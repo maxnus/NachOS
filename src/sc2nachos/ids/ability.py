@@ -143,7 +143,7 @@ class AbilityId(ReadableIntEnum):
     FACTORY_TRAIN_THOR = RawAbilityId.FactoryTrain_Thor
     FACTORY_TRAIN_WIDOW_MINE = RawAbilityId.FactoryTrain_WidowMine
     FLEET_BEACON_RESEARCH_PHOENIX_RANGE = RawAbilityId.Research_PhoenixAnionPulseCrystals
-    FLEET_BEACON_RESEARCH_TEMPEST_GROUND_ATTACK = RawAbilityId.FleetBeaconResearch_TempestResearchGroundAttackUpgrade
+    FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE = RawAbilityId.FleetBeaconResearch_TempestResearchGroundAttackUpgrade
     FLEET_BEACON_RESEARCH_VOID_RAY_SPEED = RawAbilityId.FleetBeaconResearch_ResearchVoidRaySpeedUpgrade
     FORGE_RESEARCH_GROUND_ARMOR = RawAbilityId.Research_ProtossGroundArmor
     FORGE_RESEARCH_GROUND_ARMOR_1 = RawAbilityId.ForgeResearch_ProtossGroundArmorLevel1

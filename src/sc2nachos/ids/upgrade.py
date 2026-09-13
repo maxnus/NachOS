@@ -60,7 +60,7 @@ class UpgradeId(ReadableIntEnum):
     SMART_SERVOS = RawUpgradeId.SmartServos
     STIMPACK = RawUpgradeId.Stimpack
     STORM = RawUpgradeId.PsiStormTech
-    TEMPEST_GROUND_ATTACK = RawUpgradeId.TempestGroundAttackUpgrade  # "Tectonic Destabilizers" in game
+    TEMPEST_BUILDING_DAMAGE = RawUpgradeId.TempestGroundAttackUpgrade  # "Tectonic Destabilizers" in game
     TERRAN_INFANTRY_ARMOR_1 = RawUpgradeId.TerranInfantryArmorsLevel1
     TERRAN_INFANTRY_ARMOR_2 = RawUpgradeId.TerranInfantryArmorsLevel2
     TERRAN_INFANTRY_ARMOR_3 = RawUpgradeId.TerranInfantryArmorsLevel3
