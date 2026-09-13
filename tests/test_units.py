@@ -313,6 +313,10 @@ class TestWhatAUnitReads:
         game.observe(16, _depot(900, visibility=_IN_FOG, is_flying=True))
         assert not depot.is_flying
 
+    def test_a_unit_held_up_by_a_graviton_beam_is_flying(self) -> None:
+        assert _one(make_unit(1, alliance=_ENEMY, buff_ids=[BuffId.PHOENIX_GRAVITON_BEAM])).is_flying
+        assert not _one(make_unit(1, alliance=_ENEMY, buff_ids=[BuffId.MARINE_STIMMED])).is_flying
+
     def test_identity_and_where_it_is(self) -> None:
         proto = make_unit(7, UnitTypeId.BARRACKS, at=(3.5, 4.25), owner=1, facing=1.5, radius=1.8125)
         proto.pos.z = 11.99
@@ -747,6 +751,8 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.turn(60)
         assert not marine.is_stale
         assert game.tracker.present_units.get(marine.id) is marine
+        # Out of the way, since both would shoot the enemy units made below.
+        game.debug(game.kill(tank, marine))
 
         # A mineral field remembered from the start keeps its id when first seen.
         field = min(
@@ -808,6 +814,25 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.turn(8)
         assert type(victim) is Unit
 
+        # A unit a phoenix holds up flies, though the game reports it as not flying.
+        game.debug(
+            game.create(UnitTypeId.PHOENIX, out_there + (0, -4)),
+            game.create(UnitTypeId.QUEEN, out_there + (3, -4), owner=enemy),
+        )
+        game.turn(2)
+        phoenix, queen = game.newest(UnitTypeId.PHOENIX), game.newest(UnitTypeId.QUEEN)
+        energy = debug_pb2.DebugSetUnitValue(
+            unit_value=debug_pb2.DebugSetUnitValue.Energy, value=200, unit_tag=phoenix.tag
+        )
+        game.debug(debug_pb2.DebugCommand(unit_value=energy))
+        game.turn(2)
+        game.order(AbilityId.PHOENIX_GRAVITON_BEAM, phoenix, target=queen)
+        game.turn(24)
+        assert BuffId.PHOENIX_GRAVITON_BEAM in queen.buffs
+        assert not queen._latest_data.is_flying
+        assert queen.is_flying
+        game.debug(game.kill(phoenix, queen))
+
         # An SCV building a structure is its builder until the structure finishes.
         game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.minerals))
         scv = game.tracker.present_units.own.of_type(UnitTypeId.SCV)[0]
@@ -821,9 +846,9 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         assert (scv.construction, building.builder) == (None, None)
 
         # Only death lets go of a unit.
-        game.debug(game.kill(tank))
+        game.debug(game.kill(medivac))
         game.turn(2)
-        assert tank.is_dead
-        assert game.tracker.known_units.get(tank.id) is None
+        assert medivac.is_dead
+        assert game.tracker.known_units.get(medivac.id) is None
         client.leave_game()
         client.quit()
