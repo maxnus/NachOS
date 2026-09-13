@@ -95,25 +95,57 @@ class Units[U: Unit[Any]](Sequence[U]):
         """The units `predicate` is true of."""
         return Units(unit for unit in self._units if predicate(unit))
 
-    def of_type(self, types: UnitTypeId | Iterable[UnitTypeId]) -> Units[U]:
-        """The units of `types`, which is one type or several."""
+    @overload
+    def of_type[K: UnitType.AnyType](
+        self: Units[OwnUnit[Any]], unit_type: type[K], /, *unit_types: type[K]
+    ) -> Units[OwnUnit[K]]: ...
+
+    @overload
+    def of_type[K: UnitType.AnyType](
+        self: Units[Unit[Any]], unit_type: type[K], /, *unit_types: type[K]
+    ) -> Units[Unit[K]]: ...
+
+    @overload
+    def of_type(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> Units[U]: ...
+
+    def of_type(
+        self,
+        types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
+        /,
+        *unit_types: type[UnitType.AnyType],
+    ) -> Units[Any]:
+        """The units of a `UnitType` or of several, each a type or a group, typed as those.
+
+        Also takes a `UnitTypeId` or several, for a type chosen as the bot runs, and then keeps the collection's type.
+        """
         if isinstance(types, UnitTypeId):
             return Units(unit for unit in self._units if unit.type_id is types)
-        wanted = frozenset(types)
+        wanted = _type_ids(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id in wanted)
 
-    def excluding_type(self, types: UnitTypeId | Iterable[UnitTypeId]) -> Units[U]:
-        """The units of any type but `types`, which is one type or several."""
+    @overload
+    def excluding_type(self, unit_type: type[UnitType.AnyType], /, *unit_types: type[UnitType.AnyType]) -> Units[U]: ...
+
+    @overload
+    def excluding_type(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> Units[U]: ...
+
+    def excluding_type(
+        self,
+        types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
+        /,
+        *unit_types: type[UnitType.AnyType],
+    ) -> Units[U]:
+        """The units of neither a `UnitType` nor any of several, each a type or a group, or of no `UnitTypeId` given."""
         if isinstance(types, UnitTypeId):
             return Units(unit for unit in self._units if unit.type_id is not types)
-        unwanted = frozenset(types)
+        unwanted = _type_ids(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id not in unwanted)
 
     def _of_alliance(self, alliance: Alliance) -> Units[U]:
         return Units(unit for unit in self._units if unit.alliance is alliance)
 
     @property
-    def own[K: UnitType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
+    def own[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
         """This player's units."""
         return Units(unit for unit in self._units if isinstance(unit, OwnUnit))
 
@@ -217,6 +249,17 @@ class Units[U: Unit[Any]](Sequence[U]):
             y += position[1]
         count = len(self._units)
         return Point((x / count, y / count))
+
+
+def _type_ids(
+    types: type[UnitType.AnyType] | Iterable[UnitTypeId], unit_types: tuple[type[UnitType.AnyType], ...]
+) -> frozenset[UnitTypeId]:
+    """The types a `UnitType` and further ones name, or the types in an iterable of them."""
+    if not isinstance(types, type):
+        return frozenset(types)
+    if not unit_types:
+        return types._type_ids
+    return types._type_ids.union(*(unit_type._type_ids for unit_type in unit_types))
 
 
 def _ground(point: PointLike) -> tuple[float, float]:

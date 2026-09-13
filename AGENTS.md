@@ -171,6 +171,7 @@ of its buildings.
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
 | Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/curating-ids.md` says |
+| Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` |
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |
 | Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py`, which starts the game |
