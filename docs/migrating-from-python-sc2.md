@@ -108,7 +108,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
-| `unit.is_constructing_scv` | `unit.construction is not None`, and `structure.builder` |
+| `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
 | `UnitOrder` | `Order` |
 | `unit.distance_to(p)` | `unit.position.distance_to(p)` |
 | `unit.name` | `unit.type_id.name` |
@@ -137,11 +137,13 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   structure a new tag and reports no death for the drone. If the structure is cancelled, the drone comes back as the
   same object. This holds for your own drones only, since only your own units' orders are reported.
 - **A unit names the units it points at by object.** An order's target, a rally target, a passenger, an add-on and
-  an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up.
+  an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up. An order aimed
+  at nothing has `None` for its target, where python-sc2's is `0`.
 - **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
   or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while
-  it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link.
-- **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
+  it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link, and it is true from
+  the order on, while the SCV walks to the site; `construction` is `None` until the structure is placed, so an SCV
+  on its way is one whose first order is the build ability.- **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**, such as the health of a burrowed unit never detected
   or the contents of a mineral field no one has looked at. python-sc2 answers 0.

@@ -26,6 +26,8 @@ _OWN = raw_pb2.Alliance.Self
 _VISIBILITIES = {int(member): member for member in Visibility}
 _ALLIANCES = {int(member): member for member in Alliance}
 _CLOAKS = {int(member): member for member in CloakState}
+# Worn by a unit a phoenix holds in the air, which the game reports as not flying.
+_LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
 
 
 def _copy(proto: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -283,10 +285,10 @@ class Unit[K: UnitType]:
 
     @property
     def is_flying(self) -> bool:
-        """Whether it is in the air."""
+        """Whether it is in the air, a unit held up by a phoenix's graviton beam included."""
         now = self._latest_data
         if now.display_type != _IN_FOG:
-            return now.is_flying
+            return now.is_flying or _LIFTED in now.buff_ids
         if (seen := self._latest_data_in_vision) is None:
             raise self._never_seen_error("flying")
         return seen.is_flying
