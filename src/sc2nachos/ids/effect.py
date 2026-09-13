@@ -4,11 +4,11 @@ Hand-maintained: filtered to what multiplayer needs, named for readability. Each
 catalog member, never a literal id. Unknown ids raise.
 """
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawEffectId
 
 
-class EffectId(ReadableIntEnum):
+class EffectId(IdEnum):
     """Effect ids used in multiplayer games."""
 
     COLOSSUS_BEAM = RawEffectId.ThermalLancesForward  # "Thermal Lances" in game

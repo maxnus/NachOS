@@ -153,16 +153,16 @@ class TestReadingTheTables:
         assert marine.base_type is None
         assert marine.tech_aliases == ()
 
-    def test_a_build_time_is_seconds_where_the_game_counts_steps(self) -> None:
+    def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
-        assert data.units[UnitTypeId.MARINE].build_time == pytest.approx(17.857, abs=1e-3)
+        assert data.units[UnitTypeId.MARINE].build_steps == 400.0
 
     def test_a_weapon_says_what_it_hits_and_how_long_it_waits(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         (weapon,) = data.units[UnitTypeId.MARINE].weapons
         assert weapon.target_domain is TargetDomain.ANY
         assert (weapon.damage, weapon.attacks, weapon.range) == (6.0, 1, 5.0)
-        assert weapon.cooldown == pytest.approx(0.86)
+        assert weapon.cooldown_steps == pytest.approx(0.86 * 16)
         assert weapon.damage_bonuses == {}
 
     def test_a_weapons_bonus_damage_is_read_by_the_attribute_it_is_earned_by(self) -> None:
@@ -205,7 +205,7 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
         assert row.cost == Resources(minerals=100, vespene=100)
-        assert row.research_time == pytest.approx(100.0)
+        assert row.research_steps == 2240.0
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
@@ -297,13 +297,13 @@ class TestARecordedGamesTables:
             assert grew.minerals >= came_from.minerals and grew.vespene >= came_from.vespene
             assert grew != came_from
         # The build time is the morph alone, so it is shorter than building what it morphed from took.
-        assert data.units[UnitTypeId.ORBITAL_COMMAND].build_time < data.units[UnitTypeId.COMMAND_CENTER].build_time
+        assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
         for upgrade in UpgradeId:
             row = data.upgrades[upgrade]
-            assert row.research_time > 0
+            assert row.research_steps > 0
             if upgrade in _RESEARCHED_BY_A_DEAD_ID:
                 assert row.research_ability is None, f"{upgrade} names a maker again"
             else:

@@ -1,14 +1,18 @@
 """Stand-ins for the game, shared by the tests that drive the library without one."""
 
 from collections import deque
+from collections.abc import Iterable
 from typing import Any
 
 import numpy
-from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import common_pb2, data_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocketConnectionClosedException
 
+from sc2nachos.gamedata import GameData
+from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client, Status
+from sc2nachos.units import Alliance, Visibility
 
 
 class FakeTransport:
@@ -104,12 +108,43 @@ def make_game_info(
     )
 
 
-def make_observation(game_loop: int = 0, *results: tuple[int, Result]) -> sc2api_pb2.ResponseObservation:
-    """What the game saw at `game_loop`, and how it ended if it has."""
+def make_observation(
+    game_loop: int = 0,
+    *results: tuple[int, Result],
+    units: Iterable[raw_pb2.Unit] = (),
+    dead: Iterable[int] = (),
+) -> sc2api_pb2.ResponseObservation:
+    """What the game saw at `game_loop`: `units`, the tags of those that died, and how it ended if it has."""
+    raw = raw_pb2.ObservationRaw(units=units, event=raw_pb2.Event(dead_units=dead))
     return sc2api_pb2.ResponseObservation(
-        observation=sc2api_pb2.Observation(game_loop=game_loop),
+        observation=sc2api_pb2.Observation(game_loop=game_loop, raw_data=raw),
         player_result=[sc2api_pb2.PlayerResult(player_id=player, result=result.value) for player, result in results],
     )
+
+
+def make_unit(
+    tag: int,
+    unit_type: int = UnitTypeId.MARINE,
+    *,
+    at: tuple[float, float] = (10.0, 10.0),
+    alliance: Alliance = Alliance.OWN,
+    visibility: Visibility = Visibility.IN_VISION,
+    **fields: Any,
+) -> raw_pb2.Unit:
+    """A unit as the game would report it: this player's marine, in sight, unless told otherwise."""
+    return raw_pb2.Unit(
+        tag=tag,
+        unit_type=unit_type,
+        pos=common_pb2.Point(x=at[0], y=at[1]),
+        alliance=alliance.value,
+        display_type=visibility.value,
+        **fields,
+    )
+
+
+def make_tables(*units: data_pb2.UnitTypeData) -> GameData:
+    """Tables holding a row for each of `units`."""
+    return GameData(sc2api_pb2.ResponseData(units=units))
 
 
 def make_client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]:

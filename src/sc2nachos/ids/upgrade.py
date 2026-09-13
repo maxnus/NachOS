@@ -4,11 +4,11 @@ Hand-maintained: filtered to what multiplayer needs, named for readability. Each
 catalog member, never a literal id. Unknown ids raise.
 """
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawUpgradeId
 
 
-class UpgradeId(ReadableIntEnum):
+class UpgradeId(IdEnum):
     """Upgrade ids used in multiplayer games."""
 
     ADRENAL_GLANDS = RawUpgradeId.zerglingattackspeed  # "Adrenal Glands" in game

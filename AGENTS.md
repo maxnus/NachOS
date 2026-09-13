@@ -145,6 +145,10 @@ Each of these came from a real bug found in review, mostly in code that looked c
   entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
   unit reports its own upgrade levels, visible enemies' included.
 - **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
+- **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
+  an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
+- **A tag is not a unit's identity.** A structure is remembered under a new tag every time it goes out of sight.
+  Name a unit by its NachOS `id`, and translate every tag the game hands over.
 
 ## Testing
 
