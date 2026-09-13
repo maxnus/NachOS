@@ -133,6 +133,7 @@ class AbilityId(ReadableIntEnum):
     FACTORY_LAND = RawAbilityId.Land_Factory
     FACTORY_LIFT = RawAbilityId.Lift_Factory
     FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME = RawAbilityId.Research_InfernalPreigniter
+    FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE = RawAbilityId.Research_CycloneLockOnDamage
     FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS = RawAbilityId.Research_DrillingClaws
     FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS = RawAbilityId.Research_SmartServos
     FACTORY_TRAIN_CYCLONE = RawAbilityId.Train_Cyclone
@@ -142,6 +143,7 @@ class AbilityId(ReadableIntEnum):
     FACTORY_TRAIN_THOR = RawAbilityId.FactoryTrain_Thor
     FACTORY_TRAIN_WIDOW_MINE = RawAbilityId.FactoryTrain_WidowMine
     FLEET_BEACON_RESEARCH_PHOENIX_RANGE = RawAbilityId.Research_PhoenixAnionPulseCrystals
+    FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE = RawAbilityId.FleetBeaconResearch_TempestResearchGroundAttackUpgrade
     FLEET_BEACON_RESEARCH_VOID_RAY_SPEED = RawAbilityId.FleetBeaconResearch_ResearchVoidRaySpeedUpgrade
     FORGE_RESEARCH_GROUND_ARMOR = RawAbilityId.Research_ProtossGroundArmor
     FORGE_RESEARCH_GROUND_ARMOR_1 = RawAbilityId.ForgeResearch_ProtossGroundArmorLevel1
@@ -156,7 +158,7 @@ class AbilityId(ReadableIntEnum):
     FORGE_RESEARCH_SHIELDS_2 = RawAbilityId.ForgeResearch_ProtossShieldsLevel2
     FORGE_RESEARCH_SHIELDS_3 = RawAbilityId.ForgeResearch_ProtossShieldsLevel3
     FUSION_CORE_RESEARCH_LIBERATOR_RANGE = RawAbilityId.FusionCoreResearch_ResearchBallisticRange
-    FUSION_CORE_RESEARCH_MEDIVAC_SPEED_BOOST = RawAbilityId.FusionCoreResearch_ResearchRapidReignitionSystem
+    FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION = RawAbilityId.FusionCoreResearch_ResearchMedivacEnergyUpgrade
     FUSION_CORE_RESEARCH_YAMATO_CANNON = RawAbilityId.Research_BattlecruiserWeaponRefit
     GATEWAY_MORPH_WARP_GATE = RawAbilityId.Morph_WarpGate
     GATEWAY_TRAIN_ADEPT = RawAbilityId.Train_Adept
@@ -223,8 +225,10 @@ class AbilityId(ReadableIntEnum):
     HELLION_MORPH_HELLBAT = RawAbilityId.Morph_Hellbat
     HIGH_TEMPLAR_FEEDBACK = RawAbilityId.Feedback_Feedback
     HYDRALISK_BURROW = RawAbilityId.BurrowDown_Hydralisk
+    HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE = RawAbilityId.HydraliskDenResearch_ResearchFrenzy
     HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE = RawAbilityId.Research_GroovedSpines
     HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED = RawAbilityId.Research_MuscularAugments
+    HYDRALISK_LUNGE = RawAbilityId.HydraliskFrenzy
     # The catalog also holds LurkerAspectMPFromHydraliskBurrowed, which no lurker den offers and which does
     # nothing when ordered, burrowed or not.
     HYDRALISK_MORPH_LURKER = RawAbilityId.Morph_Lurker
@@ -237,7 +241,6 @@ class AbilityId(ReadableIntEnum):
     LAIR_MORPH_HIVE = RawAbilityId.UpgradeToHive_Hive
     LAIR_RESEARCH_BURROW = RawAbilityId.Research_Burrow
     LAIR_RESEARCH_OVERLORD_SPEED = RawAbilityId.Research_PneumatizedCarapace
-    LAIR_RESEARCH_OVERLORD_TRANSPORT = RawAbilityId.LairResearch_EvolveVentralSacks
     LARVA_MORPH_CORRUPTOR = RawAbilityId.LarvaTrain_Corruptor
     LARVA_MORPH_DRONE = RawAbilityId.LarvaTrain_Drone
     LARVA_MORPH_HYDRALISK = RawAbilityId.LarvaTrain_Hydralisk
@@ -394,6 +397,7 @@ class AbilityId(ReadableIntEnum):
     STARPORT_LIFT = RawAbilityId.Lift_Starport
     STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK = RawAbilityId.Research_BansheeCloakingField
     STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED = RawAbilityId.Research_BansheeHyperflightRotors
+    STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX = RawAbilityId.StarportTechLabResearch_ResearchRavenInterferenceMatrix  # noqa: E501 # fmt: skip
     STARPORT_TRAIN_BANSHEE = RawAbilityId.StarportTrain_Banshee
     STARPORT_TRAIN_BATTLECRUISER = RawAbilityId.StarportTrain_Battlecruiser
     STARPORT_TRAIN_LIBERATOR = RawAbilityId.StarportTrain_Liberator

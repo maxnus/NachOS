@@ -209,9 +209,9 @@ class TestReadingTheTables:
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
-        storm = data_pb2.EffectData(effect_id=EffectId.PSI_STORM, radius=1.5)
+        storm = data_pb2.EffectData(effect_id=EffectId.HIGH_TEMPLAR_STORM, radius=1.5)
         data = GameData(sc2api_pb2.ResponseData(effects=[storm]))
-        assert data.effects[EffectId.PSI_STORM].radius == 1.5
+        assert data.effects[EffectId.HIGH_TEMPLAR_STORM].radius == 1.5
 
     def test_the_tables_refuse_writes(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
