@@ -10,7 +10,7 @@ from s2clientprotocol import data_pb2, raw_pb2
 
 from sc2nachos.geometry import Circle, Point, Rectangle
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, Visibility
+from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracker import _UnitTracker
 from support import make_observation, make_tables, make_unit
 
@@ -112,6 +112,22 @@ class TestFilters:
         types = {wanted} if isinstance(wanted, UnitTypeId) else set(wanted)
         assert _tags(units.of_type(wanted)) == [unit.tag for unit in units if unit.type_id in types]
         assert _tags(units.excluding_type(wanted)) == [unit.tag for unit in units if unit.type_id not in types]
+
+    @pytest.mark.parametrize(
+        "wanted",
+        [
+            (UnitType.Marine,),
+            (UnitType.Marine, UnitType.Barracks),
+            (UnitType.TerranStructure,),
+            (UnitType.Structure, UnitType.Scv),
+        ],
+    )
+    def test_by_unit_type_one_or_several_groups_included(self, wanted: tuple[type[UnitType.AnyType], ...]) -> None:
+        units = _mine(40)
+        types = frozenset[UnitTypeId]().union(*(unit_type._type_ids for unit_type in wanted))
+        first, *rest = wanted
+        assert _tags(units.of_type(first, *rest)) == [unit.tag for unit in units if unit.type_id in types]
+        assert _tags(units.excluding_type(first, *rest)) == [unit.tag for unit in units if unit.type_id not in types]
 
     def test_by_type_takes_a_one_shot_iterable(self) -> None:
         units = _mine(40)

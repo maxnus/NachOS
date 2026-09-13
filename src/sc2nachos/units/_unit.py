@@ -37,7 +37,7 @@ def _copy(proto: raw_pb2.Unit) -> raw_pb2.Unit:
     return copy
 
 
-class Unit[K: UnitType]:
+class Unit[K: UnitType.AnyType]:
     """A unit of the game, one object under one id for the whole game, reading as the game last reported it.
 
     Where it is, what type it is and how it is seen read as of the last observation that held it. Everything else
@@ -431,8 +431,9 @@ class Unit[K: UnitType]:
         return seen.build_progress == 1.0
 
     @property
-    def is_powered(self) -> bool:
-        """Whether it has the power it needs, and False for a unit that needs none."""
+    def is_powered(self: Unit[UnitType.ProtossStructure]) -> bool:
+        """Whether a Protoss structure stands in a pylon's power field, and False for one that needs no power, such
+        as a nexus, a pylon or an assimilator."""
         if (seen := self._latest_data_in_vision) is None:
             raise self._never_seen_error("power")
         return seen.is_powered

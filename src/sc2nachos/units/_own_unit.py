@@ -9,7 +9,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Order, Passenger, RallyTarget
 
 
-class OwnUnit[K: UnitType](Unit[K]):
+class OwnUnit[K: UnitType.AnyType](Unit[K]):
     """One of this player's units, which also reads what the game reports only to the player a unit belongs to.
 
     A unit changes between `Unit` and `OwnUnit` in place when it changes sides, as under a neural parasite.

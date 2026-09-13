@@ -114,7 +114,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `unit.name` | `unit.type_id.name` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
+| `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
+| `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
 | `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
 | `units.closer_than(d, p)` | `units.in_area(Circle(p, d))`, which counts a unit at exactly `d` |
 | `units.closest_n_units(p, n)` | `units.closest(n, p)` |
@@ -151,6 +153,12 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
   `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
   neural parasite changes class, and changes back.
+- **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
+  is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
+  `UnitType.ProtossStructure`. `Unit[UnitType.Marine]` is a marine, a read only some types have is an error on the
+  others, as `is_powered` is on anything but a Protoss structure. A unit typed `Unit[Any]` reads as any type, while
+  on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
+  it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **Reaper grenades and force fields stay units.** python-sc2 moves them into `state.effects`; in NachOS they are
   in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army count.
