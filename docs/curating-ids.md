@@ -67,7 +67,14 @@ only way to find one is to order the ability in game and read the performer's or
 price and its `EvolveAmorphousArmorcloud` research id, but 4.12.0 made the infestor's shroud free: an
 infestation pit is never offered that research, with a pit, a lair or a hive, and ordering it puts no order on
 the pit and grants nothing, while an infestor holding no upgrades at all is offered the cast and runs it. An
-upgrade nobody can ever hold is not in the game, so neither it nor its research is curated.
+upgrade nobody can ever hold is not in the game, so neither it nor its research is curated. Rapid Reignition
+System is another, which 5.0.12 replaced with Caduceus Reactor, and so is Ventral Sacs: a lair is offered only
+Pneumatized Carapace and Burrow, and an overlord morphing into a transport grants no upgrade.
+
+**A structure that is offered a research is the proof the research exists**, whichever way the tables point.
+Researching everything a race's structures offer, as `tools/sweep_buffs.py` does, found five upgrades the curation
+had missed, each added or brought back in a patch: Interference Matrix, Caduceus Reactor, Mag-Field Accelerator,
+Tectonic Destabilizers and Nanomuscular Swell.
 
 **A `friendly_name` of `<link_name>_<index>` means the game has no name for the row**, and is a reason to test
 before curating. Index 30 of every build menu is the command card's cancel slot, and only the terran one is an
