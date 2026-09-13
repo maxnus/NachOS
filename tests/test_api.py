@@ -100,7 +100,7 @@ def _somewhere() -> Map:
 
 
 class TestBeforeAGame:
-    @pytest.mark.parametrize("name", ["client", "map", "data", "step", "time", "result"])
+    @pytest.mark.parametrize("name", ["client", "map", "data", "step", "time", "result", "units"])
     def test_what_belongs_to_a_game_says_there_is_none(self, name: str) -> None:
         """Zero is a step a game plays and `None` is a game still going, so neither can stand for no game at all."""
         with pytest.raises(NotPlayingError, match="no game has been joined"):

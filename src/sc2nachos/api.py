@@ -1,7 +1,7 @@
 """Everything a bot talks to."""
 
 from dataclasses import dataclass
-from typing import Final, Self
+from typing import Any, Final, Self
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
@@ -12,6 +12,8 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
+from sc2nachos.units import Unit, Units
+from sc2nachos.units._tracker import _UnitTracker
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -25,6 +27,7 @@ class _Game:
     client: Final[Client]
     map: Final[GameMap]
     data: Final[GameData]
+    units: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
     step: int
@@ -35,12 +38,17 @@ class _Game:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
-        return cls(client, GameMap(info), GameData(data), observation, _step(observation))
+        step = _step(observation)
+        tables = GameData(data)
+        units = _UnitTracker(tables)
+        units.observe(observation.observation.raw_data, step)
+        return cls(client, GameMap(info), tables, units, observation, step)
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
         self.observation = self.client.observation(game_loop=step)
         self.step = _step(self.observation)
+        self.units.observe(self.observation.observation.raw_data, self.step)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -126,6 +134,16 @@ class Api:
         """How the game ended for this player, or `None` while it is still being played."""
         return self._playing().result
 
+    @property
+    def units(self) -> Units[Unit[Any]]:
+        """Every unit in the last observation, structures remembered out of sight and hidden units included."""
+        return self._playing().units.units
+
+    @property
+    def known_units(self) -> Units[Unit[Any]]:
+        """Every unit not known to be dead: those in the last observation, then those it left out."""
+        return self._playing().units.known_units
+
     def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
         """Play the game `client` has already joined to its end, and return how it ended for this player.
 
@@ -134,6 +152,8 @@ class Api:
 
         Each call starts its game from nothing, so one api plays any number of games, one after another.
         """
+        if self._game is not None:
+            self._game.units.end()
         game = _Game.start(client)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.map.name, self._steps_per_turn)

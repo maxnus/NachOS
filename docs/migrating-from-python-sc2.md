@@ -53,8 +53,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `DUTCHMARAUDERSLOW`, and an immortal's Barrier is `TAKENDAMAGE`, never `IMMORTALOVERLOAD`. NachOS calls them
   `BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW` and `BuffId.IMMORTAL_BARRIER`, and leaves the other two out. A buff is
   named after the unit that brings it on, so `STIMPACK` is `MARINE_STIMMED`.
-- **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`.
-  `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
+- **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`, and
+  reading one off a unit raises `UncuratedIdError`, which is one. `sc2nachos.ids.raw` holds every id, under
+  Blizzard's own names.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
   `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
@@ -93,6 +94,61 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **Grids are indexed `[x, y]`.** python-sc2's `PixelMap.data_numpy` is indexed `[y, x]`. `grid[point]` reads the
   tile that any point falls in, where a `PixelMap` needs whole-number coordinates. Reading past the edge raises
   `IndexError`, or returns the grid's `outside` value if it has one, instead of failing an assert.
+
+## Units
+
+| python-sc2 | NachOS |
+|---|---|
+| `bot.all_units` | `api.units`, and `api.known_units` with the units out of sight |
+| `unit.tag`, to tell units apart | `unit.id` |
+| `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.MINE`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.REMEMBERED`, `Visibility.VISIBLE` |
+| `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
+| `unit.shield_health` | `unit.health + unit.shield` |
+| `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
+| `unit.add_on_tag`, `order.target` as a tag | `unit.add_on_id`, `order.target` as an id |
+| `unit.distance_to(p)` | `unit.position.distance_to(p)` |
+| `unit.name` | `unit.type_id.name` |
+| `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
+| `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
+| `units.exclude_type(t)` | `units.excluding_type(t)` |
+| `units.owned`, `structure` | `units.mine`, `units.structures` |
+| `units.closer_than(d, p)` | `units.in_area(Circle(p, d))`, which counts a unit at exactly `d` |
+| `units.closest_n_units(p, n)` | `units.closest(n, p)` |
+| `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
+| `units.random` | `random.choice(units)` |
+
+- **A unit is one object under one id for the whole game.** The game's tags do not identify a unit: a structure
+  going out of sight is replaced by a remembered copy under a new tag each time, and a mineral field starts the game
+  as one. NachOS follows a structure through those swaps, so it keeps its object and id, and `unit.tag` is only the
+  game's current handle. An id's first digit is the unit's alliance when first seen, 1 for yours and 4 for the
+  enemy's; the rest counts that alliance's units. python-sc2 builds new objects every step, keyed by tag.
+- **A unit out of the observation is stale, not gone.** It keeps what it last read, `is_stale` is true, and it is
+  in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
+  into sight does, it is the same object. Only death ends it: `is_dead` becomes true.
+- **The game reports only the deaths you can see.** A structure that burns down or is killed out of sight stays
+  remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
+  lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
+  copy and says nothing.
+- **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
+  and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
+- **What the game never showed raises `NotReportedError`**, such as the health of a burrowed unit never detected
+  or the contents of a mineral field no one has looked at. python-sc2 answers 0.
+- **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
+  units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
+  `is_idle`. `units.mine` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
+  neural parasite changes class, and changes back.
+- **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
+- **Reaper grenades and force fields stay units.** python-sc2 moves them into `state.effects`; in NachOS they are
+  in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army count.
+- **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
+  `all_units`; NachOS has neither yet.
+- **`weapon_cooldown` is in seconds.** python-sc2's counts steps.
+- **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
+  and every filter answers a new one.
+- **Data of your own about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its
+  class is not yours to subclass. A `weakref.WeakKeyDictionary` keyed by unit lets go of an entry once the unit is
+  dead and dropped.
 
 ## The map
 

@@ -1,15 +1,20 @@
 """The recorded games everything above the protocol is tested against, and what they have to hold."""
 
+import contextlib
 from pathlib import Path
+from typing import Any
 
 import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.gamedata import GameData
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
+from sc2nachos.units import NotReportedError, OwnUnit, Unit
+from sc2nachos.units._tracker import _UnitTracker
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -63,3 +68,41 @@ def test_every_id_a_game_reported_is_curated(path: Path) -> None:
     known = {enum: {int(member) for member in enum} for enum in _CURATED}
     missing = {enum.__name__: sorted(ids - known[enum]) for enum, ids in reported.items()}
     assert not any(missing.values()), f"{path.stem} reported ids with no curated member: {missing}"
+
+
+def _tables(recording: Recording) -> GameData:
+    """The tables `recording` was played by."""
+    return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
+
+
+# Every read a unit has, which a unit in a real game answers or refuses as never shown in sight, and nothing else.
+_READS = {
+    cls: sorted(name for base in cls.__mro__ for name, member in vars(base).items() if isinstance(member, property))
+    for cls in (Unit, OwnUnit)
+}
+# The reads that name other units, whose tags must all be ones the game reported a unit under.
+_NAMING = ("orders", "rally_targets", "passengers", "add_on_id", "engaged_target_id")
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
+    recording = Recording(path)
+    tracker = _UnitTracker(_tables(recording))
+    objects: dict[int, Unit[Any]] = {}
+    for index, observation in enumerate(_observations(recording)):
+        step = observation.observation.game_loop
+        tracker.observe(observation.observation.raw_data, step)
+        units = tracker.units
+        assert [unit.tag for unit in units] == [unit.tag for unit in observation.observation.raw_data.units if unit.tag]
+        assert len({id(unit) for unit in units}) == len(units), "two tags of one observation are one unit"
+        for unit in units:
+            assert objects.setdefault(unit.id, unit) is unit
+            assert not unit.is_stale
+        for unit in units.mine:
+            for name in _NAMING:
+                getattr(unit, name)
+        if index % 50 == 0:
+            for unit in tracker.known_units:
+                for name in _READS[type(unit)]:
+                    with contextlib.suppress(NotReportedError):
+                        getattr(unit, name)
