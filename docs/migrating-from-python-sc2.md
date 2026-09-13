@@ -107,7 +107,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
-| `unit.add_on_tag`, `order.target` as a tag | `unit.add_on_id`, `order.target` as an id |
+| `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
+| `unit.is_constructing_scv` | `unit.construction is not None`, and `structure.builder` |
 | `UnitOrder` | `Order` |
 | `unit.distance_to(p)` | `unit.position.distance_to(p)` |
 | `unit.name` | `unit.type_id.name` |
@@ -132,6 +133,14 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
   lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
   copy and says nothing.
+- **A drone that becomes a structure is stale until the structure finishes, then dead.** The game gives the
+  structure a new tag and reports no death for the drone. If the structure is cancelled, the drone comes back as the
+  same object. This holds for your own drones only, since only your own units' orders are reported.
+- **A unit names the units it points at by object.** An order's target, a rally target, a passenger, an add-on and
+  an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up.
+- **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
+  or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while
+  it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**, such as the health of a burrowed unit never detected

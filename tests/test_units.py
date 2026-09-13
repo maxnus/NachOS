@@ -36,6 +36,9 @@ from support import FakeTransport, make_game_info, make_observation, make_respon
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.SPINE_CRAWLER, ability_id=AbilityId.DRONE_MORPH_SPINE_CRAWLER),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -352,6 +355,131 @@ class TestWhatAUnitReads:
         assert issubclass(UncuratedIdError, NachOSError) and issubclass(UncuratedIdError, ValueError)
 
 
+def _drone_building(tag: int, ability: AbilityId, **target: Any) -> raw_pb2.Unit:
+    """This player's drone at one spot, carrying out `ability` aimed at `target`."""
+    order = raw_pb2.UnitOrder(ability_id=ability, **target)
+    return make_unit(tag, UnitTypeId.DRONE, at=(20.0, 20.0), orders=[order])
+
+
+def _spine(tag: int, progress: float) -> raw_pb2.Unit:
+    return make_unit(tag, UnitTypeId.SPINE_CRAWLER, at=(24.0, 20.0), build_progress=progress)
+
+
+class TestUnitsThatBecomeStructures:
+    """Tested in game: a drone that morphs into a structure leaves the observation with no death reported, the
+    structure appearing under a new tag, and comes back under its own tag when the structure is cancelled."""
+
+    _AIMED: Any = {"target_world_space_pos": common_pb2.Point(x=24.0, y=20.0)}
+
+    def _started(self) -> tuple[_Game, Unit[Any], Unit[Any]]:
+        game = _Game()
+        (drone,) = game.observe(0, _drone_building(1, AbilityId.DRONE_MORPH_SPINE_CRAWLER, **self._AIMED))
+        (spine,) = game.observe(16, _spine(2, 0.1))
+        return game, drone, spine
+
+    def test_while_the_structure_is_built_the_drone_is_stale_and_its_builder(self) -> None:
+        _, drone, spine = self._started()
+        assert drone.is_stale
+        assert not drone.is_dead
+        assert isinstance(spine, OwnUnit) and isinstance(drone, OwnUnit)
+        assert spine.builder is drone
+        assert drone.construction is spine
+
+    def test_once_the_structure_finishes_the_drone_is_dead(self) -> None:
+        game, drone, _ = self._started()
+        game.observe(32, _spine(2, 0.5))
+        assert not drone.is_dead
+        (spine,) = game.observe(48, _spine(2, 1.0))
+        assert drone.is_dead
+        assert drone.id not in game.tracker.known_units.ids
+        assert isinstance(spine, OwnUnit)
+        assert spine.builder is None
+
+    def test_a_cancel_brings_the_same_drone_back(self) -> None:
+        game, drone, spine = self._started()
+        (back,) = game.observe(32, make_unit(1, UnitTypeId.DRONE, at=(24.0, 20.0)), dead=(2,))
+        assert back is drone
+        assert not drone.is_dead
+        assert spine.is_dead
+        game.observe(48, make_unit(1, UnitTypeId.DRONE, at=(24.0, 20.0)))
+        assert not drone.is_dead
+
+    def test_a_structure_destroyed_while_built_takes_the_drone_with_it(self) -> None:
+        game, drone, _ = self._started()
+        game.observe(32, dead=(2,))
+        assert drone.is_dead
+
+    def test_an_extractor_is_matched_to_the_drone_through_the_geyser_it_was_aimed_at(self) -> None:
+        game = _Game()
+        geyser = make_unit(9, UnitTypeId.VESPENE_GEYSER, at=(30.5, 30.5), alliance=Alliance.NEUTRAL)
+        drone, _ = game.observe(0, _drone_building(1, AbilityId.DRONE_MORPH_EXTRACTOR, target_unit_tag=9), geyser)
+        game.observe(16, make_unit(3, UnitTypeId.EXTRACTOR, at=(30.5, 30.5), build_progress=1.0), geyser)
+        assert drone.is_dead
+
+    def test_a_structure_far_from_where_the_drone_was_sent_is_not_what_it_became(self) -> None:
+        game = _Game()
+        (drone,) = game.observe(0, _drone_building(1, AbilityId.DRONE_MORPH_SPINE_CRAWLER, **self._AIMED))
+        game.observe(16, make_unit(2, UnitTypeId.SPINE_CRAWLER, at=(40.0, 20.0), build_progress=1.0))
+        assert drone.is_stale
+        assert not drone.is_dead
+
+
+def _scv(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """One of our SCVs beside the depot `_building_depot` builds."""
+    return make_unit(tag, UnitTypeId.SCV, at=(20.0, 20.0), orders=orders)
+
+
+def _building_depot(tag: int, progress: float) -> raw_pb2.Unit:
+    """One of our supply depots, `progress` of the way built."""
+    return make_unit(tag, UnitTypeId.SUPPLY_DEPOT, at=(24.0, 20.0), build_progress=progress)
+
+
+class TestConstruction:
+    """Tested in game: an SCV's build order is aimed at the structure's snapped center once construction starts, at the
+    structure itself when another SCV resumes it, and the SCV has no orders once construction is halted."""
+
+    _BUILD = raw_pb2.UnitOrder(
+        ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target_world_space_pos=common_pb2.Point(x=24.3, y=19.8)
+    )
+
+    def test_an_scv_building_a_structure_is_its_builder_until_it_finishes(self) -> None:
+        game = _Game()
+        scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
+        assert isinstance(scv, OwnUnit) and isinstance(depot, OwnUnit)
+        assert (scv.construction, depot.builder) == (depot, scv)
+        game.observe(16, _scv(1), _building_depot(2, 1.0))
+        assert (scv.construction, depot.builder) == (None, None)
+        assert not scv.is_dead
+
+    def test_a_halted_structure_has_no_builder(self) -> None:
+        game = _Game()
+        scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
+        game.observe(16, _scv(1), _building_depot(2, 0.3))
+        assert isinstance(depot, OwnUnit)
+        assert depot.builder is None
+        assert not depot.is_complete
+
+    def test_an_scv_resuming_a_structure_is_aimed_at_it_and_is_its_builder(self) -> None:
+        resume = raw_pb2.UnitOrder(ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target_unit_tag=2)
+        game = _Game()
+        game.observe(0, _building_depot(2, 0.3))
+        scv, depot = game.observe(16, _scv(3, resume), _building_depot(2, 0.3))
+        assert isinstance(scv, OwnUnit) and isinstance(depot, OwnUnit)
+        assert (scv.construction, depot.builder) == (depot, scv)
+
+    def test_an_scv_walking_to_build_is_building_nothing_yet(self) -> None:
+        (scv,) = _Game().observe(0, _scv(1, self._BUILD))
+        assert isinstance(scv, OwnUnit)
+        assert scv.construction is None
+
+    def test_an_scv_that_dies_while_building_leaves_the_structure_without_a_builder(self) -> None:
+        game = _Game()
+        _, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
+        game.observe(16, _building_depot(2, 0.3), dead=(1,))
+        assert isinstance(depot, OwnUnit)
+        assert depot.builder is None
+
+
 class TestOwnUnits:
     def test_a_players_own_unit_is_an_own_unit_and_anyone_elses_is_not(self) -> None:
         mine, theirs, neutral = _Game().observe(
@@ -376,11 +504,12 @@ class TestOwnUnits:
             raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_ATTACK, target_unit_tag=9),
             raw_pb2.UnitOrder(ability_id=AbilityId.BARRACKS_TRAIN_MARINE, progress=0.5),
         ]
-        marine, _ = _Game().observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
+        game = _Game()
+        marine, _ = game.observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
             Order(AbilityId.GENERAL_MOVE, Point((5.0, 6.0)), 0.0),
-            Order(AbilityId.GENERAL_ATTACK, 400001, 0.0),
+            Order(AbilityId.GENERAL_ATTACK, game.tracker.present_units.by_id(400001), 0.0),
             Order(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
@@ -398,36 +527,47 @@ class TestOwnUnits:
             raw_pb2.RallyTarget(point=common_pb2.Point(x=3, y=4), tag=5),
             raw_pb2.RallyTarget(point=common_pb2.Point(x=3, y=4), tag=1 << 32),
         ]
-        center, _ = _Game().observe(0, make_unit(1, rally_targets=rallies), make_unit(5, alliance=Alliance.NEUTRAL))
+        center, field = _Game().observe(0, make_unit(1, rally_targets=rallies), make_unit(5, alliance=Alliance.NEUTRAL))
         assert isinstance(center, OwnUnit)
         assert center.rally_targets == (
             RallyTarget(Point((1.0, 2.0))),
-            RallyTarget(300001),
+            RallyTarget(field),
             RallyTarget(Point((3.0, 4.0))),
         )
 
-    def test_passengers_an_add_on_and_a_target_are_named_by_id(self) -> None:
-        """A passenger has left the observation, so it is named by the id it had outside."""
+    def test_passengers_an_add_on_and_a_target_are_the_units_themselves(self) -> None:
+        """A passenger has left the observation, so it is the stale unit that went in."""
         passenger = raw_pb2.PassengerUnit(tag=3, unit_type=UnitTypeId.MARINE, health=45, health_max=45)
         game = _Game()
-        game.observe(0, make_unit(3), make_unit(4, UnitTypeId.TECH_LAB_BARRACKS), make_unit(6, alliance=_ENEMY))
+        marine, lab, enemy = game.observe(
+            0, make_unit(3), make_unit(4, UnitTypeId.TECH_LAB_BARRACKS), make_unit(6, alliance=_ENEMY)
+        )
         loaded = make_unit(1, passengers=[passenger], cargo_space_taken=1, add_on_tag=4, engaged_target_tag=6)
         holder, _, _ = game.observe(
             16, loaded, make_unit(4, UnitTypeId.TECH_LAB_BARRACKS), make_unit(6, alliance=_ENEMY)
         )
         assert isinstance(holder, OwnUnit)
-        assert holder.passengers == (Passenger(100001, UnitTypeId.MARINE, 45.0, 45.0, 0.0, 0.0, 0.0, 0.0),)
-        assert (holder.cargo_used, holder.cargo_max, holder.add_on_id, holder.engaged_target_id) == (
+        assert holder.passengers == (Passenger(marine, UnitTypeId.MARINE, 45.0, 45.0, 0.0, 0.0, 0.0, 0.0),)
+        assert marine.is_stale
+        assert (holder.cargo_used, holder.cargo_max, holder.add_on, holder.engaged_target) == (
             1,
             0,
-            100002,
-            400001,
+            lab,
+            enemy,
         )
+
+    def test_a_unit_named_in_the_step_it_dies_is_the_dead_unit(self) -> None:
+        game = _Game()
+        (enemy,) = game.observe(0, make_unit(9, alliance=_ENEMY))
+        (marine,) = game.observe(16, make_unit(1, engaged_target_tag=9), dead=(9,))
+        assert isinstance(marine, OwnUnit)
+        assert marine.engaged_target is enemy
+        assert enemy.is_dead
 
     def test_a_tag_the_game_leaves_at_zero_names_no_unit(self) -> None:
         marine = _one(make_unit(1))
         assert isinstance(marine, OwnUnit)
-        assert (marine.add_on_id, marine.engaged_target_id) == (None, None)
+        assert (marine.add_on, marine.engaged_target) == (None, None)
 
     def test_the_weapon_cooldown_is_in_steps(self) -> None:
         marine = _one(make_unit(1, weapon_cooldown=11.0))
@@ -601,7 +741,8 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.order(AbilityId.MEDIVAC_LOAD, medivac, target=marine)
         game.turn(40)
         assert marine.is_stale
-        assert marine.id in {passenger.id for passenger in medivac.passengers}  # pyright: ignore[reportAttributeAccessIssue]
+        assert isinstance(medivac, OwnUnit)
+        assert marine in {passenger.unit for passenger in medivac.passengers}
         game.order(AbilityId.MEDIVAC_UNLOAD_AT, medivac, target=medivac.position)
         game.turn(60)
         assert not marine.is_stale
@@ -666,6 +807,18 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.kill(infestor))
         game.turn(8)
         assert type(victim) is Unit
+
+        # An SCV building a structure is its builder until the structure finishes.
+        game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.minerals))
+        scv = game.tracker.present_units.own.of_type(UnitTypeId.SCV)[0]
+        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scv, target=game.open_ground(home.towards(middle, 8)))
+        game.turn(120)
+        (building,) = game.tracker.present_units.own.of_type(UnitTypeId.SUPPLY_DEPOT)
+        assert not building.is_complete
+        assert (scv.construction, building.builder) == (building, scv)
+        game.turn(600)
+        assert building.is_complete
+        assert (scv.construction, building.builder) == (None, None)
 
         # Only death lets go of a unit.
         game.debug(game.kill(tank))

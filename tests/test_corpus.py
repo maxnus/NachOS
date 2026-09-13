@@ -81,7 +81,7 @@ _READS = {
     for cls in (Unit, OwnUnit)
 }
 # The reads that name other units, whose tags must all be ones the game reported a unit under.
-_NAMING = ("orders", "rally_targets", "passengers", "add_on_id", "engaged_target_id")
+_NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", "construction", "builder")
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)

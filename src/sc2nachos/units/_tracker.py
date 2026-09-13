@@ -32,6 +32,10 @@ _MOVABLE_UNIT_TYPE_IDS = frozenset(
     and (performer := ability.name.rsplit("_", 1)[0]) in UnitTypeId.__members__
 )
 
+# How far from where a build order was aimed a structure may stand and still be the one it builds. The game snaps a
+# structure's center to the grid, at most half a tile along each axis from the point it was ordered at.
+_BUILDER_REACH = 1.0
+
 type _UnitsByTag = dict[int, Unit[Any]]
 
 
@@ -39,6 +43,8 @@ class _UnitTracker:
     """The units of one game: one object under one id, whatever tags the game reports it under."""
 
     __slots__ = (
+        "_builders",
+        "_builders_now",
         "_by_tag",
         "_data",
         "_ignored_tags",
@@ -48,6 +54,8 @@ class _UnitTracker:
         "_present_units",
         "_present_units_by_tag",
         "_stale_units",
+        "_under_construction",
+        "_units_by_id",
         "_units_seen_per_alliance",
     )
 
@@ -59,8 +67,9 @@ class _UnitTracker:
         self._in_fog_tags: set[int] = set()
         # Tags in the fog of structures seen since elsewhere, left out for as long as the game goes on listing them.
         self._ignored_tags: set[int] = set()
-        # Every tag ever linked, dead units' included, to the id it names.
+        # Every tag ever linked, dead units' included, to the id it names, and every unit ever made by its id.
         self._ids: dict[int, int] = {}
+        self._units_by_id: dict[int, Unit[Any]] = {}
         # The last observation's units, by the tag it reported each under, and as a collection.
         self._present_units_by_tag: _UnitsByTag = {}
         self._present_units: Units[Unit[Any]] = Units()
@@ -69,6 +78,12 @@ class _UnitTracker:
         self._known_units: Units[Unit[Any]] | None = None
         # How many units of each alliance have been seen, indexed by the alliance's value, from which ids are made.
         self._units_seen_per_alliance = [0] * 5
+        # Each structure still being built by a unit that became it, as a drone does, and that unit.
+        self._builders: dict[Unit[Any], Unit[Any]] = {}
+        # Worked out from the last observation when first asked for: this player's unfinished structures, and each
+        # structure being built by a unit in the observation with that unit.
+        self._under_construction: list[Unit[Any]] | None = None
+        self._builders_now: dict[Unit[Any], Unit[Any]] | None = None
 
     @property
     def data(self) -> GameData:
@@ -87,12 +102,71 @@ class _UnitTracker:
             self._known_units = Units((*self._present_units, *self._stale_units.values()))
         return self._known_units
 
-    def identify(self, tag: int) -> int:
-        """The id of the unit the game reported under `tag`."""
+    def resolve(self, tag: int) -> Unit[Any]:
+        """The unit the game reported under `tag`, dead or alive."""
         try:
-            return self._ids[tag]
+            return self._units_by_id[self._ids[tag]]
         except KeyError:
             raise UnknownTagError(f"the game never reported a unit under tag {tag}") from None
+
+    def construction_of(self, unit: Unit[Any]) -> Unit[Any] | None:
+        """The unfinished structure of this player's that `unit`'s first order builds, or `None`.
+
+        Tested in game: an SCV's build order is aimed at the structure's center once construction starts, or at the
+        structure itself when construction is resumed, and it has no orders once construction is halted.
+        """
+        orders = unit._latest_data.orders
+        if not orders:
+            return None
+        order = orders[0]
+        if (target := self._order_target_position(order)) is None:
+            return None
+        nearest = _BUILDER_REACH * _BUILDER_REACH
+        built = None
+        for structure in self._structures_under_construction():
+            if not self._order_makes_structure(order, structure):
+                continue
+            dx, dy = target[0] - structure._position[0], target[1] - structure._position[1]
+            if dx * dx + dy * dy <= nearest:
+                nearest = dx * dx + dy * dy
+                built = structure
+        return built
+
+    def builder_of(self, structure: Unit[Any]) -> Unit[Any] | None:
+        """The unit building `structure` now: the drone that became it, or a unit in the observation building it."""
+        if (drone := self._builders.get(structure)) is not None:
+            return drone
+        if self._builders_now is None:
+            self._builders_now = {}
+            for unit in self._present_units_by_tag.values():
+                if unit._own and (built := self.construction_of(unit)) is not None:
+                    self._builders_now[built] = unit
+        return self._builders_now.get(structure)
+
+    def _order_target_position(self, order: raw_pb2.UnitOrder) -> tuple[float, float] | None:
+        """Where `order` is aimed: its point, or where the unit it targets stands, such as the geyser a gas building
+        goes on or an unfinished structure construction resumes on."""
+        if order.HasField("target_world_space_pos"):
+            return order.target_world_space_pos.x, order.target_world_space_pos.y
+        if order.HasField("target_unit_tag") and (unit_id := self._ids.get(order.target_unit_tag)) is not None:
+            position = self._units_by_id[unit_id]._position
+            return position[0], position[1]
+        return None
+
+    def _order_makes_structure(self, order: raw_pb2.UnitOrder, structure: Unit[Any]) -> bool:
+        """Whether `order` is the ability that makes `structure`'s type."""
+        row = self._data.units.get(structure._type_id) if structure._type_id is not None else None
+        return row is not None and row.creation_ability == order.ability_id
+
+    def _structures_under_construction(self) -> list[Unit[Any]]:
+        """This player's unfinished units in the last observation."""
+        if self._under_construction is None:
+            self._under_construction = [
+                unit
+                for unit in self._present_units_by_tag.values()
+                if unit._own and unit._latest_data.build_progress < 1.0
+            ]
+        return self._under_construction
 
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
         """Take in the units the observation at `step` reports, and what it says died."""
@@ -107,9 +181,13 @@ class _UnitTracker:
         for tag in dead:
             if (unit := self._by_tag.get(tag)) is not None:
                 self._mark_dead(unit, present)
+        if self._builders:
+            self._update_builders(present)
         self._present_units_by_tag = present
         self._present_units = Units(present.values())
         self._known_units = None
+        self._under_construction = None
+        self._builders_now = None
 
     def _update_known_tags(
         self, protos: Iterable[raw_pb2.Unit], previous: _UnitsByTag, step: int
@@ -168,12 +246,16 @@ class _UnitTracker:
         structure can change form between two observations as it goes, as a supply depot lowering does (in game).
         Alliance is, since a refinery stands at the same position as its geyser.
         """
-        # What left this observation without dying or being updated under another tag.
+        # What left this observation without dying or being updated under another tag, and the own units among them
+        # that had an order, one of which may have become a structure.
         departed: dict[tuple[int, float, float], Unit[Any]] = {}
+        ordered: list[Unit[Any]] = []
         for tag, unit in previous.items():
             if unit._step != step and tag not in dead:
                 report = unit._latest_data
                 departed[(report.alliance, report.pos.x, report.pos.y)] = unit
+                if unit._own and report.orders:
+                    ordered.append(unit)
         for proto in protos:
             display = proto.display_type
             unit = departed.pop((proto.alliance, proto.pos.x, proto.pos.y), None)
@@ -182,12 +264,48 @@ class _UnitTracker:
                 unit._update(proto, step)
             else:
                 unit = self._create_unit(proto, step)
+                if ordered and unit._own and (builder := self._find_builder(unit, ordered)) is not None:
+                    ordered.remove(builder)
+                    self._builders[unit] = builder
             tag = proto.tag
             self._by_tag[tag] = unit
             self._ids[tag] = unit._id
             if display == _IN_FOG:
                 self._in_fog_tags.add(tag)
             present[tag] = unit
+
+    def _find_builder(self, structure: Unit[Any], ordered: list[Unit[Any]]) -> Unit[Any] | None:
+        """The unit that became `structure`: one that left this observation carrying out the order that makes its type.
+
+        Tested in game: a drone that morphs into a structure leaves the observation with no death reported, and the
+        structure appears under a new tag.
+        """
+        builder = None
+        nearest = _BUILDER_REACH * _BUILDER_REACH
+        for unit in ordered:
+            order = unit._latest_data.orders[0]
+            if (
+                not self._order_makes_structure(order, structure)
+                or (target := self._order_target_position(order)) is None
+            ):
+                continue
+            dx, dy = target[0] - structure._position[0], target[1] - structure._position[1]
+            if dx * dx + dy * dy <= nearest:
+                nearest = dx * dx + dy * dy
+                builder = unit
+        return builder
+
+    def _update_builders(self, present: _UnitsByTag) -> None:
+        """Mark dead each unit that became a structure which has finished, or died without the unit coming back.
+
+        Tested in game: a drone whose structure is cancelled comes back under its own tag, with its health, in the
+        observation that reports the structure dead.
+        """
+        for structure, builder in list(self._builders.items()):
+            if structure._dead or structure.is_complete:
+                del self._builders[structure]
+                if builder._stale and not builder._dead:
+                    self._mark_dead(builder, present)
 
     def _handle_departures(self, departed: _UnitsByTag, present: _UnitsByTag, step: int) -> None:
         """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be."""
@@ -211,7 +329,9 @@ class _UnitTracker:
             raise NachOSError(f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids")
         self._units_seen_per_alliance[alliance] = count
         cls = OwnUnit if alliance == _OWN else Unit
-        return cls(proto, self, alliance * _IDS_PER_ALLIANCE + count, step)
+        unit = cls(proto, self, alliance * _IDS_PER_ALLIANCE + count, step)
+        self._units_by_id[unit._id] = unit
+        return unit
 
     def _mark_dead(self, unit: Unit[Any], present: _UnitsByTag) -> None:
         """Mark `unit` dead and let go of it: reported dead, or gone from a spot it could not have left."""
@@ -233,3 +353,5 @@ class _UnitTracker:
         self._present_units_by_tag = {}
         self._present_units = Units()
         self._known_units = None
+        self._under_construction = None
+        self._builders_now = None

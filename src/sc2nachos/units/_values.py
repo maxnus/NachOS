@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, Any, Self, final
 
 from s2clientprotocol import raw_pb2
 
@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from s2clientprotocol import common_pb2
+
+    from sc2nachos.units._unit import Unit
 
 
 class Alliance(ReadableIntEnum):
@@ -69,19 +71,19 @@ class Order:
 
     ability: AbilityId
     """What it was ordered."""
-    target: Point | int | None
-    """Where it was sent, the id of the unit it was sent at, or `None` for an order that needs neither."""
+    target: Point | Unit[Any] | None
+    """Where it was sent, the unit it was sent at, or `None` for an order that needs neither."""
     progress: float
     """How far through the order it is, from 0 to 1, for an order that trains or researches, and 0 otherwise."""
 
     @classmethod
-    def from_proto(cls, order: raw_pb2.UnitOrder, identify: Callable[[int], int]) -> Self:
-        """Read an order a unit reported, naming a unit by the id `identify` gives its tag."""
+    def from_proto(cls, order: raw_pb2.UnitOrder, resolve: Callable[[int], Unit[Any]]) -> Self:
+        """Read an order a unit reported, naming a unit by what `resolve` gives for its tag."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
-                target: Point | int | None = _target_point(order.target_world_space_pos)
+                target: Point | Unit[Any] | None = _target_point(order.target_world_space_pos)
             case "target_unit_tag":
-                target = identify(order.target_unit_tag)
+                target = resolve(order.target_unit_tag)
             case _:
                 target = None
         return cls(AbilityId.read(order.ability_id), target, order.progress)
@@ -92,15 +94,15 @@ class Order:
 class RallyTarget:
     """Where a structure sends what it makes."""
 
-    target: Point | int
-    """The id of the unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
+    target: Point | Unit[Any]
+    """The unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
 
     @classmethod
-    def from_proto(cls, rally: raw_pb2.RallyTarget, identify: Callable[[int], int]) -> Self:
-        """Read a rally point a structure reported, naming a unit by the id `identify` gives its tag."""
+    def from_proto(cls, rally: raw_pb2.RallyTarget, resolve: Callable[[int], Unit[Any]]) -> Self:
+        """Read a rally point a structure reported, naming a unit by what `resolve` gives for its tag."""
         tag = rally.tag
         if rally.HasField("tag") and tag != _NO_UNIT:
-            return cls(identify(tag))
+            return cls(resolve(tag))
         return cls(_target_point(rally.point))
 
 
@@ -109,7 +111,8 @@ class RallyTarget:
 class Passenger:
     """A unit inside a transport, bunker or other unit that holds units, as the one holding it reports it."""
 
-    id: int
+    unit: Unit[Any]
+    """The unit, which is stale while it is inside, reading as it was when it went in."""
     type_id: UnitTypeId
     health: float
     health_max: float
@@ -119,10 +122,10 @@ class Passenger:
     energy_max: float
 
     @classmethod
-    def from_proto(cls, passenger: raw_pb2.PassengerUnit, identify: Callable[[int], int]) -> Self:
-        """Read a passenger a transport reported, naming it by the id `identify` gives its tag."""
+    def from_proto(cls, passenger: raw_pb2.PassengerUnit, resolve: Callable[[int], Unit[Any]]) -> Self:
+        """Read a passenger a transport reported, naming it by what `resolve` gives for its tag."""
         return cls(
-            id=identify(passenger.tag),
+            unit=resolve(passenger.tag),
             type_id=UnitTypeId.read(passenger.unit_type),
             health=passenger.health,
             health_max=passenger.health_max,

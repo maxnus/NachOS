@@ -210,7 +210,8 @@ class Unit[K: UnitType]:
 
     @property
     def is_stale(self) -> bool:
-        """Whether the last observation left it out: it went out of sight, into a transport, or died."""
+        """Whether the last observation left it out: it went out of sight, into a transport or a gas building, into a
+        structure it is becoming, as a drone does, or died."""
         return self._stale
 
     @property
@@ -218,7 +219,9 @@ class Unit[K: UnitType]:
         """Whether it is dead: reported so, or a structure that cannot lift off or uproot missing from its spot.
 
         The game reports only the deaths a player can see. A structure that dies out of sight is found dead when its
-        spot comes into sight again and it is not there. A dead unit is stale for good.
+        spot comes into sight again and it is not there. A unit of this player's that became a structure, as a drone
+        does, is dead once that structure finishes, or dies without the unit coming back from a cancel. A dead unit is
+        stale for good.
         """
         return self._dead
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Order, Passenger, RallyTarget
@@ -18,8 +20,8 @@ class OwnUnit[K: UnitType](Unit[K]):
     @property
     def orders(self) -> tuple[Order, ...]:
         """What it is doing, then what it has queued."""
-        identify = self._tracker.identify
-        return tuple(Order.from_proto(order, identify) for order in self._latest_data.orders)
+        resolve = self._tracker.resolve
+        return tuple(Order.from_proto(order, resolve) for order in self._latest_data.orders)
 
     @property
     def is_idle(self) -> bool:
@@ -44,8 +46,8 @@ class OwnUnit[K: UnitType](Unit[K]):
     @property
     def passengers(self) -> tuple[Passenger, ...]:
         """The units inside it."""
-        identify = self._tracker.identify
-        return tuple(Passenger.from_proto(passenger, identify) for passenger in self._latest_data.passengers)
+        resolve = self._tracker.resolve
+        return tuple(Passenger.from_proto(passenger, resolve) for passenger in self._latest_data.passengers)
 
     @property
     def cargo_used(self) -> int:
@@ -60,17 +62,28 @@ class OwnUnit[K: UnitType](Unit[K]):
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where it sends what it makes."""
-        identify = self._tracker.identify
-        return tuple(RallyTarget.from_proto(rally, identify) for rally in self._latest_data.rally_targets)
+        resolve = self._tracker.resolve
+        return tuple(RallyTarget.from_proto(rally, resolve) for rally in self._latest_data.rally_targets)
 
     @property
-    def add_on_id(self) -> int | None:
-        """The id of its add-on, or `None` without one."""
+    def add_on(self) -> Unit[Any] | None:
+        """Its add-on, or `None` without one."""
         tag = self._latest_data.add_on_tag
-        return self._tracker.identify(tag) if tag else None
+        return self._tracker.resolve(tag) if tag else None
 
     @property
-    def engaged_target_id(self) -> int | None:
-        """The id of the unit it is attacking, or `None`."""
+    def engaged_target(self) -> Unit[Any] | None:
+        """The unit it is attacking, or `None`."""
         tag = self._latest_data.engaged_target_tag
-        return self._tracker.identify(tag) if tag else None
+        return self._tracker.resolve(tag) if tag else None
+
+    @property
+    def construction(self) -> Unit[Any] | None:
+        """The unfinished structure it is building now, or the one a drone became until it finishes, or `None`."""
+        return self._tracker.construction_of(self)
+
+    @property
+    def builder(self) -> Unit[Any] | None:
+        """The SCV building this structure now, or the drone that became it, or `None` for a structure nobody is
+        building, such as one halted, one warped in, or one finished."""
+        return self._tracker.builder_of(self)
