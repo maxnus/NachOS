@@ -92,3 +92,15 @@ def test_renaming_preserves_identity() -> None:
     """A curated name is free to differ from Blizzard's while still being the same id."""
     assert RawUnitTypeId.LurkerMP == UnitTypeId.LURKER
     assert RawUnitTypeId.Lurker != UnitTypeId.LURKER
+
+
+def test_a_buff_is_the_id_the_game_puts_on_units() -> None:
+    """Where the catalog has two spellings for one buff, the curated name is the one a game reports, tested in game.
+
+    A marauder's concussive shells put `Slow` on their target, never `DutchMarauderSlow`, and an immortal's
+    Barrier is `TakenDamage`, never `ImmortalOverload`.
+    """
+    assert RawBuffId.Slow == BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW
+    assert RawBuffId.TakenDamage == BuffId.IMMORTAL_BARRIER
+    assert RawBuffId.DutchMarauderSlow.value not in {int(member) for member in BuffId}
+    assert RawBuffId.ImmortalOverload.value not in {int(member) for member in BuffId}

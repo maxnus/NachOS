@@ -12,11 +12,12 @@ constantly. Answer it from these.
 - **What a live structure offers** is the only direct evidence that an upgrade is researchable:
   `query_available_abilities` on a debug-created structure. An armory offers vehicle weapons, ship weapons and
   vehicle and ship plating, and nothing else -- vehicle plating and ship plating are dead halves of a 2012 merge.
-- **Ask without the `tech_tree` cheat on.** It does more than waive requirements: under it a hydralisk is offered
-  every race's `BurrowDown` and the campaign-only `HydraliskFrenzy`, and its den is offered nothing but
-  `ResearchFrenzy`. Create the unit with `all_resources` alone and the answer is the real command card -- the den
-  offers Grooved Spines and Muscular Augments, the hydralisk only its universal orders. The cheat can only add
-  ids, so a dead id staying unoffered under it still counts.
+- **Ask without the `tech_tree` cheat on, and research what an answer needs for real.** The cheat waives every
+  requirement, so what it offers is not the command card a player has. Under it a hydralisk den is offered
+  `ResearchFrenzy`, which looks like a campaign leftover and is not: 5.0.14 reused the campaign's ids for
+  Nanomuscular Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under
+  `fast_build` a debug-created structure researches in seconds, which is how `tools/sweep_buffs.py` researches
+  everything a race has. The cheat can only add ids, so a dead id staying unoffered under it still counts.
 - **A debug-created unit can be yours where the real one is nobody's.** A force field a sentry casts is a neutral
   unit, owner 16, offered nothing; conjured straight onto the map it is yours and offers `Shatter`, which no
   player can ever reach. Check `alliance` on the real thing before believing what a created one is offered.
@@ -38,6 +39,19 @@ matches the state it is in: an uncloaked ghost offers `Behavior_CloakOn_Ghost` a
 empties a field instead. The exception is an id that names nothing anyone can order, whether because the game
 no longer honors it or because the game does it by itself. Two tests in `tests/test_gamedata.py` hold the rows
 that lose their maker, and fail when a new one turns up.
+
+**A buff is curated when a game puts it on a unit**, which `tools/sweep_buffs.py` finds by making it happen: it
+researches everything a race has, orders every ability each unit type is offered at a set of targets, and records
+each buff that turns up and which unit wears it. Buff names mislead more than any other: a marauder's concussive
+shells put `Slow` on their target and never `DutchMarauderSlow`, an immortal's Barrier is `TakenDamage` and never
+`ImmortalOverload`, and a ghost holding fire wears `GhostHoldFireB`, not `GhostHoldFire`. One a game reports is
+curated even where its raw name says it is only a tint: `RavenShredderMissileTint` marks the unit an anti-armor
+missile is flying at.
+
+**A buff or an effect is named after the one unit type that brings it on, then what a player sees**, as an
+ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,
+`HIGH_TEMPLAR_STORM`. Where no one type is its only source, as with a map's zones or the minerals every worker carries, the name has no unit in it.
+Gas is carried under a different buff by each race's worker, so it is `SCV_CARRYING_GAS` and its two siblings.
 
 **A table can name an ability the game no longer honors, and the upgrade table does it too.** It says the three
 terran vehicle-and-ship plating upgrades are researched by the `ArmoryResearchSwarm` spelling, which an armory

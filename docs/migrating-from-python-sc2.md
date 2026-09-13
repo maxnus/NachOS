@@ -49,6 +49,10 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **The numbers are the same, but the names often are not.** The curated enums use the names players use:
   `PUNISHERGRENADES` is `CONCUSSIVE_SHELLS`, `TERRANBUILD_BARRACKS` is `BUILD_BARRACKS`, and `ADEPTPHASESHIFT` is
   `ADEPT_SHADE`. `UnitTypeId(old.value)` translates one to the other.
+- **Two buffs are not the ids python-sc2's names suggest.** Concussive shells put `SLOW` on their target, never
+  `DUTCHMARAUDERSLOW`, and an immortal's Barrier is `TAKENDAMAGE`, never `IMMORTALOVERLOAD`. NachOS calls them
+  `BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW` and `BuffId.IMMORTAL_BARRIER`, and leaves the other two out. A buff is
+  named after the unit that brings it on, so `STIMPACK` is `MARINE_STIMMED`.
 - **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`.
   `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
