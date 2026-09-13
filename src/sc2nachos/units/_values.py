@@ -10,7 +10,6 @@ from s2clientprotocol import raw_pb2
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.ids._uncurated import read_id
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 class Alliance(ReadableIntEnum):
     """Whose side a unit is on, from this player's point of view."""
 
-    MINE = raw_pb2.Alliance.Self
+    OWN = raw_pb2.Alliance.Self
     ALLY = raw_pb2.Alliance.Ally
     NEUTRAL = raw_pb2.Alliance.Neutral
     ENEMY = raw_pb2.Alliance.Enemy
@@ -30,11 +29,11 @@ class Alliance(ReadableIntEnum):
 class Visibility(ReadableIntEnum):
     """How much of a unit this player can see."""
 
-    VISIBLE = raw_pb2.DisplayType.Visible
+    IN_VISION = raw_pb2.DisplayType.Visible
     """In sight."""
-    REMEMBERED = raw_pb2.DisplayType.Snapshot
-    """A structure out of sight, where it was when last seen."""
-    HIDDEN = raw_pb2.DisplayType.Hidden
+    IN_FOG = raw_pb2.DisplayType.Snapshot
+    """A structure out of sight, remembered where it was when last seen."""
+    INVISIBLE = raw_pb2.DisplayType.Hidden
     """In sight, but cloaked or burrowed where nothing detects it."""
 
 
@@ -65,7 +64,7 @@ def _target_point(point: common_pb2.Point) -> Point:
 
 @final
 @dataclass(frozen=True, slots=True)
-class UnitOrder:
+class Order:
     """Something a unit has been told to do and is doing, or has queued."""
 
     ability: AbilityId
@@ -85,7 +84,7 @@ class UnitOrder:
                 target = identify(order.target_unit_tag)
             case _:
                 target = None
-        return cls(read_id(AbilityId, order.ability_id), target, order.progress)
+        return cls(AbilityId.read(order.ability_id), target, order.progress)
 
 
 @final
@@ -93,17 +92,16 @@ class UnitOrder:
 class RallyTarget:
     """Where a structure sends what it makes."""
 
-    point: Point
-    """The position, which the game gives even for a rally onto a unit."""
-    unit_id: int | None
-    """The id of the unit rallied onto, or `None` for a rally onto the ground or onto a unit now gone."""
+    target: Point | int
+    """The id of the unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
 
     @classmethod
     def from_proto(cls, rally: raw_pb2.RallyTarget, identify: Callable[[int], int]) -> Self:
         """Read a rally point a structure reported, naming a unit by the id `identify` gives its tag."""
         tag = rally.tag
-        unit_id = identify(tag) if rally.HasField("tag") and tag != _NO_UNIT else None
-        return cls(_target_point(rally.point), unit_id)
+        if rally.HasField("tag") and tag != _NO_UNIT:
+            return cls(identify(tag))
+        return cls(_target_point(rally.point))
 
 
 @final
@@ -125,7 +123,7 @@ class Passenger:
         """Read a passenger a transport reported, naming it by the id `identify` gives its tag."""
         return cls(
             id=identify(passenger.tag),
-            type_id=read_id(UnitTypeId, passenger.unit_type),
+            type_id=UnitTypeId.read(passenger.unit_type),
             health=passenger.health,
             health_max=passenger.health_max,
             shield=passenger.shield,

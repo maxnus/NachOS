@@ -101,18 +101,20 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 |---|---|
 | `bot.all_units` | `api.units`, and `api.known_units` with the units out of sight |
 | `unit.tag`, to tell units apart | `unit.id` |
-| `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.MINE`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.REMEMBERED`, `Visibility.VISIBLE` |
+| `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `Visibility.IN_VISION` |
+| `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
-| `unit.shield_health` | `unit.health + unit.shield` |
+| `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `order.target` as a tag | `unit.add_on_id`, `order.target` as an id |
+| `UnitOrder` | `Order` |
 | `unit.distance_to(p)` | `unit.position.distance_to(p)` |
 | `unit.name` | `unit.type_id.name` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
-| `units.owned`, `structure` | `units.mine`, `units.structures` |
+| `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
 | `units.closer_than(d, p)` | `units.in_area(Circle(p, d))`, which counts a unit at exactly `d` |
 | `units.closest_n_units(p, n)` | `units.closest(n, p)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
@@ -136,14 +138,14 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   or the contents of a mineral field no one has looked at. python-sc2 answers 0.
 - **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
-  `is_idle`. `units.mine` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
+  `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
   neural parasite changes class, and changes back.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **Reaper grenades and force fields stay units.** python-sc2 moves them into `state.effects`; in NachOS they are
   in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army count.
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
   `all_units`; NachOS has neither yet.
-- **`weapon_cooldown` is in seconds.** python-sc2's counts steps.
+- **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.
 - **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
   and every filter answers a new one.
 - **Data of your own about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its
@@ -203,7 +205,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Resources` without the time |
-| `unit_data.cost.time` | `unit_data.build_time`, in seconds |
+| `unit_data.cost.time` | `unit_data.build_steps` |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_cost`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed` | `unit_data.speed` |
 | `unit_data._proto.weapons` | `unit_data.weapons` |
@@ -211,8 +213,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
-| `upgrade_data.cost.time` | `upgrade_data.research_time`, in seconds |
-| `weapon.speed` | `weapon.cooldown` |
+| `upgrade_data.cost.time` | `upgrade_data.research_steps` |
+| `weapon.speed`, in Normal-speed seconds | `weapon.cooldown_steps` |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
@@ -263,7 +265,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **A cost is minerals and vespene, and times are seconds beside it.** python-sc2's `Cost` carries a `time`
   in steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong
   nearly everywhere. NachOS has `Resources`, which adds, subtracts, scales, divides and answers `covers`, and
-  `build_time` and `research_time` are their own fields in seconds. Its amounts are fractional, since half a
+  `build_steps` and `research_steps` are their own fields. Its amounts are fractional, since half a
   cost and an average cost are ordinary things to want; what the game gave stays whole until something divides
   it.
 - **The cost of a morph is everything spent to reach it, and its build time is only the last step.** An orbital

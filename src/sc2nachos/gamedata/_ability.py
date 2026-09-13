@@ -8,7 +8,6 @@ from typing import Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._curated import curated
 from sc2nachos.ids import AbilityId
 
 
@@ -54,5 +53,5 @@ class AbilityData:
             footprint_radius=data.footprint_radius if data.HasField("footprint_radius") else None,
             needs_placement=data.is_building,
             allows_autocast=data.allow_autocast,
-            remaps_to=curated(AbilityId, data.remaps_to_ability_id),
+            remaps_to=AbilityId.get(data.remaps_to_ability_id),
         )

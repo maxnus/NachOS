@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Any, final, overload
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.units._kind import Kind
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
+from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance
 
 if TYPE_CHECKING:
@@ -113,12 +113,12 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if unit.alliance is alliance)
 
     @property
-    def mine[K: Kind](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
+    def own[K: UnitType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
         """This player's units."""
         return Units(unit for unit in self._units if isinstance(unit, OwnUnit))
 
     @property
-    def ally(self) -> Units[U]:
+    def allied(self) -> Units[U]:
         """The units of this player's allies."""
         return self._of_alliance(Alliance.ALLY)
 
@@ -138,9 +138,9 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if unit.is_structure)
 
     @property
-    def ready(self) -> Units[U]:
-        """The units finished being built. Raises `NotReportedError` if one of them was never shown in sight."""
-        return Units(unit for unit in self._units if unit.is_ready)
+    def complete(self) -> Units[U]:
+        """The units that have finished being built, or warping in. Raises `NotReportedError` for one never in sight."""
+        return Units(unit for unit in self._units if unit.is_complete)
 
     @property
     def idle[O: OwnUnit[Any]](self: Units[O]) -> Units[O]:

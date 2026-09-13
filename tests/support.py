@@ -127,8 +127,8 @@ def make_unit(
     unit_type: int = UnitTypeId.MARINE,
     *,
     at: tuple[float, float] = (10.0, 10.0),
-    alliance: Alliance = Alliance.MINE,
-    visibility: Visibility = Visibility.VISIBLE,
+    alliance: Alliance = Alliance.OWN,
+    visibility: Visibility = Visibility.IN_VISION,
     **fields: Any,
 ) -> raw_pb2.Unit:
     """A unit as the game would report it: this player's marine, in sight, unless told otherwise."""

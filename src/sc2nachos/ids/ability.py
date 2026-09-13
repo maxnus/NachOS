@@ -8,11 +8,11 @@ LARVA_MORPH_ZERGLING -- and GENERAL where several units can. Where the game rema
 one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its three leveled siblings.
 """
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId
 
 
-class AbilityId(ReadableIntEnum):
+class AbilityId(IdEnum):
     """Ability ids used in multiplayer games."""
 
     ADEPT_SHADE = RawAbilityId.AdeptPhaseShift_AdeptPhaseShift

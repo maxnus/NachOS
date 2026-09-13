@@ -29,8 +29,8 @@ _TABLES = make_tables(
 def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
     """`protos` observed once."""
     tracker = _UnitTracker(_TABLES)
-    tracker.observe(make_observation(0, units=protos).observation.raw_data, 0)
-    return tracker.units
+    tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
+    return tracker.present_units
 
 
 def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
@@ -48,17 +48,17 @@ def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
                 orders=orders,
             )
         )
-    return _units(*protos).mine
+    return _units(*protos).own
 
 
 def _mixed() -> Units[Unit[Any]]:
     """A unit of every alliance, the enemy's hidden and remembered too."""
     return _units(
-        make_unit(1, alliance=Alliance.MINE),
+        make_unit(1, alliance=Alliance.OWN),
         make_unit(2, alliance=Alliance.ENEMY),
-        make_unit(3, alliance=Alliance.ENEMY, visibility=Visibility.HIDDEN),
-        make_unit(4, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.REMEMBERED),
-        make_unit(5, alliance=Alliance.NEUTRAL, visibility=Visibility.REMEMBERED),
+        make_unit(3, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE),
+        make_unit(4, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
+        make_unit(5, alliance=Alliance.NEUTRAL, visibility=Visibility.IN_FOG),
         make_unit(6, alliance=Alliance.ALLY),
     )
 
@@ -119,22 +119,22 @@ class TestFilters:
 
     def test_by_alliance(self) -> None:
         units = _mixed()
-        assert _tags(units.mine) == [1]
+        assert _tags(units.own) == [1]
         assert _tags(units.enemy) == [2, 3, 4]
         assert _tags(units.neutral) == [5]
-        assert _tags(units.ally) == [6]
+        assert _tags(units.allied) == [6]
 
     def test_structures_ready_and_idle(self) -> None:
         units = _mine(40)
         assert _tags(units.structures) == [unit.tag for unit in units if unit.type_id in _STRUCTURES]
-        assert _tags(units.ready) == [unit.tag for unit in units if unit.build_progress == 1.0]
+        assert _tags(units.complete) == [unit.tag for unit in units if unit.build_progress == 1.0]
         assert _tags(units.idle) == [unit.tag for unit in units if not unit.orders]
 
     def test_a_filter_over_what_was_never_shown_in_sight_raises(self) -> None:
         """The hidden enemy was never in sight, so how far it is built was never reported."""
         with pytest.raises(NotReportedError):
-            _ = _mixed().ready
-        assert _tags(_mixed().mine.idle) == [1]
+            _ = _mixed().complete
+        assert _tags(_mixed().own.idle) == [1]
 
     def test_by_predicate(self) -> None:
         units = _mine(40)

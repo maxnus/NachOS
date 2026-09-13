@@ -9,14 +9,16 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import steps_to_seconds
-from sc2nachos.gamedata._curated import curated
 from sc2nachos.gamedata._resources import Resources
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+
+# A game second at Normal speed; ladder games run at Faster, which is 22.4 steps a real second.
+_STEPS_PER_NORMAL_SECOND = 16
 
 
 class Attribute(ReadableIntEnum):
@@ -56,8 +58,8 @@ class Weapon:
     """Hits landed per attack, which is two for a colossus."""
     range: float
     """How far it reaches."""
-    cooldown: float
-    """Seconds between one attack and the next."""
+    cooldown_steps: float
+    """Steps between one attack and the next."""
     damage_bonuses: Mapping[Attribute, float]
     """What each attribute the target has adds to the damage of a hit."""
 
@@ -70,8 +72,9 @@ class Weapon:
             damage=weapon.damage,
             attacks=weapon.attacks,
             range=weapon.range,
-            # The game calls this the weapon's speed, though a longer one means a slower weapon.
-            cooldown=weapon.speed,
+            # The game calls this the weapon's speed, though a longer one means a slower weapon, and gives it in
+            # seconds of the game's Normal speed, which runs 16 steps a second.
+            cooldown_steps=weapon.speed * _STEPS_PER_NORMAL_SECOND,
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
@@ -87,8 +90,8 @@ class UnitTypeData:
     """The race it belongs to."""
     cost: Resources
     """Everything spent to reach this type: an orbital command is 550, the command center's 400 included."""
-    build_time: float
-    """Seconds to make one, counting only the last step where it morphs from another type."""
+    build_steps: float
+    """Steps to make one, counting only the last stage where it morphs from another type."""
     supply_cost: float
     """What it takes of the supply cap."""
     supply_provided: float
@@ -127,7 +130,7 @@ class UnitTypeData:
             id=UnitTypeId(unit.unit_id),
             race=Race(unit.race),
             cost=Resources(unit.mineral_cost, unit.vespene_cost),
-            build_time=steps_to_seconds(unit.build_time),
+            build_steps=unit.build_time,
             supply_cost=unit.food_required,
             supply_provided=unit.food_provided,
             cargo_size=unit.cargo_size,
@@ -136,13 +139,13 @@ class UnitTypeData:
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon.from_proto(weapon) for weapon in unit.weapons),
-            creation_ability=curated(AbilityId, unit.ability_id),
-            tech_requirement=curated(UnitTypeId, unit.tech_requirement),
+            creation_ability=AbilityId.get(unit.ability_id),
+            tech_requirement=UnitTypeId.get(unit.tech_requirement),
             tech_requirement_attached=unit.require_attached,
             # An alias the curated ids leave out is dropped: a viking's names an empty row nothing is ever one of.
-            tech_aliases=tuple(filter(None, (curated(UnitTypeId, alias) for alias in unit.tech_alias))),
+            tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
             # The game calls this the morphed variant, though it names the type morphed from.
-            base_type=curated(UnitTypeId, unit.unit_alias),
+            base_type=UnitTypeId.get(unit.unit_alias),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
         )

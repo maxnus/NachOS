@@ -41,14 +41,14 @@ class _Game:
         step = _step(observation)
         tables = GameData(data)
         units = _UnitTracker(tables)
-        units.observe(observation.observation.raw_data, step)
+        units.update(observation.observation.raw_data, step)
         return cls(client, GameMap(info), tables, units, observation, step)
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
         self.observation = self.client.observation(game_loop=step)
         self.step = _step(self.observation)
-        self.units.observe(self.observation.observation.raw_data, self.step)
+        self.units.update(self.observation.observation.raw_data, self.step)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -137,7 +137,7 @@ class Api:
     @property
     def units(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, structures remembered out of sight and hidden units included."""
-        return self._playing().units.units
+        return self._playing().units.present_units
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
