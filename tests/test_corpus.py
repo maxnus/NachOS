@@ -1,6 +1,7 @@
 """The recorded games everything above the protocol is tested against, and what they have to hold."""
 
 import contextlib
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,11 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata import GameData
+from sc2nachos.gamemap import GameMap
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
+from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit
 from sc2nachos.units._tracker import _UnitTracker
 
@@ -106,3 +109,26 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
                 for name in _READS[type(unit)]:
                     with contextlib.suppress(NotReportedError):
                         getattr(unit, name)
+
+
+# Every read of an observation beyond its units.
+_STATE_READS = sorted(
+    name
+    for name, member in vars(_State).items()
+    if isinstance(member, property | cached_property) and not name.startswith("_")
+)
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
+    recording = Recording(path)
+    tracker = _UnitTracker(_tables(recording))
+    game_map = GameMap(
+        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
+    )
+    for observation in _observations(recording):
+        tracker.update(observation.observation.raw_data, observation.observation.game_loop)
+        state = _State(observation, tracker, game_map)
+        for name in _STATE_READS:
+            getattr(state, name)
+    assert "actions" in _STATE_READS and "vision" in _STATE_READS

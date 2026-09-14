@@ -47,6 +47,7 @@ class _UnitTracker:
         "_builders_now",
         "_by_tag",
         "_data",
+        "_newly_dead_units",
         "_ignored_tags",
         "_ids",
         "_in_fog_tags",
@@ -76,6 +77,8 @@ class _UnitTracker:
         # The units out of the observation and not dead, by id.
         self._stale_units: dict[int, Unit[Any]] = {}
         self._known_units: Units[Unit[Any]] | None = None
+        # The units the last observation found dead.
+        self._newly_dead_units: list[Unit[Any]] = []
         # How many units of each alliance have been seen, indexed by the alliance's value, from which ids are made.
         self._units_seen_per_alliance = [0] * 5
         # Each structure still being built by a unit that became it, as a drone does, and that unit.
@@ -102,7 +105,15 @@ class _UnitTracker:
             self._known_units = Units((*self._present_units, *self._stale_units.values()))
         return self._known_units
 
-    def resolve(self, tag: int) -> Unit[Any]:
+    @property
+    def newly_dead_units(self) -> Units[Unit[Any]]:
+        """Every unit the last observation found dead, whether the game reported it or not.
+
+        The game also reports deaths under tags it never reported a unit under (corpus), which name no unit.
+        """
+        return Units(self._newly_dead_units)
+
+    def unit_by_tag(self, tag: int) -> Unit[Any]:
         """The unit the game reported under `tag`, dead or alive."""
         try:
             return self._units_by_id[self._ids[tag]]
@@ -172,6 +183,7 @@ class _UnitTracker:
         """Take in the units the observation at `step` reports, and what it says died."""
         previous = self._present_units_by_tag
         dead = observation.event.dead_units
+        self._newly_dead_units = []
         present, new = self._update_known_tags(observation.units, previous, step)
         if new:
             self._identify_new_tags(new, previous, present, step, set(dead))
@@ -339,6 +351,7 @@ class _UnitTracker:
         sighting = unit._latest_data_in_vision
         tags = {unit._tag} if sighting is None else {unit._tag, sighting.tag}
         unit._mark_dead()
+        self._newly_dead_units.append(unit)
         self._stale_units.pop(unit._id, None)
         for tag in tags:
             if self._by_tag.get(tag) is unit:
@@ -353,5 +366,6 @@ class _UnitTracker:
         self._present_units_by_tag = {}
         self._present_units = Units()
         self._known_units = None
+        self._newly_dead_units = []
         self._under_construction = None
         self._builders_now = None

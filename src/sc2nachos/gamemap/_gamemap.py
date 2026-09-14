@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, final
 
 import numpy
 
+from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.protocol import ProtocolError
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -50,8 +50,8 @@ class GameMap:
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
         self._name = info.map_name
         self._playable = playable
-        walkable = _tile_values(start.pathing_grid, playable) != 0
-        buildable = _tile_values(start.placement_grid, playable) != 0
+        walkable = image_tiles(start.pathing_grid, playable) != 0
+        buildable = image_tiles(start.placement_grid, playable) != 0
         self._pathing = Grid(walkable, origin=origin, outside=False, readonly=True)
         self._placement = Grid(buildable, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
@@ -128,26 +128,6 @@ class GameMap:
         return self._opponent_start_locations
 
 
-def _pixels(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """The whole of `image`, indexed `[x, y]`, once it is known to be as large as it says and to cover `area`."""
-    width, height, bits = image.size.x, image.size.y, image.bits_per_pixel
-    if bits not in (1, 8) or len(image.data) != math.ceil(width * height * bits / 8):
-        raise ProtocolError(f"a {width} by {height} image of {bits} bits a pixel cannot be {len(image.data)} bytes")
-    if not Rectangle(0, 0, width, height).encloses(area):
-        raise ProtocolError(f"a {width} by {height} image does not cover {area!r}")
-    pixels = numpy.frombuffer(image.data, dtype=numpy.uint8)
-    if bits == 1:
-        pixels = numpy.unpackbits(pixels, count=width * height)
-    # Each row is one y, from the bottom of the map up.
-    return pixels.reshape(height, width).T
-
-
-def _tile_values(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """What `image` says about each tile of `area`, one pixel to a tile."""
-    xs, ys = area.tile_range()
-    return numpy.ascontiguousarray(_pixels(image, area)[xs.start : xs.stop, ys.start : ys.stop])
-
-
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     """The height at every corner of the tiles of `area`, one more of them across and up than there are tiles.
 
@@ -155,7 +135,7 @@ def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
     with 127 at zero.
     """
     xs, ys = area.tile_range()
-    corners = _pixels(image, area)[xs.start : xs.stop + 1, ys.start : ys.stop + 1]
+    corners = image_array(image, area)[xs.start : xs.stop + 1, ys.start : ys.stop + 1]
     # An area reaching the far edge of the image has no corners past it, so the edge's own stand in for them.
     missing = (len(xs) + 1 - corners.shape[0], len(ys) + 1 - corners.shape[1])
     corners = numpy.pad(corners, ((0, missing[0]), (0, missing[1])), mode="edge")

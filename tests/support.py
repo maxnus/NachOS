@@ -5,14 +5,18 @@ from collections.abc import Iterable
 from typing import Any
 
 import numpy
-from s2clientprotocol import common_pb2, data_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos.gamedata import GameData
+from sc2nachos.gamemap import GameMap
+from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client, Status
-from sc2nachos.units import Alliance, Visibility
+from sc2nachos.state._state import _State
+from sc2nachos.units import Alliance, Unit, Units, Visibility
+from sc2nachos.units._tracker import _UnitTracker
 
 
 class FakeTransport:
@@ -113,11 +117,29 @@ def make_observation(
     *results: tuple[int, Result],
     units: Iterable[raw_pb2.Unit] = (),
     dead: Iterable[int] = (),
+    score: score_pb2.Score | None = None,
+    common: sc2api_pb2.PlayerCommon | None = None,
+    upgrades: Iterable[int] = (),
+    visibility: common_pb2.ImageData | None = None,
+    creep: common_pb2.ImageData | None = None,
+    effects: Iterable[raw_pb2.Effect] = (),
+    chat: Iterable[tuple[int, str]] = (),
+    actions: Iterable[sc2api_pb2.Action] = (),
 ) -> sc2api_pb2.ResponseObservation:
-    """What the game saw at `game_loop`: `units`, the tags of those that died, and how it ended if it has."""
-    raw = raw_pb2.ObservationRaw(units=units, event=raw_pb2.Event(dead_units=dead))
+    """What the game saw at `game_loop`: `units`, the tags of those that died, how it ended if it has, and the rest of
+    what an observation reports, each message sent to the chat as the sender's id and the text."""
+    raw = raw_pb2.ObservationRaw(
+        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades),
+        units=units,
+        map_state=raw_pb2.MapState(visibility=visibility, creep=creep),
+        event=raw_pb2.Event(dead_units=dead),
+        effects=effects,
+    )
+    observation = sc2api_pb2.Observation(game_loop=game_loop, player_common=common, score=score, raw_data=raw)
     return sc2api_pb2.ResponseObservation(
-        observation=sc2api_pb2.Observation(game_loop=game_loop, raw_data=raw),
+        actions=actions,
+        chat=[sc2api_pb2.ChatReceived(player_id=player, message=text) for player, text in chat],
+        observation=observation,
         player_result=[sc2api_pb2.PlayerResult(player_id=player, result=result.value) for player, result in results],
     )
 
@@ -151,3 +173,62 @@ def make_client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]
     """A client over a transport that will answer `responses`, and that transport."""
     transport = FakeTransport(*responses)
     return Client(transport), transport
+
+
+class RealGame:
+    """A game against the computer, played a step at a time by hand, with its units tracked."""
+
+    def __init__(self, client: Client, player: int) -> None:
+        self.client = client
+        self.player = player
+        self.map = GameMap(client.game_info())
+        self.tracker = _UnitTracker(GameData(client.game_data()))
+        self.state = self._observe()
+
+    def _observe(self) -> _State:
+        response = self.client.observation()
+        self.tracker.update(response.observation.raw_data, response.observation.game_loop)
+        return _State(response, self.tracker, self.map)
+
+    def turn(self, steps: int) -> Units[Unit[Any]]:
+        """Let `steps` pass, then observe."""
+        self.client.step(steps)
+        self.state = self._observe()
+        return self.tracker.present_units
+
+    def debug(self, *commands: debug_pb2.DebugCommand) -> None:
+        self.client.debug(commands)
+
+    def create(self, unit_type: UnitTypeId, at: Point, *, owner: int | None = None) -> debug_pb2.DebugCommand:
+        """The command creating a unit of `unit_type` at `at`, the player's own unless another `owner` is given."""
+        position = common_pb2.Point2D(x=at.x, y=at.y)
+        unit = debug_pb2.DebugCreateUnit(unit_type=unit_type, owner=owner or self.player, pos=position, quantity=1)
+        return debug_pb2.DebugCommand(create_unit=unit)
+
+    def kill(self, *units: Unit[Any]) -> debug_pb2.DebugCommand:
+        return debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[unit.tag for unit in units]))
+
+    def order(self, ability: int, unit: Unit[Any], *, target: Unit[Any] | Point | None = None) -> None:
+        command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=[unit.tag])
+        if isinstance(target, Point):
+            command.target_world_space_pos.x, command.target_world_space_pos.y = target
+        elif target is not None:
+            command.target_unit_tag = target.tag
+        self.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))])
+
+    def newest(self, unit_type: UnitTypeId) -> Unit[Any]:
+        """The unit of `unit_type` first seen last."""
+        return max(self.tracker.present_units.of_type(unit_type), key=lambda unit: unit.id)
+
+    def open_ground(self, near: Point) -> Point:
+        """The corner nearest to `near` that the four tiles around it can be built on."""
+        placement = self.map.placement
+        corner = near.snapped(step=1)
+        for reach in range(12):
+            for dx in range(-reach, reach + 1):
+                for dy in range(-reach, reach + 1):
+                    spot = corner + (dx, dy)
+                    tiles = [spot + offset for offset in ((-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5), (0.5, 0.5))]
+                    if all(placement[tile] for tile in tiles):
+                        return spot
+        raise AssertionError(f"no open ground near {near}")

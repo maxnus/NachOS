@@ -9,16 +9,13 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.constants import STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._resources import Resources
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-
-# A game second at Normal speed; ladder games run at Faster, which is 22.4 steps a real second.
-_STEPS_PER_NORMAL_SECOND = 16
 
 
 class Attribute(ReadableIntEnum):
@@ -74,7 +71,7 @@ class Weapon:
             range=weapon.range,
             # The game calls this the weapon's speed, though a longer one means a slower weapon, and gives it in
             # seconds of the game's Normal speed, which runs 16 steps a second.
-            cooldown_steps=weapon.speed * _STEPS_PER_NORMAL_SECOND,
+            cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
