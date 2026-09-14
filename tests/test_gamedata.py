@@ -7,6 +7,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, Resources, TargetDomain, TargetType
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -23,19 +24,19 @@ _RESEARCHED_BY_A_DEAD_ID = {
     UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3,
 }
 
-# Rows whose maker the curated ids leave out, for one of two reasons. The first six name an ability the game no
-# longer honors: tested in game, none is ever offered and ordering one does nothing, while HYDRALISK_MORPH_LURKER,
-# plain SCV_BUILD_REFINERY aimed at a rich geyser, ZERGLING_MORPH_BANELING, RAVEN_SPAWN_AUTO_TURRET,
-# SWARM_HOST_SPAWN_LOCUST and DISRUPTOR_PURIFICATION_NOVA all work. The rest name one nothing can order -- the game
-# disguises a changeling, collapses a tower and takes a locust into the air by itself, and a bare tech lab or
-# reactor is a tech requirement no unit is ever built as.
-_NO_MAKER = {
+# Rows naming a maker the game no longer honors: tested in game, none is ever offered and ordering one does nothing.
+# `gamedata/_techtree/_overrides.py` names the ability that works for each.
+_DEAD_MAKERS = {
     UnitTypeId.LURKER: RawAbilityId.LurkerAspectMPFromHydraliskBurrowed_LurkerMPFromHydraliskBurrowed,
     UnitTypeId.REFINERY_RICH: RawAbilityId.TerranBuild_Refinery_325,
     UnitTypeId.BANELING: RawAbilityId.MorphZerglingToBaneling_Baneling,
     UnitTypeId.AUTO_TURRET: RawAbilityId.RavenBuild_AutoTurret,
     UnitTypeId.LOCUST: RawAbilityId.SpawnInfestedTerran_LocustMP,
     UnitTypeId.PURIFICATION_NOVA: RawAbilityId.PurificationNovaMorph_PurificationNova,
+}
+# Rows naming a maker nothing can order: the game disguises a changeling, collapses a tower and takes a locust into
+# the air by itself, and a bare tech lab or reactor is a tech requirement no unit is ever built as.
+_NO_MAKER = {
     UnitTypeId.CHANGELING_MARINE: RawAbilityId.DisguiseAsMarineWithoutShield_Marine,
     UnitTypeId.CHANGELING_MARINE_SHIELD: RawAbilityId.DisguiseAsMarineWithShield_Marine,
     UnitTypeId.CHANGELING_ZEALOT: RawAbilityId.DisguiseAsZealot_Zealot,
@@ -57,7 +58,7 @@ _NO_MAKER = {
     UnitTypeId.REACTOR: RawAbilityId.ReactorMorph,
     UnitTypeId.TECH_LAB: RawAbilityId.TechLabMorph,
 }
-_DEAD_LURKER_MORPH = _NO_MAKER[UnitTypeId.LURKER]
+_DEAD_LURKER_MORPH = _DEAD_MAKERS[UnitTypeId.LURKER]
 # The tech alias both forms of a viking carry: a row with no cost, speed, sight or weapon, that nothing requires
 # and no unit is ever one of. Curated nowhere either.
 _PHANTOM_VIKING = RawUnitTypeId.Viking
@@ -140,16 +141,15 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE, ursadon, unheard_of]))
         assert set(data.units) == {UnitTypeId.MARINE}
 
-    def test_a_field_naming_something_uncurated_reads_as_nothing(self) -> None:
-        """As the lurker's creation ability does, the game naming an ability that no longer works."""
-        hydralisk = data_pb2.UnitTypeData(unit_id=UnitTypeId.HYDRALISK, ability_id=_DEAD_LURKER_MORPH)
-        data = GameData(sc2api_pb2.ResponseData(units=[hydralisk]))
-        assert data.units[UnitTypeId.HYDRALISK].creation_ability is None
+    def test_what_makes_a_unit_type_is_what_the_tech_tree_found_and_not_what_the_message_names(self) -> None:
+        """The game names an ability for a lurker that no longer works; the tech tree names the one that does."""
+        lurker = data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER, ability_id=_DEAD_LURKER_MORPH)
+        data = GameData(sc2api_pb2.ResponseData(units=[lurker]))
+        assert data.units[UnitTypeId.LURKER].creation_ability is AbilityId.HYDRALISK_MORPH_LURKER
 
     def test_an_id_of_zero_names_nothing(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         marine = data.units[UnitTypeId.MARINE]
-        assert marine.tech_requirement is None
         assert marine.base_type is None
         assert marine.tech_aliases == ()
 
@@ -246,6 +246,17 @@ class TestARecordedGamesTables:
         data = _tables(path)
         assert (len(data.units), len(data.abilities)) == (len(UnitTypeId), len(AbilityId))
         assert (len(data.upgrades), len(data.effects)) == (len(UpgradeId), len(EffectId))
+
+    def test_an_override_stands_in_only_where_the_table_names_nothing_that_works(self, path: Path) -> None:
+        """Once the table names a working maker for one of these again, the override can go."""
+        answer = _answer(path)
+        data = GameData(answer)
+        named = {row.unit_id: row.ability_id for row in answer.units}
+        for unit, ability in CREATION_ABILITY_OVERRIDES.items():
+            assert AbilityId.get(named[unit]) is None, f"the table names {AbilityId.get(named[unit])} for {unit.name}"
+            assert data.units[unit].creation_ability is ability
+        dead = {unit: named[unit] for unit in CREATION_ABILITY_OVERRIDES if named[unit]}
+        assert dead == _DEAD_MAKERS
 
     def test_only_the_known_rows_lose_the_ability_that_makes_them(self, path: Path) -> None:
         """Everything else a curated row names is curated too, so nothing else comes back empty."""

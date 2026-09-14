@@ -19,25 +19,21 @@ import json
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
-from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy
+from _sandbox import NEUTRAL, SUCCESS, OpenGround, Sandbox, playing, reported
 from loguru import logger
-from numpy.lib.stride_tricks import sliding_window_view
-from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId, RawUpgradeId
-from sc2nachos.launch import GameProcess, Installation, Map
-from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, GameEndedError, WebSocketTransport
-
-MAP = "PylonAIE_v4"
+from sc2nachos.launch import Installation
+from sc2nachos.match import Race
+from sc2nachos.protocol import GameEndedError
 
 # A trial counts what lands within this reach of the middle of the sandbox, and watches that long for it.
 _REACH = 14.0
@@ -45,10 +41,6 @@ _WATCHES = 16
 _STEPS_PER_WATCH = 8
 # Each trial runs this many times, since a unit that is in the way or dies early can leave a buff unseen once.
 _REPEATS = 2
-# A unit created for player 0 is the map's own, and the game then reports it as belonging to player 16.
-_NEUTRAL = 0
-_NEUTRAL_REPORTED = 16
-
 # A few enemy units of every shape a spell can ask for: light and armored, bio and mech, shields and energy, air.
 _ENEMIES = (
     UnitTypeId.MARINE,
@@ -97,8 +89,6 @@ _SKIPPED_PREFIXES = (
     "Harvest_",
 )
 
-_SUCCESS = error_pb2.ActionResult.Success
-
 
 @dataclass(frozen=True, slots=True)
 class Sighting:
@@ -133,43 +123,13 @@ class Findings:
         }
 
 
-class OpenGround:
-    """The ground a structure can be put on that nothing has claimed yet."""
-
-    def __init__(self, game_map: GameMap, units: Iterable[raw_pb2.Unit]) -> None:
-        grid = game_map.placement
-        self._origin = grid.origin
-        self._free = numpy.array(grid.values, dtype=bool)
-        for unit in units:
-            reach = int(unit.radius) + 2
-            self._claim(int(unit.pos.x), int(unit.pos.y), reach)
-
-    def claim(self, near: Point, half: int) -> Point:
-        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken."""
-        size = 2 * half + 1
-        fits = sliding_window_view(self._free, (size, size)).all(axis=(2, 3))
-        xs, ys = numpy.nonzero(fits)
-        if not len(xs):
-            raise RuntimeError(f"no free ground {size} tiles across is left")
-        x0, y0 = near.x - self._origin.x - half, near.y - self._origin.y - half
-        best = int(numpy.argmin((xs - x0) ** 2 + (ys - y0) ** 2))
-        x, y = int(xs[best]) + half, int(ys[best]) + half
-        self._claim(x, y, half)
-        return Point((self._origin.x + x + 0.5, self._origin.y + y + 0.5))
-
-    def _claim(self, x: int, y: int, half: int) -> None:
-        """Take the square `2 * half + 1` tiles across centered on the tile at index `(x, y)`."""
-        self._free[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = False
-
-
 class Sweep:
     """One game played as `race`, and what it is found to put on units."""
 
-    def __init__(
-        self, client: Client, transport: WebSocketTransport, player: int, race: Race, findings: Findings
-    ) -> None:
+    def __init__(self, game: Sandbox, race: Race, findings: Findings) -> None:
+        client, player = game.client, game.player
+        self._game = game
         self._client = client
-        self._transport = transport
         self._player = player
         self._race = race
         self._map = GameMap(client.game_info())
@@ -178,13 +138,9 @@ class Sweep:
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
         # Lifted before anything is counted, since what the fog hides, such as the computer's base, would otherwise
         # be taken for something the sweep put there and cleared away, which ends the game.
-        self._debug(
-            debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.show_map),
-            debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.all_resources),
-            debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.fast_build),
-        )
+        game.cheat("show_map", "all_resources", "fast_build")
         client.step(1)
-        units = self._units()
+        units = self._game.units()
         home = next(Point((u.pos.x, u.pos.y)) for u in units if u.owner == player and u.radius > 2)
         self._home = home
         self._ground = OpenGround(self._map, units)
@@ -197,48 +153,6 @@ class Sweep:
         # The sandbox's structures, each by what put it there, since a trial can destroy one.
         self._fixtures: dict[int, tuple[UnitTypeId, int, Point]] = {}
         self.findings = findings
-
-    # --- Talking to the game
-
-    def _units(self) -> list[raw_pb2.Unit]:
-        return list(self._client.observation().observation.raw_data.units)
-
-    def _debug(self, *commands: debug_pb2.DebugCommand) -> None:
-        self._client.debug(commands)
-
-    def _create(self, unit_type: UnitTypeId, owner: int, at: Point) -> debug_pb2.DebugCommand:
-        position = common_pb2.Point2D(x=at.x, y=at.y)
-        return debug_pb2.DebugCommand(
-            create_unit=debug_pb2.DebugCreateUnit(unit_type=unit_type, owner=owner, pos=position, quantity=1)
-        )
-
-    def _offered(self, tag: int) -> list[int]:
-        query = query_pb2.RequestQuery(
-            abilities=[query_pb2.RequestQueryAvailableAbilities(unit_tag=tag)], ignore_resource_requirements=True
-        )
-        response = self._transport.request(sc2api_pb2.Request(query=query))
-        return [ability.ability_id for ability in response.query.abilities[0].abilities]
-
-    def _order(self, ability: int, tag: int, target: Point | int | None = None) -> error_pb2.ActionResult.ValueType:
-        command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=[tag])
-        if isinstance(target, Point):
-            command.target_world_space_pos.x, command.target_world_space_pos.y = target
-        elif target is not None:
-            command.target_unit_tag = target
-        action = sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
-        return self._client.act([action]).result[0]
-
-    def _spawn(self, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> list[raw_pb2.Unit]:
-        """Create every unit asked for, and return those the game really made, which it does not always."""
-        before = {unit.tag for unit in self._units()}
-        self._debug(*(self._create(unit_type, owner, at) for unit_type, owner, at in requests))
-        self._client.step(4)
-        made = [unit for unit in self._units() if unit.tag not in before]
-        wanted = {(unit_type, _reported(owner)) for unit_type, owner, _ in requests}
-        missing = wanted - {(unit.unit_type, unit.owner) for unit in made}
-        for unit_type, owner in sorted(missing):
-            logger.warning("The game did not create a {} for player {}", RawUnitTypeId(unit_type).name, owner)
-        return made
 
     # --- Researching everything
 
@@ -262,12 +176,12 @@ class Sweep:
             requests.append((unit_type, self._player, spot - (1, 0)))
             if self._race is Race.PROTOSS:
                 requests.append((UnitTypeId.PYLON, self._player, spot + (2.5, 2.5)))
-        made = self._spawn(requests)
+        made = self._game.spawn(requests)
         for unit in made:
             if unit.unit_type in _ADD_ON_BUILDERS:
-                self._order(AbilityId.GENERAL_BUILD_TECH_LAB, unit.tag, Point((unit.pos.x, unit.pos.y)))
+                self._game.order(AbilityId.GENERAL_BUILD_TECH_LAB, unit.tag, Point((unit.pos.x, unit.pos.y)))
         self._client.step(22 * 20)
-        standing = [unit for unit in self._units() if unit.owner == self._player]
+        standing = [unit for unit in self._game.units() if unit.owner == self._player]
         self._world.update(unit.tag for unit in standing)
         structures = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
         return [unit.tag for unit in standing if unit.unit_type in structures]
@@ -287,14 +201,15 @@ class Sweep:
 
     def _research_round(self, structures: Sequence[int]) -> bool:
         """Order one research on every idle structure that offers one, and let it run. False once none is left."""
-        busy = {unit.tag for unit in self._units() if unit.orders}
+        busy = {unit.tag for unit in self._game.units() if unit.orders}
         ordered = False
         for tag in structures:
             if tag in busy:
                 ordered = True
                 continue
-            offered = [ability for ability in self._offered(tag) if "Research" in RawAbilityId(ability).name]
-            if offered and self._order(offered[0], tag) == _SUCCESS:
+            abilities = self._game.offered([tag])[tag]
+            offered = [ability for ability in abilities if "Research" in RawAbilityId(ability).name]
+            if offered and self._game.order(offered[0], tag) == SUCCESS:
                 ordered = True
         self._client.step(22 * 3)
         return ordered
@@ -328,17 +243,17 @@ class Sweep:
 
     def _restore_fixtures(self, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> None:
         """Put back every sandbox structure a trial destroyed, and heal the rest."""
-        alive = {unit.tag: unit for unit in self._units() if unit.tag in self._fixtures}
+        alive = {unit.tag: unit for unit in self._game.units() if unit.tag in self._fixtures}
         self._fixtures = {tag: request for tag, request in self._fixtures.items() if tag in alive}
         standing = set(self._fixtures.values())
         for request in requests:
             if request not in standing:
-                made = self._spawn([request])
+                made = self._game.spawn([request])
                 self._fixtures.update((unit.tag, request) for unit in made if unit.unit_type == request[0])
         value = debug_pb2.DebugSetUnitValue
         heals = [value(unit_value=value.Life, value=unit.health_max, unit_tag=unit.tag) for unit in alive.values()]
         if heals:
-            self._debug(*(debug_pb2.DebugCommand(unit_value=heal) for heal in heals))
+            self._game.debug(*(debug_pb2.DebugCommand(unit_value=heal) for heal in heals))
 
     @property
     def _enemy(self) -> int:
@@ -350,7 +265,7 @@ class Sweep:
         if caster is None:
             return
         self._record(unit_type, None, {}, [caster])
-        abilities = [ability for ability in self._offered(caster.tag) if not _is_skipped(ability)]
+        abilities = [ability for ability in self._game.offered([caster.tag])[caster.tag] if not _is_skipped(ability)]
         logger.info("{} is offered {}", unit_type, [RawAbilityId(ability).name for ability in abilities])
         for ability in abilities * _REPEATS:
             caster = self._set_up_trial(unit_type, sandbox)
@@ -359,11 +274,11 @@ class Sweep:
 
     def _sweep_zone(self, zone: UnitTypeId, sandbox: Point) -> None:
         """Put one of the map's zones in the sandbox, walk the friends through it, and record what it puts on them."""
-        self._set_up_trial(zone, sandbox, owner=_NEUTRAL)
+        self._set_up_trial(zone, sandbox, owner=NEUTRAL)
         friends = [unit for unit in self._in_trial(sandbox) if unit.owner == self._player]
         before = {unit.tag: set(unit.buff_ids) for unit in friends}
         for friend in friends:
-            self._order(AbilityId.GENERAL_MOVE, friend.tag, sandbox + (4, 0))
+            self._game.order(AbilityId.GENERAL_MOVE, friend.tag, sandbox + (4, 0))
         for _ in range(_WATCHES):
             self._client.step(_STEPS_PER_WATCH)
             self._record(zone, AbilityId.GENERAL_MOVE, before, self._in_trial(sandbox))
@@ -375,15 +290,15 @@ class Sweep:
         """
         owner = self._player if owner is None else owner
         kept = self._world | set(self._fixtures)
-        leftovers = [unit.tag for unit in self._units() if unit.tag not in kept and _near(unit, sandbox)]
+        leftovers = [unit.tag for unit in self._game.units() if unit.tag not in kept and _near(unit, sandbox)]
         if leftovers:
-            self._debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=leftovers)))
+            self._game.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=leftovers)))
             self._client.step(2)
         self._restore_fixtures(self._sandbox_structures(sandbox))
         friends = [(t, self._player, sandbox + (-4, -3 + 2 * i)) for i, t in enumerate(_FRIENDS[self._race])]
         enemies = [(t, self._enemy, sandbox + (4, -7 + 2 * i)) for i, t in enumerate(_ENEMIES)]
-        made = self._spawn([(unit_type, owner, sandbox), *friends, *enemies])
-        caster = next((u for u in made if u.unit_type == unit_type and u.owner == _reported(owner)), None)
+        made = self._game.spawn([(unit_type, owner, sandbox), *friends, *enemies])
+        caster = next((u for u in made if u.unit_type == unit_type and u.owner == reported(owner)), None)
         if caster is not None:
             self._charge(made, caster)
         return caster
@@ -395,7 +310,7 @@ class Sweep:
         friends = [unit for unit in made if unit.owner == self._player and unit.tag != caster.tag]
         commands += [value(unit_value=value.Life, value=unit.health_max / 2, unit_tag=unit.tag) for unit in friends]
         commands += [value(unit_value=value.Shields, value=0, unit_tag=unit.tag) for unit in friends if unit.shield_max]
-        self._debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
+        self._game.debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
         self._client.step(2)
 
     def _trial(self, unit_type: UnitTypeId, ability: int, caster: raw_pb2.Unit, sandbox: Point) -> None:
@@ -411,7 +326,7 @@ class Sweep:
 
     def _in_trial(self, sandbox: Point) -> list[raw_pb2.Unit]:
         """Every unit near the sandbox that the sweep put there."""
-        return [unit for unit in self._units() if unit.tag not in self._world and _near(unit, sandbox)]
+        return [unit for unit in self._game.units() if unit.tag not in self._world and _near(unit, sandbox)]
 
     def _order_somehow(
         self, ability: int, caster: raw_pb2.Unit, sandbox: Point
@@ -431,7 +346,7 @@ class Sweep:
             candidates.append(None)
         refusal = error_pb2.ActionResult.Error
         for candidate in candidates:
-            if (refusal := self._order(ability, caster.tag, candidate)) == _SUCCESS:
+            if (refusal := self._game.order(ability, caster.tag, candidate)) == SUCCESS:
                 return None
         return refusal
 
@@ -455,11 +370,6 @@ def _is_skipped(ability: int) -> bool:
     """Whether `ability` makes, researches or only sends a unit somewhere, which puts no buff on anything."""
     name = RawAbilityId(ability).name
     return name.startswith(_SKIPPED_PREFIXES) or any(fragment in name for fragment in _SKIPPED_ANYWHERE)
-
-
-def _reported(owner: int) -> int:
-    """The player the game reports a unit created for `owner` as belonging to."""
-    return _NEUTRAL_REPORTED if owner == _NEUTRAL else owner
 
 
 def _near(unit: raw_pb2.Unit, sandbox: Point) -> bool:
@@ -487,20 +397,10 @@ def sweep(race: Race, installation: Installation) -> Findings:
 
 def _play(race: Race, installation: Installation, findings: Findings) -> None:
     """Play one game as `race`, sweeping whatever `findings` has not swept yet into it."""
-    game_map = Map.find(MAP, installation=installation)
-    with GameProcess.launch(installation, window=(1024, 768)) as game:
-        transport = WebSocketTransport.connect(game.url)
-        with closing(Client(transport)) as client:
-            try:
-                # Someone to play against keeps the game open; the easiest computer leaves the sandbox alone.
-                client.create_game(game_map.path, [Participant(), Computer(race, Difficulty.VERY_EASY)])
-                player = client.join_game(race, name="NachOS")
-                run = Sweep(client, transport, player, race, findings)
-                run.research_everything()
-                run.sweep_units()
-            finally:
-                client.leave_game()
-                client.quit()
+    with playing(race, installation) as game:
+        run = Sweep(game, race, findings)
+        run.research_everything()
+        run.sweep_units()
 
 
 def main(argv: Sequence[str]) -> None:

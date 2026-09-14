@@ -114,6 +114,55 @@ id zero and no ability at all.
 spelling, or renaming an upgrade leaves its general ability behind. A test in `tests/test_gamedata.py` holds
 the two together.
 
+## Refreshing `data/tech_tree.json`
+
+What each unit type is offered, what it needs for each ability and which abilities use up the unit ordered are swept
+in game, since `RequestData` has none of it: it names no unit that performs an ability, leaves a ghost, a thor, a
+battlecruiser and a mothership without the requirement they have, and holds no upgrade's requirements at all. After a
+patch, or after curating ids, run the sweep and then the generator, which writes the build's tech tree to
+`sc2nachos/gamedata/_techtree/_build_<build>.py` and reports how many offered abilities no curated id names yet:
+
+    uv run python tools/sweep_tech_tree.py
+    uv run python tools/generate_tech_tree.py
+
+A new build's module goes beside the old one, and `gamedata/_techtree/__init__.py` names the one NachOS plays by, so
+moving to a new build is a change of that import, which the generator points out when it is missing.
+
+**Where the game's own table is wrong, `sc2nachos/gamedata/_techtree/_overrides.py` says what is right**, by hand,
+with the evidence for each entry beside it. It lists the ability that makes a unit type where the table names one that
+does nothing, as with a baneling, or none, as with a rich assimilator, and `GameData` puts it in `creation_ability`.
+Neither tool writes that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep
+orders each override in game, and the generator refuses to write the tech tree unless the sweep saw each make its unit
+type. A test in `tests/test_gamedata.py` fails once the game's table names a working ability for a type there, and its entry
+can go. Add one only with a trial in game behind it, never to paper over something the sweep cannot reach.
+
+What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads everything off:
+
+- **It leaves out what a unit lacks the tech for**, and an add-on counts only on the structure it is attached to: a
+  bare barracks is not offered a marauder while another stands with a tech lab. It ignores energy and cooldowns.
+- **A cancel and a halt are offered only in the state they undo**: a barracks is offered its cancel while it trains,
+  an SCV a halt while it builds, and a structure going up both. So the sweep sets every structure making something
+  and a worker building before it reads them.
+- **An unpowered structure is offered nothing it needs power for**, which is `needs_power` and no requirement on a
+  pylon. A probe is offered a gateway with a nexus standing and no pylon at all.
+- **A requirement leaves the answer within 4 steps of its structure leaving the observation**, and a lifted barracks
+  still counts as a barracks, as its `tech_aliases` say. The sweep kills one structure type at a time, with the
+  types whose `tech_aliases` name it, so a requirement either of two unrelated structures would meet is found as
+  neither. None is known.
+- **Once Burrow is researched, every zerg unit that burrows is offered every zerg unit's burrow**, and ordered any of
+  them burrows as itself. The sweep orders each ability that makes a unit type on every type offered it, and a type
+  that turns into something other than the product is not counted as offered it.
+- **The other half of a toggle is offered once the unit has switched**, up to 22 steps after the order, and unloading
+  once a transport carries something.
+- **A gateway turns into a warp gate on its own once Warp Gate is researched**, so what a gateway trains is tried
+  before any research; nothing is found to make a warp gate out of a gateway.
+
+Running it, three things stood in the way, each of which read as a requirement until it was dealt with: the
+computer, which attacks at some point (`god`); workers carrying minerals, which are offered a return a fresh one is
+not (the starting workers go); and a pylon the game did not make, which left a twilight council unpowered and its
+research unread (a pylon goes beside every structure still unpowered). A placeholder, with no tag, stands where a
+structure was ordered from the moment it is ordered, so it is no sign that the structure has been started.
+
 ## Refreshing `data/stableid.json`
 
 **The file depends on the map.** SC2 rewrites it on every launch from the loaded map's mod dependencies:
