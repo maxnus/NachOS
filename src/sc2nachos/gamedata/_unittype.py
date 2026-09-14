@@ -11,11 +11,14 @@ from s2clientprotocol import data_pb2
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.constants import STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from sc2nachos.gamedata._tech_tree import TechTree
 
 
 class Attribute(ReadableIntEnum):
@@ -106,11 +109,14 @@ class UnitTypeData:
     weapons: tuple[Weapon, ...]
     """Every attack it carries."""
     creation_ability: AbilityId | None
-    """The ability that makes one, or `None` where the game names one it no longer honors."""
-    tech_requirement: UnitTypeId | None
-    """The structure that must stand before one can be made."""
-    tech_requirement_attached: bool
-    """Whether that structure must be an add-on on the one making it, as a tech lab is."""
+    """The ability that makes one, or `None` where nothing does."""
+    morphed_from: UnitTypeId | None
+    """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, and `None`
+    for a marine."""
+    ability_requirements: Mapping[AbilityId, TechRequirements]
+    """Each ability a unit of this type can be offered, with what must stand or be researched first."""
+    needs_power: bool
+    """Whether it needs to be powered by a pylon or a warp prism."""
     tech_aliases: tuple[UnitTypeId, ...]
     """Other types that satisfy the same tech requirement, an orbital command counting as a command center."""
     base_type: UnitTypeId | None
@@ -120,11 +126,17 @@ class UnitTypeData:
     has_vespene: bool
     """Whether vespene can be mined from it."""
 
+    @property
+    def abilities(self) -> frozenset[AbilityId]:
+        """Each ability a unit of this type can be offered."""
+        return frozenset(self.ability_requirements)
+
     @classmethod
-    def from_proto(cls, unit: data_pb2.UnitTypeData) -> Self:
-        """Read one unit type out of the game's tables."""
+    def from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
+        """Read one unit type out of the game's tables, with what `tech_tree` found about it in game."""
+        unit_type = UnitTypeId(unit.unit_id)
         return cls(
-            id=UnitTypeId(unit.unit_id),
+            id=unit_type,
             race=Race(unit.race),
             cost=Resources(unit.mineral_cost, unit.vespene_cost),
             build_steps=unit.build_time,
@@ -136,9 +148,10 @@ class UnitTypeData:
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon.from_proto(weapon) for weapon in unit.weapons),
-            creation_ability=AbilityId.get(unit.ability_id),
-            tech_requirement=UnitTypeId.get(unit.tech_requirement),
-            tech_requirement_attached=unit.require_attached,
+            creation_ability=tech_tree.creation_abilities.get(unit_type),
+            morphed_from=tech_tree.morph_sources.get(unit_type),
+            ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
+            needs_power=unit_type in tech_tree.power_consumers,
             # An alias the curated ids leave out is dropped: a viking's names an empty row nothing is ever one of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
             # The game calls this the morphed variant, though it names the type morphed from.

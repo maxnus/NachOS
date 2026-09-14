@@ -272,6 +272,16 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | nothing; see below |
+| `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
+| `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |
+| `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
+| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]` |
+| `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |
+| `EQUIVALENTS_FOR_TECH_PROGRESS` | `unit_data.tech_aliases` of the type that stands |
+| `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
+| `GENERIC_REDIRECT_ABILITIES` | `ability_data.remaps_to` |
+| a requirement's `requires_power` | `unit_data.needs_power` |
+| nothing | `ability_data.product`, `unit_data.morphed_from` |
 
 - **A table is keyed by the id itself**, where python-sc2 keys by the number inside it and every lookup reads
   `units[UnitTypeId.MARINE.value]`.
@@ -294,17 +304,18 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters
   instead on the `available` flag, which is no filter: the game marks `MorphZerglingToBaneling` unavailable, and
   a zergling morphs anyway.
-- **A field naming something uncurated reads as `None`, and `tech_aliases` drops it.** Twenty-two unit types
-  have no `creation_ability` and one has no `tech_aliases`, for two reasons, each checked in game rather
-  than guessed. Six name an ability the game no longer honors: a lurker's is
-  `LurkerAspectMPFromHydraliskBurrowed`, a baneling's is `MorphZerglingToBaneling`, a rich refinery's is a
-  second `TerranBuild` row, an auto turret's is `RavenBuild_AutoTurret`, a locust's is `SpawnInfestedTerran`
-  and a purification nova's is `PurificationNovaMorph` -- none is ever offered, none does anything when
-  ordered, and `HYDRALISK_MORPH_LURKER`, `ZERGLING_MORPH_BANELING`, plain `SCV_BUILD_REFINERY`,
-  `RAVEN_SPAWN_AUTO_TURRET`, `SWARM_HOST_SPAWN_LOCUST` and `DISRUPTOR_PURIFICATION_NOVA` are what work. The
-  rest name one nothing can order at all, since the game disguises a changeling, collapses a tower, takes a
-  locust into the air and digs a creep tumor in by itself, and a bare tech lab or reactor is a tech
-  requirement no unit is built as.
+- **A field naming something uncurated reads as `None`, and `tech_aliases` drops it, except where an override
+  names what works.** Six unit types' rows name a creation ability the game no longer honors: a lurker's is
+  `LurkerAspectMPFromHydraliskBurrowed`, a baneling's is `MorphZerglingToBaneling`, a rich refinery's is a second
+  `TerranBuild` row, an auto turret's is `RavenBuild_AutoTurret`, a locust's is `SpawnInfestedTerran` and a
+  purification nova's is `PurificationNovaMorph` -- none is ever offered and none does anything when ordered. A rich
+  assimilator's and a rich extractor's rows name none at all. For these eight, `creation_ability` is the ability
+  that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas builds and so on, which
+  `gamedata/_overrides.py` lists with its reasons and the tech tree sweep checks in game each time it runs
+  (`docs/curating-ids.md`). python-sc2 papers over only the lurker, by writing `MORPH_LURKER` into the message it
+  was handed. The rest name one nothing can order at all, and read `None`: the game disguises a changeling,
+  collapses a tower, takes a locust into the air and digs a creep tumor in by itself, and a bare tech lab or
+  reactor is a tech requirement no unit is built as.
   The viking is the `tech_aliases` one: its alias is a row with no cost, speed, sight or weapon that nothing
   requires and no unit is ever one of. python-sc2 keeps every one of these, because it filters unit types on
   `available` and the game sets that flag on them.
@@ -325,7 +336,31 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   command is 550 minerals, the command center's 400 included, and 25 seconds, the morph alone. python-sc2
   subtracts the predecessor in `morph_cost` and `calculate_ability_cost`, reading a hand-written
   `UNIT_TRAINED_FROM` and hard-coding that zerglings come in pairs and that a baneling really costs 25/25.
-  NachOS hands back the game's numbers as they stand; what morphs from what belongs to the relationship tables.
+  NachOS hands back the game's numbers as they stand, and `morphed_from` says what to subtract.
+- **What relates the tables to each other was swept in game, not read from the game's files.** `RequestData`
+  names no unit that performs an ability, gives a ghost, a thor, a battlecruiser and a mothership no requirement,
+  has room for only one, and holds no upgrade's requirements. python-sc2's dicts come from sc2-techtree, which
+  read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which asks the game what each
+  unit type is offered and sees what goes when a structure dies or an upgrade finishes (`docs/curating-ids.md`).
+  Where the two disagree, the game says a probe is offered a gateway and a forge once a nexus stands, whatever the
+  pylons, and a roach a ravager once a roach warren stands, where python-sc2 says a pylon and a hatchery.
+- **Requirements belong to a unit type and an ability together**, since one ability can need different things of
+  different types: a burrowed roach moves only once Tunneling Claws is researched, and nothing else needs anything
+  to move. `units[t].ability_requirements` holds an entry for every ability `units[t]` is offered, needing nothing where
+  it needs nothing. A structure required counts as standing where a type whose `tech_aliases` name it stands, and an
+  add-on among them has to be the unit's own, which is what python-sc2's `requires_techlab` says.
+- **Power is the structure's, not the ability's.** An unpowered gateway is offered nothing it trains, which
+  python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
+- **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
+  zerg unit that burrows is offered every zerg unit's burrow, and ordered any of them burrows as itself, so a
+  zergling's `abilities` hold only `ZERGLING_BURROW`. A general ability is never offered, so its `performers` are
+  those of the abilities that remap to it, and an id a unit only reports, such as `LIBERATOR_SIEGE_EXACT`, has none.
+  A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
+  to cancel, halt or unload. What a gateway warps in is not curated yet, so a warp gate trains nothing in the tables.
+- **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
+  gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
+  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. Take the price of a morph as its
+  `cost` less that of what it came from; python-sc2's `calculate_ability_cost` does it with a hand-written table.
 - **Reading the tables leaves the message they came from alone.** Building python-sc2's `GameData` writes
   `MORPH_LURKER` over that same lurker row in the `ResponseData` it was handed, so whatever reads that message
   afterwards sees the substitution rather than what the game said.

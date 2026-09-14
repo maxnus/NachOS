@@ -4,6 +4,7 @@ from sc2nachos.gamedata._ability import AbilityData, TargetType
 from sc2nachos.gamedata._effect import EffectData
 from sc2nachos.gamedata._gamedata import GameData
 from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unittype import Attribute, TargetDomain, UnitTypeData, Weapon
 from sc2nachos.gamedata._upgrade import UpgradeData
 
@@ -12,6 +13,7 @@ __all__ = [
     "Attribute",
     "EffectData",
     "GameData",
+    "TechRequirements",
     "Resources",
     "TargetDomain",
     "TargetType",
