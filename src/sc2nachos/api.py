@@ -8,10 +8,14 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.gamedata import GameData
+from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
+from sc2nachos.geometry import Grid
+from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
+from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
+from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
 
@@ -29,6 +33,7 @@ class _Game:
     data: Final[GameData]
     units: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
+    state: _State
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -42,13 +47,15 @@ class _Game:
         tables = GameData(data)
         units = _UnitTracker(tables)
         units.update(observation.observation.raw_data, step)
-        return cls(client, GameMap(info), tables, units, observation, step)
+        game_map = GameMap(info)
+        return cls(client, game_map, tables, units, observation, _State(observation, units, game_map), step)
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
         self.observation = self.client.observation(game_loop=step)
         self.step = _step(self.observation)
         self.units.update(self.observation.observation.raw_data, self.step)
+        self.state = _State(self.observation, self.units, self.map)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -143,6 +150,57 @@ class Api:
     def known_units(self) -> Units[Unit[Any]]:
         """Every unit not known to be dead: those in the last observation, then those it left out."""
         return self._playing().units.known_units
+
+    @property
+    def score(self) -> Score:
+        """The score the game keeps for this player."""
+        return self._playing().state.score
+
+    @property
+    def resources(self) -> Resources:
+        """The minerals and vespene this player has to spend."""
+        return self._playing().state.resources
+
+    @property
+    def supply(self) -> Supply:
+        """The supply this player's units take and its structures and units provide."""
+        return self._playing().state.supply
+
+    @property
+    def ui_unit_counts(self) -> UiUnitCounts:
+        """The counts of this player's idle workers, army units and warp gates the game's interface shows."""
+        return self._playing().state.ui_unit_counts
+
+    @property
+    def upgrades(self) -> frozenset[UpgradeId]:
+        """Every upgrade this player has finished researching.
+
+        Raises `UncuratedIdError` where one is an upgrade the curated ids leave out.
+        """
+        return self._playing().state.upgrades
+
+    @property
+    def vision(self) -> Grid[bool]:
+        """Where this player can see now, over the playable area, as the map's grids are."""
+        return self._playing().state.vision
+
+    @property
+    def explored(self) -> Grid[bool]:
+        """Where this player has seen at some point in the game, over the playable area."""
+        return self._playing().state.explored
+
+    @property
+    def creep(self) -> Grid[bool]:
+        """Where creep covers the ground, over the playable area."""
+        return self._playing().state.creep
+
+    @property
+    def effects(self) -> tuple[Effect, ...]:
+        """Every effect this player can see.
+
+        Raises `UncuratedIdError` where one is an effect the curated ids leave out.
+        """
+        return self._playing().state.effects
 
     def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
         """Play the game `client` has already joined to its end, and return how it ended for this player.

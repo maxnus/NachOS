@@ -9,8 +9,6 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
@@ -26,12 +24,11 @@ from sc2nachos.units import (
     Passenger,
     RallyTarget,
     Unit,
-    Units,
     UnknownTagError,
     Visibility,
 )
 from sc2nachos.units._tracker import _MOVABLE_UNIT_TYPE_IDS, _UnitTracker
-from support import FakeTransport, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import FakeTransport, RealGame, make_game_info, make_observation, make_response, make_tables, make_unit
 
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
@@ -135,6 +132,18 @@ class TestLifecycle:
         assert not game.tracker.known_units
         assert repr(marine) == "OwnUnit(MARINE, id=100001, at (10.00, 10.00), dead)"
 
+    def test_the_dead_units_are_those_the_last_observation_found_dead(self) -> None:
+        """The game also reports deaths under tags it never reported a unit under (corpus), which name no unit."""
+        game = _Game()
+        (marine, _) = game.observe(0, make_unit(1), make_unit(2))
+        game.observe(16, make_unit(2), dead=(1, 77))
+        assert list(game.tracker.newly_dead_units) == [marine]
+        game.observe(32, make_unit(2))
+        assert not game.tracker.newly_dead_units
+        game.tracker.update(make_observation(48, dead=(2,)).observation.raw_data, 48)
+        game.tracker.end()
+        assert not game.tracker.newly_dead_units
+
     def test_a_morph_keeps_the_unit_and_changes_its_type(self) -> None:
         game = _Game()
         (unit,) = game.observe(0, make_unit(1, UnitTypeId.BARRACKS))
@@ -235,6 +244,7 @@ class TestTheFog:
         game.observe(32)
         assert depot.is_dead
         assert not game.tracker.known_units
+        assert list(game.tracker.newly_dead_units) == [depot]
 
     def test_a_structure_that_can_move_missing_from_its_spot_is_stale_until_it_turns_up(self) -> None:
         game = _Game()
@@ -398,6 +408,11 @@ class TestUnitsThatBecomeStructures:
         assert drone.id not in game.tracker.known_units.ids
         assert isinstance(spine, OwnUnit)
         assert spine.builder is None
+
+    def test_the_drone_is_among_the_dead_units_once_its_structure_finishes(self) -> None:
+        game, drone, _ = self._started()
+        game.observe(32, _spine(2, 1.0))
+        assert list(game.tracker.newly_dead_units) == [drone]
 
     def test_a_cancel_brings_the_same_drone_back(self) -> None:
         game, drone, spine = self._started()
@@ -652,60 +667,6 @@ class TestThroughTheApi:
         assert api.units.by_id(100001) is not marine
 
 
-class _RealGame:
-    """A game against the computer, played a step at a time by hand, with its units tracked."""
-
-    def __init__(self, client: Client, player: int) -> None:
-        self.client = client
-        self.player = player
-        self.map = GameMap(client.game_info())
-        self.tracker = _UnitTracker(GameData(client.game_data()))
-
-    def turn(self, steps: int) -> Units[Unit[Any]]:
-        """Let `steps` pass, then observe."""
-        self.client.step(steps)
-        observation = self.client.observation().observation
-        self.tracker.update(observation.raw_data, observation.game_loop)
-        return self.tracker.present_units
-
-    def debug(self, *commands: debug_pb2.DebugCommand) -> None:
-        self.client.debug(commands)
-
-    def create(self, unit_type: UnitTypeId, at: Point, *, owner: int | None = None) -> debug_pb2.DebugCommand:
-        """The command creating a unit of `unit_type` at `at`, the player's own unless another `owner` is given."""
-        position = common_pb2.Point2D(x=at.x, y=at.y)
-        unit = debug_pb2.DebugCreateUnit(unit_type=unit_type, owner=owner or self.player, pos=position, quantity=1)
-        return debug_pb2.DebugCommand(create_unit=unit)
-
-    def kill(self, *units: Unit[Any]) -> debug_pb2.DebugCommand:
-        return debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[unit.tag for unit in units]))
-
-    def order(self, ability: int, unit: Unit[Any], *, target: Unit[Any] | Point | None = None) -> None:
-        command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=[unit.tag])
-        if isinstance(target, Point):
-            command.target_world_space_pos.x, command.target_world_space_pos.y = target
-        elif target is not None:
-            command.target_unit_tag = target.tag
-        self.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))])
-
-    def newest(self, unit_type: UnitTypeId) -> Unit[Any]:
-        """The unit of `unit_type` first seen last."""
-        return max(self.tracker.present_units.of_type(unit_type), key=lambda unit: unit.id)
-
-    def open_ground(self, near: Point) -> Point:
-        """The corner nearest to `near` that the four tiles around it can be built on."""
-        placement = self.map.placement
-        corner = near.snapped(step=1)
-        for reach in range(12):
-            for dx in range(-reach, reach + 1):
-                for dy in range(-reach, reach + 1):
-                    spot = corner + (dx, dy)
-                    tiles = [spot + offset for offset in ((-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5), (0.5, 0.5))]
-                    if all(placement[tile] for tile in tiles):
-                        return spot
-        raise AssertionError(f"no open ground near {near}")
-
-
 @pytest.mark.integration
 def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_death() -> None:
     """Run with `pytest -m integration`. Starts the game and plays a minute of it."""
@@ -719,7 +680,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         closing(Client(WebSocketTransport.connect(process.url))) as client,
     ):
         client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
-        game = _RealGame(client, client.join_game(Race.TERRAN))
+        game = RealGame(client, client.join_game(Race.TERRAN))
         enemy = 3 - game.player
         units = game.turn(1)
         home = units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position

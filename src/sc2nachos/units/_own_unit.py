@@ -20,8 +20,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[Order, ...]:
         """What it is doing, then what it has queued."""
-        resolve = self._tracker.resolve
-        return tuple(Order.from_proto(order, resolve) for order in self._latest_data.orders)
+        unit_by_tag = self._tracker.unit_by_tag
+        return tuple(Order.from_proto(order, unit_by_tag) for order in self._latest_data.orders)
 
     @property
     def is_idle(self) -> bool:
@@ -46,8 +46,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def passengers(self) -> tuple[Passenger, ...]:
         """The units inside it."""
-        resolve = self._tracker.resolve
-        return tuple(Passenger.from_proto(passenger, resolve) for passenger in self._latest_data.passengers)
+        unit_by_tag = self._tracker.unit_by_tag
+        return tuple(Passenger.from_proto(passenger, unit_by_tag) for passenger in self._latest_data.passengers)
 
     @property
     def cargo_used(self) -> int:
@@ -62,20 +62,20 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where it sends what it makes."""
-        resolve = self._tracker.resolve
-        return tuple(RallyTarget.from_proto(rally, resolve) for rally in self._latest_data.rally_targets)
+        unit_by_tag = self._tracker.unit_by_tag
+        return tuple(RallyTarget.from_proto(rally, unit_by_tag) for rally in self._latest_data.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:
         """Its add-on, or `None` without one."""
         tag = self._latest_data.add_on_tag
-        return self._tracker.resolve(tag) if tag else None
+        return self._tracker.unit_by_tag(tag) if tag else None
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
         """The unit it is attacking, or `None`."""
         tag = self._latest_data.engaged_target_tag
-        return self._tracker.resolve(tag) if tag else None
+        return self._tracker.unit_by_tag(tag) if tag else None
 
     @property
     def construction(self) -> Unit[Any] | None:

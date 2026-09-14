@@ -17,7 +17,9 @@ constantly. Answer it from these.
   `ResearchFrenzy`, which looks like a campaign leftover and is not: 5.0.14 reused the campaign's ids for
   Nanomuscular Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under
   `fast_build` a debug-created structure researches in seconds, which is how `tools/sweep_buffs.py` researches
-  everything a race has. The cheat can only add ids, so a dead id staying unoffered under it still counts.
+  everything a race has. The cheat can only add ids, so a dead id staying unoffered under it still counts. It also
+  hands the player 42 upgrades within a few steps, so leave it off where a test reads what research gives; `free`
+  and `fast_build` hand out none.
 - **A debug-created unit can be yours where the real one is nobody's.** A force field a sentry casts is a neutral
   unit, owner 16, offered nothing; conjured straight onto the map it is yours and offers `Shatter`, which no
   player can ever reach. Check `alliance` on the real thing before believing what a created one is offered.
