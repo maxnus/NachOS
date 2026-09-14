@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability import AbilityData
 from sc2nachos.gamedata._effect import EffectData
-from sc2nachos.gamedata._tech_tree_95841 import TECH_TREE
+from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamedata._unittype import UnitTypeData
 from sc2nachos.gamedata._upgrade import UpgradeData
 

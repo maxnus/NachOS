@@ -120,20 +120,20 @@ What each unit type is offered, what it needs for each ability and which abiliti
 in game, since `RequestData` has none of it: it names no unit that performs an ability, leaves a ghost, a thor, a
 battlecruiser and a mothership without the requirement they have, and holds no upgrade's requirements at all. After a
 patch, or after curating ids, run the sweep and then the generator, which writes the build's tech tree to
-`sc2nachos/gamedata/_tech_tree_<build>.py` and reports how many offered abilities no curated id names yet:
+`sc2nachos/gamedata/_techtree/_build_<build>.py` and reports how many offered abilities no curated id names yet:
 
     uv run python tools/sweep_tech_tree.py
     uv run python tools/generate_tech_tree.py
 
-A new build's module goes beside the old one, and `gamedata/_gamedata.py` names the one NachOS plays by, so moving to a
-new build is a change of that import, which the generator points out when it is missing.
+A new build's module goes beside the old one, and `gamedata/_techtree/__init__.py` names the one NachOS plays by, so
+moving to a new build is a change of that import, which the generator points out when it is missing.
 
-**Where the game's own table is wrong, `sc2nachos/gamedata/_overrides.py` says what is right**, by hand, with the
-evidence for each entry beside it. It lists the ability that makes a unit type where the table names one that does
-nothing, as with a baneling, or none, as with a rich assimilator, and `GameData` puts it in `creation_ability`. Neither
-tool writes that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep orders each
-override in game, and the generator refuses to write the tech tree unless the sweep saw each make its unit type. A
-test in `tests/test_gamedata.py` fails once the game's table names a working ability for a type there, and its entry
+**Where the game's own table is wrong, `sc2nachos/gamedata/_techtree/_overrides.py` says what is right**, by hand,
+with the evidence for each entry beside it. It lists the ability that makes a unit type where the table names one that
+does nothing, as with a baneling, or none, as with a rich assimilator, and `GameData` puts it in `creation_ability`.
+Neither tool writes that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep
+orders each override in game, and the generator refuses to write the tech tree unless the sweep saw each make its unit
+type. A test in `tests/test_gamedata.py` fails once the game's table names a working ability for a type there, and its entry
 can go. Add one only with a trial in game behind it, never to paper over something the sweep cannot reach.
 
 What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads everything off:

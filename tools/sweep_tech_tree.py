@@ -44,7 +44,7 @@ from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetType
-from sc2nachos.gamedata._overrides import CREATION_ABILITY_OVERRIDES
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId

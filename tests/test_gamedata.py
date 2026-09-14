@@ -7,7 +7,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._overrides import CREATION_ABILITY_OVERRIDES
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -25,7 +25,7 @@ _RESEARCHED_BY_A_DEAD_ID = {
 }
 
 # Rows naming a maker the game no longer honors: tested in game, none is ever offered and ordering one does nothing.
-# `gamedata/_overrides.py` names the ability that works for each.
+# `gamedata/_techtree/_overrides.py` names the ability that works for each.
 _DEAD_MAKERS = {
     UnitTypeId.LURKER: RawAbilityId.LurkerAspectMPFromHydraliskBurrowed_LurkerMPFromHydraliskBurrowed,
     UnitTypeId.REFINERY_RICH: RawAbilityId.TerranBuild_Refinery_325,

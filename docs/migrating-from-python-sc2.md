@@ -311,7 +311,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   purification nova's is `PurificationNovaMorph` -- none is ever offered and none does anything when ordered. A rich
   assimilator's and a rich extractor's rows name none at all. For these eight, `creation_ability` is the ability
   that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas builds and so on, which
-  `gamedata/_overrides.py` lists with its reasons and the tech tree sweep checks in game each time it runs
+  `gamedata/_techtree/_overrides.py` lists with its reasons and the tech tree sweep checks in game each time it runs
   (`docs/curating-ids.md`). python-sc2 papers over only the lurker, by writing `MORPH_LURKER` into the message it
   was handed. The rest name one nothing can order at all, and read `None`: the game disguises a changeling,
   collapses a tower, takes a locust into the air and digs a creep tumor in by itself, and a bare tech lab or

@@ -11,7 +11,7 @@ from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
-    from sc2nachos.gamedata._tech_tree import TechTree
+    from sc2nachos.gamedata._techtree import TechTree
 
 
 class TargetType(ReadableIntEnum):

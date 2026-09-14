@@ -11,8 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._overrides import CREATION_ABILITY_OVERRIDES
-from sc2nachos.gamedata._tech_tree import TechTree
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError

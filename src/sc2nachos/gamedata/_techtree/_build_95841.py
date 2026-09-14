@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import Final
 
 from sc2nachos.gamedata._tech_requirements import TechRequirements
-from sc2nachos.gamedata._tech_tree import TechTree
+from sc2nachos.gamedata._techtree._tech_tree import TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 TECH_TREE: Final = TechTree(

@@ -67,11 +67,11 @@ src = ["src", "tests"]
 
 [tool.ruff.format]
 # Laid out by `tools/generate_tech_tree.py`, which keeps a mapping's brace beside its parenthesis.
-exclude = ["src/sc2nachos/gamedata/_tech_tree_*.py"]
+exclude = ["src/sc2nachos/gamedata/_techtree/_build_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 # What the tech tree holds for one ability goes on one line, however long.
-"src/sc2nachos/gamedata/_tech_tree_*.py" = ["E501"]
+"src/sc2nachos/gamedata/_techtree/_build_*.py" = ["E501"]

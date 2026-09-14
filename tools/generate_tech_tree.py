@@ -1,12 +1,13 @@
-"""Generate `sc2nachos/gamedata/_tech_tree_<build>.py` from `data/tech_tree.json`, which `tools/sweep_tech_tree.py`
-writes.
+"""Generate `sc2nachos/gamedata/_techtree/_build_<build>.py` from `data/tech_tree.json`, which
+`tools/sweep_tech_tree.py` writes.
 
 Keeps what the curated ids name, and runs without StarCraft II. Run it again after sweeping, or after changing the
 curated ids::
 
     uv run python tools/generate_tech_tree.py
 
-A sweep on a new build writes a new module beside the old one, and `gamedata/_gamedata.py` imports the one it plays by.
+A sweep on a new build writes a new module beside the old one, and `gamedata/_techtree/__init__.py` imports the one
+NachOS plays by.
 """
 
 import json
@@ -18,14 +19,13 @@ from pathlib import Path
 from types import MappingProxyType
 
 from sc2nachos.gamedata import TechRequirements
-from sc2nachos.gamedata._overrides import CREATION_ABILITY_OVERRIDES
-from sc2nachos.gamedata._tech_tree import TechTree
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
 
 REPO = Path(__file__).parents[1]
 INPUT = REPO / "data" / "tech_tree.json"
-GAMEDATA = REPO / "src" / "sc2nachos" / "gamedata"
+TECHTREE = REPO / "src" / "sc2nachos" / "gamedata" / "_techtree"
 
 HEADER = '''"""The tech tree of build {base_build}, as `tools/sweep_tech_tree.py` found it in game.
 
@@ -36,7 +36,7 @@ from types import MappingProxyType
 from typing import Final
 
 from sc2nachos.gamedata._tech_requirements import TechRequirements
-from sc2nachos.gamedata._tech_tree import TechTree
+from sc2nachos.gamedata._techtree._tech_tree import TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 '''
@@ -55,7 +55,7 @@ def read(findings: Mapping[str, object]) -> TechTree:
     Raises `ValueError` where a requirement is something no curated id names, where an add-on required was not seen
     to count only on the unit's own structure, where a unit type is offered an ability whose requirements were never
     read, which would otherwise read as needing nothing, or where the sweep did not see an override in
-    `gamedata/_overrides.py` make its unit type.
+    `gamedata/_techtree/_overrides.py` make its unit type.
     """
     trials = _trials(findings)
     made = {(ability, product) for _, ability, product, result in trials if result in ("morph", "build")}
@@ -169,7 +169,7 @@ def render(tech_tree: TechTree) -> str:
 
 def output(tech_tree: TechTree) -> Path:
     """Where the module holding `tech_tree` goes."""
-    return GAMEDATA / f"_tech_tree_{tech_tree.base_build}.py"
+    return TECHTREE / f"_build_{tech_tree.base_build}.py"
 
 
 def _literal(value: object, indent: int) -> str:
@@ -280,6 +280,8 @@ if __name__ == "__main__":
     module = output(tech_tree)
     module.write_text(render(tech_tree), encoding="utf-8")
     print(f"{module.name}: {len(tech_tree.ability_requirements)} unit types, {len(tech_tree.morph_sources)} morphs")
-    if f"from sc2nachos.gamedata.{module.stem} import" not in (GAMEDATA / "_gamedata.py").read_text(encoding="utf-8"):
-        print(f"gamedata/_gamedata.py does not import {module.stem} yet")
+    if f"from sc2nachos.gamedata._techtree.{module.stem} import" not in (TECHTREE / "__init__.py").read_text(
+        encoding="utf-8"
+    ):
+        print(f"gamedata/_techtree/__init__.py does not import {module.stem} yet")
     print(f"{len(uncurated(findings))} abilities are offered that no curated id names")

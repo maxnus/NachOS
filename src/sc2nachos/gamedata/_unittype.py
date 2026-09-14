@@ -18,7 +18,7 @@ from sc2nachos.match import Race
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from sc2nachos.gamedata._tech_tree import TechTree
+    from sc2nachos.gamedata._techtree import TechTree
 
 
 class Attribute(ReadableIntEnum):
