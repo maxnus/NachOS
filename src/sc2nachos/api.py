@@ -1,5 +1,6 @@
 """Everything a bot talks to."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Final, Self
 
@@ -16,7 +17,7 @@ from sc2nachos.match import Result
 from sc2nachos.protocol import Client
 from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
 from sc2nachos.state._state import _State
-from sc2nachos.units import Unit, Units
+from sc2nachos.units import AssumedUpgrades, Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
 
 
@@ -178,6 +179,20 @@ class Api:
         Raises `UncuratedIdError` where one is an upgrade the curated ids leave out.
         """
         return self._playing().state.upgrades
+
+    @property
+    def enemy_upgrades(self) -> AssumedUpgrades:
+        """The upgrades the enemy is assumed to have researched, empty as each game starts.
+
+        The game reports only the attack, armor and shield levels of an enemy's units in sight. What a bot adds here
+        counts in every read of the enemy's units that upgrades change, such as `Unit.weapons` and `Unit.speed`, until
+        it is discarded again. Assigning a collection of upgrades assumes exactly those, so `|=` and `-=` work too.
+        """
+        return self._playing().units.enemy_upgrades
+
+    @enemy_upgrades.setter
+    def enemy_upgrades(self, upgrades: Iterable[UpgradeId]) -> None:
+        self._playing().units.enemy_upgrades = upgrades
 
     @property
     def vision(self) -> Grid[bool]:

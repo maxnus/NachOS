@@ -80,9 +80,9 @@ class _State:
 
     # The map as it stands.
 
-    @cached_property
+    @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        return frozenset(UpgradeId.read(upgrade) for upgrade in self._observation.raw_data.player.upgrade_ids)
+        return self._units.upgrades
 
     @cached_property
     def _visibility(self) -> ndarray:

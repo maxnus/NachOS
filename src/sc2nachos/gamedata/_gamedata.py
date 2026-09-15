@@ -34,7 +34,9 @@ class GameData:
         self._abilities = _read_table(
             data.abilities, lambda ability: AbilityData.from_proto(ability, TECH_TREE), lambda row: row.id
         )
-        self._upgrades = _read_table(data.upgrades, UpgradeData.from_proto, lambda row: row.id)
+        self._upgrades = _read_table(
+            data.upgrades, lambda upgrade: UpgradeData.from_proto(upgrade, TECH_TREE), lambda row: row.id
+        )
         self._effects = _read_table(data.effects, EffectData.from_proto, lambda row: row.id)
 
     @property

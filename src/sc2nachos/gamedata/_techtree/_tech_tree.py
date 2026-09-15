@@ -11,13 +11,15 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._tech_requirements import TechRequirements
+    from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
+    from sc2nachos.gamedata._upgrade import UpgradeReport
     from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 
 @final
 @dataclass(frozen=True, slots=True)
 class TechTree:
-    """How unit types and abilities relate on one build of the game, as `tools/sweep_tech_tree.py` found it."""
+    """How unit types, abilities and upgrades relate on one build of the game, as the sweeps in `tools` found it."""
 
     base_build: int
     """The build of the game swept."""
@@ -33,6 +35,13 @@ class TechTree:
     """The unit type used up to make each unit type made out of another."""
     power_consumers: frozenset[UnitTypeId]
     """The unit types that need to be powered by a pylon or a warp prism."""
+    unit_type_upgrades: Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]
+    """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
+    `tools/sweep_upgrades.py` found it."""
+    upgrade_reports: Mapping[UpgradeId, UpgradeReport]
+    """The upgrade level units report each upgrade adds to."""
+    upgrade_levels: Mapping[UpgradeId, int]
+    """Which level of its line each leveled upgrade is."""
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)
     """The unit types that perform each ability. A general ability's performers are those of the abilities that stand
     for it."""

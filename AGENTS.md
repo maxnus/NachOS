@@ -144,6 +144,8 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **`ResponseData` changes with the asking player's upgrades, and only with them**, though a unit type has one
   entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
   unit reports its own upgrade levels, visible enemies' included.
+- **Debug cheats change more than their names say**, `god` the weapons in `ResponseData` among them. Read
+  `docs/cheats.md` before turning one on.
 - **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.

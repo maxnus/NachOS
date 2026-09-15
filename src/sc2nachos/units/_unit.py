@@ -15,7 +15,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
 
 if TYPE_CHECKING:
-    from sc2nachos.gamedata import UnitTypeData
+    from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.units._tracker import _UnitTracker
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -454,7 +454,7 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def armor_upgrade_level(self) -> int:
-        """The armor upgrades it has."""
+        """The armor its upgrades add, which is not a count of levels: Chitinous Plating adds 2 to an ultralisk's."""
         if (seen := self._latest_data_in_vision) is None:
             raise self._never_seen_error("armor upgrades")
         return seen.armor_upgrade_level
@@ -493,6 +493,27 @@ class Unit[K: UnitType.AnyType]:
     def type_data(self) -> UnitTypeData:
         """What the game's tables say about its type, before any upgrade."""
         return self._tracker.data.units[self.type_id]
+
+    @property
+    def weapons(self) -> tuple[Weapon, ...]:
+        """Its type's weapons with the upgrades its owner has.
+
+        Those are this player's upgrades for its own units, those `Api.enemy_upgrades` assumes for the enemy's, and none
+        for anyone else's. For a unit shown in sight, the attack level it reports counts in place of the attack levels
+        among them, and the armor it reports its upgrades add in place of every armor upgrade.
+        """
+        return self._tracker.upgraded_type(self).weapons
+
+    @property
+    def speed(self) -> float:
+        """How fast its type moves with the upgrades its owner has, as `weapons` counts them, and before creep or any
+        buff: in distance per second, as `velocity` is."""
+        return self._tracker.upgraded_type(self).speed
+
+    @property
+    def armor(self) -> float:
+        """Its type's armor with the upgrades its owner has, as `weapons` counts them."""
+        return self._tracker.upgraded_type(self).armor
 
     @property
     def is_structure(self) -> bool:
