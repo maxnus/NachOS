@@ -397,6 +397,26 @@ class TestWhatAUnitReads:
         assert set(assumed) == {UpgradeId.COMBAT_SHIELD}
         assert repr(assumed) == "AssumedUpgrades({COMBAT_SHIELD})"
 
+    def test_what_the_set_operators_make_of_the_assumed_upgrades_is_a_plain_set_and_assumes_nothing(self) -> None:
+        stim, shield, shells = UpgradeId.STIMPACK, UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS
+        assumed = AssumedUpgrades()
+        assumed |= {stim, shield}
+        made = [assumed | {shells}, assumed - {stim}, assumed & {stim}, assumed ^ {stim, shells}, {shells} | assumed]
+        assert made == [{stim, shield, shells}, {shield}, {stim}, {shield, shells}, {stim, shield, shells}]
+        assert all(type(result) is frozenset for result in made)
+        assert set(assumed) == {stim, shield}
+
+    def test_the_in_place_set_operators_change_what_is_assumed(self) -> None:
+        stim, shield, shells = UpgradeId.STIMPACK, UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS
+        assumed = AssumedUpgrades()
+        assumed |= {stim, shield}
+        assumed &= {stim, shells}
+        assert set(assumed) == {stim}
+        assumed ^= {stim, shells}
+        assert set(assumed) == {shells}
+        assumed -= {shells}
+        assert not assumed
+
 
 def _upgraded(row: UnitTypeData) -> list[float]:
     """What upgrades change of `row`, as numbers in a fixed order."""
