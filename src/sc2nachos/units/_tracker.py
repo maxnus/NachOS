@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from s2clientprotocol import raw_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos.gamedata import UpgradeType
+from sc2nachos.enemy import UpgradeLines
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
@@ -43,10 +43,10 @@ type _UnitsByTag = dict[int, Unit[Any]]
 
 
 class _UpgradedUnitTypes:
-    """What every unit type is with a set of upgrades held.
+    """The cache behind `Unit.weapons`, `speed` and `armor`: one upgraded row per unit type and set of upgrades held.
 
-    Each answer is worked out once and kept under what it was worked out from, since a unit reads its weapons, speed
-    and armor every step and few sets of upgrades are ever asked about.
+    Without it every read would build a type's weapons again, and a bot reads them for every unit every step, where
+    the sets of upgrades a game ever holds are few.
     """
 
     __slots__ = ("_data", "_rows")
@@ -64,55 +64,6 @@ class _UpgradedUnitTypes:
         if (upgraded := self._rows.get(key)) is None:
             upgraded = self._rows[key] = row.with_upgrades(upgrades)
         return upgraded
-
-
-class _UpgradeLines:
-    """The upgrades each unit type's reported levels stand for, worked out once per type.
-
-    A unit reports how many attack and shields levels it has and how much armor its upgrades add, and those belong to
-    its owner and the line the levels are of: a marine at attack level 2 says its player holds the first two Terran
-    Infantry Weapons, and every one of its infantry has them.
-    """
-
-    __slots__ = ("_data", "_lines")
-
-    def __init__(self, data: GameData) -> None:
-        self._data = data
-        # Each type's attack, armor and shields upgrades in order of level, and no armor line for a type an upgrade
-        # that is no level also gives armor to.
-        self._lines: dict[UnitTypeId, tuple[tuple[UpgradeId, ...], tuple[UpgradeId, ...], tuple[UpgradeId, ...]]] = {}
-
-    def reported(self, unit_type: UnitTypeId, attack: int, armor: int, shield: int) -> frozenset[UpgradeId]:
-        """The upgrades a unit of `unit_type` reporting these levels shows its owner to have."""
-        if not attack and not armor and not shield:
-            return frozenset()
-        attacks, armors, shields = self._lines_of(unit_type)
-        return frozenset(attacks[:attack] + armors[:armor] + shields[:shield])
-
-    def shields(self, unit_type: UnitTypeId) -> frozenset[UpgradeId]:
-        """The shields levels of `unit_type`, whose count is the armor its shields have."""
-        return frozenset(self._lines_of(unit_type)[2])
-
-    def _lines_of(
-        self, unit_type: UnitTypeId
-    ) -> tuple[tuple[UpgradeId, ...], tuple[UpgradeId, ...], tuple[UpgradeId, ...]]:
-        if (lines := self._lines.get(unit_type)) is None:
-            upgrades = self._data.units[unit_type].upgrades
-            rows = [self._data.upgrades[upgrade] for upgrade in upgrades]
-            by_type = {
-                kind: tuple(row.id for row in sorted(rows, key=lambda row: row.level) if row.type is kind and row.level)
-                for kind in (UpgradeType.ATTACK, UpgradeType.ARMOR, UpgradeType.SHIELD)
-            }
-            # An ultralisk's armor is levels and Chitinous Plating together, and a terran structure's Neosteel Armor,
-            # so what it reports says nothing about the levels alone and is left out.
-            if any(row.type is UpgradeType.ARMOR and not row.level for row in rows):
-                by_type[UpgradeType.ARMOR] = ()
-            lines = self._lines[unit_type] = (
-                by_type[UpgradeType.ATTACK],
-                by_type[UpgradeType.ARMOR],
-                by_type[UpgradeType.SHIELD],
-            )
-        return lines
 
 
 class _UnitTracker:
@@ -171,7 +122,7 @@ class _UnitTracker:
         # This player's finished upgrades, as the last observation listed them.
         self._upgrades: frozenset[UpgradeId] = frozenset()
         self._upgraded_unit_types = _UpgradedUnitTypes(data)
-        self._upgrade_lines = _UpgradeLines(data)
+        self._upgrade_lines = UpgradeLines(data)
 
     @property
     def data(self) -> GameData:
@@ -188,6 +139,11 @@ class _UnitTracker:
         """The other player of the game, and what is known of it."""
         return self._enemy
 
+    @property
+    def upgrade_lines(self) -> UpgradeLines:
+        """Which upgrades each unit type's reported levels stand for, for whoever reads the units' reports."""
+        return self._upgrade_lines
+
     def upgraded_type(self, unit: Unit[Any]) -> UnitTypeData:
         """The type of `unit` as the upgrades its owner has leave it.
 
@@ -197,10 +153,9 @@ class _UnitTracker:
         return self._upgraded_unit_types.upgraded_row(unit.type_id, self._upgrades_of(unit))
 
     def armor_of(self, unit: Unit[Any]) -> float:
-        """The armor of `unit`: its type's, with the armor its upgrades add.
+        """The armor of `unit`: its base armor with the armor its upgrades add.
 
-        A unit in sight reports that armor itself, which is exact where what its owner is known to have is a floor:
-        an ultralisk's Chitinous Plating is never inferred from what it reports, since levels would explain it too.
+        A unit in sight reports that armor itself, which is exact, where what its owner is known to have is a floor.
         """
         upgraded = self.upgraded_type(unit)
         if (seen := unit._latest_data_in_vision) is None:
@@ -208,34 +163,20 @@ class _UnitTracker:
         return max(upgraded.armor, self._data.units[unit.type_id].armor + seen.armor_upgrade_level)
 
     def shield_armor_of(self, unit: Unit[Any]) -> float:
-        """The armor of the shields of `unit`, which is the shields levels its owner has (in game).
-
-        The game's rows hold no shield armor at all, and a unit reports its shields levels, which is what one adds.
-        """
-        levels = len(self._upgrade_lines.shields(unit.type_id) & self._upgrades_of(unit))
+        """The armor the shields of `unit` have, which is the shields levels its owner has, and 0 without shields."""
+        levels = sum(1 for upgrade in self._upgrade_lines.shields(unit.type_id) if upgrade in self._upgrades_of(unit))
         if (seen := unit._latest_data_in_vision) is None:
             return levels
         return max(levels, seen.shield_upgrade_level)
 
     def _upgrades_of(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades the owner of `unit` has: this player's own, the enemy's known ones, and nothing else."""
+        # Not a `match`: its value patterns need the dotted names, and looking those up on the protobuf enum on every
+        # read cost 700 ns of the 1040 a read took with it.
         alliance = unit._latest_data.alliance
         if alliance == _OWN:
             return self._upgrades
         return self._enemy.upgrades if alliance == _ENEMY else frozenset()
-
-    def _learn_from(self, units: Iterable[Unit[Any]]) -> None:
-        """Take in what the enemy's units in sight report of their upgrade levels."""
-        learned: set[UpgradeId] = set()
-        for unit in units:
-            if unit._latest_data.alliance != _ENEMY or unit._latest_data.display_type != _IN_VISION:
-                continue
-            seen = unit._latest_data
-            learned |= self._upgrade_lines.reported(
-                unit._type_id, seen.attack_upgrade_level, seen.armor_upgrade_level, seen.shield_upgrade_level
-            )
-        if learned - self._enemy.upgrades:
-            self._enemy._learn_upgrades(frozenset(learned))
 
     @property
     def present_units(self) -> Units[Unit[Any]]:
@@ -343,7 +284,6 @@ class _UnitTracker:
                 self._mark_dead(unit, present)
         if self._builders:
             self._update_builders(present)
-        self._learn_from(present.values())
         self._present_units_by_tag = present
         self._present_units = Units(present.values())
         self._known_units = None

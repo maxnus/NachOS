@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, upgrades_shown
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -329,6 +329,7 @@ def _observe(
     tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
 ) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
+    tracker.enemy.assume_upgrades(*upgrades_shown(tracker.present_units, tracker.upgrade_lines))
     by_tag = {unit.tag: unit for unit in tracker.present_units}
     return [by_tag[unit.tag] for unit in units]
 
@@ -350,14 +351,14 @@ class TestWhatAUnitReads:
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
         base = tables.units[UnitTypeId.ZERGLING].speed
         assert zergling.speed == base
-        tracker.enemy.assume_upgrade(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
-        tracker.enemy.forget_upgrade(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == base
 
     def test_a_neutral_unit_reads_with_no_upgrade(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrade(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
         (zergling,) = _observe(
             tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL), upgrades=(UpgradeId.ZERGLING_SPEED,)
         )
@@ -428,7 +429,7 @@ class TestWhatAUnitReads:
 
     def test_a_unit_never_shown_in_sight_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrade(UpgradeId.BUILDING_ARMOR)
+        tracker.enemy.assume_upgrades(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
         assert _observe(tracker, remembered)[0].armor == tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
 
@@ -442,7 +443,7 @@ class TestWhatAUnitReads:
 
     def test_a_unit_without_shields_has_no_shield_armor(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrade(UpgradeId.PROTOSS_SHIELDS_1)
+        tracker.enemy.assume_upgrades(UpgradeId.PROTOSS_SHIELDS_1)
         (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
         assert marine.shield_armor == 0
 
@@ -484,6 +485,7 @@ def test_a_recorded_game_shows_what_its_enemy_researched(path: Path) -> None:
         if exchange.response.HasField("observation"):
             observation = exchange.response.observation.observation
             tracker.update(observation.raw_data, observation.game_loop)
+            tracker.enemy.assume_upgrades(*upgrades_shown(tracker.present_units, tracker.upgrade_lines))
     assert tracker.enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
@@ -549,16 +551,19 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
             assert marine.shield_armor == 0
 
             # The shields levels are the armor a protoss unit's shields have, which no row carries.
-            forge = game.open_ground(toward.towards(home, -16))
+            spot = game.open_ground(toward.towards(home, -16))
             game.debug(
-                game.create(UnitTypeId.FORGE, forge),
-                game.create(UnitTypeId.PYLON, forge + (3, 3)),
+                game.create(UnitTypeId.FORGE, spot),
+                # Where `tools/sweep_tech_tree.py` puts a pylon to power a structure it has just created.
+                game.create(UnitTypeId.PYLON, spot + (2.5, 2.5)),
                 game.create(UnitTypeId.ZEALOT, toward.towards(home, 6)),
             )
-            game.turn(4)
+            game.turn(22)
+            forge = game.newest(UnitTypeId.FORGE)
+            assert forge.is_powered, "the pylon did not go up beside the forge"
             zealot = game.newest(UnitTypeId.ZEALOT)
             assert zealot.shield_armor == 0
-            game.order(AbilityId.FORGE_RESEARCH_SHIELDS_1, game.newest(UnitTypeId.FORGE))
+            game.order(AbilityId.FORGE_RESEARCH_SHIELDS_1, forge)
             for _ in range(100):
                 if UpgradeId.PROTOSS_SHIELDS_1 in game.state.upgrades:
                     break

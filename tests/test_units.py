@@ -661,9 +661,9 @@ class TestThroughTheApi:
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         enemy = api.enemy
         assert not enemy.upgrades
-        api.enemy.assume_upgrade(UpgradeId.STIMPACK)
-        api.enemy.assume_upgrade(UpgradeId.COMBAT_SHIELD)
-        api.enemy.forget_upgrade(UpgradeId.STIMPACK)
+        api.enemy.assume_upgrades(UpgradeId.STIMPACK)
+        api.enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
+        api.enemy.forget_upgrades(UpgradeId.STIMPACK)
         assert api.enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
         assert repr(api.enemy) == "Enemy(upgrades={COMBAT_SHIELD})"
         self._play(api, make_observation(0, (1, Result.VICTORY)))

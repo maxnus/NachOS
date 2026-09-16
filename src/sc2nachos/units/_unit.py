@@ -493,12 +493,8 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def weapons(self) -> tuple[Weapon, ...]:
-        """Its type's weapons with the upgrades its owner has.
-
-        Those are this player's upgrades for its own units, what `Api.enemy.upgrades` holds for the enemy's, and none
-        for anyone else's. What an enemy unit in sight reports of its levels is in there, so a unit out of sight counts
-        a level another of its line has shown since.
-        """
+        """Its type's weapons with the upgrades its owner has: this player's own for its units, `Api.enemy.upgrades`
+        for the enemy's, and none for anyone else's."""
         return self._tracker.upgraded_type(self).weapons
 
     @property
@@ -509,16 +505,15 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def armor(self) -> float:
-        """Its type's armor with the armor its upgrades add: what it reports for a unit in sight, and what its owner
-        is known to have for one out of it."""
+        """Its base armor with the armor its upgrades add: what it reports for a unit in sight, and what its owner is
+        known to have for one out of it."""
         return self._tracker.armor_of(self)
 
     @property
     def shield_armor(self) -> float:
         """The armor its shields have, which is the shields levels its owner has, and 0 for a unit without shields.
 
-        The game's tables hold no shield armor, so this is what a shields level was measured to take off each hit in
-        game: a marine's 6 damage takes 5 off a zealot's shields at level 1, and 3 at level 3.
+        The game's tables hold none of this; `docs/curating-ids.md` has what a level was measured to take off a hit.
         """
         return self._tracker.shield_armor_of(self)
 

@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, upgrades_shown
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -49,17 +49,32 @@ class _Game:
         tables = GameData(data)
         enemy = Enemy()
         unit_tracker = _UnitTracker(tables, enemy)
-        unit_tracker.update(observation.observation.raw_data, step)
         game_map = GameMap(info)
-        state = _State(observation, unit_tracker, game_map)
-        return cls(client, game_map, tables, enemy, unit_tracker, observation, state, step)
+        game = cls(
+            client,
+            game_map,
+            tables,
+            enemy,
+            unit_tracker,
+            observation,
+            _State(observation, unit_tracker, game_map),
+            step,
+        )
+        game._take_in(observation, step)
+        return game
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
-        self.observation = self.client.observation(game_loop=step)
-        self.step = _step(self.observation)
-        self.unit_tracker.update(self.observation.observation.raw_data, self.step)
-        self.state = _State(self.observation, self.unit_tracker, self.map)
+        observation = self.client.observation(game_loop=step)
+        self._take_in(observation, _step(observation))
+
+    def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
+        """Read `observation`: its units, what they show of the enemy's upgrades, and the rest of what it reports."""
+        self.observation = observation
+        self.step = step
+        self.unit_tracker.update(observation.observation.raw_data, step)
+        self.enemy.assume_upgrades(*upgrades_shown(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines))
+        self.state = _State(observation, self.unit_tracker, self.map)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
