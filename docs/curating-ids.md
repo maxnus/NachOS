@@ -180,6 +180,8 @@ What the rows take in:
   ultralisk with Chitinous Plating and three levels reports 5. The sweep writes down whose reported levels each upgrade
   raises, which is `UpgradeData.type`; an upgrade is a level where its curated name ends in the number, so
   Chitinous Plating raises the armor report and is no level. A leveled upgrade's name has to keep its number for this.
+- **Shield armor is the shields levels, and no row holds it.** Each level takes one more off every hit a protoss
+  unit's shields receive. Nothing in `RequestData` says so, so `Unit.shield_armor` counts the levels instead.
 
 Every run checks what it found in two ways, and the generator refuses to write while either turns something up: once
 everything is researched, each row has to be the first one with every change found added up, and after each upgrade,

@@ -11,6 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
+from sc2nachos.enemy import Enemy, upgrades_shown_by
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -321,11 +322,14 @@ class TestWhatTheTablesSay:
 
 
 def _tracker(tables: GameData) -> _UnitTracker:
-    return _UnitTracker(tables)
+    return _UnitTracker(tables, Enemy())
 
 
-def _observe(tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = ()) -> list[Unit[Any]]:
-    tracker.update(make_observation(0, units=units, upgrades=upgrades).observation.raw_data, 0)
+def _observe(
+    tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
+) -> list[Unit[Any]]:
+    tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
+    tracker.enemy.assume_upgrades(*upgrades_shown_by(tracker.present_units, tracker.upgrade_lines))
     by_tag = {unit.tag: unit for unit in tracker.present_units}
     return [by_tag[unit.tag] for unit in units]
 
@@ -336,35 +340,62 @@ class TestWhatAUnitReads:
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=(UpgradeId.ZERGLING_SPEED,))
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
 
-    def test_the_enemys_units_read_with_the_upgrades_assumed_until_one_is_discarded(self, tables: GameData) -> None:
+    def test_this_players_units_show_it_nothing_it_has_not_researched(self, tables: GameData) -> None:
+        """What its own units report is what its own upgrades say, so nothing is read off them."""
+        tracker = _tracker(tables)
+        _observe(tracker, make_unit(1, attack_upgrade_level=3))
+        assert not tracker.enemy.upgrades
+
+    def test_the_enemys_units_read_with_what_it_is_assumed_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
         base = tables.units[UnitTypeId.ZERGLING].speed
         assert zergling.speed == base
-        tracker.enemy_upgrades.add(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
-        tracker.enemy_upgrades.discard(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == base
 
     def test_a_neutral_unit_reads_with_no_upgrade(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy_upgrades.add(UpgradeId.ZERGLING_SPEED)
+        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
         (zergling,) = _observe(
             tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL), upgrades=(UpgradeId.ZERGLING_SPEED,)
         )
         assert zergling.speed == tables.units[UnitTypeId.ZERGLING].speed
 
-    def test_the_attack_level_a_unit_reports_counts_in_place_of_any_assumed(self, tables: GameData) -> None:
+    def test_an_enemy_unit_in_sight_shows_the_levels_of_its_own_lines(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy_upgrades.add(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2))
+        assert tracker.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_WEAPONS_2}
+
+    def test_what_one_unit_shows_counts_for_every_type_of_its_line(self, tables: GameData) -> None:
+        """A marine's attack level is Terran Infantry Weapons, which a marauder has too and a viking does not."""
+        tracker = _tracker(tables)
+        marauder = make_unit(2, UnitTypeId.MARAUDER, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        viking = make_unit(3, UnitTypeId.VIKING, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        units = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2), marauder, viking)
+        assert units[1].weapons[0].damage == tables.units[UnitTypeId.MARAUDER].weapons[0].damage + 2
+        assert units[2].weapons[0].damage == tables.units[UnitTypeId.VIKING].weapons[0].damage
+
+    def test_a_unit_out_of_sight_counts_a_level_another_showed_since(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
         base = tables.units[UnitTypeId.MARINE].weapons[0].damage
-        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=3))
-        assert marine.weapons[0].damage == base + 3
-        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=0))
         assert marine.weapons[0].damage == base
+        _observe(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1), step=1)
+        assert marine.is_stale
+        assert marine.weapons[0].damage == base + 1
+
+    def test_a_level_a_unit_showed_stays_known_once_it_is_gone(self, tables: GameData) -> None:
+        """Levels are never lost, so what one unit showed holds for the rest of the game."""
+        tracker = _tracker(tables)
+        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=1))
+        _observe(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=0))
+        assert tracker.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1}
 
     @pytest.mark.parametrize("level", [0, 1, 2, 3])
-    def test_an_enemy_marauder_reads_the_damage_and_bonus_of_the_level_it_reports(
+    def test_an_enemy_marauder_reads_the_damage_and_bonus_of_the_level_it_shows(
         self, tables: GameData, level: int
     ) -> None:
         tracker = _tracker(tables)
@@ -374,20 +405,88 @@ class TestWhatAUnitReads:
         weapon = marauder.weapons[0]
         assert (weapon.damage, dict(weapon.damage_bonuses)) == (10 + level, {Attribute.ARMORED: 10 + level})
 
-    def test_the_armor_a_unit_reports_counts_in_place_of_every_armor_upgrade_assumed(self, tables: GameData) -> None:
+    def test_the_armor_a_zergling_shows_is_the_ground_armor_levels(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy_upgrades |= {*_levels("ZERG_GROUND_ARMOR"), UpgradeId.ULTRALISK_ARMOR}
-        base = tables.units[UnitTypeId.ULTRALISK].armor
-        reporting = make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=2)
-        assert _observe(tracker, reporting)[0].armor == base + 2
-        never_seen = make_unit(2, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-        assert _observe(tracker, never_seen)[0].armor == base + 5
+        _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, armor_upgrade_level=2))
+        assert tracker.enemy.upgrades == {UpgradeId.ZERG_GROUND_ARMOR_1, UpgradeId.ZERG_GROUND_ARMOR_2}
 
-    def test_a_structure_never_shown_in_sight_reads_its_armor_with_the_upgrades_assumed(self, tables: GameData) -> None:
+    def test_the_armor_an_ultralisk_shows_says_nothing_about_the_levels(self, tables: GameData) -> None:
+        """Its 2 could be two levels or Chitinous Plating, and taking it for levels would armor every zergling."""
         tracker = _tracker(tables)
-        tracker.enemy_upgrades.add(UpgradeId.BUILDING_ARMOR)
+        (ultralisk,) = _observe(
+            tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=2)
+        )
+        assert not tracker.enemy.upgrades
+        assert ultralisk.armor == tables.units[UnitTypeId.ULTRALISK].armor + 2
+
+    def test_a_unit_in_sight_reads_the_armor_it_reports(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        base = tables.units[UnitTypeId.ULTRALISK].armor
+        (ultralisk,) = _observe(
+            tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=5)
+        )
+        assert ultralisk.armor == base + 5
+
+    def test_a_unit_never_shown_in_sight_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        tracker.enemy.assume_upgrades(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
         assert _observe(tracker, remembered)[0].armor == tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
+
+    def test_shield_armor_is_the_shields_levels(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        (zealot,) = _observe(tracker, make_unit(1, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=2))
+        assert zealot.shield_armor == 2
+        assert tracker.enemy.upgrades == {UpgradeId.PROTOSS_SHIELDS_1, UpgradeId.PROTOSS_SHIELDS_2}
+        never_seen = make_unit(2, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        assert _observe(tracker, never_seen)[0].shield_armor == 2
+
+    def test_a_unit_without_shields_has_no_shield_armor(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        tracker.enemy.assume_upgrades(UpgradeId.PROTOSS_SHIELDS_1)
+        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
+        assert marine.shield_armor == 0
+
+
+# What the enemy's units show of their upgrades in each recorded game, which is nothing in the two the enemy
+# researched nothing in.
+_LEARNED_IN_THE_CORPUS = {
+    "IncorporealAIE_v4-PvZ": {
+        UpgradeId.ZERG_GROUND_ARMOR_1,
+        UpgradeId.ZERG_MELEE_WEAPONS_1,
+        UpgradeId.ZERG_RANGE_WEAPONS_1,
+        UpgradeId.ZERG_RANGE_WEAPONS_2,
+    },
+    "LeyLinesAIE_v3-ZvP": set(),
+    "MagannathaAIE_v2-TvT": {UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1, UpgradeId.TERRAN_VEHICLE_WEAPONS_1},
+    "PersephoneAIE_v4-PvT": {
+        UpgradeId.TERRAN_INFANTRY_ARMOR_1,
+        UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1,
+        UpgradeId.TERRAN_VEHICLE_WEAPONS_1,
+    },
+    "PylonAIE_v4-TvZ": {
+        UpgradeId.ZERG_GROUND_ARMOR_1,
+        UpgradeId.ZERG_MELEE_WEAPONS_1,
+        UpgradeId.ZERG_RANGE_WEAPONS_1,
+    },
+    "TorchesAIE_v4-TvP": {UpgradeId.PROTOSS_GROUND_ARMOR_1, UpgradeId.PROTOSS_GROUND_WEAPONS_1},
+    "UltraloveAIE_v2-ZvT": set(),
+}
+
+
+@pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
+def test_a_recorded_game_shows_what_its_enemy_researched(path: Path) -> None:
+    """The computer researches while a corpus game runs, and its units carry the levels where NachOS reads them."""
+    recording = Recording(path)
+    tables = GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
+    tracker = _UnitTracker(tables, Enemy())
+    for exchange in recording:
+        if exchange.response.HasField("observation"):
+            observation = exchange.response.observation.observation
+            tracker.update(observation.raw_data, observation.game_loop)
+            tracker.enemy.assume_upgrades(*upgrades_shown_by(tracker.present_units, tracker.upgrade_lines))
+    assert tracker.enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:
@@ -449,4 +548,27 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
                 assert unit.armor == asked.units[unit.type_id].armor
             marine = game.newest(UnitTypeId.MARINE)
             assert marine.weapons[0].damage == asked.units[UnitTypeId.MARINE].weapons[0].damage
+            assert marine.shield_armor == 0
+
+            # The shields levels are the armor a protoss unit's shields have, which no row carries.
+            spot = game.open_ground(toward.towards(home, -16))
+            game.debug(
+                game.create(UnitTypeId.FORGE, spot),
+                # Where `tools/sweep_tech_tree.py` puts a pylon to power a structure it has just created.
+                game.create(UnitTypeId.PYLON, spot + (2.5, 2.5)),
+                game.create(UnitTypeId.ZEALOT, toward.towards(home, 6)),
+            )
+            game.turn(22)
+            forge = game.newest(UnitTypeId.FORGE)
+            assert forge.is_powered, "the pylon did not go up beside the forge"
+            zealot = game.newest(UnitTypeId.ZEALOT)
+            assert zealot.shield_armor == 0
+            game.order(AbilityId.FORGE_RESEARCH_SHIELDS_1, forge)
+            for _ in range(100):
+                if UpgradeId.PROTOSS_SHIELDS_1 in game.state.upgrades:
+                    break
+                game.turn(22)
+            game.turn(22)
+            assert UpgradeId.PROTOSS_SHIELDS_1 in game.state.upgrades
+            assert zealot.shield_armor == 1
             client.leave_game()

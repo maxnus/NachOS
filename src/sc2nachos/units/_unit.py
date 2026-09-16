@@ -493,12 +493,8 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def weapons(self) -> tuple[Weapon, ...]:
-        """Its type's weapons with the upgrades its owner has.
-
-        Those are this player's upgrades for its own units, those `Api.enemy_upgrades` assumes for the enemy's, and none
-        for anyone else's. For a unit shown in sight, the attack level it reports counts in place of the attack levels
-        among them, and the armor it reports its upgrades add in place of every armor upgrade.
-        """
+        """Its type's weapons with the upgrades its owner has: this player's own for its units, `Api.enemy.upgrades`
+        for the enemy's, and none for anyone else's."""
         return self._tracker.upgraded_type(self).weapons
 
     @property
@@ -509,8 +505,17 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def armor(self) -> float:
-        """Its type's armor with the upgrades its owner has, as `weapons` counts them."""
-        return self._tracker.upgraded_type(self).armor
+        """Its base armor with the armor its upgrades add: what it reports for a unit in sight, and what its owner is
+        known to have for one out of it."""
+        return self._tracker.armor_of(self)
+
+    @property
+    def shield_armor(self) -> float:
+        """The armor its shields have, which is the shields levels its owner has, and 0 for a unit without shields.
+
+        The game's tables hold none of this; `docs/curating-ids.md` has what a level was measured to take off a hit.
+        """
+        return self._tracker.shield_armor_of(self)
 
     @property
     def is_structure(self) -> bool:

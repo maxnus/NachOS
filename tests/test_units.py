@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
+from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
@@ -46,7 +47,7 @@ class _Game:
     """A tracker fed one observation after another, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
-        self.tracker = _UnitTracker(_TABLES)
+        self.tracker = _UnitTracker(_TABLES, Enemy())
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
         """Observe `units` at `step`, and answer the unit each one listed was read into, in the order given."""
@@ -655,20 +656,19 @@ class TestThroughTheApi:
         assert api.units.ids == {100001}
         assert api.known_units.ids == {100001, 400001}
 
-    def test_the_enemy_upgrades_are_assumed_by_adding_assigning_or_combining_and_start_empty_each_game(self) -> None:
+    def test_the_enemy_holds_what_it_is_assumed_to_have_and_is_new_for_each_game(self) -> None:
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY)))
-        assumed = api.enemy_upgrades
-        assert not assumed
-        api.enemy_upgrades.add(UpgradeId.STIMPACK)
-        api.enemy_upgrades |= {UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS}
-        api.enemy_upgrades -= {UpgradeId.STIMPACK}
-        assert set(api.enemy_upgrades) == {UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS}
-        api.enemy_upgrades = [UpgradeId.STIMPACK]
-        assert api.enemy_upgrades is assumed
-        assert set(assumed) == {UpgradeId.STIMPACK}
+        enemy = api.enemy
+        assert not enemy.upgrades
+        api.enemy.assume_upgrades(UpgradeId.STIMPACK)
+        api.enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
+        api.enemy.forget_upgrades(UpgradeId.STIMPACK)
+        assert api.enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
+        assert repr(api.enemy) == "Enemy(upgrades={COMBAT_SHIELD})"
         self._play(api, make_observation(0, (1, Result.VICTORY)))
-        assert not api.enemy_upgrades
+        assert api.enemy is not enemy
+        assert not api.enemy.upgrades
 
     def test_the_last_games_units_are_stale_once_the_next_game_starts(self) -> None:
         api = Api()

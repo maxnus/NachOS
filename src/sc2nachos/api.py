@@ -1,6 +1,5 @@
 """Everything a bot talks to."""
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Final, Self
 
@@ -9,6 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.enemy import Enemy, upgrades_shown_by
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -19,7 +19,6 @@ from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
-from sc2nachos.util import SnapshotSet
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -33,6 +32,7 @@ class _Game:
     client: Final[Client]
     map: Final[GameMap]
     data: Final[GameData]
+    enemy: Final[Enemy]
     unit_tracker: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
@@ -47,18 +47,34 @@ class _Game:
         observation = client.observation()
         step = _step(observation)
         tables = GameData(data)
-        unit_tracker = _UnitTracker(tables)
-        unit_tracker.update(observation.observation.raw_data, step)
+        enemy = Enemy()
+        unit_tracker = _UnitTracker(tables, enemy)
         game_map = GameMap(info)
-        state = _State(observation, unit_tracker, game_map)
-        return cls(client, game_map, tables, unit_tracker, observation, state, step)
+        game = cls(
+            client,
+            game_map,
+            tables,
+            enemy,
+            unit_tracker,
+            observation,
+            _State(observation, unit_tracker, game_map),
+            step,
+        )
+        game._take_in(observation, step)
+        return game
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
-        self.observation = self.client.observation(game_loop=step)
-        self.step = _step(self.observation)
-        self.unit_tracker.update(self.observation.observation.raw_data, self.step)
-        self.state = _State(self.observation, self.unit_tracker, self.map)
+        observation = self.client.observation(game_loop=step)
+        self._take_in(observation, _step(observation))
+
+    def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
+        """Read `observation`: its units, what they show of the enemy's upgrades, and the rest of what it reports."""
+        self.observation = observation
+        self.step = step
+        self.unit_tracker.update(observation.observation.raw_data, step)
+        self.enemy.assume_upgrades(*upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines))
+        self.state = _State(observation, self.unit_tracker, self.map)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -183,18 +199,14 @@ class Api:
         return self._current_game().state.upgrades
 
     @property
-    def enemy_upgrades(self) -> SnapshotSet[UpgradeId]:
-        """The upgrades the enemy is assumed to have researched, empty as each game starts.
+    def enemy(self) -> Enemy:
+        """The other player of this game, and what is known of it.
 
-        The game reports only the attack, armor and shield levels of an enemy's units in sight. What a bot adds here
-        counts in every read of the enemy's units that upgrades change, such as `Unit.weapons` and `Unit.speed`, until
-        it is discarded again. Assigning a collection of upgrades assumes exactly those, so `|=` and `-=` work too.
+        `api.enemy.upgrades` holds the upgrades its units have shown, which NachOS reads off their levels, and any a
+        bot adds with `assume_upgrade`. Every read of an enemy unit that upgrades change counts them, `Unit.weapons`
+        and `Unit.speed` among them.
         """
-        return self._current_game().unit_tracker.enemy_upgrades
-
-    @enemy_upgrades.setter
-    def enemy_upgrades(self, upgrades: Iterable[UpgradeId]) -> None:
-        self._current_game().unit_tracker.enemy_upgrades = upgrades
+        return self._current_game().enemy
 
     @property
     def vision(self) -> Grid[bool]:
