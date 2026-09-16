@@ -10,6 +10,7 @@ from typing import Any, assert_type
 import pytest
 from s2clientprotocol import data_pb2
 
+from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.ids import UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
@@ -77,7 +78,7 @@ _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
 def _unit(unit_type: int) -> Unit[Any]:
-    tracker = _UnitTracker(_TABLES)
+    tracker = _UnitTracker(_TABLES, Enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
     return tracker.present_units[0]
 

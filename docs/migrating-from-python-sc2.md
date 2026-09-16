@@ -167,13 +167,23 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
   it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
-- **A unit's weapons, speed and armor count its owner's upgrades.** Yours come from the observation. The game reports
-  nothing of the enemy's beyond the attack, armor and shield levels on each of its units in sight, so
-  `api.enemy_upgrades` is the set of upgrades you assume it has: empty as each game starts, counted by every read of
-  its units from the moment you add one. What a unit in sight reports counts in place of what is assumed: its attack
-  level in place of the attack levels, and its armor in place of every armor upgrade. python-sc2's
-  `real_speed` counts only your own upgrades and takes `calculate_speed(upgrades)` for anyone else's, and its
-  `ground_range`, `ground_dps` and `armor` count none. For some other set, read `unit.type_data.with_upgrades(set)`.
+- **A unit's weapons, speed and armor count its owner's upgrades.** Yours come from the observation, and the enemy's
+  from `api.enemy.upgrades`. python-sc2's `real_speed` counts only your own upgrades and takes
+  `calculate_speed(upgrades)` for anyone else's, and its `ground_range`, `ground_dps` and `armor` count none. For some
+  other set, read `unit.type_data.with_upgrades(set)`.
+- **What the enemy's units show is read off them, once, for the whole player.** The game reports nothing of the
+  enemy's upgrades beyond the attack, armor and shield levels on each unit in sight, and those belong to the player
+  and the line they are of: a marine at attack level 2 puts the first two Terran Infantry Weapons into
+  `api.enemy.upgrades`, where every marauder of the enemy's counts them, in the fog as much as in sight. An
+  ultralisk's armor is left out of this, since 2 could be two levels or Chitinous Plating. Anything the game never
+  reports, such as Metabolic Boost, a bot adds with `api.enemy.assume_upgrade`, and can take back with
+  `forget_upgrade`. python-sc2 leaves all of this to the bot, per call.
+- **`unit.armor` is what a unit in sight reports, so it is exact**, and what the enemy is known to have for a unit out
+  of sight.
+- **`unit.shield_armor` is the shields levels its owner has**, which is what python-sc2 writes as
+  `enemy_shield_armor = target.shield_upgrade_level` inside `calculate_damage_vs_target`. The game's tables carry no
+  shield armor at all: this was measured in game, where a marine's 6 damage took 5 off a zealot's shields at level 1
+  and 3 at level 3.
 - **`unit.speed` counts no creep and no buff yet**, where python-sc2's `real_speed` counts both.
 - **Speeds are per second of the game's Faster speed, as `velocity` is.** The game's tables give them per second of
   its Normal speed, 16 steps, which python-sc2 hands on, so its code multiplies by 1.4 to get a distance a unit covers

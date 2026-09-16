@@ -10,6 +10,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
@@ -90,7 +91,7 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _UnitTracker(_tables(recording))
+    tracker = _UnitTracker(_tables(recording), Enemy())
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(_observations(recording)):
         step = observation.observation.game_loop
@@ -122,7 +123,7 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _UnitTracker(_tables(recording))
+    tracker = _UnitTracker(_tables(recording), Enemy())
     game_map = GameMap(
         next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
     )

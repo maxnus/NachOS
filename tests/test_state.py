@@ -8,6 +8,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 
 from sc2nachos import Api, NotPlayingError
+from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -55,7 +56,7 @@ class _Game:
     """The units and the rest of a game's observations, taken in one at a time, on an eight by eight map."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None) -> None:
-        self.tracker = _UnitTracker(_TABLES)
+        self.tracker = _UnitTracker(_TABLES, Enemy())
         self.map = GameMap(game_info or make_game_info())
 
     def observe(self, step: int = 0, **fields: Any) -> _State:
