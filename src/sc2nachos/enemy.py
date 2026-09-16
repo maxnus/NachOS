@@ -36,7 +36,7 @@ class Enemy:
         """Every upgrade the enemy is known to have, and every one a bot has assumed it has.
 
         The game reports no enemy upgrade but the attack, armor and shield levels on each unit in sight, which
-        `upgrades_shown` reads as the levels of that unit type's own lines, and every unit of the enemy's counts what
+        `upgrades_shown_by` reads as the levels of that unit type's own lines, and every unit of the enemy's counts what
         is held here, those out of sight included. Everything else, such as Grooved Spines or Metabolic Boost, the game
         never reports, and a bot that works one out says so with `assume_upgrades`.
         """
@@ -97,7 +97,7 @@ class UpgradeLines:
         return lines
 
 
-def upgrades_shown(units: Iterable[Unit[Any]], lines: UpgradeLines) -> frozenset[UpgradeId]:
+def upgrades_shown_by(units: Iterable[Unit[Any]], lines: UpgradeLines) -> frozenset[UpgradeId]:
     """What the enemy's units in sight show of its upgrades, read off the levels each reports."""
     shown: set[UpgradeId] = set()
     for unit in units:

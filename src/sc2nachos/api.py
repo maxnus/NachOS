@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy, upgrades_shown
+from sc2nachos.enemy import Enemy, upgrades_shown_by
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -73,7 +73,7 @@ class _Game:
         self.observation = observation
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
-        self.enemy.assume_upgrades(*upgrades_shown(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines))
+        self.enemy.assume_upgrades(*upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines))
         self.state = _State(observation, self.unit_tracker, self.map)
 
     def outcome(self) -> Result | None:

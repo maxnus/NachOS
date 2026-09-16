@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import Enemy, upgrades_shown
+from sc2nachos.enemy import Enemy, upgrades_shown_by
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -329,7 +329,7 @@ def _observe(
     tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
 ) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*upgrades_shown(tracker.present_units, tracker.upgrade_lines))
+    tracker.enemy.assume_upgrades(*upgrades_shown_by(tracker.present_units, tracker.upgrade_lines))
     by_tag = {unit.tag: unit for unit in tracker.present_units}
     return [by_tag[unit.tag] for unit in units]
 
@@ -485,7 +485,7 @@ def test_a_recorded_game_shows_what_its_enemy_researched(path: Path) -> None:
         if exchange.response.HasField("observation"):
             observation = exchange.response.observation.observation
             tracker.update(observation.raw_data, observation.game_loop)
-            tracker.enemy.assume_upgrades(*upgrades_shown(tracker.present_units, tracker.upgrade_lines))
+            tracker.enemy.assume_upgrades(*upgrades_shown_by(tracker.present_units, tracker.upgrade_lines))
     assert tracker.enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 

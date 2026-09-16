@@ -8,7 +8,7 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos.enemy import Enemy, upgrades_shown
+from sc2nachos.enemy import Enemy, upgrades_shown_by
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -190,7 +190,7 @@ class RealGame:
     def _observe(self) -> _State:
         response = self.client.observation()
         self.tracker.update(response.observation.raw_data, response.observation.game_loop)
-        self.enemy.assume_upgrades(*upgrades_shown(self.tracker.present_units, self.tracker.upgrade_lines))
+        self.enemy.assume_upgrades(*upgrades_shown_by(self.tracker.present_units, self.tracker.upgrade_lines))
         return _State(response, self.tracker, self.map)
 
     def turn(self, steps: int) -> Units[Unit[Any]]:

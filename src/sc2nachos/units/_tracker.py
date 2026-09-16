@@ -171,8 +171,6 @@ class _UnitTracker:
 
     def _upgrades_of(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades the owner of `unit` has: this player's own, the enemy's known ones, and nothing else."""
-        # Not a `match`: its value patterns need the dotted names, and looking those up on the protobuf enum on every
-        # read cost 700 ns of the 1040 a read took with it.
         alliance = unit._latest_data.alliance
         if alliance == _OWN:
             return self._upgrades
