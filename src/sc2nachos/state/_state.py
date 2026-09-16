@@ -67,7 +67,7 @@ class _State:
         rows = self._unit_tracker.data.units
         taken = 0.0
         for unit in self._unit_tracker.known_units:
-            if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN or unit._type_id is None:
+            if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # What the unit takes beyond a whole supply: 0.5 for a zergling, 0 for a roach.

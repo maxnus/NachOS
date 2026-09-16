@@ -259,7 +259,7 @@ class _UnitTracker:
 
     def _order_makes_structure(self, order: raw_pb2.UnitOrder, structure: Unit[Any]) -> bool:
         """Whether `order` is the ability that makes `structure`'s type."""
-        row = self._data.units.get(structure._type_id) if structure._type_id is not None else None
+        row = self._data.units.get(structure._type_id)
         return row is not None and row.creation_ability == order.ability_id
 
     def _structures_under_construction(self) -> list[Unit[Any]]:

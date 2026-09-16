@@ -54,8 +54,11 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW` and `BuffId.IMMORTAL_BARRIER`, and leaves the other two out. A buff is
   named after the unit that brings it on, so `STIMPACK` is `MARINE_STIMMED`.
 - **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`, and
-  reading one off a unit raises `UncuratedIdError`, which is one. `sc2nachos.ids.raw` holds every id, under
-  Blizzard's own names.
+  `UncuratedIdError` is the one NachOS raises, naming the id and what the raw catalog calls it.
+  `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
+- **An id the enums leave out stops the game as the observation comes in**, for a unit's type and for an upgrade this
+  player holds, since both belong among the curated ids and a game that reports one is a gap to fill. A buff, an
+  effect and an ability read off a unit raise when they are read. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
   `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where

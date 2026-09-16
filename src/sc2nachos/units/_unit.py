@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Attribute
 from sc2nachos.geometry import Point
-from sc2nachos.ids import BuffId, UncuratedIdError, UnitTypeId
+from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
@@ -74,7 +74,7 @@ class Unit[K: UnitType.AnyType]:
     _latest_data_in_vision: raw_pb2.Unit | None
     _last_seen: int | None
     _raw_type: int
-    _type_id: UnitTypeId | None
+    _type_id: UnitTypeId
     _position: Point
     _own: bool
     _step: int
@@ -148,13 +148,13 @@ class Unit[K: UnitType.AnyType]:
         self._dead = True
 
     def _update_unit_type(self, raw_type: int) -> None:
-        """Become a unit of `raw_type`: the one place a unit's type is set, on creation and at every morph."""
+        """Become a unit of `raw_type`: the one place a unit's type is set, on creation and at every morph.
+
+        Raises `UncuratedIdError` for a type the curated ids leave out, as the observation is taken in, since a type
+        the game reports belongs among them.
+        """
         self._raw_type = raw_type
-        try:
-            self._type_id = UnitTypeId(raw_type)
-        except ValueError:
-            # Raised when read, so a unit nobody asks about crashes nothing.
-            self._type_id = None
+        self._type_id = UnitTypeId.read(raw_type)
 
     def _update_alliance(self) -> None:
         """Change sides, and with them class, to `OwnUnit` or back: a neural parasite takes a unit over and lets go."""
@@ -169,9 +169,8 @@ class Unit[K: UnitType.AnyType]:
         return NotReportedError(f"the game never showed {self!r} in sight, so it never reported its {what}")
 
     def __repr__(self) -> str:
-        name = self._type_id.name if self._type_id is not None else f"uncurated type {self._raw_type}"
         state = ", dead" if self._dead else ", stale" if self._stale else ""
-        return f"{type(self).__name__}({name}, id={self._id}, at {self._position}{state})"
+        return f"{type(self).__name__}({self._type_id.name}, id={self._id}, at {self._position}{state})"
 
     # Identity.
 
@@ -191,10 +190,8 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def type_id(self) -> UnitTypeId:
-        """What type of unit this is. Raises `UncuratedIdError` for a type the curated ids leave out."""
-        if (type_id := self._type_id) is None:
-            raise UncuratedIdError(UnitTypeId, self._raw_type)
-        return type_id
+        """What type of unit this is."""
+        return self._type_id
 
     @property
     def alliance(self) -> Alliance:

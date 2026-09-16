@@ -352,12 +352,10 @@ class TestWhatAUnitReads:
         unit = _one(make_unit(1, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST]))
         assert unit.buffs == {BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST}
 
-    def test_an_uncurated_type_raises_when_read_and_names_the_id(self) -> None:
-        unit = _one(make_unit(1, RawUnitTypeId.Viking))
-        assert unit.tag == 1
+    def test_an_uncurated_type_raises_as_the_observation_is_taken_in_and_names_the_id(self) -> None:
+        """A type the game reports belongs among the curated ids, so one missing is a mistake to fix."""
         with pytest.raises(UncuratedIdError, match=r"UnitTypeId has no member for id \d+ \(RawUnitTypeId.Viking\)"):
-            _ = unit.type_id
-        assert repr(unit).startswith("OwnUnit(uncurated type")
+            _one(make_unit(1, RawUnitTypeId.Viking))
 
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
