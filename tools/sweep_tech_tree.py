@@ -35,7 +35,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -148,7 +148,14 @@ class Findings:
 class TechSweep:
     """One game played as `race`, and what its unit types are offered and need."""
 
-    def __init__(self, game: Sandbox, race: Race, findings: Findings) -> None:
+    def __init__(
+        self,
+        game: Sandbox,
+        race: Race,
+        findings: Findings,
+        *,
+        cheats: Sequence[str] = ("free", "fast_build", "food", "god"),
+    ) -> None:
         self._game = game
         self._client = game.client
         self._player = game.player
@@ -181,7 +188,7 @@ class TechSweep:
         }
         # `free` rather than `all_resources`, which runs dry once add-ons have been rebuilt a few hundred times.
         # `god`, since the computer comes to attack at some point, which the sweep would take for a requirement lost.
-        game.cheat("free", "fast_build", "food", "god")
+        game.cheat(*cheats)
         self._client.step(2)
         units = game.units()
         self._home = next(Point((u.pos.x, u.pos.y)) for u in units if u.owner == self._player and u.radius > 2)
@@ -395,6 +402,20 @@ class TechSweep:
 
     def research_everything(self) -> None:
         """Research one upgrade at a time, reading what each newly offers and what that needs."""
+        for upgrades in self.research_each():
+            new_upgrades = {RawUpgradeId(upgrade).name for upgrade in upgrades}
+            new_pairs = self._pairs(self._read()) - self._seen
+            # What a unit is offered only for a moment, such as a worker's return with cargo, is not the upgrade's.
+            self._client.step(22)
+            new_pairs &= self._pairs(self._read())
+            logger.info("{} newly offers {}", sorted(new_upgrades), sorted(new_pairs))
+            for pair in new_pairs:
+                self.findings.upgrades[pair] |= new_upgrades
+            self._seen |= new_pairs
+            self.read_requirements(new_pairs)
+
+    def research_each(self) -> Iterator[set[int]]:
+        """Research one upgrade at a time, whichever an idle unit is offered first, and yield what each finished."""
         refused: set[tuple[int, int]] = set()
         for _ in range(300):
             read = self._read()
@@ -419,16 +440,7 @@ class TechSweep:
                 refused.add(choice)
                 continue
             self._client.step(22)
-            new_upgrades = {RawUpgradeId(upgrade).name for upgrade in self._upgrades() - before}
-            new_pairs = self._pairs(self._read()) - self._seen
-            # What a unit is offered only for a moment, such as a worker's return with cargo, is not the upgrade's.
-            self._client.step(22)
-            new_pairs &= self._pairs(self._read())
-            logger.info("{} newly offers {}", sorted(new_upgrades), sorted(new_pairs))
-            for pair in new_pairs:
-                self.findings.upgrades[pair] |= new_upgrades
-            self._seen |= new_pairs
-            self.read_requirements(new_pairs)
+            yield self._upgrades() - before
         logger.info("Researched {} upgrades as {}", len(self._upgrades()), self._race)
 
     def _upgrades(self) -> set[int]:

@@ -1,0 +1,3961 @@
+{
+ "base_build": 95841,
+ "races": [
+  "protoss",
+  "terran",
+  "zerg"
+ ],
+ "research": [
+  {
+   "upgrades": [
+    "Stimpack"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ShieldWall"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "PunisherGrenades"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "HighCapacityBarrels"
+   ],
+   "changes": {
+    "Hellion": {
+     "weapons": [
+      {
+       "bonuses": {
+        "Light": 5.0
+       }
+      }
+     ]
+    },
+    "HellionTank": {
+     "weapons": [
+      {
+       "bonuses": {
+        "Light": 12.0
+       }
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "DrillClaws"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "SmartServos"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "CycloneLockOnDamageUpgrade"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "BansheeCloak"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "BansheeSpeed"
+   ],
+   "changes": {
+    "Banshee": {
+     "speed": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "InterferenceMatrix"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleWeaponsLevel1"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "weapons": [
+      {
+       "damage": 4.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "SiegeTank": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Thor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Hellion": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "HellionTank": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "WarHound": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "ThorAP": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Cyclone": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleWeaponsLevel2"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "weapons": [
+      {
+       "damage": 4.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "SiegeTank": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Thor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Hellion": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "HellionTank": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "WarHound": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "ThorAP": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Cyclone": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleWeaponsLevel3"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "weapons": [
+      {
+       "damage": 4.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "SiegeTank": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Thor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Hellion": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "HellionTank": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "WarHound": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "ThorAP": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      },
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Cyclone": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranShipWeaponsLevel1"
+   ],
+   "changes": {
+    "VikingAssault": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Mechanical": 1.0
+       }
+      }
+     ]
+    },
+    "VikingFighter": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Banshee": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Liberator": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LiberatorAG": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Banshee",
+     "Liberator",
+     "LiberatorAG",
+     "VikingAssault",
+     "VikingFighter"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranShipWeaponsLevel2"
+   ],
+   "changes": {
+    "VikingAssault": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Mechanical": 1.0
+       }
+      }
+     ]
+    },
+    "VikingFighter": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Banshee": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Liberator": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LiberatorAG": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Banshee",
+     "Liberator",
+     "LiberatorAG",
+     "VikingAssault",
+     "VikingFighter"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranShipWeaponsLevel3"
+   ],
+   "changes": {
+    "VikingAssault": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Mechanical": 1.0
+       }
+      }
+     ]
+    },
+    "VikingFighter": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Banshee": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Liberator": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LiberatorAG": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Banshee",
+     "Liberator",
+     "LiberatorAG",
+     "VikingAssault",
+     "VikingFighter"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleAndShipArmorsLevel1"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "armor": 1.0
+    },
+    "SiegeTank": {
+     "armor": 1.0
+    },
+    "VikingAssault": {
+     "armor": 1.0
+    },
+    "VikingFighter": {
+     "armor": 1.0
+    },
+    "Thor": {
+     "armor": 1.0
+    },
+    "Hellion": {
+     "armor": 1.0
+    },
+    "Medivac": {
+     "armor": 1.0
+    },
+    "Banshee": {
+     "armor": 1.0
+    },
+    "Raven": {
+     "armor": 1.0
+    },
+    "Battlecruiser": {
+     "armor": 1.0
+    },
+    "HellionTank": {
+     "armor": 1.0
+    },
+    "WidowMine": {
+     "armor": 1.0
+    },
+    "WidowMineBurrowed": {
+     "armor": 1.0
+    },
+    "Liberator": {
+     "armor": 1.0
+    },
+    "ThorAP": {
+     "armor": 1.0
+    },
+    "Cyclone": {
+     "armor": 1.0
+    },
+    "LiberatorAG": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Banshee",
+     "Battlecruiser",
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "Liberator",
+     "LiberatorAG",
+     "Medivac",
+     "Raven",
+     "SiegeTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP",
+     "VikingAssault",
+     "VikingFighter",
+     "WidowMine",
+     "WidowMineBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleAndShipArmorsLevel2"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "armor": 1.0
+    },
+    "SiegeTank": {
+     "armor": 1.0
+    },
+    "VikingAssault": {
+     "armor": 1.0
+    },
+    "VikingFighter": {
+     "armor": 1.0
+    },
+    "Thor": {
+     "armor": 1.0
+    },
+    "Hellion": {
+     "armor": 1.0
+    },
+    "Medivac": {
+     "armor": 1.0
+    },
+    "Banshee": {
+     "armor": 1.0
+    },
+    "Raven": {
+     "armor": 1.0
+    },
+    "Battlecruiser": {
+     "armor": 1.0
+    },
+    "HellionTank": {
+     "armor": 1.0
+    },
+    "WidowMine": {
+     "armor": 1.0
+    },
+    "WidowMineBurrowed": {
+     "armor": 1.0
+    },
+    "Liberator": {
+     "armor": 1.0
+    },
+    "ThorAP": {
+     "armor": 1.0
+    },
+    "Cyclone": {
+     "armor": 1.0
+    },
+    "LiberatorAG": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Banshee",
+     "Battlecruiser",
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "Liberator",
+     "LiberatorAG",
+     "Medivac",
+     "Raven",
+     "SiegeTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP",
+     "VikingAssault",
+     "VikingFighter",
+     "WidowMine",
+     "WidowMineBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranVehicleAndShipArmorsLevel3"
+   ],
+   "changes": {
+    "SiegeTankSieged": {
+     "armor": 1.0
+    },
+    "SiegeTank": {
+     "armor": 1.0
+    },
+    "VikingAssault": {
+     "armor": 1.0
+    },
+    "VikingFighter": {
+     "armor": 1.0
+    },
+    "Thor": {
+     "armor": 1.0
+    },
+    "Hellion": {
+     "armor": 1.0
+    },
+    "Medivac": {
+     "armor": 1.0
+    },
+    "Banshee": {
+     "armor": 1.0
+    },
+    "Raven": {
+     "armor": 1.0
+    },
+    "Battlecruiser": {
+     "armor": 1.0
+    },
+    "HellionTank": {
+     "armor": 1.0
+    },
+    "WidowMine": {
+     "armor": 1.0
+    },
+    "WidowMineBurrowed": {
+     "armor": 1.0
+    },
+    "Liberator": {
+     "armor": 1.0
+    },
+    "ThorAP": {
+     "armor": 1.0
+    },
+    "Cyclone": {
+     "armor": 1.0
+    },
+    "LiberatorAG": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Banshee",
+     "Battlecruiser",
+     "Cyclone",
+     "Hellion",
+     "HellionTank",
+     "Liberator",
+     "LiberatorAG",
+     "Medivac",
+     "Raven",
+     "SiegeTank",
+     "SiegeTankSieged",
+     "Thor",
+     "ThorAP",
+     "VikingAssault",
+     "VikingFighter",
+     "WidowMine",
+     "WidowMineBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "HiSecAutoTracking"
+   ],
+   "changes": {
+    "MissileTurret": {
+     "weapons": [
+      {
+       "range": 1.0
+      }
+     ]
+    },
+    "AutoTurret": {
+     "weapons": [
+      {
+       "range": 1.0
+      }
+     ]
+    },
+    "PlanetaryFortress": {
+     "weapons": [
+      {
+       "range": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranBuildingArmor"
+   ],
+   "changes": {
+    "TechLab": {
+     "armor": 2.0
+    },
+    "Reactor": {
+     "armor": 2.0
+    },
+    "PointDefenseDrone": {
+     "armor": 2.0
+    },
+    "CommandCenter": {
+     "armor": 2.0
+    },
+    "SupplyDepot": {
+     "armor": 2.0
+    },
+    "Refinery": {
+     "armor": 2.0
+    },
+    "Barracks": {
+     "armor": 2.0
+    },
+    "EngineeringBay": {
+     "armor": 2.0
+    },
+    "MissileTurret": {
+     "armor": 2.0
+    },
+    "Bunker": {
+     "armor": 2.0
+    },
+    "SensorTower": {
+     "armor": 2.0
+    },
+    "GhostAcademy": {
+     "armor": 2.0
+    },
+    "Factory": {
+     "armor": 2.0
+    },
+    "Starport": {
+     "armor": 2.0
+    },
+    "Armory": {
+     "armor": 2.0
+    },
+    "FusionCore": {
+     "armor": 2.0
+    },
+    "CommandCenterFlying": {
+     "armor": 2.0
+    },
+    "BarracksTechLab": {
+     "armor": 2.0
+    },
+    "BarracksReactor": {
+     "armor": 2.0
+    },
+    "FactoryTechLab": {
+     "armor": 2.0
+    },
+    "FactoryReactor": {
+     "armor": 2.0
+    },
+    "StarportTechLab": {
+     "armor": 2.0
+    },
+    "StarportReactor": {
+     "armor": 2.0
+    },
+    "FactoryFlying": {
+     "armor": 2.0
+    },
+    "StarportFlying": {
+     "armor": 2.0
+    },
+    "BarracksFlying": {
+     "armor": 2.0
+    },
+    "SupplyDepotLowered": {
+     "armor": 2.0
+    },
+    "PlanetaryFortress": {
+     "armor": 2.0
+    },
+    "OrbitalCommand": {
+     "armor": 2.0
+    },
+    "OrbitalCommandFlying": {
+     "armor": 2.0
+    },
+    "BypassArmorDrone": {
+     "armor": 2.0
+    },
+    "RavenRepairDrone": {
+     "armor": 2.0
+    },
+    "RefineryRich": {
+     "armor": 2.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Armory",
+     "Barracks",
+     "BarracksFlying",
+     "BarracksReactor",
+     "BarracksTechLab",
+     "Bunker",
+     "CommandCenter",
+     "CommandCenterFlying",
+     "EngineeringBay",
+     "Factory",
+     "FactoryFlying",
+     "FactoryReactor",
+     "FactoryTechLab",
+     "FusionCore",
+     "GhostAcademy",
+     "MissileTurret",
+     "OrbitalCommand",
+     "OrbitalCommandFlying",
+     "PlanetaryFortress",
+     "Refinery",
+     "RefineryRich",
+     "SensorTower",
+     "Starport",
+     "StarportFlying",
+     "StarportReactor",
+     "StarportTechLab",
+     "SupplyDepot",
+     "SupplyDepotLowered"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryWeaponsLevel1"
+   ],
+   "changes": {
+    "ChangelingMarineShield": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingMarine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Marine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Reaper": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ghost": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "Marauder": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "GhostAlternate": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "GhostNova": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ScopeTest": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "HERCPlacement": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "HERC": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Ghost",
+     "Marauder",
+     "Marine",
+     "Reaper"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryWeaponsLevel2"
+   ],
+   "changes": {
+    "ChangelingMarineShield": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingMarine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Marine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Reaper": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ghost": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "Marauder": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "GhostAlternate": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "GhostNova": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ScopeTest": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "HERCPlacement": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "HERC": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Ghost",
+     "Marauder",
+     "Marine",
+     "Reaper"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryWeaponsLevel3"
+   ],
+   "changes": {
+    "ChangelingMarineShield": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingMarine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Marine": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Reaper": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ghost": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "Marauder": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "GhostAlternate": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "GhostNova": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ScopeTest": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "HERCPlacement": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "HERC": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Ghost",
+     "Marauder",
+     "Marine",
+     "Reaper"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryArmorsLevel1"
+   ],
+   "changes": {
+    "SCV": {
+     "armor": 1.0
+    },
+    "Marine": {
+     "armor": 1.0
+    },
+    "Reaper": {
+     "armor": 1.0
+    },
+    "Ghost": {
+     "armor": 1.0
+    },
+    "Marauder": {
+     "armor": 1.0
+    },
+    "GhostAlternate": {
+     "armor": 1.0
+    },
+    "GhostNova": {
+     "armor": 1.0
+    },
+    "MULE": {
+     "armor": 1.0
+    },
+    "HERC": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Ghost",
+     "MULE",
+     "Marauder",
+     "Marine",
+     "Reaper",
+     "SCV"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryArmorsLevel2"
+   ],
+   "changes": {
+    "SCV": {
+     "armor": 1.0
+    },
+    "Marine": {
+     "armor": 1.0
+    },
+    "Reaper": {
+     "armor": 1.0
+    },
+    "Ghost": {
+     "armor": 1.0
+    },
+    "Marauder": {
+     "armor": 1.0
+    },
+    "GhostAlternate": {
+     "armor": 1.0
+    },
+    "GhostNova": {
+     "armor": 1.0
+    },
+    "MULE": {
+     "armor": 1.0
+    },
+    "HERC": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Ghost",
+     "MULE",
+     "Marauder",
+     "Marine",
+     "Reaper",
+     "SCV"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TerranInfantryArmorsLevel3"
+   ],
+   "changes": {
+    "SCV": {
+     "armor": 1.0
+    },
+    "Marine": {
+     "armor": 1.0
+    },
+    "Reaper": {
+     "armor": 1.0
+    },
+    "Ghost": {
+     "armor": 1.0
+    },
+    "Marauder": {
+     "armor": 1.0
+    },
+    "GhostAlternate": {
+     "armor": 1.0
+    },
+    "GhostNova": {
+     "armor": 1.0
+    },
+    "MULE": {
+     "armor": 1.0
+    },
+    "HERC": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Ghost",
+     "MULE",
+     "Marauder",
+     "Marine",
+     "Reaper",
+     "SCV"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "BattlecruiserEnableSpecializations"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "LiberatorAGRangeUpgrade"
+   ],
+   "changes": {
+    "LiberatorAG": {
+     "weapons": [
+      {
+       "range": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "MedivacCaduceusReactor"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "PersonalCloaking"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirWeaponsLevel1"
+   ],
+   "changes": {
+    "Mothership": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Phoenix": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Interceptor": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "MothershipCore": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Tempest": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 2.0
+       }
+      },
+      {
+       "damage": 4.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Carrier",
+     "Interceptor",
+     "Phoenix",
+     "Tempest",
+     "VoidRay"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirWeaponsLevel2"
+   ],
+   "changes": {
+    "Mothership": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Phoenix": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Interceptor": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "MothershipCore": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Tempest": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 2.0
+       }
+      },
+      {
+       "damage": 4.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Carrier",
+     "Interceptor",
+     "Phoenix",
+     "Tempest",
+     "VoidRay"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirWeaponsLevel3"
+   ],
+   "changes": {
+    "Mothership": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Phoenix": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Interceptor": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "MothershipCore": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Tempest": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Massive": 2.0
+       }
+      },
+      {
+       "damage": 4.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Carrier",
+     "Interceptor",
+     "Phoenix",
+     "Tempest",
+     "VoidRay"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirArmorsLevel1"
+   ],
+   "changes": {
+    "Mothership": {
+     "armor": 1.0
+    },
+    "Phoenix": {
+     "armor": 1.0
+    },
+    "Carrier": {
+     "armor": 1.0
+    },
+    "VoidRay": {
+     "armor": 1.0
+    },
+    "WarpPrism": {
+     "armor": 1.0
+    },
+    "Observer": {
+     "armor": 1.0
+    },
+    "Interceptor": {
+     "armor": 1.0
+    },
+    "WarpPrismPhasing": {
+     "armor": 1.0
+    },
+    "MothershipCore": {
+     "armor": 1.0
+    },
+    "Oracle": {
+     "armor": 1.0
+    },
+    "Tempest": {
+     "armor": 1.0
+    },
+    "ObserverSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Carrier",
+     "Interceptor",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "Phoenix",
+     "Tempest",
+     "VoidRay",
+     "WarpPrism",
+     "WarpPrismPhasing"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirArmorsLevel2"
+   ],
+   "changes": {
+    "Mothership": {
+     "armor": 1.0
+    },
+    "Phoenix": {
+     "armor": 1.0
+    },
+    "Carrier": {
+     "armor": 1.0
+    },
+    "VoidRay": {
+     "armor": 1.0
+    },
+    "WarpPrism": {
+     "armor": 1.0
+    },
+    "Observer": {
+     "armor": 1.0
+    },
+    "Interceptor": {
+     "armor": 1.0
+    },
+    "WarpPrismPhasing": {
+     "armor": 1.0
+    },
+    "MothershipCore": {
+     "armor": 1.0
+    },
+    "Oracle": {
+     "armor": 1.0
+    },
+    "Tempest": {
+     "armor": 1.0
+    },
+    "ObserverSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Carrier",
+     "Interceptor",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "Phoenix",
+     "Tempest",
+     "VoidRay",
+     "WarpPrism",
+     "WarpPrismPhasing"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossAirArmorsLevel3"
+   ],
+   "changes": {
+    "Mothership": {
+     "armor": 1.0
+    },
+    "Phoenix": {
+     "armor": 1.0
+    },
+    "Carrier": {
+     "armor": 1.0
+    },
+    "VoidRay": {
+     "armor": 1.0
+    },
+    "WarpPrism": {
+     "armor": 1.0
+    },
+    "Observer": {
+     "armor": 1.0
+    },
+    "Interceptor": {
+     "armor": 1.0
+    },
+    "WarpPrismPhasing": {
+     "armor": 1.0
+    },
+    "MothershipCore": {
+     "armor": 1.0
+    },
+    "Oracle": {
+     "armor": 1.0
+    },
+    "Tempest": {
+     "armor": 1.0
+    },
+    "ObserverSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Carrier",
+     "Interceptor",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "Phoenix",
+     "Tempest",
+     "VoidRay",
+     "WarpPrism",
+     "WarpPrismPhasing"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "WarpGateResearch"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "DarkTemplarBlinkUpgrade"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "PhoenixRangeUpgrade"
+   ],
+   "changes": {
+    "Phoenix": {
+     "weapons": [
+      {
+       "range": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "VoidRaySpeedUpgrade"
+   ],
+   "changes": {
+    "VoidRay": {
+     "speed": 0.5703125
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TempestGroundAttackUpgrade"
+   ],
+   "changes": {
+    "Tempest": {
+     "weapons": [
+      {
+       "bonuses": {
+        "Structure": 40.0
+       }
+      },
+      {
+       "bonuses": {
+        "Structure": 40.0
+       }
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundWeaponsLevel1"
+   ],
+   "changes": {
+    "Colossus": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ChangelingZealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Stalker": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "HighTemplar": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "DarkTemplar": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    },
+    "Immortal": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 3.0
+       }
+      }
+     ]
+    },
+    "Archon": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Biological": 1.0
+       }
+      }
+     ]
+    },
+    "Adept": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "HighTemplar",
+     "Immortal",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundWeaponsLevel2"
+   ],
+   "changes": {
+    "Colossus": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ChangelingZealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Stalker": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "HighTemplar": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "DarkTemplar": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    },
+    "Immortal": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 3.0
+       }
+      }
+     ]
+    },
+    "Archon": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Biological": 1.0
+       }
+      }
+     ]
+    },
+    "Adept": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "HighTemplar",
+     "Immortal",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundWeaponsLevel3"
+   ],
+   "changes": {
+    "Colossus": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    },
+    "ChangelingZealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zealot": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Stalker": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "HighTemplar": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "DarkTemplar": {
+     "weapons": [
+      {
+       "damage": 5.0
+      }
+     ]
+    },
+    "Immortal": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 3.0
+       }
+      }
+     ]
+    },
+    "Archon": {
+     "weapons": [
+      {
+       "damage": 3.0,
+       "bonuses": {
+        "Biological": 1.0
+       }
+      }
+     ]
+    },
+    "Adept": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Light": 1.0
+       }
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "HighTemplar",
+     "Immortal",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundArmorsLevel1"
+   ],
+   "changes": {
+    "Colossus": {
+     "armor": 1.0
+    },
+    "Zealot": {
+     "armor": 1.0
+    },
+    "Stalker": {
+     "armor": 1.0
+    },
+    "HighTemplar": {
+     "armor": 1.0
+    },
+    "DarkTemplar": {
+     "armor": 1.0
+    },
+    "Sentry": {
+     "armor": 1.0
+    },
+    "Immortal": {
+     "armor": 1.0
+    },
+    "Probe": {
+     "armor": 1.0
+    },
+    "Archon": {
+     "armor": 1.0
+    },
+    "Adept": {
+     "armor": 1.0
+    },
+    "Disruptor": {
+     "armor": 1.0
+    },
+    "DisruptorPhased": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "HighTemplar",
+     "Immortal",
+     "Probe",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundArmorsLevel2"
+   ],
+   "changes": {
+    "Colossus": {
+     "armor": 1.0
+    },
+    "Zealot": {
+     "armor": 1.0
+    },
+    "Stalker": {
+     "armor": 1.0
+    },
+    "HighTemplar": {
+     "armor": 1.0
+    },
+    "DarkTemplar": {
+     "armor": 1.0
+    },
+    "Sentry": {
+     "armor": 1.0
+    },
+    "Immortal": {
+     "armor": 1.0
+    },
+    "Probe": {
+     "armor": 1.0
+    },
+    "Archon": {
+     "armor": 1.0
+    },
+    "Adept": {
+     "armor": 1.0
+    },
+    "Disruptor": {
+     "armor": 1.0
+    },
+    "DisruptorPhased": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "HighTemplar",
+     "Immortal",
+     "Probe",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossGroundArmorsLevel3"
+   ],
+   "changes": {
+    "Colossus": {
+     "armor": 1.0
+    },
+    "Zealot": {
+     "armor": 1.0
+    },
+    "Stalker": {
+     "armor": 1.0
+    },
+    "HighTemplar": {
+     "armor": 1.0
+    },
+    "DarkTemplar": {
+     "armor": 1.0
+    },
+    "Sentry": {
+     "armor": 1.0
+    },
+    "Immortal": {
+     "armor": 1.0
+    },
+    "Probe": {
+     "armor": 1.0
+    },
+    "Archon": {
+     "armor": 1.0
+    },
+    "Adept": {
+     "armor": 1.0
+    },
+    "Disruptor": {
+     "armor": 1.0
+    },
+    "DisruptorPhased": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Adept",
+     "Archon",
+     "Colossus",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "HighTemplar",
+     "Immortal",
+     "Probe",
+     "Sentry",
+     "Stalker",
+     "Zealot"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossShieldsLevel1"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": [
+     "Adept",
+     "Archon",
+     "Assimilator",
+     "Carrier",
+     "Colossus",
+     "CyberneticsCore",
+     "DarkShrine",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "FleetBeacon",
+     "Forge",
+     "HighTemplar",
+     "Immortal",
+     "Interceptor",
+     "Nexus",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "OracleStasisTrap",
+     "Phoenix",
+     "PhotonCannon",
+     "Probe",
+     "Pylon",
+     "RoboticsBay",
+     "RoboticsFacility",
+     "Sentry",
+     "ShieldBattery",
+     "Stalker",
+     "Stargate",
+     "Tempest",
+     "TemplarArchive",
+     "TwilightCouncil",
+     "VoidRay",
+     "WarpGate",
+     "WarpPrism",
+     "WarpPrismPhasing",
+     "Zealot"
+    ]
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossShieldsLevel2"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": [
+     "Adept",
+     "Archon",
+     "Assimilator",
+     "Carrier",
+     "Colossus",
+     "CyberneticsCore",
+     "DarkShrine",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "FleetBeacon",
+     "Forge",
+     "HighTemplar",
+     "Immortal",
+     "Interceptor",
+     "Nexus",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "OracleStasisTrap",
+     "Phoenix",
+     "PhotonCannon",
+     "Probe",
+     "Pylon",
+     "RoboticsBay",
+     "RoboticsFacility",
+     "Sentry",
+     "ShieldBattery",
+     "Stalker",
+     "Stargate",
+     "Tempest",
+     "TemplarArchive",
+     "TwilightCouncil",
+     "VoidRay",
+     "WarpGate",
+     "WarpPrism",
+     "WarpPrismPhasing",
+     "Zealot"
+    ]
+   }
+  },
+  {
+   "upgrades": [
+    "ProtossShieldsLevel3"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": [
+     "Adept",
+     "Archon",
+     "Assimilator",
+     "Carrier",
+     "Colossus",
+     "CyberneticsCore",
+     "DarkShrine",
+     "DarkTemplar",
+     "Disruptor",
+     "DisruptorPhased",
+     "FleetBeacon",
+     "Forge",
+     "HighTemplar",
+     "Immortal",
+     "Interceptor",
+     "Nexus",
+     "Observer",
+     "ObserverSiegeMode",
+     "Oracle",
+     "Phoenix",
+     "PhotonCannon",
+     "Probe",
+     "Pylon",
+     "RoboticsBay",
+     "RoboticsFacility",
+     "Sentry",
+     "ShieldBattery",
+     "Stalker",
+     "Stargate",
+     "Tempest",
+     "TemplarArchive",
+     "TwilightCouncil",
+     "VoidRay",
+     "WarpGate",
+     "WarpPrism",
+     "WarpPrismPhasing",
+     "Zealot"
+    ]
+   }
+  },
+  {
+   "upgrades": [
+    "ObserverGraviticBooster"
+   ],
+   "changes": {
+    "Observer": {
+     "speed": 1.0078125
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "GraviticDrive"
+   ],
+   "changes": {
+    "WarpPrism": {
+     "speed": 0.875
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ExtendedThermalLance"
+   ],
+   "changes": {
+    "Colossus": {
+     "weapons": [
+      {
+       "range": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "PsiStormTech"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "Charge"
+   ],
+   "changes": {
+    "Zealot": {
+     "speed": 1.125
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "BlinkTech"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "AdeptPiercingAttack"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "overlordspeed"
+   ],
+   "changes": {
+    "Overlord": {
+     "speed": 1.234375
+    },
+    "Overseer": {
+     "speed": 1.5
+    },
+    "OverlordTransport": {
+     "speed": 1.23046875
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "Burrow"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "CentrificalHooks"
+   ],
+   "changes": {
+    "Baneling": {
+     "speed": 0.453125
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMeleeWeaponsLevel1"
+   ],
+   "changes": {
+    "ChangelingZerglingWings": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingZergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ultralisk": {
+     "weapons": [
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Broodling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Broodling",
+     "Ultralisk",
+     "Zergling"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMeleeWeaponsLevel2"
+   ],
+   "changes": {
+    "ChangelingZerglingWings": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingZergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ultralisk": {
+     "weapons": [
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Broodling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Broodling",
+     "Ultralisk",
+     "Zergling"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMeleeWeaponsLevel3"
+   ],
+   "changes": {
+    "ChangelingZerglingWings": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "ChangelingZergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Zergling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Ultralisk": {
+     "weapons": [
+      {
+       "damage": 3.0
+      }
+     ]
+    },
+    "Broodling": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Broodling",
+     "Ultralisk",
+     "Zergling"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergGroundArmorsLevel1"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "armor": 1.0
+    },
+    "BanelingCocoon": {
+     "armor": 1.0
+    },
+    "Baneling": {
+     "armor": 1.0
+    },
+    "Drone": {
+     "armor": 1.0
+    },
+    "Zergling": {
+     "armor": 1.0
+    },
+    "Hydralisk": {
+     "armor": 1.0
+    },
+    "Ultralisk": {
+     "armor": 1.0
+    },
+    "Roach": {
+     "armor": 1.0
+    },
+    "Infestor": {
+     "armor": 1.0
+    },
+    "BanelingBurrowed": {
+     "armor": 1.0
+    },
+    "DroneBurrowed": {
+     "armor": 1.0
+    },
+    "HydraliskBurrowed": {
+     "armor": 1.0
+    },
+    "RoachBurrowed": {
+     "armor": 1.0
+    },
+    "ZerglingBurrowed": {
+     "armor": 1.0
+    },
+    "InfestorTerranBurrowed": {
+     "armor": 1.0
+    },
+    "QueenBurrowed": {
+     "armor": 1.0
+    },
+    "Queen": {
+     "armor": 1.0
+    },
+    "InfestorBurrowed": {
+     "armor": 1.0
+    },
+    "UltraliskBurrowed": {
+     "armor": 1.0
+    },
+    "Broodling": {
+     "armor": 1.0
+    },
+    "LocustMP": {
+     "armor": 1.0
+    },
+    "SwarmHostBurrowedMP": {
+     "armor": 1.0
+    },
+    "SwarmHostMP": {
+     "armor": 1.0
+    },
+    "LurkerMP": {
+     "armor": 1.0
+    },
+    "LurkerMPBurrowed": {
+     "armor": 1.0
+    },
+    "Ravager": {
+     "armor": 1.0
+    },
+    "RavagerBurrowed": {
+     "armor": 1.0
+    },
+    "LocustMPFlying": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Baneling",
+     "BanelingBurrowed",
+     "BanelingCocoon",
+     "Broodling",
+     "Drone",
+     "DroneBurrowed",
+     "Hydralisk",
+     "HydraliskBurrowed",
+     "Infestor",
+     "InfestorBurrowed",
+     "LocustMP",
+     "LocustMPFlying",
+     "LurkerMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "QueenBurrowed",
+     "Ravager",
+     "RavagerBurrowed",
+     "Roach",
+     "RoachBurrowed",
+     "SwarmHostBurrowedMP",
+     "SwarmHostMP",
+     "Ultralisk",
+     "UltraliskBurrowed",
+     "Zergling",
+     "ZerglingBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergGroundArmorsLevel2"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "armor": 1.0
+    },
+    "BanelingCocoon": {
+     "armor": 1.0
+    },
+    "Baneling": {
+     "armor": 1.0
+    },
+    "Drone": {
+     "armor": 1.0
+    },
+    "Zergling": {
+     "armor": 1.0
+    },
+    "Hydralisk": {
+     "armor": 1.0
+    },
+    "Ultralisk": {
+     "armor": 1.0
+    },
+    "Roach": {
+     "armor": 1.0
+    },
+    "Infestor": {
+     "armor": 1.0
+    },
+    "BanelingBurrowed": {
+     "armor": 1.0
+    },
+    "DroneBurrowed": {
+     "armor": 1.0
+    },
+    "HydraliskBurrowed": {
+     "armor": 1.0
+    },
+    "RoachBurrowed": {
+     "armor": 1.0
+    },
+    "ZerglingBurrowed": {
+     "armor": 1.0
+    },
+    "InfestorTerranBurrowed": {
+     "armor": 1.0
+    },
+    "QueenBurrowed": {
+     "armor": 1.0
+    },
+    "Queen": {
+     "armor": 1.0
+    },
+    "InfestorBurrowed": {
+     "armor": 1.0
+    },
+    "UltraliskBurrowed": {
+     "armor": 1.0
+    },
+    "Broodling": {
+     "armor": 1.0
+    },
+    "LocustMP": {
+     "armor": 1.0
+    },
+    "SwarmHostBurrowedMP": {
+     "armor": 1.0
+    },
+    "SwarmHostMP": {
+     "armor": 1.0
+    },
+    "LurkerMP": {
+     "armor": 1.0
+    },
+    "LurkerMPBurrowed": {
+     "armor": 1.0
+    },
+    "Ravager": {
+     "armor": 1.0
+    },
+    "RavagerBurrowed": {
+     "armor": 1.0
+    },
+    "LocustMPFlying": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Baneling",
+     "BanelingBurrowed",
+     "BanelingCocoon",
+     "Broodling",
+     "Drone",
+     "DroneBurrowed",
+     "Hydralisk",
+     "HydraliskBurrowed",
+     "Infestor",
+     "InfestorBurrowed",
+     "LocustMP",
+     "LocustMPFlying",
+     "LurkerMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "QueenBurrowed",
+     "Ravager",
+     "RavagerBurrowed",
+     "Roach",
+     "RoachBurrowed",
+     "SwarmHostBurrowedMP",
+     "SwarmHostMP",
+     "Ultralisk",
+     "UltraliskBurrowed",
+     "Zergling",
+     "ZerglingBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergGroundArmorsLevel3"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "armor": 1.0
+    },
+    "BanelingCocoon": {
+     "armor": 1.0
+    },
+    "Baneling": {
+     "armor": 1.0
+    },
+    "Drone": {
+     "armor": 1.0
+    },
+    "Zergling": {
+     "armor": 1.0
+    },
+    "Hydralisk": {
+     "armor": 1.0
+    },
+    "Ultralisk": {
+     "armor": 1.0
+    },
+    "Roach": {
+     "armor": 1.0
+    },
+    "Infestor": {
+     "armor": 1.0
+    },
+    "BanelingBurrowed": {
+     "armor": 1.0
+    },
+    "DroneBurrowed": {
+     "armor": 1.0
+    },
+    "HydraliskBurrowed": {
+     "armor": 1.0
+    },
+    "RoachBurrowed": {
+     "armor": 1.0
+    },
+    "ZerglingBurrowed": {
+     "armor": 1.0
+    },
+    "InfestorTerranBurrowed": {
+     "armor": 1.0
+    },
+    "QueenBurrowed": {
+     "armor": 1.0
+    },
+    "Queen": {
+     "armor": 1.0
+    },
+    "InfestorBurrowed": {
+     "armor": 1.0
+    },
+    "UltraliskBurrowed": {
+     "armor": 1.0
+    },
+    "Broodling": {
+     "armor": 1.0
+    },
+    "LocustMP": {
+     "armor": 1.0
+    },
+    "SwarmHostBurrowedMP": {
+     "armor": 1.0
+    },
+    "SwarmHostMP": {
+     "armor": 1.0
+    },
+    "LurkerMP": {
+     "armor": 1.0
+    },
+    "LurkerMPBurrowed": {
+     "armor": 1.0
+    },
+    "Ravager": {
+     "armor": 1.0
+    },
+    "RavagerBurrowed": {
+     "armor": 1.0
+    },
+    "LocustMPFlying": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Baneling",
+     "BanelingBurrowed",
+     "BanelingCocoon",
+     "Broodling",
+     "Drone",
+     "DroneBurrowed",
+     "Hydralisk",
+     "HydraliskBurrowed",
+     "Infestor",
+     "InfestorBurrowed",
+     "LocustMP",
+     "LocustMPFlying",
+     "LurkerMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "QueenBurrowed",
+     "Ravager",
+     "RavagerBurrowed",
+     "Roach",
+     "RoachBurrowed",
+     "SwarmHostBurrowedMP",
+     "SwarmHostMP",
+     "Ultralisk",
+     "UltraliskBurrowed",
+     "Zergling",
+     "ZerglingBurrowed"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMissileWeaponsLevel1"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "weapons": [
+      {
+       "damage": 2.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Hydralisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Roach": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "Queen": {
+     "weapons": [
+      {
+       "damage": 1.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LocustMP": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LurkerMPBurrowed": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Ravager": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Hydralisk",
+     "LocustMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "Ravager",
+     "Roach"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMissileWeaponsLevel2"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "weapons": [
+      {
+       "damage": 2.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Hydralisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Roach": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "Queen": {
+     "weapons": [
+      {
+       "damage": 1.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LocustMP": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LurkerMPBurrowed": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Ravager": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Hydralisk",
+     "LocustMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "Ravager",
+     "Roach"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergMissileWeaponsLevel3"
+   ],
+   "changes": {
+    "InfestorTerran": {
+     "weapons": [
+      {
+       "damage": 2.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Hydralisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Roach": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    },
+    "Queen": {
+     "weapons": [
+      {
+       "damage": 1.0
+      },
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LocustMP": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "LurkerMPBurrowed": {
+     "weapons": [
+      {
+       "damage": 2.0,
+       "bonuses": {
+        "Armored": 1.0
+       }
+      }
+     ]
+    },
+    "Ravager": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "Hydralisk",
+     "LocustMP",
+     "LurkerMPBurrowed",
+     "Queen",
+     "Ravager",
+     "Roach"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerWeaponsLevel1"
+   ],
+   "changes": {
+    "Mutalisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Corruptor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      }
+     ]
+    },
+    "BroodLord": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "BroodLord",
+     "Corruptor",
+     "Mutalisk"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerWeaponsLevel2"
+   ],
+   "changes": {
+    "Mutalisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Corruptor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      }
+     ]
+    },
+    "BroodLord": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "BroodLord",
+     "Corruptor",
+     "Mutalisk"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerWeaponsLevel3"
+   ],
+   "changes": {
+    "Mutalisk": {
+     "weapons": [
+      {
+       "damage": 1.0
+      }
+     ]
+    },
+    "Corruptor": {
+     "weapons": [
+      {
+       "damage": 1.0,
+       "bonuses": {
+        "Massive": 1.0
+       }
+      }
+     ]
+    },
+    "BroodLord": {
+     "weapons": [
+      {
+       "damage": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [
+     "BroodLord",
+     "Corruptor",
+     "Mutalisk"
+    ],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerArmorsLevel1"
+   ],
+   "changes": {
+    "Overlord": {
+     "armor": 1.0
+    },
+    "Mutalisk": {
+     "armor": 1.0
+    },
+    "Corruptor": {
+     "armor": 1.0
+    },
+    "BroodLordCocoon": {
+     "armor": 1.0
+    },
+    "BroodLord": {
+     "armor": 1.0
+    },
+    "OverlordCocoon": {
+     "armor": 1.0
+    },
+    "Overseer": {
+     "armor": 1.0
+    },
+    "Viper": {
+     "armor": 1.0
+    },
+    "TransportOverlordCocoon": {
+     "armor": 1.0
+    },
+    "OverlordTransport": {
+     "armor": 1.0
+    },
+    "OverseerSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "BroodLord",
+     "BroodLordCocoon",
+     "Corruptor",
+     "Mutalisk",
+     "Overlord",
+     "OverlordCocoon",
+     "OverlordTransport",
+     "Overseer",
+     "OverseerSiegeMode",
+     "TransportOverlordCocoon",
+     "Viper"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerArmorsLevel2"
+   ],
+   "changes": {
+    "Overlord": {
+     "armor": 1.0
+    },
+    "Mutalisk": {
+     "armor": 1.0
+    },
+    "Corruptor": {
+     "armor": 1.0
+    },
+    "BroodLordCocoon": {
+     "armor": 1.0
+    },
+    "BroodLord": {
+     "armor": 1.0
+    },
+    "OverlordCocoon": {
+     "armor": 1.0
+    },
+    "Overseer": {
+     "armor": 1.0
+    },
+    "Viper": {
+     "armor": 1.0
+    },
+    "TransportOverlordCocoon": {
+     "armor": 1.0
+    },
+    "OverlordTransport": {
+     "armor": 1.0
+    },
+    "OverseerSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "BroodLord",
+     "BroodLordCocoon",
+     "Corruptor",
+     "Mutalisk",
+     "Overlord",
+     "OverlordCocoon",
+     "OverlordTransport",
+     "Overseer",
+     "OverseerSiegeMode",
+     "TransportOverlordCocoon",
+     "Viper"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ZergFlyerArmorsLevel3"
+   ],
+   "changes": {
+    "Overlord": {
+     "armor": 1.0
+    },
+    "Mutalisk": {
+     "armor": 1.0
+    },
+    "Corruptor": {
+     "armor": 1.0
+    },
+    "BroodLordCocoon": {
+     "armor": 1.0
+    },
+    "BroodLord": {
+     "armor": 1.0
+    },
+    "OverlordCocoon": {
+     "armor": 1.0
+    },
+    "Overseer": {
+     "armor": 1.0
+    },
+    "Viper": {
+     "armor": 1.0
+    },
+    "TransportOverlordCocoon": {
+     "armor": 1.0
+    },
+    "OverlordTransport": {
+     "armor": 1.0
+    },
+    "OverseerSiegeMode": {
+     "armor": 1.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "BroodLord",
+     "BroodLordCocoon",
+     "Corruptor",
+     "Mutalisk",
+     "Overlord",
+     "OverlordCocoon",
+     "OverlordTransport",
+     "Overseer",
+     "OverseerSiegeMode",
+     "TransportOverlordCocoon",
+     "Viper"
+    ],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "EvolveGroovedSpines"
+   ],
+   "changes": {
+    "Hydralisk": {
+     "weapons": [
+      {
+       "range": 1.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "EvolveMuscularAugments"
+   ],
+   "changes": {
+    "Hydralisk": {
+     "speed": 0.69921875
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "Frenzy"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "NeuralParasite"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "DiggingClaws"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "LurkerRange"
+   ],
+   "changes": {
+    "LurkerMPBurrowed": {
+     "weapons": [
+      {
+       "range": 2.0
+      }
+     ]
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "GlialReconstitution"
+   ],
+   "changes": {
+    "Roach": {
+     "speed": 0.75
+    },
+    "RoachBurrowed": {
+     "speed": 0.83984375
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "TunnelingClaws"
+   ],
+   "changes": {
+    "RoachBurrowed": {
+     "speed": 1.40625
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "zerglingattackspeed"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "zerglingmovementspeed"
+   ],
+   "changes": {
+    "Zergling": {
+     "speed": 1.74609375
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "AnabolicSynthesis"
+   ],
+   "changes": {
+    "Ultralisk": {
+     "speed": 0.5234375
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ChitinousPlating"
+   ],
+   "changes": {
+    "Ultralisk": {
+     "armor": 2.0
+    },
+    "UltraliskBurrowed": {
+     "armor": 2.0
+    }
+   },
+   "levels": {
+    "attack": [],
+    "armor": [
+     "Ultralisk",
+     "UltraliskBurrowed"
+    ],
+    "shield": []
+   }
+  }
+ ],
+ "unexplained": []
+}

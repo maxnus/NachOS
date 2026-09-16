@@ -9,9 +9,11 @@ from sc2nachos.util._math import (
     s_curve,
     sticky_round,
 )
+from sc2nachos.util._snapshot_set import SnapshotSet
 from sc2nachos.util._timeseries import TimeSeries
 
 __all__ = [
+    "SnapshotSet",
     "TimeSeries",
     "clip",
     "damp",

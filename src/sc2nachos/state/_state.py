@@ -29,11 +29,13 @@ if TYPE_CHECKING:
 class _State:
     """What one observation reports beyond its units, each read out of it when first asked for."""
 
-    def __init__(self, observation: sc2api_pb2.ResponseObservation, units: _UnitTracker, game_map: GameMap) -> None:
-        """Read `observation`, whose units `units` has taken in, on `game_map`."""
+    def __init__(
+        self, observation: sc2api_pb2.ResponseObservation, unit_tracker: _UnitTracker, game_map: GameMap
+    ) -> None:
+        """Read `observation`, whose units `unit_tracker` has taken in, on `game_map`."""
         self._response = observation
         self._observation = observation.observation
-        self._units = units
+        self._unit_tracker = unit_tracker
         self._map = game_map
 
     @cached_property
@@ -62,10 +64,10 @@ class _State:
     def _half_supply(self) -> float:
         """What the units first seen as this player's and not dead take beyond whole supplies, those inside another
         unit included: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
-        rows = self._units.data.units
+        rows = self._unit_tracker.data.units
         taken = 0.0
-        for unit in self._units.known_units:
-            if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN or unit._type_id is None:
+        for unit in self._unit_tracker.known_units:
+            if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # What the unit takes beyond a whole supply: 0.5 for a zergling, 0 for a roach.
@@ -80,9 +82,9 @@ class _State:
 
     # The map as it stands.
 
-    @cached_property
+    @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        return frozenset(UpgradeId.read(upgrade) for upgrade in self._observation.raw_data.player.upgrade_ids)
+        return self._unit_tracker.upgrades
 
     @cached_property
     def _visibility(self) -> ndarray:
@@ -124,6 +126,6 @@ class _State:
 
         Raises `UncuratedIdError` where an action names an ability the curated ids leave out.
         """
-        unit_by_tag = self._units.unit_by_tag
+        unit_by_tag = self._unit_tracker.unit_by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
         return tuple(action for action in actions if action is not None)

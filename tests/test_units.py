@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
@@ -352,12 +352,10 @@ class TestWhatAUnitReads:
         unit = _one(make_unit(1, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST]))
         assert unit.buffs == {BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST}
 
-    def test_an_uncurated_type_raises_when_read_and_names_the_id(self) -> None:
-        unit = _one(make_unit(1, RawUnitTypeId.Viking))
-        assert unit.tag == 1
+    def test_an_uncurated_type_raises_as_the_observation_is_taken_in_and_names_the_id(self) -> None:
+        """A type the game reports belongs among the curated ids, so one missing is a mistake to fix."""
         with pytest.raises(UncuratedIdError, match=r"UnitTypeId has no member for id \d+ \(RawUnitTypeId.Viking\)"):
-            _ = unit.type_id
-        assert repr(unit).startswith("OwnUnit(uncurated type")
+            _one(make_unit(1, RawUnitTypeId.Viking))
 
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
@@ -657,6 +655,21 @@ class TestThroughTheApi:
         assert api.units.ids == {100001}
         assert api.known_units.ids == {100001, 400001}
 
+    def test_the_enemy_upgrades_are_assumed_by_adding_assigning_or_combining_and_start_empty_each_game(self) -> None:
+        api = Api()
+        self._play(api, make_observation(0, (1, Result.VICTORY)))
+        assumed = api.enemy_upgrades
+        assert not assumed
+        api.enemy_upgrades.add(UpgradeId.STIMPACK)
+        api.enemy_upgrades |= {UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS}
+        api.enemy_upgrades -= {UpgradeId.STIMPACK}
+        assert set(api.enemy_upgrades) == {UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS}
+        api.enemy_upgrades = [UpgradeId.STIMPACK]
+        assert api.enemy_upgrades is assumed
+        assert set(assumed) == {UpgradeId.STIMPACK}
+        self._play(api, make_observation(0, (1, Result.VICTORY)))
+        assert not api.enemy_upgrades
+
     def test_the_last_games_units_are_stale_once_the_next_game_starts(self) -> None:
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY), units=[make_unit(1)]))
@@ -686,7 +699,10 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         home = units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
         middle = game.map.playable_area.center
         out_there = home.towards(middle, 12)
-        game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.tech_tree))
+        # Not the `tech_tree` cheat, which grants campaign upgrades no curated id names, and an observation holding one
+        # raises (`docs/cheats.md`). What this needs researched, it researches.
+        # Not `fast_build` either: a structure going up is one of the things read below.
+        game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free))
 
         # A morph keeps the object.
         game.debug(game.create(UnitTypeId.SIEGE_TANK, out_there))
@@ -755,6 +771,14 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         assert game.tracker.known_units.get(depot.id) is None
 
         # A neural parasite takes a unit over and lets it go, changing its class both times.
+        game.debug(game.create(UnitTypeId.INFESTATION_PIT, game.open_ground(out_there.towards(home, -8))))
+        game.turn(2)
+        game.order(AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE, game.newest(UnitTypeId.INFESTATION_PIT))
+        for _ in range(100):
+            if UpgradeId.NEURAL_PARASITE in game.state.upgrades:
+                break
+            game.turn(22)
+        assert UpgradeId.NEURAL_PARASITE in game.state.upgrades
         game.debug(
             game.create(UnitTypeId.INFESTOR, out_there + (0, 4)),
             game.create(UnitTypeId.MARINE, out_there + (4, 4), owner=enemy),

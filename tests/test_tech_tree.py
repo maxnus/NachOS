@@ -23,6 +23,7 @@ from support import RealGame
 _REPO = Path(__file__).parents[1]
 _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
+_UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 # What the unit types are offered that no curated ability names, for the curation pass before M4 to name.
 _UNCURATED_OFFERED = frozenset(
@@ -132,6 +133,11 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
     return findings
 
 
+def _no_upgrades(*research: dict[str, object]) -> dict[str, object]:
+    """Upgrade findings as `tools/sweep_upgrades.py` writes them, holding only `research`."""
+    return {"base_build": 1, "races": [], "research": list(research), "unexplained": []}
+
+
 def _requirement(performer: str, ability: str, structures: list[str], upgrades: list[str]) -> dict[str, object]:
     return {
         "performer": performer,
@@ -146,7 +152,7 @@ def _requirement(performer: str, ability: str, structures: list[str], upgrades: 
 class TestGeneratingTheTables:
     def test_what_is_offered_is_read_under_the_curated_ids(self) -> None:
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", "Rally_Building"], "Ursadon": ["Smart"]})
-        tree = _generator().read(findings)
+        tree = _generator().read(findings, _no_upgrades())
         assert AbilityId.BARRACKS_TRAIN_MARINE in tree.ability_requirements[UnitTypeId.BARRACKS]
         assert set(tree.ability_requirements) == {UnitTypeId.BARRACKS}
 
@@ -155,12 +161,12 @@ class TestGeneratingTheTables:
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", spray], "Factory": [spray]})
         generator = _generator()
         assert generator.uncurated(findings) == {spray}
-        assert generator.read(findings).ability_requirements[UnitTypeId.FACTORY] == {}
+        assert generator.read(findings, _no_upgrades()).ability_requirements[UnitTypeId.FACTORY] == {}
 
     def test_a_requirement_is_read_under_the_unit_type_and_the_ability(self) -> None:
         ghost = _requirement("Barracks", "BarracksTrain_Ghost", ["GhostAcademy", "BarracksTechLab"], [])
         findings = _findings(offered={"Barracks": ["BarracksTrain_Ghost"]}, requirements=[ghost])
-        tree = _generator().read(findings)
+        tree = _generator().read(findings, _no_upgrades())
         assert tree.ability_requirements[UnitTypeId.BARRACKS][AbilityId.BARRACKS_TRAIN_GHOST] == TechRequirements(
             structures=frozenset({UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS})
         )
@@ -170,7 +176,7 @@ class TestGeneratingTheTables:
         marauder = _requirement("Barracks", "BarracksTrain_Marauder", ["BarracksTechLab"], []) | {"attached": False}
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marauder"]}, requirements=[marauder])
         with pytest.raises(ValueError, match="another structure's add-on"):
-            _generator().read(findings)
+            _generator().read(findings, _no_upgrades())
 
     def test_what_performs_and_makes_an_ability_comes_with_the_tables_the_sweep_read(self) -> None:
         findings = _findings(
@@ -179,7 +185,7 @@ class TestGeneratingTheTables:
             creation_abilities={"Marine": "BarracksTrain_Marine", "Baneling": "MorphZerglingToBaneling_Baneling"},
             research_abilities={"Stimpack": "BarracksTechLabResearch_Stimpack"},
         )
-        tree = _generator().read(findings)
+        tree = _generator().read(findings, _no_upgrades())
         assert tree.ability_performers[AbilityId.GENERAL_BURROW] == {UnitTypeId.ZERGLING}
         assert tree.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
         # The table names a dead ability for a baneling, so the override stands in.
@@ -189,14 +195,14 @@ class TestGeneratingTheTables:
 
     def test_an_ability_needing_nothing_reads_as_needing_nothing(self) -> None:
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine"]})
-        tree = _generator().read(findings)
+        tree = _generator().read(findings, _no_upgrades())
         assert tree.ability_requirements == {UnitTypeId.BARRACKS: {AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()}}
 
     def test_one_ability_can_need_different_things_of_different_unit_types(self) -> None:
         """A burrowed roach moves only once Tunneling Claws is researched, and a marine needs nothing to."""
         offered = {"RoachBurrowed": ["Move_Move"], "Marine": ["Move_Move"]}
         claws = _requirement("RoachBurrowed", "Move_Move", [], ["TunnelingClaws"])
-        tree = _generator().read(_findings(offered=offered, requirements=[claws]))
+        tree = _generator().read(_findings(offered=offered, requirements=[claws]), _no_upgrades())
         needs = tree.ability_requirements
         assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.GENERAL_MOVE_EXACT].upgrades == {UpgradeId.TUNNELING_CLAWS}
         assert needs[UnitTypeId.MARINE][AbilityId.GENERAL_MOVE_EXACT] == TechRequirements()
@@ -205,18 +211,18 @@ class TestGeneratingTheTables:
         """Rather than read as needing nothing."""
         findings = _findings(offered={"Ghost": ["Behavior_CloakOff_Ghost"]}, unread=True)
         with pytest.raises(ValueError, match="GHOST GHOST_CLOAK_OFF"):
-            _generator().read(findings)
+            _generator().read(findings, _no_upgrades())
 
     def test_an_override_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
         """A patch that breaks one stops the regeneration, rather than keep an ability that makes nothing any more."""
         with pytest.raises(ValueError, match="BANELING by ZERGLING_MORPH_BANELING"):
-            _generator().read(_findings(unconfirmed=True))
+            _generator().read(_findings(unconfirmed=True), _no_upgrades())
 
     def test_a_requirement_no_curated_id_names_is_refused(self) -> None:
         marine = _requirement("Barracks", "BarracksTrain_Marine", ["Ursadon"], [])
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine"]}, requirements=[marine])
         with pytest.raises(ValueError, match="Ursadon"):
-            _generator().read(findings)
+            _generator().read(findings, _no_upgrades())
 
     def test_an_ability_that_turns_a_unit_into_something_else_is_not_its_to_perform(self) -> None:
         """Once Burrow is researched a zergling is offered a drone's burrow, and ordered it burrows as a zergling."""
@@ -225,7 +231,7 @@ class TestGeneratingTheTables:
             _trial("Drone", "BurrowDown_Drone", "DroneBurrowed", "morph"),
             _trial("Zergling", "BurrowDown_Drone", "DroneBurrowed", "other"),
         ]
-        tree = _generator().read(_findings(offered=offered, made=made))
+        tree = _generator().read(_findings(offered=offered, made=made), _no_upgrades())
         assert set(tree.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.ZERGLING_BURROW}
         assert tree.morph_sources[UnitTypeId.DRONE_BURROWED] is UnitTypeId.DRONE
 
@@ -234,7 +240,7 @@ class TestGeneratingTheTables:
             _trial("CommandCenter", "UpgradeToOrbital_OrbitalCommand", "OrbitalCommand", "morph"),
             _trial("Barracks", "BarracksTrain_Marine", "Marine", "build"),
         ]
-        morphed_from = _generator().read(_findings(made=made)).morph_sources
+        morphed_from = _generator().read(_findings(made=made), _no_upgrades()).morph_sources
         assert morphed_from == {UnitTypeId.ORBITAL_COMMAND: UnitTypeId.COMMAND_CENTER}
 
     def test_a_type_several_types_are_used_up_for_is_made_out_of_the_one_the_others_come_from(self) -> None:
@@ -244,12 +250,12 @@ class TestGeneratingTheTables:
             _trial("Overlord", "Morph_Overseer", "Overseer", "morph"),
             _trial("OverlordTransport", "Morph_Overseer", "Overseer", "morph"),
         ]
-        morphed_from = _generator().read(_findings(made=made)).morph_sources
+        morphed_from = _generator().read(_findings(made=made), _no_upgrades()).morph_sources
         assert morphed_from[UnitTypeId.OVERSEER] is UnitTypeId.OVERLORD
         assert morphed_from[UnitTypeId.OVERLORD_TRANSPORT] is UnitTypeId.OVERLORD
 
     def test_a_pylon_powering_itself_does_not_need_power(self) -> None:
-        tree = _generator().read(_findings(powered=["Gateway", "Pylon"]))
+        tree = _generator().read(_findings(powered=["Gateway", "Pylon"]), _no_upgrades())
         assert tree.power_consumers == {UnitTypeId.GATEWAY}
 
     def test_the_module_holds_the_tech_tree_read(self) -> None:
@@ -260,14 +266,24 @@ class TestGeneratingTheTables:
             made=[_trial("Barracks", "Lift_Barracks", "BarracksFlying", "morph")],
             powered=["Gateway"],
         )
-        tree = generator.read(findings)
+        igniter = {
+            "upgrades": ["HighCapacityBarrels"],
+            "changes": {"HellionTank": {"speed": 0.5, "weapons": [{"damage": 1.0, "bonuses": {"Light": 12.0}}, {}]}},
+            "levels": {"attack": [], "armor": [], "shield": []},
+        }
+        tree = generator.read(findings, _no_upgrades(igniter))
+        assert tree.unit_type_upgrades
         namespace: dict[str, object] = {}
         exec(generator.render(tree), namespace)  # noqa: S102
         assert namespace["TECH_TREE"] == tree
 
+    def test_findings_from_two_builds_are_refused(self) -> None:
+        with pytest.raises(ValueError, match="build 1 and the upgrades on 2"):
+            _generator().read(_findings(), _no_upgrades() | {"base_build": 2})
+
     def test_the_module_is_as_generated_from_the_findings(self) -> None:
         generator = _generator()
-        tree = generator.read(_findings_file())
+        tree = generator.read(_findings_file(), _upgrade_findings_file())
         written = generator.output(tree).read_text(encoding="utf-8")
         assert written == generator.render(tree), "run tools/generate_tech_tree.py"
 
@@ -281,9 +297,14 @@ def _findings_file() -> dict[str, object]:
     return json.loads(_FINDINGS.read_text(encoding="utf-8"))
 
 
+def _upgrade_findings_file() -> dict[str, object]:
+    """The committed findings of `tools/sweep_upgrades.py`."""
+    return json.loads(_UPGRADE_FINDINGS.read_text(encoding="utf-8"))
+
+
 def _sweep() -> TechTree:
     """What the committed findings generate, as `tools/generate_tech_tree.py` reads them."""
-    return _generator().read(_findings_file())
+    return _generator().read(_findings_file(), _upgrade_findings_file())
 
 
 @pytest.fixture(scope="module")

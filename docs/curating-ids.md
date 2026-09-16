@@ -17,12 +17,7 @@ constantly. Answer it from these.
   `ResearchFrenzy`, which looks like a campaign leftover and is not: 5.0.14 reused the campaign's ids for
   Nanomuscular Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under
   `fast_build` a debug-created structure researches in seconds, which is how `tools/sweep_buffs.py` researches
-  everything a race has. The cheat can only add ids, so a dead id staying unoffered under it still counts. It also
-  hands the player 42 upgrades within a few steps, so leave it off where a test reads what research gives; `free`
-  and `fast_build` hand out none.
-- **A debug-created unit can be yours where the real one is nobody's.** A force field a sentry casts is a neutral
-  unit, owner 16, offered nothing; conjured straight onto the map it is yours and offers `Shatter`, which no
-  player can ever reach. Check `alliance` on the real thing before believing what a created one is offered.
+  everything a race has. What else the cheats and debug-created units get wrong is in `docs/cheats.md`.
 - **A price is not evidence.** Dead upgrades keep theirs: vehicle plating still answers ability 852 at 100/100
   after fourteen years. Only an entry with no ability, no cost and no research time at all (Enhanced Shockwaves)
   is caught from `RequestData` alone.
@@ -162,6 +157,36 @@ computer, which attacks at some point (`god`); workers carrying minerals, which 
 not (the starting workers go); and a pylon the game did not make, which left a twilight council unpowered and its
 research unread (a pylon goes beside every structure still unpowered). A placeholder, with no tag, stands where a
 structure was ordered from the moment it is ordered, so it is no sign that the structure has been started.
+
+## Refreshing `data/upgrades.json`
+
+What each upgrade adds to each unit type is swept in game too, since `UpgradeData` holds only an upgrade's cost and
+time. The game folds the upgrades the asking player holds into the unit types' rows of `RequestData`, so
+`tools/sweep_upgrades.py` researches one upgrade at a time, asks for the rows again and writes down what changed. The
+generator reads this file beside `data/tech_tree.json` and refuses the two from different builds, so after a patch run
+both sweeps before it:
+
+    uv run python tools/sweep_upgrades.py
+    uv run python tools/generate_tech_tree.py
+
+What the rows take in:
+
+- **Weapon damage, damage bonuses and range, armor and speed.** A bonus can be new: Infernal Pre-Igniter gives a
+  hellbat one against light. Every level of a leveled upgrade adds the same, to every unit type.
+- **Nothing else an upgrade does.** Adrenal Glands and Resonating Glaives change no weapon's cooldown, and shield
+  levels, Combat Shield's health, Stim, Concussive Shells and the spells researched leave the rows as they were.
+  Anabolic Synthesis is in them, though in play it counts only off creep.
+- **A unit reports how many attack levels it has, but in `armor_upgrade_level` the armor its upgrades add**: an
+  ultralisk with Chitinous Plating and three levels reports 5. The sweep writes down whose reported levels each upgrade
+  raises, which is `UpgradeData.type`; an upgrade is a level where its curated name ends in the number, so
+  Chitinous Plating raises the armor report and is no level. A leveled upgrade's name has to keep its number for this.
+
+Every run checks what it found in two ways, and the generator refuses to write while either turns something up: once
+everything is researched, each row has to be the first one with every change found added up, and after each upgrade,
+every unit's type armor with the armor it reports from upgrades has to be its row's armor.
+
+The `god` cheat multiplies every weapon's damage in the rows (`docs/cheats.md`), so this sweep never turns it on, and
+reads the rows it adds everything up against before any cheat.
 
 ## Refreshing `data/stableid.json`
 

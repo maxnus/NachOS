@@ -54,8 +54,11 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW` and `BuffId.IMMORTAL_BARRIER`, and leaves the other two out. A buff is
   named after the unit that brings it on, so `STIMPACK` is `MARINE_STIMMED`.
 - **The curated enums hold only what a melee game needs.** Converting an id they leave out raises `ValueError`, and
-  reading one off a unit raises `UncuratedIdError`, which is one. `sc2nachos.ids.raw` holds every id, under
-  Blizzard's own names.
+  `UncuratedIdError` is the one NachOS raises, naming the id and what the raw catalog calls it.
+  `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
+- **An id the enums leave out stops the game as the observation comes in**, for a unit's type and for an upgrade this
+  player holds, since both belong among the curated ids and a game that reports one is a gap to fill. A buff, an
+  effect and an ability read off a unit raise when they are read. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
   `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
@@ -112,6 +115,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `UnitOrder` | `Order` |
 | `unit.distance_to(p)` | `unit.position.distance_to(p)` |
 | `unit.name` | `unit.type_id.name` |
+| `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
+| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them |
+| `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
@@ -161,6 +167,19 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
   it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
+- **A unit's weapons, speed and armor count its owner's upgrades.** Yours come from the observation. The game reports
+  nothing of the enemy's beyond the attack, armor and shield levels on each of its units in sight, so
+  `api.enemy_upgrades` is the set of upgrades you assume it has: empty as each game starts, counted by every read of
+  its units from the moment you add one. What a unit in sight reports counts in place of what is assumed: its attack
+  level in place of the attack levels, and its armor in place of every armor upgrade. python-sc2's
+  `real_speed` counts only your own upgrades and takes `calculate_speed(upgrades)` for anyone else's, and its
+  `ground_range`, `ground_dps` and `armor` count none. For some other set, read `unit.type_data.with_upgrades(set)`.
+- **`unit.speed` counts no creep and no buff yet**, where python-sc2's `real_speed` counts both.
+- **Speeds are per second of the game's Faster speed, as `velocity` is.** The game's tables give them per second of
+  its Normal speed, 16 steps, which python-sc2 hands on, so its code multiplies by 1.4 to get a distance a unit covers
+  in a real second. NachOS has done it already: a zergling's `speed` is 4.13, not 2.95.
+- **`armor_upgrade_level` is armor, not a count of levels.** An ultralisk with Chitinous Plating and three levels
+  reports 5, and a structure with Neosteel Armor 2. `attack_upgrade_level` is a count.
 - **Reaper grenades and force fields stay units.** python-sc2 moves them into `state.effects`; in NachOS they are
   in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army count.
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
@@ -260,7 +279,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `unit_data.cost` | `unit_data.cost`, a `Resources` without the time |
 | `unit_data.cost.time` | `unit_data.build_steps` |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_cost`, `unit_data.supply_provided` |
-| `unit_data._proto.movement_speed` | `unit_data.speed` |
+| `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons` |
 | `unit_data.unit_alias` | `unit_data.base_type` |
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
@@ -282,6 +301,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `GENERIC_REDIRECT_ABILITIES` | `ability_data.remaps_to` |
 | a requirement's `requires_power` | `unit_data.needs_power` |
 | nothing | `ability_data.product`, `unit_data.morphed_from` |
+| `DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, `SPEED_INCREASE_DICT` | `unit_data.upgrades`, `unit_data.with_upgrades(upgrades)` |
+| nothing | `upgrade_data.type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
 
 - **A table is keyed by the id itself**, where python-sc2 keys by the number inside it and every lookup reads
   `units[UnitTypeId.MARINE.value]`.
@@ -361,6 +382,19 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
   for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. Take the price of a morph as its
   `cost` less that of what it came from; python-sc2's `calculate_ability_cost` does it with a hand-written table.
+- **What an upgrade changes was swept in game too, and is added, not multiplied.** python-sc2 writes
+  `DAMAGE_BONUS_PER_UPGRADE` and its speed dicts by hand, the speeds as factors. `unit_data.upgrades` holds what
+  `tools/sweep_upgrades.py` read off the game's rows after each upgrade, and every upgrade raising a level the type's
+  units report besides, with nothing added to the row: a shields level for every protoss type, and the attack levels
+  for a void ray, a carrier and a sentry, which the rows give no weapon. Those rows take in weapon damage, bonuses and
+  range, armor and speed, and nothing else: no attack speed, since Adrenal Glands and Resonating Glaives change nothing
+  in them, and Anabolic Synthesis counts there whether or not the ultralisk is on creep. Where the two disagree, the
+  game says a cyclone's attack level adds 1 where python-sc2 says 2; Flux Vanes makes a void ray 1.21 times as fast,
+  Gravitic Boosters an observer 1.5, Muscular Augments a hydralisk 1.31 and Anabolic Synthesis an ultralisk 1.18, where
+  python-sc2 says 1.33, 2, 1.25 and 1.2; Pneumatized Carapace speeds up an overlord transport too; Adaptive Talons
+  changes no lurker's speed; and python-sc2's Rapid Deployment is an upgrade the game no longer has.
+- **A row is as it stands before any upgrade, unless `with_upgrades` made it.** Asked again later in a game, the game
+  folds in the asking player's upgrades, and only that player's, though a unit type has one row; NachOS asks once.
 - **Reading the tables leaves the message they came from alone.** Building python-sc2's `GameData` writes
   `MORPH_LURKER` over that same lurker row in the `ResponseData` it was handed, so whatever reads that message
   afterwards sees the substitution rather than what the game said.

@@ -1,5 +1,6 @@
 """Everything a bot talks to."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Final, Self
 
@@ -18,6 +19,7 @@ from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.util import SnapshotSet
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -31,7 +33,7 @@ class _Game:
     client: Final[Client]
     map: Final[GameMap]
     data: Final[GameData]
-    units: Final[_UnitTracker]
+    unit_tracker: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
@@ -45,17 +47,18 @@ class _Game:
         observation = client.observation()
         step = _step(observation)
         tables = GameData(data)
-        units = _UnitTracker(tables)
-        units.update(observation.observation.raw_data, step)
+        unit_tracker = _UnitTracker(tables)
+        unit_tracker.update(observation.observation.raw_data, step)
         game_map = GameMap(info)
-        return cls(client, game_map, tables, units, observation, _State(observation, units, game_map), step)
+        state = _State(observation, unit_tracker, game_map)
+        return cls(client, game_map, tables, unit_tracker, observation, state, step)
 
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
         self.observation = self.client.observation(game_loop=step)
         self.step = _step(self.observation)
-        self.units.update(self.observation.observation.raw_data, self.step)
-        self.state = _State(self.observation, self.units, self.map)
+        self.unit_tracker.update(self.observation.observation.raw_data, self.step)
+        self.state = _State(self.observation, self.unit_tracker, self.map)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -105,7 +108,7 @@ class Api:
         """How many steps pass between one turn and the next."""
         return self._steps_per_turn
 
-    def _playing(self) -> _Game:
+    def _current_game(self) -> _Game:
         """The game being played, or the one played last."""
         if self._game is None:
             raise NotPlayingError("no game has been joined")
@@ -114,22 +117,22 @@ class Api:
     @property
     def client(self) -> Client:
         """The client the game is played on."""
-        return self._playing().client
+        return self._current_game().client
 
     @property
     def map(self) -> GameMap:
         """The map the game is played on."""
-        return self._playing().map
+        return self._current_game().map
 
     @property
     def data(self) -> GameData:
         """The tables the game is played by, as they stood before any upgrade."""
-        return self._playing().data
+        return self._current_game().data
 
     @property
     def step(self) -> int:
         """The step the game had reached when it was last observed."""
-        return self._playing().step
+        return self._current_game().step
 
     @property
     def time(self) -> float:
@@ -139,37 +142,37 @@ class Api:
     @property
     def result(self) -> Result | None:
         """How the game ended for this player, or `None` while it is still being played."""
-        return self._playing().result
+        return self._current_game().result
 
     @property
     def units(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, structures remembered out of sight and hidden units included."""
-        return self._playing().units.present_units
+        return self._current_game().unit_tracker.present_units
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
         """Every unit not known to be dead: those in the last observation, then those it left out."""
-        return self._playing().units.known_units
+        return self._current_game().unit_tracker.known_units
 
     @property
     def score(self) -> Score:
         """The score the game keeps for this player."""
-        return self._playing().state.score
+        return self._current_game().state.score
 
     @property
     def resources(self) -> Resources:
         """The minerals and vespene this player has to spend."""
-        return self._playing().state.resources
+        return self._current_game().state.resources
 
     @property
     def supply(self) -> Supply:
         """The supply this player's units take and its structures and units provide."""
-        return self._playing().state.supply
+        return self._current_game().state.supply
 
     @property
     def ui_unit_counts(self) -> UiUnitCounts:
         """The counts of this player's idle workers, army units and warp gates the game's interface shows."""
-        return self._playing().state.ui_unit_counts
+        return self._current_game().state.ui_unit_counts
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
@@ -177,22 +180,36 @@ class Api:
 
         Raises `UncuratedIdError` where one is an upgrade the curated ids leave out.
         """
-        return self._playing().state.upgrades
+        return self._current_game().state.upgrades
+
+    @property
+    def enemy_upgrades(self) -> SnapshotSet[UpgradeId]:
+        """The upgrades the enemy is assumed to have researched, empty as each game starts.
+
+        The game reports only the attack, armor and shield levels of an enemy's units in sight. What a bot adds here
+        counts in every read of the enemy's units that upgrades change, such as `Unit.weapons` and `Unit.speed`, until
+        it is discarded again. Assigning a collection of upgrades assumes exactly those, so `|=` and `-=` work too.
+        """
+        return self._current_game().unit_tracker.enemy_upgrades
+
+    @enemy_upgrades.setter
+    def enemy_upgrades(self, upgrades: Iterable[UpgradeId]) -> None:
+        self._current_game().unit_tracker.enemy_upgrades = upgrades
 
     @property
     def vision(self) -> Grid[bool]:
         """Where this player can see now, over the playable area, as the map's grids are."""
-        return self._playing().state.vision
+        return self._current_game().state.vision
 
     @property
     def explored(self) -> Grid[bool]:
         """Where this player has seen at some point in the game, over the playable area."""
-        return self._playing().state.explored
+        return self._current_game().state.explored
 
     @property
     def creep(self) -> Grid[bool]:
         """Where creep covers the ground, over the playable area."""
-        return self._playing().state.creep
+        return self._current_game().state.creep
 
     @property
     def effects(self) -> tuple[Effect, ...]:
@@ -200,7 +217,7 @@ class Api:
 
         Raises `UncuratedIdError` where one is an effect the curated ids leave out.
         """
-        return self._playing().state.effects
+        return self._current_game().state.effects
 
     def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
         """Play the game `client` has already joined to its end, and return how it ended for this player.
@@ -211,7 +228,7 @@ class Api:
         Each call starts its game from nothing, so one api plays any number of games, one after another.
         """
         if self._game is not None:
-            self._game.units.end()
+            self._game.unit_tracker.end()
         game = _Game.start(client)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.map.name, self._steps_per_turn)
