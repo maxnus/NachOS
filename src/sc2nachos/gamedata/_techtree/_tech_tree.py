@@ -39,7 +39,8 @@ class TechTree:
     """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
     `tools/sweep_upgrades.py` found it."""
     upgrade_types: Mapping[UpgradeId, UpgradeType]
-    """The kind of upgrade each upgrade is: the upgrade level a unit reports it adds to, where it adds to one."""
+    """The kind of each upgrade a unit reports something of: the upgrade level it adds to. The rest are `OTHER`, and
+    left out."""
     upgrade_levels: Mapping[UpgradeId, int]
     """Which level of its line each leveled upgrade is."""
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)

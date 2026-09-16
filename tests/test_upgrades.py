@@ -297,8 +297,9 @@ class TestWhatTheTablesSay:
         assert not row.weapons
         assert all(row.upgrades[upgrade] == UnitTypeUpgrade() for upgrade in _levels(family))
 
-    def test_an_upgrade_no_unit_reports_is_no_level(self, tables: GameData) -> None:
-        assert _reports(tables, [UpgradeId.HYDRALISK_RANGE, UpgradeId.ZERGLING_SPEED]) == [(None, 0), (None, 0)]
+    def test_an_upgrade_no_unit_reports_is_of_no_kind_and_no_level(self, tables: GameData) -> None:
+        other = (UpgradeType.OTHER, 0)
+        assert _reports(tables, [UpgradeId.HYDRALISK_RANGE, UpgradeId.ZERGLING_SPEED]) == [other, other]
 
     def test_infernal_pre_igniter_gives_a_hellbat_a_bonus_against_light(self, tables: GameData) -> None:
         hellbat = tables.units[UnitTypeId.HELLBAT]

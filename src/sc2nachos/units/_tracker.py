@@ -41,28 +41,26 @@ _MOVABLE_UNIT_TYPE_IDS = frozenset(
 _BUILDER_REACH = 1.0
 
 type _UnitsByTag = dict[int, Unit[Any]]
-# A unit type, the upgrades held, and the attack level and armor a unit in sight reports, or `None` for one never seen.
-type _UpgradedKey = tuple[UnitTypeId, frozenset[UpgradeId], tuple[int, int] | None]
-
-# The kinds of upgrade a unit in sight reports, which count in place of the ones its owner is known to have. A shields
-# level changes nothing in a row, so nothing is read in its place.
-_REPORTED_BY_A_UNIT = frozenset({UpgradeType.ATTACK, UpgradeType.ARMOR})
 
 
 class _UpgradedUnitTypes:
-    """Each unit type as the upgrades held leave it, worked out once and kept.
+    """What every unit type is with the upgrades its owner holds, and with what its units report.
 
-    A unit reads its weapons, speed and armor every step, and few sets of upgrades are ever asked about, so each answer
-    is kept under the upgrades and what the unit reported.
+    Each answer is worked out once and kept under what it was worked out from, since a unit reads its weapons, speed
+    and armor every step and few sets of upgrades are ever asked about.
     """
+
+    # A unit type, the upgrades held, and the attack level and armor a unit in sight reports, `None` for one never
+    # shown in sight.
+    type _Key = tuple[UnitTypeId, frozenset[UpgradeId], tuple[int, int] | None]
 
     __slots__ = ("_data", "_rows")
 
     def __init__(self, data: GameData) -> None:
         self._data = data
-        self._rows: dict[_UpgradedKey, UnitTypeData] = {}
+        self._rows: dict[_UpgradedUnitTypes._Key, UnitTypeData] = {}
 
-    def row(
+    def upgraded_row(
         self, unit_type: UnitTypeId, upgrades: frozenset[UpgradeId], reported: tuple[int, int] | None
     ) -> UnitTypeData:
         """The row of `unit_type` with `upgrades`, and with what a unit `reported` in place of what that covers."""
@@ -71,18 +69,21 @@ class _UpgradedUnitTypes:
             return row
         key = (unit_type, upgrades, reported)
         if (upgraded := self._rows.get(key)) is None:
-            upgraded = self._rows[key] = self._upgrade(row, upgrades, reported)
+            upgraded = self._rows[key] = self._apply_upgrades(row, upgrades, reported)
         return upgraded
 
-    def _upgrade(
+    def _apply_upgrades(
         self, row: UnitTypeData, upgrades: frozenset[UpgradeId], reported: tuple[int, int] | None
     ) -> UnitTypeData:
-        """`row` with `upgrades`, or with the attack level and armor a unit reports in place of what they cover."""
+        """`row` with `upgrades`, or with the attack level and armor a unit reports in place of what they cover.
+
+        A shields level changes nothing in a row, so nothing is read in place of what a unit reports of it.
+        """
         if reported is None:
             return row.with_upgrades(upgrades)
         attack, armor = reported
         tables = self._data.upgrades
-        unreported = {upgrade for upgrade in upgrades if tables[upgrade].type not in _REPORTED_BY_A_UNIT}
+        unreported = {u for u in upgrades if tables[u].type not in (UpgradeType.ATTACK, UpgradeType.ARMOR)}
         levels = {
             upgrade
             for upgrade in row.upgrades
@@ -184,7 +185,7 @@ class _UnitTracker:
         )
         seen = unit._latest_data_in_vision
         reported = (seen.attack_upgrade_level, seen.armor_upgrade_level) if seen is not None else None
-        return self._upgraded_unit_types.row(unit.type_id, upgrades, reported)
+        return self._upgraded_unit_types.upgraded_row(unit.type_id, upgrades, reported)
 
     @property
     def present_units(self) -> Units[Unit[Any]]:
