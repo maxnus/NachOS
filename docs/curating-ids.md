@@ -178,7 +178,7 @@ What the rows take in:
   Anabolic Synthesis is in them, though in play it counts only off creep.
 - **A unit reports how many attack levels it has, but in `armor_upgrade_level` the armor its upgrades add**: an
   ultralisk with Chitinous Plating and three levels reports 5. The sweep writes down whose reported levels each upgrade
-  raises, which is `UpgradeData.report`; an upgrade is a level where its curated name ends in the number, so
+  raises, which is `UpgradeData.type`; an upgrade is a level where its curated name ends in the number, so
   Chitinous Plating raises the armor report and is no level. A leveled upgrade's name has to keep its number for this.
 
 Every run checks what it found in two ways, and the generator refuses to write while either turns something up: once

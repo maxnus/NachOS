@@ -7,7 +7,7 @@ from sc2nachos.gamedata._resources import Resources
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gamedata._unittype import Attribute, TargetDomain, UnitTypeData, Weapon
-from sc2nachos.gamedata._upgrade import UpgradeData, UpgradeReport
+from sc2nachos.gamedata._upgrade import UpgradeData, UpgradeType
 
 __all__ = [
     "AbilityData",
@@ -21,7 +21,7 @@ __all__ = [
     "UnitTypeData",
     "UnitTypeUpgrade",
     "UpgradeData",
-    "UpgradeReport",
+    "UpgradeType",
     "Weapon",
     "WeaponUpgrade",
 ]

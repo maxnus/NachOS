@@ -183,10 +183,11 @@ class TestTheMapAsItStands:
         state = _Game().observe(upgrades=[UpgradeId.ZERG_MELEE_WEAPONS_1, UpgradeId.ZERG_GROUND_ARMOR_1])
         assert state.upgrades == {UpgradeId.ZERG_MELEE_WEAPONS_1, UpgradeId.ZERG_GROUND_ARMOR_1}
 
-    def test_an_uncurated_upgrade_raises_when_read(self) -> None:
-        state = _Game().observe(upgrades=[RawUpgradeId.CarrierLaunchSpeedUpgrade])
+    def test_an_uncurated_upgrade_raises_as_the_observation_is_taken_in(self) -> None:
+        """An upgrade this player holds belongs among the curated ids, so one missing is a mistake to fix rather than
+        to read around."""
         with pytest.raises(UncuratedIdError):
-            _ = state.upgrades
+            _Game().observe(upgrades=[RawUpgradeId.CarrierLaunchSpeedUpgrade])
 
     def test_an_effect_is_where_it_is_and_whose(self) -> None:
         spines = raw_pb2.Effect(

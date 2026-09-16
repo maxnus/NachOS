@@ -701,7 +701,10 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         home = units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
         middle = game.map.playable_area.center
         out_there = home.towards(middle, 12)
-        game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.tech_tree))
+        # Not the `tech_tree` cheat, which grants campaign upgrades no curated id names, and an observation holding one
+        # raises (`docs/cheats.md`). What this needs researched, it researches.
+        # Not `fast_build` either: a structure going up is one of the things read below.
+        game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free))
 
         # A morph keeps the object.
         game.debug(game.create(UnitTypeId.SIEGE_TANK, out_there))
@@ -770,6 +773,14 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         assert game.tracker.known_units.get(depot.id) is None
 
         # A neural parasite takes a unit over and lets it go, changing its class both times.
+        game.debug(game.create(UnitTypeId.INFESTATION_PIT, game.open_ground(out_there.towards(home, -8))))
+        game.turn(2)
+        game.order(AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE, game.newest(UnitTypeId.INFESTATION_PIT))
+        for _ in range(100):
+            if UpgradeId.NEURAL_PARASITE in game.state.upgrades:
+                break
+            game.turn(22)
+        assert UpgradeId.NEURAL_PARASITE in game.state.upgrades
         game.debug(
             game.create(UnitTypeId.INFESTOR, out_there + (0, 4)),
             game.create(UnitTypeId.MARINE, out_there + (4, 4), owner=enemy),

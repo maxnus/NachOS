@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTree
 
 
-class UpgradeReport(ReadableIntEnum):
-    """Which of the upgrade levels a unit reports an upgrade adds to."""
+class UpgradeType(ReadableIntEnum):
+    """The kind of upgrade an upgrade is, which is the upgrade level a unit reports it adds to."""
 
     ATTACK = 1
     """`Unit.attack_upgrade_level`, a count of levels."""
@@ -39,8 +39,8 @@ class UpgradeData:
     """Steps it takes to research."""
     research_ability: AbilityId | None
     """The ability that researches it."""
-    report: UpgradeReport | None
-    """Which upgrade level the units it affects report it adds to, or `None` where they report nothing of it."""
+    type: UpgradeType | None
+    """The upgrade level the units it affects report it adds to, or `None` where they report nothing of it."""
     level: int
     """Which level of its line it is, from 1, or 0 for an upgrade that is no level, as Chitinous Plating is."""
 
@@ -53,6 +53,6 @@ class UpgradeData:
             cost=Resources(data.mineral_cost, data.vespene_cost),
             research_steps=data.research_time,
             research_ability=AbilityId.get(data.ability_id),
-            report=tech_tree.upgrade_reports.get(upgrade),
+            type=tech_tree.upgrade_types.get(upgrade),
             level=tech_tree.upgrade_levels.get(upgrade, 0),
         )

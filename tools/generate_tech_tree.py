@@ -18,8 +18,8 @@ from enum import IntEnum
 from pathlib import Path
 from types import MappingProxyType
 
-from sc2nachos.constants import STEPS_PER_NORMAL_SECOND, STEPS_PER_SECOND
-from sc2nachos.gamedata import Attribute, TechRequirements, UnitTypeUpgrade, UpgradeReport, WeaponUpgrade
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
+from sc2nachos.gamedata import Attribute, TechRequirements, UnitTypeUpgrade, UpgradeType, WeaponUpgrade
 from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
@@ -41,7 +41,7 @@ from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._tech_tree import TechTree
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gamedata._unittype import Attribute
-from sc2nachos.gamedata._upgrade import UpgradeReport
+from sc2nachos.gamedata._upgrade import UpgradeType
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 '''
@@ -114,7 +114,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
         unit_type_upgrades=MappingProxyType(
             {unit_type: MappingProxyType(upgrades) for unit_type, upgrades in found.unit_types.items()}
         ),
-        upgrade_reports=MappingProxyType(found.reports),
+        upgrade_types=MappingProxyType(found.types),
         upgrade_levels=MappingProxyType(found.levels),
     )
 
@@ -125,8 +125,8 @@ class Upgrades:
 
     unit_types: dict[UnitTypeId, dict[UpgradeId, UnitTypeUpgrade]]
     """Every upgrade that affects each unit type, and what it adds to the type's row."""
-    reports: dict[UpgradeId, UpgradeReport]
-    """The upgrade level each upgrade adds to where units report it."""
+    types: dict[UpgradeId, UpgradeType]
+    """The kind each upgrade is: the upgrade level a unit reports it adds to."""
     levels: dict[UpgradeId, int]
     """Which level of its line each leveled upgrade is."""
 
@@ -148,12 +148,12 @@ def read_upgrades(upgrade_findings: Mapping[str, object]) -> Upgrades:
     if unexplained := _strings(upgrade_findings["unexplained"]):
         raise ValueError(f"the changes do not account for: {'; '.join(unexplained)}")
     unit_types: defaultdict[UnitTypeId, dict[UpgradeId, UnitTypeUpgrade]] = defaultdict(dict)
-    reports: dict[UpgradeId, UpgradeReport] = {}
+    kinds: dict[UpgradeId, UpgradeType] = {}
     for record in _records(upgrade_findings["research"]):
         names = _strings(record["upgrades"])
         changes = _mapping(record["changes"])
-        raised = {UpgradeReport[kind.upper()]: _strings(types) for kind, types in _mapping(record["levels"]).items()}
-        raised = {report: types for report, types in raised.items() if types}
+        raised = {UpgradeType[kind.upper()]: _strings(types) for kind, types in _mapping(record["levels"]).items()}
+        raised = {kind: types for kind, types in raised.items() if types}
         if len(names) != 1:
             if changes or raised:
                 raise ValueError(f"one research finished {', '.join(names)}, which cannot be told apart")
@@ -167,22 +167,22 @@ def read_upgrades(upgrade_findings: Mapping[str, object]) -> Upgrades:
             continue
         if len(raised) > 1:
             raise ValueError(
-                f"{names[0]} raises the {' and '.join(sorted(r.name for r in raised))} levels units report"
+                f"{names[0]} raises the {' and '.join(sorted(k.name for k in raised))} levels units report"
             )
         if raised:
-            reports[upgrade] = next(iter(raised))
+            kinds[upgrade] = next(iter(raised))
         for type_name in affected:
             change = _mapping(changes.get(type_name, {}))
             unit_types[_required_unit_type(type_name)][upgrade] = _unit_type_upgrade(names[0], type_name, change)
-    levels = {upgrade: level for upgrade in reports if (level := _level(upgrade))}
+    levels = {upgrade: level for upgrade in kinds if (level := _level(upgrade))}
     for unit_type, upgrades in unit_types.items():
-        for report in UpgradeReport:
-            leveled = sorted((levels[u], u) for u in upgrades if reports.get(u) is report and u in levels)
+        for kind in UpgradeType:
+            leveled = sorted((levels[u], u) for u in upgrades if kinds.get(u) is kind and u in levels)
             if [level for level, _ in leveled] != list(range(1, len(leveled) + 1)):
-                raise ValueError(f"the {report.name} levels affecting {unit_type.name} are not 1 onwards")
+                raise ValueError(f"the {kind.name} levels affecting {unit_type.name} are not 1 onwards")
             if any(upgrades[u] != upgrades[leveled[0][1]] for _, u in leveled):
-                raise ValueError(f"the {report.name} levels of {unit_type.name} add different amounts")
-    return Upgrades(dict(unit_types), reports, levels)
+                raise ValueError(f"the {kind.name} levels of {unit_type.name} add different amounts")
+    return Upgrades(dict(unit_types), kinds, levels)
 
 
 def _level(upgrade: UpgradeId) -> int:
@@ -221,7 +221,7 @@ def _unit_type_upgrade(upgrade: str, unit_type: str, change: Mapping[str, object
             )
         )
     # Rounded to what the game's 32-bit floats hold, which the conversion otherwise dresses up in digits of its own.
-    speed = round(float(str(change.get("speed", 0.0))) * STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND, 6)
+    speed = round(float(str(change.get("speed", 0.0))) * FASTER_PER_NORMAL_SPEED, 6)
     return UnitTypeUpgrade(armor=float(str(change.get("armor", 0.0))), speed=speed, weapons=tuple(weapons))
 
 

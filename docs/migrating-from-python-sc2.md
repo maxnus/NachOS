@@ -299,7 +299,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | a requirement's `requires_power` | `unit_data.needs_power` |
 | nothing | `ability_data.product`, `unit_data.morphed_from` |
 | `DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, `SPEED_INCREASE_DICT` | `unit_data.upgrades`, `unit_data.with_upgrades(upgrades)` |
-| nothing | `upgrade_data.report` and `upgrade_data.level`: which level units report an upgrade adds to, and which it is |
+| nothing | `upgrade_data.type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
 
 - **A table is keyed by the id itself**, where python-sc2 keys by the number inside it and every lookup reads
   `units[UnitTypeId.MARINE.value]`.

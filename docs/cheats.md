@@ -24,4 +24,5 @@ What debug commands make is not always what a player would have:
 - **A debug-created unit can be yours where the real one is nobody's.** A force field a sentry casts is a neutral
   unit, owner 16, offered nothing; created straight onto the map it is yours and offered `Shatter`, which no player
   can ever reach. Check `alliance` on the real thing before believing what a created one is offered.
-- **Some units cannot be created at all**: the game makes no creep tumor and no larva from a debug command.
+- **A creep tumor is created only on creep, and a plain `CREEP_TUMOR` never.** A queen's `CREEP_TUMOR_QUEEN` turned up
+  beside a hatchery and at no spot off creep, and not at every spot on it either.

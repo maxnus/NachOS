@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata._tech_requirements import TechRequirements
     from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
-    from sc2nachos.gamedata._upgrade import UpgradeReport
+    from sc2nachos.gamedata._upgrade import UpgradeType
     from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 
@@ -38,8 +38,8 @@ class TechTree:
     unit_type_upgrades: Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]
     """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
     `tools/sweep_upgrades.py` found it."""
-    upgrade_reports: Mapping[UpgradeId, UpgradeReport]
-    """The upgrade level units report each upgrade adds to."""
+    upgrade_types: Mapping[UpgradeId, UpgradeType]
+    """The kind of upgrade each upgrade is: the upgrade level a unit reports it adds to, where it adds to one."""
     upgrade_levels: Mapping[UpgradeId, int]
     """Which level of its line each leveled upgrade is."""
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)

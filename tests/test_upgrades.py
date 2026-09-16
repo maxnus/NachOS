@@ -10,14 +10,14 @@ from typing import Any
 import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
-from sc2nachos.constants import STEPS_PER_NORMAL_SECOND, STEPS_PER_SECOND
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
     TargetDomain,
     UnitTypeData,
     UnitTypeUpgrade,
-    UpgradeReport,
+    UpgradeType,
     Weapon,
     WeaponUpgrade,
 )
@@ -25,7 +25,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
-from sc2nachos.units import Alliance, AssumedUpgrades, Unit, Visibility
+from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracker import _UnitTracker
 from support import RealGame, make_observation, make_unit
 
@@ -34,7 +34,7 @@ _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 _NO_LEVELS = {"attack": [], "armor": [], "shield": []}
 # A zergling's speed with Metabolic Boost: the game's rows give 4.6992188 a second of its Normal speed.
-_BOOSTED_ZERGLING_SPEED = 4.6992188 * STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND
+_BOOSTED_ZERGLING_SPEED = 4.6992188 * FASTER_PER_NORMAL_SPEED
 
 
 def _generator() -> ModuleType:
@@ -66,7 +66,7 @@ class TestGeneratingTheUpgrades:
         assert found.unit_types[UnitTypeId.HELLBAT][UpgradeId.BLUE_FLAME] == UnitTypeUpgrade(
             weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 12.0})),)
         )
-        assert UpgradeId.BLUE_FLAME not in found.reports
+        assert UpgradeId.BLUE_FLAME not in found.types
 
     def test_a_level_affects_every_type_it_raises_the_report_of_or_changes_the_row_of(self) -> None:
         """A void ray reports its attack level with no weapon in the rows, and no mothership stands in the sweep to
@@ -79,20 +79,20 @@ class TestGeneratingTheUpgrades:
         found = _generator().read_upgrades(_findings(weapons))
         assert set(found.unit_types) == {UnitTypeId.PHOENIX, UnitTypeId.VOID_RAY, UnitTypeId.MOTHERSHIP}
         assert found.unit_types[UnitTypeId.VOID_RAY][UpgradeId.PROTOSS_AIR_WEAPONS_1] == UnitTypeUpgrade()
-        assert found.reports[UpgradeId.PROTOSS_AIR_WEAPONS_1] is UpgradeReport.ATTACK
+        assert found.types[UpgradeId.PROTOSS_AIR_WEAPONS_1] is UpgradeType.ATTACK
         assert found.levels[UpgradeId.PROTOSS_AIR_WEAPONS_1] == 1
 
     def test_an_upgrade_raising_a_report_with_no_number_in_its_name_is_no_level(self) -> None:
         plating = _research("ChitinousPlating", {"Ultralisk": {"armor": 2.0}}, armor=["Ultralisk"])
         found = _generator().read_upgrades(_findings(plating))
-        assert found.reports[UpgradeId.ULTRALISK_ARMOR] is UpgradeReport.ARMOR
+        assert found.types[UpgradeId.ULTRALISK_ARMOR] is UpgradeType.ARMOR
         assert UpgradeId.ULTRALISK_ARMOR not in found.levels
 
     def test_a_shields_level_affects_the_types_that_report_it_and_changes_no_row(self) -> None:
         shields = _research("ProtossShieldsLevel1", {}, shield=["Zealot", "Pylon"])
         found = _generator().read_upgrades(_findings(shields))
         assert found.unit_types[UnitTypeId.PYLON] == {UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade()}
-        assert found.reports[UpgradeId.PROTOSS_SHIELDS_1] is UpgradeReport.SHIELD
+        assert found.types[UpgradeId.PROTOSS_SHIELDS_1] is UpgradeType.SHIELD
 
     def test_levels_that_add_different_amounts_to_one_type_are_refused(self) -> None:
         """A unit reports only how many attack levels it has, so what each adds has to be the same."""
@@ -210,9 +210,9 @@ _ARMOR_LEVELS = [
 ]
 
 
-def _reports(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeReport | None, int]]:
+def _reports(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeType | None, int]]:
     """The upgrade level each of `upgrades` adds to where units report it, and which level of its line it is."""
-    return [(tables.upgrades[upgrade].report, tables.upgrades[upgrade].level) for upgrade in upgrades]
+    return [(tables.upgrades[upgrade].type, tables.upgrades[upgrade].level) for upgrade in upgrades]
 
 
 def _weapon(row: UnitTypeData, domain: TargetDomain) -> Weapon:
@@ -237,7 +237,7 @@ class TestWhatTheTablesSay:
     ) -> None:
         row = tables.units[unit_type]
         levels = _levels(family)
-        assert _reports(tables, levels) == [(UpgradeReport.ATTACK, level) for level in (1, 2, 3)]
+        assert _reports(tables, levels) == [(UpgradeType.ATTACK, level) for level in (1, 2, 3)]
         assert set(levels) <= row.upgrades.keys()
         for level in range(4):
             weapon = _weapon(row.with_upgrades(levels[:level]), domain)
@@ -254,7 +254,7 @@ class TestWhatTheTablesSay:
     ) -> None:
         row = tables.units[unit_type]
         levels = _levels(family)
-        assert _reports(tables, levels) == [(UpgradeReport.ARMOR, level) for level in (1, 2, 3)]
+        assert _reports(tables, levels) == [(UpgradeType.ARMOR, level) for level in (1, 2, 3)]
         assert [row.with_upgrades(levels[:level]).armor for level in range(4)] == by_level
 
     def test_one_level_adds_different_amounts_to_different_types(self, tables: GameData) -> None:
@@ -275,12 +275,12 @@ class TestWhatTheTablesSay:
     def test_chitinous_plating_adds_two_on_top_of_the_armor_levels(self, tables: GameData) -> None:
         ultralisk = tables.units[UnitTypeId.ULTRALISK]
         assert ultralisk.with_upgrades({*_levels("ZERG_GROUND_ARMOR"), UpgradeId.ULTRALISK_ARMOR}).armor == 7
-        assert _reports(tables, [UpgradeId.ULTRALISK_ARMOR]) == [(UpgradeReport.ARMOR, 0)]
+        assert _reports(tables, [UpgradeId.ULTRALISK_ARMOR]) == [(UpgradeType.ARMOR, 0)]
 
     def test_a_shields_level_affects_protoss_types_and_changes_no_row(self, tables: GameData) -> None:
         """The game's rows hold no armor for shields, so the levels, which add to it, change nothing a row holds."""
         shields = _levels("PROTOSS_SHIELDS")
-        assert _reports(tables, shields) == [(UpgradeReport.SHIELD, level) for level in (1, 2, 3)]
+        assert _reports(tables, shields) == [(UpgradeType.SHIELD, level) for level in (1, 2, 3)]
         for unit_type in (UnitTypeId.ZEALOT, UnitTypeId.PYLON, UnitTypeId.VOID_RAY, UnitTypeId.NEXUS):
             row = tables.units[unit_type]
             assert all(row.upgrades[upgrade] == UnitTypeUpgrade() for upgrade in shields)
@@ -387,35 +387,6 @@ class TestWhatAUnitReads:
         tracker.enemy_upgrades.add(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
         assert _observe(tracker, remembered)[0].armor == tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
-
-    def test_the_assumed_upgrades_are_a_set(self) -> None:
-        assumed = AssumedUpgrades()
-        assumed.add(UpgradeId.STIMPACK)
-        assumed |= {UpgradeId.COMBAT_SHIELD}
-        assert UpgradeId.STIMPACK in assumed and len(assumed) == 2
-        assumed.discard(UpgradeId.STIMPACK)
-        assert set(assumed) == {UpgradeId.COMBAT_SHIELD}
-        assert repr(assumed) == "AssumedUpgrades({COMBAT_SHIELD})"
-
-    def test_what_the_set_operators_make_of_the_assumed_upgrades_is_a_plain_set_and_assumes_nothing(self) -> None:
-        stim, shield, shells = UpgradeId.STIMPACK, UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS
-        assumed = AssumedUpgrades()
-        assumed |= {stim, shield}
-        made = [assumed | {shells}, assumed - {stim}, assumed & {stim}, assumed ^ {stim, shells}, {shells} | assumed]
-        assert made == [{stim, shield, shells}, {shield}, {stim}, {shield, shells}, {stim, shield, shells}]
-        assert all(type(result) is frozenset for result in made)
-        assert set(assumed) == {stim, shield}
-
-    def test_the_in_place_set_operators_change_what_is_assumed(self) -> None:
-        stim, shield, shells = UpgradeId.STIMPACK, UpgradeId.COMBAT_SHIELD, UpgradeId.CONCUSSIVE_SHELLS
-        assumed = AssumedUpgrades()
-        assumed |= {stim, shield}
-        assumed &= {stim, shells}
-        assert set(assumed) == {stim}
-        assumed ^= {stim, shells}
-        assert set(assumed) == {shells}
-        assumed -= {shells}
-        assert not assumed
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:

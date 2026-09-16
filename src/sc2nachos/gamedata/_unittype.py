@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import STEPS_PER_NORMAL_SECOND, STEPS_PER_SECOND
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._resources import Resources
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
@@ -22,7 +22,8 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
 
-# What an upgrade that only raises a level units report adds to a type's row.
+# What an upgrade adds to a type's row where it adds nothing, as a shields level does: it only raises a level the
+# type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
 
 
@@ -185,7 +186,7 @@ class UnitTypeData:
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,
             # The game gives it in distance per second of its Normal speed, which runs 16 steps a second.
-            speed=unit.movement_speed * STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND,
+            speed=unit.movement_speed * FASTER_PER_NORMAL_SPEED,
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon.from_proto(weapon) for weapon in unit.weapons),

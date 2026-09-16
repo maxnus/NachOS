@@ -8,6 +8,8 @@ STEPS_PER_SECOND = 22.4
 # Multiplying by this lands on every whole second exactly. Dividing by 22.4 overshoots those in the top quarter
 # of a power of two: 15 seconds come out as 15.000000000000002.
 SECONDS_PER_STEP = 1 / STEPS_PER_SECOND
+# What a speed the game gives per second of its Normal speed is per second of the Faster speed a game is played at.
+FASTER_PER_NORMAL_SPEED = STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND
 
 
 def steps_to_seconds(steps: float) -> float:
