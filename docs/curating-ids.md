@@ -58,7 +58,9 @@ what the game offers, and let the field that names the dead one come back empty.
 **A suffix of `_EXACT` marks the id a unit reports, beside the one you order.** Order `LIBERATOR_SIEGE` and the
 liberator's `orders` name `LIBERATOR_SIEGE_EXACT`; the exact id is never offered, and ordering it does nothing.
 `remaps_to` links some pairs of this shape and not others -- all four liberator rows leave it empty -- so the
-only way to find one is to order the ability in game and read the performer's orders back.
+only way to find one is to order the ability in game and read the performer's orders back. A spell has no such twin:
+ordered at a target out of reach, a storm, a neural parasite and each raven's and viper's spell show in the caster's
+orders under the id that was ordered.
 
 **The upgrade table also keeps upgrades the game has taken out.** `MicrobialShroud` still carries its 150/150
 price and its `EvolveAmorphousArmorcloud` research id, but 4.12.0 made the infestor's shroud free: an
@@ -123,21 +125,25 @@ patch, or after curating ids, run the sweep and then the generator, which writes
 A new build's module goes beside the old one, and `gamedata/_techtree/__init__.py` names the one NachOS plays by, so
 moving to a new build is a change of that import, which the generator points out when it is missing.
 
-**Where the game's own table is wrong, `sc2nachos/gamedata/_techtree/_overrides.py` says what is right**, by hand,
-with the evidence for each entry beside it. It lists the ability that makes a unit type where the table names one that
-does nothing, as with a baneling, or none, as with a rich assimilator, and `GameData` puts it in `creation_ability`.
-Neither tool writes that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep
-orders each override in game, and the generator refuses to write the tech tree unless the sweep saw each make its unit
-type. A test in `tests/test_gamedata.py` fails once the game's table names a working ability for a type there, and its entry
-can go. Add one only with a trial in game behind it, never to paper over something the sweep cannot reach.
+**What makes a unit type that the game's own table does not name is in `sc2nachos/gamedata/_techtree/_overrides.py`**,
+by hand, with the evidence for each entry beside it. Where the table names an ability that does nothing, as with a
+baneling, or none, as with a rich assimilator, the entry is the type's `creation_ability`; where the table names one
+that works, the entry makes the type besides, as a warp gate's warp-ins make what a gateway trains. Neither tool writes
+that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep orders each in game,
+and the generator refuses to write the tech tree unless the sweep saw each make its unit type. A test in
+`tests/test_gamedata.py` fails once the game's table names an entry's ability for its type, and the entry can go. Add
+one only with a trial in game behind it, never to paper over something the sweep cannot reach.
 
 What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads everything off:
 
 - **It leaves out what a unit lacks the tech for**, and an add-on counts only on the structure it is attached to: a
   bare barracks is not offered a marauder while another stands with a tech lab. It ignores energy and cooldowns.
 - **A cancel and a halt are offered only in the state they undo**: a barracks is offered its cancel while it trains,
-  an SCV a halt while it builds, and a structure going up both. So the sweep sets every structure making something
-  and a worker building before it reads them.
+  an SCV a halt while it builds, and a structure going up both; a cocoon or a lurker egg its cancel while it changes,
+  a phoenix lifting, an infestor controlling and a ghost sniping theirs, an adept whose shade is out, and a ghost
+  academy arming a nuke. So the sweep sets every structure making something and a worker building, reads a unit on
+  its way to what it becomes, arms every nuke, and orders every ability aimed at a unit or a point on a new unit,
+  reading what it is offered 6 steps later.
 - **An unpowered structure is offered nothing it needs power for**, which is `needs_power` and no requirement on a
   pylon. A probe is offered a gateway with a nexus standing and no pylon at all.
 - **A requirement leaves the answer within 4 steps of its structure leaving the observation**, and a lifted barracks
@@ -151,6 +157,8 @@ What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads 
   once a transport carries something.
 - **A gateway turns into a warp gate on its own once Warp Gate is researched**, so what a gateway trains is tried
   before any research; nothing is found to make a warp gate out of a gateway.
+- **A ghost is offered its calldown only while a nuke is armed**, which is no structure and no upgrade, so the tables
+  say it needs nothing.
 
 Running it, three things stood in the way, each of which read as a requirement until it was dealt with: the
 computer, which attacks at some point (`god`); workers carrying minerals, which are offered a return a fresh one is

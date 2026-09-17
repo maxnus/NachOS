@@ -7,7 +7,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES
+from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -247,15 +247,20 @@ class TestARecordedGamesTables:
         assert (len(data.units), len(data.abilities)) == (len(UnitTypeId), len(AbilityId))
         assert (len(data.upgrades), len(data.effects)) == (len(UpgradeId), len(EffectId))
 
-    def test_an_override_stands_in_only_where_the_table_names_nothing_that_works(self, path: Path) -> None:
-        """Once the table names a working maker for one of these again, the override can go."""
+    def test_an_unnamed_creation_ability_stands_in_only_where_the_table_names_nothing_that_works(
+        self, path: Path
+    ) -> None:
+        """Once the table names one of these for its type, the entry can go."""
         answer = _answer(path)
         data = GameData(answer)
         named = {row.unit_id: row.ability_id for row in answer.units}
-        for unit, ability in CREATION_ABILITY_OVERRIDES.items():
-            assert AbilityId.get(named[unit]) is None, f"the table names {AbilityId.get(named[unit])} for {unit.name}"
-            assert data.units[unit].creation_ability is ability
-        dead = {unit: named[unit] for unit in CREATION_ABILITY_OVERRIDES if named[unit]}
+        for ability, unit in UNNAMED_CREATION_ABILITIES.items():
+            assert named[unit] != ability, f"the table names {ability.name} for {unit.name}"
+            assert data.units[unit].creation_ability is (AbilityId.get(named[unit]) or ability)
+        stood_in = {
+            unit for ability, unit in UNNAMED_CREATION_ABILITIES.items() if data.units[unit].creation_ability is ability
+        }
+        dead = {unit: named[unit] for unit in stood_in if named[unit]}
         assert dead == _DEAD_MAKERS
 
     def test_only_the_known_rows_lose_the_ability_that_makes_them(self, path: Path) -> None:

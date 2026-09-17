@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
+from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
@@ -25,64 +25,11 @@ _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
-# What the unit types are offered that no curated ability names, for the curation pass before M4 to name.
-_UNCURATED_OFFERED = frozenset(
-    {
-        "Attack_Redirect",
-        "BlindingCloud_BlindingCloud",
-        "Build_Nuke",
-        "BurrowDown_InfestorTerran",
-        "BurrowUp_InfestorTerran",
-        "Cancel_BuildInProgress",
-        "Cancel_MorphGreaterSpire",
-        "Cancel_MorphHive",
-        "Cancel_MorphLair",
-        "Cancel_Queue1",
-        "Cancel_Queue5",
-        "Cancel_QueueCancelToSelection",
-        "Cancel_QueuePasive",
-        "Cancel_QueuePassiveCancelToSelection",
-        "Cancel_VoidRayPrismaticAlignment",
-        "Contaminate_Contaminate",
-        "Effect_Abduct",
-        "Effect_AntiArmorMissile",
-        "Effect_ChronoBoostEnergyCost",
-        "Effect_InterferenceMatrix",
-        "Effect_Spray_Protoss",
-        "Effect_Spray_Terran",
-        "Effect_Spray_Zerg",
-        "EnergyRecharge_EnergyRecharge",
-        "GuardianShield_GuardianShield",
-        "Hallucination_Adept",
-        "Hallucination_Archon",
-        "Hallucination_Colossus",
-        "Hallucination_Disruptor",
-        "Hallucination_HighTemplar",
-        "Hallucination_Immortal",
-        "Hallucination_Oracle",
-        "Hallucination_Phoenix",
-        "Hallucination_Probe",
-        "Hallucination_Stalker",
-        "Hallucination_VoidRay",
-        "Hallucination_WarpPrism",
-        "Hallucination_Zealot",
-        "Morph_Gateway",
-        "NeuralParasite_NeuralParasite",
-        "ParasiticBomb_ParasiticBomb",
-        "PsiStorm_PsiStorm",
-        "Shatter",
-        "ShieldBatteryRechargeEx5_ShieldBatteryRecharge",
-        "Stop_Redirect",
-        "SupplyDrop_SupplyDrop",
-        "TrainWarp_Adept",
-        "Transfusion_Transfusion",
-        "WarpGateTrain_DarkTemplar",
-        "WarpGateTrain_HighTemplar",
-        "WarpGateTrain_Sentry",
-        "WarpGateTrain_Stalker",
-        "WarpGateTrain_Zealot",
-    }
-)
+# What the unit types are offered that no curated ability names, none of which a player gives. A force field a sentry
+# makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered Shatter.
+# And once Burrow is researched every zerg unit that burrows is offered the infested terran's burrow, which burrows it
+# as itself, reporting its own burrow running.
+_UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Shatter"})
 
 
 def _generator() -> ModuleType:
@@ -96,8 +43,8 @@ def _generator() -> ModuleType:
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
     """Findings as the sweep writes them, empty but for `parts`: every ability offered read as needing nothing where
-    `parts` holds no requirement for it, unless it is to be left `unread`, and every override seen making its unit type,
-    unless it is to be left `unconfirmed`."""
+    `parts` holds no requirement for it, unless it is to be left `unread`, and every unnamed creation ability seen
+    making its unit type, unless it is to be left `unconfirmed`."""
     findings: dict[str, object] = {
         "base_build": 1,
         "offered": {},
@@ -128,7 +75,7 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
                 "product": RawUnitTypeId(unit).name,
                 "result": "build",
             }
-            for unit, ability in CREATION_ABILITY_OVERRIDES.items()
+            for ability, unit in UNNAMED_CREATION_ABILITIES.items()
         ]
     return findings
 
@@ -157,10 +104,10 @@ class TestGeneratingTheTables:
         assert set(tree.ability_requirements) == {UnitTypeId.BARRACKS}
 
     def test_an_ability_no_curated_id_names_is_left_out_and_named(self) -> None:
-        spray = "Effect_Spray_Terran"
-        findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", spray], "Factory": [spray]})
+        shatter = "Shatter"
+        findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", shatter], "Factory": [shatter]})
         generator = _generator()
-        assert generator.uncurated(findings) == {spray}
+        assert generator.uncurated(findings) == {shatter}
         assert generator.read(findings, _no_upgrades()).ability_requirements[UnitTypeId.FACTORY] == {}
 
     def test_a_requirement_is_read_under_the_unit_type_and_the_ability(self) -> None:
@@ -188,7 +135,7 @@ class TestGeneratingTheTables:
         tree = _generator().read(findings, _no_upgrades())
         assert tree.ability_performers[AbilityId.GENERAL_BURROW] == {UnitTypeId.ZERGLING}
         assert tree.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
-        # The table names a dead ability for a baneling, so the override stands in.
+        # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
         assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] is UnitTypeId.MARINE
         assert tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK] is UpgradeId.STIMPACK
@@ -213,7 +160,27 @@ class TestGeneratingTheTables:
         with pytest.raises(ValueError, match="GHOST GHOST_CLOAK_OFF"):
             _generator().read(findings, _no_upgrades())
 
-    def test_an_override_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
+    def test_two_unnamed_creation_abilities_for_a_type_the_table_names_nothing_for_are_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Either could be its creation ability."""
+        generator = _generator()
+        second = AbilityId.LARVA_MORPH_ZERGLING
+        monkeypatch.setattr(
+            generator, "UNNAMED_CREATION_ABILITIES", {**UNNAMED_CREATION_ABILITIES, second: UnitTypeId.BANELING}
+        )
+        findings = _findings()
+        trial: dict[str, object] = {
+            "performer": "Larva",
+            "ability": RawAbilityId(second).name,
+            "product": "Baneling",
+            "result": "morph",
+        }
+        cast("list[dict[str, object]]", findings["made"]).append(trial)
+        with pytest.raises(ValueError, match=r"more than one is listed: \['BANELING'\]"):
+            generator.read(findings, _no_upgrades())
+
+    def test_an_unnamed_creation_ability_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
         """A patch that breaks one stops the regeneration, rather than keep an ability that makes nothing any more."""
         with pytest.raises(ValueError, match="BANELING by ZERGLING_MORPH_BANELING"):
             _generator().read(_findings(unconfirmed=True), _no_upgrades())
@@ -370,7 +337,9 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.BARRACKS].morphed_from is None
         assert units[UnitTypeId.MARINE].morphed_from is None
 
-    def test_an_override_makes_what_the_table_has_no_working_ability_for(self, tables: GameData) -> None:
+    def test_an_unnamed_creation_ability_makes_what_the_table_has_no_working_ability_for(
+        self, tables: GameData
+    ) -> None:
         baneling = tables.abilities[AbilityId.ZERGLING_MORPH_BANELING]
         assert baneling.product is UnitTypeId.BANELING
         assert tables.units[UnitTypeId.BANELING].creation_ability is AbilityId.ZERGLING_MORPH_BANELING
@@ -380,6 +349,11 @@ class TestWhatTheTablesSay:
         assert tables.units[UnitTypeId.ASSIMILATOR_RICH].morphed_from is None
         # The build a rich refinery shares with a refinery makes a refinery, as the table says.
         assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].product is UnitTypeId.REFINERY
+
+    def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
+        zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
+        assert (zealot.product, zealot.performers) == (UnitTypeId.ZEALOT, {UnitTypeId.WARP_GATE})
+        assert tables.units[UnitTypeId.ZEALOT].creation_ability is AbilityId.GATEWAY_TRAIN_ZEALOT
 
     def test_a_gateway_needs_power_and_a_nexus_and_a_pylon_do_not(self, tables: GameData) -> None:
         assert tables.units[UnitTypeId.GATEWAY].needs_power
@@ -429,7 +403,7 @@ class TestWhatTheSweepFound:
         assert others and all(ability.startswith("BurrowDown_") for ability in others)
 
     def test_what_is_offered_that_no_curated_id_names_is_known(self) -> None:
-        """What the curation pass before M4 is to name: a warp gate's warp-ins, hallucinations, spells and sprays."""
+        """Anything else a unit type is offered has to be curated, or the tables leave it out."""
         assert _generator().uncurated(_findings_file()) == _UNCURATED_OFFERED
 
 

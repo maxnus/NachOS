@@ -11,8 +11,9 @@ answer changes. Measured in game while writing this:
 
 - The answer leaves out what the unit lacks the tech for, and an add-on counts only on the structure it is attached to.
   It ignores energy and cooldowns, and offers an unpowered structure nothing it needs power for.
-- A cancel is offered only to a structure making something or being put up, and a halt only to a worker putting one
-  up and to what it puts up.
+- A cancel is offered only to a structure making something or being put up, a cocoon while it changes, a unit while
+  it channels and a ghost academy while it arms a nuke, and a halt only to a worker putting a structure up and to what
+  it puts up. A ghost is offered its calldown only while a nuke is armed.
 - A structure's requirement leaves the answer within 4 steps of the structure leaving the observation. A lifted barracks
   still counts as a barracks.
 - The other half of a toggle is offered once the unit has switched, up to 22 steps after the order.
@@ -25,8 +26,9 @@ Each game puts up every structure of the race and one of every other unit type, 
 finds what each ability offered needs by killing every structure of one type at a time and seeing what goes, then
 researches one upgrade at a time and reads what each newly offers, finding what that needs the same way. It orders
 every ability that makes a unit type on a new unit of each type offered it, before the research and after, to see what
-it does to that unit, switches every toggle, loads every transport, and sets every structure making something and
-a worker building, to read what each is offered then.
+it does to that unit and what the unit is offered on its way, as a cocoon is. It switches every toggle, loads every
+transport, sets every structure making something and a worker building, arms every nuke, and orders every ability
+aimed at a unit or a point on a new unit of each type, to read what each is offered then.
 
 What it finds is written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
 """
@@ -44,7 +46,7 @@ from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetType
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES
+from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -88,9 +90,16 @@ _NOT_SWITCHES += (
     "Unload",
 )
 _WORKERS = {Race.TERRAN: UnitTypeId.SCV, Race.PROTOSS: UnitTypeId.PROBE, Race.ZERG: UnitTypeId.DRONE}
-# What a structure is set making while its cancel is read.
-_MAKING = ("Train", "Research", "UpgradeTo")
+# What a structure is set making while its cancel is read, arming a nuke among it.
+_MAKING = ("Train", "Research", "UpgradeTo", "Build")
 _STRUCTURE_ROOM = 4
+# What a new unit is not ordered at a target to see what it is offered while it carries the order out: anything that
+# sends it somewhere, gathers, loads or builds, none of which is a channel.
+_NOT_CASTS = ("Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest", "Load", "Unload", "Land", "Build")
+# What a cast is aimed at: enemies of every kind a spell can ask for, standing close enough that no caster has to walk.
+_CAST_TARGETS = (UnitTypeId.MARAUDER, UnitTypeId.SIEGE_TANK, UnitTypeId.VIKING)
+# How long after the order what the caster is offered is read: long enough for any channel to have begun.
+_CAST_STEPS = 6
 # Only one may stand at a time, and none is offered while one does, so it comes after what makes it has been read.
 _ONE_AT_A_TIME = frozenset({UnitTypeId.MOTHERSHIP})
 
@@ -179,12 +188,14 @@ class TechSweep:
             for entry in raw_data.upgrades
             if entry.ability_id
         }
-        # What makes each unit type: what the table names where that works, and the override where it does not.
+        # What makes each unit type: what the table names where that works, and the unnamed creation ability where it
+        # does not.
         table = {entry.unit_id: AbilityId.get(entry.ability_id) for entry in raw_data.units}
+        unnamed = {unit_type: ability for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
         self._makers = {
             row.id: ability
             for row in self._data.units.values()
-            if (ability := table.get(row.id) or CREATION_ABILITY_OVERRIDES.get(row.id))
+            if (ability := table.get(row.id) or unnamed.get(row.id))
         }
         # `free` rather than `all_resources`, which runs dry once add-ons have been rebuilt a few hundred times.
         # `god`, since the computer comes to attack at some point, which the sweep would take for a requirement lost.
@@ -197,16 +208,18 @@ class TechSweep:
         self._seen: set[Pair] = set()
         self._pad = self._sandbox
         self._structure_types = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
-        self._creation_abilities = {int(ability) for ability in self._makers.values()}
+        self._on_the_way: set[Pair] = set()
+        self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
 
     # --- Reading the game
 
     def _mine(self) -> list[raw_pb2.Unit]:
         return [unit for unit in self._game.units() if unit.owner == self._player]
 
-    def _read(self) -> dict[int, tuple[int, set[int]]]:
-        """Every unit of this player, by tag: its type and what it is offered, recorded as found."""
-        units = {unit.tag: unit.unit_type for unit in self._mine()}
+    def _read(self, tags: Iterable[int] | None = None) -> dict[int, tuple[int, set[int]]]:
+        """Every unit of this player, or those of `tags`, by tag: its type and what it is offered, recorded as found."""
+        wanted = None if tags is None else set(tags)
+        units = {unit.tag: unit.unit_type for unit in self._mine() if wanted is None or unit.tag in wanted}
         offered = self._game.offered(units)
         for tag, abilities in offered.items():
             type_name = _unit_name(units[tag])
@@ -561,6 +574,72 @@ class TechSweep:
         logger.warning("Nothing was put up by {}", _ability_name(build))
         return set()
 
+    # --- Casting
+
+    def sweep_casts(self) -> None:
+        """Order every ability aimed at a unit or a point on a new unit of each type offered one, reading what the unit
+        is offered meanwhile: a channel's cancel is offered only while it lasts. Every nuke is armed first, since a
+        ghost is offered its calldown only while one is."""
+        arming = [
+            (unit.tag, ability)
+            for unit in self._mine()
+            if unit.unit_type in self._structure_types
+            for ability in self._game.offered([unit.tag])[unit.tag]
+            if self._targets.get(ability) == _NOTHING
+            and _ability_name(ability).startswith("Build_")
+            and ability not in self._creation_abilities
+        ]
+        for tag, ability in arming:
+            self._game.order(ability, tag)
+        self._client.step(22 * 10)
+        found = self._pairs(self._read())
+        pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
+        for type_name, names in sorted(self.findings.offered.items()):
+            performer = UnitTypeId.get(RawUnitTypeId[type_name]) if type_name in _RAW_UNITS else None
+            if performer is None or performer in self._structure_types:
+                continue
+            if self._data.units[performer].race is not self._race:
+                continue
+            for name in sorted(names):
+                ability = int(RawAbilityId[name]) if name in _RAW_ABILITIES else None
+                if (
+                    ability is None
+                    or ability in self._creation_abilities
+                    or self._targets.get(ability) not in _AIMED
+                    or any(fragment in name for fragment in _NOT_CASTS)
+                ):
+                    continue
+                found |= self._cast(performer, ability, pad)
+        self.read_requirements(found - self._seen)
+        self._seen |= found
+
+    def _cast(self, performer: UnitTypeId, ability: int, pad: Point) -> set[Pair]:
+        """What a new `performer` is offered once ordered `ability` at an enemy beside it, or at the ground there."""
+        before = {u.tag for u in self._game.units()}
+        try:
+            enemy = 3 - self._player
+            requests = [(performer, self._player, pad)]
+            requests += [(target, enemy, pad + (3, -2 + 2 * index)) for index, target in enumerate(_CAST_TARGETS)]
+            made = self._game.spawn(requests)
+            caster = next((u for u in made if u.unit_type == performer and u.owner == self._player), None)
+            if caster is None:
+                return set()
+            self._charge()
+            self._client.step(2)
+            target = self._targets[ability]
+            aims: list[Point | int] = []
+            if target != _POINT:
+                aims += [u.tag for u in made if u.owner == enemy]
+            if target != _UNIT:
+                aims.append(pad + (3, 0))
+            if not any(self._game.order(ability, caster.tag, aim) == SUCCESS for aim in aims):
+                logger.warning("A {} could not be ordered {} at anything", performer.name, _ability_name(ability))
+                return set()
+            self._client.step(_CAST_STEPS)
+            return self._pairs(self._read({caster.tag}))
+        finally:
+            self._clear({u.tag for u in self._game.units() if u.tag not in before})
+
     # --- What an ability that makes a unit does to the unit ordered
 
     def sweep_makers(self) -> None:
@@ -571,18 +650,24 @@ class TechSweep:
         """
         if self._pad == self._sandbox:
             self._pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
-        for row in sorted(self._data.units.values(), key=lambda row: row.id.name):
-            ability = self._makers.get(row.id)
-            if row.race is not self._race or ability is None:
+        makers = sorted(
+            {*self._makers.items(), *((product, ability) for ability, product in UNNAMED_CREATION_ABILITIES.items())},
+            key=lambda maker: (maker[0].name, maker[1].name),
+        )
+        for product, ability in makers:
+            if self._data.units[product].race is not self._race:
                 continue
             name = _ability_name(ability)
             for performer_name in sorted(t for t, offered in self.findings.offered.items() if name in offered):
                 performer = UnitTypeId.get(RawUnitTypeId[performer_name]) if performer_name in _RAW_UNITS else None
-                trial = (performer_name, name, _unit_name(row.id))
+                trial = (performer_name, name, _unit_name(product))
                 if performer is None or trial in self.findings.made:
                     continue
-                if (result := self._make(row.id, performer, ability)) is not None:
+                if (result := self._make(product, performer, ability)) is not None:
                     self.findings.made[trial] = result
+        # What a unit was offered on its way to what it became, such as a cocoon's cancel, which no unit is offered now.
+        self._seen |= self._on_the_way
+        self.read_requirements(self._on_the_way)
 
     def _make(self, product: UnitTypeId, performer: UnitTypeId, ability: AbilityId) -> str | None:
         """What ordering `ability` on a new `performer` did, as `_watch` tells it, or `None` where nothing could."""
@@ -660,6 +745,7 @@ class TechSweep:
         before = {u.tag for u in self._game.units()}
         target = self._target(ability, unit, product)
         answer = None if target is False else self._game.order(ability, unit.tag, target)
+        on_the_way = False
         if answer != SUCCESS:
             reason = "nothing to aim at" if answer is None else error_pb2.ActionResult.Name(answer)
             logger.warning("{} refused {}: {}", _unit_name(unit.unit_type), _ability_name(ability), reason)
@@ -677,7 +763,10 @@ class TechSweep:
                 if form is not None and form.base_type is not None and form.base_type == unit.unit_type:
                     # It turned into a form of itself, as a zergling ordered to burrow as a drone does.
                     return "other"
-                # On its way, as a larva is an egg first.
+                # On its way, as a larva is an egg first, and offered meanwhile what it is offered at no other time.
+                if not on_the_way:
+                    self._on_the_way |= self._pairs(self._read({unit.tag}))
+                    on_the_way = True
                 continue
             # A placeholder, with no tag, stands where a structure was ordered from the moment it is ordered. Only
             # while the unit ordered is still what it was does a product beside it count, since an egg or a cocoon
@@ -747,7 +836,11 @@ class TechSweep:
 
 
 _NOTHING = data_pb2.AbilityData.Target.Value("None")
+_UNIT = data_pb2.AbilityData.Target.Value("Unit")
+_POINT = data_pb2.AbilityData.Target.Value("Point")
+_AIMED = frozenset({_UNIT, _POINT, data_pb2.AbilityData.Target.Value("PointOrUnit")})
 _RAW_UNITS = {member.name for member in RawUnitTypeId}
+_RAW_ABILITIES = {member.name for member in RawAbilityId}
 
 
 def _unit_name(unit_type: int) -> str:
@@ -787,6 +880,7 @@ def sweep(race: Race, installation: Installation, findings: Findings) -> None:
                 run.research_everything()
                 run.sweep_states()
                 run.sweep_busy()
+                run.sweep_casts()
                 run.sweep_makers()
                 run.read_last_requirements()
         except GameEndedError:
