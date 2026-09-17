@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy, UpgradeInference, upgrades_shown_by
+from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -19,6 +19,7 @@ from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.upgrade_reader import UpgradeInference
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -75,11 +76,12 @@ class _Game:
         self.observation = observation
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
-        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(
-                *upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines)
-            )
         self.state = _State(observation, self.unit_tracker, self.map)
+        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrade_reader
+        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
+            self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
+        if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
+            self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -212,7 +214,7 @@ class Api:
         """The other player of this game, and what is known of it.
 
         `api.enemy.upgrades` holds any upgrades a bot adds with `assume_upgrades`, and those its units have shown, which
-        NachOS reads off their levels unless `infer_enemy_upgrades` tells it not to. Every read of an enemy unit that
+        NachOS reads as far as `infer_enemy_upgrades` says. Every read of an enemy unit that
         upgrades change counts them, `Unit.weapons` and `Unit.speed` among them.
         """
         return self._current_game().enemy

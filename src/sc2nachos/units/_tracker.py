@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, Any
 from s2clientprotocol import raw_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos.enemy import UpgradeLines
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._units import Units
+from sc2nachos.upgrade_reader import UpgradeReader
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -86,7 +86,7 @@ class _UnitTracker:
         "_under_construction",
         "_units_by_id",
         "_units_seen_per_alliance",
-        "_upgrade_lines",
+        "_upgrade_reader",
         "_upgraded_unit_types",
         "_upgrades",
     )
@@ -122,7 +122,7 @@ class _UnitTracker:
         # This player's finished upgrades, as the last observation listed them.
         self._upgrades: frozenset[UpgradeId] = frozenset()
         self._upgraded_unit_types = _UpgradedUnitTypes(data)
-        self._upgrade_lines = UpgradeLines(data)
+        self._upgrade_reader = UpgradeReader(data)
 
     @property
     def data(self) -> GameData:
@@ -140,9 +140,9 @@ class _UnitTracker:
         return self._enemy
 
     @property
-    def upgrade_lines(self) -> UpgradeLines:
+    def upgrade_reader(self) -> UpgradeReader:
         """Which upgrades each unit type's reported levels stand for, for whoever reads the units' reports."""
-        return self._upgrade_lines
+        return self._upgrade_reader
 
     def upgraded_type(self, unit: Unit[Any]) -> UnitTypeData:
         """The type of `unit` as the upgrades its owner has leave it.
@@ -164,7 +164,9 @@ class _UnitTracker:
 
     def shield_armor_of(self, unit: Unit[Any]) -> float:
         """The armor the shields of `unit` have, which is the shields levels its owner has, and 0 without shields."""
-        levels = sum(1 for upgrade in self._upgrade_lines.shields(unit.type_id) if upgrade in self._upgrades_of(unit))
+        levels = sum(
+            1 for upgrade in self._upgrade_reader.shields_of(unit.type_id) if upgrade in self._upgrades_of(unit)
+        )
         if (seen := unit._latest_data_in_vision) is None:
             return levels
         return max(levels, seen.shield_upgrade_level)
