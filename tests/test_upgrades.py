@@ -334,7 +334,7 @@ def _observe(
     tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
 ) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*tracker.upgrade_reader.levels_shown_by(tracker.present_units))
+    tracker.enemy.assume_upgrades(*tracker.upgrade_reader.read_basic_upgrades(tracker.present_units))
     by_tag = {unit.tag: unit for unit in tracker.present_units}
     return [by_tag[unit.tag] for unit in units]
 
@@ -457,7 +457,7 @@ def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...]
     """What `units` and `effects`, in one observation, show of the enemy's upgrades beyond their levels."""
     tracker = _tracker(tables)
     _observe(tracker, *units)
-    return UpgradeReader(tables).signs_shown_by(tracker.present_units, effects)
+    return UpgradeReader(tables).read_intermediate_upgrades(tracker.present_units, effects)
 
 
 def _storm(alliance: Alliance) -> Effect:
@@ -749,7 +749,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         )
         academy = _made(game, UnitTypeId.GHOST_ACADEMY, game.open_ground(toward + (0, -8), size=3))
         marine = _made(game, UnitTypeId.MARINE, toward + (-6, 0))
-        assert (marine.health_max, reader.of_owner(marine)) == (45.0, frozenset())
+        assert (marine.health_max, reader._of_owner(marine)) == (45.0, frozenset())
 
         _research_in_game(
             game,
@@ -761,22 +761,22 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
             (AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, academy, UpgradeId.GHOST_CLOAK),
         )
         game.turn(22)
-        assert (marine.health_max, reader.of_owner(marine)) == (55.0, {UpgradeId.COMBAT_SHIELD})
+        assert (marine.health_max, reader._of_owner(marine)) == (55.0, {UpgradeId.COMBAT_SHIELD})
         game.order(AbilityId.MARINE_STIM, marine)
         game.turn(4)
-        assert reader.of_owner(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
+        assert reader._of_owner(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
 
         marauder = _made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
         game.order(AbilityId.MARAUDER_STIM, marauder)
         game.turn(4)
-        assert reader.of_owner(marauder) == {UpgradeId.STIMPACK}
+        assert reader._of_owner(marauder) == {UpgradeId.STIMPACK}
 
         banshee = _made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
         ghost = _made(game, UnitTypeId.GHOST, toward + (-6, 6))
         game.order(AbilityId.BANSHEE_CLOAK_ON, banshee)
         game.order(AbilityId.GHOST_CLOAK_ON, ghost)
         game.turn(8)
-        assert (reader.of_owner(banshee), reader.of_owner(ghost)) == (
+        assert (reader._of_owner(banshee), reader._of_owner(ghost)) == (
             {UpgradeId.BANSHEE_CLOAK},
             {UpgradeId.GHOST_CLOAK},
         )
@@ -784,7 +784,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         roach = _made(game, UnitTypeId.ROACH, toward + (-1, 2), owner=enemy)
         game.order(AbilityId.GENERAL_ATTACK, marauder, target=roach)
         _until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
-        assert reader.of_opponent(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
+        assert reader._of_opponent(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
         # Gone, or the marauder would slow the tank too.
         game.debug(game.kill(marauder, roach))
 
@@ -792,7 +792,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         tank = _made(game, UnitTypeId.SIEGE_TANK, toward + (-1, 8), owner=enemy)
         game.order(AbilityId.RAVEN_INTERFERENCE_MATRIX, raven, target=tank)
         _until(game, lambda: BuffId.RAVEN_INTERFERENCE_MATRIX in tank.buffs)
-        assert reader.of_opponent(tank) == {UpgradeId.INTERFERENCE_MATRIX}
+        assert reader._of_opponent(tank) == {UpgradeId.INTERFERENCE_MATRIX}
 
 
 @pytest.mark.integration
@@ -808,7 +808,7 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
         council = _made(game, UnitTypeId.TWILIGHT_COUNCIL, spots[1])
         archive = _made(game, UnitTypeId.TEMPLAR_ARCHIVE, spots[2])
         gateway = _made(game, UnitTypeId.GATEWAY, spots[3])
-        assert reader.of_owner(gateway) == frozenset()
+        assert reader._of_owner(gateway) == frozenset()
 
         _research_in_game(
             game,
@@ -817,19 +817,19 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
             (AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM, archive, UpgradeId.STORM),
         )
         _until(game, lambda: gateway.type_id is UnitTypeId.WARP_GATE, steps=22)
-        assert reader.of_owner(gateway) == {UpgradeId.WARP_GATE}
+        assert reader._of_owner(gateway) == {UpgradeId.WARP_GATE}
 
         zealot = _made(game, UnitTypeId.ZEALOT, toward + (-8, 0))
         roach = _made(game, UnitTypeId.ROACH, toward + (-14, 0), owner=enemy)
         game.order(AbilityId.GENERAL_ATTACK, zealot, target=roach)
         _until(game, lambda: BuffId.ZEALOT_CHARGING in zealot.buffs, turns=60)
-        assert reader.of_owner(zealot) == {UpgradeId.CHARGE}
+        assert reader._of_owner(zealot) == {UpgradeId.CHARGE}
 
         templar = _made(game, UnitTypeId.HIGH_TEMPLAR, toward + (-8, 4))
         game.order(AbilityId.HIGH_TEMPLAR_STORM, templar, target=toward + (-10, 4))
         _until(game, lambda: any(effect.id is EffectId.HIGH_TEMPLAR_STORM for effect in game.state.effects))
         (storm,) = [effect for effect in game.state.effects if effect.id is EffectId.HIGH_TEMPLAR_STORM]
-        assert (storm.alliance, reader.of_effect(storm)) == (Alliance.OWN, {UpgradeId.STORM})
+        assert (storm.alliance, reader._of_effect(storm)) == (Alliance.OWN, {UpgradeId.STORM})
 
 
 @pytest.mark.integration
@@ -852,19 +852,19 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
             (AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE, pit, UpgradeId.NEURAL_PARASITE),
         )
         zergling = _made(game, UnitTypeId.ZERGLING, near + (-4, 0))
-        assert reader.of_owner(zergling) == frozenset()
+        assert reader._of_owner(zergling) == frozenset()
         game.order(AbilityId.ZERGLING_BURROW, zergling)
         _until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
-        assert reader.of_owner(zergling) == {UpgradeId.BURROW}
+        assert reader._of_owner(zergling) == {UpgradeId.BURROW}
 
         hydralisk = _made(game, UnitTypeId.HYDRALISK, near + (-4, 3))
         game.order(AbilityId.HYDRALISK_LUNGE, hydralisk)
         _until(game, lambda: BuffId.HYDRALISK_LUNGE in hydralisk.buffs)
-        assert reader.of_owner(hydralisk) == {UpgradeId.HYDRALISK_LUNGE}
+        assert reader._of_owner(hydralisk) == {UpgradeId.HYDRALISK_LUNGE}
 
         infestor = _made(game, UnitTypeId.INFESTOR, near + (-4, 6))
         marine = _made(game, UnitTypeId.MARINE, near + (-1, 6), owner=enemy)
         game.order(AbilityId.INFESTOR_NEURAL_PARASITE, infestor, target=marine)
         _until(game, lambda: marine.alliance is Alliance.OWN)
         assert BuffId.INFESTOR_NEURAL_PARASITE in marine.buffs
-        assert reader.of_owner(marine) == {UpgradeId.NEURAL_PARASITE}
+        assert reader._of_owner(marine) == {UpgradeId.NEURAL_PARASITE}

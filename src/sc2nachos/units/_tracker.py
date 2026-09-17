@@ -164,7 +164,9 @@ class _UnitTracker:
 
     def shield_armor_of(self, unit: Unit[Any]) -> float:
         """The armor the shields of `unit` have, which is the shields levels its owner has, and 0 without shields."""
-        levels = sum(1 for upgrade in self._upgrade_reader.shields(unit.type_id) if upgrade in self._upgrades_of(unit))
+        levels = sum(
+            1 for upgrade in self._upgrade_reader.shields_of(unit.type_id) if upgrade in self._upgrades_of(unit)
+        )
         if (seen := unit._latest_data_in_vision) is None:
             return levels
         return max(levels, seen.shield_upgrade_level)

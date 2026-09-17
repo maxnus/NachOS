@@ -79,9 +79,9 @@ class _Game:
         self.state = _State(observation, self.unit_tracker, self.map)
         units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrade_reader
         if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(*reader.levels_shown_by(units))
+            self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
-            self.enemy.assume_upgrades(*reader.signs_shown_by(units, self.state.effects))
+            self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""

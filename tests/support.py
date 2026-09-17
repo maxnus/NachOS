@@ -190,7 +190,7 @@ class RealGame:
     def _observe(self) -> _State:
         response = self.client.observation()
         self.tracker.update(response.observation.raw_data, response.observation.game_loop)
-        self.enemy.assume_upgrades(*self.tracker.upgrade_reader.levels_shown_by(self.tracker.present_units))
+        self.enemy.assume_upgrades(*self.tracker.upgrade_reader.read_basic_upgrades(self.tracker.present_units))
         return _State(response, self.tracker, self.map)
 
     def turn(self, steps: int) -> Units[Unit[Any]]:

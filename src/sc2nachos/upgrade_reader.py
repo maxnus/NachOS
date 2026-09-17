@@ -24,28 +24,23 @@ class UpgradeInference(ReadableIntEnum):
     NONE = 0
     """Nothing: only a bot changes it."""
     BASIC = 1
-    """The attack, armor and shield levels the enemy's units in sight report, which `UpgradeReader.levels_shown_by`
+    """The attack, armor and shield levels the enemy's units in sight report, which `UpgradeReader.read_basic_upgrades`
     reads as the levels of each type's own lines."""
     INTERMEDIATE = 2
-    """What only an upgrade can bring about, which `UpgradeReader.signs_shown_by` reads: Burrow, Warp Gate, Stimpack,
-    Combat Shield, Concussive Shells, Charge, Psionic Storm, Neural Parasite, Interference Matrix, Nanomuscular Swell,
-    Cloaking Field and Personal Cloaking. A unit type that cannot be made without an upgrade shows it, so a patch that
-    puts another type behind one adds it here.
-
-    It reads the buffs every unit in sight wears, so a buff the curated ids leave out raises `UncuratedIdError`."""
+    """What only an upgrade can bring about, which `UpgradeReader.read_intermediate_upgrades` reads: Burrow, Warp Gate,
+    Stimpack, Combat Shield, Concussive Shells, Charge, Psionic Storm, Neural Parasite, Interference Matrix,
+    Nanomuscular Swell, Cloaking Field and Personal Cloaking. It reads the buffs every unit in sight wears, so a buff
+    the curated ids leave out raises `UncuratedIdError` where the settings below it never would."""
 
 
 class UpgradeReader:
     """What the units and effects of an observation show of the upgrades their owners have, worked out once per unit
-    type.
-
-    One of these belongs to a game, since it is only as good as the tables it reads the game by.
-    """
+    type."""
 
     __slots__ = ("_data", "_lines", "_types")
 
     # The buffs whose wearer shows its owner has an upgrade, which the ability that puts each on needs.
-    _WORN_WITH: Final[Mapping[BuffId, UpgradeId]] = MappingProxyType(
+    _BUFF_EVIDENCE_OF_OWNER: Final[Mapping[BuffId, UpgradeId]] = MappingProxyType(
         {
             BuffId.BANSHEE_CLOAK: UpgradeId.BANSHEE_CLOAK,
             BuffId.GHOST_CLOAK: UpgradeId.GHOST_CLOAK,
@@ -57,21 +52,25 @@ class UpgradeReader:
             BuffId.ZEALOT_CHARGING: UpgradeId.CHARGE,
         }
     )
-    # The buffs whose wearer shows its owner's opponent has an upgrade, whose ability put each on. Kept apart from
-    # `_WORN_WITH` rather than keyed by both the buff and whose it is, since a dict cannot hold ids of two enums: a
+    # The buffs whose wearer shows its owner's opponent has an upgrade, whose ability put each on. These mappings stay
+    # apart, rather than becoming one keyed by every kind of evidence, since a dict cannot hold ids of two enums: a
     # buff id and a unit type id of the same number are one key.
-    _PUT_ON_WITH: Final[Mapping[BuffId, UpgradeId]] = MappingProxyType(
+    _BUFF_EVIDENCE_OF_OPPONENT: Final[Mapping[BuffId, UpgradeId]] = MappingProxyType(
         {
             BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW: UpgradeId.CONCUSSIVE_SHELLS,
             BuffId.RAVEN_INTERFERENCE_MATRIX: UpgradeId.INTERFERENCE_MATRIX,
         }
     )
-    _LEFT_WITH: Final[Mapping[EffectId, UpgradeId]] = MappingProxyType({EffectId.HIGH_TEMPLAR_STORM: UpgradeId.STORM})
+    _EFFECT_EVIDENCE: Final[Mapping[EffectId, UpgradeId]] = MappingProxyType(
+        {EffectId.HIGH_TEMPLAR_STORM: UpgradeId.STORM}
+    )
     # A gateway turns into a warp gate by itself once Warp Gate is researched, and nothing else makes one.
-    _ONLY_WITH: Final[Mapping[UnitTypeId, UpgradeId]] = MappingProxyType({UnitTypeId.WARP_GATE: UpgradeId.WARP_GATE})
+    _UNIT_TYPE_EVIDENCE: Final[Mapping[UnitTypeId, UpgradeId]] = MappingProxyType(
+        {UnitTypeId.WARP_GATE: UpgradeId.WARP_GATE}
+    )
     # The health a unit has without the one upgrade that adds to it, measured in game: the game's tables hold no
     # health at all.
-    _HEALTH_WITHOUT: Final[Mapping[UnitTypeId, tuple[float, UpgradeId]]] = MappingProxyType(
+    _HEALTH_EVIDENCE: Final[Mapping[UnitTypeId, tuple[float, UpgradeId]]] = MappingProxyType(
         {UnitTypeId.MARINE: (45.0, UpgradeId.COMBAT_SHIELD)}
     )
 
@@ -82,18 +81,18 @@ class UpgradeReader:
 
     # --- The levels a unit reports
 
-    def levels_shown_by(self, units: Iterable[Unit[Any]]) -> frozenset[UpgradeId]:
+    def read_basic_upgrades(self, units: Iterable[Unit[Any]]) -> frozenset[UpgradeId]:
         """What the enemy's units in sight show of its upgrades, read off the levels each reports."""
         shown: set[UpgradeId] = set()
         for unit in units:
             if unit.alliance is not Alliance.ENEMY or unit.visibility is not Visibility.IN_VISION:
                 continue
-            shown |= self.levels_of(
+            shown |= self._levels_of(
                 unit.type_id, unit.attack_upgrade_level, unit.armor_upgrade_level, unit.shield_upgrade_level
             )
         return frozenset(shown)
 
-    def levels_of(self, unit_type: UnitTypeId, attack: int, armor: int, shield: int) -> frozenset[UpgradeId]:
+    def _levels_of(self, unit_type: UnitTypeId, attack: int, armor: int, shield: int) -> frozenset[UpgradeId]:
         """The upgrades a unit of `unit_type` reporting these levels shows its owner to have.
 
         A unit reports how many attack and shields levels it has and how much armor its upgrades add, and each of those
@@ -107,7 +106,7 @@ class UpgradeReader:
             lines[UpgradeType.ATTACK][:attack] + lines[UpgradeType.ARMOR][:armor] + lines[UpgradeType.SHIELD][:shield]
         )
 
-    def shields(self, unit_type: UnitTypeId) -> tuple[UpgradeId, ...]:
+    def shields_of(self, unit_type: UnitTypeId) -> tuple[UpgradeId, ...]:
         """The shields levels of `unit_type`, whose count is the armor its shields have."""
         return self._lines_of(unit_type)[UpgradeType.SHIELD]
 
@@ -128,21 +127,21 @@ class UpgradeReader:
 
     # --- What only an upgrade brings about
 
-    def signs_shown_by(self, units: Iterable[Unit[Any]], effects: Iterable[Effect]) -> frozenset[UpgradeId]:
+    def read_intermediate_upgrades(self, units: Iterable[Unit[Any]], effects: Iterable[Effect]) -> frozenset[UpgradeId]:
         """What the enemy's units and effects, and the buffs this player's units wear, show of the enemy's upgrades
         beyond the levels its units report."""
         shown: set[UpgradeId] = set()
         for unit in units:
             if unit.alliance is Alliance.ENEMY:
-                shown |= self.of_owner(unit)
+                shown |= self._of_owner(unit)
             elif unit.alliance is Alliance.OWN:
-                shown |= self.of_opponent(unit)
+                shown |= self._of_opponent(unit)
         for effect in effects:
             if effect.alliance is Alliance.ENEMY:
-                shown |= self.of_effect(effect)
+                shown |= self._of_effect(effect)
         return frozenset(shown)
 
-    def of_owner(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
+    def _of_owner(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades `unit` shows its owner has, by its type, and while in sight by the buffs it wears and its
         health.
 
@@ -155,27 +154,29 @@ class UpgradeReader:
         buffs = unit.buffs
         if BuffId.INFESTOR_NEURAL_PARASITE in buffs:
             return frozenset({UpgradeId.NEURAL_PARASITE})
-        worn = {self._WORN_WITH[buff] for buff in buffs if buff in self._WORN_WITH}
-        if (health := self._HEALTH_WITHOUT.get(unit.type_id)) is not None and unit.health_max > health[0]:
+        worn = {self._BUFF_EVIDENCE_OF_OWNER[buff] for buff in buffs if buff in self._BUFF_EVIDENCE_OF_OWNER}
+        if (health := self._HEALTH_EVIDENCE.get(unit.type_id)) is not None and unit.health_max > health[0]:
             worn.add(health[1])
         return shown | worn if worn else shown
 
     @classmethod
-    def of_opponent(cls, unit: Unit[Any]) -> frozenset[UpgradeId]:
+    def _of_opponent(cls, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades the buffs `unit` wears show its owner's opponent has, and nothing for a unit out of sight."""
         if unit.visibility is not Visibility.IN_VISION:
             return frozenset()
-        return frozenset(cls._PUT_ON_WITH[buff] for buff in unit.buffs if buff in cls._PUT_ON_WITH)
+        return frozenset(
+            cls._BUFF_EVIDENCE_OF_OPPONENT[buff] for buff in unit.buffs if buff in cls._BUFF_EVIDENCE_OF_OPPONENT
+        )
 
     @classmethod
-    def of_effect(cls, effect: Effect) -> frozenset[UpgradeId]:
+    def _of_effect(cls, effect: Effect) -> frozenset[UpgradeId]:
         """The upgrades `effect` shows its owner has."""
-        upgrade = cls._LEFT_WITH.get(effect.id)
+        upgrade = cls._EFFECT_EVIDENCE.get(effect.id)
         return frozenset() if upgrade is None else frozenset({upgrade})
 
     def _of_type(self, unit_type: UnitTypeId) -> frozenset[UpgradeId]:
         """The upgrades a unit of `unit_type` cannot be made without: those every type offered its creation ability
-        needs for it, as a burrowed zergling needs Burrow, and those `_ONLY_WITH` holds."""
+        needs for it, as a burrowed zergling needs Burrow, and those `_UNIT_TYPE_EVIDENCE` holds."""
         if (upgrades := self._types.get(unit_type)) is None:
             upgrades = frozenset()
             if (ability := self._data.units[unit_type].creation_ability) is not None:
@@ -185,7 +186,7 @@ class UpgradeReader:
                     if (requirements := self._data.units[performer].ability_requirements.get(ability)) is not None
                 ]
                 upgrades = frozenset.intersection(*needs) if needs else frozenset()
-            if (only := self._ONLY_WITH.get(unit_type)) is not None:
+            if (only := self._UNIT_TYPE_EVIDENCE.get(unit_type)) is not None:
                 upgrades |= {only}
             self._types[unit_type] = upgrades
         return upgrades
