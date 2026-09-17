@@ -87,6 +87,32 @@ class TestSequence:
         assert _mine(1)
 
 
+class TestCombining:
+    def test_collections_come_one_after_another(self) -> None:
+        units = _mine(5)
+        assert _tags(Units.combined(units[:2], units[3:])) == [1, 2, 4, 5]
+
+    def test_a_unit_in_two_collections_is_kept_where_it_first_appears(self) -> None:
+        units = _mine(5)
+        assert _tags(Units.combined(units[2:], units[:3])) == [3, 4, 5, 1, 2]
+
+    def test_it_takes_any_iterable_of_units(self) -> None:
+        units = _mine(3)
+        assert _tags(Units.combined([units[0]], iter(units))) == [1, 2, 3]
+
+    def test_combining_nothing_is_empty(self) -> None:
+        assert not Units.combined()
+        assert not Units.combined(Units(), [])
+
+    def test_the_units_are_found_by_id_afterwards(self) -> None:
+        units = _mine(5)
+        combined = Units.combined(units[:3], units)
+        assert combined.ids == units.ids
+        assert combined.by_id(100004) is units.by_id(100004)
+        assert all(combined.by_id(unit.id) is unit for unit in combined)
+        assert len(combined) == len(combined.ids)
+
+
 class TestById:
     def test_a_unit_is_found_by_its_id(self) -> None:
         units = _mine(5)

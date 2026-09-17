@@ -35,6 +35,22 @@ class Units[U: Unit[Any]](Sequence[U]):
         self._units = tuple(units)
         self._by_id = None
 
+    @classmethod
+    def combined[V: Unit[Any]](cls, *collections: Iterable[V]) -> Units[V]:
+        """Every unit of `collections` in one collection, in the order they come, each kept where it first appears.
+
+        A unit is the one with its id, so a unit in two of them is in the answer once, and the collections a bot
+        keeps of what it has seen combine whether or not they overlap.
+        """
+        index: dict[int, V] = {}
+        for collection in collections:
+            for unit in collection:
+                if unit.id not in index:
+                    index[unit.id] = unit
+        combined = Units(index.values())
+        combined._by_id = index
+        return combined
+
     def __len__(self) -> int:
         return len(self._units)
 
