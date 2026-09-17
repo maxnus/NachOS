@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy, UpgradeInference, UpgradeSigns, upgrades_evident_from, upgrades_shown_by
+from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -19,6 +19,7 @@ from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.upgrade_reader import UpgradeInference
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -34,7 +35,6 @@ class _Game:
     data: Final[GameData]
     enemy: Final[Enemy]
     infer_enemy_upgrades: Final[UpgradeInference]
-    upgrade_signs: Final[UpgradeSigns]
     unit_tracker: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
@@ -58,7 +58,6 @@ class _Game:
             tables,
             enemy,
             infer_enemy_upgrades,
-            UpgradeSigns(tables),
             unit_tracker,
             observation,
             _State(observation, unit_tracker, game_map),
@@ -78,11 +77,11 @@ class _Game:
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.unit_tracker, self.map)
-        units = self.unit_tracker.present_units
+        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrade_reader
         if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(*upgrades_shown_by(units, self.unit_tracker.upgrade_lines))
+            self.enemy.assume_upgrades(*reader.levels_shown_by(units))
         if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
-            self.enemy.assume_upgrades(*upgrades_evident_from(units, self.state.effects, self.upgrade_signs))
+            self.enemy.assume_upgrades(*reader.signs_shown_by(units, self.state.effects))
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
