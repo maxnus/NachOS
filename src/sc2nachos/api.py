@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy, UpgradeInference, upgrades_shown_by
+from sc2nachos.enemy import Enemy, UpgradeInference, UpgradeSigns, upgrades_evident_from, upgrades_shown_by
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -34,6 +34,7 @@ class _Game:
     data: Final[GameData]
     enemy: Final[Enemy]
     infer_enemy_upgrades: Final[UpgradeInference]
+    upgrade_signs: Final[UpgradeSigns]
     unit_tracker: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
@@ -57,6 +58,7 @@ class _Game:
             tables,
             enemy,
             infer_enemy_upgrades,
+            UpgradeSigns(tables),
             unit_tracker,
             observation,
             _State(observation, unit_tracker, game_map),
@@ -75,11 +77,12 @@ class _Game:
         self.observation = observation
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
-        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(
-                *upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines)
-            )
         self.state = _State(observation, self.unit_tracker, self.map)
+        units = self.unit_tracker.present_units
+        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
+            self.enemy.assume_upgrades(*upgrades_shown_by(units, self.unit_tracker.upgrade_lines))
+        if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
+            self.enemy.assume_upgrades(*upgrades_evident_from(units, self.state.effects, self.upgrade_signs))
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
@@ -212,7 +215,7 @@ class Api:
         """The other player of this game, and what is known of it.
 
         `api.enemy.upgrades` holds any upgrades a bot adds with `assume_upgrades`, and those its units have shown, which
-        NachOS reads off their levels unless `infer_enemy_upgrades` tells it not to. Every read of an enemy unit that
+        NachOS reads as far as `infer_enemy_upgrades` says. Every read of an enemy unit that
         upgrades change counts them, `Unit.weapons` and `Unit.speed` among them.
         """
         return self._current_game().enemy
