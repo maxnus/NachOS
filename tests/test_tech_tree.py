@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, OTHER_CREATION_ABILITIES, TechTree
+from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
@@ -43,8 +43,8 @@ def _generator() -> ModuleType:
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
     """Findings as the sweep writes them, empty but for `parts`: every ability offered read as needing nothing where
-    `parts` holds no requirement for it, unless it is to be left `unread`, and every override seen making its unit type,
-    unless it is to be left `unconfirmed`."""
+    `parts` holds no requirement for it, unless it is to be left `unread`, and every unnamed creation ability seen
+    making its unit type, unless it is to be left `unconfirmed`."""
     findings: dict[str, object] = {
         "base_build": 1,
         "offered": {},
@@ -75,10 +75,7 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
                 "product": RawUnitTypeId(unit).name,
                 "result": "build",
             }
-            for unit, ability in [
-                *CREATION_ABILITY_OVERRIDES.items(),
-                *((u, a) for a, u in OTHER_CREATION_ABILITIES.items()),
-            ]
+            for ability, unit in UNNAMED_CREATION_ABILITIES.items()
         ]
     return findings
 
@@ -138,7 +135,7 @@ class TestGeneratingTheTables:
         tree = _generator().read(findings, _no_upgrades())
         assert tree.ability_performers[AbilityId.GENERAL_BURROW] == {UnitTypeId.ZERGLING}
         assert tree.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
-        # The table names a dead ability for a baneling, so the override stands in.
+        # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
         assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] is UnitTypeId.MARINE
         assert tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK] is UpgradeId.STIMPACK
@@ -163,7 +160,27 @@ class TestGeneratingTheTables:
         with pytest.raises(ValueError, match="GHOST GHOST_CLOAK_OFF"):
             _generator().read(findings, _no_upgrades())
 
-    def test_an_override_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
+    def test_two_unnamed_creation_abilities_for_a_type_the_table_names_nothing_for_are_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Either could be its creation ability."""
+        generator = _generator()
+        second = AbilityId.LARVA_MORPH_ZERGLING
+        monkeypatch.setattr(
+            generator, "UNNAMED_CREATION_ABILITIES", {**UNNAMED_CREATION_ABILITIES, second: UnitTypeId.BANELING}
+        )
+        findings = _findings()
+        trial: dict[str, object] = {
+            "performer": "Larva",
+            "ability": RawAbilityId(second).name,
+            "product": "Baneling",
+            "result": "morph",
+        }
+        cast("list[dict[str, object]]", findings["made"]).append(trial)
+        with pytest.raises(ValueError, match=r"more than one is listed: \['BANELING'\]"):
+            generator.read(findings, _no_upgrades())
+
+    def test_an_unnamed_creation_ability_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
         """A patch that breaks one stops the regeneration, rather than keep an ability that makes nothing any more."""
         with pytest.raises(ValueError, match="BANELING by ZERGLING_MORPH_BANELING"):
             _generator().read(_findings(unconfirmed=True), _no_upgrades())
@@ -320,7 +337,9 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.BARRACKS].morphed_from is None
         assert units[UnitTypeId.MARINE].morphed_from is None
 
-    def test_an_override_makes_what_the_table_has_no_working_ability_for(self, tables: GameData) -> None:
+    def test_an_unnamed_creation_ability_makes_what_the_table_has_no_working_ability_for(
+        self, tables: GameData
+    ) -> None:
         baneling = tables.abilities[AbilityId.ZERGLING_MORPH_BANELING]
         assert baneling.product is UnitTypeId.BANELING
         assert tables.units[UnitTypeId.BANELING].creation_ability is AbilityId.ZERGLING_MORPH_BANELING

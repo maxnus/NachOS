@@ -11,8 +11,9 @@ answer changes. Measured in game while writing this:
 
 - The answer leaves out what the unit lacks the tech for, and an add-on counts only on the structure it is attached to.
   It ignores energy and cooldowns, and offers an unpowered structure nothing it needs power for.
-- A cancel is offered only to a structure making something or being put up, and a halt only to a worker putting one
-  up and to what it puts up.
+- A cancel is offered only to a structure making something or being put up, a cocoon while it changes, a unit while
+  it channels and a ghost academy while it arms a nuke, and a halt only to a worker putting a structure up and to what
+  it puts up. A ghost is offered its calldown only while a nuke is armed.
 - A structure's requirement leaves the answer within 4 steps of the structure leaving the observation. A lifted barracks
   still counts as a barracks.
 - The other half of a toggle is offered once the unit has switched, up to 22 steps after the order.
@@ -20,8 +21,6 @@ answer changes. Measured in game while writing this:
   whichever it is ordered.
 - A gateway turns into a warp gate on its own once Warp Gate is researched, so what a gateway trains is tried before any
   research. Larva die with their hatchery.
-- A cancel is offered only while there is something to cancel: to a cocoon while it changes, a unit while it channels,
-  and a ghost academy while it arms a nuke. A ghost is offered its calldown only while a nuke is armed.
 
 Each game puts up every structure of the race and one of every other unit type, and reads what each is offered. It
 finds what each ability offered needs by killing every structure of one type at a time and seeing what goes, then
@@ -47,7 +46,7 @@ from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetType
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, OTHER_CREATION_ABILITIES
+from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -189,12 +188,14 @@ class TechSweep:
             for entry in raw_data.upgrades
             if entry.ability_id
         }
-        # What makes each unit type: what the table names where that works, and the override where it does not.
+        # What makes each unit type: what the table names where that works, and the unnamed creation ability where it
+        # does not.
         table = {entry.unit_id: AbilityId.get(entry.ability_id) for entry in raw_data.units}
+        unnamed = {unit_type: ability for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
         self._makers = {
             row.id: ability
             for row in self._data.units.values()
-            if (ability := table.get(row.id) or CREATION_ABILITY_OVERRIDES.get(row.id))
+            if (ability := table.get(row.id) or unnamed.get(row.id))
         }
         # `free` rather than `all_resources`, which runs dry once add-ons have been rebuilt a few hundred times.
         # `god`, since the computer comes to attack at some point, which the sweep would take for a requirement lost.
@@ -208,7 +209,7 @@ class TechSweep:
         self._pad = self._sandbox
         self._structure_types = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
         self._on_the_way: set[Pair] = set()
-        self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *OTHER_CREATION_ABILITIES]}
+        self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
 
     # --- Reading the game
 
@@ -650,7 +651,7 @@ class TechSweep:
         if self._pad == self._sandbox:
             self._pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
         makers = sorted(
-            [*self._makers.items(), *((product, ability) for ability, product in OTHER_CREATION_ABILITIES.items())],
+            {*self._makers.items(), *((product, ability) for ability, product in UNNAMED_CREATION_ABILITIES.items())},
             key=lambda maker: (maker[0].name, maker[1].name),
         )
         for product, ability in makers:

@@ -125,21 +125,25 @@ patch, or after curating ids, run the sweep and then the generator, which writes
 A new build's module goes beside the old one, and `gamedata/_techtree/__init__.py` names the one NachOS plays by, so
 moving to a new build is a change of that import, which the generator points out when it is missing.
 
-**Where the game's own table is wrong, `sc2nachos/gamedata/_techtree/_overrides.py` says what is right**, by hand,
-with the evidence for each entry beside it. It lists the ability that makes a unit type where the table names one that
-does nothing, as with a baneling, or none, as with a rich assimilator, and `GameData` puts it in `creation_ability`.
-Neither tool writes that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep
-orders each override in game, and the generator refuses to write the tech tree unless the sweep saw each make its unit
-type. A test in `tests/test_gamedata.py` fails once the game's table names a working ability for a type there, and its entry
-can go. Add one only with a trial in game behind it, never to paper over something the sweep cannot reach.
+**What makes a unit type that the game's own table does not name is in `sc2nachos/gamedata/_techtree/_overrides.py`**,
+by hand, with the evidence for each entry beside it. Where the table names an ability that does nothing, as with a
+baneling, or none, as with a rich assimilator, the entry is the type's `creation_ability`; where the table names one
+that works, the entry makes the type besides, as a warp gate's warp-ins make what a gateway trains. Neither tool writes
+that file, so a regeneration keeps every entry, and each one is checked on every run: the sweep orders each in game,
+and the generator refuses to write the tech tree unless the sweep saw each make its unit type. A test in
+`tests/test_gamedata.py` fails once the game's table names an entry's ability for its type, and the entry can go. Add
+one only with a trial in game behind it, never to paper over something the sweep cannot reach.
 
 What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads everything off:
 
 - **It leaves out what a unit lacks the tech for**, and an add-on counts only on the structure it is attached to: a
   bare barracks is not offered a marauder while another stands with a tech lab. It ignores energy and cooldowns.
 - **A cancel and a halt are offered only in the state they undo**: a barracks is offered its cancel while it trains,
-  an SCV a halt while it builds, and a structure going up both. So the sweep sets every structure making something
-  and a worker building before it reads them.
+  an SCV a halt while it builds, and a structure going up both; a cocoon or a lurker egg its cancel while it changes,
+  a phoenix lifting, an infestor controlling and a ghost sniping theirs, an adept whose shade is out, and a ghost
+  academy arming a nuke. So the sweep sets every structure making something and a worker building, reads a unit on
+  its way to what it becomes, arms every nuke, and orders every ability aimed at a unit or a point on a new unit,
+  reading what it is offered 6 steps later.
 - **An unpowered structure is offered nothing it needs power for**, which is `needs_power` and no requirement on a
   pylon. A probe is offered a gateway with a nexus standing and no pylon at all.
 - **A requirement leaves the answer within 4 steps of its structure leaving the observation**, and a lifted barracks
@@ -152,12 +156,7 @@ What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads 
 - **The other half of a toggle is offered once the unit has switched**, up to 22 steps after the order, and unloading
   once a transport carries something.
 - **A gateway turns into a warp gate on its own once Warp Gate is researched**, so what a gateway trains is tried
-  before any research; nothing is found to make a warp gate out of a gateway. What a warp gate warps in is made by no
-  ability the game's table names, so `_overrides.py` lists each warp-in with what it makes, and the sweep orders it.
-- **A cancel is offered only while there is something to cancel**: to a cocoon or a lurker egg while it changes, to a
-  phoenix lifting, an infestor controlling and a ghost sniping, to an adept whose shade is out, and to a ghost academy
-  arming a nuke. So the sweep reads a unit on its way to what it becomes, arms every nuke, and orders every ability
-  aimed at a unit or a point on a new unit, reading what it is offered 6 steps later.
+  before any research; nothing is found to make a warp gate out of a gateway.
 - **A ghost is offered its calldown only while a nuke is armed**, which is no structure and no upgrade, so the tables
   say it needs nothing.
 
