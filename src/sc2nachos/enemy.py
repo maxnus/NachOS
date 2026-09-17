@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata import UpgradeType
 from sc2nachos.units import Alliance, Visibility
 
@@ -13,6 +14,15 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
     from sc2nachos.ids import UnitTypeId, UpgradeId
     from sc2nachos.units import Unit
+
+
+class UpgradeInference(ReadableIntEnum):
+    """How much of `Enemy.upgrades` NachOS works out for itself, each setting working out all the one before it does."""
+
+    NONE = 0
+    """Nothing: only a bot changes it."""
+    BASIC = 1
+    """The attack, armor and shield levels the enemy's units in sight report, as `upgrades_shown_by` reads them."""
 
 
 @final
@@ -36,9 +46,10 @@ class Enemy:
         """Every upgrade the enemy is known to have, and every one a bot has assumed it has.
 
         The game reports no enemy upgrade but the attack, armor and shield levels on each unit in sight, which
-        `upgrades_shown_by` reads as the levels of that unit type's own lines, and every unit of the enemy's counts what
-        is held here, those out of sight included. Everything else, such as Grooved Spines or Metabolic Boost, the game
-        never reports, and a bot that works one out says so with `assume_upgrades`.
+        `upgrades_shown_by` reads as the levels of that unit type's own lines, and NachOS adds here as far as the `Api`
+        was told to with `UpgradeInference`. Every unit of the enemy's counts what is held here, those out of sight
+        included. Everything else, such as Grooved Spines or Metabolic Boost, the game never reports, and a bot that
+        works one out says so with `assume_upgrades`.
         """
         return self._upgrades
 
@@ -49,7 +60,7 @@ class Enemy:
     def forget_upgrades(self, *upgrades: UpgradeId) -> None:
         """Take the enemy not to have `upgrades` from now on.
 
-        A unit of the enemy's that shows one again puts it back.
+        Where NachOS reads what the enemy's units show, a unit that shows one again puts it back.
         """
         self._upgrades -= frozenset(upgrades)
 

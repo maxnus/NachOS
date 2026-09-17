@@ -8,7 +8,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy, upgrades_shown_by
+from sc2nachos.enemy import Enemy, UpgradeInference, upgrades_shown_by
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -33,6 +33,7 @@ class _Game:
     map: Final[GameMap]
     data: Final[GameData]
     enemy: Final[Enemy]
+    infer_enemy_upgrades: Final[UpgradeInference]
     unit_tracker: Final[_UnitTracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
@@ -41,7 +42,7 @@ class _Game:
     result: Result | None = None
 
     @classmethod
-    def start(cls, client: Client) -> Self:
+    def start(cls, client: Client, *, infer_enemy_upgrades: UpgradeInference) -> Self:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
@@ -55,6 +56,7 @@ class _Game:
             game_map,
             tables,
             enemy,
+            infer_enemy_upgrades,
             unit_tracker,
             observation,
             _State(observation, unit_tracker, game_map),
@@ -69,11 +71,14 @@ class _Game:
         self._take_in(observation, _step(observation))
 
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
-        """Read `observation`: its units, what they show of the enemy's upgrades, and the rest of what it reports."""
+        """Read `observation`: its units, what they show of the enemy's upgrades if told to, and all else it reports."""
         self.observation = observation
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
-        self.enemy.assume_upgrades(*upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines))
+        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
+            self.enemy.assume_upgrades(
+                *upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines)
+            )
         self.state = _State(observation, self.unit_tracker, self.map)
 
     def outcome(self) -> Result | None:
@@ -113,9 +118,13 @@ class Api:
     answering from that game until the next one starts.
     """
 
-    def __init__(self, *, steps_per_turn: int = 1) -> None:
-        """Take a turn every `steps_per_turn` steps. Nothing here connects to anything."""
+    def __init__(
+        self, *, steps_per_turn: int = 1, infer_enemy_upgrades: UpgradeInference = UpgradeInference.BASIC
+    ) -> None:
+        """Take a turn every `steps_per_turn` steps, and work out as much of `api.enemy.upgrades` as
+        `infer_enemy_upgrades` says. Nothing here connects to anything."""
         self._steps_per_turn = steps_per_turn
+        self._infer_enemy_upgrades = infer_enemy_upgrades
         # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
         self._game: _Game | None = None
 
@@ -202,9 +211,9 @@ class Api:
     def enemy(self) -> Enemy:
         """The other player of this game, and what is known of it.
 
-        `api.enemy.upgrades` holds the upgrades its units have shown, which NachOS reads off their levels, and any a
-        bot adds with `assume_upgrade`. Every read of an enemy unit that upgrades change counts them, `Unit.weapons`
-        and `Unit.speed` among them.
+        `api.enemy.upgrades` holds any upgrades a bot adds with `assume_upgrades`, and those its units have shown, which
+        NachOS reads off their levels unless `infer_enemy_upgrades` tells it not to. Every read of an enemy unit that
+        upgrades change counts them, `Unit.weapons` and `Unit.speed` among them.
         """
         return self._current_game().enemy
 
@@ -241,7 +250,7 @@ class Api:
         """
         if self._game is not None:
             self._game.unit_tracker.end()
-        game = _Game.start(client)
+        game = _Game.start(client, infer_enemy_upgrades=self._infer_enemy_upgrades)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.map.name, self._steps_per_turn)
 

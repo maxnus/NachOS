@@ -176,8 +176,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   and the line they are of: a marine at attack level 2 puts the first two Terran Infantry Weapons into
   `api.enemy.upgrades`, where every marauder of the enemy's counts them, in the fog as much as in sight. An
   ultralisk's armor is left out of this, since 2 could be two levels or Chitinous Plating. Anything the game never
-  reports, such as Metabolic Boost, a bot adds with `api.enemy.assume_upgrade`, and can take back with
-  `forget_upgrade`. python-sc2 leaves all of this to the bot, per call.
+  reports, such as Metabolic Boost, a bot adds with `api.enemy.assume_upgrades`, and can take back with
+  `forget_upgrades`, and with `Api(infer_enemy_upgrades=UpgradeInference.NONE)` NachOS adds nothing itself.
+  python-sc2 leaves all of this to the bot, per call.
 - **`unit.armor` is what a unit in sight reports, so it is exact**, and what the enemy is known to have for a unit out
   of sight.
 - **`unit.shield_armor` is the shields levels its owner has**, which is what python-sc2 writes as
