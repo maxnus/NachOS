@@ -8,6 +8,7 @@
  "offered": {
   "Adept": [
    "AdeptPhaseShift_AdeptPhaseShift",
+   "Cancel_AdeptPhaseShift",
    "HoldPosition_Hold",
    "Move_Move",
    "Patrol_Patrol",
@@ -87,6 +88,7 @@
    "Explode_Explode"
   ],
   "BanelingCocoon": [
+   "MorphToBaneling_Cancel",
    "Rally_Building",
    "Smart"
   ],
@@ -149,7 +151,13 @@
    "attack_Attack",
    "stop_Stop"
   ],
-  "BroodLordCocoon": [],
+  "BroodLordCocoon": [
+   "Cancel_MorphBroodlord",
+   "HoldPosition_Hold",
+   "Move_Move",
+   "Patrol_Patrol",
+   "Smart"
+  ],
   "Broodling": [
    "HoldPosition_Hold",
    "Move_Move",
@@ -460,17 +468,21 @@
    "Behavior_CloakOff_Ghost",
    "Behavior_CloakOn_Ghost",
    "Behavior_HoldFireOn_Ghost",
+   "Cancel_Nuke",
+   "ChannelSnipe_Cancel",
    "EMP_EMP",
    "Effect_GhostSnipe",
    "HoldPosition_Hold",
    "Move_Move",
    "Patrol_Patrol",
    "Smart",
+   "TacNukeStrike_NukeCalldown",
    "attack_Attack",
    "stop_Stop"
   ],
   "GhostAcademy": [
    "Build_Nuke",
+   "Cancel_Queue5",
    "Research_PersonalCloaking"
   ],
   "GreaterSpire": [
@@ -593,6 +605,7 @@
    "BurrowDown_SwarmHost",
    "BurrowDown_Ultralisk",
    "BurrowDown_Zergling",
+   "Cancel_NeuralParasite",
    "FungalGrowth_FungalGrowth",
    "HoldPosition_Hold",
    "Move_Move",
@@ -614,6 +627,7 @@
    "BurrowUp_SwarmHost",
    "BurrowUp_Ultralisk",
    "BurrowUp_Zergling",
+   "Cancel_NeuralParasite",
    "HoldPosition_Hold",
    "Move_Move",
    "NeuralParasite_NeuralParasite",
@@ -708,6 +722,7 @@
    "stop_Stop"
   ],
   "LurkerMPEgg": [
+   "Cancel_MorphLurker",
    "Rally_Building",
    "Smart"
   ],
@@ -857,7 +872,13 @@
    "Smart",
    "stop_Stop"
   ],
-  "OverlordCocoon": [],
+  "OverlordCocoon": [
+   "Cancel_MorphOverseer",
+   "HoldPosition_Hold",
+   "Move_Move",
+   "Patrol_Patrol",
+   "Smart"
+  ],
   "OverlordTransport": [
    "Behavior_GenerateCreepOff",
    "Behavior_GenerateCreepOn",
@@ -889,7 +910,9 @@
    "SpawnChangeling_SpawnChangeling",
    "stop_Stop"
   ],
+  "ParasiticBombDummy": [],
   "Phoenix": [
+   "Cancel_GravitonBeam",
    "GravitonBeam_GravitonBeam",
    "HoldPosition_Hold",
    "Move_Move",
@@ -1009,6 +1032,7 @@
    "BurrowUp_Zergling"
   ],
   "RavagerCocoon": [
+   "Cancel_MorphRavager",
    "Rally_Building",
    "Smart"
   ],
@@ -1324,7 +1348,13 @@
    "attack_Attack",
    "stop_Stop"
   ],
-  "TransportOverlordCocoon": [],
+  "TransportOverlordCocoon": [
+   "Cancel_MorphOverlordTransport",
+   "HoldPosition_Hold",
+   "Move_Move",
+   "Patrol_Patrol",
+   "Smart"
+  ],
   "TwilightCouncil": [
    "Research_AdeptResonatingGlaives",
    "Research_Blink",
@@ -1493,6 +1523,13 @@
   {
    "performer": "Adept",
    "ability": "AdeptPhaseShift_AdeptPhaseShift",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Adept",
+   "ability": "Cancel_AdeptPhaseShift",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -1974,6 +2011,13 @@
   },
   {
    "performer": "BanelingCocoon",
+   "ability": "MorphToBaneling_Cancel",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BanelingCocoon",
    "ability": "Rally_Building",
    "structures": [],
    "attached": false,
@@ -2301,6 +2345,41 @@
   {
    "performer": "BroodLord",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BroodLordCocoon",
+   "ability": "Cancel_MorphBroodlord",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BroodLordCocoon",
+   "ability": "HoldPosition_Hold",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BroodLordCocoon",
+   "ability": "Move_Move",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BroodLordCocoon",
+   "ability": "Patrol_Patrol",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BroodLordCocoon",
+   "ability": "Smart",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -4146,6 +4225,20 @@
   },
   {
    "performer": "Ghost",
+   "ability": "Cancel_Nuke",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Ghost",
+   "ability": "ChannelSnipe_Cancel",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Ghost",
    "ability": "EMP_EMP",
    "structures": [],
    "attached": false,
@@ -4188,6 +4281,13 @@
   },
   {
    "performer": "Ghost",
+   "ability": "TacNukeStrike_NukeCalldown",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Ghost",
    "ability": "attack_Attack",
    "structures": [],
    "attached": false,
@@ -4206,6 +4306,13 @@
    "structures": [
     "Factory"
    ],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "GhostAcademy",
+   "ability": "Cancel_Queue5",
+   "structures": [],
    "attached": false,
    "upgrades": []
   },
@@ -4975,6 +5082,13 @@
   },
   {
    "performer": "Infestor",
+   "ability": "Cancel_NeuralParasite",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Infestor",
    "ability": "FungalGrowth_FungalGrowth",
    "structures": [],
    "attached": false,
@@ -5104,6 +5218,13 @@
   {
    "performer": "InfestorBurrowed",
    "ability": "BurrowUp_Zergling",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "InfestorBurrowed",
+   "ability": "Cancel_NeuralParasite",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -5629,6 +5750,13 @@
   {
    "performer": "LurkerMPBurrowed",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "LurkerMPEgg",
+   "ability": "Cancel_MorphLurker",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -6451,6 +6579,41 @@
    "upgrades": []
   },
   {
+   "performer": "OverlordCocoon",
+   "ability": "Cancel_MorphOverseer",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "OverlordCocoon",
+   "ability": "HoldPosition_Hold",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "OverlordCocoon",
+   "ability": "Move_Move",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "OverlordCocoon",
+   "ability": "Patrol_Patrol",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "OverlordCocoon",
+   "ability": "Smart",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
    "performer": "OverlordTransport",
    "ability": "Behavior_GenerateCreepOff",
    "structures": [],
@@ -6625,6 +6788,13 @@
   {
    "performer": "OverseerSiegeMode",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Phoenix",
+   "ability": "Cancel_GravitonBeam",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -7398,6 +7568,13 @@
   {
    "performer": "RavagerBurrowed",
    "ability": "BurrowUp_Zergling",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "RavagerCocoon",
+   "ability": "Cancel_MorphRavager",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -9244,6 +9421,41 @@
   {
    "performer": "ThorAP",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TransportOverlordCocoon",
+   "ability": "Cancel_MorphOverlordTransport",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TransportOverlordCocoon",
+   "ability": "HoldPosition_Hold",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TransportOverlordCocoon",
+   "ability": "Move_Move",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TransportOverlordCocoon",
+   "ability": "Patrol_Patrol",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TransportOverlordCocoon",
+   "ability": "Smart",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -11548,6 +11760,42 @@
    "ability": "Morph_VikingAssaultMode",
    "product": "VikingAssault",
    "result": "morph"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "TrainWarp_Adept",
+   "product": "Adept",
+   "result": "build"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "WarpGateTrain_DarkTemplar",
+   "product": "DarkTemplar",
+   "result": "build"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "WarpGateTrain_HighTemplar",
+   "product": "HighTemplar",
+   "result": "build"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "WarpGateTrain_Sentry",
+   "product": "Sentry",
+   "result": "build"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "WarpGateTrain_Stalker",
+   "product": "Stalker",
+   "result": "build"
+  },
+  {
+   "performer": "WarpGate",
+   "ability": "WarpGateTrain_Zealot",
+   "product": "Zealot",
+   "result": "build"
   },
   {
    "performer": "WarpPrism",

@@ -20,7 +20,7 @@ from types import MappingProxyType
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.gamedata import Attribute, TechRequirements, UnitTypeUpgrade, UpgradeType, WeaponUpgrade
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, OTHER_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
 
@@ -59,7 +59,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
 
     Raises `ValueError` where a requirement is something no curated id names, where an add-on required was not seen
     to count only on the unit's own structure, where a unit type is offered an ability whose requirements were never
-    read, which would otherwise read as needing nothing, or where the sweep did not see an override in
+    read, which would otherwise read as needing nothing, or where the sweep did not see an ability in
     `gamedata/_techtree/_overrides.py` make its unit type. Raises it too for what `read_upgrades` raises for, and where
     the two sweeps played different builds.
     """
@@ -71,9 +71,8 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     found = read_upgrades(upgrade_findings)
     trials = _trials(findings)
     made = {(ability, product) for _, ability, product, result in trials if result in ("morph", "build")}
-    if unconfirmed := sorted(
-        f"{u.name} by {a.name}" for u, a in CREATION_ABILITY_OVERRIDES.items() if (a, u) not in made
-    ):
+    overrides = [*CREATION_ABILITY_OVERRIDES.items(), *((u, a) for a, u in OTHER_CREATION_ABILITIES.items())]
+    if unconfirmed := sorted(f"{u.name} by {a.name}" for u, a in overrides if (a, u) not in made):
         raise ValueError(f"the sweep did not see these overrides make their unit type: {', '.join(unconfirmed)}")
 
     turned = {(performer, ability) for performer, ability, _, result in trials if result == "other"}
@@ -254,13 +253,15 @@ def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, Abil
 def _products(
     creation_abilities: Mapping[UnitTypeId, AbilityId], findings: Mapping[str, object]
 ) -> dict[AbilityId, UnitTypeId | UpgradeId]:
-    """The unit type or upgrade each ability makes. An override sharing its ability with a type the game's table names
-    it for, as a rich refinery shares the plain build with a refinery, leaves the table's product standing."""
+    """The unit type or upgrade each ability makes, a type's other creation abilities included. An override sharing its
+    ability with a type the game's table names it for, as a rich refinery shares the plain build with a refinery, leaves
+    the table's product standing."""
     products: dict[AbilityId, UnitTypeId | UpgradeId] = {}
     for unit_type, ability in sorted(
         creation_abilities.items(), key=lambda entry: entry[0] in CREATION_ABILITY_OVERRIDES
     ):
         products.setdefault(ability, unit_type)
+    products |= OTHER_CREATION_ABILITIES
     for upgrade_name, ability_name in _mapping(findings["research_abilities"]).items():
         if (upgrade := _upgrade(upgrade_name)) and (ability := _ability(str(ability_name))):
             products[ability] = upgrade

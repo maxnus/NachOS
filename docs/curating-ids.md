@@ -152,7 +152,14 @@ What the game's `RequestQueryAvailableAbilities` answers, which the sweep reads 
 - **The other half of a toggle is offered once the unit has switched**, up to 22 steps after the order, and unloading
   once a transport carries something.
 - **A gateway turns into a warp gate on its own once Warp Gate is researched**, so what a gateway trains is tried
-  before any research; nothing is found to make a warp gate out of a gateway.
+  before any research; nothing is found to make a warp gate out of a gateway. What a warp gate warps in is made by no
+  ability the game's table names, so `_overrides.py` lists each warp-in with what it makes, and the sweep orders it.
+- **A cancel is offered only while there is something to cancel**: to a cocoon or a lurker egg while it changes, to a
+  phoenix lifting, an infestor controlling and a ghost sniping, to an adept whose shade is out, and to a ghost academy
+  arming a nuke. So the sweep reads a unit on its way to what it becomes, arms every nuke, and orders every ability
+  aimed at a unit or a point on a new unit, reading what it is offered 6 steps later.
+- **A ghost is offered its calldown only while a nuke is armed**, which is no structure and no upgrade, so the tables
+  say it needs nothing.
 
 Running it, three things stood in the way, each of which read as a requirement until it was dealt with: the
 computer, which attacks at some point (`god`); workers carrying minerals, which are offered a return a fresh one is

@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, TechTree
+from sc2nachos.gamedata._techtree import CREATION_ABILITY_OVERRIDES, OTHER_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
@@ -75,7 +75,10 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
                 "product": RawUnitTypeId(unit).name,
                 "result": "build",
             }
-            for unit, ability in CREATION_ABILITY_OVERRIDES.items()
+            for unit, ability in [
+                *CREATION_ABILITY_OVERRIDES.items(),
+                *((u, a) for a, u in OTHER_CREATION_ABILITIES.items()),
+            ]
         ]
     return findings
 
@@ -327,6 +330,11 @@ class TestWhatTheTablesSay:
         assert tables.units[UnitTypeId.ASSIMILATOR_RICH].morphed_from is None
         # The build a rich refinery shares with a refinery makes a refinery, as the table says.
         assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].product is UnitTypeId.REFINERY
+
+    def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
+        zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
+        assert (zealot.product, zealot.performers) == (UnitTypeId.ZEALOT, {UnitTypeId.WARP_GATE})
+        assert tables.units[UnitTypeId.ZEALOT].creation_ability is AbilityId.GATEWAY_TRAIN_ZEALOT
 
     def test_a_gateway_needs_power_and_a_nexus_and_a_pylon_do_not(self, tables: GameData) -> None:
         assert tables.units[UnitTypeId.GATEWAY].needs_power

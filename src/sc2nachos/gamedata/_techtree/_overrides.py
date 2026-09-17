@@ -1,9 +1,10 @@
-"""The abilities that make a unit type where the game's own table names one that does not.
+"""The abilities that make a unit type which the game's own table does not name: where it names one that does not work,
+and where a type is made in more than one way.
 
 Hand-written, and never generated, so a new sweep of the tech tree keeps every entry. `tools/sweep_tech_tree.py` orders
 each ability here in game, and `tools/generate_tech_tree.py` refuses to write the tech tree unless the sweep saw each
 make its unit type, so a patch that breaks one stops the regeneration. `tests/test_gamedata.py` fails once the game's
-table names a working ability for a type here, and the entry can go.
+table names a working ability for a type in `CREATION_ABILITY_OVERRIDES`, and the entry can go.
 """
 
 from collections.abc import Mapping
@@ -32,3 +33,16 @@ CREATION_ABILITY_OVERRIDES: Final[Mapping[UnitTypeId, AbilityId]] = MappingProxy
     }
 )
 """For each unit type the table gives no working creation ability, the one that makes it, each seen doing so in game."""
+
+OTHER_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
+    {
+        # A warp gate warps in what a gateway trains, and the table names only the gateway's.
+        AbilityId.WARP_GATE_WARP_IN_ADEPT: UnitTypeId.ADEPT,
+        AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: UnitTypeId.DARK_TEMPLAR,
+        AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: UnitTypeId.HIGH_TEMPLAR,
+        AbilityId.WARP_GATE_WARP_IN_SENTRY: UnitTypeId.SENTRY,
+        AbilityId.WARP_GATE_WARP_IN_STALKER: UnitTypeId.STALKER,
+        AbilityId.WARP_GATE_WARP_IN_ZEALOT: UnitTypeId.ZEALOT,
+    }
+)
+"""The unit type each ability makes besides a type's creation ability, each seen doing so in game."""
