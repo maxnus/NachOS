@@ -25,64 +25,11 @@ _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
-# What the unit types are offered that no curated ability names, for the curation pass before M4 to name.
-_UNCURATED_OFFERED = frozenset(
-    {
-        "Attack_Redirect",
-        "BlindingCloud_BlindingCloud",
-        "Build_Nuke",
-        "BurrowDown_InfestorTerran",
-        "BurrowUp_InfestorTerran",
-        "Cancel_BuildInProgress",
-        "Cancel_MorphGreaterSpire",
-        "Cancel_MorphHive",
-        "Cancel_MorphLair",
-        "Cancel_Queue1",
-        "Cancel_Queue5",
-        "Cancel_QueueCancelToSelection",
-        "Cancel_QueuePasive",
-        "Cancel_QueuePassiveCancelToSelection",
-        "Cancel_VoidRayPrismaticAlignment",
-        "Contaminate_Contaminate",
-        "Effect_Abduct",
-        "Effect_AntiArmorMissile",
-        "Effect_ChronoBoostEnergyCost",
-        "Effect_InterferenceMatrix",
-        "Effect_Spray_Protoss",
-        "Effect_Spray_Terran",
-        "Effect_Spray_Zerg",
-        "EnergyRecharge_EnergyRecharge",
-        "GuardianShield_GuardianShield",
-        "Hallucination_Adept",
-        "Hallucination_Archon",
-        "Hallucination_Colossus",
-        "Hallucination_Disruptor",
-        "Hallucination_HighTemplar",
-        "Hallucination_Immortal",
-        "Hallucination_Oracle",
-        "Hallucination_Phoenix",
-        "Hallucination_Probe",
-        "Hallucination_Stalker",
-        "Hallucination_VoidRay",
-        "Hallucination_WarpPrism",
-        "Hallucination_Zealot",
-        "Morph_Gateway",
-        "NeuralParasite_NeuralParasite",
-        "ParasiticBomb_ParasiticBomb",
-        "PsiStorm_PsiStorm",
-        "Shatter",
-        "ShieldBatteryRechargeEx5_ShieldBatteryRecharge",
-        "Stop_Redirect",
-        "SupplyDrop_SupplyDrop",
-        "TrainWarp_Adept",
-        "Transfusion_Transfusion",
-        "WarpGateTrain_DarkTemplar",
-        "WarpGateTrain_HighTemplar",
-        "WarpGateTrain_Sentry",
-        "WarpGateTrain_Stalker",
-        "WarpGateTrain_Zealot",
-    }
-)
+# What the unit types are offered that no curated ability names, none of which a player gives. A force field a sentry
+# makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered Shatter.
+# And once Burrow is researched every zerg unit that burrows is offered the infested terran's burrow, which burrows it
+# as itself, reporting its own burrow running.
+_UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Shatter"})
 
 
 def _generator() -> ModuleType:
@@ -157,10 +104,10 @@ class TestGeneratingTheTables:
         assert set(tree.ability_requirements) == {UnitTypeId.BARRACKS}
 
     def test_an_ability_no_curated_id_names_is_left_out_and_named(self) -> None:
-        spray = "Effect_Spray_Terran"
-        findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", spray], "Factory": [spray]})
+        shatter = "Shatter"
+        findings = _findings(offered={"Barracks": ["BarracksTrain_Marine", shatter], "Factory": [shatter]})
         generator = _generator()
-        assert generator.uncurated(findings) == {spray}
+        assert generator.uncurated(findings) == {shatter}
         assert generator.read(findings, _no_upgrades()).ability_requirements[UnitTypeId.FACTORY] == {}
 
     def test_a_requirement_is_read_under_the_unit_type_and_the_ability(self) -> None:
@@ -429,7 +376,7 @@ class TestWhatTheSweepFound:
         assert others and all(ability.startswith("BurrowDown_") for ability in others)
 
     def test_what_is_offered_that_no_curated_id_names_is_known(self) -> None:
-        """What the curation pass before M4 is to name: a warp gate's warp-ins, hallucinations, spells and sprays."""
+        """Anything else a unit type is offered has to be curated, or the tables leave it out."""
         assert _generator().uncurated(_findings_file()) == _UNCURATED_OFFERED
 
 

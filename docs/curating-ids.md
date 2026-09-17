@@ -58,7 +58,9 @@ what the game offers, and let the field that names the dead one come back empty.
 **A suffix of `_EXACT` marks the id a unit reports, beside the one you order.** Order `LIBERATOR_SIEGE` and the
 liberator's `orders` name `LIBERATOR_SIEGE_EXACT`; the exact id is never offered, and ordering it does nothing.
 `remaps_to` links some pairs of this shape and not others -- all four liberator rows leave it empty -- so the
-only way to find one is to order the ability in game and read the performer's orders back.
+only way to find one is to order the ability in game and read the performer's orders back. A spell has no such twin:
+ordered at a target out of reach, a storm, a neural parasite and each raven's and viper's spell show in the caster's
+orders under the id that was ordered.
 
 **The upgrade table also keeps upgrades the game has taken out.** `MicrobialShroud` still carries its 150/150
 price and its `EvolveAmorphousArmorcloud` research id, but 4.12.0 made the infestor's shroud free: an
