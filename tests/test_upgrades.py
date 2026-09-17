@@ -10,8 +10,9 @@ from typing import Any
 import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
+from sc2nachos import Api
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import Enemy, upgrades_shown_by
+from sc2nachos.enemy import Enemy, UpgradeInference, upgrades_shown_by
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -25,7 +26,7 @@ from sc2nachos.gamedata import (
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, Recording, WebSocketTransport
+from sc2nachos.protocol import Client, Recording, ReplayTransport, WebSocketTransport
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracker import _UnitTracker
 from support import RealGame, make_observation, make_unit
@@ -475,18 +476,25 @@ _LEARNED_IN_THE_CORPUS = {
 }
 
 
+def _replay(path: Path, api: Api) -> Api:
+    """`api` once it has played the recorded game at `path` to its end."""
+    client = Client(ReplayTransport(Recording(path)))
+    client.create_game("recorded", [Participant(), Computer()])
+    client.join_game(Race.RANDOM)
+    api.play(client)
+    return api
+
+
 @pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
 def test_a_recorded_game_shows_what_its_enemy_researched(path: Path) -> None:
     """The computer researches while a corpus game runs, and its units carry the levels where NachOS reads them."""
-    recording = Recording(path)
-    tables = GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
-    tracker = _UnitTracker(tables, Enemy())
-    for exchange in recording:
-        if exchange.response.HasField("observation"):
-            observation = exchange.response.observation.observation
-            tracker.update(observation.raw_data, observation.game_loop)
-            tracker.enemy.assume_upgrades(*upgrades_shown_by(tracker.present_units, tracker.upgrade_lines))
-    assert tracker.enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+    assert _replay(path, Api()).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+
+
+@pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
+def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path: Path) -> None:
+    api = Api(infer_enemy_upgrades=UpgradeInference.NONE)
+    assert not _replay(path, api).enemy.upgrades
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:
