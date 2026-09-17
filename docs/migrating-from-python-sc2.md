@@ -202,9 +202,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
   and every filter answers a new one.
 - **Collections are put together with `Units.combined(a, b, ...)`**, which keeps each unit where it first appears
-  and knows a unit by its NachOS id. python-sc2 spells it `a | b`, and spells it `a + b` as well: there `+` is that
-  same union rather than the concatenation the operator reads as, and it costs a pass over the left collection for
-  every unit of the right one.
+  and knows a unit by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
 - **Data of your own about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its
   class is not yours to subclass. A `weakref.WeakKeyDictionary` keyed by unit lets go of an entry once the unit is
   dead and dropped.
