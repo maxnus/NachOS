@@ -559,7 +559,8 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
             assert marine.shield_armor == 0
 
             # The shields levels are the armor a protoss unit's shields have, which no row carries.
-            spot = game.open_ground(toward.towards(home, -16))
+            # A forge and the pylon beside it fill five tiles a side.
+            spot = game.open_ground(toward.towards(home, -16), size=5) - (1, 1)
             game.debug(
                 game.create(UnitTypeId.FORGE, spot),
                 # Where `tools/sweep_tech_tree.py` puts a pylon to power a structure it has just created.

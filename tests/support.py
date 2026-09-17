@@ -223,15 +223,16 @@ class RealGame:
         """The unit of `unit_type` first seen last."""
         return max(self.tracker.present_units.of_type(unit_type), key=lambda unit: unit.id)
 
-    def open_ground(self, near: Point) -> Point:
-        """The corner nearest to `near` that the four tiles around it can be built on."""
+    def open_ground(self, near: Point, *, size: int = 2) -> Point:
+        """The center nearest to `near` of a square of `size` tiles a side that can all be built on."""
         placement = self.map.placement
-        corner = near.snapped(step=1)
+        center = near.snapped(step=1) + ((0.5, 0.5) if size % 2 else (0.0, 0.0))
+        half = (size - 1) / 2
+        offsets = [(dx - half, dy - half) for dx in range(size) for dy in range(size)]
         for reach in range(12):
             for dx in range(-reach, reach + 1):
                 for dy in range(-reach, reach + 1):
-                    spot = corner + (dx, dy)
-                    tiles = [spot + offset for offset in ((-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5), (0.5, 0.5))]
-                    if all(placement[tile] for tile in tiles):
+                    spot = center + (dx, dy)
+                    if all(placement[spot + offset] for offset in offsets):
                         return spot
         raise AssertionError(f"no open ground near {near}")
