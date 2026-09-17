@@ -21,7 +21,7 @@ class UpgradeInference(ReadableIntEnum):
 
     NONE = 0
     """Nothing: only a bot changes it."""
-    LEVELS = 1
+    BASIC = 1
     """The attack, armor and shield levels the enemy's units in sight report, as `upgrades_shown_by` reads them."""
 
 

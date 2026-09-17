@@ -75,7 +75,7 @@ class _Game:
         self.observation = observation
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
-        if self.infer_enemy_upgrades >= UpgradeInference.LEVELS:
+        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(
                 *upgrades_shown_by(self.unit_tracker.present_units, self.unit_tracker.upgrade_lines)
             )
@@ -119,7 +119,7 @@ class Api:
     """
 
     def __init__(
-        self, *, steps_per_turn: int = 1, infer_enemy_upgrades: UpgradeInference = UpgradeInference.LEVELS
+        self, *, steps_per_turn: int = 1, infer_enemy_upgrades: UpgradeInference = UpgradeInference.BASIC
     ) -> None:
         """Take a turn every `steps_per_turn` steps, and work out as much of `api.enemy.upgrades` as
         `infer_enemy_upgrades` says. Nothing here connects to anything."""
