@@ -109,6 +109,9 @@ class TestCombining:
         combined = Units.combined(units[:3], units)
         assert combined.ids == units.ids
         assert combined.by_id(100004) is units.by_id(100004)
+        # The answer is handed the index it was told apart by, which has to be the units it ended up holding.
+        assert all(combined.by_id(unit.id) is unit for unit in combined)
+        assert len(combined) == len(combined.ids)
 
 
 class TestById:
