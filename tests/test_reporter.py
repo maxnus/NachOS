@@ -19,6 +19,7 @@ from sc2nachos.events import (
     EnemyUnitLeftSightEvent,
     Event,
     EventBus,
+    MergeCompleteAlertEvent,
     MorphCompleteAlertEvent,
     MuleExpiredAlertEvent,
     OwnActionEvent,
@@ -445,6 +446,22 @@ class TestAgainstTheRealGame:
             _until(game, lambda: _of(seen, UnitDamagedEvent), steps=2)
             (damaged,) = _of(seen, UnitDamagedEvent)
             assert damaged.unit is zealot and damaged.damage == pytest.approx(zealot.shield_max - 10, abs=1)
+
+            # Two templar ordered to merge walk to each other, each reporting the order it runs, and become an archon.
+            at = home.towards(middle, 5)
+            game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, at), game.create(UnitTypeId.HIGH_TEMPLAR, at + (6.0, 0.0)))
+            _until(game, lambda: len(game.tracker.present_units.own.of_type(UnitTypeId.HIGH_TEMPLAR)) == 2)
+            templar = [
+                u for u in game.tracker.present_units.own.of_type(UnitTypeId.HIGH_TEMPLAR) if isinstance(u, OwnUnit)
+            ]
+            merge = raw_pb2.ActionRawUnitCommand(
+                ability_id=AbilityId.GENERAL_MORPH_ARCHON, unit_tags=[unit.tag for unit in templar]
+            )
+            game.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=merge))])
+            _until(game, lambda: all(unit.orders for unit in templar), steps=1)
+            assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON_EXACT] * 2
+            _until(game, lambda: _of(seen, MergeCompleteAlertEvent))
+            assert game.tracker.present_units.own.of_type(UnitTypeId.ARCHON)
 
             # An enemy pylon out of sight comes into sight beside an observer, goes out of it some steps after the
             # observer dies, and is found dead once its spot is seen again after it died in the fog.

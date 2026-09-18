@@ -200,9 +200,11 @@ class AbilityId(IdEnum):
     GENERAL_LIFT = RawAbilityId.Lift
     GENERAL_LOAD = RawAbilityId.Load
     GENERAL_LOAD_ALL = RawAbilityId.LoadAll
-    # Ordered of two templar together, which it merges into an archon (in game). The catalog's other archon
-    # ability, Archon_Warp_Target, is answered Success and merges nothing, aimed at a templar or not.
+    # The order you give two templar together, high or dark, which walks them to each other and merges them into an
+    # archon; given one alone it is refused. Each reports MORPH_ARCHON_EXACT running, aimed at the other, which
+    # merges them too given both at one of them, and does nothing given one (in game).
     GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
+    GENERAL_MORPH_ARCHON_EXACT = RawAbilityId.Archon_Warp_Target
     GENERAL_MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     GENERAL_MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     GENERAL_PATROL = RawAbilityId.Patrol
