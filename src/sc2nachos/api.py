@@ -9,6 +9,7 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos._errors import NachOSError
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy
+from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
@@ -114,26 +115,29 @@ class Api:
     ordinary functions.
 
     Time is counted in steps. One step is one game loop, 22.4 of them make a second, and the bot takes a turn
-    every `steps_per_turn` of them.
+    every `steps_per_turn` of them, which the game is played with.
 
     What belongs to a game raises `NotPlayingError` until the first game starts. Once a game is over it goes on
     answering from that game until the next one starts.
     """
 
     def __init__(
-        self, *, steps_per_turn: int = 1, infer_enemy_upgrades: UpgradeInference = UpgradeInference.BASIC
+        self, *, infer_enemy_upgrades: UpgradeInference = UpgradeInference.BASIC, time_handlers: bool = False
     ) -> None:
-        """Take a turn every `steps_per_turn` steps, and work out as much of `api.enemy.upgrades` as
-        `infer_enemy_upgrades` says. Nothing here connects to anything."""
-        self._steps_per_turn = steps_per_turn
+        """Work out as much of `api.enemy.upgrades` as `infer_enemy_upgrades` says, and time every handler's calls
+        if `time_handlers`. Nothing here connects to anything."""
         self._infer_enemy_upgrades = infer_enemy_upgrades
+        self._event = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
         self._game: _Game | None = None
 
     @property
-    def steps_per_turn(self) -> int:
-        """How many steps pass between one turn and the next."""
-        return self._steps_per_turn
+    def event(self) -> EventBus:
+        """What the api tells its handlers about as a game goes on, and who they are.
+
+        It answers before any game, so that handlers can subscribe as their modules are imported.
+        """
+        return self._event
 
     def _current_game(self) -> _Game:
         """The game being played, or the one played last."""
@@ -242,31 +246,41 @@ class Api:
         """
         return self._current_game().state.effects
 
-    def play(self, client: Client, *, realtime: bool = False, time_limit: float | None = None) -> Result:
-        """Play the game `client` has already joined to its end, and return how it ended for this player.
+    def play(
+        self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
+    ) -> Result:
+        """Play the game `client` has already joined to its end, taking a turn every `steps_per_turn` steps, and return
+        how it ended for this player.
 
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way,
         such as a recording. `time_limit` gives up on a game that is taking too long, in game seconds.
 
-        Each call starts its game from nothing, so one api plays any number of games, one after another.
+        Each call starts its game from nothing, so one api plays any number of games, one after another. Handlers
+        stay subscribed from one to the next, and what each has done starts afresh.
         """
         if self._game is not None:
             self._game.unit_tracker.end()
         game = _Game.start(client, infer_enemy_upgrades=self._infer_enemy_upgrades)
         self._game = game
-        logger.info("Playing {} at {} steps a turn", game.map.name, self._steps_per_turn)
+        logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)
+        events = self._event
+        events._start_game()
+        events._emit(GameStartEvent(game.step))
 
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
-                return game.finish(Result.TIE)
+                result = game.finish(Result.TIE)
+                break
 
-            # A turn's work belongs here, once there is any: the event dispatch and the flush of orders.
+            events._emit(TurnStartEvent(game.step))
+            events._emit(TurnEvent(game.step))
 
             if realtime:
                 # A realtime game runs whether or not anyone is watching, so each turn asks for the step it wants.
-                game.observe(game.step + self._steps_per_turn)
+                game.observe(game.step + steps_per_turn)
             else:
-                client.step(self._steps_per_turn)
+                client.step(steps_per_turn)
                 game.observe()
+        events._emit(GameEndEvent(game.step, result))
         return result
