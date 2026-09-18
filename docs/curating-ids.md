@@ -43,7 +43,8 @@ each buff that turns up and which unit wears it. Buff names mislead more than an
 shells put `Slow` on their target and never `DutchMarauderSlow`, an immortal's Barrier is `TakenDamage` and never
 `ImmortalOverload`, and a ghost holding fire wears `GhostHoldFireB`, not `GhostHoldFire`. One a game reports is
 curated even where its raw name says it is only a tint: `RavenShredderMissileTint` marks the unit an anti-armor
-missile is flying at.
+missile is flying at. The sweep never warps a unit in, so it missed `WARP_GATE_WARPING_IN`, which a unit wears while
+it does; the buff events' in-game test found it.
 
 **A buff or an effect is named after the one unit type that brings it on, then what a player sees**, as an
 ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,

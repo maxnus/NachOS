@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from s2clientprotocol import raw_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.units._changes import _TrackerChanges
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
@@ -42,6 +42,9 @@ _MOVABLE_UNIT_TYPE_IDS = frozenset(
 _BUILDER_REACH = 1.0
 
 type _UnitsByTag = dict[int, Unit[Any]]
+
+# Each curated buff by its id, read much faster than the enum is called. An id missing is read by the enum, to raise.
+_BUFFS: dict[int, BuffId] = {buff.value: buff for buff in BuffId}
 
 
 class _UpgradedUnitTypes:
@@ -96,6 +99,8 @@ class _UnitTracker:
         "_upgraded_unit_types",
         "_upgrades",
         "_used_up_builders",
+        "_worn",
+        "_worn_update",
     )
 
     def __init__(self, data: GameData, enemy: Enemy) -> None:
@@ -123,6 +128,11 @@ class _UnitTracker:
         # last ran on.
         self._compared: dict[int, raw_pb2.Unit] = {}
         self._compared_update = 0
+        # The buffs of each of those units in vision wearing any, by id, as of the update `compare_units` last compared
+        # buffs on. Kept apart, and only for units wearing something, since reading a unit's buffs costs some five times
+        # what reading another of its fields does.
+        self._worn: dict[int, tuple[int, ...]] = {}
+        self._worn_update = 0
         # This player's units first seen unfinished and not finished since, by id.
         self._unfinished: dict[int, OwnUnit[Any]] = {}
         # How many units of each alliance have been seen, indexed by the alliance's value, from which ids are made.
@@ -295,16 +305,22 @@ class _UnitTracker:
             self._update_unfinished_units()
         self._set_present_units(present)
 
-    def compare_units(self, *, damage: bool, energy: bool, cloak: bool) -> None:
+    def compare_units(self, *, damage: bool, energy: bool, cloak: bool, buffs: bool) -> None:
         """Record in the last changes, as asked, the health and shields and the energy each unit of this player's or
-        the enemy's lost since the update before, and how its cloak changed, if this ran on that update too. Keep each
-        such unit's report for the next.
+        the enemy's lost since the update before, how its cloak changed, and the buffs it gained and lost, if this ran
+        on that update too. Keep each such unit's report for the next.
 
-        Loss is compared for a unit in vision in both and of the same type, cloak for one in sight in both, since an
-        enemy unit nothing detects is listed cloaked but not in vision (in game).
+        Cloak is compared for a unit in sight in both, since an enemy unit nothing detects is listed cloaked but not in
+        vision; buffs for one in vision in both, since such an enemy unit shows none (in game); loss for one in vision
+        in both and of the same type.
+
+        Raises `UncuratedIdError` for a buff the curated ids leave out, which belongs in them.
         """
-        before = self._compared if self._compared_update == self._number_of_updates - 1 else None
+        last = self._number_of_updates - 1
+        before = self._compared if self._compared_update == last else None
+        worn_before = self._worn if buffs and self._worn_update == last else None
         compared: dict[int, raw_pb2.Unit] = {}
+        worn: dict[int, tuple[int, ...]] = {}
         changes = self._last_changes
         for unit in self._present_units:
             report = unit._latest_data
@@ -312,6 +328,9 @@ class _UnitTracker:
             if (alliance != _OWN and alliance != _ENEMY) or report.display_type == _IN_FOG:
                 continue
             compared[unit._id] = report
+            in_vision = report.display_type == _IN_VISION
+            if buffs and in_vision and (listed := report.buff_ids):
+                worn[unit._id] = tuple(listed)
             if before is None or (then := before.get(unit._id)) is None:
                 continue
             if cloak and report.cloak != then.cloak:
@@ -319,8 +338,10 @@ class _UnitTracker:
                     changes.own_units_cloak_changed.append((unit, CloakState(then.cloak)))
                 else:
                     changes.enemy_units_cloak_changed.append((unit, CloakState(then.cloak)))
-            if report.display_type != _IN_VISION or then.display_type != _IN_VISION:
+            if not in_vision or then.display_type != _IN_VISION:
                 continue
+            if worn_before is not None and (now := worn.get(unit._id, ())) != (was := worn_before.get(unit._id, ())):
+                self._record_buffs(unit, was, now)
             if report.unit_type != then.unit_type:
                 continue
             if damage and (lost := max(0.0, then.health - report.health) + max(0.0, then.shield - report.shield)):
@@ -335,10 +356,32 @@ class _UnitTracker:
                     changes.enemy_units_energy_lost.append((unit, drained))
         self._compared = compared
         self._compared_update = self._number_of_updates
+        if buffs:
+            self._worn = worn
+            self._worn_update = self._number_of_updates
+
+    def _record_buffs(self, unit: Unit[Any], was: tuple[int, ...], now: tuple[int, ...]) -> None:
+        """Record the buffs `unit` gained and lost between wearing `was` and `now`, each in the order of their ids."""
+        if not was or not now:
+            # A unit that wore nothing before or wears nothing now, as a worker picking up minerals or delivering them
+            # does every trip, which is most changes (corpus).
+            gained, lost = sorted(now), sorted(was)
+        else:
+            gained, lost = sorted(set(now).difference(was)), sorted(set(was).difference(now))
+        gained_buffs = [_BUFFS.get(buff) or BuffId.read(buff) for buff in gained]
+        lost_buffs = [_BUFFS.get(buff) or BuffId.read(buff) for buff in lost]
+        changes = self._last_changes
+        if isinstance(unit, OwnUnit):
+            changes.own_units_gained_buff.extend((unit, buff) for buff in gained_buffs)
+            changes.own_units_lost_buff.extend((unit, buff) for buff in lost_buffs)
+        else:
+            changes.enemy_units_gained_buff.extend((unit, buff) for buff in gained_buffs)
+            changes.enemy_units_lost_buff.extend((unit, buff) for buff in lost_buffs)
 
     def stop_comparing_units(self) -> None:
-        """Let go of the reports `compare_units` kept."""
+        """Let go of the reports and buffs `compare_units` kept."""
         self._compared = {}
+        self._worn = {}
 
     def _update_upgrades(self, player: raw_pb2.PlayerRaw) -> None:
         """Take in this player's upgrades, recording those new to them."""
@@ -594,3 +637,4 @@ class _UnitTracker:
         self._unfinished = {}
         self._used_up_builders = []
         self._compared = {}
+        self._worn = {}

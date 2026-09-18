@@ -55,4 +55,5 @@ class BuffId(IdEnum):
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
+    WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot

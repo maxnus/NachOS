@@ -59,6 +59,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
   | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
   | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
+  | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
   | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent`, whose `alert` is an `Alert` |
 
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
@@ -70,7 +71,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   changed type took none. The energy lost events report energy the same way: a spell cast, a feedback or an EMP,
   but never what regenerates.
 - **A cloaked unit of yours reads `CLOAKED_ALLIED` whether the enemy detects it or not**, so no event says it was
-  detected, and nothing else of its report does either: not its display, not its buffs. Burrowing is no cloak: a burrowed enemy nothing detects is not in the observation at all.
+  detected, and nothing else of its report does either: not its display, not its buffs. Burrowing is no cloak: a
+  burrowed enemy nothing detects is not in the observation at all.
 - **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
   it has gone some 6000 steps without being attacked, the same as in python-sc2. The camera starts on the main base
   and stays there until moved, so an attack on the main raises none. `OwnUnitDamagedEvent` reports every turn a unit
@@ -108,7 +110,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
 - **An id the enums leave out stops the game as the observation comes in**, for a unit's type and for an upgrade this
   player holds, since both belong among the curated ids and a game that reports one is a gap to fill. A buff, an
-  effect and an ability read off a unit raise when they are read. python-sc2 has no curation to be missing from.
+  effect and an ability read off a unit raise when they are read, and a handler of a buff event has every unit's
+  buffs read each turn. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
   `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, final
 
-from sc2nachos.ids import UnitTypeId, UpgradeId
+from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit
@@ -183,6 +183,51 @@ class EnemyUnitCloakChangedEvent(Event):
     unit: Unit[Any]
     previous_cloak: CloakState
     """The cloak it had."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class OwnUnitGainedBuffEvent(Event):
+    """A unit of this player's wears a buff it did not in the observation before: a spell, a stim, a cloak, or a
+    worker picking up minerals or gas, which it does every trip. A unit's several come in the order of their ids."""
+
+    unit: OwnUnit[Any]
+    buff: BuffId
+    """The buff it gained."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class EnemyUnitGainedBuffEvent(Event):
+    """A unit of the enemy's in vision now and in the observation before wears a buff it did not then. An enemy unit
+    nothing detects shows no buffs, so one coming to be detected gains none (in game). A unit's several come in the
+    order of their ids."""
+
+    unit: Unit[Any]
+    buff: BuffId
+    """The buff it gained."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class OwnUnitLostBuffEvent(Event):
+    """A unit of this player's no longer wears a buff it wore in the observation before: it wore off, was ended, or a
+    worker delivered its minerals or gas. A unit's several come in the order of their ids."""
+
+    unit: OwnUnit[Any]
+    buff: BuffId
+    """The buff it lost."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class EnemyUnitLostBuffEvent(Event):
+    """A unit of the enemy's in vision now and in the observation before no longer wears a buff it wore then. A
+    unit's several come in the order of their ids."""
+
+    unit: Unit[Any]
+    buff: BuffId
+    """The buff it lost."""
 
 
 @final

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 if TYPE_CHECKING:
-    from sc2nachos.ids import UnitTypeId, UpgradeId
+    from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
     from sc2nachos.units._own_unit import OwnUnit
     from sc2nachos.units._unit import Unit
     from sc2nachos.units._values import Alliance, CloakState
@@ -28,6 +28,10 @@ class _TrackerChanges:
         "enemy_units_energy_lost",
         "own_units_cloak_changed",
         "enemy_units_cloak_changed",
+        "own_units_gained_buff",
+        "enemy_units_gained_buff",
+        "own_units_lost_buff",
+        "enemy_units_lost_buff",
         "enemy_units_entered_sight",
         "enemy_units_left_sight",
         "units_died",
@@ -58,6 +62,16 @@ class _TrackerChanges:
         self.own_units_cloak_changed: list[tuple[OwnUnit[Any], CloakState]] = []
         """This player's units whose cloak changed, each with the state it was. Filled only by `compare_units`."""
         self.enemy_units_cloak_changed: list[tuple[Unit[Any], CloakState]] = []
+        """The same for the enemy's units."""
+        self.own_units_gained_buff: list[tuple[OwnUnit[Any], BuffId]] = []
+        """This player's units that wear a buff they did not, each with the buff, a unit's several in the order of
+        their ids. Filled only by `compare_units`."""
+        self.enemy_units_gained_buff: list[tuple[Unit[Any], BuffId]] = []
+        """The same for the enemy's units."""
+        self.own_units_lost_buff: list[tuple[OwnUnit[Any], BuffId]] = []
+        """This player's units that no longer wear a buff they did, each with the buff, a unit's several in the order of
+        their ids. Filled only by `compare_units`."""
+        self.enemy_units_lost_buff: list[tuple[Unit[Any], BuffId]] = []
         """The same for the enemy's units."""
         self.enemy_units_entered_sight: list[Unit[Any]] = []
         """The enemy's units in sight that were not in the observation before."""

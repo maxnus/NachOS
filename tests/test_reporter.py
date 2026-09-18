@@ -18,7 +18,9 @@ from sc2nachos.events import (
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
+    EnemyUnitGainedBuffEvent,
     EnemyUnitLeftSightEvent,
+    EnemyUnitLostBuffEvent,
     Event,
     EventBus,
     OwnActionEvent,
@@ -28,6 +30,8 @@ from sc2nachos.events import (
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
+    OwnUnitGainedBuffEvent,
+    OwnUnitLostBuffEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
@@ -37,7 +41,7 @@ from sc2nachos.events import (
 )
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
@@ -84,7 +88,7 @@ def _everything(game: _Game) -> None:
     """Two turns, the second reporting one of everything, the first the units the game starts with."""
     game.observe(
         0,
-        make_unit(1, health=45.0, energy=50.0, build_progress=1.0),
+        make_unit(1, health=45.0, energy=50.0, build_progress=1.0, buff_ids=[BuffId.MARINE_STIMMED]),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=0.5),
         make_unit(4, UnitTypeId.SIEGE_TANK, alliance=_ENEMY, health=100.0),
@@ -93,7 +97,14 @@ def _everything(game: _Game) -> None:
         _depot(900, visibility=Visibility.IN_FOG),
         make_unit(8, build_progress=1.0),
         make_unit(12, UnitTypeId.GHOST, build_progress=1.0, cloak=CloakState.NOT_CLOAKED),
-        make_unit(13, UnitTypeId.HIGH_TEMPLAR, alliance=_ENEMY, health=40.0, energy=100.0),
+        make_unit(
+            13,
+            UnitTypeId.HIGH_TEMPLAR,
+            alliance=_ENEMY,
+            health=40.0,
+            energy=100.0,
+            buff_ids=[BuffId.SENTRY_GUARDIAN_SHIELD],
+        ),
         make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, visibility=Visibility.INVISIBLE, cloak=CloakState.CLOAKED),
     )
     camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
@@ -107,8 +118,17 @@ def _everything(game: _Game) -> None:
         make_unit(9, UnitTypeId.ROACH, alliance=_ENEMY),
         make_unit(10, UnitTypeId.SCV, build_progress=1.0),
         make_unit(11, UnitTypeId.SUPPLY_DEPOT, build_progress=0.1),
-        make_unit(12, UnitTypeId.GHOST, build_progress=1.0, cloak=CloakState.CLOAKED_ALLIED),
-        make_unit(13, UnitTypeId.HIGH_TEMPLAR, alliance=_ENEMY, health=30.0, energy=50.0),
+        make_unit(
+            12, UnitTypeId.GHOST, build_progress=1.0, cloak=CloakState.CLOAKED_ALLIED, buff_ids=[BuffId.GHOST_CLOAK]
+        ),
+        make_unit(
+            13,
+            UnitTypeId.HIGH_TEMPLAR,
+            alliance=_ENEMY,
+            health=30.0,
+            energy=50.0,
+            buff_ids=[BuffId.INFESTOR_FUNGAL_GROWTH],
+        ),
         make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, cloak=CloakState.CLOAKED_DETECTED),
         dead=(8,),
         upgrades=[UpgradeId.STIMPACK],
@@ -155,6 +175,12 @@ class TestWhatATurnReports:
         assert at_16[EnemyUnitEnergyLostEvent] == EnemyUnitEnergyLostEvent(16, units[13], 50.0)
         assert at_16[OwnUnitCloakChangedEvent] == OwnUnitCloakChangedEvent(16, own[12], CloakState.NOT_CLOAKED)
         assert at_16[EnemyUnitCloakChangedEvent] == EnemyUnitCloakChangedEvent(16, units[14], CloakState.CLOAKED)
+        assert at_16[OwnUnitGainedBuffEvent] == OwnUnitGainedBuffEvent(16, own[12], BuffId.GHOST_CLOAK)
+        assert at_16[OwnUnitLostBuffEvent] == OwnUnitLostBuffEvent(16, own[1], BuffId.MARINE_STIMMED)
+        gained = EnemyUnitGainedBuffEvent(16, units[13], BuffId.INFESTOR_FUNGAL_GROWTH)
+        assert at_16[EnemyUnitGainedBuffEvent] == gained
+        lost = EnemyUnitLostBuffEvent(16, units[13], BuffId.SENTRY_GUARDIAN_SHIELD)
+        assert at_16[EnemyUnitLostBuffEvent] == lost
         assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(16, units[5])
         assert at_16[UnitDiedEvent] == UnitDiedEvent(16, units[8])
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(16, units[900])
@@ -359,6 +385,50 @@ class TestCloak:
         ]
 
 
+class TestBuffs:
+    def _changes(self, *units: raw_pb2.Unit) -> list[tuple[str, BuffId]]:
+        """The buffs reported gained and lost as each of `units` is observed in turn."""
+        game = _Game()
+        buff_events = (OwnUnitGainedBuffEvent, OwnUnitLostBuffEvent, EnemyUnitGainedBuffEvent, EnemyUnitLostBuffEvent)
+        seen = record(game.events, *buff_events)
+        for step, unit in enumerate(units):
+            game.observe(step * 16, unit)
+        return [(type(event).__name__, event.buff) for event in seen]
+
+    def test_the_buffs_gained_then_those_lost_each_in_the_order_of_their_ids(self) -> None:
+        stims, boosts = BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST
+        before = _worn(BuffId.QUEEN_TRANSFUSED, BuffId.GHOST_CLOAK)
+        after = _worn(boosts, stims, BuffId.GHOST_CLOAK)
+        assert self._changes(before, after) == [
+            ("OwnUnitGainedBuffEvent", stims),
+            ("OwnUnitGainedBuffEvent", boosts),
+            ("OwnUnitLostBuffEvent", BuffId.QUEEN_TRANSFUSED),
+        ]
+
+    def test_the_first_sight_of_a_unit_gains_it_nothing(self) -> None:
+        assert not self._changes(_worn(BuffId.MARINE_STIMMED))
+
+    def test_an_enemy_unit_coming_to_be_detected_gains_nothing(self) -> None:
+        hidden = _worn(BuffId.GHOST_CLOAK, alliance=_ENEMY, visibility=Visibility.INVISIBLE, buff_ids=[])
+        assert not self._changes(hidden, _worn(BuffId.GHOST_CLOAK, alliance=_ENEMY))
+
+    def test_a_unit_that_changed_type_is_still_compared(self) -> None:
+        sieged = _worn(BuffId.RAVEN_INTERFERENCE_MATRIX, unit_type=UnitTypeId.SIEGE_TANK_SIEGED)
+        assert self._changes(_worn(unit_type=UnitTypeId.SIEGE_TANK), sieged) == [
+            ("OwnUnitGainedBuffEvent", BuffId.RAVEN_INTERFERENCE_MATRIX)
+        ]
+
+    def test_a_buff_the_curated_ids_leave_out_raises(self) -> None:
+        uncurated = 236
+        with pytest.raises(UncuratedIdError):
+            self._changes(_worn(), _worn(buff_ids=[uncurated]))
+
+
+def _worn(*buffs: BuffId, **fields: Any) -> raw_pb2.Unit:
+    fields.setdefault("buff_ids", list(buffs))
+    return make_unit(1, fields.pop("unit_type", UnitTypeId.MARINE), **fields)
+
+
 def _ghost(cloak: CloakState) -> raw_pb2.Unit:
     return make_unit(1, UnitTypeId.GHOST, cloak=cloak)
 
@@ -539,7 +609,7 @@ class TestAgainstTheRealGame:
             assert UnitDiedEvent(game.step, mule) in seen
             assert AlertEvent(game.step, Alert.MULE_EXPIRED) in seen
 
-    def test_a_ghost_cloaking_and_an_enemy_observer_being_detected(self) -> None:
+    def test_cloaking_detection_and_buffs(self) -> None:
         with _played_as(Race.TERRAN) as (game, seen, middle):
             home = _own(game, UnitTypeId.COMMAND_CENTER).position
 
@@ -563,6 +633,11 @@ class TestAgainstTheRealGame:
                 (ghost, CloakState.NOT_CLOAKED),
                 (ghost, CloakState.CLOAKED_ALLIED),
             ]
+            cloaks = [event for event in _of(seen, OwnUnitGainedBuffEvent, OwnUnitLostBuffEvent) if event.unit is ghost]
+            assert [(type(event), event.buff) for event in cloaks] == [
+                (OwnUnitGainedBuffEvent, BuffId.GHOST_CLOAK),
+                (OwnUnitLostBuffEvent, BuffId.GHOST_CLOAK),
+            ]
 
             # An enemy observer nothing detects is listed cloaked, out of vision, until a raven beside it detects it.
             game.debug(game.create(UnitTypeId.OBSERVER, home.towards(middle, 4), owner=3 - game.player))
@@ -574,6 +649,23 @@ class TestAgainstTheRealGame:
             (detected,) = _of(seen, EnemyUnitCloakChangedEvent)
             assert detected.unit is observer and detected.previous_cloak is CloakState.CLOAKED
             assert observer.cloak is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.IN_VISION
+
+            # A fungal growth on an enemy marine is a buff it gains, and loses as it wears off.
+            game.debug(
+                game.create(UnitTypeId.MARINE, home.towards(middle, 22), owner=3 - game.player),
+                game.create(UnitTypeId.INFESTOR, home.towards(middle, 16)),
+            )
+            _until(game, lambda: game.tracker.present_units.enemy.of_type(UnitTypeId.MARINE), steps=1)
+            marine = game.newest(UnitTypeId.MARINE)
+            game.order(AbilityId.INFESTOR_FUNGAL_GROWTH, _own(game, UnitTypeId.INFESTOR), target=marine.position)
+            _until(game, lambda: _of(seen, EnemyUnitLostBuffEvent), steps=2)
+            fungal = [
+                event for event in _of(seen, EnemyUnitGainedBuffEvent, EnemyUnitLostBuffEvent) if event.unit is marine
+            ]
+            assert [(type(event), event.buff) for event in fungal] == [
+                (EnemyUnitGainedBuffEvent, BuffId.INFESTOR_FUNGAL_GROWTH),
+                (EnemyUnitLostBuffEvent, BuffId.INFESTOR_FUNGAL_GROWTH),
+            ]
 
     def test_protoss_warp_ins_damage_sight_death_archons_and_energy(self) -> None:
         with _played_as(Race.PROTOSS) as (game, seen, middle):

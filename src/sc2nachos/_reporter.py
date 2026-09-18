@@ -14,7 +14,9 @@ from sc2nachos.events import (
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
+    EnemyUnitGainedBuffEvent,
     EnemyUnitLeftSightEvent,
+    EnemyUnitLostBuffEvent,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
@@ -22,6 +24,8 @@ from sc2nachos.events import (
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
+    OwnUnitGainedBuffEvent,
+    OwnUnitLostBuffEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
@@ -110,16 +114,18 @@ def _report(
 
 
 def _report_compared(events: EventBus, tracker: _UnitTracker, step: int) -> None:
-    """Have `tracker` compare each unit with the update before, as the damage, energy and cloak events with a handler
-    still to run need, and hand on what it found; have it let go of what it kept when none has."""
+    """Have `tracker` compare each unit with the update before, as the damage, energy, cloak and buff events with a
+    handler still to run need, and hand on what it found; have it let go of what it kept when none has."""
     wanted = events._has_handlers
     damage = wanted(OwnUnitDamagedEvent) or wanted(EnemyUnitDamagedEvent)
     energy = wanted(OwnUnitEnergyLostEvent) or wanted(EnemyUnitEnergyLostEvent)
     cloak = wanted(OwnUnitCloakChangedEvent) or wanted(EnemyUnitCloakChangedEvent)
-    if not (damage or energy or cloak):
+    buff_events = (OwnUnitGainedBuffEvent, EnemyUnitGainedBuffEvent, OwnUnitLostBuffEvent, EnemyUnitLostBuffEvent)
+    buffs = any(wanted(event_type) for event_type in buff_events)
+    if not (damage or energy or cloak or buffs):
         tracker.stop_comparing_units()
         return
-    tracker.compare_units(damage=damage, energy=energy, cloak=cloak)
+    tracker.compare_units(damage=damage, energy=energy, cloak=cloak, buffs=buffs)
     changes = tracker.last_changes
     emit = events._emit
     if changes.own_units_damaged and wanted(OwnUnitDamagedEvent):
@@ -140,6 +146,18 @@ def _report_compared(events: EventBus, tracker: _UnitTracker, step: int) -> None
     if changes.enemy_units_cloak_changed and wanted(EnemyUnitCloakChangedEvent):
         for unit, previous_cloak in changes.enemy_units_cloak_changed:
             emit(EnemyUnitCloakChangedEvent(step, unit, previous_cloak))
+    if changes.own_units_gained_buff and wanted(OwnUnitGainedBuffEvent):
+        for own, buff in changes.own_units_gained_buff:
+            emit(OwnUnitGainedBuffEvent(step, own, buff))
+    if changes.enemy_units_gained_buff and wanted(EnemyUnitGainedBuffEvent):
+        for unit, buff in changes.enemy_units_gained_buff:
+            emit(EnemyUnitGainedBuffEvent(step, unit, buff))
+    if changes.own_units_lost_buff and wanted(OwnUnitLostBuffEvent):
+        for own, buff in changes.own_units_lost_buff:
+            emit(OwnUnitLostBuffEvent(step, own, buff))
+    if changes.enemy_units_lost_buff and wanted(EnemyUnitLostBuffEvent):
+        for unit, buff in changes.enemy_units_lost_buff:
+            emit(EnemyUnitLostBuffEvent(step, unit, buff))
 
 
 def _is_structure(tracker: _UnitTracker, unit: Unit[Any]) -> bool:
