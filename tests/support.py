@@ -11,6 +11,7 @@ from websocket import WebSocketConnectionClosedException
 from sc2nachos._reporter import _Reporter
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
+    AlertEvent,
     ChatEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
@@ -30,7 +31,6 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
-from sc2nachos.events._alert_events import _ALERT_EVENTS
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -208,7 +208,7 @@ HAPPENINGS: tuple[type[Event], ...] = (
     UnitFoundDeadEvent,
     OwnActionEvent,
     ChatEvent,
-    *(event_type for event_type in _ALERT_EVENTS.values() if event_type is not None),
+    AlertEvent,
 )
 
 

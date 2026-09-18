@@ -5,7 +5,7 @@ from typing import Any, final
 
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
-from sc2nachos.state import Action
+from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, OwnUnit, Unit
 
 
@@ -190,3 +190,12 @@ class ChatEvent(Event):
     player_id: int
     """The id of the player who sent it."""
     text: str
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class AlertEvent(Event):
+    """The game has alerted this player. Several of one observation come in the order the game raised them."""
+
+    alert: Alert
+    """What it alerted to, whose docstring says when the game raises it."""

@@ -8,37 +8,16 @@ type, in this order:
 2. `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent`, `OwnWarpInFinishedEvent`, `OwnUpgradeFinishedEvent`;
 3. `UnitDamagedEvent`, `UnitEnergyLostEvent`, `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent`;
 4. `UnitDiedEvent`, `UnitFoundDeadEvent`, so that a unit created and dead within one observation reads in order;
-5. `OwnActionEvent`, `ChatEvent`, and the alert events, in the order the game raised them.
+5. `OwnActionEvent`, `ChatEvent`, `AlertEvent`, the alerts in the order the game raised them.
 
 The first turn reports the units the game starts with as created. An event is made only for a type with a handler
 still to run this game, and its step is when NachOS learned of it: a morph in the fog is reported when the unit is
 next seen.
 """
 
-from sc2nachos.events._alert_events import (
-    AddOnCompleteAlertEvent,
-    BuildingCompleteAlertEvent,
-    BuildingUnderAttackAlertEvent,
-    LarvaHatchedAlertEvent,
-    MergeCompleteAlertEvent,
-    MineralsExhaustedAlertEvent,
-    MorphCompleteAlertEvent,
-    MothershipCompleteAlertEvent,
-    MuleExpiredAlertEvent,
-    NuclearLaunchDetectedAlertEvent,
-    NukeCompleteAlertEvent,
-    NydusWormDetectedAlertEvent,
-    ResearchCompleteAlertEvent,
-    TrainUnitCompleteAlertEvent,
-    TrainWorkerCompleteAlertEvent,
-    TransformationCompleteAlertEvent,
-    UnitUnderAttackAlertEvent,
-    UpgradeCompleteAlertEvent,
-    VespeneExhaustedAlertEvent,
-    WarpInCompleteAlertEvent,
-)
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import (
+    AlertEvent,
     ChatEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
@@ -66,9 +45,7 @@ from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._handler_timings import HandlerTimings
 
 __all__ = [
-    "AddOnCompleteAlertEvent",
-    "BuildingCompleteAlertEvent",
-    "BuildingUnderAttackAlertEvent",
+    "AlertEvent",
     "ChatEvent",
     "Done",
     "EnemyUnitEnteredSightEvent",
@@ -80,25 +57,12 @@ __all__ = [
     "GameEndEvent",
     "GameStartEvent",
     "HandlerTimings",
-    "LarvaHatchedAlertEvent",
-    "MergeCompleteAlertEvent",
-    "MineralsExhaustedAlertEvent",
-    "MorphCompleteAlertEvent",
-    "MothershipCompleteAlertEvent",
-    "MuleExpiredAlertEvent",
-    "NuclearLaunchDetectedAlertEvent",
-    "NukeCompleteAlertEvent",
-    "NydusWormDetectedAlertEvent",
     "OwnActionEvent",
     "OwnConstructionFinishedEvent",
     "OwnConstructionStartedEvent",
     "OwnUnitCreatedEvent",
     "OwnUpgradeFinishedEvent",
     "OwnWarpInFinishedEvent",
-    "ResearchCompleteAlertEvent",
-    "TrainUnitCompleteAlertEvent",
-    "TrainWorkerCompleteAlertEvent",
-    "TransformationCompleteAlertEvent",
     "TurnEvent",
     "TurnStartEvent",
     "UnitAllianceChangedEvent",
@@ -107,8 +71,4 @@ __all__ = [
     "UnitEnergyLostEvent",
     "UnitFoundDeadEvent",
     "UnitTypeChangedEvent",
-    "UnitUnderAttackAlertEvent",
-    "UpgradeCompleteAlertEvent",
-    "VespeneExhaustedAlertEvent",
-    "WarpInCompleteAlertEvent",
 ]

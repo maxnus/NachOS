@@ -58,7 +58,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   | `on_unit_took_damage` | `UnitDamagedEvent`, for every unit in vision |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
   | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent`, `UnitEnergyLostEvent` |
-  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and an event per alert, such as `NuclearLaunchDetectedAlertEvent` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent`, whose `alert` is an `Alert` |
 
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
   reported created on the first turn.
@@ -70,7 +70,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   never what regenerates.
 - **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
   it has gone some 6000 steps without being attacked, the same as in python-sc2. `UnitDamagedEvent` reports every
-  turn a unit in vision loses health. `AlertError` and `TrainError` have no events: nothing in
+  turn a unit in vision loses health. `AlertError` and `TrainError` have no `Alert` members: nothing in
   `tools/sweep_alerts.py` raised either, and training stalled for supply or a structure's ground found blocked
   raise action errors instead.
 

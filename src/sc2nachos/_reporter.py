@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
 from sc2nachos.events import (
+    AlertEvent,
     ChatEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
@@ -22,8 +25,8 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
-from sc2nachos.events._alert_events import _ALERT_EVENTS
 from sc2nachos.gamedata import Attribute
+from sc2nachos.state import Alert
 
 if TYPE_CHECKING:
     from typing import Any
@@ -34,6 +37,10 @@ if TYPE_CHECKING:
     from sc2nachos.state._state import _State
     from sc2nachos.units import Unit
     from sc2nachos.units._tracker import _UnitTracker
+
+
+# Each alert by the protocol's value.
+_ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 
 
 @final
@@ -106,10 +113,11 @@ class _Reporter:
         if observation.chat and wanted(ChatEvent):
             for message in observation.chat:
                 emit(ChatEvent(step, message.player_id, message.message))
-        # The protocol parses an alert it does not name into nothing, so every one read is in the mapping.
-        for alert in observation.observation.alerts:
-            if (event_type := _ALERT_EVENTS[alert]) is not None and wanted(event_type):
-                emit(event_type(step))
+        if wanted(AlertEvent):
+            for value in observation.observation.alerts:
+                # `AlertError` and `TrainError` have no member, and are passed over.
+                if (alert := _ALERTS.get(value)) is not None:
+                    emit(AlertEvent(step, alert))
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""

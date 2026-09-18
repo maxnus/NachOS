@@ -10,8 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from sc2nachos._reporter import _Reporter
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
-    AddOnCompleteAlertEvent,
-    BuildingCompleteAlertEvent,
+    AlertEvent,
     ChatEvent,
     Done,
     EnemyUnitEnteredSightEvent,
@@ -19,39 +18,35 @@ from sc2nachos.events import (
     EnemyUnitLeftSightEvent,
     Event,
     EventBus,
-    MergeCompleteAlertEvent,
-    MorphCompleteAlertEvent,
-    MuleExpiredAlertEvent,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
     OwnUnitCreatedEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
-    TrainWorkerCompleteAlertEvent,
     UnitAllianceChangedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
     UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
-    UpgradeCompleteAlertEvent,
-    WarpInCompleteAlertEvent,
 )
-from sc2nachos.events._alert_events import _ALERT_EVENTS
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
-from sc2nachos.state import CameraMove
+from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, Unit, Visibility
 from sc2nachos.units._tracker import _UnitTracker
 from support import HAPPENINGS, RealGame, make_game_info, make_observation, make_tables, make_unit, record
 
 _ENEMY = Alliance.ENEMY
+# Every alert the protocol names, in the order it names them, and the two no `Alert` stands for.
+_EVERY_ALERT = [value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values]
+_PASSED_OVER = frozenset({sc2api_pb2.Alert.AlertError, sc2api_pb2.Alert.TrainError})
 _STRUCTURE = [data_pb2.Attribute.Structure]
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=_STRUCTURE),
@@ -110,7 +105,7 @@ def _everything(game: _Game) -> None:
         upgrades=[UpgradeId.STIMPACK],
         actions=[sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=camera), game_loop=12)],
         chat=[(2, "gl hf")],
-        alerts=list(_ALERT_EVENTS),
+        alerts=_EVERY_ALERT,
     )
 
 
@@ -151,6 +146,8 @@ class TestWhatATurnReports:
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(16, units[900])
         assert at_16[OwnActionEvent] == OwnActionEvent(16, CameraMove(12, Point((30.75, 139.0))))
         assert at_16[ChatEvent] == ChatEvent(16, 2, "gl hf")
+        alerts = [event.alert for event in seen if isinstance(event, AlertEvent)]
+        assert alerts == [Alert(value) for value in _EVERY_ALERT if value not in _PASSED_OVER]
 
     def test_a_unit_created_and_killed_in_one_observation_reads_in_order(self) -> None:
         game = _Game()
@@ -159,16 +156,14 @@ class TestWhatATurnReports:
         game.observe(16, make_unit(1), dead=(1,))
         assert [type(event) for event in seen] == [OwnUnitCreatedEvent, UnitDiedEvent]
 
-    def test_every_alert_the_protocol_names_has_an_event_of_its_own_or_is_passed_over(self) -> None:
-        assert set(_ALERT_EVENTS) == {value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values}
-        events = [event_type for event_type in _ALERT_EVENTS.values() if event_type is not None]
-        assert len(set(events)) == len(events) == len(_ALERT_EVENTS) - 2
-        assert all(event_type.__name__.endswith("AlertEvent") for event_type in events)
+    def test_every_alert_the_protocol_names_is_curated_but_the_two_passed_over(self) -> None:
+        protocol = {value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values}
+        assert {int(alert) for alert in Alert} == protocol - _PASSED_OVER
 
     def test_an_alert_passed_over_reaches_no_handler(self) -> None:
         game = _Game()
         seen = record(game.events, *HAPPENINGS)
-        game.observe(0, alerts=[sc2api_pb2.Alert.AlertError, sc2api_pb2.Alert.TrainError])
+        game.observe(0, alerts=list(_PASSED_OVER))
         assert not seen
 
 
@@ -330,6 +325,10 @@ def _until(game: RealGame, done: Callable[[], object], *, steps: int = 4, turns:
     raise AssertionError("it never happened")
 
 
+def _alerts(seen: list[Any], alert: Alert) -> list[AlertEvent]:
+    return [event for event in seen if isinstance(event, AlertEvent) and event.alert is alert]
+
+
 def _of(seen: list[Any], *event_types: type[Event]) -> list[Any]:
     return [event for event in seen if type(event) in event_types]
 
@@ -355,7 +354,7 @@ class TestAgainstTheRealGame:
             assert died.unit is egg
             hatched = [event.unit.type_id for event in _of(seen, OwnUnitCreatedEvent) if event.step == died.step]
             assert UnitTypeId.DRONE in hatched
-            assert any(event.step == died.step for event in _of(seen, TrainWorkerCompleteAlertEvent))
+            assert AlertEvent(died.step, Alert.TRAIN_WORKER_COMPLETE) in seen
 
             # A drone becomes a spawning pool, and the game reports it dead as the pool finishes.
             drone = _own(game, UnitTypeId.DRONE)
@@ -368,7 +367,7 @@ class TestAgainstTheRealGame:
             assert started_pool.unit is finished.unit
             assert finished.unit.type_id is UnitTypeId.SPAWNING_POOL
             assert UnitDiedEvent(finished.step, drone) in seen
-            assert BuildingCompleteAlertEvent(finished.step) in seen
+            assert AlertEvent(finished.step, Alert.BUILDING_COMPLETE) in seen
 
             # A zergling stays itself through its cocoon.
             game.debug(game.create(UnitTypeId.BANELING_NEST, game.open_ground(home.towards(middle, 10), size=3)))
@@ -381,7 +380,7 @@ class TestAgainstTheRealGame:
                 UnitTypeId.ZERGLING,
                 UnitTypeId.BANELING_COCOON,
             ]
-            assert _of(seen, MorphCompleteAlertEvent)
+            assert _alerts(seen, Alert.MORPH_COMPLETE)
 
             # This player's own message comes back.
             chat = sc2api_pb2.ActionChat(channel=sc2api_pb2.ActionChat.Broadcast, message="gl hf")
@@ -413,14 +412,14 @@ class TestAgainstTheRealGame:
             assert reactor.build_progress < 0.1
             assert OwnConstructionStartedEvent(game.step, reactor) in seen
             _until(game, lambda: reactor.is_complete)
-            assert _of(seen, AddOnCompleteAlertEvent)
+            assert _alerts(seen, Alert.ADD_ON_COMPLETE)
 
             # A command center becomes an orbital command once the morph finishes, which the game calls an upgrade.
             center = _own(game, UnitTypeId.COMMAND_CENTER)
             game.order(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, center)
             _until(game, lambda: center.type_id is UnitTypeId.ORBITAL_COMMAND)
             assert UnitTypeChangedEvent(game.step, center, UnitTypeId.COMMAND_CENTER) in seen
-            assert UpgradeCompleteAlertEvent(game.step) in seen
+            assert AlertEvent(game.step, Alert.UPGRADE_COMPLETE) in seen
 
             # A research finishes.
             game.debug(game.create(UnitTypeId.ENGINEERING_BAY, game.open_ground(home.towards(middle, 18), size=3)))
@@ -455,7 +454,7 @@ class TestAgainstTheRealGame:
             mule = _own(game, UnitTypeId.MULE)
             _until(game, lambda: mule.is_dead, steps=100, turns=20)
             assert UnitDiedEvent(game.step, mule) in seen
-            assert MuleExpiredAlertEvent(game.step) in seen
+            assert AlertEvent(game.step, Alert.MULE_EXPIRED) in seen
 
     def test_protoss_warp_ins_damage_sight_death_archons_and_energy(self) -> None:
         with _played_as(Race.PROTOSS) as (game, seen, middle):
@@ -472,7 +471,7 @@ class TestAgainstTheRealGame:
             assert not zealot.is_complete
             _until(game, lambda: zealot.is_complete, steps=1)
             assert OwnWarpInFinishedEvent(game.step, zealot) in seen
-            assert WarpInCompleteAlertEvent(game.step) in seen
+            assert AlertEvent(game.step, Alert.WARP_IN_COMPLETE) in seen
 
             # Shields lost are damage.
             shields = debug_pb2.DebugSetUnitValue(
@@ -496,7 +495,7 @@ class TestAgainstTheRealGame:
             game.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=merge))])
             _until(game, lambda: all(unit.orders for unit in templar), steps=1)
             assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON_EXACT] * 2
-            _until(game, lambda: _of(seen, MergeCompleteAlertEvent))
+            _until(game, lambda: _alerts(seen, Alert.MERGE_COMPLETE))
             assert game.tracker.present_units.own.of_type(UnitTypeId.ARCHON)
 
             # An enemy pylon out of sight comes into sight beside an observer, goes out of it some steps after the
