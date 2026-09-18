@@ -183,8 +183,8 @@ class _UnitTracker:
     def _ignore_structure_fog_copy(self, tag: int, previous: _UnitsByTag, present: _UnitsByTag) -> None:
         """Leave out, for good, the copy in the fog under `tag` of a structure that is back in vision.
 
-        Tested in game: a structure that lifts off or uproots out of vision and is then seen elsewhere is reported in
-        vision there while its copy in the fog stays listed where it was, until that spot is in vision too.
+        A structure that lifts off or uproots out of vision and is seen elsewhere keeps its copy listed where it was,
+        until that spot is in vision too (in game).
         """
         self._in_fog_tags.discard(tag)
         del self._by_tag[tag]
@@ -250,7 +250,7 @@ class _UnitTracker:
                 self._in_fog_tags.discard(tag)
                 del self._by_tag[tag]
                 if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS:
-                    # Its spot came into vision without it: tested in game, the game reports no death it cannot see.
+                    # Its spot came into vision without it, and the game reports no death it cannot see (in game).
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
             if unit._step != step and not unit._stale:

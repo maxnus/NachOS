@@ -37,8 +37,8 @@ class _BuilderTracker:
     def structure_built_by(self, unit: Unit[Any]) -> Unit[Any] | None:
         """The unfinished structure of this player's that `unit`'s first order builds, or `None`.
 
-        Tested in game: an SCV's build order is aimed at the structure's center once construction starts, or at the
-        structure itself when construction is resumed, and it has no orders once construction is halted.
+        An SCV's build order is aimed at the structure's center once construction starts, and at the structure itself
+        once construction is resumed (in game).
         """
         orders = unit._latest_data.orders
         if not orders:
@@ -72,9 +72,8 @@ class _BuilderTracker:
         """Link `structure`, new to this observation, to the unit that became it, if one of `ordered` did, and take
         that one out of `ordered`.
 
-        `ordered` holds this player's units that left this observation carrying out an order. Tested in game: a drone
-        that morphs into a structure leaves the observation with no death reported, and the structure appears under a
-        new tag.
+        `ordered` holds this player's units that left this observation carrying out an order. A drone that becomes a
+        structure leaves the observation with no death reported, and the structure appears under a new tag (in game).
         """
         builder = None
         nearest = _BUILDER_REACH * _BUILDER_REACH
@@ -97,10 +96,8 @@ class _BuilderTracker:
         """Mark dead each unit that became a structure which finished or died an update ago, unless the game has
         reported it dead since or it came back, and leave those whose structure finished or died now to the next update.
 
-        Tested in game: a drone whose structure is cancelled comes back under its own tag, with its health, in the
-        observation that reports the structure dead. One whose structure finishes the game reports dead itself, in the
-        step the structure finishes or the one after, so an observation later at most; this marks only one the game did
-        not.
+        The game reports such a unit dead itself an observation after its structure finishes at the latest, and one
+        whose structure is cancelled comes back (in game), so this marks only one the game did not.
         """
         if not self._builders and not self._used_up_builders:
             return

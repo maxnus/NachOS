@@ -2,7 +2,8 @@
 
 For bots moving over from [python-sc2](https://github.com/BurnySc2/python-sc2), the `burnysc2` package imported as
 `sc2`. NachOS is not a drop-in replacement. This page lists the places where the obvious translation of python-sc2
-code goes wrong. It covers what NachOS has so far, and grows with it.
+code goes wrong. It covers what NachOS has so far, and grows with it. What the game itself does, whichever library
+reads it, is in [game-behavior.md](game-behavior.md).
 
 ## Running a game
 

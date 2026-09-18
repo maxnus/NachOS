@@ -10,11 +10,9 @@ _ALERT = sc2api_pb2.Alert
 class Alert(ReadableIntEnum):
     """An alert the game raised for this player, which names no unit and no position.
 
-    What each docstring says raised it was seen in game, most of it by `tools/sweep_alerts.py`, which also counted
-    one alert for each thing it made happen. The protocol's `AlertError` and `TrainError` have no member: nothing the
-    sweep did raised either. A morph ordered with no supply left is refused as it is given, and training stalled when
-    supply runs short or is lost, or a structure whose ground is found blocked, raises an action error instead. Should
-    the game raise either, it is passed over.
+    What each docstring says raises it was seen in game. The protocol's `AlertError` and `TrainError` have no member:
+    the game raised neither, a failed order giving an action error instead, and should it raise either, it is passed
+    over.
     """
 
     NUCLEAR_LAUNCH_DETECTED = _ALERT.NuclearLaunchDetected
@@ -62,9 +60,8 @@ class Alert(ReadableIntEnum):
     UNIT_UNDER_ATTACK = _ALERT.UnitUnderAttack
     """A unit of this player's out of sight of its camera has come under attack.
 
-    The game raises none for a unit its camera shows, and none again for a unit until it has gone some 6000 to 6500
-    steps without being attacked: one attacked every 3000 steps raised one alert in 24000 steps. Each unit counts for
-    itself, so two attacked at once raise two, and a new unit attacked where another just was raises one.
+    The game raises none for a unit its camera shows, and none again for a unit until it has gone some 6000 steps
+    without being attacked, each unit counting for itself.
 
     The camera starts on the main base, its townhall, workers, mineral fields and geysers on screen, and stays there
     until moved, so an attack on the main raises none. `OwnUnitDamagedEvent` reports every unit of this player's that
