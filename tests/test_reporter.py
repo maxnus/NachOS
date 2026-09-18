@@ -32,6 +32,7 @@ from sc2nachos.events import (
     UnitAllianceChangedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
+    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
     UpgradeCompleteAlertEvent,
@@ -85,7 +86,7 @@ def _everything(game: _Game) -> None:
     """Two turns, the second reporting one of everything, the first the units the game starts with."""
     game.observe(
         0,
-        make_unit(1, health=45.0, build_progress=1.0),
+        make_unit(1, health=45.0, energy=50.0, build_progress=1.0),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=0.5),
         make_unit(4, UnitTypeId.SIEGE_TANK, alliance=_ENEMY, health=100.0),
@@ -97,7 +98,7 @@ def _everything(game: _Game) -> None:
     camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
     game.observe(
         16,
-        make_unit(1, health=40.0, build_progress=1.0),
+        make_unit(1, health=40.0, energy=25.0, build_progress=1.0),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=1.0),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=1.0),
         make_unit(4, UnitTypeId.SIEGE_TANK_SIEGED, alliance=_ENEMY, health=90.0),
@@ -144,6 +145,7 @@ class TestWhatATurnReports:
         assert at_16[OwnWarpInFinishedEvent].unit is units[3]
         assert at_16[OwnUpgradeFinishedEvent] == OwnUpgradeFinishedEvent(16, UpgradeId.STIMPACK)
         assert at_16[UnitDamagedEvent] == UnitDamagedEvent(16, units[1], 5.0)
+        assert at_16[UnitEnergyLostEvent] == UnitEnergyLostEvent(16, units[1], 25.0)
         assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(16, units[5])
         assert at_16[UnitDiedEvent] == UnitDiedEvent(16, units[8])
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(16, units[900])
@@ -188,23 +190,57 @@ class TestOnlyWhatIsWanted:
         _everything(game)
         assert made and set(made) == {wanted}
 
-    def test_with_no_handler_the_actions_are_never_read_and_no_health_is_kept(self) -> None:
+    def test_with_no_handler_the_actions_are_never_read_and_no_vitals_are_kept(self) -> None:
         game = _Game()
         _everything(game)
         assert game.state is not None and "actions" not in vars(game.state)
-        assert not game.reporter._health
+        assert not game.reporter._vitals
 
-    def test_a_handler_that_is_done_stops_the_health_being_kept(self) -> None:
+    def test_a_handler_that_is_done_stops_the_vitals_being_kept(self) -> None:
         game = _Game()
         game.events.on(UnitDamagedEvent)(lambda event: Done)
         game.observe(0, make_unit(1, health=45.0))
         game.observe(16, make_unit(1, health=40.0))
         game.observe(32, make_unit(1, health=35.0))
-        assert not game.reporter._health
+        assert not game.reporter._vitals
 
 
 def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Unit:
     return make_unit(1, alliance=_ENEMY, health=health, shield=shield, **fields)
+
+
+class TestEnergy:
+    def _lost(self, *units: raw_pb2.Unit) -> list[float]:
+        """The energy reported lost as each of `units` is observed in turn."""
+        game = _Game()
+        seen = record(game.events, UnitEnergyLostEvent)
+        for step, unit in enumerate(units):
+            game.observe(step * 16, unit)
+        return [event.energy_lost for event in seen]
+
+    def test_energy_lost_is_what_went_net_of_what_regenerated(self) -> None:
+        assert self._lost(_raven(100.0), _raven(50.5), _raven(51.0)) == [49.5]
+
+    def test_energy_regenerating_or_kept_is_never_lost(self) -> None:
+        assert not self._lost(_raven(100.0), _raven(100.0), _raven(101.0))
+
+    def test_a_unit_that_changed_type_lost_none(self) -> None:
+        assert not self._lost(_raven(100.0), _raven(50.0, unit_type=UnitTypeId.ORACLE))
+
+    def test_a_unit_out_of_vision_in_either_observation_lost_none(self) -> None:
+        assert not self._lost(_raven(100.0), _raven(50.0, visibility=Visibility.INVISIBLE), _raven(25.0))
+
+    def test_energy_is_kept_for_a_handler_of_its_own_as_damage_is(self) -> None:
+        game = _Game()
+        seen = record(game.events, UnitEnergyLostEvent)
+        game.observe(0, _raven(100.0))
+        game.observe(16, _raven(25.0))
+        assert [event.energy_lost for event in seen] == [75.0]
+        assert game.reporter._vitals
+
+
+def _raven(energy: float, **fields: Any) -> raw_pb2.Unit:
+    return make_unit(1, fields.pop("unit_type", UnitTypeId.RAVEN), alliance=_ENEMY, energy=energy, **fields)
 
 
 class TestDamage:
@@ -421,7 +457,7 @@ class TestAgainstTheRealGame:
             assert UnitDiedEvent(game.step, mule) in seen
             assert MuleExpiredAlertEvent(game.step) in seen
 
-    def test_protoss_warp_ins_damage_and_an_enemy_seen_lost_and_found_dead(self) -> None:
+    def test_protoss_warp_ins_damage_sight_death_archons_and_energy(self) -> None:
         with _played_as(Race.PROTOSS) as (game, seen, middle):
             home = _own(game, UnitTypeId.NEXUS).position
 
@@ -492,3 +528,42 @@ class TestAgainstTheRealGame:
             game.debug(game.create(UnitTypeId.OBSERVER, far + (3.0, 0.0)))
             _until(game, lambda: enemy.is_dead)
             assert UnitFoundDeadEvent(game.step, enemy) in seen
+
+            # A feedback costs its caster 50 energy and drains its target's, which no buff or effect shows. `free`, a
+            # toggle, would make it cost nothing, so it is turned off.
+            game.debug(
+                debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free),
+                game.create(UnitTypeId.HIGH_TEMPLAR, at),
+                game.create(UnitTypeId.RAVEN, at + (4.0, 0.0), owner=3 - game.player),
+            )
+            pair = [UnitTypeId.HIGH_TEMPLAR, UnitTypeId.RAVEN]
+            _until(game, lambda: len(game.tracker.present_units.of_type(pair)) == 2)
+            caster, raven = game.newest(UnitTypeId.HIGH_TEMPLAR), game.newest(UnitTypeId.RAVEN)
+
+            def charge(energy: float, *units: Unit[Any]) -> None:
+                value = debug_pb2.DebugSetUnitValue.Energy
+                commands = [debug_pb2.DebugSetUnitValue(unit_value=value, value=energy, unit_tag=u.tag) for u in units]
+                game.debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
+                game.turn(2)
+
+            def lost_after(since: int, *units: Unit[Any]) -> dict[Unit[Any], float]:
+                """The energy each of `units` is reported to lose from the `since`-th report on, once each has."""
+                _until(game, lambda: {e.unit for e in _of(seen, UnitEnergyLostEvent)[since:]} >= set(units), steps=1)
+                return {e.unit: e.energy_lost for e in _of(seen, UnitEnergyLostEvent)[since:]}
+
+            charge(100, caster, raven)
+            since = len(_of(seen, UnitEnergyLostEvent))
+            game.order(AbilityId.HIGH_TEMPLAR_FEEDBACK, caster, target=raven)
+            lost = lost_after(since, caster, raven)
+            assert lost[caster] == pytest.approx(50, abs=1) and lost[raven] == pytest.approx(100, abs=1)
+            assert not raven.buffs and not game.state.effects
+
+            # An EMP costs its caster 75 energy, and drains up to 100 of every unit's where it lands.
+            game.debug(game.create(UnitTypeId.GHOST, at + (-4.0, 0.0)))
+            _until(game, lambda: game.tracker.present_units.own.of_type(UnitTypeId.GHOST))
+            ghost = game.newest(UnitTypeId.GHOST)
+            charge(150, ghost, raven)
+            since = len(_of(seen, UnitEnergyLostEvent))
+            game.order(AbilityId.GHOST_EMP, ghost, target=raven.position)
+            lost = lost_after(since, ghost, raven)
+            assert lost[ghost] == pytest.approx(75, abs=1) and lost[raven] == pytest.approx(100, abs=1)

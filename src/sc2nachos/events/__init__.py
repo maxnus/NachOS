@@ -6,7 +6,7 @@ type, in this order:
 
 1. `OwnUnitCreatedEvent`, `EnemyUnitFirstSeenEvent`, `UnitTypeChangedEvent`, `UnitAllianceChangedEvent`;
 2. `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent`, `OwnWarpInFinishedEvent`, `OwnUpgradeFinishedEvent`;
-3. `UnitDamagedEvent`, `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent`;
+3. `UnitDamagedEvent`, `UnitEnergyLostEvent`, `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent`;
 4. `UnitDiedEvent`, `UnitFoundDeadEvent`, so that a unit created and dead within one observation reads in order;
 5. `OwnActionEvent`, `ChatEvent`, and the alert events, in the order the game raised them.
 
@@ -57,6 +57,7 @@ from sc2nachos.events._event import (
     UnitAllianceChangedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
+    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -103,6 +104,7 @@ __all__ = [
     "UnitAllianceChangedEvent",
     "UnitDamagedEvent",
     "UnitDiedEvent",
+    "UnitEnergyLostEvent",
     "UnitFoundDeadEvent",
     "UnitTypeChangedEvent",
     "UnitUnderAttackAlertEvent",

@@ -18,6 +18,7 @@ from sc2nachos.events import (
     UnitAllianceChangedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
+    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -40,14 +41,14 @@ class _Reporter:
     """Hands on what each observation of one game reports has happened, each as an event, and only to a type with a
     handler still to run."""
 
-    __slots__ = ("_health", "_health_update", "_tracker")
+    __slots__ = ("_tracker", "_vitals", "_vitals_update")
 
     def __init__(self, tracker: _UnitTracker) -> None:
         self._tracker = tracker
-        # The raw type, health and shields of each unit in vision by id, as of the tracker update `_health_update`
-        # counts, kept while `UnitDamagedEvent` has a handler.
-        self._health: dict[int, tuple[int, float, float]] = {}
-        self._health_update = 0
+        # The raw type, health, shields and energy of each unit in vision by id, as of the tracker update
+        # `_vitals_update` counts, kept while `UnitDamagedEvent` or `UnitEnergyLostEvent` has a handler.
+        self._vitals: dict[int, tuple[int, float, float, float]] = {}
+        self._vitals_update = 0
 
     def report(self, events: EventBus, observation: sc2api_pb2.ResponseObservation, state: _State, step: int) -> None:
         """Hand on what `observation`, taken in at `step` and read as `state`, reports has happened."""
@@ -82,10 +83,11 @@ class _Reporter:
         if changes.upgrades and wanted(OwnUpgradeFinishedEvent):
             for upgrade in changes.upgrades:
                 emit(OwnUpgradeFinishedEvent(step, upgrade))
-        if wanted(UnitDamagedEvent):
-            self._report_damage(events, step)
-        elif self._health:
-            self._health = {}
+        damage, energy = wanted(UnitDamagedEvent), wanted(UnitEnergyLostEvent)
+        if damage or energy:
+            self._report_vitals(events, step, damage=damage, energy=energy)
+        elif self._vitals:
+            self._vitals = {}
         if changes.entered_sight and wanted(EnemyUnitEnteredSightEvent):
             for unit in changes.entered_sight:
                 emit(EnemyUnitEnteredSightEvent(step, unit))
@@ -114,21 +116,28 @@ class _Reporter:
         row = self._tracker.data.units.get(unit.type_id)
         return row is not None and Attribute.STRUCTURE in row.attributes
 
-    def _report_damage(self, events: EventBus, step: int) -> None:
-        """Hand on the health and shields each unit in vision lost since the tracker's update before, if this reporter
-        kept them then, and keep them for the next."""
+    def _report_vitals(self, events: EventBus, step: int, *, damage: bool, energy: bool) -> None:
+        """Hand on, as asked, the health and shields and the energy each unit in vision lost since the tracker's
+        update before, if this reporter kept them then, and keep them for the next."""
         updates = self._tracker.updates
-        before = self._health if self._health_update == updates - 1 else None
-        health: dict[int, tuple[int, float, float]] = {}
+        before = self._vitals if self._vitals_update == updates - 1 else None
+        vitals: dict[int, tuple[int, float, float, float]] = {}
+        damaged: list[UnitDamagedEvent] = []
+        drained: list[UnitEnergyLostEvent] = []
         for unit in self._tracker.present_units:
             report = unit._latest_data
             if unit._latest_data_in_vision is not report:
                 continue
-            now = health[unit._id] = (report.unit_type, report.health, report.shield)
+            now = vitals[unit._id] = (report.unit_type, report.health, report.shield, report.energy)
             if before is None or (then := before.get(unit._id)) is None or then[0] != now[0]:
                 continue
-            damage = max(0.0, then[1] - now[1]) + max(0.0, then[2] - now[2])
-            if damage > 0.0:
-                events._emit(UnitDamagedEvent(step, unit, damage))
-        self._health = health
-        self._health_update = updates
+            if damage and (lost := max(0.0, then[1] - now[1]) + max(0.0, then[2] - now[2])) > 0.0:
+                damaged.append(UnitDamagedEvent(step, unit, lost))
+            if energy and now[3] < then[3]:
+                drained.append(UnitEnergyLostEvent(step, unit, then[3] - now[3]))
+        self._vitals = vitals
+        self._vitals_update = updates
+        for event in damaged:
+            events._emit(event)
+        for event in drained:
+            events._emit(event)

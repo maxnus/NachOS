@@ -26,6 +26,7 @@ from sc2nachos.events import (
     UnitAllianceChangedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
+    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -200,6 +201,7 @@ HAPPENINGS: tuple[type[Event], ...] = (
     OwnWarpInFinishedEvent,
     OwnUpgradeFinishedEvent,
     UnitDamagedEvent,
+    UnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitLeftSightEvent,
     UnitDiedEvent,

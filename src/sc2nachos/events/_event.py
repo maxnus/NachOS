@@ -129,6 +129,17 @@ class UnitDamagedEvent(Event):
 
 @final
 @dataclass(frozen=True, slots=True)
+class UnitEnergyLostEvent(Event):
+    """A unit in vision now and in the observation before has less energy, and kept its type: it cast a spell, or
+    lost energy to a feedback or an EMP."""
+
+    unit: Unit[Any]
+    energy_lost: float
+    """The energy it lost since the observation before, less what it regenerated in between."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
 class EnemyUnitEnteredSightEvent(Event):
     """A unit of the enemy's has come into sight: seen for the first time, back in the observation, or back from the
     fog. A unit that cloaks where it stands is still in sight."""

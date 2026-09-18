@@ -19,6 +19,7 @@ from sc2nachos.events import (
     OwnUnitCreatedEvent,
     UnitDamagedEvent,
     UnitDiedEvent,
+    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
@@ -153,6 +154,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
             assert in_sight.get(event.unit.id, False) is not entering, f"{event} twice in a row"
             in_sight[event.unit.id] = entering
     assert all(event.damage > 0 for event in seen if isinstance(event, UnitDamagedEvent))
+    assert all(event.energy_lost > 0 for event in seen if isinstance(event, UnitEnergyLostEvent))
     assert in_sight, "no enemy unit ever came into sight"
     client.leave_game()
     client.quit()
