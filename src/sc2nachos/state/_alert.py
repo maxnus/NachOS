@@ -30,7 +30,7 @@ class Alert(ReadableIntEnum):
     not an add-on (in game)."""
     BUILDING_UNDER_ATTACK = _ALERT.BuildingUnderAttack
     """A structure of this player's out of sight of its camera has come under attack. See `UNIT_UNDER_ATTACK` for when
-    the game holds one back (in game)."""
+    the game raises none (in game)."""
     LARVA_HATCHED = _ALERT.LarvaHatched
     """A queen's inject has hatched its larva, one alert for each inject, a few steps before the larva are seen. Larva
     a hatchery makes by itself raise none (in game)."""
@@ -66,6 +66,10 @@ class Alert(ReadableIntEnum):
     The game raises none for a unit its camera shows, and none again for a unit until it has gone some 6000 to 6500
     steps without being attacked: one attacked every 3000 steps raised one alert in 24000 steps. Each unit counts for
     itself, so two attacked at once raise two, and a new unit attacked where another just was raises one (in game).
+
+    The camera starts on the main base, its townhall, workers, mineral fields and geysers on screen, and stays there
+    until moved, so an attack on the main raises none (in game). `UnitDamagedEvent` reports every unit of this
+    player's that loses health or shields, every turn, whatever the camera shows.
     """
     UPGRADE_COMPLETE = _ALERT.UpgradeComplete
     """A level of this player's weapons or armor has finished, or a command center has become an orbital command or a
