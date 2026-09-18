@@ -45,6 +45,28 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it is
   passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
   unsubscribes the old ones, or they go on handling events alongside the new.
+- **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent` in the
+  order `sc2nachos.events` gives, and made only for a type something subscribes to:
+
+  | python-sc2 | NachOS |
+  |---|---|
+  | `on_unit_created(unit)` | `OwnUnitCreatedEvent`, structures included |
+  | `on_building_construction_started`, `_complete` | `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent` |
+  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, and `UnitFoundDeadEvent` for a structure found gone from its spot |
+  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit |
+  | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
+  | `on_unit_took_damage` | `UnitDamagedEvent`, for every unit in vision |
+  | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
+  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and an event per alert, such as `NuclearLaunchDetectedAlertEvent` |
+
+- **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
+  reported created on the first turn.
+- **An event's step is when NachOS learned of it.** A morph in the fog is reported when the unit is next seen, and a
+  structure that died there when its spot is.
+- **A unit that dies does not also leave sight, and one that cloaks where it stands stays in sight.**
+- **Damage is what a unit lost since the observation before**, less what it regained in between, and a unit that
+  changed type took none.
 
 ## Errors
 
@@ -160,8 +182,9 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
   copy and says nothing.
 - **A drone that becomes a structure is stale until the structure finishes, then dead.** The game gives the
-  structure a new tag and reports no death for the drone. If the structure is cancelled, the drone comes back as the
-  same object. This holds for your own drones only, since only your own units' orders are reported.
+  structure a new tag, and reports the drone dead once the structure finishes or is killed. If the structure is
+  cancelled, the drone comes back as the same object. `builder` links the two for your own drones only, since only
+  your own units' orders are reported.
 - **A unit names the units it points at by object.** An order's target, a rally target, a passenger, an add-on and
   an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up. An order aimed
   at nothing has `None` for its target, where python-sc2's is `0`.
@@ -241,7 +264,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
 | `state.common.larva_count` | `len(api.units.own.of_type(UnitType.Larva))` |
-| `state.dead_units`, `chat`, `actions`, `action_errors`, `alerts` | nothing yet |
+| `state.dead_units`, `chat`, `actions`, `alerts` | events: see Events |
+| `state.action_errors` | nothing yet |
 
 - **Each read answers from the last observation, and nothing is read until asked for.** There is no `state`
   object to hold on to; `api.score` read next turn is next turn's score.

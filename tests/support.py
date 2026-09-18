@@ -8,7 +8,28 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
+from sc2nachos._reporter import _Reporter
 from sc2nachos.enemy import Enemy
+from sc2nachos.events import (
+    ChatEvent,
+    EnemyUnitEnteredSightEvent,
+    EnemyUnitFirstSeenEvent,
+    EnemyUnitLeftSightEvent,
+    Event,
+    EventBus,
+    OwnActionEvent,
+    OwnConstructionFinishedEvent,
+    OwnConstructionStartedEvent,
+    OwnUnitCreatedEvent,
+    OwnUpgradeFinishedEvent,
+    OwnWarpInFinishedEvent,
+    UnitAllianceChangedEvent,
+    UnitDamagedEvent,
+    UnitDiedEvent,
+    UnitFoundDeadEvent,
+    UnitTypeChangedEvent,
+)
+from sc2nachos.events._alert_events import _ALERT_EVENTS
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -126,6 +147,7 @@ def make_observation(
     effects: Iterable[raw_pb2.Effect] = (),
     chat: Iterable[tuple[int, str]] = (),
     actions: Iterable[sc2api_pb2.Action] = (),
+    alerts: Iterable[sc2api_pb2.Alert.ValueType] = (),
 ) -> sc2api_pb2.ResponseObservation:
     """What the game saw at `game_loop`: `units`, the tags of those that died, how it ended if it has, and the rest of
     what an observation reports, each message sent to the chat as the sender's id and the text."""
@@ -136,7 +158,9 @@ def make_observation(
         event=raw_pb2.Event(dead_units=dead),
         effects=effects,
     )
-    observation = sc2api_pb2.Observation(game_loop=game_loop, player_common=common, score=score, raw_data=raw)
+    observation = sc2api_pb2.Observation(
+        game_loop=game_loop, player_common=common, score=score, raw_data=raw, alerts=alerts
+    )
     return sc2api_pb2.ResponseObservation(
         actions=actions,
         chat=[sc2api_pb2.ChatReceived(player_id=player, message=text) for player, text in chat],
@@ -165,6 +189,35 @@ def make_unit(
     )
 
 
+# Every event a turn can report, in the order it reports them.
+HAPPENINGS: tuple[type[Event], ...] = (
+    OwnUnitCreatedEvent,
+    EnemyUnitFirstSeenEvent,
+    UnitTypeChangedEvent,
+    UnitAllianceChangedEvent,
+    OwnConstructionStartedEvent,
+    OwnConstructionFinishedEvent,
+    OwnWarpInFinishedEvent,
+    OwnUpgradeFinishedEvent,
+    UnitDamagedEvent,
+    EnemyUnitEnteredSightEvent,
+    EnemyUnitLeftSightEvent,
+    UnitDiedEvent,
+    UnitFoundDeadEvent,
+    OwnActionEvent,
+    ChatEvent,
+    *_ALERT_EVENTS.values(),
+)
+
+
+def record(events: EventBus, *event_types: type[Event]) -> list[Any]:
+    """The events of `event_types` handed out from now on, in the order they were."""
+    seen: list[Any] = []
+    for event_type in event_types:
+        events.on(event_type)(lambda event: seen.append(event))
+    return seen
+
+
 def make_tables(*units: data_pb2.UnitTypeData) -> GameData:
     """Tables holding a row for each of `units`."""
     return GameData(sc2api_pb2.ResponseData(units=units))
@@ -177,21 +230,27 @@ def make_client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]
 
 
 class RealGame:
-    """A game against the computer, played a step at a time by hand, with its units tracked."""
+    """A game against the computer, played a step at a time by hand, with its units tracked and what each observation
+    reports has happened handed to the handlers of `events`."""
 
-    def __init__(self, client: Client, player: int) -> None:
+    def __init__(self, client: Client, player: int, events: EventBus | None = None) -> None:
         self.client = client
         self.player = player
+        self.events = events or EventBus()
         self.map = GameMap(client.game_info())
         self.enemy = Enemy()
         self.tracker = _UnitTracker(GameData(client.game_data()), self.enemy)
+        self.reporter = _Reporter(self.tracker)
         self.state = self._observe()
 
     def _observe(self) -> _State:
         response = self.client.observation()
-        self.tracker.update(response.observation.raw_data, response.observation.game_loop)
+        step = self.step = response.observation.game_loop
+        self.tracker.update(response.observation.raw_data, step)
         self.enemy.assume_upgrades(*self.tracker.upgrade_reader.read_basic_upgrades(self.tracker.present_units))
-        return _State(response, self.tracker, self.map)
+        state = _State(response, self.tracker, self.map)
+        self.reporter.report(self.events, response, state, step)
+        return state
 
     def turn(self, steps: int) -> Units[Unit[Any]]:
         """Let `steps` pass, then observe."""

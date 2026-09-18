@@ -132,6 +132,15 @@ class TestSubscribing:
         assert bus._has_handlers(TurnEvent)
         assert not bus._has_handlers(TurnStartEvent)
 
+    def test_nothing_is_wanted_once_every_handler_is_done_until_the_next_game(self) -> None:
+        bus = EventBus()
+        bus.on(TurnEvent, once=True)(lambda event: None)
+        bus.on(TurnEvent)(lambda event: Done)
+        bus._emit(TurnEvent(0))
+        assert not bus._has_handlers(TurnEvent)
+        bus._start_game()
+        assert bus._has_handlers(TurnEvent)
+
     def test_a_coroutine_function_is_refused(self) -> None:
         """NachOS calls its handlers synchronously, so one would only make a coroutine nobody awaits."""
 

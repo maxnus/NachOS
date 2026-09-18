@@ -149,6 +149,9 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
+- **What an order does can show up an observation late.** On the ladder, and in any realtime game, an add-on or a
+  stim buff may appear two observations after the order rather than in the next. Never write code, or a test, that
+  needs an order's effect in the very next observation: wait for it.
 - **A tag is not a unit's identity.** A structure is remembered under a new tag every time it goes out of sight.
   Name a unit by its NachOS `id`, and translate every tag the game hands over.
 

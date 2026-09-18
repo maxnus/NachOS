@@ -10,7 +10,6 @@ from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.state._actions import Action, read_action
-from sc2nachos.state._chat import ChatMessage
 from sc2nachos.state._effect import Effect
 from sc2nachos.state._score import Score
 from sc2nachos.state._supply import Supply
@@ -112,13 +111,9 @@ class _State:
     def effects(self) -> tuple[Effect, ...]:
         return tuple(Effect.from_proto(effect) for effect in self._observation.raw_data.effects)
 
-    # What happened since the observation before. The game reports each once, in the next observation however many
-    # steps it spans, a realtime game's included (in game). Read by the events a later milestone adds.
-
-    @cached_property
-    def chat(self) -> tuple[ChatMessage, ...]:
-        """The messages sent to the chat, this player's own included (in game)."""
-        return tuple(ChatMessage.from_proto(message) for message in self._response.chat)
+    # What this player did since the observation before. The game reports each action once, in the next observation
+    # however many steps it spans, a realtime game's included (in game), as it does chat and alerts. Read by the
+    # events that hand them on.
 
     @cached_property
     def actions(self) -> tuple[Action, ...]:

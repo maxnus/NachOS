@@ -8,6 +8,7 @@ from s2clientprotocol import raw_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.units._changes import _Changes
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
@@ -73,9 +74,9 @@ class _UnitTracker:
         "_builders",
         "_builders_now",
         "_by_tag",
+        "_changes",
         "_data",
         "_enemy",
-        "_newly_dead_units",
         "_ignored_tags",
         "_ids",
         "_in_fog_tags",
@@ -84,8 +85,10 @@ class _UnitTracker:
         "_present_units_by_tag",
         "_stale_units",
         "_under_construction",
+        "_unfinished",
         "_units_by_id",
         "_units_seen_per_alliance",
+        "_updates",
         "_upgrade_reader",
         "_upgraded_unit_types",
         "_upgrades",
@@ -109,8 +112,11 @@ class _UnitTracker:
         # The units out of the observation and not dead, by id.
         self._stale_units: dict[int, Unit[Any]] = {}
         self._known_units: Units[Unit[Any]] | None = None
-        # The units the last observation found dead.
-        self._newly_dead_units: list[Unit[Any]] = []
+        # What the last update found changed, and how many updates there have been.
+        self._changes = _Changes()
+        self._updates = 0
+        # This player's units first seen unfinished and not finished since, by id.
+        self._unfinished: dict[int, OwnUnit[Any]] = {}
         # How many units of each alliance have been seen, indexed by the alliance's value, from which ids are made.
         self._units_seen_per_alliance = [0] * 5
         # Each structure still being built by a unit that became it, as a drone does, and that unit.
@@ -191,12 +197,17 @@ class _UnitTracker:
         return self._known_units
 
     @property
-    def newly_dead_units(self) -> Units[Unit[Any]]:
-        """Every unit the last observation found dead, whether the game reported it or not.
+    def changes(self) -> _Changes:
+        """What the last update found changed.
 
         The game also reports deaths under tags it never reported a unit under (corpus), which name no unit.
         """
-        return Units(self._newly_dead_units)
+        return self._changes
+
+    @property
+    def updates(self) -> int:
+        """How many observations have been taken in."""
+        return self._updates
 
     def unit_by_tag(self, tag: int) -> Unit[Any]:
         """The unit the game reported under `tag`, dead or alive."""
@@ -269,10 +280,15 @@ class _UnitTracker:
 
         Raises `UncuratedIdError` where this player holds an upgrade the curated ids leave out, which belongs in them.
         """
-        self._upgrades = frozenset(UpgradeId.read(upgrade) for upgrade in observation.player.upgrade_ids)
+        changes = self._changes = _Changes()
+        self._updates += 1
+        upgrades = frozenset(UpgradeId.read(upgrade) for upgrade in observation.player.upgrade_ids)
+        # Upgrades are never lost, so a count unchanged is a set unchanged.
+        if len(upgrades) != len(self._upgrades):
+            changes.upgrades = sorted(upgrades - self._upgrades)
+        self._upgrades = upgrades
         previous = self._present_units_by_tag
         dead = observation.event.dead_units
-        self._newly_dead_units = []
         present, new = self._update_known_tags(observation.units, previous, step)
         if new:
             self._identify_new_tags(new, previous, present, step, set(dead))
@@ -281,9 +297,14 @@ class _UnitTracker:
         self._handle_departures(previous, present, step)
         for tag in dead:
             if (unit := self._by_tag.get(tag)) is not None:
-                self._mark_dead(unit, present)
+                self._mark_dead(unit, present, reported=True)
         if self._builders:
             self._update_builders(present)
+        if self._unfinished:
+            self._update_unfinished()
+        if changes.left_sight:
+            # A unit that died went out of the observation first.
+            changes.left_sight = [unit for unit in changes.left_sight if not unit._dead]
         self._present_units_by_tag = present
         self._present_units = Units(present.values())
         self._known_units = None
@@ -318,12 +339,19 @@ class _UnitTracker:
                     continue
                 if unit._stale:
                     del self._stale_units[unit._id]
+                    self._note_back_in_sight(unit, proto)
                 elif unit._tag in self._in_fog_tags:
                     self._ignore_fog_copy(unit._tag, previous, present)
+                    self._note_back_in_sight(unit, proto)
                 unit._tag = tag
             unit._update(proto, step)
             present[tag] = unit
         return present, new
+
+    def _note_back_in_sight(self, unit: Unit[Any], proto: raw_pb2.Unit) -> None:
+        """Note an enemy unit reported in sight again, having been out of the observation or in the fog."""
+        if proto.alliance == _ENEMY and proto.display_type != _IN_FOG:
+            self._changes.entered_sight.append(unit)
 
     def _ignore_fog_copy(self, tag: int, previous: _UnitsByTag, present: _UnitsByTag) -> None:
         """Leave out, for good, the copy in the fog under `tag` of a structure that is back in vision.
@@ -361,6 +389,9 @@ class _UnitTracker:
             display = proto.display_type
             unit = departed.pop((proto.alliance, proto.pos.x, proto.pos.y), None)
             if unit is not None and {display, unit._latest_data.display_type} == {_IN_VISION, _IN_FOG}:
+                if proto.alliance == _ENEMY:
+                    sight = self._changes.entered_sight if display == _IN_VISION else self._changes.left_sight
+                    sight.append(unit)
                 unit._tag = proto.tag
                 unit._update(proto, step)
             else:
@@ -400,13 +431,23 @@ class _UnitTracker:
         """Mark dead each unit that became a structure which has finished, or died without the unit coming back.
 
         Tested in game: a drone whose structure is cancelled comes back under its own tag, with its health, in the
-        observation that reports the structure dead.
+        observation that reports the structure dead. One whose structure finishes or is killed the game reports dead
+        itself, in that observation, so this marks only one the game did not.
         """
         for structure, builder in list(self._builders.items()):
             if structure._dead or structure.is_complete:
                 del self._builders[structure]
                 if builder._stale and not builder._dead:
-                    self._mark_dead(builder, present)
+                    self._mark_dead(builder, present, reported=False)
+
+    def _update_unfinished(self) -> None:
+        """Note each of this player's unfinished units that has finished, and forget those and the dead."""
+        for unit_id, unit in list(self._unfinished.items()):
+            if unit._dead:
+                del self._unfinished[unit_id]
+            elif unit._latest_data.build_progress == 1.0:
+                del self._unfinished[unit_id]
+                self._changes.finished.append(unit)
 
     def _handle_departures(self, departed: _UnitsByTag, present: _UnitsByTag, step: int) -> None:
         """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be."""
@@ -416,9 +457,12 @@ class _UnitTracker:
                 del self._by_tag[tag]
                 if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS:
                     # Its spot came into vision without it: tested in game, the game reports no death it cannot see.
-                    self._mark_dead(unit, present)
+                    self._mark_dead(unit, present, reported=False)
                     continue
             if unit._step != step and not unit._stale:
+                report = unit._latest_data
+                if report.alliance == _ENEMY and report.display_type != _IN_FOG:
+                    self._changes.left_sight.append(unit)
                 unit._mark_stale()
                 self._stale_units[unit._id] = unit
 
@@ -429,18 +473,31 @@ class _UnitTracker:
         if count >= _IDS_PER_ALLIANCE:
             raise NachOSError(f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids")
         self._units_seen_per_alliance[alliance] = count
-        cls = OwnUnit if alliance == _OWN else Unit
-        unit = cls(proto, self, alliance * _IDS_PER_ALLIANCE + count, step)
-        self._units_by_id[unit._id] = unit
+        unit_id = alliance * _IDS_PER_ALLIANCE + count
+        changes = self._changes
+        if alliance == _OWN:
+            own: OwnUnit[Any] = OwnUnit(proto, self, unit_id, step)
+            changes.created.append(own)
+            if proto.build_progress < 1.0:
+                self._unfinished[unit_id] = own
+            unit: Unit[Any] = own
+        else:
+            unit = Unit(proto, self, unit_id, step)
+            if alliance == _ENEMY:
+                changes.first_seen.append(unit)
+                if proto.display_type != _IN_FOG:
+                    changes.entered_sight.append(unit)
+        self._units_by_id[unit_id] = unit
         return unit
 
-    def _mark_dead(self, unit: Unit[Any], present: _UnitsByTag) -> None:
-        """Mark `unit` dead and let go of it: reported dead, or gone from a spot it could not have left."""
+    def _mark_dead(self, unit: Unit[Any], present: _UnitsByTag, *, reported: bool) -> None:
+        """Mark `unit` dead and let go of it: `reported` dead, or found dead, such as gone from a spot it could not have
+        left."""
         # Its tags: the one it was last reported under, and the one it was last in vision under.
         sighting = unit._latest_data_in_vision
         tags = {unit._tag} if sighting is None else {unit._tag, sighting.tag}
         unit._mark_dead()
-        self._newly_dead_units.append(unit)
+        (self._changes.died if reported else self._changes.found_dead).append(unit)
         self._stale_units.pop(unit._id, None)
         for tag in tags:
             if self._by_tag.get(tag) is unit:
@@ -455,6 +512,7 @@ class _UnitTracker:
         self._present_units_by_tag = {}
         self._present_units = Units()
         self._known_units = None
-        self._newly_dead_units = []
+        self._changes = _Changes()
+        self._unfinished = {}
         self._under_construction = None
         self._builders_now = None
