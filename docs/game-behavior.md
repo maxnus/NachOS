@@ -149,8 +149,9 @@ Each entry ends with how it was seen:
   1.00); an egg or cocoon reads 1 throughout, its progress being in its order (#25).
 - Only the command center (12 of 16, then 9 once three SCVs went to gas) and the refinery (3 of 3) reported
   harvesters. `ideal_harvesters` is 2 a mineral field and 3 a geyser (#25).
-- `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a pylon, a nexus, an
-  assimilator, a barracks and a command center (#25, #27; but see Not understood).
+- `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a nexus, an assimilator,
+  a barracks, a command center and a pylon, which always stands in its own field, alone or beside another (#25, #27,
+  #39).
 - `is_hallucination` is true for an enemy's hallucination only while a detector is near; this player's own are
   always flagged. `is_active` is true for any unit carrying out an order, the enemy's included. `engaged_target_tag`
   names the unit a marine attacks (#25).
@@ -457,8 +458,6 @@ Each entry ends with how it was seen:
 
 ## Not understood yet
 
-- **When a pylon reads as powered.** In a probe as this page was written, a lone pylon and a pylon inside another's
-  field both read unpowered, but `tools/sweep_tech_tree.py` recorded one reading powered (`data/tech_tree.json`).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it stale and never finds it dead (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
