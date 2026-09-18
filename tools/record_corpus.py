@@ -56,9 +56,17 @@ GAMES = (
 
 def record(game: CorpusGame) -> None:
     """Play `game` with an api that does nothing, and record it."""
-    api = Api(steps_per_turn=STEPS_PER_TURN)
+    api = Api()
     bot = ApiBot(api, game.race, "NachOS")
-    result = run_local(game.map, bot, game.opponent, random_seed=game.seed, record_to=game.path, window=(640, 480))
+    result = run_local(
+        game.map,
+        bot,
+        game.opponent,
+        steps_per_turn=STEPS_PER_TURN,
+        random_seed=game.seed,
+        record_to=game.path,
+        window=(640, 480),
+    )
     logger.info("{} ended in a {} after {:.0f} seconds", game.name, result, api.time)
 
 

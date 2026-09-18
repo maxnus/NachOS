@@ -8,8 +8,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 
 - **Nothing is subclassed, and nothing is `async`.** Construct an `Api`, at import time if you like, and hand it
   to a runner along with the race it plays: `run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG))`.
-- **A turn is one step unless you say otherwise.** Use `Api(steps_per_turn=4)` to match python-sc2, whose
-  `client.game_step` defaults to 4. The value is fixed for the life of the api and cannot be changed mid-game.
+- **A turn is one step unless you say otherwise.** Use `run_local(..., steps_per_turn=4)` to match python-sc2,
+  whose `client.game_step` defaults to 4. It is set for a game and cannot be changed during one.
 - **`Computer()` defaults to very hard, with a random race and build.** python-sc2's `Computer` requires a race
   and defaults to easy.
 - **A game holds one bot and at most one computer.** Every current map has two slots, and the game drops extra
@@ -27,6 +27,24 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
   `path`. A `Client` over `ReplayTransport(Recording(path))` then plays it back with no game running. A run that
   is killed before it finishes leaves only part of the file.
+
+## Events
+
+- **A bot's code runs in handlers, not in overridden methods.** `on_start`, `on_step` and `on_end` are handlers of
+  `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.event.on(TurnEvent)`. A module-level
+  function is subscribed as it is defined. A method is marked, and subscribed for an instance passed to
+  `api.event.subscribe(instance)`, usually by its own `__init__`.
+- **`on_step` is best kept as one `TurnEvent` handler** that calls the bot's parts in the order it wants. Handlers
+  run in the order of their priorities, highest first, then the order they subscribed, which is hard to follow
+  across many modules.
+- **There is no `iteration`.** `event.step` is the game loop, and `every_steps` and `at_step` count steps, so a
+  handler runs as often in game time at any `steps_per_turn`.
+- **The last observation gets no turn, as in python-sc2, but it is taken in.** A `GameEndEvent` handler reads the
+  game as it ended, where python-sc2's `on_end` sees the observation before it.
+- **A handler cannot be `async`**, and one that is is refused when it subscribes.
+- **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it is
+  passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
+  unsubscribes the old ones, or they go on handling events alongside the new.
 
 ## Errors
 

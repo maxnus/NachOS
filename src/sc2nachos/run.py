@@ -27,6 +27,7 @@ def run_local(
     bot: ApiBot,
     opponent: Computer | None = None,
     *,
+    steps_per_turn: int = 1,
     realtime: bool = False,
     time_limit: float | None = None,
     random_seed: int | None = None,
@@ -49,7 +50,7 @@ def run_local(
         try:
             client.create_game(game_map.path, players, realtime=realtime, random_seed=random_seed)
             client.join_game(bot.race, name=bot.name)
-            return bot.api.play(client, realtime=realtime, time_limit=time_limit)
+            return bot.api.play(client, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
         finally:
             client.leave_game()
             client.quit()
@@ -61,6 +62,7 @@ def run_ladder(
     host: str,
     port: int,
     start_port: int | None = None,
+    steps_per_turn: int = 1,
     realtime: bool = False,
     record_to: Path | None = None,
 ) -> Result:
@@ -74,7 +76,7 @@ def run_ladder(
         try:
             ports = GamePorts.from_start_port(start_port) if start_port is not None else None
             client.join_game(bot.race, name=bot.name, ports=ports)
-            return bot.api.play(client, realtime=realtime)
+            return bot.api.play(client, steps_per_turn=steps_per_turn, realtime=realtime)
         finally:
             # The ladder owns the client it started, so it is left running to be told what to do next.
             client.leave_game()
