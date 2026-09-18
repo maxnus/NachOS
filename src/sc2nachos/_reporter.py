@@ -104,9 +104,9 @@ class _Reporter:
         if observation.chat and wanted(ChatEvent):
             for message in observation.chat:
                 emit(ChatEvent(step, message.player_id, message.message))
-        # The protocol parses an alert it does not name into nothing, so every one read has an event.
+        # The protocol parses an alert it does not name into nothing, so every one read is in the mapping.
         for alert in observation.observation.alerts:
-            if wanted(event_type := _ALERT_EVENTS[alert]):
+            if (event_type := _ALERT_EVENTS[alert]) is not None and wanted(event_type):
                 emit(event_type(step))
 
     def _is_structure(self, unit: Unit[Any]) -> bool:

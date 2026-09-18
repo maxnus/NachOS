@@ -156,10 +156,17 @@ class TestWhatATurnReports:
         game.observe(16, make_unit(1), dead=(1,))
         assert [type(event) for event in seen] == [OwnUnitCreatedEvent, UnitDiedEvent]
 
-    def test_every_alert_the_protocol_names_has_an_event_of_its_own(self) -> None:
+    def test_every_alert_the_protocol_names_has_an_event_of_its_own_or_is_passed_over(self) -> None:
         assert set(_ALERT_EVENTS) == {value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values}
-        assert len(set(_ALERT_EVENTS.values())) == len(_ALERT_EVENTS)
-        assert all(event_type.__name__.endswith("AlertEvent") for event_type in _ALERT_EVENTS.values())
+        events = [event_type for event_type in _ALERT_EVENTS.values() if event_type is not None]
+        assert len(set(events)) == len(events) == len(_ALERT_EVENTS) - 2
+        assert all(event_type.__name__.endswith("AlertEvent") for event_type in events)
+
+    def test_an_alert_passed_over_reaches_no_handler(self) -> None:
+        game = _Game()
+        seen = record(game.events, *HAPPENINGS)
+        game.observe(0, alerts=[sc2api_pb2.Alert.AlertError, sc2api_pb2.Alert.TrainError])
+        assert not seen
 
 
 class TestOnlyWhatIsWanted:

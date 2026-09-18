@@ -180,3 +180,4 @@ of its buildings.
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |
 | Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py`, which starts the game |
+| Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |

@@ -67,6 +67,10 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **A unit that dies does not also leave sight, and one that cloaks where it stands stays in sight.**
 - **Damage is what a unit lost since the observation before**, less what it regained in between, and a unit that
   changed type took none.
+- **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
+  it has gone some 6000 steps without being attacked, the same as in python-sc2. `UnitDamagedEvent` reports every
+  turn a unit in vision loses health. `AlertError` and `TrainError` have no events, since nothing the sweep in `tools/sweep_alerts.py` did raised
+  either.
 
 ## Errors
 

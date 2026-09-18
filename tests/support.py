@@ -206,7 +206,7 @@ HAPPENINGS: tuple[type[Event], ...] = (
     UnitFoundDeadEvent,
     OwnActionEvent,
     ChatEvent,
-    *_ALERT_EVENTS.values(),
+    *(event_type for event_type in _ALERT_EVENTS.values() if event_type is not None),
 )
 
 
