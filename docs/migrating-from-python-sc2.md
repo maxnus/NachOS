@@ -45,6 +45,40 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 - **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it is
   passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
   unsubscribes the old ones, or they go on handling events alongside the new.
+- **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent` in the
+  order `sc2nachos.events` gives, and made only for a type something subscribes to:
+
+  | python-sc2 | NachOS |
+  |---|---|
+  | `on_unit_created(unit)` | `OwnUnitCreatedEvent`, structures included |
+  | `on_building_construction_started`, `_complete` | `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent` |
+  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, and `UnitFoundDeadEvent` for a structure found gone from its spot |
+  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit |
+  | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
+  | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's units in vision |
+  | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
+  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
+  | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
+  | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent`, whose `alert` is an `Alert` |
+
+- **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
+  reported created on the first turn.
+- **An event's step is when NachOS learned of it.** A morph in the fog is reported when the unit is next seen, and a
+  structure that died there when its spot is.
+- **A unit that dies does not also leave sight, and one that cloaks where it stands stays in sight.**
+- **Damage is what a unit lost since the observation before**, less what it regained in between, and a unit that
+  changed type took none. The energy lost events report energy the same way: a spell cast, a feedback or an EMP,
+  but never what regenerates.
+- **A cloaked unit of yours reads `CLOAKED_ALLIED` whether the enemy detects it or not**, so no event says it was
+  detected, and nothing else of its report does either: not its display, not its buffs. Burrowing is no cloak: a
+  burrowed enemy nothing detects is not in the observation at all.
+- **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
+  it has gone some 6000 steps without being attacked, the same as in python-sc2. The camera starts on the main base
+  and stays there until moved, so an attack on the main raises none. `OwnUnitDamagedEvent` reports every turn a unit
+  of yours loses health or shields, whatever the camera shows. `AlertError` and `TrainError` have no `Alert` members:
+  nothing in `tools/sweep_alerts.py` raised either, and training stalled for supply or a structure's ground found
+  blocked raise action errors instead.
 
 ## Errors
 
@@ -76,7 +110,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   `sc2nachos.ids.raw` holds every id, under Blizzard's own names.
 - **An id the enums leave out stops the game as the observation comes in**, for a unit's type and for an upgrade this
   player holds, since both belong among the curated ids and a game that reports one is a gap to fill. A buff, an
-  effect and an ability read off a unit raise when they are read. python-sc2 has no curation to be missing from.
+  effect and an ability read off a unit raise when they are read, and a handler of a buff event has every unit's
+  buffs read each turn. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
   `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
@@ -160,8 +195,10 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
   copy and says nothing.
 - **A drone that becomes a structure is stale until the structure finishes, then dead.** The game gives the
-  structure a new tag and reports no death for the drone. If the structure is cancelled, the drone comes back as the
-  same object. This holds for your own drones only, since only your own units' orders are reported.
+  structure a new tag, and reports the drone dead as the structure finishes or is killed, or a step later, so up to
+  an observation after the structure's `OwnConstructionFinishedEvent`. If the structure is
+  cancelled, the drone comes back as the same object. `builder` links the two for your own drones only, since only
+  your own units' orders are reported.
 - **A unit names the units it points at by object.** An order's target, a rally target, a passenger, an add-on and
   an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up. An order aimed
   at nothing has `None` for its target, where python-sc2's is `0`.
@@ -241,7 +278,8 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
 | `state.common.larva_count` | `len(api.units.own.of_type(UnitType.Larva))` |
-| `state.dead_units`, `chat`, `actions`, `action_errors`, `alerts` | nothing yet |
+| `state.dead_units`, `chat`, `actions`, `alerts` | events: see Events |
+| `state.action_errors` | nothing yet |
 
 - **Each read answers from the last observation, and nothing is read until asked for.** There is no `state`
   object to hold on to; `api.score` read next turn is next turn's score.

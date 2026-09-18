@@ -18,7 +18,6 @@ class AbilityId(IdEnum):
     ADEPT_CANCEL_SHADE = RawAbilityId.Cancel_AdeptPhaseShift
     ADEPT_SHADE = RawAbilityId.AdeptPhaseShift_AdeptPhaseShift
     ADEPT_SHADE_CANCEL = RawAbilityId.Cancel_AdeptShadePhaseShift
-    ARCHON_MERGE = RawAbilityId.Archon_Warp_Target
     ARMORY_RESEARCH_SHIP_WEAPONS = RawAbilityId.Research_TerranShipWeapons
     ARMORY_RESEARCH_SHIP_WEAPONS_1 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel1
     ARMORY_RESEARCH_SHIP_WEAPONS_2 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel2
@@ -201,6 +200,11 @@ class AbilityId(IdEnum):
     GENERAL_LIFT = RawAbilityId.Lift
     GENERAL_LOAD = RawAbilityId.Load
     GENERAL_LOAD_ALL = RawAbilityId.LoadAll
+    # The order you give two templar together, high or dark, which walks them to each other and merges them into an
+    # archon; given one alone it is refused. Each reports MORPH_ARCHON_EXACT running, aimed at the other, which
+    # merges them too given both at one of them, and does nothing given one (in game).
+    GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
+    GENERAL_MORPH_ARCHON_EXACT = RawAbilityId.Archon_Warp_Target
     GENERAL_MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     GENERAL_MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     GENERAL_PATROL = RawAbilityId.Patrol

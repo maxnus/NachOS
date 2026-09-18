@@ -7,7 +7,16 @@ import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
-from sc2nachos.events import Event, EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
+from sc2nachos.events import (
+    Event,
+    EventBus,
+    GameEndEvent,
+    GameStartEvent,
+    OwnUnitCreatedEvent,
+    TurnEvent,
+    TurnStartEvent,
+    UnitDiedEvent,
+)
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -19,7 +28,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
-from support import FakeTransport, make_game_info, make_observation, make_response
+from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
 _LADDER_MAP = "PylonAIE_v4"
@@ -40,6 +49,17 @@ def _game(*steps: int, ending: Result | None = Result.VICTORY, stepped: bool = T
         status = Status.ENDED if final else Status.IN_GAME
         responses.append(make_response(status, observation=make_observation(step, *results)))
         if not final and stepped:
+            responses.append(make_response(step=sc2api_pb2.ResponseStep()))
+    return responses
+
+
+def _game_of(*observations: sc2api_pb2.ResponseObservation) -> list[sc2api_pb2.Response]:
+    """The game's whole side of a conversation, a turn at each of `observations`, the last of which ends it."""
+    responses = [make_response(game_info=make_game_info()), make_response(data=sc2api_pb2.ResponseData())]
+    for index, observation in enumerate(observations):
+        final = index == len(observations) - 1
+        responses.append(make_response(Status.ENDED if final else Status.IN_GAME, observation=observation))
+        if not final:
             responses.append(make_response(step=sc2api_pb2.ResponseStep()))
     return responses
 
@@ -274,6 +294,40 @@ class TestEvents:
         fired.clear()
         api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
         assert first == fired == [("before", 0), ("during", 0), ("function", 2)]
+
+    def test_what_happened_comes_within_each_turn_and_the_last_observations_never_does(self) -> None:
+        api = Api()
+        seen: list[tuple[str, int]] = []
+        _record(api, seen)
+        for kind in (OwnUnitCreatedEvent, UnitDiedEvent):
+            api.event.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
+
+        def game() -> list[sc2api_pb2.Response]:
+            marine, scv = make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0)
+            return _game_of(
+                make_observation(0, units=[marine]),
+                make_observation(2, units=[marine, scv]),
+                make_observation(4, (1, Result.VICTORY), units=[scv], dead=(1,)),
+            )
+
+        api.play(_joined(*game())[0], steps_per_turn=2)
+        first = list(seen)
+        seen.clear()
+        api.play(_joined(*game())[0], steps_per_turn=2)
+        assert (
+            first
+            == seen
+            == [
+                ("GameStartEvent", 0),
+                ("TurnStartEvent", 0),
+                ("OwnUnitCreatedEvent", 0),
+                ("TurnEvent", 0),
+                ("TurnStartEvent", 2),
+                ("OwnUnitCreatedEvent", 2),
+                ("TurnEvent", 2),
+                ("GameEndEvent", 4),
+            ]
+        )
 
     def test_a_handler_that_raises_ends_the_game_by_raising(self) -> None:
         client, _ = _joined(*_game(0, 2, 4))

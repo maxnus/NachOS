@@ -36,7 +36,8 @@ class Visibility(ReadableIntEnum):
     IN_FOG = raw_pb2.DisplayType.Snapshot
     """A structure out of sight, remembered where it was when last seen."""
     INVISIBLE = raw_pb2.DisplayType.Hidden
-    """In sight, but cloaked or burrowed where nothing detects it."""
+    """In sight, but cloaked where nothing detects it. A burrowed unit nothing detects is not listed at all (in
+    game)."""
 
 
 class CloakState(ReadableIntEnum):

@@ -2,7 +2,8 @@
 structures on, and the few requests those tools make of it."""
 
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import closing, contextmanager
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
 
 import numpy
@@ -14,9 +15,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
-from sc2nachos.launch import GameProcess, Installation, Map
+from sc2nachos.launch import GameProcess, Installation, Map, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.protocol import Client, GamePorts, PortPair, WebSocketTransport
 
 MAP = "PylonAIE_v4"
 
@@ -160,5 +161,44 @@ def playing(race: Race, installation: Installation) -> Iterator[Sandbox]:
                 player = client.join_game(race, name="NachOS")
                 yield Sandbox(client, transport, player)
             finally:
+                client.leave_game()
+                client.quit()
+
+
+@dataclass(frozen=True, slots=True)
+class Rivals:
+    """A game on `MAP` between two players, both played from here: `me`, and `enemy`, whose units `me` meets."""
+
+    me: Sandbox
+    enemy: Sandbox
+    _pool: ThreadPoolExecutor
+
+    def step(self, count: int) -> None:
+        """Let `count` steps pass, which a game of two does only once both players ask for them."""
+        for future in [self._pool.submit(side.client.step, count) for side in (self.me, self.enemy)]:
+            future.result()
+
+
+@contextmanager
+def playing_rivals(race: Race, installation: Installation) -> Iterator[Rivals]:
+    """A game on `MAP` between two players of `race`, each on a client of its own. A debug cheat is a toggle for the
+    whole game, so only one of them turns each on."""
+    game_map = Map.find(MAP, installation=installation)
+    with ExitStack() as stack, ThreadPoolExecutor(2) as pool:
+        games = [stack.enter_context(GameProcess.launch(installation, window=(800, 600))) for _ in range(2)]
+        transports = [WebSocketTransport.connect(game.url) for game in games]
+        clients = [stack.enter_context(closing(Client(transport))) for transport in transports]
+        try:
+            clients[0].create_game(game_map.path, [Participant(), Participant()])
+            ports = GamePorts(PortPair(free_port(), free_port()), (PortPair(free_port(), free_port()),))
+            # Each join waits for the other, so they are sent together.
+            joins = [pool.submit(client.join_game, race, ports=ports) for client in clients]
+            me, enemy = (
+                Sandbox(client, transport, join.result())
+                for client, transport, join in zip(clients, transports, joins, strict=True)
+            )
+            yield Rivals(me, enemy, pool)
+        finally:
+            for client in clients:
                 client.leave_game()
                 client.quit()

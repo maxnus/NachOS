@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NotPlayingError
 from sc2nachos.enemy import Enemy
+from sc2nachos.events import ChatEvent
 from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -21,7 +22,6 @@ from sc2nachos.state import (
     AutocastToggle,
     CameraMove,
     CategoryScore,
-    ChatMessage,
     Effect,
     Supply,
     UiUnitCounts,
@@ -42,6 +42,7 @@ from support import (
     make_response,
     make_tables,
     make_unit,
+    record,
 )
 
 _TABLES = make_tables(
@@ -214,10 +215,6 @@ def _command(ability: int, *tags: int, queued: bool = False, **target: Any) -> s
 
 
 class TestWhatHappened:
-    def test_chat_is_every_message_this_player_included(self) -> None:
-        state = _Game().observe(chat=[(1, "gl hf"), (2, "you too")])
-        assert state.chat == (ChatMessage(1, "gl hf"), ChatMessage(2, "you too"))
-
     def test_a_unit_command_names_its_units_and_its_target(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1), make_unit(2), make_unit(9, alliance=_ENEMY)])
@@ -344,21 +341,21 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         # The game sends points in single precision.
         assert command.target == pytest.approx(out_there, abs=1e-3)
 
-        # A message sent to the chat comes back.
+        # A message sent to the chat comes back, once.
         chat = sc2api_pb2.ActionChat(channel=sc2api_pb2.ActionChat.Broadcast, message="gl hf")
         client.act([sc2api_pb2.Action(action_chat=chat)])
+        messages = record(game.events, ChatEvent)
         game.turn(1)
-        assert game.state.chat == (ChatMessage(game.player, "gl hf"),)
         game.turn(1)
-        assert game.state.chat == ()
+        assert messages == [ChatEvent(messages[0].step, game.player, "gl hf")]
 
         # A unit that dies is among the dead units in one observation only.
         game.debug(game.kill(zergling))
         while not zergling.is_dead:
             game.turn(1)
-        assert list(game.tracker.newly_dead_units) == [zergling]
+        assert game.tracker.last_changes.units_died == [zergling]
         game.turn(1)
-        assert not game.tracker.newly_dead_units
+        assert not game.tracker.last_changes.units_died
 
         # An upgrade once researched. The `tech_tree` cheat would grant dozens of upgrades besides.
         game.debug(

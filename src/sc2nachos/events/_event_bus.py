@@ -215,8 +215,10 @@ class EventBus:
         return removed
 
     def _has_handlers(self, event_type: type[Event]) -> bool:
-        """Whether anything is subscribed to `event_type`, so that an event nobody handles is never made."""
-        return event_type in self._handlers
+        """Whether any handler of `event_type` is not done."""
+        if (handlers := self._handlers.get(event_type)) is None:
+            return False
+        return any(not handler.done for handler in handlers)
 
     def _start_game(self) -> None:
         """Forget what every handler has done, and how long it took."""

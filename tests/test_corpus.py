@@ -11,6 +11,19 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.enemy import Enemy
+from sc2nachos.events import (
+    EnemyUnitDamagedEvent,
+    EnemyUnitEnergyLostEvent,
+    EnemyUnitEnteredSightEvent,
+    EnemyUnitFirstSeenEvent,
+    EnemyUnitLeftSightEvent,
+    Event,
+    OwnUnitCreatedEvent,
+    OwnUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
+    UnitDiedEvent,
+    UnitFoundDeadEvent,
+)
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
@@ -19,6 +32,7 @@ from sc2nachos.protocol import Client, Recording, ReplayTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit
 from sc2nachos.units._tracker import _UnitTracker
+from support import HAPPENINGS
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -110,6 +124,45 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
                 for name in _READS[type(unit)]:
                     with contextlib.suppress(NotReportedError):
                         getattr(unit, name)
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
+    """Every unit of this player's is created once and every enemy unit first seen once, the dead are dead, a unit
+    enters and leaves sight in turn, and damage is always some."""
+    recording = Recording(path)
+    client = Client(ReplayTransport(recording))
+    client.create_game("recorded", [Participant(), Computer()])
+    client.join_game(Race.RANDOM)
+    api = Api()
+    seen: list[Event] = []
+    for event_type in HAPPENINGS:
+        api.event.on(event_type)(lambda event: seen.append(event))
+    api.play(client)
+
+    tracker = api._current_game().unit_tracker
+    # The last observation gets no turn, so what it first saw is never reported.
+    unreported = {
+        unit.id for unit in (*tracker.last_changes.own_units_created, *tracker.last_changes.enemy_units_first_seen)
+    }
+    ever = [unit_id for unit_id in tracker._units_by_id if unit_id not in unreported]
+    created = [event.unit for event in seen if isinstance(event, OwnUnitCreatedEvent)]
+    first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
+    assert sorted(unit.id for unit in created) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 1]
+    assert sorted(unit.id for unit in first_seen) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 4]
+    assert all(event.unit.is_dead for event in seen if isinstance(event, UnitDiedEvent | UnitFoundDeadEvent))
+    in_sight: dict[int, bool] = {}
+    for event in seen:
+        if isinstance(event, EnemyUnitEnteredSightEvent | EnemyUnitLeftSightEvent):
+            entering = isinstance(event, EnemyUnitEnteredSightEvent)
+            assert in_sight.get(event.unit.id, False) is not entering, f"{event} twice in a row"
+            in_sight[event.unit.id] = entering
+    assert all(event.damage > 0 for event in seen if isinstance(event, OwnUnitDamagedEvent | EnemyUnitDamagedEvent))
+    drained = [event for event in seen if isinstance(event, OwnUnitEnergyLostEvent | EnemyUnitEnergyLostEvent)]
+    assert all(event.energy_lost > 0 for event in drained)
+    assert in_sight, "no enemy unit ever came into sight"
+    client.leave_game()
+    client.quit()
 
 
 # Every read of an observation beyond its units.
