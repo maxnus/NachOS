@@ -31,7 +31,7 @@ from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from support import HAPPENINGS
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
@@ -105,12 +105,12 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _UnitTracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), Enemy())
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(_observations(recording)):
         step = observation.observation.game_loop
         tracker.update(observation.observation.raw_data, step)
-        units = tracker.present_units
+        units = tracker.units.present
         assert [unit.tag for unit in units] == [unit.tag for unit in observation.observation.raw_data.units if unit.tag]
         assert len({id(unit) for unit in units}) == len(units), "two tags of one observation are one unit"
         for unit in units:
@@ -120,7 +120,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
             for name in _NAMING:
                 getattr(unit, name)
         if index % 50 == 0:
-            for unit in tracker.known_units:
+            for unit in tracker.units.known:
                 for name in _READS[type(unit)]:
                     with contextlib.suppress(NotReportedError):
                         getattr(unit, name)
@@ -140,12 +140,12 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
         api.event.on(event_type)(lambda event: seen.append(event))
     api.play(client)
 
-    tracker = api._current_game().unit_tracker
+    tracker = api._current_game().tracker
     # The last observation gets no turn, so what it first saw is never reported.
     unreported = {
         unit.id for unit in (*tracker.last_changes.own_units_created, *tracker.last_changes.enemy_units_first_seen)
     }
-    ever = [unit_id for unit_id in tracker._units_by_id if unit_id not in unreported]
+    ever = [unit_id for unit_id in tracker.units._units_by_id if unit_id not in unreported]
     created = [event.unit for event in seen if isinstance(event, OwnUnitCreatedEvent)]
     first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
     assert sorted(unit.id for unit in created) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 1]
@@ -176,7 +176,7 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _UnitTracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), Enemy())
     game_map = GameMap(
         next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
     )

@@ -31,7 +31,7 @@ from sc2nachos.state import (
 )
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
     RealGame,
@@ -57,7 +57,7 @@ class _Game:
     """The units and the rest of a game's observations, taken in one at a time, on an eight by eight map."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None) -> None:
-        self.tracker = _UnitTracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(game_info or make_game_info())
 
     def observe(self, step: int = 0, **fields: Any) -> _State:
@@ -218,7 +218,7 @@ class TestWhatHappened:
     def test_a_unit_command_names_its_units_and_its_target(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1), make_unit(2), make_unit(9, alliance=_ENEMY)])
-        present = game.tracker.present_units
+        present = game.tracker.units.present
         marine, other, enemy = present.by_id(100001), present.by_id(100002), present.by_id(400001)
         actions = [
             _command(AbilityId.GENERAL_MOVE_EXACT, 1, 2, target_world_space_pos=common_pb2.Point2D(x=5.0, y=6.0)),
@@ -236,7 +236,7 @@ class TestWhatHappened:
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1, UnitTypeId.MEDIVAC)])
-        medivac: Unit[Any] = game.tracker.present_units[0]
+        medivac: Unit[Any] = game.tracker.units.present[0]
         toggle = raw_pb2.ActionRawToggleAutocast(ability_id=AbilityId.MEDIVAC_HEAL, unit_tags=[1])
         camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
         actions = [

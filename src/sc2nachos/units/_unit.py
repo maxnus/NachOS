@@ -16,7 +16,7 @@ from sc2nachos.units._values import Alliance, CloakState, Visibility
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import UnitTypeData, Weapon
-    from sc2nachos.units._tracker import _UnitTracker
+    from sc2nachos.units._tracking import _Tracker
 
 _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
@@ -67,7 +67,7 @@ class Unit[K: UnitType.AnyType]:
         "_type_id",
     )
 
-    _tracker: _UnitTracker
+    _tracker: _Tracker
     _id: int
     _tag: int
     _latest_data: raw_pb2.Unit
@@ -83,7 +83,7 @@ class Unit[K: UnitType.AnyType]:
     _stale: bool
     _dead: bool
 
-    def __init__(self, proto: raw_pb2.Unit, tracker: _UnitTracker, unit_id: int, step: int) -> None:
+    def __init__(self, proto: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
         self._id = unit_id
         self._tag = proto.tag
@@ -499,19 +499,19 @@ class Unit[K: UnitType.AnyType]:
     def weapons(self) -> tuple[Weapon, ...]:
         """Its type's weapons with the upgrades its owner has: this player's own for its units, `Api.enemy.upgrades`
         for the enemy's, and none for anyone else's."""
-        return self._tracker.upgraded_type(self).weapons
+        return self._tracker.upgrades.upgraded_type(self).weapons
 
     @property
     def speed(self) -> float:
         """How fast its type moves with the upgrades its owner has, as `weapons` counts them, and before creep or any
         buff: in distance per second, as `velocity` is."""
-        return self._tracker.upgraded_type(self).speed
+        return self._tracker.upgrades.upgraded_type(self).speed
 
     @property
     def armor(self) -> float:
         """Its base armor with the armor its upgrades add: what it reports for a unit in sight, and what its owner is
         known to have for one out of it."""
-        return self._tracker.armor_of(self)
+        return self._tracker.upgrades.armor_of(self)
 
     @property
     def shield_armor(self) -> float:
@@ -519,7 +519,7 @@ class Unit[K: UnitType.AnyType]:
 
         The game's tables hold none of this; `docs/curating-ids.md` has what a level was measured to take off a hit.
         """
-        return self._tracker.shield_armor_of(self)
+        return self._tracker.upgrades.shield_armor_of(self)
 
     @property
     def is_structure(self) -> bool:

@@ -11,7 +11,7 @@ from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
-    from sc2nachos.units._tracker import _UnitTracker
+    from sc2nachos.units._tracking._tracker import _Tracker
     from sc2nachos.units._unit import Unit
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -21,13 +21,13 @@ _ENEMY = raw_pb2.Alliance.Enemy
 
 
 @final
-class _UnitComparison:
+class _UnitComparer:
     """What each unit of this player's or the enemy's lost since the tracker's update before, how its cloak changed,
     and the buffs it gained and lost, recorded among the tracker's last changes as asked."""
 
     __slots__ = ("_compared", "_compared_update", "_tracker", "_worn", "_worn_update")
 
-    def __init__(self, tracker: _UnitTracker) -> None:
+    def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
         # The report of each unit of this player's or the enemy's in sight, by id, as of the update `compare` last ran
         # on.
@@ -57,7 +57,7 @@ class _UnitComparison:
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
         changes = tracker.last_changes
-        for unit in tracker.present_units:
+        for unit in tracker.units.present:
             report = unit._latest_data
             alliance = report.alliance
             if (alliance != _OWN and alliance != _ENEMY) or report.display_type == _IN_FOG:

@@ -31,7 +31,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, Recording, ReplayTransport, WebSocketTransport
 from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, Visibility
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeInference, UpgradeReader
 from support import RealGame, make_observation, make_unit
 
@@ -326,16 +326,14 @@ class TestWhatTheTablesSay:
         assert marine.with_upgrades({UpgradeId.ADRENAL_GLANDS, UpgradeId.STIMPACK}) is marine
 
 
-def _tracker(tables: GameData) -> _UnitTracker:
-    return _UnitTracker(tables, Enemy())
+def _tracker(tables: GameData) -> _Tracker:
+    return _Tracker(tables, Enemy())
 
 
-def _observe(
-    tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
-) -> list[Unit[Any]]:
+def _observe(tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*tracker.upgrade_reader.read_basic_upgrades(tracker.present_units))
-    by_tag = {unit.tag: unit for unit in tracker.present_units}
+    tracker.enemy.assume_upgrades(*tracker.upgrades.reader.read_basic_upgrades(tracker.units.present))
+    by_tag = {unit.tag: unit for unit in tracker.units.present}
     return [by_tag[unit.tag] for unit in units]
 
 
@@ -457,7 +455,7 @@ def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...]
     """What `units` and `effects`, in one observation, show of the enemy's upgrades beyond their levels."""
     tracker = _tracker(tables)
     _observe(tracker, *units)
-    return UpgradeReader(tables).read_intermediate_upgrades(tracker.present_units, effects)
+    return UpgradeReader(tables).read_intermediate_upgrades(tracker.units.present, effects)
 
 
 def _storm(alliance: Alliance) -> Effect:
@@ -648,7 +646,7 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
                 if _upgraded(row.with_upgrades(game.state.upgrades)) != pytest.approx(_upgraded(asked.units[unit_type]))
             ]
             assert not differ
-            for unit in game.tracker.present_units.own:
+            for unit in game.tracker.units.present.own:
                 assert unit.armor == asked.units[unit.type_id].armor
             marine = game.newest(UnitTypeId.MARINE)
             assert marine.weapons[0].damage == asked.units[UnitTypeId.MARINE].weapons[0].damage
@@ -697,7 +695,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
             units = game.turn(1)
             townhalls = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
             home = next(unit for unit in units.own if unit.type_id in townhalls).position
-            yield game, game.tracker.upgrade_reader, home.towards(game.map.playable_area.center, 10)
+            yield game, game.tracker.upgrades.reader, home.towards(game.map.playable_area.center, 10)
             client.leave_game()
 
 
@@ -731,7 +729,7 @@ def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, 
     """The tech lab a new `unit_type` builds, both standing in the 5 tiles a side around `at`."""
     structure = _made(game, unit_type, at - (1, 0))
     game.order(AbilityId.GENERAL_BUILD_TECH_LAB, structure)
-    _until(game, lambda: bool(game.tracker.present_units.own.of_type(tech_lab)), steps=22)
+    _until(game, lambda: bool(game.tracker.units.present.own.of_type(tech_lab)), steps=22)
     return game.newest(tech_lab)
 
 
@@ -837,7 +835,7 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
     """Run with `pytest -m integration`. As the terran test, for the zerg signs, on the creep around the hatchery."""
     with _signs_game(Race.ZERG) as (game, reader, _):
         enemy = 3 - game.player
-        hatchery = game.tracker.present_units.own.of_type(UnitTypeId.HATCHERY)[0]
+        hatchery = game.tracker.units.present.own.of_type(UnitTypeId.HATCHERY)[0]
         near = hatchery.position.towards(game.map.playable_area.center, 7)
         game.debug(game.create(UnitTypeId.HIVE, game.open_ground(near + (6, 0), size=5)))
         game.turn(4)

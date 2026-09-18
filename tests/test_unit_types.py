@@ -17,7 +17,7 @@ from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from support import make_observation, make_tables, make_unit
 
 _GENERATOR = Path(__file__).parents[1] / "tools" / "generate_unit_types.py"
@@ -78,9 +78,9 @@ _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
 def _unit(unit_type: int) -> Unit[Any]:
-    tracker = _UnitTracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, Enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
-    return tracker.present_units[0]
+    return tracker.units.present[0]
 
 
 class TestIncludes:

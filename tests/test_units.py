@@ -28,7 +28,8 @@ from sc2nachos.units import (
     UnknownTagError,
     Visibility,
 )
-from sc2nachos.units._tracker import _MOVABLE_UNIT_TYPE_IDS, _UnitTracker
+from sc2nachos.units._tracking import _Tracker
+from sc2nachos.units._tracking._unit_tracker import _MOVABLE_UNIT_TYPE_IDS
 from support import FakeTransport, RealGame, make_game_info, make_observation, make_response, make_tables, make_unit
 
 _TABLES = make_tables(
@@ -47,12 +48,12 @@ class _Game:
     """A tracker fed one observation after another, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
-        self.tracker = _UnitTracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, Enemy())
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
         """Observe `units` at `step`, and answer the unit each one listed was read into, in the order given."""
         self.tracker.update(make_observation(step, units=units, dead=dead).observation.raw_data, step)
-        by_tag = {unit.tag: unit for unit in self.tracker.present_units}
+        by_tag = {unit.tag: unit for unit in self.tracker.units.present}
         return [by_tag[unit.tag] for unit in units if unit.tag in by_tag]
 
 
@@ -89,7 +90,7 @@ class TestIds:
 
     def test_running_out_of_ids_raises(self) -> None:
         game = _Game()
-        game.tracker._units_seen_per_alliance[Alliance.OWN] = 99_998
+        game.tracker.units._units_seen_per_alliance[Alliance.OWN] = 99_998
         game.observe(0, make_unit(1))
         with pytest.raises(NachOSError, match="all its ids"):
             game.observe(16, make_unit(1), make_unit(2))
@@ -110,8 +111,8 @@ class TestLifecycle:
         game.observe(16)
         assert zergling.is_stale
         assert (zergling.position, zergling.health, zergling.last_seen) == (Point((5.0, 6.0)), 35.0, 0)
-        assert not game.tracker.present_units
-        assert list(game.tracker.known_units) == [zergling]
+        assert not game.tracker.units.present
+        assert list(game.tracker.units.known) == [zergling]
 
     def test_a_stale_unit_that_comes_back_is_the_same_object(self) -> None:
         game = _Game()
@@ -121,7 +122,7 @@ class TestLifecycle:
         assert back is zergling
         assert not zergling.is_stale
         assert zergling.position == Point((20.0, 20.0))
-        assert list(game.tracker.known_units) == [zergling]
+        assert list(game.tracker.units.known) == [zergling]
 
     def test_a_unit_the_game_reports_dead_is_dead_and_let_go(self) -> None:
         game = _Game()
@@ -130,7 +131,7 @@ class TestLifecycle:
         assert marine.is_dead
         assert marine.is_stale
         assert marine.health == 45.0
-        assert not game.tracker.known_units
+        assert not game.tracker.units.known
         assert repr(marine) == "OwnUnit(MARINE, id=100001, at (10.00, 10.00), dead)"
 
     def test_the_dead_units_are_those_the_last_observation_reported_dead(self) -> None:
@@ -161,20 +162,20 @@ class TestLifecycle:
         )
         game = _Game()
         game.observe(0, blip, placeholder, make_unit(1))
-        assert [unit.tag for unit in game.tracker.present_units] == [1]
+        assert [unit.tag for unit in game.tracker.units.present] == [1]
 
     def test_units_are_listed_in_the_order_the_game_reported_them_new_ones_included(self) -> None:
         game = _Game()
         game.observe(0, make_unit(3), make_unit(1))
         game.observe(16, make_unit(2), make_unit(3), make_unit(4), make_unit(1))
-        assert [unit.tag for unit in game.tracker.present_units] == [2, 3, 4, 1]
+        assert [unit.tag for unit in game.tracker.units.present] == [2, 3, 4, 1]
 
     def test_ending_the_game_leaves_every_unit_stale(self) -> None:
         game = _Game()
         (marine,) = game.observe(0, make_unit(1))
         game.tracker.end()
         assert marine.is_stale
-        assert not game.tracker.present_units
+        assert not game.tracker.units.present
 
 
 class TestTheFog:
@@ -194,7 +195,7 @@ class TestTheFog:
         assert (depot.tag, depot.visibility, depot.health, depot.last_seen) == (1, Visibility.IN_VISION, 300.0, 32)
         (again,) = game.observe(48, _depot(901, visibility=_IN_FOG))
         assert again is depot
-        assert [unit.id for unit in game.tracker.known_units] == [400001]
+        assert [unit.id for unit in game.tracker.units.known] == [400001]
 
     def test_a_mineral_field_never_seen_keeps_the_id_it_had_when_it_is_first_seen(self) -> None:
         field = {"at": (60.0, 20.5), "alliance": Alliance.NEUTRAL}
@@ -245,7 +246,7 @@ class TestTheFog:
         game.observe(16, _depot(900, visibility=_IN_FOG))
         game.observe(32)
         assert depot.is_dead
-        assert not game.tracker.known_units
+        assert not game.tracker.units.known
         assert game.tracker.last_changes.units_found_dead == [depot]
         assert not game.tracker.last_changes.units_died
 
@@ -292,10 +293,10 @@ class TestTheFog:
         landed = make_unit(1, barracks, at=(60.5, 30.5), alliance=_ENEMY, health=900.0)
         for step in (32, 48):
             game.observe(step, *((copy, landed) if copy_first else (landed, copy)))
-            assert list(game.tracker.present_units) == [unit]
+            assert list(game.tracker.units.present) == [unit]
             assert (unit.position, unit.visibility, unit.health) == (Point((60.5, 30.5)), Visibility.IN_VISION, 900.0)
         game.observe(64, landed)
-        assert list(game.tracker.known_units) == [unit]
+        assert list(game.tracker.units.known) == [unit]
         assert not unit.is_stale
 
 
@@ -409,7 +410,7 @@ class TestUnitsThatBecomeStructures:
         assert not drone.is_dead
         game.observe(64, _spine(2, 1.0))
         assert drone.is_dead
-        assert drone.id not in game.tracker.known_units.ids
+        assert drone.id not in game.tracker.units.known.ids
         assert isinstance(spine, OwnUnit)
         assert spine.builder is None
 
@@ -551,7 +552,7 @@ class TestOwnUnits:
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
             Order(AbilityId.GENERAL_MOVE, Point((5.0, 6.0)), 0.0),
-            Order(AbilityId.GENERAL_ATTACK, game.tracker.present_units.by_id(400001), 0.0),
+            Order(AbilityId.GENERAL_ATTACK, game.tracker.units.present.by_id(400001), 0.0),
             Order(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
@@ -725,10 +726,10 @@ class TestWhatChanged:
         game.observe(0, _building_depot(1, 0.25))
         game.observe(16, dead=(1,))
         assert not game.tracker.last_changes.own_units_finished
-        assert not game.tracker._unfinished
+        assert not game.tracker.units._unfinished
 
     def test_upgrades_new_to_the_observation_come_in_the_order_of_their_ids(self) -> None:
-        tracker = _UnitTracker(_TABLES, Enemy())
+        tracker = _Tracker(_TABLES, Enemy())
         held = [UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.STIMPACK]
         tracker.update(make_observation(0, upgrades=held).observation.raw_data, 0)
         assert tracker.last_changes.own_upgrades_finished == sorted(held)
@@ -796,8 +797,8 @@ class TestWhatChanged:
         game.tracker.end()
         changes = game.tracker.last_changes
         assert not any(getattr(changes, name) for name in changes.__slots__)
-        assert not game.tracker._unfinished
-        assert not game.tracker.comparison._compared
+        assert not game.tracker.units._unfinished
+        assert not game.tracker.comparer._compared
 
 
 class TestThroughTheApi:
@@ -878,7 +879,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.order(AbilityId.SIEGE_TANK_SIEGE, tank)
         game.turn(90)
         assert tank.type_id is UnitTypeId.SIEGE_TANK_SIEGED
-        assert game.tracker.present_units.get(tank.id) is tank
+        assert game.tracker.units.present.get(tank.id) is tank
 
         # A unit loaded into a transport is stale, and the same object once unloaded.
         game.debug(
@@ -894,13 +895,13 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.order(AbilityId.MEDIVAC_UNLOAD_AT, medivac, target=medivac.position)
         game.turn(60)
         assert not marine.is_stale
-        assert game.tracker.present_units.get(marine.id) is marine
+        assert game.tracker.units.present.get(marine.id) is marine
         # Out of the way, since both would shoot the enemy units made below.
         game.debug(game.kill(tank, marine))
 
         # A mineral field remembered from the start keeps its id when first seen.
         field = min(
-            game.tracker.present_units.neutral.filter(lambda unit: unit.visibility is Visibility.IN_FOG),
+            game.tracker.units.present.neutral.filter(lambda unit: unit.visibility is Visibility.IN_FOG),
             key=lambda unit: abs(unit.position.distance_to(home) - 40),
         )
         spot = game.open_ground(field.position.towards(middle, 7))
@@ -909,7 +910,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         )
         game.turn(4)
         assert field.visibility is Visibility.IN_VISION
-        assert game.tracker.present_units.get(field.id) is field
+        assert game.tracker.units.present.get(field.id) is field
         spotter, depot = game.newest(UnitTypeId.MARINE), game.newest(UnitTypeId.SUPPLY_DEPOT)
 
         # A structure out of sight is remembered under its id, and back in sight under it again.
@@ -917,12 +918,12 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.kill(spotter))
         game.turn(60)
         assert depot.visibility is Visibility.IN_FOG
-        assert game.tracker.present_units.get(depot.id) is depot
+        assert game.tracker.units.present.get(depot.id) is depot
         assert depot.health == health
         game.debug(game.create(UnitTypeId.MARINE, spot + (2, 0)))
         game.turn(4)
         assert depot.visibility is Visibility.IN_VISION
-        assert game.tracker.present_units.get(depot.id) is depot
+        assert game.tracker.units.present.get(depot.id) is depot
 
         # A structure that dies out of sight is found dead once its spot is in sight again.
         depot_tag = depot.tag
@@ -935,7 +936,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.create(UnitTypeId.MARINE, spot + (2, 0)))
         game.turn(4)
         assert depot.is_dead
-        assert game.tracker.known_units.get(depot.id) is None
+        assert game.tracker.units.known.get(depot.id) is None
 
         # A neural parasite takes a unit over and lets it go, changing its class both times.
         game.debug(game.create(UnitTypeId.INFESTATION_PIT, game.open_ground(out_there.towards(home, -8))))
@@ -952,7 +953,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         )
         game.turn(2)
         infestor = game.newest(UnitTypeId.INFESTOR)
-        victim = game.tracker.present_units.enemy.of_type(UnitTypeId.MARINE)[-1]
+        victim = game.tracker.units.present.enemy.of_type(UnitTypeId.MARINE)[-1]
         energy = debug_pb2.DebugSetUnitValue(
             unit_value=debug_pb2.DebugSetUnitValue.Energy, value=200, unit_tag=infestor.tag
         )
@@ -987,10 +988,10 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
 
         # An SCV building a structure is its builder until the structure finishes.
         game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.minerals))
-        scv = game.tracker.present_units.own.of_type(UnitTypeId.SCV)[0]
+        scv = game.tracker.units.present.own.of_type(UnitTypeId.SCV)[0]
         game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scv, target=game.open_ground(home.towards(middle, 8)))
         game.turn(120)
-        (building,) = game.tracker.present_units.own.of_type(UnitTypeId.SUPPLY_DEPOT)
+        (building,) = game.tracker.units.present.own.of_type(UnitTypeId.SUPPLY_DEPOT)
         assert not building.is_complete
         assert (scv.construction, building.builder) == (building, scv)
         game.turn(600)
@@ -1001,6 +1002,6 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.kill(medivac))
         game.turn(2)
         assert medivac.is_dead
-        assert game.tracker.known_units.get(medivac.id) is None
+        assert game.tracker.units.known.get(medivac.id) is None
         client.leave_game()
         client.quit()

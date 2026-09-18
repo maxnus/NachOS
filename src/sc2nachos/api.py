@@ -96,12 +96,12 @@ class Api:
     @property
     def units(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, structures remembered out of sight and hidden units included."""
-        return self._current_game().unit_tracker.present_units
+        return self._current_game().tracker.units.present
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
         """Every unit not known to be dead: those in the last observation, then those it left out."""
-        return self._current_game().unit_tracker.known_units
+        return self._current_game().tracker.units.known
 
     @property
     def score(self) -> Score:
@@ -177,7 +177,7 @@ class Api:
         stay subscribed from one to the next, and what each has done starts afresh.
         """
         if self._game is not None:
-            self._game.unit_tracker.end()
+            self._game.tracker.end()
         game = _Game.start(client, infer_enemy_upgrades=self._infer_enemy_upgrades)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)

@@ -20,7 +20,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[Order, ...]:
         """What it is doing, then what it has queued."""
-        unit_by_tag = self._tracker.unit_by_tag
+        unit_by_tag = self._tracker.units.by_tag
         return tuple(Order.from_proto(order, unit_by_tag) for order in self._latest_data.orders)
 
     @property
@@ -46,7 +46,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def passengers(self) -> tuple[Passenger, ...]:
         """The units inside it."""
-        unit_by_tag = self._tracker.unit_by_tag
+        unit_by_tag = self._tracker.units.by_tag
         return tuple(Passenger.from_proto(passenger, unit_by_tag) for passenger in self._latest_data.passengers)
 
     @property
@@ -62,28 +62,28 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where it sends what it makes."""
-        unit_by_tag = self._tracker.unit_by_tag
+        unit_by_tag = self._tracker.units.by_tag
         return tuple(RallyTarget.from_proto(rally, unit_by_tag) for rally in self._latest_data.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:
         """Its add-on, or `None` without one."""
         tag = self._latest_data.add_on_tag
-        return self._tracker.unit_by_tag(tag) if tag else None
+        return self._tracker.units.by_tag(tag) if tag else None
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
         """The unit it is attacking, or `None`."""
         tag = self._latest_data.engaged_target_tag
-        return self._tracker.unit_by_tag(tag) if tag else None
+        return self._tracker.units.by_tag(tag) if tag else None
 
     @property
     def construction(self) -> Unit[Any] | None:
         """The unfinished structure it is building now, or the one a drone became until it finishes, or `None`."""
-        return self._tracker.construction_of(self)
+        return self._tracker.builders.structure_built_by(self)
 
     @property
     def builder(self) -> Unit[Any] | None:
         """The SCV building this structure now, or the drone that became it, or `None` for a structure nobody is
         building, such as one halted, one warped in, or one finished."""
-        return self._tracker.builder_of(self)
+        return self._tracker.builders.builder_of(self)
