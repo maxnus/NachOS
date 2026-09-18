@@ -797,7 +797,7 @@ class TestWhatChanged:
         changes = game.tracker.last_changes
         assert not any(getattr(changes, name) for name in changes.__slots__)
         assert not game.tracker._unfinished
-        assert not game.tracker._compared
+        assert not game.tracker.comparison._compared
 
 
 class TestThroughTheApi:

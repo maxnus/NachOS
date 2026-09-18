@@ -1,13 +1,11 @@
 """Everything a bot talks to."""
 
-from dataclasses import dataclass
-from typing import Any, Final, Self
+from typing import Any
 
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos._reporter import _report
+from sc2nachos._game import _Game
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
@@ -18,98 +16,12 @@ from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client
 from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
-from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, Units
-from sc2nachos.units._tracker import _UnitTracker
 from sc2nachos.upgrade_reader import UpgradeInference
 
 
 class NotPlayingError(NachOSError, RuntimeError):
     """There is no game to answer from, because none has been joined."""
-
-
-@dataclass(slots=True)
-class _Game:
-    """One game as it is played: the client it is played on, and everything seen of it so far."""
-
-    client: Final[Client]
-    map: Final[GameMap]
-    data: Final[GameData]
-    enemy: Final[Enemy]
-    infer_enemy_upgrades: Final[UpgradeInference]
-    unit_tracker: Final[_UnitTracker]
-    observation: sc2api_pb2.ResponseObservation
-    state: _State
-    # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
-    step: int
-    result: Result | None = None
-
-    @classmethod
-    def start(cls, client: Client, *, infer_enemy_upgrades: UpgradeInference) -> Self:
-        """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
-        info, data = client.game_info(), client.game_data()
-        observation = client.observation()
-        step = _step(observation)
-        tables = GameData(data)
-        enemy = Enemy()
-        unit_tracker = _UnitTracker(tables, enemy)
-        game_map = GameMap(info)
-        game = cls(
-            client,
-            game_map,
-            tables,
-            enemy,
-            infer_enemy_upgrades,
-            unit_tracker,
-            observation,
-            _State(observation, unit_tracker, game_map),
-            step,
-        )
-        game._take_in(observation, step)
-        return game
-
-    def observe(self, step: int | None = None) -> None:
-        """Observe the game now, or once it reaches `step`."""
-        observation = self.client.observation(game_loop=step)
-        self._take_in(observation, _step(observation))
-
-    def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
-        """Read `observation`: its units, what they show of the enemy's upgrades if told to, and all else it reports."""
-        self.observation = observation
-        self.step = step
-        self.unit_tracker.update(observation.observation.raw_data, step)
-        self.state = _State(observation, self.unit_tracker, self.map)
-        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrade_reader
-        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
-        if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
-            self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
-
-    def report(self, events: EventBus) -> None:
-        """Hand on to the handlers of `events` what the last observation reports has happened."""
-        _report(events, self.unit_tracker, self.observation, self.state, self.step)
-
-    def outcome(self) -> Result | None:
-        """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
-        if (result := self.client.result) is not None:
-            return self.finish(result)
-        if not self.client.in_game:
-            # Over, and the game would not say how even when the client asked it again.
-            return self.finish(Result.UNDECIDED)
-        return None
-
-    def finish(self, result: Result) -> Result:
-        """Settle how the game ended, and say so."""
-        self.result = result
-        seconds = steps_to_seconds(self.step)
-        logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
-        return result
-
-
-def _step(observation: sc2api_pb2.ResponseObservation) -> int:
-    """The step `observation` was made at."""
-    # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
-    return observation.observation.game_loop
 
 
 class Api:

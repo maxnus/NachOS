@@ -1,6 +1,6 @@
 """What every curated id enum shares: reading an id a game reported."""
 
-from typing import Self
+from typing import Self, cast
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos._errors import NachOSError
@@ -30,17 +30,14 @@ class IdEnum(ReadableIntEnum):
     @classmethod
     def read(cls, value: int) -> Self:
         """The member a game's `value` names. Raises `UncuratedIdError` where the enum leaves it out."""
-        try:
-            return cls(value)
-        except ValueError:
-            raise UncuratedIdError(cls, value) from None
+        # The enum's own map from value to member, which reads in under half the time calling the enum takes.
+        if (member := cls._value2member_map_.get(value)) is None:
+            raise UncuratedIdError(cls, value)
+        return cast("Self", member)
 
     @classmethod
     def get(cls, value: int) -> Self | None:
         """The member `value` names, or `None` where it is zero, which names nothing, or the enum leaves it out."""
         if not value:
             return None
-        try:
-            return cls(value)
-        except ValueError:
-            return None
+        return cast("Self | None", cls._value2member_map_.get(value))

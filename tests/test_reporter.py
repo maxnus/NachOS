@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos._reporter import _report
+from sc2nachos import _game
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
@@ -49,7 +49,17 @@ from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, Visibility
 from sc2nachos.units._tracker import _UnitTracker
-from support import HAPPENINGS, RealGame, make_game_info, make_observation, make_tables, make_unit, record
+from support import (
+    HAPPENINGS,
+    RealGame,
+    make_client,
+    make_game_info,
+    make_observation,
+    make_tables,
+    make_unit,
+    played,
+    record,
+)
 
 _ENEMY = Alliance.ENEMY
 # Every alert the protocol names, in the order it names them, and the two no `Alert` stands for.
@@ -63,20 +73,21 @@ _TABLES = make_tables(
 
 
 class _Game:
-    """A tracker fed one observation after another and each reported, as `Api.play` does each turn."""
+    """A game fed one observation after another, each taken in and reported as `Api.play` does each turn."""
 
     def __init__(self, events: EventBus | None = None) -> None:
         self.events = events or EventBus()
         self.tracker = _UnitTracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info())
         self.state: _State | None = None
+        self._client, _ = make_client()
+        self._game: _game._Game | None = None
 
     def observe(self, step: int, *units: raw_pb2.Unit, **fields: Any) -> dict[int, Unit[Any]]:
         """Take in `units` and the rest of an observation at `step`, report it, and answer the units by tag."""
         observation = make_observation(step, units=units, **fields)
-        self.tracker.update(observation.observation.raw_data, step)
-        self.state = _State(observation, self.tracker, self.map)
-        _report(self.events, self.tracker, observation, self.state, step)
+        self._game = played(self._game, self._client, self.map, self.tracker, observation, self.events)
+        self.state = self._game.state
         return {unit.tag: unit for unit in self.tracker.present_units}
 
 
@@ -229,7 +240,7 @@ class TestOnlyWhatIsWanted:
         game = _Game()
         _everything(game)
         assert game.state is not None and "actions" not in vars(game.state)
-        assert not game.tracker._compared
+        assert not game.tracker.comparison._compared
 
     def test_a_handler_that_is_done_stops_the_units_being_compared(self) -> None:
         game = _Game()
@@ -237,7 +248,7 @@ class TestOnlyWhatIsWanted:
         game.observe(0, make_unit(1, health=45.0))
         game.observe(16, make_unit(1, health=40.0))
         game.observe(32, make_unit(1, health=35.0))
-        assert not game.tracker._compared
+        assert not game.tracker.comparison._compared
 
 
 def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Unit:
@@ -271,7 +282,7 @@ class TestEnergy:
         game.observe(0, _raven(100.0))
         game.observe(16, _raven(25.0))
         assert [event.energy_lost for event in seen] == [75.0]
-        assert game.tracker._compared
+        assert game.tracker.comparison._compared
 
     def test_a_unit_of_this_players_loses_energy_to_the_event_of_its_own(self) -> None:
         game = _Game()
