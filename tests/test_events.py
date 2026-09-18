@@ -127,10 +127,10 @@ class TestSubscribing:
 
     def test_nothing_is_wanted_until_something_subscribes(self) -> None:
         bus = EventBus()
-        assert not bus._wants(TurnEvent)
+        assert not bus._has_handlers(TurnEvent)
         bus.on(TurnEvent)(lambda event: None)
-        assert bus._wants(TurnEvent)
-        assert not bus._wants(TurnStartEvent)
+        assert bus._has_handlers(TurnEvent)
+        assert not bus._has_handlers(TurnStartEvent)
 
     def test_a_coroutine_function_is_refused(self) -> None:
         """NachOS calls its handlers synchronously, so one would only make a coroutine nobody awaits."""
@@ -161,19 +161,19 @@ class TestSubscribing:
 
 
 class TestOrder:
-    def test_priorities_run_in_order_and_one_priority_in_the_order_it_subscribed(self) -> None:
+    def test_the_highest_priority_runs_first_and_one_priority_in_the_order_it_subscribed(self) -> None:
         bus, calls = EventBus(), []
         for name, priority in [
-            ("late", EventPriority.LATE),
-            ("first", EventPriority.FIRST),
-            ("early", EventPriority.EARLY),
-            ("normal", EventPriority.NORMAL),
+            ("low", EventPriority.LOW),
+            ("highest", EventPriority.HIGHEST),
+            ("high", EventPriority.HIGH),
+            ("medium", EventPriority.MEDIUM),
         ]:
             bus.on(TurnEvent, priority=priority)(lambda event, name=name: calls.append(name))
-        bus.on(TurnEvent, priority=EventPriority.FIRST)(lambda event: calls.append("first again"))
-        bus.on(TurnEvent, priority=EventPriority.LAST)(lambda event: calls.append("last"))
+        bus.on(TurnEvent, priority=EventPriority.HIGHEST)(lambda event: calls.append("highest again"))
+        bus.on(TurnEvent, priority=EventPriority.LOWEST)(lambda event: calls.append("lowest"))
         _turns(bus, 0)
-        assert calls == ["first", "first again", "early", "normal", "late", "last"]
+        assert calls == ["highest", "highest again", "high", "medium", "low", "lowest"]
 
     def test_only_the_handlers_of_the_events_own_type_run(self) -> None:
         bus, calls = EventBus(), []
@@ -270,7 +270,7 @@ class TestUnsubscribing:
         bus.unsubscribe(handler)
         _turns(bus, 1)
         assert fired == [0]
-        assert not bus._wants(TurnEvent)
+        assert not bus._has_handlers(TurnEvent)
 
     def test_one_method_of_an_instance_or_all_of_them(self) -> None:
         bus = EventBus()
@@ -373,7 +373,7 @@ class TestInstances:
     def test_a_handler_reads_as_its_name_event_and_how_often_it_runs(self) -> None:
         bus = EventBus()
 
-        @bus.on(TurnEvent, priority=EventPriority.LATE, every_steps=16, catch_exceptions=True)
+        @bus.on(TurnEvent, priority=EventPriority.LOW, every_steps=16, catch_exceptions=True)
         def planned(event: TurnEvent) -> None:
             pass
 
@@ -382,9 +382,9 @@ class TestInstances:
             pass
 
         assert repr(bus._handlers[TurnEvent][0]).endswith(
-            ".planned, TurnEvent, priority=LATE, every_steps=16, catch_exceptions=True)"
+            ".planned, TurnEvent, priority=LOW, every_steps=16, catch_exceptions=True)"
         )
-        assert repr(bus._handlers[GameStartEvent][0]).endswith(".started, GameStartEvent, priority=NORMAL, once=True)")
+        assert repr(bus._handlers[GameStartEvent][0]).endswith(".started, GameStartEvent, priority=MEDIUM, once=True)")
 
     def test_an_instance_without_a_marked_method_is_refused(self) -> None:
         """Most likely its methods were marked with another api's `on`, or not at all."""

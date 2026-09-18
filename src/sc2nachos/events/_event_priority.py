@@ -4,11 +4,13 @@ from sc2nachos._enum import ReadableIntEnum
 
 
 class EventPriority(ReadableIntEnum):
-    """Where among the handlers of an event one runs: every handler of an earlier priority first, and those of one
+    """Where among the handlers of an event one runs: every handler of a higher priority first, and those of one
     priority in the order they subscribed."""
 
-    FIRST = 0
-    EARLY = 1
-    NORMAL = 2
-    LATE = 3
-    LAST = 4
+    LOWEST = 0
+    VERY_LOW = 1
+    LOW = 2
+    MEDIUM = 3
+    HIGH = 4
+    VERY_HIGH = 5
+    HIGHEST = 6

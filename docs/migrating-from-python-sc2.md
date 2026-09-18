@@ -35,11 +35,12 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   function is subscribed as it is defined. A method is marked, and subscribed for an instance passed to
   `api.event.subscribe(instance)`, usually by its own `__init__`.
 - **`on_step` is best kept as one `TurnEvent` handler** that calls the bot's parts in the order it wants. Handlers
-  run in the order of their priorities, then the order they subscribed, which is hard to follow across many modules.
+  run in the order of their priorities, highest first, then the order they subscribed, which is hard to follow
+  across many modules.
 - **There is no `iteration`.** `event.step` is the game loop, and `every_steps` and `at_step` count steps, so a
   handler runs as often in game time at any `steps_per_turn`.
-- **The last observation gets no turn.** python-sc2 calls `on_step` for it; here `GameEndEvent` is what a bot sees
-  of it.
+- **The last observation gets no turn, as in python-sc2, but it is taken in.** A `GameEndEvent` handler reads the
+  game as it ended, where python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`**, and one that is is refused when it subscribes.
 - **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it is
   passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game

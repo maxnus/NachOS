@@ -55,8 +55,8 @@ class EventBus:
     A function stays subscribed for the life of the api, and an instance until it is passed to `unsubscribe`. Both are
     held strongly, so a handler runs whether or not anything else keeps it. What a handler has done counts for one game
     and starts afresh with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned
-    `Done`. The handlers of an event run in the order of their priorities, and those of one priority in the order they
-    subscribed.
+    `Done`. The handlers of an event run in the order of their priorities, highest first, and those of one priority in
+    the order they subscribed.
     """
 
     __slots__ = ("_handlers", "_marks", "_methods_of", "_timings")
@@ -80,7 +80,7 @@ class EventBus:
         event_type: type[E],
         /,
         *,
-        priority: EventPriority = EventPriority.NORMAL,
+        priority: EventPriority = EventPriority.MEDIUM,
         every_steps: int | None = None,
         at_step: int | None = None,
         once: bool = False,
@@ -177,7 +177,7 @@ class EventBus:
 
     def _subscribe(self, handler: _Handler) -> None:
         handlers = list(self._handlers.get(handler.event_type, ()))
-        handlers.insert(bisect_right(handlers, handler.priority, key=lambda other: other.priority), handler)
+        handlers.insert(bisect_right(handlers, -handler.priority, key=lambda other: -other.priority), handler)
         self._handlers[handler.event_type] = tuple(handlers)
 
     def _marked_methods(self, cls: type) -> tuple[_Handler, ...]:
@@ -214,7 +214,7 @@ class EventBus:
                 self._handlers[event_type] = tuple(kept)
         return removed
 
-    def _wants(self, event_type: type[Event]) -> bool:
+    def _has_handlers(self, event_type: type[Event]) -> bool:
         """Whether anything is subscribed to `event_type`, so that an event nobody handles is never made."""
         return event_type in self._handlers
 
