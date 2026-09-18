@@ -110,7 +110,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
         creation_abilities=MappingProxyType(creation_abilities),
         ability_products=MappingProxyType(_products(creation_abilities, findings)),
         morph_sources=MappingProxyType(_morph_sources(trials)),
-        # A pylon reads as powered, by itself.
+        # A pylon needs no power, though the sweep once saw one read as powered (docs/game-behavior.md).
         power_consumers=frozenset(filter(None, map(_unit_type, _strings(findings["powered"])))) - {UnitTypeId.PYLON},
         unit_type_upgrades=MappingProxyType(
             {unit_type: MappingProxyType(upgrades) for unit_type, upgrades in found.unit_types.items()}

@@ -8,7 +8,7 @@
 
 The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
-is in `docs/curating-ids.md`.
+is in `docs/curating-ids.md`, and what the game has been seen to do in `docs/game-behavior.md`.
 
 ## Keep this file small
 
@@ -89,7 +89,8 @@ Carried over from AvocaDOS, so the two codebases read alike:
   the one place the two meet. Never write "frame" for either.
 - **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
   piece of code goes beside that code, in its docstring or a comment. The evidence goes in the commit message or
-  PR, and the steps for one kind of task in `docs/`.
+  PR, and the steps for one kind of task in `docs/`. Anything seen of how the game behaves also goes in
+  `docs/game-behavior.md`, with how it was seen.
 
 ## Review checklist
 
