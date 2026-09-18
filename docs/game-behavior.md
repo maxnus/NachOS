@@ -139,8 +139,8 @@ Each entry ends with how it was seen:
 ## What is reported of a unit
 
 - The game zeroes what the player cannot know: a remembered copy's health, contents and buffs, an unseen mineral
-  field's contents, a hidden unit's owner. An undetected cloaked or burrowed enemy reports its position and cloak,
-  and no health, owner, build progress, buffs, facing or energy (#25; corpus).
+  field's contents, a hidden unit's owner. An undetected cloaked enemy reports its position and cloak, and no
+  health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
   player's own units (#25; corpus).
 - `life` means health alone; shields are apart (stated). A marine has 45 health, 55 with Combat Shield, and the
@@ -240,8 +240,9 @@ Each entry ends with how it was seen:
 
 ## Buffs
 
-- A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race, gas
-  under a buff of each race's worker. Map zones put buffs on units too (tool `sweep_buffs`, #24).
+- A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race and
+  a second for rich minerals, gas under a buff of each race's worker. Map zones put buffs on units too (tool
+  `sweep_buffs`, #24).
 - Workers pick up and deliver minerals every trip, a buff gained and lost each time: all but 14 of the corpus's
   16,882 buff changes (corpus, #37).
 - Buff names mislead: concussive shells put `Slow` on what they hit, never `DutchMarauderSlow`; an immortal's
