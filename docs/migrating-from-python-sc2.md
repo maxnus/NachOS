@@ -70,7 +70,7 @@ code goes wrong. It covers what NachOS has so far, and grows with it.
   changed type took none. The energy lost events report energy the same way: a spell cast, a feedback or an EMP,
   but never what regenerates.
 - **A cloaked unit of yours reads `CLOAKED_ALLIED` whether the enemy detects it or not**, so no event says it was
-  detected. Burrowing is no cloak: a burrowed enemy nothing detects is not in the observation at all.
+  detected, and nothing else of its report does either: not its display, not its buffs. Burrowing is no cloak: a burrowed enemy nothing detects is not in the observation at all.
 - **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
   it has gone some 6000 steps without being attacked, the same as in python-sc2. The camera starts on the main base
   and stays there until moved, so an attack on the main raises none. `OwnUnitDamagedEvent` reports every turn a unit

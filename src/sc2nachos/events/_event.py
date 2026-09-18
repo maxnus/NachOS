@@ -166,7 +166,8 @@ class EnemyUnitEnergyLostEvent(Event):
 @dataclass(frozen=True, slots=True)
 class OwnUnitCloakChangedEvent(Event):
     """A unit of this player's has cloaked or uncloaked. Cloaked, it reads `CLOAKED_ALLIED` whether the enemy detects
-    it or not, so no event says it was detected (in game)."""
+    it or not, so no event says it was detected: an enemy observer, missile turret and photon cannon each detected and
+    shot at one, which read the same throughout, with no buff and no change of display (in game)."""
 
     unit: OwnUnit[Any]
     previous_cloak: CloakState
