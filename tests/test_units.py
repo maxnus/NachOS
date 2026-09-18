@@ -138,13 +138,13 @@ class TestLifecycle:
         game = _Game()
         (marine, _) = game.observe(0, make_unit(1), make_unit(2))
         game.observe(16, make_unit(2), dead=(1, 77))
-        assert game.tracker.changes.died == [marine]
-        assert not game.tracker.changes.found_dead
+        assert game.tracker.last_changes.units_died == [marine]
+        assert not game.tracker.last_changes.units_found_dead
         game.observe(32, make_unit(2))
-        assert not game.tracker.changes.died
+        assert not game.tracker.last_changes.units_died
         game.tracker.update(make_observation(48, dead=(2,)).observation.raw_data, 48)
         game.tracker.end()
-        assert not game.tracker.changes.died
+        assert not game.tracker.last_changes.units_died
 
     def test_a_morph_keeps_the_unit_and_changes_its_type(self) -> None:
         game = _Game()
@@ -246,8 +246,8 @@ class TestTheFog:
         game.observe(32)
         assert depot.is_dead
         assert not game.tracker.known_units
-        assert game.tracker.changes.found_dead == [depot]
-        assert not game.tracker.changes.died
+        assert game.tracker.last_changes.units_found_dead == [depot]
+        assert not game.tracker.last_changes.units_died
 
     def test_a_structure_that_can_move_missing_from_its_spot_is_stale_until_it_turns_up(self) -> None:
         game = _Game()
@@ -382,8 +382,8 @@ def _spine(tag: int, progress: float) -> raw_pb2.Unit:
 
 class TestUnitsThatBecomeStructures:
     """Tested in game: a drone that morphs into a structure leaves the observation with no death reported, the
-    structure appearing under a new tag, is reported dead once the structure finishes or is killed, and comes back
-    under its own tag when the structure is cancelled."""
+    structure appearing under a new tag, is reported dead as the structure finishes or is killed, or a step later, and
+    comes back under its own tag when the structure is cancelled."""
 
     _AIMED: Any = {"target_world_space_pos": common_pb2.Point(x=24.0, y=20.0)}
 
@@ -401,11 +401,13 @@ class TestUnitsThatBecomeStructures:
         assert spine.builder is drone
         assert drone.construction is spine
 
-    def test_once_the_structure_finishes_the_drone_is_dead(self) -> None:
+    def test_an_update_after_the_structure_finishes_the_drone_is_dead(self) -> None:
         game, drone, _ = self._started()
         game.observe(32, _spine(2, 0.5))
         assert not drone.is_dead
         (spine,) = game.observe(48, _spine(2, 1.0))
+        assert not drone.is_dead
+        game.observe(64, _spine(2, 1.0))
         assert drone.is_dead
         assert drone.id not in game.tracker.known_units.ids
         assert isinstance(spine, OwnUnit)
@@ -414,13 +416,23 @@ class TestUnitsThatBecomeStructures:
     def test_the_drone_is_dead_as_the_game_reports_once_its_structure_finishes(self) -> None:
         game, drone, _ = self._started()
         game.observe(32, _spine(2, 1.0), dead=(1,))
-        assert game.tracker.changes.died == [drone]
-        assert not game.tracker.changes.found_dead
+        assert game.tracker.last_changes.units_died == [drone]
+        assert not game.tracker.last_changes.units_found_dead
 
-    def test_a_drone_the_game_did_not_report_is_found_dead_once_its_structure_finishes(self) -> None:
+    def test_the_drone_is_dead_as_the_game_reports_an_observation_after_its_structure_finishes(self) -> None:
         game, drone, _ = self._started()
         game.observe(32, _spine(2, 1.0))
-        assert game.tracker.changes.found_dead == [drone]
+        assert not drone.is_dead
+        game.observe(48, _spine(2, 1.0), dead=(1,))
+        assert game.tracker.last_changes.units_died == [drone]
+        assert not game.tracker.last_changes.units_found_dead
+
+    def test_a_drone_the_game_did_not_report_is_found_dead_an_update_after_its_structure_finishes(self) -> None:
+        game, drone, _ = self._started()
+        game.observe(32, _spine(2, 1.0))
+        assert not game.tracker.last_changes.units_found_dead
+        game.observe(48, _spine(2, 1.0))
+        assert game.tracker.last_changes.units_found_dead == [drone]
 
     def test_a_cancel_brings_the_same_drone_back(self) -> None:
         game, drone, spine = self._started()
@@ -434,13 +446,16 @@ class TestUnitsThatBecomeStructures:
     def test_a_structure_destroyed_while_built_takes_the_drone_with_it(self) -> None:
         game, drone, _ = self._started()
         game.observe(32, dead=(2,))
+        game.observe(48)
         assert drone.is_dead
 
     def test_an_extractor_is_matched_to_the_drone_through_the_geyser_it_was_aimed_at(self) -> None:
         game = _Game()
         geyser = make_unit(9, UnitTypeId.VESPENE_GEYSER, at=(30.5, 30.5), alliance=Alliance.NEUTRAL)
         drone, _ = game.observe(0, _drone_building(1, AbilityId.DRONE_MORPH_EXTRACTOR, target_unit_tag=9), geyser)
-        game.observe(16, make_unit(3, UnitTypeId.EXTRACTOR, at=(30.5, 30.5), build_progress=1.0), geyser)
+        extractor = make_unit(3, UnitTypeId.EXTRACTOR, at=(30.5, 30.5), build_progress=1.0)
+        game.observe(16, extractor, geyser)
+        game.observe(32, extractor, geyser)
         assert drone.is_dead
 
     def test_a_structure_far_from_where_the_drone_was_sent_is_not_what_it_became(self) -> None:
@@ -651,39 +666,39 @@ class TestWhatChanged:
             make_unit(2, alliance=_ENEMY),
             make_unit(3, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL),
         )
-        assert game.tracker.changes.created == [marine]
+        assert game.tracker.last_changes.own_units_created == [marine]
         (_, scv) = game.observe(16, make_unit(1), make_unit(4, UnitTypeId.SCV))
-        assert game.tracker.changes.created == [scv]
+        assert game.tracker.last_changes.own_units_created == [scv]
         game.observe(32, make_unit(1), make_unit(4, UnitTypeId.SCV))
-        assert not game.tracker.changes.created
+        assert not game.tracker.last_changes.own_units_created
 
     def test_an_enemy_unit_is_first_seen_once_in_sight_or_in_the_fog(self) -> None:
         game = _Game()
         (zergling,) = game.observe(0, make_unit(1, alliance=_ENEMY))
-        assert game.tracker.changes.first_seen == [zergling]
+        assert game.tracker.last_changes.enemy_units_first_seen == [zergling]
         game.observe(16)
         game.observe(32, make_unit(1, alliance=_ENEMY))
-        assert not game.tracker.changes.first_seen
+        assert not game.tracker.last_changes.enemy_units_first_seen
         (_, remembered) = game.observe(48, make_unit(1, alliance=_ENEMY), _depot(900, visibility=_IN_FOG))
-        assert game.tracker.changes.first_seen == [remembered]
-        assert not game.tracker.changes.entered_sight
+        assert game.tracker.last_changes.enemy_units_first_seen == [remembered]
+        assert not game.tracker.last_changes.enemy_units_entered_sight
 
     def test_a_type_change_is_noted_once_with_the_type_it_was_and_never_on_creation(self) -> None:
         game = _Game()
         (tank,) = game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK, alliance=_ENEMY))
-        assert not game.tracker.changes.type_changes
+        assert not game.tracker.last_changes.units_type_changed
         game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED, alliance=_ENEMY))
-        assert game.tracker.changes.type_changes == [(tank, UnitTypeId.SIEGE_TANK)]
+        assert game.tracker.last_changes.units_type_changed == [(tank, UnitTypeId.SIEGE_TANK)]
         game.observe(32, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED, alliance=_ENEMY))
-        assert not game.tracker.changes.type_changes
+        assert not game.tracker.last_changes.units_type_changed
 
     def test_a_side_change_is_noted_with_the_alliance_it_left(self) -> None:
         game = _Game()
         (marine,) = game.observe(0, make_unit(1, alliance=_ENEMY))
         game.observe(16, make_unit(1, alliance=Alliance.OWN))
-        assert game.tracker.changes.alliance_changes == [(marine, _ENEMY)]
+        assert game.tracker.last_changes.units_alliance_changed == [(marine, _ENEMY)]
         game.observe(32, make_unit(1, alliance=_ENEMY))
-        assert game.tracker.changes.alliance_changes == [(marine, Alliance.OWN)]
+        assert game.tracker.last_changes.units_alliance_changed == [(marine, Alliance.OWN)]
 
     def test_a_unit_first_seen_unfinished_finishes_once(self) -> None:
         game = _Game()
@@ -693,51 +708,57 @@ class TestWhatChanged:
             make_unit(2, UnitTypeId.ZEALOT, build_progress=0.25),
             make_unit(3, build_progress=1.0),
         )
-        assert not game.tracker.changes.finished
+        assert not game.tracker.last_changes.own_units_finished
         game.observe(
             16,
             make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0),
             make_unit(2, UnitTypeId.ZEALOT, build_progress=1.0),
             make_unit(3, build_progress=1.0),
         )
-        assert game.tracker.changes.finished == [barracks, zealot]
-        assert marine not in game.tracker.changes.finished
+        assert game.tracker.last_changes.own_units_finished == [barracks, zealot]
+        assert marine not in game.tracker.last_changes.own_units_finished
         game.observe(32, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
-        assert not game.tracker.changes.finished
+        assert not game.tracker.last_changes.own_units_finished
 
     def test_a_unit_dying_unfinished_never_finishes(self) -> None:
         game = _Game()
         game.observe(0, _building_depot(1, 0.25))
         game.observe(16, dead=(1,))
-        assert not game.tracker.changes.finished
+        assert not game.tracker.last_changes.own_units_finished
         assert not game.tracker._unfinished
 
     def test_upgrades_new_to_the_observation_come_in_the_order_of_their_ids(self) -> None:
         tracker = _UnitTracker(_TABLES, Enemy())
         held = [UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.STIMPACK]
         tracker.update(make_observation(0, upgrades=held).observation.raw_data, 0)
-        assert tracker.changes.upgrades == sorted(held)
+        assert tracker.last_changes.own_upgrades_finished == sorted(held)
         tracker.update(make_observation(16, upgrades=held).observation.raw_data, 16)
-        assert not tracker.changes.upgrades
+        assert not tracker.last_changes.own_upgrades_finished
         tracker.update(make_observation(32, upgrades=[*held, UpgradeId.COMBAT_SHIELD]).observation.raw_data, 32)
-        assert tracker.changes.upgrades == [UpgradeId.COMBAT_SHIELD]
+        assert tracker.last_changes.own_upgrades_finished == [UpgradeId.COMBAT_SHIELD]
 
     def test_a_structure_enters_and_leaves_sight_through_the_fog_both_ways(self) -> None:
         game = _Game()
         (depot,) = game.observe(0, _depot(1))
-        assert game.tracker.changes.entered_sight == [depot]
+        assert game.tracker.last_changes.enemy_units_entered_sight == [depot]
         game.observe(16, _depot(900, visibility=_IN_FOG))
-        assert (game.tracker.changes.entered_sight, game.tracker.changes.left_sight) == ([], [depot])
+        assert (
+            game.tracker.last_changes.enemy_units_entered_sight,
+            game.tracker.last_changes.enemy_units_left_sight,
+        ) == ([], [depot])
         game.observe(32, _depot(1))
-        assert (game.tracker.changes.entered_sight, game.tracker.changes.left_sight) == ([depot], [])
+        assert (
+            game.tracker.last_changes.enemy_units_entered_sight,
+            game.tracker.last_changes.enemy_units_left_sight,
+        ) == ([depot], [])
 
     def test_a_unit_leaves_sight_as_it_leaves_the_observation_and_enters_it_coming_back(self) -> None:
         game = _Game()
         (zergling,) = game.observe(0, make_unit(1, alliance=_ENEMY))
         game.observe(16)
-        assert game.tracker.changes.left_sight == [zergling]
+        assert game.tracker.last_changes.enemy_units_left_sight == [zergling]
         game.observe(32, make_unit(1, alliance=_ENEMY))
-        assert game.tracker.changes.entered_sight == [zergling]
+        assert game.tracker.last_changes.enemy_units_entered_sight == [zergling]
 
     def test_a_structure_seen_where_it_moved_to_enters_sight(self) -> None:
         game = _Game()
@@ -745,43 +766,38 @@ class TestWhatChanged:
         copy = make_unit(900, UnitTypeId.BARRACKS, at=(20.5, 20.5), alliance=_ENEMY, visibility=_IN_FOG)
         game.observe(16, copy)
         game.observe(32, copy, make_unit(1, UnitTypeId.BARRACKS, at=(60.5, 30.5), alliance=_ENEMY))
-        assert game.tracker.changes.entered_sight == [barracks]
+        assert game.tracker.last_changes.enemy_units_entered_sight == [barracks]
 
     def test_a_unit_cloaking_where_it_stands_stays_in_sight(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, alliance=_ENEMY))
         game.observe(16, make_unit(1, alliance=_ENEMY, visibility=_INVISIBLE))
-        assert not game.tracker.changes.entered_sight
-        assert not game.tracker.changes.left_sight
+        assert not game.tracker.last_changes.enemy_units_entered_sight
+        assert not game.tracker.last_changes.enemy_units_left_sight
 
     def test_a_unit_that_dies_does_not_leave_sight(self) -> None:
         game = _Game()
         (zergling,) = game.observe(0, make_unit(1, alliance=_ENEMY))
         game.observe(16, dead=(1,))
-        assert not game.tracker.changes.left_sight
-        assert game.tracker.changes.died == [zergling]
+        assert not game.tracker.last_changes.enemy_units_left_sight
+        assert game.tracker.last_changes.units_died == [zergling]
 
     def test_this_players_units_and_neutral_ones_never_enter_or_leave_sight(self) -> None:
         game = _Game()
         field = make_unit(2, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL)
         game.observe(0, make_unit(1), field)
-        assert not game.tracker.changes.entered_sight
+        assert not game.tracker.last_changes.enemy_units_entered_sight
         game.observe(16)
-        assert not game.tracker.changes.left_sight
+        assert not game.tracker.last_changes.enemy_units_left_sight
 
     def test_ending_the_game_forgets_what_changed(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, build_progress=0.5), make_unit(2, alliance=_ENEMY))
         game.tracker.end()
-        changes = game.tracker.changes
+        changes = game.tracker.last_changes
         assert not any(getattr(changes, name) for name in changes.__slots__)
         assert not game.tracker._unfinished
-
-    def test_each_update_is_counted(self) -> None:
-        game = _Game()
-        game.observe(0)
-        game.observe(16)
-        assert game.tracker.updates == 2
+        assert not game.tracker._compared
 
 
 class TestThroughTheApi:

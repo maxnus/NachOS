@@ -6,7 +6,9 @@ type, in this order:
 
 1. `OwnUnitCreatedEvent`, `EnemyUnitFirstSeenEvent`, `UnitTypeChangedEvent`, `UnitAllianceChangedEvent`;
 2. `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent`, `OwnWarpInFinishedEvent`, `OwnUpgradeFinishedEvent`;
-3. `UnitDamagedEvent`, `UnitEnergyLostEvent`, `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent`;
+3. `OwnUnitDamagedEvent`, `EnemyUnitDamagedEvent`, `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`,
+   `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent`, `EnemyUnitEnteredSightEvent`,
+   `EnemyUnitLeftSightEvent`;
 4. `UnitDiedEvent`, `UnitFoundDeadEvent`, so that a unit created and dead within one observation reads in order;
 5. `OwnActionEvent`, `ChatEvent`, `AlertEvent`, the alerts in the order the game raised them.
 
@@ -19,6 +21,9 @@ from sc2nachos.events._done import Done
 from sc2nachos.events._event import (
     AlertEvent,
     ChatEvent,
+    EnemyUnitCloakChangedEvent,
+    EnemyUnitDamagedEvent,
+    EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitLeftSightEvent,
@@ -28,15 +33,16 @@ from sc2nachos.events._event import (
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
+    OwnUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     TurnEvent,
     TurnStartEvent,
     UnitAllianceChangedEvent,
-    UnitDamagedEvent,
     UnitDiedEvent,
-    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -48,6 +54,9 @@ __all__ = [
     "AlertEvent",
     "ChatEvent",
     "Done",
+    "EnemyUnitCloakChangedEvent",
+    "EnemyUnitDamagedEvent",
+    "EnemyUnitEnergyLostEvent",
     "EnemyUnitEnteredSightEvent",
     "EnemyUnitFirstSeenEvent",
     "EnemyUnitLeftSightEvent",
@@ -60,15 +69,16 @@ __all__ = [
     "OwnActionEvent",
     "OwnConstructionFinishedEvent",
     "OwnConstructionStartedEvent",
+    "OwnUnitCloakChangedEvent",
     "OwnUnitCreatedEvent",
+    "OwnUnitDamagedEvent",
+    "OwnUnitEnergyLostEvent",
     "OwnUpgradeFinishedEvent",
     "OwnWarpInFinishedEvent",
     "TurnEvent",
     "TurnStartEvent",
     "UnitAllianceChangedEvent",
-    "UnitDamagedEvent",
     "UnitDiedEvent",
-    "UnitEnergyLostEvent",
     "UnitFoundDeadEvent",
     "UnitTypeChangedEvent",
 ]

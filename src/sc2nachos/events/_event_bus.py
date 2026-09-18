@@ -215,8 +215,7 @@ class EventBus:
         return removed
 
     def _has_handlers(self, event_type: type[Event]) -> bool:
-        """Whether a handler of `event_type` is still to run this game, so that an event nobody would handle is never
-        made."""
+        """Whether any handler of `event_type` is not done."""
         if (handlers := self._handlers.get(event_type)) is None:
             return False
         return any(not handler.done for handler in handlers)

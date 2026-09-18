@@ -8,11 +8,14 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos._reporter import _Reporter
+from sc2nachos._reporter import _report
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
+    EnemyUnitCloakChangedEvent,
+    EnemyUnitDamagedEvent,
+    EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitLeftSightEvent,
@@ -21,13 +24,14 @@ from sc2nachos.events import (
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
+    OwnUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
-    UnitDamagedEvent,
     UnitDiedEvent,
-    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -200,8 +204,12 @@ HAPPENINGS: tuple[type[Event], ...] = (
     OwnConstructionFinishedEvent,
     OwnWarpInFinishedEvent,
     OwnUpgradeFinishedEvent,
-    UnitDamagedEvent,
-    UnitEnergyLostEvent,
+    OwnUnitDamagedEvent,
+    EnemyUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
+    EnemyUnitEnergyLostEvent,
+    OwnUnitCloakChangedEvent,
+    EnemyUnitCloakChangedEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitLeftSightEvent,
     UnitDiedEvent,
@@ -242,7 +250,6 @@ class RealGame:
         self.map = GameMap(client.game_info())
         self.enemy = Enemy()
         self.tracker = _UnitTracker(GameData(client.game_data()), self.enemy)
-        self.reporter = _Reporter(self.tracker)
         self.state = self._observe()
 
     def _observe(self) -> _State:
@@ -251,7 +258,7 @@ class RealGame:
         self.tracker.update(response.observation.raw_data, step)
         self.enemy.assume_upgrades(*self.tracker.upgrade_reader.read_basic_upgrades(self.tracker.present_units))
         state = _State(response, self.tracker, self.map)
-        self.reporter.report(self.events, response, state, step)
+        _report(self.events, self.tracker, response, state, step)
         return state
 
     def turn(self, steps: int) -> Units[Unit[Any]]:

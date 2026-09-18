@@ -353,9 +353,9 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         game.debug(game.kill(zergling))
         while not zergling.is_dead:
             game.turn(1)
-        assert game.tracker.changes.died == [zergling]
+        assert game.tracker.last_changes.units_died == [zergling]
         game.turn(1)
-        assert not game.tracker.changes.died
+        assert not game.tracker.last_changes.units_died
 
         # An upgrade once researched. The `tech_tree` cheat would grant dozens of upgrades besides.
         game.debug(

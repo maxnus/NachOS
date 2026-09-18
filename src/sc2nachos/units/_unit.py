@@ -128,13 +128,13 @@ class Unit[K: UnitType.AnyType]:
             self._last_seen = last
         if (proto.alliance == _OWN) is not self._own:
             # Read before the report it came in replaces the last one.
-            self._tracker.changes.alliance_changes.append((self, _ALLIANCES[self._latest_data.alliance]))
+            self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._latest_data.alliance]))
             self._update_alliance()
         self._latest_data = proto
         if proto.unit_type != self._raw_type:
             previous = self._type_id
             self._update_unit_type(proto.unit_type)
-            self._tracker.changes.type_changes.append((self, previous))
+            self._tracker.last_changes.units_type_changed.append((self, previous))
 
     def _mark_stale(self) -> None:
         """Be stale: out of the observation, keeping what it last read without keeping that observation alive."""

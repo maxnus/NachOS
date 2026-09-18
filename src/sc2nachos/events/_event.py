@@ -6,7 +6,7 @@ from typing import Any, final
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
-from sc2nachos.units import Alliance, OwnUnit, Unit
+from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +32,7 @@ class TurnStartEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class TurnEvent(Event):
-    """A bot's turn, once a new observation has been taken in and what it reports has happened has been handed on."""
+    """A bot's turn, after the events of what the new observation reports."""
 
 
 @final
@@ -60,7 +60,8 @@ class OwnUnitCreatedEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class EnemyUnitFirstSeenEvent(Event):
-    """A unit of the enemy's is seen for the first time, in sight or in the fog. One in sight also enters sight."""
+    """A unit of the enemy's is seen for the first time, in sight or in the fog. One first seen in sight also gets
+    `EnemyUnitEnteredSightEvent`."""
 
     unit: Unit[Any]
 
@@ -88,7 +89,8 @@ class UnitAllianceChangedEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class OwnConstructionStartedEvent(Event):
-    """A structure of this player's, an add-on included, is first seen unfinished."""
+    """A structure of this player's is first seen unfinished: an add-on and a creep tumor included, but not an
+    auto-turret, which is first seen finished (in game)."""
 
     unit: OwnUnit[Any]
 
@@ -96,7 +98,7 @@ class OwnConstructionStartedEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class OwnConstructionFinishedEvent(Event):
-    """A structure of this player's first seen unfinished has finished."""
+    """A structure of this player's that got `OwnConstructionStartedEvent` has finished."""
 
     unit: OwnUnit[Any]
 
@@ -104,7 +106,7 @@ class OwnConstructionFinishedEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class OwnWarpInFinishedEvent(Event):
-    """A unit of this player's first seen warping in has finished warping in."""
+    """A unit of this player's has finished warping in."""
 
     unit: OwnUnit[Any]
 
@@ -119,8 +121,19 @@ class OwnUpgradeFinishedEvent(Event):
 
 @final
 @dataclass(frozen=True, slots=True)
-class UnitDamagedEvent(Event):
-    """A unit in vision now and in the observation before has lost health or shields, and kept its type."""
+class OwnUnitDamagedEvent(Event):
+    """A unit of this player's has lost health or shields since the observation before, and kept its type."""
+
+    unit: OwnUnit[Any]
+    damage: float
+    """The health and shields it lost since the observation before, less what it regained in between."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class EnemyUnitDamagedEvent(Event):
+    """A unit of the enemy's in vision now and in the observation before has lost health or shields, and kept its
+    type."""
 
     unit: Unit[Any]
     damage: float
@@ -129,13 +142,46 @@ class UnitDamagedEvent(Event):
 
 @final
 @dataclass(frozen=True, slots=True)
-class UnitEnergyLostEvent(Event):
-    """A unit in vision now and in the observation before has less energy, and kept its type: it cast a spell, or
+class OwnUnitEnergyLostEvent(Event):
+    """A unit of this player's has less energy than in the observation before, and kept its type: it cast a spell, or
     lost energy to a feedback or an EMP."""
+
+    unit: OwnUnit[Any]
+    energy_lost: float
+    """The energy it lost since the observation before, less what it regenerated in between."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class EnemyUnitEnergyLostEvent(Event):
+    """A unit of the enemy's in vision now and in the observation before has less energy, and kept its type: it cast a
+    spell, or lost energy to a feedback or an EMP."""
 
     unit: Unit[Any]
     energy_lost: float
     """The energy it lost since the observation before, less what it regenerated in between."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class OwnUnitCloakChangedEvent(Event):
+    """A unit of this player's has cloaked or uncloaked. Cloaked, it reads `CLOAKED_ALLIED` whether the enemy detects
+    it or not, so no event says it was detected (in game)."""
+
+    unit: OwnUnit[Any]
+    previous_cloak: CloakState
+    """The cloak it had."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class EnemyUnitCloakChangedEvent(Event):
+    """A unit of the enemy's in sight now and in the observation before has cloaked or uncloaked, or has come to be
+    detected or no longer is. Burrowing is no cloak: a burrowed unit nothing detects is not listed at all (in game)."""
+
+    unit: Unit[Any]
+    previous_cloak: CloakState
+    """The cloak it had."""
 
 
 @final
@@ -158,8 +204,9 @@ class EnemyUnitLeftSightEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class UnitDiedEvent(Event):
-    """The game has reported a unit dead: killed, cancelled, an egg that hatched, a drone whose structure finished
-    or died, or a MULE that expired (in game)."""
+    """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone as
+    the structure it became finishes or is killed, or a step later (in game). A dead unit gets this or
+    `UnitFoundDeadEvent`, never both."""
 
     unit: Unit[Any]
 
@@ -168,7 +215,8 @@ class UnitDiedEvent(Event):
 @dataclass(frozen=True, slots=True)
 class UnitFoundDeadEvent(Event):
     """A unit is dead that the game did not report: a structure remembered in the fog whose spot came into vision
-    without it (in game)."""
+    without it (in game), or a drone the game has not reported dead an update after its structure finished or was
+    killed, which no game has needed."""
 
     unit: Unit[Any]
 
@@ -185,7 +233,7 @@ class OwnActionEvent(Event):
 @final
 @dataclass(frozen=True, slots=True)
 class ChatEvent(Event):
-    """A player sent a message to the game's chat, this player included (in game)."""
+    """Any player has sent a message to the game's chat (in game)."""
 
     player_id: int
     """The id of the player who sent it."""

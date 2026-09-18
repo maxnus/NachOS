@@ -12,14 +12,16 @@ from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
+    EnemyUnitDamagedEvent,
+    EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitLeftSightEvent,
     Event,
     OwnUnitCreatedEvent,
-    UnitDamagedEvent,
+    OwnUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
     UnitDiedEvent,
-    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
@@ -140,7 +142,9 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
 
     tracker = api._current_game().unit_tracker
     # The last observation gets no turn, so what it first saw is never reported.
-    unreported = {unit.id for unit in (*tracker.changes.created, *tracker.changes.first_seen)}
+    unreported = {
+        unit.id for unit in (*tracker.last_changes.own_units_created, *tracker.last_changes.enemy_units_first_seen)
+    }
     ever = [unit_id for unit_id in tracker._units_by_id if unit_id not in unreported]
     created = [event.unit for event in seen if isinstance(event, OwnUnitCreatedEvent)]
     first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
@@ -153,8 +157,9 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
             entering = isinstance(event, EnemyUnitEnteredSightEvent)
             assert in_sight.get(event.unit.id, False) is not entering, f"{event} twice in a row"
             in_sight[event.unit.id] = entering
-    assert all(event.damage > 0 for event in seen if isinstance(event, UnitDamagedEvent))
-    assert all(event.energy_lost > 0 for event in seen if isinstance(event, UnitEnergyLostEvent))
+    assert all(event.damage > 0 for event in seen if isinstance(event, OwnUnitDamagedEvent | EnemyUnitDamagedEvent))
+    drained = [event for event in seen if isinstance(event, OwnUnitEnergyLostEvent | EnemyUnitEnergyLostEvent)]
+    assert all(event.energy_lost > 0 for event in drained)
     assert in_sight, "no enemy unit ever came into sight"
     client.leave_game()
     client.quit()

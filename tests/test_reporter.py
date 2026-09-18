@@ -7,12 +7,15 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos._reporter import _Reporter
+from sc2nachos._reporter import _report
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
     Done,
+    EnemyUnitCloakChangedEvent,
+    EnemyUnitDamagedEvent,
+    EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitLeftSightEvent,
@@ -21,13 +24,14 @@ from sc2nachos.events import (
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
+    OwnUnitDamagedEvent,
+    OwnUnitEnergyLostEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
-    UnitDamagedEvent,
     UnitDiedEvent,
-    UnitEnergyLostEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
@@ -39,7 +43,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, OwnUnit, Unit, Visibility
+from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, Visibility
 from sc2nachos.units._tracker import _UnitTracker
 from support import HAPPENINGS, RealGame, make_game_info, make_observation, make_tables, make_unit, record
 
@@ -55,12 +59,11 @@ _TABLES = make_tables(
 
 
 class _Game:
-    """A tracker and a reporter fed one observation after another, as `Api.play` feeds them each turn."""
+    """A tracker fed one observation after another and each reported, as `Api.play` does each turn."""
 
     def __init__(self, events: EventBus | None = None) -> None:
         self.events = events or EventBus()
         self.tracker = _UnitTracker(_TABLES, Enemy())
-        self.reporter = _Reporter(self.tracker)
         self.map = GameMap(make_game_info())
         self.state: _State | None = None
 
@@ -69,7 +72,7 @@ class _Game:
         observation = make_observation(step, units=units, **fields)
         self.tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.tracker, self.map)
-        self.reporter.report(self.events, observation, self.state, step)
+        _report(self.events, self.tracker, observation, self.state, step)
         return {unit.tag: unit for unit in self.tracker.present_units}
 
 
@@ -89,6 +92,9 @@ def _everything(game: _Game) -> None:
         make_unit(6, alliance=_ENEMY),
         _depot(900, visibility=Visibility.IN_FOG),
         make_unit(8, build_progress=1.0),
+        make_unit(12, UnitTypeId.GHOST, build_progress=1.0, cloak=CloakState.NOT_CLOAKED),
+        make_unit(13, UnitTypeId.HIGH_TEMPLAR, alliance=_ENEMY, health=40.0, energy=100.0),
+        make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, visibility=Visibility.INVISIBLE, cloak=CloakState.CLOAKED),
     )
     camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
     game.observe(
@@ -101,6 +107,9 @@ def _everything(game: _Game) -> None:
         make_unit(9, UnitTypeId.ROACH, alliance=_ENEMY),
         make_unit(10, UnitTypeId.SCV, build_progress=1.0),
         make_unit(11, UnitTypeId.SUPPLY_DEPOT, build_progress=0.1),
+        make_unit(12, UnitTypeId.GHOST, build_progress=1.0, cloak=CloakState.CLOAKED_ALLIED),
+        make_unit(13, UnitTypeId.HIGH_TEMPLAR, alliance=_ENEMY, health=30.0, energy=50.0),
+        make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, cloak=CloakState.CLOAKED_DETECTED),
         dead=(8,),
         upgrades=[UpgradeId.STIMPACK],
         actions=[sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=camera), game_loop=12)],
@@ -133,14 +142,19 @@ class TestWhatATurnReports:
         seen = record(game.events, *HAPPENINGS)
         _everything(game)
         units = {unit.tag: unit for unit in game.tracker._units_by_id.values()}
+        own = {tag: unit for tag, unit in units.items() if isinstance(unit, OwnUnit)}
         at_16 = {type(event): event for event in seen if event.step == 16}
         assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(16, units[4], UnitTypeId.SIEGE_TANK)
         assert at_16[UnitAllianceChangedEvent] == UnitAllianceChangedEvent(16, units[6], _ENEMY)
         assert at_16[OwnConstructionFinishedEvent].unit is units[2]
         assert at_16[OwnWarpInFinishedEvent].unit is units[3]
         assert at_16[OwnUpgradeFinishedEvent] == OwnUpgradeFinishedEvent(16, UpgradeId.STIMPACK)
-        assert at_16[UnitDamagedEvent] == UnitDamagedEvent(16, units[1], 5.0)
-        assert at_16[UnitEnergyLostEvent] == UnitEnergyLostEvent(16, units[1], 25.0)
+        assert at_16[OwnUnitDamagedEvent] == OwnUnitDamagedEvent(16, own[1], 5.0)
+        assert at_16[EnemyUnitDamagedEvent] == EnemyUnitDamagedEvent(16, units[13], 10.0)
+        assert at_16[OwnUnitEnergyLostEvent] == OwnUnitEnergyLostEvent(16, own[1], 25.0)
+        assert at_16[EnemyUnitEnergyLostEvent] == EnemyUnitEnergyLostEvent(16, units[13], 50.0)
+        assert at_16[OwnUnitCloakChangedEvent] == OwnUnitCloakChangedEvent(16, own[12], CloakState.NOT_CLOAKED)
+        assert at_16[EnemyUnitCloakChangedEvent] == EnemyUnitCloakChangedEvent(16, units[14], CloakState.CLOAKED)
         assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(16, units[5])
         assert at_16[UnitDiedEvent] == UnitDiedEvent(16, units[8])
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(16, units[900])
@@ -185,19 +199,19 @@ class TestOnlyWhatIsWanted:
         _everything(game)
         assert made and set(made) == {wanted}
 
-    def test_with_no_handler_the_actions_are_never_read_and_no_vitals_are_kept(self) -> None:
+    def test_with_no_handler_the_actions_are_never_read_and_no_units_are_compared(self) -> None:
         game = _Game()
         _everything(game)
         assert game.state is not None and "actions" not in vars(game.state)
-        assert not game.reporter._vitals
+        assert not game.tracker._compared
 
-    def test_a_handler_that_is_done_stops_the_vitals_being_kept(self) -> None:
+    def test_a_handler_that_is_done_stops_the_units_being_compared(self) -> None:
         game = _Game()
-        game.events.on(UnitDamagedEvent)(lambda event: Done)
+        game.events.on(OwnUnitDamagedEvent)(lambda event: Done)
         game.observe(0, make_unit(1, health=45.0))
         game.observe(16, make_unit(1, health=40.0))
         game.observe(32, make_unit(1, health=35.0))
-        assert not game.reporter._vitals
+        assert not game.tracker._compared
 
 
 def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Unit:
@@ -208,7 +222,7 @@ class TestEnergy:
     def _lost(self, *units: raw_pb2.Unit) -> list[float]:
         """The energy reported lost as each of `units` is observed in turn."""
         game = _Game()
-        seen = record(game.events, UnitEnergyLostEvent)
+        seen = record(game.events, EnemyUnitEnergyLostEvent)
         for step, unit in enumerate(units):
             game.observe(step * 16, unit)
         return [event.energy_lost for event in seen]
@@ -225,24 +239,33 @@ class TestEnergy:
     def test_a_unit_out_of_vision_in_either_observation_lost_none(self) -> None:
         assert not self._lost(_raven(100.0), _raven(50.0, visibility=Visibility.INVISIBLE), _raven(25.0))
 
-    def test_energy_is_kept_for_a_handler_of_its_own_as_damage_is(self) -> None:
+    def test_energy_is_compared_for_a_handler_of_its_own_as_damage_is(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitEnergyLostEvent)
+        seen = record(game.events, EnemyUnitEnergyLostEvent)
         game.observe(0, _raven(100.0))
         game.observe(16, _raven(25.0))
         assert [event.energy_lost for event in seen] == [75.0]
-        assert game.reporter._vitals
+        assert game.tracker._compared
+
+    def test_a_unit_of_this_players_loses_energy_to_the_event_of_its_own(self) -> None:
+        game = _Game()
+        own, enemy = record(game.events, OwnUnitEnergyLostEvent), record(game.events, EnemyUnitEnergyLostEvent)
+        game.observe(0, _raven(100.0, alliance=Alliance.OWN))
+        game.observe(16, _raven(50.0, alliance=Alliance.OWN))
+        assert [(event.unit, event.energy_lost) for event in own] == [(game.tracker.present_units[0], 50.0)]
+        assert not enemy
 
 
 def _raven(energy: float, **fields: Any) -> raw_pb2.Unit:
-    return make_unit(1, fields.pop("unit_type", UnitTypeId.RAVEN), alliance=_ENEMY, energy=energy, **fields)
+    unit_type, alliance = fields.pop("unit_type", UnitTypeId.RAVEN), fields.pop("alliance", _ENEMY)
+    return make_unit(1, unit_type, alliance=alliance, energy=energy, **fields)
 
 
 class TestDamage:
     def _damage(self, *units: raw_pb2.Unit) -> list[float]:
         """The damage reported as each of `units` is observed in turn."""
         game = _Game()
-        seen = record(game.events, UnitDamagedEvent)
+        seen = record(game.events, EnemyUnitDamagedEvent)
         for step, unit in enumerate(units):
             game.observe(step * 16, unit)
         return [event.damage for event in seen]
@@ -263,10 +286,24 @@ class TestDamage:
         hidden = Visibility.INVISIBLE
         assert not self._damage(_marine(45.0), _marine(40.0, visibility=hidden), _marine(30.0))
 
+    def test_damage_goes_to_the_event_of_the_units_side_and_none_for_a_neutral_unit(self) -> None:
+        game = _Game()
+        own, enemy = record(game.events, OwnUnitDamagedEvent), record(game.events, EnemyUnitDamagedEvent)
+        rock = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ROCK
+        game.observe(
+            0, _marine(45.0), make_unit(2, health=45.0), make_unit(3, rock, alliance=Alliance.NEUTRAL, health=2000.0)
+        )
+        game.observe(
+            16, _marine(40.0), make_unit(2, health=30.0), make_unit(3, rock, alliance=Alliance.NEUTRAL, health=1000.0)
+        )
+        units = {unit.tag: unit for unit in game.tracker.present_units}
+        assert [(event.unit, event.damage) for event in own] == [(units[2], 15.0)]
+        assert [(event.unit, event.damage) for event in enemy] == [(units[1], 5.0)]
+
     def test_a_handler_subscribed_mid_game_hears_of_damage_from_the_turn_after(self) -> None:
         game = _Game()
         game.observe(0, _marine(45.0))
-        seen = record(game.events, UnitDamagedEvent)
+        seen = record(game.events, EnemyUnitDamagedEvent)
         game.observe(16, _marine(40.0))
         game.observe(32, _marine(30.0))
         assert [(event.step, event.damage) for event in seen] == [(32, 10.0)]
@@ -274,17 +311,60 @@ class TestDamage:
     def test_after_a_gap_without_handlers_damage_starts_afresh(self) -> None:
         game = _Game()
 
-        @game.events.on(UnitDamagedEvent)
-        def handler(event: UnitDamagedEvent) -> None:
+        @game.events.on(EnemyUnitDamagedEvent)
+        def handler(event: EnemyUnitDamagedEvent) -> None:
             pass
 
         game.observe(0, _marine(45.0))
         game.events.unsubscribe(handler)
         game.observe(16, _marine(40.0))
-        seen = record(game.events, UnitDamagedEvent)
+        seen = record(game.events, EnemyUnitDamagedEvent)
         game.observe(32, _marine(30.0))
         game.observe(48, _marine(25.0))
         assert [(event.step, event.damage) for event in seen] == [(48, 5.0)]
+
+
+class TestCloak:
+    def _changes(self, *units: raw_pb2.Unit | None) -> list[tuple[type[Event], CloakState]]:
+        """The cloak changes reported as each of `units` is observed in turn, `None` for an observation without it."""
+        game = _Game()
+        seen = record(game.events, OwnUnitCloakChangedEvent, EnemyUnitCloakChangedEvent)
+        for step, unit in enumerate(units):
+            game.observe(step * 16, *([] if unit is None else [unit]))
+        return [(type(event), event.previous_cloak) for event in seen]
+
+    def test_a_unit_of_this_players_cloaking_and_uncloaking(self) -> None:
+        assert self._changes(
+            _ghost(CloakState.NOT_CLOAKED), _ghost(CloakState.CLOAKED_ALLIED), _ghost(CloakState.NOT_CLOAKED)
+        ) == [
+            (OwnUnitCloakChangedEvent, CloakState.NOT_CLOAKED),
+            (OwnUnitCloakChangedEvent, CloakState.CLOAKED_ALLIED),
+        ]
+
+    def test_an_enemy_unit_coming_to_be_detected_and_no_longer(self) -> None:
+        hidden = _observer(CloakState.CLOAKED, visibility=Visibility.INVISIBLE)
+        assert self._changes(hidden, _observer(CloakState.CLOAKED_DETECTED), hidden) == [
+            (EnemyUnitCloakChangedEvent, CloakState.CLOAKED),
+            (EnemyUnitCloakChangedEvent, CloakState.CLOAKED_DETECTED),
+        ]
+
+    def test_a_unit_out_of_the_observation_in_between_changed_nothing(self) -> None:
+        hidden = _observer(CloakState.CLOAKED, visibility=Visibility.INVISIBLE)
+        assert not self._changes(hidden, None, _observer(CloakState.CLOAKED_DETECTED))
+
+    def test_a_unit_that_changed_type_is_still_compared(self) -> None:
+        sieged = _observer(CloakState.CLOAKED_DETECTED, unit_type=UnitTypeId.OBSERVER_SIEGED)
+        assert self._changes(_observer(CloakState.CLOAKED, visibility=Visibility.INVISIBLE), sieged) == [
+            (EnemyUnitCloakChangedEvent, CloakState.CLOAKED)
+        ]
+
+
+def _ghost(cloak: CloakState) -> raw_pb2.Unit:
+    return make_unit(1, UnitTypeId.GHOST, cloak=cloak)
+
+
+def _observer(cloak: CloakState, **fields: Any) -> raw_pb2.Unit:
+    return make_unit(1, fields.pop("unit_type", UnitTypeId.OBSERVER), alliance=_ENEMY, cloak=cloak, **fields)
 
 
 @contextmanager
@@ -366,7 +446,10 @@ class TestAgainstTheRealGame:
             (finished,) = _of(seen, OwnConstructionFinishedEvent)
             assert started_pool.unit is finished.unit
             assert finished.unit.type_id is UnitTypeId.SPAWNING_POOL
-            assert UnitDiedEvent(finished.step, drone) in seen
+            # The game reports the drone dead in the step the pool finishes or the one after.
+            _until(game, lambda: drone.is_dead)
+            (drone_died,) = [event for event in _of(seen, UnitDiedEvent, UnitFoundDeadEvent) if event.unit is drone]
+            assert type(drone_died) is UnitDiedEvent and drone_died.step - finished.step in (0, 4)
             assert AlertEvent(finished.step, Alert.BUILDING_COMPLETE) in seen
 
             # A zergling stays itself through its cocoon.
@@ -456,6 +539,42 @@ class TestAgainstTheRealGame:
             assert UnitDiedEvent(game.step, mule) in seen
             assert AlertEvent(game.step, Alert.MULE_EXPIRED) in seen
 
+    def test_a_ghost_cloaking_and_an_enemy_observer_being_detected(self) -> None:
+        with _played_as(Race.TERRAN) as (game, seen, middle):
+            home = _own(game, UnitTypeId.COMMAND_CENTER).position
+
+            # A ghost cloaks and uncloaks once its academy has researched cloaking.
+            game.debug(
+                game.create(UnitTypeId.GHOST_ACADEMY, game.open_ground(home.towards(middle, 10), size=3)),
+                game.create(UnitTypeId.GHOST, home.towards(middle, 6)),
+            )
+            _until(
+                game,
+                lambda: len(game.tracker.present_units.own.of_type([UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY])) == 2,
+            )
+            game.order(AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, _own(game, UnitTypeId.GHOST_ACADEMY))
+            _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrades)
+            ghost = _own(game, UnitTypeId.GHOST)
+            game.order(AbilityId.GHOST_CLOAK_ON, ghost)
+            _until(game, lambda: _of(seen, OwnUnitCloakChangedEvent), steps=1)
+            game.order(AbilityId.GHOST_CLOAK_OFF, ghost)
+            _until(game, lambda: len(_of(seen, OwnUnitCloakChangedEvent)) == 2, steps=1)
+            assert [(event.unit, event.previous_cloak) for event in _of(seen, OwnUnitCloakChangedEvent)] == [
+                (ghost, CloakState.NOT_CLOAKED),
+                (ghost, CloakState.CLOAKED_ALLIED),
+            ]
+
+            # An enemy observer nothing detects is listed cloaked, out of vision, until a raven beside it detects it.
+            game.debug(game.create(UnitTypeId.OBSERVER, home.towards(middle, 4), owner=3 - game.player))
+            _until(game, lambda: game.tracker.present_units.enemy.of_type(UnitTypeId.OBSERVER), steps=1)
+            observer = game.newest(UnitTypeId.OBSERVER)
+            assert observer.cloak is CloakState.CLOAKED and observer.visibility is Visibility.INVISIBLE
+            game.debug(game.create(UnitTypeId.RAVEN, observer.position))
+            _until(game, lambda: _of(seen, EnemyUnitCloakChangedEvent), steps=1)
+            (detected,) = _of(seen, EnemyUnitCloakChangedEvent)
+            assert detected.unit is observer and detected.previous_cloak is CloakState.CLOAKED
+            assert observer.cloak is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.IN_VISION
+
     def test_protoss_warp_ins_damage_sight_death_archons_and_energy(self) -> None:
         with _played_as(Race.PROTOSS) as (game, seen, middle):
             home = _own(game, UnitTypeId.NEXUS).position
@@ -478,8 +597,8 @@ class TestAgainstTheRealGame:
                 unit_value=debug_pb2.DebugSetUnitValue.Shields, value=10, unit_tag=zealot.tag
             )
             game.debug(debug_pb2.DebugCommand(unit_value=shields))
-            _until(game, lambda: _of(seen, UnitDamagedEvent), steps=2)
-            (damaged,) = _of(seen, UnitDamagedEvent)
+            _until(game, lambda: _of(seen, OwnUnitDamagedEvent), steps=2)
+            (damaged,) = _of(seen, OwnUnitDamagedEvent)
             assert damaged.unit is zealot and damaged.damage == pytest.approx(zealot.shield_max - 10, abs=1)
 
             # Two templar ordered to merge walk to each other, each reporting the order it runs, and become an archon.
@@ -545,24 +664,29 @@ class TestAgainstTheRealGame:
                 game.debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
                 game.turn(2)
 
+            drained = (OwnUnitEnergyLostEvent, EnemyUnitEnergyLostEvent)
+
             def lost_after(since: int, *units: Unit[Any]) -> dict[Unit[Any], float]:
                 """The energy each of `units` is reported to lose from the `since`-th report on, once each has."""
-                _until(game, lambda: {e.unit for e in _of(seen, UnitEnergyLostEvent)[since:]} >= set(units), steps=1)
-                return {e.unit: e.energy_lost for e in _of(seen, UnitEnergyLostEvent)[since:]}
+                _until(game, lambda: {e.unit for e in _of(seen, *drained)[since:]} >= set(units), steps=1)
+                return {e.unit: e.energy_lost for e in _of(seen, *drained)[since:]}
 
             charge(100, caster, raven)
-            since = len(_of(seen, UnitEnergyLostEvent))
+            since = len(_of(seen, *drained))
             game.order(AbilityId.HIGH_TEMPLAR_FEEDBACK, caster, target=raven)
             lost = lost_after(since, caster, raven)
             assert lost[caster] == pytest.approx(50, abs=1) and lost[raven] == pytest.approx(100, abs=1)
             assert not raven.buffs and not game.state.effects
+            assert {type(event) for event in _of(seen, *drained)[since:] if event.unit is raven} == {
+                EnemyUnitEnergyLostEvent
+            }
 
             # An EMP costs its caster 75 energy, and drains up to 100 of every unit's where it lands.
             game.debug(game.create(UnitTypeId.GHOST, at + (-4.0, 0.0)))
             _until(game, lambda: game.tracker.present_units.own.of_type(UnitTypeId.GHOST))
             ghost = game.newest(UnitTypeId.GHOST)
             charge(150, ghost, raven)
-            since = len(_of(seen, UnitEnergyLostEvent))
+            since = len(_of(seen, *drained))
             game.order(AbilityId.GHOST_EMP, ghost, target=raven.position)
             lost = lost_after(since, ghost, raven)
             assert lost[ghost] == pytest.approx(75, abs=1) and lost[raven] == pytest.approx(100, abs=1)

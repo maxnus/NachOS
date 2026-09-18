@@ -7,7 +7,7 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos._reporter import _Reporter
+from sc2nachos._reporter import _report
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
@@ -38,7 +38,6 @@ class _Game:
     enemy: Final[Enemy]
     infer_enemy_upgrades: Final[UpgradeInference]
     unit_tracker: Final[_UnitTracker]
-    reporter: Final[_Reporter]
     observation: sc2api_pb2.ResponseObservation
     state: _State
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
@@ -62,7 +61,6 @@ class _Game:
             enemy,
             infer_enemy_upgrades,
             unit_tracker,
-            _Reporter(unit_tracker),
             observation,
             _State(observation, unit_tracker, game_map),
             step,
@@ -89,7 +87,7 @@ class _Game:
 
     def report(self, events: EventBus) -> None:
         """Hand on to the handlers of `events` what the last observation reports has happened."""
-        self.reporter.report(events, self.observation, self.state, self.step)
+        _report(events, self.unit_tracker, self.observation, self.state, self.step)
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
