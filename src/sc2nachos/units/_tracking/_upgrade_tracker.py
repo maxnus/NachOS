@@ -19,7 +19,7 @@ _ENEMY = raw_pb2.Alliance.Enemy
 
 
 @final
-class _Upgrades:
+class _UpgradeTracker:
     """This player's finished upgrades, as the last observation listed them, and each unit's type as the upgrades its
     owner has leave it: this player's own for its units, what `Enemy.upgrades` holds for the enemy's, and none for
     anyone else's."""

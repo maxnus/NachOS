@@ -47,7 +47,7 @@ from sc2nachos.match import Result
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeInference
 
 
@@ -246,7 +246,7 @@ def played(
     game: _Game | None,
     client: Client,
     game_map: GameMap,
-    tracker: _UnitTracker,
+    tracker: _Tracker,
     observation: sc2api_pb2.ResponseObservation,
     events: EventBus,
     *,
@@ -279,7 +279,7 @@ class RealGame:
         self.events = events or EventBus()
         self.map = GameMap(client.game_info())
         self.enemy = Enemy()
-        self.tracker = _UnitTracker(GameData(client.game_data()), self.enemy)
+        self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()
 
@@ -294,7 +294,7 @@ class RealGame:
         """Let `steps` pass, then observe."""
         self.client.step(steps)
         self.state = self._observe()
-        return self.tracker.present_units
+        return self.tracker.units.present
 
     def debug(self, *commands: debug_pb2.DebugCommand) -> None:
         self.client.debug(commands)
@@ -318,7 +318,7 @@ class RealGame:
 
     def newest(self, unit_type: UnitTypeId) -> Unit[Any]:
         """The unit of `unit_type` first seen last."""
-        return max(self.tracker.present_units.of_type(unit_type), key=lambda unit: unit.id)
+        return max(self.tracker.units.present.of_type(unit_type), key=lambda unit: unit.id)
 
     def open_ground(self, near: Point, *, size: int = 2) -> Point:
         """The center nearest to `near` of a square of `size` tiles a side that can all be built on."""

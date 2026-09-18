@@ -52,25 +52,25 @@ class _TrackerChanges:
         self.own_upgrades_finished: list[UpgradeId] = []
         """This player's upgrades new to the observation, in the order of their ids."""
         self.own_units_damaged: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units that lost health or shields, each with how much. Filled only by `compare_units`."""
+        """This player's units that lost health or shields, each with how much. Filled only by the comparer."""
         self.enemy_units_damaged: list[tuple[Unit[Any], float]] = []
         """The same for the enemy's units."""
         self.own_units_energy_lost: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units that lost energy, each with how much. Filled only by `compare_units`."""
+        """This player's units that lost energy, each with how much. Filled only by the comparer."""
         self.enemy_units_energy_lost: list[tuple[Unit[Any], float]] = []
         """The same for the enemy's units."""
         self.own_units_cloak_changed: list[tuple[OwnUnit[Any], CloakState]] = []
-        """This player's units whose cloak changed, each with the state it was. Filled only by `compare_units`."""
+        """This player's units whose cloak changed, each with the state it was. Filled only by the comparer."""
         self.enemy_units_cloak_changed: list[tuple[Unit[Any], CloakState]] = []
         """The same for the enemy's units."""
         self.own_units_gained_buff: list[tuple[OwnUnit[Any], BuffId]] = []
         """This player's units that wear a buff they did not, each with the buff, a unit's several in the order of
-        their ids. Filled only by `compare_units`."""
+        their ids. Filled only by the comparer."""
         self.enemy_units_gained_buff: list[tuple[Unit[Any], BuffId]] = []
         """The same for the enemy's units."""
         self.own_units_lost_buff: list[tuple[OwnUnit[Any], BuffId]] = []
         """This player's units that no longer wear a buff they did, each with the buff, a unit's several in the order of
-        their ids. Filled only by `compare_units`."""
+        their ids. Filled only by the comparer."""
         self.enemy_units_lost_buff: list[tuple[Unit[Any], BuffId]] = []
         """The same for the enemy's units."""
         self.enemy_units_entered_sight: list[Unit[Any]] = []

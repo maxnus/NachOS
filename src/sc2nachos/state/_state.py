@@ -15,26 +15,24 @@ from sc2nachos.state._score import Score
 from sc2nachos.state._supply import Supply
 from sc2nachos.state._ui_unit_counts import UiUnitCounts
 from sc2nachos.units import Alliance
-from sc2nachos.units._tracker import _IDS_PER_ALLIANCE
+from sc2nachos.units._tracking._unit_tracker import _IDS_PER_ALLIANCE
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from s2clientprotocol import sc2api_pb2
 
     from sc2nachos.gamemap import GameMap
-    from sc2nachos.units._tracker import _UnitTracker
+    from sc2nachos.units._tracking import _Tracker
 
 
 class _State:
     """What one observation reports beyond its units, each read out of it when first asked for."""
 
-    def __init__(
-        self, observation: sc2api_pb2.ResponseObservation, unit_tracker: _UnitTracker, game_map: GameMap
-    ) -> None:
-        """Read `observation`, whose units `unit_tracker` has taken in, on `game_map`."""
+    def __init__(self, observation: sc2api_pb2.ResponseObservation, tracker: _Tracker, game_map: GameMap) -> None:
+        """Read `observation`, whose units `tracker` has taken in, on `game_map`."""
         self._response = observation
         self._observation = observation.observation
-        self._unit_tracker = unit_tracker
+        self._tracker = tracker
         self._map = game_map
 
     @cached_property
@@ -63,9 +61,9 @@ class _State:
     def _half_supply(self) -> float:
         """What the units first seen as this player's and not dead take beyond whole supplies, those inside another
         unit included: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
-        rows = self._unit_tracker.data.units
+        rows = self._tracker.data.units
         taken = 0.0
-        for unit in self._unit_tracker.known_units:
+        for unit in self._tracker.units.known:
             if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
@@ -83,7 +81,7 @@ class _State:
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        return self._unit_tracker.upgrades.own
+        return self._tracker.upgrades.own
 
     @cached_property
     def _visibility(self) -> ndarray:
@@ -121,6 +119,6 @@ class _State:
 
         Raises `UncuratedIdError` where an action names an ability the curated ids leave out.
         """
-        unit_by_tag = self._unit_tracker.unit_by_tag
+        unit_by_tag = self._tracker.units.by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
         return tuple(action for action in actions if action is not None)

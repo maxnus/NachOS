@@ -45,7 +45,7 @@ from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeInference
 
 # Each alert by the protocol's value.
@@ -61,7 +61,7 @@ class _Game:
     data: Final[GameData]
     enemy: Final[Enemy]
     infer_enemy_upgrades: Final[UpgradeInference]
-    unit_tracker: Final[_UnitTracker]
+    tracker: Final[_Tracker]
     observation: sc2api_pb2.ResponseObservation
     state: _State
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
@@ -76,7 +76,7 @@ class _Game:
         step = _step(observation)
         tables = GameData(data)
         enemy = Enemy()
-        unit_tracker = _UnitTracker(tables, enemy)
+        tracker = _Tracker(tables, enemy)
         game_map = GameMap(info)
         game = cls(
             client,
@@ -84,9 +84,9 @@ class _Game:
             tables,
             enemy,
             infer_enemy_upgrades,
-            unit_tracker,
+            tracker,
             observation,
-            _State(observation, unit_tracker, game_map),
+            _State(observation, tracker, game_map),
             step,
         )
         game._take_in(observation, step)
@@ -101,9 +101,9 @@ class _Game:
         """Read `observation`: its units, what they show of the enemy's upgrades if told to, and all else it reports."""
         self.observation = observation
         self.step = step
-        self.unit_tracker.update(observation.observation.raw_data, step)
-        self.state = _State(observation, self.unit_tracker, self.map)
-        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrades.reader
+        self.tracker.update(observation.observation.raw_data, step)
+        self.state = _State(observation, self.tracker, self.map)
+        units, reader = self.tracker.units.present, self.tracker.upgrades.reader
         if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
@@ -112,7 +112,7 @@ class _Game:
     def report(self, events: EventBus) -> None:
         """Hand on to the handlers of `events` what the last observation reports has happened, as events of the types
         with a handler still to run."""
-        tracker, observation, state, step = self.unit_tracker, self.observation, self.state, self.step
+        tracker, observation, state, step = self.tracker, self.observation, self.state, self.step
         changes = tracker.last_changes
         wanted = events._has_handlers
         emit = events._emit
@@ -172,7 +172,7 @@ class _Game:
     def _report_compared(self, events: EventBus) -> None:
         """Have the tracker compare each unit with the update before, as the damage, energy, cloak and buff events with
         a handler still to run need, and hand on what it found; have it let go of what it kept when none has."""
-        tracker, step = self.unit_tracker, self.step
+        tracker, step = self.tracker, self.step
         wanted = events._has_handlers
         damage = wanted(OwnUnitDamagedEvent) or wanted(EnemyUnitDamagedEvent)
         energy = wanted(OwnUnitEnergyLostEvent) or wanted(EnemyUnitEnergyLostEvent)
@@ -180,9 +180,9 @@ class _Game:
         buff_events = (OwnUnitGainedBuffEvent, EnemyUnitGainedBuffEvent, OwnUnitLostBuffEvent, EnemyUnitLostBuffEvent)
         buffs = any(wanted(event_type) for event_type in buff_events)
         if not (damage or energy or cloak or buffs):
-            tracker.comparison.stop()
+            tracker.comparer.stop()
             return
-        tracker.comparison.compare(damage=damage, energy=energy, cloak=cloak, buffs=buffs)
+        tracker.comparer.compare(damage=damage, energy=energy, cloak=cloak, buffs=buffs)
         changes = tracker.last_changes
         emit = events._emit
         if changes.own_units_damaged and wanted(OwnUnitDamagedEvent):

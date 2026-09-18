@@ -16,7 +16,7 @@ from sc2nachos.units._values import Alliance, CloakState, Visibility
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import UnitTypeData, Weapon
-    from sc2nachos.units._tracker import _UnitTracker
+    from sc2nachos.units._tracking import _Tracker
 
 _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
@@ -67,7 +67,7 @@ class Unit[K: UnitType.AnyType]:
         "_type_id",
     )
 
-    _tracker: _UnitTracker
+    _tracker: _Tracker
     _id: int
     _tag: int
     _latest_data: raw_pb2.Unit
@@ -83,7 +83,7 @@ class Unit[K: UnitType.AnyType]:
     _stale: bool
     _dead: bool
 
-    def __init__(self, proto: raw_pb2.Unit, tracker: _UnitTracker, unit_id: int, step: int) -> None:
+    def __init__(self, proto: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
         self._id = unit_id
         self._tag = proto.tag

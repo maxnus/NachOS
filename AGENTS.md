@@ -68,7 +68,10 @@ Carried over from AvocaDOS, so the two codebases read alike:
 
 - **Imports**: separate stdlib, third-party and internal imports with blank lines.
 - **Keyword-only args**: use `*` in signatures liberally.
-- **One class per file** (except small data classes). File named after the class, lowercase.
+- **One class per file** (except small data classes). File named after the class, snake-cased: `_tracker_changes.py`
+  holds `_TrackerChanges`.
+- **Name a class for what it is responsible for**, so the name says what it does: `_BuilderTracker` keeps track of
+  who builds what, where `_Construction` named only what it was about.
 - **Type hints** on all parameters and return types.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.

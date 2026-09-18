@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Any, final
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
-    from sc2nachos.units._tracker import _UnitsByTag, _UnitTracker
+    from sc2nachos.units._tracking._tracker import _Tracker
+    from sc2nachos.units._tracking._unit_tracker import _UnitsByTag
     from sc2nachos.units._unit import Unit
 
 # How far from where a build order was aimed a structure may stand and still be the one it builds. The game snaps a
@@ -16,13 +17,13 @@ _BUILDER_REACH = 1.0
 
 
 @final
-class _Construction:
+class _BuilderTracker:
     """The builder of each of this player's structures being built: a unit in the observation carrying out the order
     that builds it, or the unit that became it, as a drone does."""
 
     __slots__ = ("_builders", "_builders_now", "_tracker", "_under_construction", "_used_up_builders")
 
-    def __init__(self, tracker: _UnitTracker) -> None:
+    def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
         # Each structure still being built by a unit that became it, as a drone does, and that unit.
         self._builders: dict[Unit[Any], Unit[Any]] = {}
@@ -62,7 +63,7 @@ class _Construction:
             return drone
         if self._builders_now is None:
             self._builders_now = {}
-            for unit in self._tracker.present_units:
+            for unit in self._tracker.units.present:
                 if unit._own and (built := self.structure_built_by(unit)) is not None:
                     self._builders_now[built] = unit
         return self._builders_now.get(structure)
@@ -105,7 +106,7 @@ class _Construction:
             return
         for builder in self._used_up_builders:
             if builder._stale and not builder._dead:
-                self._tracker._mark_unit_dead(builder, present, reported=False)
+                self._tracker.units._mark_unit_dead(builder, present, reported=False)
         self._used_up_builders = []
         for structure, builder in list(self._builders.items()):
             if structure._dead or structure.is_complete:
@@ -127,9 +128,9 @@ class _Construction:
         goes on or an unfinished structure construction resumes on."""
         if order.HasField("target_world_space_pos"):
             return order.target_world_space_pos.x, order.target_world_space_pos.y
-        tracker = self._tracker
-        if order.HasField("target_unit_tag") and (unit_id := tracker._ids.get(order.target_unit_tag)) is not None:
-            position = tracker._units_by_id[unit_id]._position
+        units = self._tracker.units
+        if order.HasField("target_unit_tag") and (unit_id := units._ids.get(order.target_unit_tag)) is not None:
+            position = units._units_by_id[unit_id]._position
             return position[0], position[1]
         return None
 
@@ -142,6 +143,6 @@ class _Construction:
         """This player's unfinished units in the last observation."""
         if self._under_construction is None:
             self._under_construction = [
-                unit for unit in self._tracker.present_units if unit._own and unit._latest_data.build_progress < 1.0
+                unit for unit in self._tracker.units.present if unit._own and unit._latest_data.build_progress < 1.0
             ]
         return self._under_construction

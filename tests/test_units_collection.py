@@ -12,7 +12,7 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Circle, Point, Rectangle
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
-from sc2nachos.units._tracker import _UnitTracker
+from sc2nachos.units._tracking import _Tracker
 from support import make_observation, make_tables, make_unit
 
 _TYPES = (UnitTypeId.MARINE, UnitTypeId.SCV, UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT)
@@ -29,9 +29,9 @@ _TABLES = make_tables(
 
 def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
     """`protos` observed once."""
-    tracker = _UnitTracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, Enemy())
     tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
-    return tracker.present_units
+    return tracker.units.present
 
 
 def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
