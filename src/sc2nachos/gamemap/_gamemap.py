@@ -146,8 +146,8 @@ def _tile_corners(heights: ndarray) -> ndarray:
     """The heights of each tile's lower left, lower right, upper left and upper right corners, as the tile stands.
 
     A corner on a cliff line has one height, which is the wrong level for the tiles on its other side. A tile
-    stands on the side most of its corners are on, and on the upper side when they split two and two, as measured
-    on every map of the 2025 pool. Its corners on the far side take the mean height of those on its own.
+    stands on the side most of its corners are on, and on the upper side when they split two and two (in game). Its
+    corners on the far side take the mean height of those on its own.
     """
     corners = numpy.stack((heights[:-1, :-1], heights[1:, :-1], heights[:-1, 1:], heights[1:, 1:]), axis=-1)
     ordered = numpy.sort(corners, axis=-1)

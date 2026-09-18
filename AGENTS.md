@@ -88,9 +88,10 @@ Carried over from AvocaDOS, so the two codebases read alike:
   layer keeps Blizzard's `game_loop`, because the messages it hands back carry that field, and `Api.play` is
   the one place the two meet. Never write "frame" for either.
 - **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
-  piece of code goes beside that code, in its docstring or a comment. The evidence goes in the commit message or
-  PR, and the steps for one kind of task in `docs/`. Anything seen of how the game behaves also goes in
-  `docs/game-behavior.md`, with how it was seen.
+  piece of code goes beside that code, in its docstring or a comment. What the game was seen to do goes in
+  `docs/game-behavior.md`, with how it was seen, and the code states only the part it relies on, tagged
+  `(in game)` or `(corpus)`. The steps for one kind of task go in `docs/`, and measurements in the commit message or
+  PR.
 
 ## Review checklist
 

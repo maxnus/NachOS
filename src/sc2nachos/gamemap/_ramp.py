@@ -22,9 +22,8 @@ _TOUCHING = numpy.ones((3, 3), dtype=bool)
 _HALF_A_LEVEL = 1.0
 
 # How near the end of a ramp a tile counts as part of it, which is one byte of the height the game sends. A row
-# straight across a ramp is not quite level where the corners under it are not all the same: on four ramps of
-# the 2026 pool its tiles differ by half a byte, and an exact reading took two tiles of a ten-tile row. The next
-# row up any ramp measured is 0.1875 away, so a byte cannot reach it.
+# straight across a ramp is not quite level, its tiles differing by up to half a byte, while the next row up is
+# 0.1875 away, so a byte cannot reach it (in game).
 _A_BYTE = 0.125
 
 
