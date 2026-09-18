@@ -3,12 +3,16 @@
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `free`, `fast_build`,
 `food` and `show_map` cheats, killing whatever of the computer's could fight, and runs trials in turn. Each trial
 makes something happen a counted number of times, such as three marines trained, and records every alert raised
-meanwhile, and every action error, with the step it came at. `attacks` plays the attack trials alone, and
-`suppression` the long ones that time how an attack alert is held back::
+meanwhile, every action error, and every order the game refused as it was given, with the step it came at.
+
+`errors` and `zerg-errors` play without the cheats, so that minerals and supply run short. `rivals` plays a game of
+two players, both from here, for what only an enemy brings about. `attacks` plays the attack trials alone, which
+`terran` begins with, and `suppression` the long ones that time how an attack alert is held back, which only run
+when named::
 
     uv run python tools/sweep_alerts.py
-    uv run python tools/sweep_alerts.py terran --out alerts-terran.json
-    uv run python tools/sweep_alerts.py attacks
+    uv run python tools/sweep_alerts.py rivals errors --out alerts-rivals.json
+    uv run python tools/sweep_alerts.py suppression
 
 What it finds is written as JSON, one entry per trial: the steps what it made happen was seen at, and the steps each
 alert came at. An alert raised in no trial is one the sweep did not bring about, or one the game does not raise.
@@ -20,7 +24,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from _sandbox import OpenGround, Sandbox, playing
+from _sandbox import OpenGround, Sandbox, playing, playing_rivals
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
@@ -35,8 +39,6 @@ from sc2nachos.match import Race
 _SETTLE = 96
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# The ability that merges two templar into an archon, which the curated ids do not name.
-_MORPH_ARCHON = 1766
 # What the attack trials make for the enemy, which the computer, playing zerg, never has of its own.
 _ATTACKERS = frozenset({UnitTypeId.PYLON, UnitTypeId.PHOTON_CANNON})
 
@@ -49,7 +51,8 @@ class Trial:
     happened: list[int] = field(default_factory=list)
     """The steps what it made happen was seen at, once for each time."""
     alerts: dict[str, list[int]] = field(default_factory=dict)
-    """The steps each alert came at, and each action error, spelled `error:` and its result."""
+    """The steps each alert came at, each action error, spelled `error:` and its result, and each order the game
+    refused as it was given, `verdict:` and its answer."""
 
 
 def _at(unit: raw_pb2.Unit) -> Point:
@@ -59,9 +62,13 @@ def _at(unit: raw_pb2.Unit) -> Point:
 class _Game:
     """A sweep's game, stepped and observed here only, so that no observation's alerts go unrecorded."""
 
-    def __init__(self, sandbox: Sandbox) -> None:
+    def __init__(self, sandbox: Sandbox, *, step: Callable[[int], object] | None = None, guarded: bool = True) -> None:
+        """Play the game `sandbox` has joined, stepping it with `step`, which in a game of two steps both players, and
+        killing what of the computer's could fight if `guarded`."""
         self.sandbox = sandbox
         self.client = sandbox.client
+        self._step = step or self.client.step
+        self._guarded = guarded
         self.player = sandbox.player
         self.enemy = 3 - sandbox.player
         self.map = GameMap(self.client.game_info())
@@ -73,6 +80,8 @@ class _Game:
         self.step = 0
         self.units: list[raw_pb2.Unit] = []
         self.upgrades: set[int] = set()
+        self.minerals = 0
+        self.supply = (0, 0)
         self.alerts: list[tuple[int, str]] = []
         # The mineral fields at home, and the step each was first missing at.
         self.home_fields: set[int] = set()
@@ -93,6 +102,9 @@ class _Game:
         self.step = response.observation.game_loop
         self.units = list(response.observation.raw_data.units)
         self.upgrades = set(response.observation.raw_data.player.upgrade_ids)
+        common = response.observation.player_common
+        self.minerals = common.minerals
+        self.supply = (common.food_used, common.food_cap)
         for tag in self.home_fields - {unit.tag for unit in self.units}:
             self.fields_gone.setdefault(tag, self.step)
         self.alerts.extend((self.step, sc2api_pb2.Alert.Name(alert)) for alert in response.observation.alerts)
@@ -106,9 +118,11 @@ class _Game:
         while steps > 0:
             # A long wait is made of short ones, so that nothing the computer makes lives long.
             chunk = min(steps, 64)
-            self.client.step(chunk)
+            self._step(chunk)
             self.observe()
             steps -= chunk
+            if not self._guarded:
+                continue
             if fighters := [u.tag for u in self.units if u.alliance == _ENEMY and u.unit_type in self.fighters]:
                 self.sandbox.kill(fighters)
 
@@ -171,6 +185,7 @@ class _Game:
         verdict = error_pb2.ActionResult.Name(result)
         if result != error_pb2.ActionResult.Success:
             logger.info("Ability {} answered {}", ability, verdict)
+            self.alerts.append((self.step, f"verdict:{verdict}"))
         return verdict
 
     def camera(self, at: Point) -> None:
@@ -492,6 +507,162 @@ def _suppression_trials(game: _Game) -> list[Trial]:
                 lambda at=at, gap=gap: _bursts(game, at, UnitTypeId.OVERLORD, gaps=(gap,)),
             )
         )
+    return trials
+
+
+def _terran_errors(game: _Game) -> list[Trial]:
+    """Orders a player without cheats gives and the game cannot carry out, now or once it comes to them."""
+    trials: list[Trial] = []
+    center = game.own(UnitTypeId.COMMAND_CENTER)[0]
+    scvs = [unit for unit in game.own(UnitTypeId.SCV)]
+
+    def minerals_short() -> list[int]:
+        game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [center])
+        game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [center], queued=True)
+        game.turn(400)
+        return []
+
+    trials.append(
+        game.trial("an SCV trained with the 50 minerals the game starts with, and another queued", minerals_short)
+    )
+
+    def supply_short() -> list[int]:
+        game.until(lambda: game.minerals >= 250, limit=6000)
+        logger.info("Supply {} with {} minerals", game.supply, game.minerals)
+        for _ in range(5):
+            game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [center], queued=True)
+        game.turn(1500)
+        return []
+
+    trials.append(game.trial("5 SCVs queued with 2 supply left", supply_short))
+
+    def supply_lost() -> list[int]:
+        (depot,) = game.create(UnitTypeId.SUPPLY_DEPOT, game.spot(game.toward(10), 1) + (0.5, 0.5))
+        game.until(lambda: game.minerals >= 250, limit=6000)
+        for _ in range(5):
+            game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [center], queued=True)
+        game.turn(64)
+        logger.info("Supply {} before the depot is killed", game.supply)
+        game.kill([depot])
+        game.turn(1500)
+        return []
+
+    trials.append(game.trial("5 SCVs queued, then the supply depot they need killed", supply_lost))
+
+    def spent_meanwhile() -> list[int]:
+        game.until(lambda: game.minerals >= 150, limit=6000)
+        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scvs[:1], game.spot(game.toward(24), 1) + (0.5, 0.5))
+        game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [center], queued=True)
+        game.turn(600)
+        return []
+
+    trials.append(game.trial("a depot ordered far off, its minerals spent before the SCV gets there", spent_meanwhile))
+
+    def blocked() -> list[int]:
+        game.until(lambda: game.minerals >= 100, limit=6000)
+        spot = game.spot(game.toward(20), 1) + (0.5, 0.5)
+        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scvs[1:2], spot)
+        game.create(UnitTypeId.SIEGE_TANK_SIEGED, spot)
+        game.turn(600)
+        return []
+
+    trials.append(game.trial("a depot ordered where a sieged tank then stands", blocked))
+
+    def placed_badly() -> list[int]:
+        game.until(lambda: game.minerals >= 100, limit=6000)
+        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scvs[2:3], _at(_minerals(game)[0]))
+        game.turn(200)
+        return []
+
+    trials.append(game.trial("a depot ordered on a mineral field", placed_badly))
+    return trials
+
+
+def _zerg_errors(game: _Game) -> list[Trial]:
+    """Orders a zerg player without cheats gives and the game cannot carry out."""
+    trials: list[Trial] = []
+
+    def minerals_short() -> list[int]:
+        for larva in game.own(UnitTypeId.LARVA)[:2]:
+            game.order(AbilityId.LARVA_MORPH_DRONE, [larva])
+        game.turn(400)
+        return []
+
+    trials.append(game.trial("a drone morphed with the 50 minerals the game starts with, and another", minerals_short))
+
+    def supply_short() -> list[int]:
+        game.until(lambda: game.minerals >= 200 and len(game.own(UnitTypeId.LARVA)) >= 3, limit=6000)
+        logger.info("Supply {} with {} minerals", game.supply, game.minerals)
+        for larva in game.own(UnitTypeId.LARVA)[:3]:
+            game.order(AbilityId.LARVA_MORPH_DRONE, [larva])
+        game.turn(600)
+        return []
+
+    trials.append(game.trial("3 drones morphed with 1 supply left", supply_short))
+
+    def overlord_lost() -> list[int]:
+        game.until(lambda: game.minerals >= 150 and len(game.own(UnitTypeId.LARVA)) >= 2, limit=6000)
+        for larva in game.own(UnitTypeId.LARVA)[:2]:
+            game.order(AbilityId.LARVA_MORPH_DRONE, [larva])
+        game.turn(16)
+        game.kill(game.own(UnitTypeId.OVERLORD)[:1])
+        game.turn(600)
+        return []
+
+    trials.append(game.trial("2 drones morphing, then an overlord killed", overlord_lost))
+    return trials
+
+
+def _rival_trials(me: _Game, enemy: _Game) -> list[Trial]:
+    """What only an enemy brings about, the enemy played from here too: its nukes and its nydus worms, where this
+    player sees and where it does not."""
+    trials: list[Trial] = []
+    # A debug cheat is a toggle for the whole game, so one side turns each on.
+    me.sandbox.cheat("free", "fast_build", "food")
+    me.turn(8)
+    enemy.observe()
+    factory = enemy.toward(12)
+    enemy.sandbox.debug(
+        enemy.sandbox.create(UnitTypeId.FACTORY, enemy.player, factory),
+        enemy.sandbox.create(UnitTypeId.GHOST_ACADEMY, enemy.player, enemy.toward(16)),
+        enemy.sandbox.create(UnitTypeId.NYDUS_NETWORK, enemy.player, factory + (0.0, 6.0)),
+    )
+    me.turn(8)
+    enemy.observe()
+    unseen = me.spot(me.middle, 4)
+
+    def nuke(target: Point, ghost_at: Point) -> list[int]:
+        enemy.order(AbilityId.GHOST_ACADEMY_BUILD_NUKE, enemy.own(UnitTypeId.GHOST_ACADEMY))
+        (ghost,) = enemy.create(UnitTypeId.GHOST, ghost_at)
+        enemy.order(AbilityId.GHOST_HOLD_FIRE_ON, [ghost])
+        me.turn(400)
+        enemy.observe()
+        verdict = enemy.order(AbilityId.GHOST_TACTICAL_NUKE, [ghost], target)
+        logger.info("The enemy's nuke answered {}", verdict)
+        launched = me.step
+        me.turn(400)
+        enemy.observe()
+        enemy.kill([ghost])
+        return [launched]
+
+    trials.append(me.trial("the enemy's nuke launched at this player's home", lambda: nuke(me.home, me.toward(8))))
+    trials.append(
+        me.trial("the enemy's nuke launched where this player sees nothing", lambda: nuke(unseen, unseen + (8.0, 0.0)))
+    )
+
+    def worm(at: Point) -> list[int]:
+        enemy.create(UnitTypeId.OVERSEER, at)
+        verdict = enemy.order(AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM, enemy.own(UnitTypeId.NYDUS_NETWORK), at)
+        logger.info("The enemy's nydus worm answered {}", verdict)
+        summoned = me.step
+        me.turn(600)
+        enemy.observe()
+        return [summoned]
+
+    near = me.spot(me.toward(10), 2)
+    trials.append(me.trial("the enemy's nydus worm summoned where this player sees", lambda: worm(near)))
+    elsewhere = me.spot(me.middle, 4)
+    trials.append(me.trial("the enemy's nydus worm summoned where this player sees nothing", lambda: worm(elsewhere)))
     return trials
 
 
@@ -822,8 +993,8 @@ def _protoss(game: _Game) -> list[Trial]:
     def archons() -> list[int]:
         templar = game.create(UnitTypeId.HIGH_TEMPLAR, game.spot(game.toward(6), 1), count=2)
         dark = game.create(UnitTypeId.DARK_TEMPLAR, game.spot(game.toward(6), 1), count=2)
-        game.order(_MORPH_ARCHON, templar)
-        game.order(_MORPH_ARCHON, dark)
+        game.order(AbilityId.GENERAL_MORPH_ARCHON, templar)
+        game.order(AbilityId.GENERAL_MORPH_ARCHON, dark)
         return game.appear([UnitTypeId.ARCHON], 2)
 
     trials.append(game.trial("2 archons merged, one of high and one of dark templar", archons))
@@ -837,30 +1008,43 @@ def _protoss(game: _Game) -> list[Trial]:
     return trials
 
 
-_RACES: dict[str, tuple[Race, Callable[[_Game], list[Trial]]]] = {
-    "attacks": (Race.TERRAN, _attack_trials),
-    "suppression": (Race.TERRAN, _suppression_trials),
-    "terran": (Race.TERRAN, _terran),
-    "zerg": (Race.ZERG, _zerg),
-    "protoss": (Race.PROTOSS, _protoss),
+_CHEATS = ("free", "fast_build", "food", "show_map")
+# The sweeps of one player against the computer: its race, its trials, and the cheats it plays under. The error trials
+# play without the cheats that would keep minerals and supply from running short.
+_SOLO: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[str, ...]]] = {
+    "terran": (Race.TERRAN, _terran, _CHEATS),
+    "zerg": (Race.ZERG, _zerg, _CHEATS),
+    "protoss": (Race.PROTOSS, _protoss, _CHEATS),
+    "errors": (Race.TERRAN, _terran_errors, ("show_map",)),
+    "zerg-errors": (Race.ZERG, _zerg_errors, ("show_map",)),
+    "attacks": (Race.TERRAN, _attack_trials, _CHEATS),
+    "suppression": (Race.TERRAN, _suppression_trials, _CHEATS),
 }
+# `rivals` is the game of two players; `attacks` is a part of `terran`, and `suppression` is long.
+_EVERY = ("terran", "zerg", "protoss", "errors", "zerg-errors", "rivals")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        "races", nargs="*", help="terran, zerg or protoss, or attacks for the attack trials alone; all when none"
+        "sweeps", nargs="*", help=f"any of {', '.join([*_SOLO, 'rivals'])}; all but the last two when none"
     )
     parser.add_argument("--out", type=Path, default=Path("alerts.json"), help="where to write the findings")
     args = parser.parse_args()
-    if unknown := set(args.races) - _RACES.keys():
-        parser.error(f"no such race: {', '.join(sorted(unknown))}")
+    if unknown := set(args.sweeps) - {*_SOLO, "rivals"}:
+        parser.error(f"no such sweep: {', '.join(sorted(unknown))}")
     installation = Installation.find()
     findings: dict[str, list[dict[str, object]]] = {}
-    for name in args.races or ["terran", "zerg", "protoss"]:
-        race, sweep = _RACES[name]
+    for name in args.sweeps or _EVERY:
+        if name == "rivals":
+            with playing_rivals(Race.TERRAN, installation) as rivals:
+                me = _Game(rivals.me, step=rivals.step, guarded=False)
+                enemy = _Game(rivals.enemy, step=rivals.step, guarded=False)
+                findings[name] = [asdict(trial) for trial in _rival_trials(me, enemy)]
+            continue
+        race, sweep, cheats = _SOLO[name]
         with playing(race, installation) as sandbox:
-            sandbox.cheat("free", "fast_build", "food", "show_map")
+            sandbox.cheat(*cheats)
             sandbox.client.step(8)
             findings[name] = [asdict(trial) for trial in sweep(_Game(sandbox))]
     args.out.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")

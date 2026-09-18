@@ -16,14 +16,14 @@ from sc2nachos.events._event import Event
 @final
 @dataclass(frozen=True, slots=True)
 class NuclearLaunchDetectedAlertEvent(Event):
-    """The game has alerted this player to a nuke launched at it. Untested, since only an enemy launches one: this
+    """The enemy has launched a nuke, one alert for each, whether this player sees where it is aimed or not. This
     player's own nuke raises nothing (in game)."""
 
 
 @final
 @dataclass(frozen=True, slots=True)
 class NydusWormDetectedAlertEvent(Event):
-    """The game has alerted this player to an enemy's nydus worm. Untested, since only an enemy summons one: this
+    """The enemy has summoned a nydus worm, one alert for each, whether this player sees where or not. This
     player's own worm raises only a `BuildingCompleteAlertEvent` (in game)."""
 
 
@@ -156,7 +156,9 @@ _ALERT_EVENTS: Mapping[sc2api_pb2.Alert.ValueType, type[Event] | None] = Mapping
     {
         _Alert.NuclearLaunchDetected: NuclearLaunchDetectedAlertEvent,
         _Alert.NydusWormDetected: NydusWormDetectedAlertEvent,
-        # Nothing the sweep did raised these two, and what would is not known, so they are passed over.
+        # Nothing the sweep did raised these two. A morph ordered with no supply left is refused as it is given, and
+        # training stalled when supply runs short or is lost, or a structure whose ground is found blocked, raises an
+        # action error instead (in game). What would raise them is not known, so they are passed over.
         _Alert.AlertError: None,
         _Alert.TrainError: None,
         _Alert.AddOnComplete: AddOnCompleteAlertEvent,

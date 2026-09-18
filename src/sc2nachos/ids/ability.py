@@ -18,7 +18,6 @@ class AbilityId(IdEnum):
     ADEPT_CANCEL_SHADE = RawAbilityId.Cancel_AdeptPhaseShift
     ADEPT_SHADE = RawAbilityId.AdeptPhaseShift_AdeptPhaseShift
     ADEPT_SHADE_CANCEL = RawAbilityId.Cancel_AdeptShadePhaseShift
-    ARCHON_MERGE = RawAbilityId.Archon_Warp_Target
     ARMORY_RESEARCH_SHIP_WEAPONS = RawAbilityId.Research_TerranShipWeapons
     ARMORY_RESEARCH_SHIP_WEAPONS_1 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel1
     ARMORY_RESEARCH_SHIP_WEAPONS_2 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel2
@@ -201,6 +200,9 @@ class AbilityId(IdEnum):
     GENERAL_LIFT = RawAbilityId.Lift
     GENERAL_LOAD = RawAbilityId.Load
     GENERAL_LOAD_ALL = RawAbilityId.LoadAll
+    # Ordered of two templar together, which it merges into an archon (in game). The catalog's other archon
+    # ability, Archon_Warp_Target, is answered Success and merges nothing, aimed at a templar or not.
+    GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
     GENERAL_MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     GENERAL_MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     GENERAL_PATROL = RawAbilityId.Patrol
