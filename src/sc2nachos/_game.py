@@ -103,7 +103,7 @@ class _Game:
         self.step = step
         self.unit_tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.unit_tracker, self.map)
-        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrade_reader
+        units, reader = self.unit_tracker.present_units, self.unit_tracker.upgrades.reader
         if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:

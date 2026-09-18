@@ -334,7 +334,7 @@ def _observe(
     tracker: _UnitTracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
 ) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*tracker.upgrade_reader.read_basic_upgrades(tracker.present_units))
+    tracker.enemy.assume_upgrades(*tracker.upgrades.reader.read_basic_upgrades(tracker.present_units))
     by_tag = {unit.tag: unit for unit in tracker.present_units}
     return [by_tag[unit.tag] for unit in units]
 
@@ -697,7 +697,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
             units = game.turn(1)
             townhalls = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
             home = next(unit for unit in units.own if unit.type_id in townhalls).position
-            yield game, game.tracker.upgrade_reader, home.towards(game.map.playable_area.center, 10)
+            yield game, game.tracker.upgrades.reader, home.towards(game.map.playable_area.center, 10)
             client.leave_game()
 
 

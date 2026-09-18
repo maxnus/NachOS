@@ -80,10 +80,10 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def construction(self) -> Unit[Any] | None:
         """The unfinished structure it is building now, or the one a drone became until it finishes, or `None`."""
-        return self._tracker.construction_of(self)
+        return self._tracker.construction.structure_built_by(self)
 
     @property
     def builder(self) -> Unit[Any] | None:
         """The SCV building this structure now, or the drone that became it, or `None` for a structure nobody is
         building, such as one halted, one warped in, or one finished."""
-        return self._tracker.builder_of(self)
+        return self._tracker.construction.builder_of(self)

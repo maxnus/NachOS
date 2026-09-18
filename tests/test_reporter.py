@@ -634,7 +634,7 @@ class TestAgainstTheRealGame:
                 lambda: len(game.tracker.present_units.own.of_type([UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY])) == 2,
             )
             game.order(AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, _own(game, UnitTypeId.GHOST_ACADEMY))
-            _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrades)
+            _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrades.own)
             ghost = _own(game, UnitTypeId.GHOST)
             game.order(AbilityId.GHOST_CLOAK_ON, ghost)
             _until(game, lambda: _of(seen, OwnUnitCloakChangedEvent), steps=1)

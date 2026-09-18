@@ -83,7 +83,7 @@ class _State:
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        return self._unit_tracker.upgrades
+        return self._unit_tracker.upgrades.own
 
     @cached_property
     def _visibility(self) -> ndarray:
