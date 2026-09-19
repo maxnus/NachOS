@@ -21,6 +21,7 @@ sending one twice turns it off again.
 - **`fast_build` makes building, training and research take seconds**, which is how the sweeps research everything a
   race has. It hands out no upgrade by itself, and neither does `free`.
 - **`food` lifts the supply cap.**
+- **`minerals` hands out 5000 minerals, and `gas` no vespene at all**: 216 steps after `gas` a player still had none.
 
 What debug commands make is not always what a player would have:
 
