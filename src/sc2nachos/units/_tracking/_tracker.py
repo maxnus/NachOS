@@ -30,7 +30,6 @@ class _Tracker:
         "_data",
         "_enemy",
         "_last_changes",
-        "_number_of_updates",
         "_units",
         "_upgrades",
         "_watcher",
@@ -39,9 +38,8 @@ class _Tracker:
     def __init__(self, data: GameData, enemy: Enemy) -> None:
         self._data = data
         self._enemy = enemy
-        # What the last update found changed, and how many updates there have been.
-        self._last_changes = _TrackerChanges()
-        self._number_of_updates = 0
+        # What the last update found changed, and which update it was.
+        self._last_changes = _TrackerChanges(0)
         self._units = _UnitTracker(self)
         self._builders = _BuilderTracker(self)
         self._upgrades = _UpgradeTracker(data, enemy)
@@ -98,8 +96,7 @@ class _Tracker:
         Raises `UncuratedIdError` where this player holds an upgrade, or a unit is of a type, the curated ids leave
         out, which belongs among them.
         """
-        self._last_changes = _TrackerChanges()
-        self._number_of_updates += 1
+        self._last_changes = _TrackerChanges(self._last_changes.update + 1)
         if new_upgrades := self._upgrades.update(observation.player):
             self._last_changes.own_upgrades_finished = new_upgrades
         self._units.update(observation, step)
@@ -110,4 +107,4 @@ class _Tracker:
         self._builders.end()
         self._comparer.stop()
         self._watcher.stop()
-        self._last_changes = _TrackerChanges()
+        self._last_changes = _TrackerChanges(self._last_changes.update)

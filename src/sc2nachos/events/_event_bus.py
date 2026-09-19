@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import inspect
 import weakref
-from bisect import bisect_right
 from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
@@ -18,6 +17,7 @@ from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timings import HandlerTimings
+from sc2nachos.events._subscriptions import _Subscriptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -65,45 +65,21 @@ class EventBus:
     is handed each event of the turn it selects, in the turn's order, before any handler of the next.
     """
 
-    __slots__ = (
-        "_by_priority",
-        "_handlers",
-        "_keyed",
-        "_marks",
-        "_methods_of",
-        "_resolved",
-        "_selecting",
-        "_step",
-        "_subscriptions",
-        "_timings",
-        "_wanted",
-    )
+    __slots__ = ("_marks", "_methods_of", "_step", "_subscriptions", "_timings")
 
     def __init__(self, *, time_handlers: bool = False) -> None:
         """Time every handler's calls only if `time_handlers`, which costs some 200 ns a call."""
-        # Each event type's handlers in the order they run, replaced whole on every change, so that one subscribed
-        # while an event is being handed out waits for the next.
-        self._handlers: dict[type[Event], tuple[_Handler, ...]] = {}
-        # The handlers of each event class asked for since they last changed, its bases' included, in the order they
-        # run, and the classes among those one of whose handlers selects by key or predicate.
-        self._resolved: dict[type[Event], tuple[_Handler, ...]] = {}
-        self._selecting: set[type[Event]] = set()
-        # The same handlers grouped by priority, highest first, and the keys they select with those selecting them.
-        self._by_priority: dict[type[Event], tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]] = {}
-        self._wanted: dict[type[Event], tuple[frozenset[Hashable], tuple[_Handler, ...]]] = {}
-        # The step of the game being played, which an event emitted without one is given, or `None` between games.
-        self._step: int | None = None
-        # How many handlers have subscribed, which numbers each to order the handlers of one priority across classes,
-        # and how many subscribed now select by key.
-        self._subscriptions = 0
-        self._keyed = 0
+        self._subscriptions = _Subscriptions()
         # The handlers of methods marked in class bodies, of no instance yet, which `subscribe` binds to one.
         self._marks: weakref.WeakKeyDictionary[FunctionType, list[_Handler]] = weakref.WeakKeyDictionary()
         self._methods_of: weakref.WeakKeyDictionary[type, tuple[_Handler, ...]] = weakref.WeakKeyDictionary()
+        # The step of the game being played, which an event emitted without one is given, or `None` between games.
+        self._step: int | None = None
         self._timings: dict[type[Event], dict[str, HandlerTimings]] | None = {} if time_handlers else None
 
     def __repr__(self) -> str:
-        counts = ", ".join(f"{kind.__name__}: {len(handlers)}" for kind, handlers in self._handlers.items())
+        by_type = self._subscriptions.by_type.items()
+        counts = ", ".join(f"{kind.__name__}: {len(handlers)}" for kind, handlers in by_type)
         return f"EventBus({counts})"
 
     # A type checker refuses a parameterized event subscribed to bare, since nothing is callable on `None`.
@@ -162,14 +138,12 @@ class EventBus:
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
         """
-        keys: frozenset[Hashable] | None = None
-        predicate: Callable[[Any], bool] | None = None
-        if isinstance(event_type, EventFilter):
-            event_type, keys, predicate = event_type.event_type, event_type.keys, event_type.predicate
-        if not (isinstance(event_type, type) and issubclass(event_type, Event)):
-            raise TypeError(f"a handler subscribes to an event type, not {event_type!r}")
-        if keys is None and issubclass(event_type, ParameterizedEvent):
-            name = event_type.__name__
+        selects = event_type if isinstance(event_type, EventFilter) else EventFilter(event_type)
+        selected = selects.event_type
+        if not (isinstance(selected, type) and issubclass(selected, Event)):
+            raise TypeError(f"a handler subscribes to an event type, not {selected!r}")
+        if selects.keys is None and issubclass(selected, ParameterizedEvent):
+            name = selected.__name__
             raise TypeError(f"a handler subscribes to {name} through `of`, as in `{name}.of(...)`")
         if every_steps is not None:
             if every_steps < 1:
@@ -190,9 +164,7 @@ class EventBus:
                 )
             subscription = _Handler(
                 function,
-                event_type,
-                keys=keys,
-                predicate=predicate,
+                selects,
                 priority=priority,
                 every_steps=every_steps,
                 at_step=at_step,
@@ -203,7 +175,7 @@ class EventBus:
             if instance is None and _in_class_body(function):
                 self._marks.setdefault(function, []).append(subscription)
             else:
-                self._subscribe(subscription)
+                self._subscriptions.add(subscription)
             return handler
 
         return decorate
@@ -216,10 +188,10 @@ class EventBus:
         """
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
-        if any(handler.instance is instance for handlers in self._handlers.values() for handler in handlers):
+        if any(handler.instance is instance for handler in self._subscriptions):
             raise ValueError(f"{instance!r} is subscribed already")
         for handler in marked:
-            self._subscribe(handler.bound_to(instance))
+            self._subscriptions.add(handler.bound_to(instance))
 
     def unsubscribe(self, target: object) -> None:
         """Call `target` no more: a function, a method bound to its instance, or every method of an instance.
@@ -228,11 +200,15 @@ class EventBus:
         """
         if isinstance(target, MethodType):
             function, instance = target.__func__, target.__self__
-            removed = self._remove(lambda handler: handler.function is function and handler.instance is instance)
+            removed = self._subscriptions.remove(
+                lambda handler: handler.function is function and handler.instance is instance
+            )
         elif isinstance(target, FunctionType):
-            removed = self._remove(lambda handler: handler.function is target and handler.instance is None)
+            removed = self._subscriptions.remove(
+                lambda handler: handler.function is target and handler.instance is None
+            )
         else:
-            removed = self._remove(lambda handler: handler.instance is target)
+            removed = self._subscriptions.remove(lambda handler: handler.instance is target)
         if not removed:
             raise ValueError(f"nothing of {target!r} is subscribed")
 
@@ -246,15 +222,6 @@ class EventBus:
         if self._timings is None:
             raise RuntimeError("handlers are timed only for an api made with time_handlers=True")
         return MappingProxyType({kind: MappingProxyType(timings) for kind, timings in self._timings.items()})
-
-    def _subscribe(self, handler: _Handler) -> None:
-        handler.order = self._subscriptions
-        self._subscriptions += 1
-        self._keyed += handler.keys is not None
-        handlers = list(self._handlers.get(handler.event_type, ()))
-        handlers.insert(bisect_right(handlers, -handler.priority, key=lambda other: -other.priority), handler)
-        self._handlers[handler.event_type] = tuple(handlers)
-        self._forget_resolved()
 
     def _marked_methods(self, cls: type) -> tuple[_Handler, ...]:
         """The handlers of the marked methods an instance of `cls` has: those its attributes resolve to, so an override
@@ -272,78 +239,13 @@ class EventBus:
             marked = self._methods_of[cls] = tuple(found)
         return marked
 
-    def _remove(self, removing: Callable[[_Handler], bool]) -> bool:
-        """Drop the handlers `removing` picks, and say whether there were any."""
-        removed = False
-        for event_type, handlers in list(self._handlers.items()):
-            kept = []
-            for handler in handlers:
-                if removing(handler):
-                    # So that an event being handed out skips it too. It is in no list any more, so no new game
-                    # starts it afresh.
-                    handler.done = removed = True
-                    self._keyed -= handler.keys is not None
-                else:
-                    kept.append(handler)
-            if not kept:
-                del self._handlers[event_type]
-            elif len(kept) < len(handlers):
-                self._handlers[event_type] = tuple(kept)
-        if removed:
-            self._forget_resolved()
-        return removed
-
-    def _forget_resolved(self) -> None:
-        """Forget which handlers each event class is handed to, since they have changed."""
-        self._resolved.clear()
-        self._selecting.clear()
-        self._by_priority.clear()
-        self._wanted.clear()
-
-    def _resolve(self, event_type: type[Event]) -> tuple[_Handler, ...]:
-        """The handlers the events of `event_type` are handed to, those of its bases included, in the order they run,
-        noting whether any of them selects by key or predicate."""
-        found = [handler for cls in event_type.__mro__ for handler in self._handlers.get(cls, ())]
-        found.sort(key=lambda handler: (-handler.priority, handler.order))
-        if any(handler.keys is not None or handler.predicate is not None for handler in found):
-            self._selecting.add(event_type)
-        resolved = self._resolved[event_type] = tuple(found)
-        return resolved
-
-    def _has_handlers(self, event_type: type[Event]) -> bool:
-        """Whether a handler not done takes every event of `event_type` that its predicate passes: one subscribed to
-        it or to a base of it, without `only` or `of`."""
-        if (handlers := self._resolved.get(event_type)) is None:
-            handlers = self._resolve(event_type)
-        return bool(handlers) and any(not handler.done and handler.keys is None for handler in handlers)
-
-    def _wanted_keys(self, event_type: type[Event]) -> frozenset[Hashable]:
-        """The keys of `event_type` a handler not done selects through `only` or `of`: the same set until one of those
-        handlers is done or the handlers change, since a unit type group makes a set of hundreds."""
-        if not self._keyed:
-            return _NO_KEYS
-        if (wanted := self._wanted.get(event_type)) is not None and not any(handler.done for handler in wanted[1]):
-            return wanted[0]
-        if (handlers := self._resolved.get(event_type)) is None:
-            handlers = self._resolve(event_type)
-        if event_type not in self._selecting:
-            return _NO_KEYS
-        selecting = tuple(handler for handler in handlers if not handler.done and handler.keys is not None)
-        keys = frozenset().union(*(handler.keys for handler in selecting if handler.keys is not None))
-        self._wanted[event_type] = (keys, selecting)
-        return keys
-
     def _start_game(self) -> None:
         """Forget what every handler has done, and how long it took."""
-        for handlers in self._handlers.values():
-            for handler in handlers:
-                handler.last_step = None
-                handler.done = False
-        self._wanted.clear()
+        self._subscriptions.start_game()
         if self._timings is not None:
             self._timings = {}
 
-    def _at_step(self, step: int | None) -> None:
+    def _set_step(self, step: int | None) -> None:
         """Give the events emitted without a step from now on `step`, the game's, or none once it has ended."""
         self._step = step
 
@@ -358,8 +260,9 @@ class EventBus:
             if self._step is None:
                 raise ValueError(f"{event!r} has no step, and no game is being played to give it one")
             object.__setattr__(event, "step", self._step)
-        if (handlers := self._resolved.get(type(event))) is None:
-            handlers = self._resolve(type(event))
+        subscriptions = self._subscriptions
+        if (handlers := subscriptions.resolved.get(type(event))) is None:
+            handlers = subscriptions.resolve(type(event))
         if handlers:
             self._run(handlers, event)
 
@@ -368,28 +271,16 @@ class EventBus:
         is handed each event it selects, in the order of `events`, before any handler of the next priority is."""
         passes: dict[EventPriority, list[tuple[Event, tuple[_Handler, ...]]]] = {}
         for event in events:
-            for priority, handlers in self._grouped(type(event)):
+            for priority, handlers in self._subscriptions.grouped(type(event)):
                 passes.setdefault(priority, []).append((event, handlers))
         for priority in sorted(passes, reverse=True):
             for event, handlers in passes[priority]:
                 self._run(handlers, event)
 
-    def _grouped(self, event_type: type[Event]) -> tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]:
-        """The handlers the events of `event_type` are handed to, grouped by priority, highest first."""
-        if (grouped := self._by_priority.get(event_type)) is None:
-            if (handlers := self._resolved.get(event_type)) is None:
-                handlers = self._resolve(event_type)
-            groups: dict[EventPriority, list[_Handler]] = {}
-            for handler in handlers:
-                groups.setdefault(handler.priority, []).append(handler)
-            grouped = self._by_priority[event_type] = tuple(
-                (priority, tuple(group)) for priority, group in groups.items()
-            )
-        return grouped
-
     def _run(self, handlers: tuple[_Handler, ...], event: Event) -> None:
         """Hand `event` to each of `handlers` that selects it and is due to run."""
-        todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if type(event) in self._selecting else handlers
+        selecting = type(event) in self._subscriptions.selecting
+        todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
         step = event.step
         for handler in todo:
@@ -419,9 +310,6 @@ class EventBus:
                 handler.done = True
 
 
-_NO_KEYS: frozenset[Hashable] = frozenset()
-
-
 def _selecting_handlers(handlers: tuple[_Handler, ...], event: Event) -> Iterator[_Handler]:
     """The handlers of `handlers` that select `event`, and those done, which `_run` passes over. Each selects it as
     its turn comes, after those before it have run. Kept out of `_run`, where the closure would slow every read of
@@ -433,9 +321,10 @@ def _selecting_handlers(handlers: tuple[_Handler, ...], event: Event) -> Iterato
 def _selects(handler: _Handler, event: Event, key: Hashable) -> bool:
     """Whether `handler` selects `event`, whose key is `key`: by its keys, then by its predicate, which is logged and
     taken as not passing if it raises and the handler catches exceptions."""
-    if (keys := handler.keys) is not None and key not in keys:
+    selects = handler.selects
+    if (keys := selects.keys) is not None and key not in keys:
         return False
-    if (predicate := handler.predicate) is None:
+    if (predicate := selects.predicate) is None:
         return True
     try:
         return bool(predicate(event))

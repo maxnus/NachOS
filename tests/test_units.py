@@ -796,7 +796,7 @@ class TestWhatChanged:
         game.observe(0, make_unit(1, build_progress=0.5), make_unit(2, alliance=_ENEMY))
         game.tracker.end()
         changes = game.tracker.last_changes
-        assert not any(getattr(changes, name) for name in changes.__slots__ if name not in {"own", "enemy"})
+        assert not any(getattr(changes, name) for name in changes.__slots__ if name not in {"update", "own", "enemy"})
         assert not any(getattr(side, name) for side in (changes.own, changes.enemy) for name in side.__slots__)
         assert not game.tracker.units._unfinished
         assert not game.tracker.comparer._compared

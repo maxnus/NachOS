@@ -183,7 +183,7 @@ class Api:
         logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)
         events = self._event
         events._start_game()
-        events._at_step(game.step)
+        events._set_step(game.step)
         events.emit(GameStartEvent(step=game.step))
 
         while (result := game.outcome()) is None:
@@ -201,7 +201,7 @@ class Api:
             else:
                 client.step(steps_per_turn)
                 game.observe()
-            events._at_step(game.step)
+            events._set_step(game.step)
         events.emit(GameEndEvent(result, step=game.step))
-        events._at_step(None)
+        events._set_step(None)
         return result

@@ -49,6 +49,7 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
+from sc2nachos.events._subscriptions import _Subscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area
@@ -126,82 +127,82 @@ class _Game:
         """What the last observation reports has happened, as the events a handler of `events` still to run this game
         wants, in the order they are handed out: every event of a type a handler takes whole, and those of the keys
         handlers select through `only` or `of`."""
-        tracker, observation = self.tracker, self.observation
+        tracker, observation, subscriptions = self.tracker, self.observation, events._subscriptions
         changes = tracker.last_changes
         happened: list[Event] = []
-        hand_on = functools.partial(self._hand_on, events, happened)
-        hand_on(OwnUnitCreatedEvent, changes.own_units_created, _unit_type)
-        hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen, _unit_type)
-        hand_on(UnitTypeChangedEvent, changes.units_type_changed, _first_unit_type, tuples=True)
-        hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, _first_unit_type, tuples=True)
-        if changes.own_units_created and _wants(events, OwnConstructionStartedEvent):
+        hand_on = functools.partial(self._hand_on, subscriptions, happened)
+        hand_on(OwnUnitCreatedEvent, changes.own_units_created)
+        hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen)
+        hand_on(UnitTypeChangedEvent, changes.units_type_changed, tuples=True)
+        hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, tuples=True)
+        if changes.own_units_created and _wants_any(subscriptions, OwnConstructionStartedEvent):
             started = [unit for unit in changes.own_units_created if not unit.is_complete and self._is_structure(unit)]
-            hand_on(OwnConstructionStartedEvent, started, _unit_type)
+            hand_on(OwnConstructionStartedEvent, started)
         if changes.own_units_finished:
-            if _wants(events, OwnConstructionFinishedEvent):
-                built = [unit for unit in changes.own_units_finished if self._is_structure(unit)]
-                hand_on(OwnConstructionFinishedEvent, built, _unit_type)
-            if _wants(events, OwnWarpInFinishedEvent):
+            if _wants_any(subscriptions, OwnConstructionFinishedEvent):
+                hand_on(OwnConstructionFinishedEvent, [u for u in changes.own_units_finished if self._is_structure(u)])
+            if _wants_any(subscriptions, OwnWarpInFinishedEvent):
                 warped = [unit for unit in changes.own_units_finished if not self._is_structure(unit)]
-                hand_on(OwnWarpInFinishedEvent, warped, _unit_type)
-        hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished, _itself)
-        compared, watched = self._compare(events), self._watch(events)
+                hand_on(OwnWarpInFinishedEvent, warped)
+        hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished)
+        compared, watched = self._compare(subscriptions), self._watch(subscriptions)
         own, enemy = changes.own, changes.enemy
         if compared:
-            hand_on(OwnUnitDamagedEvent, own.damaged, _first_unit_type, tuples=True)
-            hand_on(EnemyUnitDamagedEvent, enemy.damaged, _first_unit_type, tuples=True)
-            hand_on(OwnUnitEnergyLostEvent, own.energy_lost, _first_unit_type, tuples=True)
-            hand_on(EnemyUnitEnergyLostEvent, enemy.energy_lost, _first_unit_type, tuples=True)
+            hand_on(OwnUnitDamagedEvent, own.damaged, tuples=True)
+            hand_on(EnemyUnitDamagedEvent, enemy.damaged, tuples=True)
+            hand_on(OwnUnitEnergyLostEvent, own.energy_lost, tuples=True)
+            hand_on(EnemyUnitEnergyLostEvent, enemy.energy_lost, tuples=True)
         if watched:
-            hand_on(OwnUnitVitalReachedEvent, own.vital_reached, _vital_key, tuples=True)
-            hand_on(EnemyUnitVitalReachedEvent, enemy.vital_reached, _vital_key, tuples=True)
-            hand_on(OwnUnitVitalDroppedEvent, own.vital_dropped, _vital_key, tuples=True)
-            hand_on(EnemyUnitVitalDroppedEvent, enemy.vital_dropped, _vital_key, tuples=True)
+            hand_on(OwnUnitVitalReachedEvent, own.vital_reached, tuples=True)
+            hand_on(EnemyUnitVitalReachedEvent, enemy.vital_reached, tuples=True)
+            hand_on(OwnUnitVitalDroppedEvent, own.vital_dropped, tuples=True)
+            hand_on(EnemyUnitVitalDroppedEvent, enemy.vital_dropped, tuples=True)
         if compared:
-            hand_on(OwnUnitCloakChangedEvent, own.cloak_changed, _first_unit_type, tuples=True)
-            hand_on(EnemyUnitCloakChangedEvent, enemy.cloak_changed, _first_unit_type, tuples=True)
-            hand_on(OwnUnitGainedBuffEvent, own.gained_buff, _second, tuples=True)
-            hand_on(EnemyUnitGainedBuffEvent, enemy.gained_buff, _second, tuples=True)
-            hand_on(OwnUnitLostBuffEvent, own.lost_buff, _second, tuples=True)
-            hand_on(EnemyUnitLostBuffEvent, enemy.lost_buff, _second, tuples=True)
-        hand_on(EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight, _unit_type)
-        hand_on(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight, _unit_type)
+            hand_on(OwnUnitCloakChangedEvent, own.cloak_changed, tuples=True)
+            hand_on(EnemyUnitCloakChangedEvent, enemy.cloak_changed, tuples=True)
+            hand_on(OwnUnitGainedBuffEvent, own.gained_buff, tuples=True)
+            hand_on(EnemyUnitGainedBuffEvent, enemy.gained_buff, tuples=True)
+            hand_on(OwnUnitLostBuffEvent, own.lost_buff, tuples=True)
+            hand_on(EnemyUnitLostBuffEvent, enemy.lost_buff, tuples=True)
+        hand_on(EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight)
+        hand_on(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight)
         if watched:
-            hand_on(OwnUnitEnteredAreaEvent, own.entered_area, _second, tuples=True)
-            hand_on(OwnUnitLeftAreaEvent, own.left_area, _second, tuples=True)
-            hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, _second, tuples=True)
-            hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, _second, tuples=True)
-        hand_on(UnitDiedEvent, changes.units_died, _unit_type)
-        hand_on(UnitFoundDeadEvent, changes.units_found_dead, _unit_type)
-        emit, step = happened.append, self.step
-        if observation.actions and events._has_handlers(OwnActionEvent):
+            hand_on(OwnUnitEnteredAreaEvent, own.entered_area, tuples=True)
+            hand_on(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
+            hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
+            hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
+        hand_on(UnitDiedEvent, changes.units_died)
+        hand_on(UnitFoundDeadEvent, changes.units_found_dead)
+        add, step = happened.append, self.step
+        if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
-                emit(OwnActionEvent(action, step=step))
-        if observation.chat and events._has_handlers(ChatEvent):
+                add(OwnActionEvent(action, step=step))
+        if observation.chat and subscriptions.wants_every(ChatEvent):
             for message in observation.chat:
-                emit(ChatEvent(message.player_id, message.message, step=step))
-        if observation.observation.alerts and _wants(events, AlertEvent):
-            every, keys = events._has_handlers(AlertEvent), events._wanted_keys(AlertEvent)
+                add(ChatEvent(message.player_id, message.message, step=step))
+        if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
+            every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
                 # `AlertError` and `TrainError` have no member, and are passed over.
-                if (alert := _ALERTS.get(value)) is not None and (every or alert in keys):
-                    emit(AlertEvent(alert, step=step))
+                if (alert := _ALERTS.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
+                    add(AlertEvent(alert, step=step))
         return happened
 
-    def _compare(self, events: EventBus) -> bool:
+    def _compare(self, subscriptions: _Subscriptions) -> bool:
         """Have the tracker compare each unit with the update before, as the damage, energy lost, cloak and buff events
         a handler wants need: the buffs handlers select, or every one if a handler takes them all. Have it let go of
         what it kept when no handler wants any. Say whether it compared."""
         comparer = self.tracker.comparer
-        damage = _wants(events, OwnUnitDamagedEvent) or _wants(events, EnemyUnitDamagedEvent)
-        energy = _wants(events, OwnUnitEnergyLostEvent) or _wants(events, EnemyUnitEnergyLostEvent)
-        cloak = _wants(events, OwnUnitCloakChangedEvent) or _wants(events, EnemyUnitCloakChangedEvent)
+        wants = functools.partial(_wants_any, subscriptions)
+        damage = wants(OwnUnitDamagedEvent) or wants(EnemyUnitDamagedEvent)
+        energy = wants(OwnUnitEnergyLostEvent) or wants(EnemyUnitEnergyLostEvent)
+        cloak = wants(OwnUnitCloakChangedEvent) or wants(EnemyUnitCloakChangedEvent)
         buff_events = (OwnUnitGainedBuffEvent, EnemyUnitGainedBuffEvent, OwnUnitLostBuffEvent, EnemyUnitLostBuffEvent)
         only_buffs: frozenset[Hashable] | None = None
-        if any(events._has_handlers(event_type) for event_type in buff_events):
+        if any(subscriptions.wants_every(event_type) for event_type in buff_events):
             buffs = True
         else:
-            only_buffs = frozenset().union(*(events._wanted_keys(event_type) for event_type in buff_events))
+            only_buffs = frozenset().union(*(subscriptions.wanted_keys(event_type) for event_type in buff_events))
             buffs = bool(only_buffs)
         if not (damage or energy or cloak or buffs):
             comparer.stop()
@@ -211,14 +212,14 @@ class _Game:
         )
         return True
 
-    def _watch(self, events: EventBus) -> bool:
+    def _watch(self, subscriptions: _Subscriptions) -> bool:
         """Have the tracker watch each unit for the vitals and areas handlers select, or let go of what it kept when
         none does. Say whether it watched."""
         watcher = self.tracker.watcher
-        if not events._keyed:
+        if not subscriptions.any_keyed:
             watcher.stop()
             return False
-        keys = events._wanted_keys
+        keys = subscriptions.wanted_keys
         own_reached, own_dropped = keys(OwnUnitVitalReachedEvent), keys(OwnUnitVitalDroppedEvent)
         enemy_reached, enemy_dropped = keys(EnemyUnitVitalReachedEvent), keys(EnemyUnitVitalDroppedEvent)
         own_areas = keys(OwnUnitEnteredAreaEvent) | keys(OwnUnitLeftAreaEvent)
@@ -238,28 +239,30 @@ class _Game:
 
     def _hand_on(
         self,
-        events: EventBus,
+        subscriptions: _Subscriptions,
         happened: list[Event],
         event_type: type[Event],
         found: Sequence[Any],
-        key: Callable[[Any], Hashable],
         *,
         tuples: bool = False,
     ) -> None:
-        """Add to `happened` an event of `event_type` made of each of `found` a handler of `events` wants, of a tuple's
-        items if `tuples`: all of them if a handler takes every event of the type, or else those whose key, read by
-        `key`, a handler selects. A parameterized event is made only for the keys selected, a handler of a base of it
-        taking those."""
+        """Add to `happened` an event of `event_type` made of each of `found` a handler wants, of a tuple's items if
+        `tuples`: all of them if a handler takes every event of the type, or else those whose key a handler selects.
+        A parameterized event is made only for the keys selected, a handler of a base of it taking those."""
         if not found:
             return
-        every = events._has_handlers(event_type) and not issubclass(event_type, ParameterizedEvent)
-        keys = _NO_KEYS if every else events._wanted_keys(event_type)
+        every = subscriptions.wants_every(event_type) and not issubclass(event_type, ParameterizedEvent)
+        keys = _NO_KEYS if every else subscriptions.wanted_keys(event_type)
         if not (every or keys):
             return
-        add, step, make = happened.append, self.step, cast("Callable[..., Event]", event_type)
+        add, step, key_of = happened.append, self.step, event_type._key_of
+        make = cast("Callable[..., Event]", event_type)
         for item in found:
-            if every or key(item) in keys:
-                add(make(*item, step=step) if tuples else make(item, step=step))
+            if tuples:
+                if every or key_of(*item) in keys:
+                    add(make(*item, step=step))
+            elif every or key_of(item) in keys:
+                add(make(item, step=step))
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""
@@ -292,32 +295,6 @@ def _step(observation: sc2api_pb2.ResponseObservation) -> int:
 _NO_KEYS: frozenset[Hashable] = frozenset()
 
 
-def _wants(events: EventBus, event_type: type[Event]) -> bool:
-    """Whether a handler of `events` wants an event of `event_type`: every one, or one of some keys."""
-    return events._has_handlers(event_type) or bool(events._wanted_keys(event_type))
-
-
-def _itself[T](item: T) -> T:
-    """`item`, the key of an event made of it alone."""
-    return item
-
-
-def _unit_type(unit: Unit[Any]) -> Hashable:
-    """The type of `unit`, the key of an event of it."""
-    return unit.type_id
-
-
-def _first_unit_type(pair: tuple[Unit[Any], object]) -> Hashable:
-    """The type of the unit `pair` starts with, the key of an event of it."""
-    return pair[0].type_id
-
-
-def _second(pair: tuple[object, Hashable]) -> Hashable:
-    """What `pair` holds beside its unit, the key of an event of it: a buff or an area."""
-    return pair[1]
-
-
-def _vital_key(crossed: tuple[Unit[Any], VitalType, float]) -> Hashable:
-    """The vital, the value and the type of the unit of `crossed`, the key of an event of crossing it."""
-    unit, vital, value = crossed
-    return vital, value, unit.type_id
+def _wants_any(subscriptions: _Subscriptions, event_type: type[Event]) -> bool:
+    """Whether a handler of `subscriptions` wants an event of `event_type`: every one, or one of some keys."""
+    return subscriptions.wants_every(event_type) or bool(subscriptions.wanted_keys(event_type))

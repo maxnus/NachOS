@@ -20,6 +20,7 @@ class _TrackerChanges:
     """
 
     __slots__ = (
+        "update",
         "own_units_created",
         "enemy_units_first_seen",
         "units_type_changed",
@@ -34,7 +35,9 @@ class _TrackerChanges:
         "units_found_dead",
     )
 
-    def __init__(self) -> None:
+    def __init__(self, update: int) -> None:
+        self.update = update
+        """The number of the update these are of, 1 for a game's first."""
         self.own_units_created: list[OwnUnit[Any]] = []
         """This player's units first seen."""
         self.enemy_units_first_seen: list[Unit[Any]] = []
@@ -47,9 +50,9 @@ class _TrackerChanges:
         """This player's units first seen unfinished that have finished: structures, add-ons and warp-ins."""
         self.own_upgrades_finished: list[UpgradeId] = []
         """This player's upgrades new to the observation, in the order of their ids."""
-        self.own: _SideChanges[OwnUnit[Any]] = _SideChanges()
+        self.own: _ComparedChanges[OwnUnit[Any]] = _ComparedChanges()
         """What the comparer and the watcher found of this player's units."""
-        self.enemy: _SideChanges[Unit[Any]] = _SideChanges()
+        self.enemy: _ComparedChanges[Unit[Any]] = _ComparedChanges()
         """What the comparer and the watcher found of the enemy's units."""
         self.enemy_units_entered_sight: list[Unit[Any]] = []
         """The enemy's units in sight that were not in the observation before."""
@@ -63,7 +66,7 @@ class _TrackerChanges:
 
 
 @final
-class _SideChanges[U: Unit[Any]]:
+class _ComparedChanges[U: Unit[Any]]:
     """What the comparer and the watcher found of one side's units in one update, each in the order it was found."""
 
     __slots__ = (

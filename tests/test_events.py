@@ -137,19 +137,19 @@ class TestSubscribing:
 
     def test_nothing_is_wanted_until_something_subscribes(self) -> None:
         bus = EventBus()
-        assert not bus._has_handlers(TurnEvent)
+        assert not bus._subscriptions.wants_every(TurnEvent)
         bus.on(TurnEvent)(lambda event: None)
-        assert bus._has_handlers(TurnEvent)
-        assert not bus._has_handlers(TurnStartEvent)
+        assert bus._subscriptions.wants_every(TurnEvent)
+        assert not bus._subscriptions.wants_every(TurnStartEvent)
 
     def test_nothing_is_wanted_once_every_handler_is_done_until_the_next_game(self) -> None:
         bus = EventBus()
         bus.on(TurnEvent, once=True)(lambda event: None)
         bus.on(TurnEvent)(lambda event: Done)
         bus.emit(TurnEvent(step=0))
-        assert not bus._has_handlers(TurnEvent)
+        assert not bus._subscriptions.wants_every(TurnEvent)
         bus._start_game()
-        assert bus._has_handlers(TurnEvent)
+        assert bus._subscriptions.wants_every(TurnEvent)
 
     def test_a_coroutine_function_is_refused(self) -> None:
         """NachOS calls its handlers synchronously, so one would only make a coroutine nobody awaits."""
@@ -289,7 +289,7 @@ class TestUnsubscribing:
         bus.unsubscribe(handler)
         _turns(bus, 1)
         assert fired == [0]
-        assert not bus._has_handlers(TurnEvent)
+        assert not bus._subscriptions.wants_every(TurnEvent)
 
     def test_one_method_of_an_instance_or_all_of_them(self) -> None:
         bus = EventBus()
@@ -400,10 +400,12 @@ class TestInstances:
         def started(event: GameStartEvent) -> None:
             pass
 
-        assert repr(bus._handlers[TurnEvent][0]).endswith(
+        assert repr(bus._subscriptions.by_type[TurnEvent][0]).endswith(
             ".planned, TurnEvent, priority=LOW, every_steps=16, catch_exceptions=True)"
         )
-        assert repr(bus._handlers[GameStartEvent][0]).endswith(".started, GameStartEvent, priority=MEDIUM, once=True)")
+        assert repr(bus._subscriptions.by_type[GameStartEvent][0]).endswith(
+            ".started, GameStartEvent, priority=MEDIUM, once=True)"
+        )
 
     def test_an_instance_without_a_marked_method_is_refused(self) -> None:
         """Most likely its methods were marked with another api's `on`, or not at all."""
@@ -534,7 +536,7 @@ class TestTyping:
 
         bus.on(TurnStartEvent)(called)
         bus.on(TurnEvent)(called)
-        assert len(bus._handlers[TurnEvent]) == 3
+        assert len(bus._subscriptions.by_type[TurnEvent]) == 3
 
     def test_what_only_of_and_where_select_is_typed_as_their_class(self) -> None:
         bus = EventBus()
@@ -551,7 +553,7 @@ class TestTyping:
         def full(event: OwnUnitVitalReachedEvent) -> None:
             pass
 
-        assert len(bus._handlers[AlertEvent]) == 2
+        assert len(bus._subscriptions.by_type[AlertEvent]) == 2
 
 
 class TestExceptions:
@@ -673,7 +675,7 @@ class TestDispatchByClass:
         for event in (TurnStartEvent(step=0), TurnEvent(step=0), GameEndEvent(Result.TIE, step=0)):
             bus.emit(event)
         assert seen == [TurnStartEvent, TurnEvent, GameEndEvent]
-        assert bus._has_handlers(OwnUnitCreatedEvent)
+        assert bus._subscriptions.wants_every(OwnUnitCreatedEvent)
 
     def test_priority_then_the_order_they_subscribed_holds_across_classes(self) -> None:
         bus, calls = EventBus(), []
@@ -734,31 +736,33 @@ class TestOnlyAndOf:
 
     def test_the_keys_wanted_are_those_of_the_handlers_not_done(self) -> None:
         bus = EventBus()
-        assert not bus._wanted_keys(AlertEvent)
+        assert not bus._subscriptions.wanted_keys(AlertEvent)
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE))(lambda event: Done)
         bus.on(AlertEvent.only(Alert.UPGRADE_COMPLETE))(lambda event: None)
-        assert bus._wanted_keys(AlertEvent) == {Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE}
-        assert not bus._has_handlers(AlertEvent)
+        assert bus._subscriptions.wanted_keys(AlertEvent) == {Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE}
+        assert not bus._subscriptions.wants_every(AlertEvent)
         bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=0))
-        assert bus._wanted_keys(AlertEvent) == {Alert.UPGRADE_COMPLETE}
-        assert not bus._wanted_keys(OwnUnitVitalReachedEvent)
+        assert bus._subscriptions.wanted_keys(AlertEvent) == {Alert.UPGRADE_COMPLETE}
+        assert not bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent)
 
     def test_the_keys_wanted_are_the_same_set_until_the_handlers_change(self) -> None:
         bus = EventBus()
         bus.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 50))(lambda event: None)
-        wanted = bus._wanted_keys(OwnUnitVitalReachedEvent)
-        assert bus._wanted_keys(OwnUnitVitalReachedEvent) is wanted
+        wanted = bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent)
+        assert bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent) is wanted
         bus.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75))(lambda event: None)
-        assert len(bus._wanted_keys(OwnUnitVitalReachedEvent)) == 2 * len(wanted)
+        assert len(bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent)) == 2 * len(wanted)
 
     def test_a_parameterized_event_is_subscribed_to_through_of(self) -> None:
         bus = EventBus()
         bus.on(OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 0.5, UnitTypeId.MARINE))(lambda event: None)
         area = Circle(Point((20.0, 20.0)), 5)
         bus.on(EnemyUnitEnteredAreaEvent.of(area))(lambda event: None)
-        assert bus._wanted_keys(OwnUnitVitalReachedEvent) == {(VitalType.LIFE_FRACTION, 0.5, UnitTypeId.MARINE)}
-        assert bus._wanted_keys(EnemyUnitEnteredAreaEvent) == {area}
-        assert not bus._wanted_keys(OwnUnitVitalDroppedEvent)
+        assert bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent) == {
+            (VitalType.LIFE_FRACTION, 0.5, UnitTypeId.MARINE)
+        }
+        assert bus._subscriptions.wanted_keys(EnemyUnitEnteredAreaEvent) == {area}
+        assert not bus._subscriptions.wanted_keys(OwnUnitVitalDroppedEvent)
 
     def test_a_parameterized_event_subscribed_to_bare_is_refused_and_a_type_checker_refuses_it(self) -> None:
         bus = EventBus()
@@ -793,7 +797,7 @@ class TestTheStep:
     def test_an_event_made_without_a_step_is_given_the_games_as_it_is_emitted(self) -> None:
         bus, seen = EventBus(), []
         bus.on(_Scouted)(lambda event: seen.append(event.step))
-        bus._at_step(80)
+        bus._set_step(80)
         bus.emit(_Scouted("natural"))
         bus.emit(_Scouted("natural", step=16))
         assert seen == [80, 16]

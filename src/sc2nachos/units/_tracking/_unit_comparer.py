@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
     from sc2nachos.units._tracking._tracker import _Tracker
-    from sc2nachos.units._tracking._tracker_changes import _SideChanges
+    from sc2nachos.units._tracking._tracker_changes import _ComparedChanges
     from sc2nachos.units._unit import Unit
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -55,12 +55,12 @@ class _UnitComparer:
         Raises `UncuratedIdError` for a buff the curated ids leave out, which belongs in them.
         """
         tracker = self._tracker
-        update = tracker._number_of_updates
+        changes = tracker.last_changes
+        update = changes.update
         before = self._compared if self._compared_update == update - 1 else None
         worn_before = self._worn if buffs and self._worn_update == update - 1 else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
-        changes = tracker.last_changes
         for unit in tracker.units.present:
             report = unit._latest_data
             alliance = report.alliance
@@ -68,7 +68,7 @@ class _UnitComparer:
                 continue
             compared[unit._id] = report
             in_vision = report.display_type == _IN_VISION
-            side: _SideChanges[Any] = changes.own if alliance == _OWN else changes.enemy
+            side: _ComparedChanges[Any] = changes.own if alliance == _OWN else changes.enemy
             if buffs and in_vision and (listed := report.buff_ids):
                 worn[unit._id] = tuple(listed)
             if before is None or (then := before.get(unit._id)) is None:
@@ -98,7 +98,7 @@ class _UnitComparer:
 
     def _record_buffs(
         self,
-        side: _SideChanges[Any],
+        side: _ComparedChanges[Any],
         unit: Unit[Any],
         was: tuple[int, ...],
         now: tuple[int, ...],

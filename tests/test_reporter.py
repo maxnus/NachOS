@@ -695,7 +695,7 @@ class TestAreas:
         game.observe(32, dead=(1,))
         game.observe(48)
         assert [type(event) for event in seen] == [EnemyUnitEnteredAreaEvent]
-        assert not any(game.tracker.watcher._enemy._areas[_AREA].inside)
+        assert not any(game.tracker.watcher._enemy._area_watches[_AREA].inside)
 
     def test_an_enemy_unit_in_the_fog_is_not_counted(self) -> None:
         assert not self._crossings(None, _INSIDE, visibility=Visibility.IN_FOG)

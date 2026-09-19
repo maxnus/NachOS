@@ -69,8 +69,8 @@ class _UnitWatcher:
             elif alliance == _ENEMY and enemy.watching and (display := report.display_type) != _IN_FOG:
                 enemy.compare(unit, report, changes.enemy, in_vision=display == _IN_VISION)
         dead = [unit._id for unit in (*changes.units_died, *changes.units_found_dead)]
-        own.settle(dead)
-        enemy.settle(dead)
+        own.end_update(dead)
+        enemy.end_update(dead)
 
     def stop(self) -> None:
         """Let go of everything watched."""

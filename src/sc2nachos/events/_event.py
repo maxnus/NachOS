@@ -33,6 +33,12 @@ class Event(metaclass=_EventMeta):
         only those."""
         return EventFilter(cls, predicate=predicate)
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        """What `only` or `of` selects an event of this type by, read off what it is made of: its fields but `step`, in
+        order. `None` for a type that has neither."""
+        return None
+
     def _key(self) -> Hashable:
         """What `only` or `of` selects this event by, for a type that has either."""
         return None
@@ -77,10 +83,14 @@ class _UnitEvent(Event):
     ) -> EventFilter[Self]:
         """The events of units of these types, for `on`: each a `UnitType`, a group of them, or a `UnitTypeId`. A
         unit's type is the one it has as the event is made."""
-        return EventFilter(cls, keys=_type_ids((unit_type, *unit_types)))
+        return EventFilter(cls, keys=_unit_type_ids_in((unit_type, *unit_types)))
+
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        return made_of[0].type_id
 
     def _key(self) -> Hashable:
-        return self.unit.type_id
+        return self._key_of(self.unit)
 
 
 class OwnUnitCreatedEvent(_UnitEvent):
@@ -139,8 +149,12 @@ class OwnUpgradeFinishedEvent(Event):
         """The events of these upgrades, for `on`."""
         return EventFilter(cls, keys=frozenset((upgrade, *upgrades)))
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        return made_of[0]
+
     def _key(self) -> Hashable:
-        return self.upgrade
+        return self._key_of(self.upgrade)
 
 
 class OwnUnitDamagedEvent(_UnitEvent):
@@ -197,11 +211,16 @@ class _VitalEvent(ParameterizedEvent):
         if not value > 0 or (vital.is_fraction and value > 1):
             most = " and at most 1" if vital.is_fraction else ""
             raise ValueError(f"a {vital.value} is crossed above 0{most}, not at {value}")
-        types = _type_ids(unit_types) if unit_types else _EVERY_TYPE
+        types = _unit_type_ids_in(unit_types) if unit_types else _EVERY_TYPE
         return EventFilter(cls, keys=frozenset((vital, float(value), type_id) for type_id in types))
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        unit, vital, value = made_of
+        return vital, value, unit.type_id
+
     def _key(self) -> Hashable:
-        return self.vital, self.value, self.unit.type_id
+        return self._key_of(self.unit, self.vital, self.value)
 
 
 class OwnUnitVitalReachedEvent(_VitalEvent):
@@ -260,8 +279,12 @@ class _BuffEvent(Event):
         """The events of these buffs, for `on`."""
         return EventFilter(cls, keys=frozenset((buff, *buffs)))
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        return made_of[1]
+
     def _key(self) -> Hashable:
-        return self.buff
+        return self._key_of(self.unit, self.buff)
 
 
 class OwnUnitGainedBuffEvent(_BuffEvent):
@@ -320,8 +343,12 @@ class _AreaEvent(ParameterizedEvent):
         """The events of units crossing the edge of `area`, for `on`."""
         return EventFilter(cls, keys=frozenset((area,)))
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        return made_of[1]
+
     def _key(self) -> Hashable:
-        return self.area
+        return self._key_of(self.unit, self.area)
 
 
 class OwnUnitEnteredAreaEvent(_AreaEvent):
@@ -386,16 +413,20 @@ class AlertEvent(Event):
         """The events of these alerts, for `on`."""
         return EventFilter(cls, keys=frozenset((alert, *alerts)))
 
+    @classmethod
+    def _key_of(cls, *made_of: Any) -> Hashable:
+        return made_of[0]
+
     def _key(self) -> Hashable:
-        return self.alert
+        return self._key_of(self.alert)
 
 
 # Every type of unit, which a vital is watched for when `of` is given none.
 _EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType._type_ids
 
 
-def _type_ids(unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...]) -> frozenset[Hashable]:
-    """The unit types `unit_types` name, a group standing for each type in it."""
+def _unit_type_ids_in(unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...]) -> frozenset[Hashable]:
+    """The ids of the unit types `unit_types` stand for, a group for each type in it."""
     ids: set[UnitTypeId] = set()
     for unit_type in unit_types:
         ids.update((unit_type,) if isinstance(unit_type, UnitTypeId) else unit_type._type_ids)

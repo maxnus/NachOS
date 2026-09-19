@@ -35,12 +35,16 @@ class EventFilter[E: Event]:
         """What an event must pass to be handed on, or `None` for nothing."""
 
     def __repr__(self) -> str:
+        return f"EventFilter({', '.join(self._details())})"
+
+    def _details(self) -> list[str]:
+        """The type, keys and predicate, as a repr shows them: each of a few keys, or how many of more."""
         details = [self.event_type.__name__]
-        if self.keys is not None:
-            details.append(f"keys={_described(self.keys)}")
+        if (keys := self.keys) is not None:
+            details.append(f"keys={sorted(keys, key=repr)!r}" if len(keys) <= 4 else f"keys=<{len(keys)} keys>")
         if self.predicate is not None:
             details.append(f"predicate={getattr(self.predicate, '__qualname__', self.predicate)}")
-        return f"EventFilter({', '.join(details)})"
+        return details
 
     def where(self, predicate: Callable[[E], bool], /) -> EventFilter[E]:
         """These events, of those `predicate` passes too."""
@@ -52,8 +56,3 @@ class EventFilter[E: Event]:
                 return first(event) and predicate(event)
 
         return EventFilter(self.event_type, keys=self.keys, predicate=both)
-
-
-def _described(keys: frozenset[Hashable]) -> str:
-    """`keys` as a repr shows them: each of a few, or how many of more."""
-    return repr(sorted(keys, key=repr)) if len(keys) <= 4 else f"<{len(keys)} keys>"
