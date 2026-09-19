@@ -1,10 +1,10 @@
 """What makes every event class a frozen, slotted dataclass."""
 
-from dataclasses import dataclass
+from dataclasses import Field, dataclass, field
 from typing import Any, dataclass_transform
 
 
-@dataclass_transform(frozen_default=True)
+@dataclass_transform(frozen_default=True, field_specifiers=(Field, field))
 class _EventMeta(type):
     """The type of every event class, which makes each a frozen, slotted dataclass of the fields it declares."""
 

@@ -183,7 +183,8 @@ class Api:
         logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)
         events = self._event
         events._start_game()
-        events.emit(GameStartEvent(game.step))
+        events._at_step(game.step)
+        events.emit(GameStartEvent(step=game.step))
 
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
@@ -191,9 +192,8 @@ class Api:
                 result = game.finish(Result.TIE)
                 break
 
-            events.emit(TurnStartEvent(game.step))
-            game.report(events)
-            events.emit(TurnEvent(game.step))
+            events.emit(TurnStartEvent(step=game.step))
+            events._hand_out([*game.report(events), TurnEvent(step=game.step)])
 
             if realtime:
                 # A realtime game runs whether or not anyone is watching, so each turn asks for the step it wants.
@@ -201,5 +201,7 @@ class Api:
             else:
                 client.step(steps_per_turn)
                 game.observe()
-        events.emit(GameEndEvent(game.step, result))
+            events._at_step(game.step)
+        events.emit(GameEndEvent(result, step=game.step))
+        events._at_step(None)
         return result

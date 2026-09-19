@@ -2,125 +2,107 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Hashable
+from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any, final
+
+from sc2nachos.units._values import VitalType
 
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.geometry import Area
     from sc2nachos.ids import UnitTypeId
+    from sc2nachos.units._tracking._tracker_changes import _SideChanges
     from sc2nachos.units._unit import Unit
+
+# A vital watched: how to read it, which it is, the value, whether it is to be reached rather than dropped below, and
+# the ids last seen on the far side of the value: below it to be reached, at or above it to be dropped below.
+type _VitalWatch = tuple[Callable[[raw_pb2.Unit], float | None], VitalType, float, bool, set[int]]
 
 
 @final
-class _SideWatches[U: "Unit[Any]"]:
-    """What is watched of one side's units, what was last seen of each, and what crossed it in the update being read."""
+class _SideWatches[U: Unit[Any]]:
+    """What is watched of one side's units, and what was last seen of each: the vitals of each type, and areas."""
 
-    __slots__ = (
-        "areas",
-        "energy",
-        "energy_by_type",
-        "energy_reached",
-        "entered",
-        "left",
-        "life_dropped",
-        "life_dropped_watches",
-        "life_reached",
-        "life_reached_watches",
-        "watching",
-    )
+    __slots__ = ("_areas", "_dropped_keys", "_reached_keys", "_vital_ids", "_vitals_by_type", "watching")
 
     def __init__(self) -> None:
-        # The ids last seen below each energy of a unit type, and the same by raw unit type.
-        self.energy: dict[tuple[UnitTypeId, float], set[int]] = {}
-        self.energy_by_type: dict[int, list[tuple[float, set[int]]]] = {}
-        # The ids last seen below each life fraction watched to be reached, and at or above each watched to be dropped
-        # below.
-        self.life_reached_watches: dict[float, set[int]] = {}
-        self.life_dropped_watches: dict[float, set[int]] = {}
-        self.areas: dict[Area, _AreaWatch] = {}
+        # The keys of the vitals watched to be reached and to be dropped below, each a vital, a value and a unit type,
+        # as last given, so that the watches are made anew only when they change.
+        self._reached_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
+        self._dropped_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
+        # The ids of each vital watch, shared by the unit types it is watched for, and the watches by raw unit type.
+        self._vital_ids: dict[tuple[VitalType, float, bool], set[int]] = {}
+        self._vitals_by_type: dict[int, list[_VitalWatch]] = {}
+        self._areas: dict[Area, _AreaWatch] = {}
         self.watching = False
-        self.energy_reached: list[tuple[U, float]] = []
-        self.life_reached: list[tuple[U, float]] = []
-        self.life_dropped: list[tuple[U, float]] = []
-        self.entered: list[tuple[U, Area]] = []
-        self.left: list[tuple[U, Area]] = []
 
     def watch(
         self,
-        energy: Collection[tuple[UnitTypeId, float]],
-        life_reached: Collection[float],
-        life_dropped: Collection[float],
+        reached: Collection[tuple[VitalType, float, UnitTypeId]],
+        dropped: Collection[tuple[VitalType, float, UnitTypeId]],
         areas: Collection[Area],
     ) -> None:
         """Watch these from now on, keeping what was last seen for what was watched before."""
-        if _keep_only(self.energy, energy, _no_ids):
-            self.energy_by_type = {}
-            for (unit_type, value), below in self.energy.items():
-                self.energy_by_type.setdefault(int(unit_type), []).append((value, below))
-        _keep_only(self.life_reached_watches, life_reached, _no_ids)
-        _keep_only(self.life_dropped_watches, life_dropped, _no_ids)
-        _keep_only(self.areas, areas, _AreaWatch)
-        self.watching = bool(self.energy or self.life_reached_watches or self.life_dropped_watches or self.areas)
-        self.energy_reached, self.life_reached, self.life_dropped, self.entered, self.left = [], [], [], [], []
+        # The bus hands over the same sets while its handlers stay the same, sparing a comparison of hundreds a turn.
+        if reached is not self._reached_keys or dropped is not self._dropped_keys:
+            if reached != self._reached_keys or dropped != self._dropped_keys:
+                self._watch_vitals(reached, dropped)
+            self._reached_keys, self._dropped_keys = reached, dropped
+        _keep_only(self._areas, areas)
+        self.watching = bool(self._vital_ids or self._areas)
 
-    def compare(self, unit: U, report: raw_pb2.Unit, *, in_vision: bool) -> None:
-        """Record what `unit`, in sight and reading as `report`, crossed since it was last seen."""
+    def _watch_vitals(
+        self,
+        reached: Collection[tuple[VitalType, float, UnitTypeId]],
+        dropped: Collection[tuple[VitalType, float, UnitTypeId]],
+    ) -> None:
+        """Make the vital watches of `reached` and `dropped` anew, keeping the ids of each still watched."""
+        kept: dict[tuple[VitalType, float, bool], set[int]] = {}
+        by_type: dict[int, list[_VitalWatch]] = {}
+        for keys, reaching in ((reached, True), (dropped, False)):
+            for vital, value, unit_type in keys:
+                if (ids := kept.get((vital, value, reaching))) is None:
+                    ids = kept[vital, value, reaching] = self._vital_ids.get((vital, value, reaching), set())
+                by_type.setdefault(int(unit_type), []).append((_READS[vital], vital, value, reaching, ids))
+        self._vital_ids, self._vitals_by_type = kept, by_type
+
+    def compare(self, unit: U, report: raw_pb2.Unit, found: _SideChanges[U], *, in_vision: bool) -> None:
+        """Record in `found` what `unit`, in sight and reading as `report`, crossed since it was last seen."""
         unit_id = unit._id
-        if in_vision:
-            if self.energy_by_type and (watches := self.energy_by_type.get(report.unit_type)) is not None:
-                energy = report.energy
-                for value, below in watches:
-                    if energy < value:
-                        below.add(unit_id)
-                    elif unit_id in below:
-                        below.discard(unit_id)
-                        self.energy_reached.append((unit, value))
-            if (self.life_reached_watches or self.life_dropped_watches) and (
-                most := report.health_max + report.shield_max
-            ):
-                fraction = (report.health + report.shield) / most
-                for value, below in self.life_reached_watches.items():
-                    if fraction < value:
-                        below.add(unit_id)
-                    elif unit_id in below:
-                        below.discard(unit_id)
-                        self.life_reached.append((unit, value))
-                for value, above in self.life_dropped_watches.items():
-                    if fraction >= value:
-                        above.add(unit_id)
-                    elif unit_id in above:
-                        above.discard(unit_id)
-                        self.life_dropped.append((unit, value))
-        if self.areas:
+        if in_vision and (watches := self._vitals_by_type.get(report.unit_type)) is not None:
+            for read, vital, value, reaching, ids in watches:
+                if (now := read(report)) is None:
+                    continue
+                if (now < value) is reaching:
+                    ids.add(unit_id)
+                elif unit_id in ids:
+                    ids.discard(unit_id)
+                    (found.vital_reached if reaching else found.vital_dropped).append((unit, vital, value))
+        if self._areas:
             position = unit._position
             x, y = position
-            for area, watch in self.areas.items():
+            for area, watch in self._areas.items():
                 if (bounds := watch.bounds) is None:
                     continue
                 inside = watch.inside
+                # The rectangle around the area rules out most units for a fraction of what `in` costs.
                 if bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3] and position in area:
                     if unit_id not in inside:
                         inside.add(unit_id)
                         if not watch.fresh:
-                            self.entered.append((unit, area))
+                            found.entered_area.append((unit, area))
                 elif unit_id in inside:
                     inside.discard(unit_id)
-                    self.left.append((unit, area))
+                    found.left_area.append((unit, area))
 
     def settle(self, dead: list[int]) -> None:
         """Forget the units in `dead`, and count every area watched as watched for a turn."""
         if not self.watching:
             return
-        for watched in (
-            *self.energy.values(),
-            *self.life_reached_watches.values(),
-            *self.life_dropped_watches.values(),
-            *(watch.inside for watch in self.areas.values()),
-        ):
+        for watched in (*self._vital_ids.values(), *(watch.inside for watch in self._areas.values())):
             watched.difference_update(dead)
-        for watch in self.areas.values():
+        for watch in self._areas.values():
             watch.fresh = False
 
 
@@ -143,19 +125,30 @@ class _AreaWatch:
             self.bounds = (box.left, box.bottom, box.right, box.top)
 
 
-def _keep_only[K: Hashable, V](watches: dict[K, V], wanted: Collection[K], start: Callable[[K], V]) -> bool:
-    """Keep the watches of `wanted` only, starting one with `start` for each new key, and say whether any changed."""
-    changed = False
-    for key in [key for key in watches if key not in wanted]:
-        del watches[key]
-        changed = True
-    for key in wanted:
-        if key not in watches:
-            watches[key] = start(key)
-            changed = True
-    return changed
+def _keep_only(watches: dict[Area, _AreaWatch], wanted: Collection[Area]) -> None:
+    """Keep the watches of the areas of `wanted` only, starting one for each new area."""
+    for area in [area for area in watches if area not in wanted]:
+        del watches[area]
+    for area in wanted:
+        if area not in watches:
+            watches[area] = _AreaWatch(area)
 
 
-def _no_ids(_: object) -> set[int]:
-    """No unit's id, to start a watch of a value with."""
-    return set()
+def _fraction(amount: float, most: float) -> float | None:
+    """`amount` as a fraction of `most`, or `None` for a unit with none of it, whose most is 0."""
+    return amount / most if most else None
+
+
+# How to read each vital off a unit's report, `None` for a unit that has none of it.
+_READS: dict[VitalType, Callable[[raw_pb2.Unit], float | None]] = {
+    VitalType.HEALTH: lambda report: report.health,
+    VitalType.SHIELD: lambda report: report.shield if report.shield_max else None,
+    VitalType.LIFE: lambda report: report.health + report.shield,
+    VitalType.ENERGY: lambda report: report.energy if report.energy_max else None,
+    VitalType.HEALTH_FRACTION: lambda report: _fraction(report.health, report.health_max),
+    VitalType.SHIELD_FRACTION: lambda report: _fraction(report.shield, report.shield_max),
+    VitalType.LIFE_FRACTION: lambda report: _fraction(
+        report.health + report.shield, report.health_max + report.shield_max
+    ),
+    VitalType.ENERGY_FRACTION: lambda report: _fraction(report.energy, report.energy_max),
+}

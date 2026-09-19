@@ -24,9 +24,8 @@ from sc2nachos.events import (
     GameEndEvent,
     GameStartEvent,
     OwnUnitCreatedEvent,
-    OwnUnitEnergyReachedEvent,
-    OwnUnitLifeFractionDroppedEvent,
-    OwnUnitLifeFractionReachedEvent,
+    OwnUnitVitalDroppedEvent,
+    OwnUnitVitalReachedEvent,
     TurnEvent,
     TurnStartEvent,
 )
@@ -34,13 +33,13 @@ from sc2nachos.geometry import Circle, Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.state import Alert
-from sc2nachos.units import UnitType
+from sc2nachos.units import UnitType, VitalType
 
 
 def _turns(bus: EventBus, *steps: int) -> None:
     """A turn at each of `steps`."""
     for step in steps:
-        bus.emit(TurnEvent(step))
+        bus.emit(TurnEvent(step=step))
 
 
 @pytest.fixture
@@ -132,8 +131,8 @@ class TestSubscribing:
         def both(event: Event) -> None:
             calls.append(type(event))
 
-        bus.emit(TurnStartEvent(0))
-        bus.emit(TurnEvent(0))
+        bus.emit(TurnStartEvent(step=0))
+        bus.emit(TurnEvent(step=0))
         assert calls == [TurnStartEvent, TurnEvent]
 
     def test_nothing_is_wanted_until_something_subscribes(self) -> None:
@@ -147,7 +146,7 @@ class TestSubscribing:
         bus = EventBus()
         bus.on(TurnEvent, once=True)(lambda event: None)
         bus.on(TurnEvent)(lambda event: Done)
-        bus.emit(TurnEvent(0))
+        bus.emit(TurnEvent(step=0))
         assert not bus._has_handlers(TurnEvent)
         bus._start_game()
         assert bus._has_handlers(TurnEvent)
@@ -198,8 +197,8 @@ class TestOrder:
     def test_a_handler_of_another_type_is_not_handed_the_event(self) -> None:
         bus, calls = EventBus(), []
         bus.on(TurnEvent)(lambda event: calls.append("turn"))
-        bus.emit(TurnStartEvent(0))
-        bus.emit(GameStartEvent(0))
+        bus.emit(TurnStartEvent(step=0))
+        bus.emit(GameStartEvent(step=0))
         assert calls == []
 
 
@@ -310,11 +309,11 @@ class TestUnsubscribing:
 
         mine, other = Handlers(), Handlers()
         bus.unsubscribe(mine.turn)
-        bus.emit(TurnStartEvent(0))
+        bus.emit(TurnStartEvent(step=0))
         _turns(bus, 0)
         assert mine.calls == ["start"]
         bus.unsubscribe(other)
-        bus.emit(TurnStartEvent(1))
+        bus.emit(TurnStartEvent(step=1))
         _turns(bus, 1)
         assert other.calls == ["start", "turn"]
         assert mine.calls == ["start", "start"]
@@ -548,8 +547,8 @@ class TestTyping:
         def wrong(event: TurnEvent) -> None:
             pass
 
-        @bus.on(OwnUnitLifeFractionReachedEvent.of(1.0))
-        def full(event: OwnUnitLifeFractionReachedEvent) -> None:
+        @bus.on(OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0))
+        def full(event: OwnUnitVitalReachedEvent) -> None:
             pass
 
         assert len(bus._handlers[AlertEvent]) == 2
@@ -606,7 +605,7 @@ class TestTimings:
     def test_a_new_game_starts_them_afresh(self) -> None:
         bus = EventBus(time_handlers=True)
         bus.on(GameEndEvent)(lambda event: None)
-        bus.emit(GameEndEvent(10, Result.VICTORY))
+        bus.emit(GameEndEvent(Result.VICTORY, step=10))
         assert bus.timings[GameEndEvent]
         bus._start_game()
         assert not bus.timings
@@ -627,15 +626,15 @@ class _ScoutedAgain(_Scouted):
 
 class TestEventsOfABotsOwn:
     def test_a_subclass_is_a_frozen_slotted_dataclass_of_the_fields_it_declares(self) -> None:
-        event = _Scouted(5, "natural")
-        assert dataclasses.is_dataclass(event) and event == _Scouted(5, "natural", 1)
+        event = _Scouted("natural", step=5)
+        assert dataclasses.is_dataclass(event) and event == _Scouted("natural", 1, step=5)
         assert not hasattr(event, "__dict__")
         with pytest.raises(dataclasses.FrozenInstanceError):
             event.times = 2  # type: ignore
 
     def test_a_subclass_of_one_adds_its_fields_to_those_it_inherits(self) -> None:
         assert [field.name for field in dataclasses.fields(_ScoutedAgain)] == ["step", "place", "times", "by"]
-        assert _ScoutedAgain(1, "main").by == "overlord"
+        assert _ScoutedAgain("main", step=1).by == "overlord"
 
     def test_one_decorated_as_a_dataclass_too_is_refused(self) -> None:
         with pytest.raises(TypeError, match="Cannot overwrite attribute __setattr__"):
@@ -650,11 +649,11 @@ class TestEventsOfABotsOwn:
         @bus.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             calls.append("turn")
-            bus.emit(_Scouted(event.step, "natural"))
+            bus.emit(_Scouted("natural", step=event.step))
             calls.append("turn done")
 
         bus.on(_Scouted)(lambda event: calls.append("scouted"))
-        bus.emit(TurnEvent(0))
+        bus.emit(TurnEvent(step=0))
         assert calls == ["turn", "scouted", "turn done"]
 
 
@@ -663,15 +662,15 @@ class TestDispatchByClass:
         bus, bases, subclasses = EventBus(), [], []
         bus.on(_Scouted)(lambda event: bases.append(type(event)))
         bus.on(_ScoutedAgain)(lambda event: subclasses.append(type(event)))
-        bus.emit(_Scouted(0, "main"))
-        bus.emit(_ScoutedAgain(0, "main"))
+        bus.emit(_Scouted("main", step=0))
+        bus.emit(_ScoutedAgain("main", step=0))
         assert bases == [_Scouted, _ScoutedAgain]
         assert subclasses == [_ScoutedAgain]
 
     def test_a_handler_of_event_is_handed_every_event_and_wants_every_type(self) -> None:
         bus, seen = EventBus(), []
         bus.on(Event)(lambda event: seen.append(type(event)))
-        for event in (TurnStartEvent(0), TurnEvent(0), GameEndEvent(0, Result.TIE)):
+        for event in (TurnStartEvent(step=0), TurnEvent(step=0), GameEndEvent(Result.TIE, step=0)):
             bus.emit(event)
         assert seen == [TurnStartEvent, TurnEvent, GameEndEvent]
         assert bus._has_handlers(OwnUnitCreatedEvent)
@@ -682,21 +681,21 @@ class TestDispatchByClass:
         bus.on(_Scouted)(lambda event: calls.append("scouted"))
         bus.on(_ScoutedAgain)(lambda event: calls.append("again"))
         bus.on(Event, priority=EventPriority.HIGH)(lambda event: calls.append("any, high"))
-        bus.emit(_ScoutedAgain(0, "main"))
+        bus.emit(_ScoutedAgain("main", step=0))
         assert calls == ["any, high", "scouted", "again", "again, low"]
 
     def test_a_handler_of_a_base_counts_from_the_event_after_it_subscribes_or_unsubscribes(self) -> None:
         bus, calls = EventBus(), []
         bus.on(_ScoutedAgain)(lambda event: calls.append(("again", event.step)))
-        bus.emit(_ScoutedAgain(0, "main"))
+        bus.emit(_ScoutedAgain("main", step=0))
 
         @bus.on(Event)
         def any_event(event: Event) -> None:
             calls.append(("any", event.step))
 
-        bus.emit(_ScoutedAgain(1, "main"))
+        bus.emit(_ScoutedAgain("main", step=1))
         bus.unsubscribe(any_event)
-        bus.emit(_ScoutedAgain(2, "main"))
+        bus.emit(_ScoutedAgain("main", step=2))
         assert calls == [("again", 0), ("again", 1), ("any", 1), ("again", 2)]
 
 
@@ -705,7 +704,7 @@ class TestOnlyAndOf:
         bus, seen = EventBus(), []
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE))(lambda event: seen.append(event.alert))
         for alert in (Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED, Alert.UPGRADE_COMPLETE):
-            bus.emit(AlertEvent(0, alert))
+            bus.emit(AlertEvent(alert, step=0))
         assert seen == [Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE]
 
     def test_a_unit_type_group_stands_for_each_type_in_it(self) -> None:
@@ -713,21 +712,24 @@ class TestOnlyAndOf:
         assert terran is not None
         assert {UnitTypeId.MARINE, UnitTypeId.BARRACKS, UnitTypeId.ZERGLING} <= terran
         assert UnitTypeId.ZEALOT not in terran
-        assert OwnUnitEnergyReachedEvent.of(UnitType.HighTemplar, 75).keys == {(UnitTypeId.HIGH_TEMPLAR, 75.0)}
+        storm = OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)
+        assert storm.keys == {(VitalType.ENERGY, 75.0, UnitTypeId.HIGH_TEMPLAR)}
+        every = OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75).keys
+        assert every is not None and {(VitalType.ENERGY, 75.0, UnitTypeId.RAVEN)} <= every and len(every) > 100
 
     def test_once_counts_across_the_keys_of_one_handler(self) -> None:
         bus, seen = EventBus(), []
         either = AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE)
         bus.on(either, once=True)(lambda event: seen.append(event))
-        bus.emit(AlertEvent(0, Alert.UPGRADE_COMPLETE))
-        bus.emit(AlertEvent(1, Alert.RESEARCH_COMPLETE))
-        assert seen == [AlertEvent(0, Alert.UPGRADE_COMPLETE)]
+        bus.emit(AlertEvent(Alert.UPGRADE_COMPLETE, step=0))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=1))
+        assert seen == [AlertEvent(Alert.UPGRADE_COMPLETE, step=0)]
 
     def test_a_handler_of_the_type_and_one_of_a_key_are_handed_the_same_event(self) -> None:
         bus, seen = EventBus(), []
         bus.on(AlertEvent)(lambda event: seen.append(event))
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE))(lambda event: seen.append(event))
-        bus.emit(AlertEvent(0, Alert.RESEARCH_COMPLETE))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=0))
         assert len(seen) == 2 and seen[0] is seen[1]
 
     def test_the_keys_wanted_are_those_of_the_handlers_not_done(self) -> None:
@@ -737,44 +739,100 @@ class TestOnlyAndOf:
         bus.on(AlertEvent.only(Alert.UPGRADE_COMPLETE))(lambda event: None)
         assert bus._wanted_keys(AlertEvent) == {Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE}
         assert not bus._has_handlers(AlertEvent)
-        bus.emit(AlertEvent(0, Alert.RESEARCH_COMPLETE))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=0))
         assert bus._wanted_keys(AlertEvent) == {Alert.UPGRADE_COMPLETE}
-        assert not bus._wanted_keys(OwnUnitLifeFractionReachedEvent)
+        assert not bus._wanted_keys(OwnUnitVitalReachedEvent)
+
+    def test_the_keys_wanted_are_the_same_set_until_the_handlers_change(self) -> None:
+        bus = EventBus()
+        bus.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 50))(lambda event: None)
+        wanted = bus._wanted_keys(OwnUnitVitalReachedEvent)
+        assert bus._wanted_keys(OwnUnitVitalReachedEvent) is wanted
+        bus.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75))(lambda event: None)
+        assert len(bus._wanted_keys(OwnUnitVitalReachedEvent)) == 2 * len(wanted)
 
     def test_a_parameterized_event_is_subscribed_to_through_of(self) -> None:
         bus = EventBus()
-        bus.on(OwnUnitLifeFractionReachedEvent.of(0.5))(lambda event: None)
+        bus.on(OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 0.5, UnitTypeId.MARINE))(lambda event: None)
         area = Circle(Point((20.0, 20.0)), 5)
         bus.on(EnemyUnitEnteredAreaEvent.of(area))(lambda event: None)
-        assert bus._wanted_keys(OwnUnitLifeFractionReachedEvent) == {0.5}
+        assert bus._wanted_keys(OwnUnitVitalReachedEvent) == {(VitalType.LIFE_FRACTION, 0.5, UnitTypeId.MARINE)}
         assert bus._wanted_keys(EnemyUnitEnteredAreaEvent) == {area}
-        assert not bus._wanted_keys(OwnUnitLifeFractionDroppedEvent)
+        assert not bus._wanted_keys(OwnUnitVitalDroppedEvent)
 
     def test_a_parameterized_event_subscribed_to_bare_is_refused_and_a_type_checker_refuses_it(self) -> None:
         bus = EventBus()
-        with pytest.raises(TypeError, match=r"through `of`, as in `OwnUnitEnergyReachedEvent\.of\(\.\.\.\)`"):
+        with pytest.raises(TypeError, match=r"through `of`, as in `OwnUnitVitalReachedEvent\.of\(\.\.\.\)`"):
 
-            @bus.on(OwnUnitEnergyReachedEvent)  # type: ignore
-            def reached(event: OwnUnitEnergyReachedEvent) -> None:
+            @bus.on(OwnUnitVitalReachedEvent)  # type: ignore
+            def reached(event: OwnUnitVitalReachedEvent) -> None:
                 pass
 
         with pytest.raises(TypeError, match="through `of`"):
-            bus.on(OwnUnitEnergyReachedEvent.where(lambda event: True))
+            bus.on(OwnUnitVitalReachedEvent.where(lambda event: True))
 
-    @pytest.mark.parametrize("fraction", [0.0, -0.5, 1.5])
-    def test_a_life_fraction_that_cannot_be_crossed_is_refused(self, fraction: float) -> None:
-        with pytest.raises(ValueError, match="above 0 and at most 1"):
-            OwnUnitLifeFractionReachedEvent.of(fraction)
+    @pytest.mark.parametrize(
+        ("vital", "value"),
+        [
+            (VitalType.LIFE_FRACTION, 0.0),
+            (VitalType.ENERGY_FRACTION, 1.5),
+            (VitalType.HEALTH, -1),
+            (VitalType.ENERGY, 0),
+        ],
+    )
+    def test_a_value_that_cannot_be_crossed_is_refused(self, vital: VitalType, value: float) -> None:
+        with pytest.raises(ValueError, match=f"a {vital.value} is crossed above 0"):
+            OwnUnitVitalReachedEvent.of(vital, value)
 
-    def test_an_energy_that_cannot_be_reached_is_refused(self) -> None:
-        with pytest.raises(ValueError, match="above 0"):
-            OwnUnitEnergyReachedEvent.of(UnitType.HighTemplar, 0)
+    def test_a_fraction_is_at_most_1_and_any_other_value_as_large_as_it_likes(self) -> None:
+        assert OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0).keys
+        assert OwnUnitVitalReachedEvent.of(VitalType.LIFE, 500).keys
+
+
+class TestTheStep:
+    def test_an_event_made_without_a_step_is_given_the_games_as_it_is_emitted(self) -> None:
+        bus, seen = EventBus(), []
+        bus.on(_Scouted)(lambda event: seen.append(event.step))
+        bus._at_step(80)
+        bus.emit(_Scouted("natural"))
+        bus.emit(_Scouted("natural", step=16))
+        assert seen == [80, 16]
+
+    def test_one_emitted_without_a_step_and_with_no_game_being_played_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="no game is being played"):
+            EventBus().emit(_Scouted("natural"))
+
+
+class TestATurnGoesOutPriorityFirst:
+    def test_every_handler_of_one_priority_runs_before_any_of_the_next_each_in_the_turns_order(self) -> None:
+        bus, calls = EventBus(), []
+        bus.on(_Scouted, priority=EventPriority.LOW)(lambda event: calls.append("scouted, low"))
+        bus.on(AlertEvent)(lambda event: calls.append("alert"))
+        bus.on(_Scouted, priority=EventPriority.HIGH)(lambda event: calls.append("scouted, high"))
+        bus.on(AlertEvent, priority=EventPriority.HIGH)(lambda event: calls.append("alert, high"))
+        bus.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: calls.append("turn, high"))
+        bus.on(TurnEvent)(lambda event: calls.append("turn"))
+        bus._hand_out([_Scouted("main", step=0), AlertEvent(Alert.RESEARCH_COMPLETE, step=0), TurnEvent(step=0)])
+        assert calls == ["scouted, high", "alert, high", "turn, high", "alert", "turn", "scouted, low"]
+
+    def test_what_a_handler_emits_goes_out_at_once_all_priorities_through(self) -> None:
+        bus, calls = EventBus(), []
+
+        @bus.on(TurnEvent, priority=EventPriority.HIGH)
+        def high(event: TurnEvent) -> None:
+            calls.append("turn, high")
+            bus.emit(_Scouted("natural", step=event.step))
+
+        bus.on(_Scouted, priority=EventPriority.LOWEST)(lambda event: calls.append("scouted, lowest"))
+        bus.on(TurnEvent)(lambda event: calls.append("turn"))
+        bus._hand_out([TurnEvent(step=0)])
+        assert calls == ["turn, high", "scouted, lowest", "turn"]
 
 
 class TestWhere:
     def _turns(self, bus: EventBus, *steps: int) -> None:
         for step in steps:
-            bus.emit(TurnEvent(step))
+            bus.emit(TurnEvent(step=step))
 
     def test_a_predicate_selects_the_events_a_handler_is_handed(self) -> None:
         bus, fired = EventBus(), []
@@ -817,7 +875,7 @@ class TestWhere:
         bus.on(selected)(lambda event: seen.append((event.step, event.alert)))
         for step in range(4):
             for alert in (Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED):
-                bus.emit(AlertEvent(step, alert))
+                bus.emit(AlertEvent(alert, step=step))
         assert seen == [(1, Alert.RESEARCH_COMPLETE), (2, Alert.RESEARCH_COMPLETE)]
 
     def test_each_handler_selects_the_event_as_its_turn_comes(self) -> None:
@@ -829,7 +887,7 @@ class TestWhere:
 
         bus.on(TurnEvent.where(lambda event: event.step not in taken))(take)
         bus.on(TurnEvent.where(lambda event: event.step not in taken))(take)
-        bus.emit(TurnEvent(0))
+        bus.emit(TurnEvent(step=0))
         assert calls == [0]
 
     def test_a_predicate_that_raises_is_logged_if_its_handler_catches_and_otherwise_goes_on_up(
@@ -837,8 +895,8 @@ class TestWhere:
     ) -> None:
         bus, fired = EventBus(), []
         bus.on(TurnEvent.where(lambda event: 1 / 0 > 0), catch_exceptions=True)(lambda event: fired.append(event))
-        bus.emit(TurnEvent(0))
+        bus.emit(TurnEvent(step=0))
         assert not fired and any("raised selecting" in message for message in logged)
         bus.on(TurnEvent.where(lambda event: 1 / 0 > 0))(lambda event: fired.append(event))
         with pytest.raises(ZeroDivisionError):
-            bus.emit(TurnEvent(1))
+            bus.emit(TurnEvent(step=1))

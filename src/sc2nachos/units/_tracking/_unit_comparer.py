@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.ids import BuffId
-from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
     from collections.abc import Collection
 
     from sc2nachos.units._tracking._tracker import _Tracker
+    from sc2nachos.units._tracking._tracker_changes import _SideChanges
     from sc2nachos.units._unit import Unit
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -68,31 +68,23 @@ class _UnitComparer:
                 continue
             compared[unit._id] = report
             in_vision = report.display_type == _IN_VISION
+            side: _SideChanges[Any] = changes.own if alliance == _OWN else changes.enemy
             if buffs and in_vision and (listed := report.buff_ids):
                 worn[unit._id] = tuple(listed)
             if before is None or (then := before.get(unit._id)) is None:
                 continue
             if cloak and report.cloak != then.cloak:
-                if isinstance(unit, OwnUnit):
-                    changes.own_units_cloak_changed.append((unit, CloakState(then.cloak)))
-                else:
-                    changes.enemy_units_cloak_changed.append((unit, CloakState(then.cloak)))
+                side.cloak_changed.append((unit, CloakState(then.cloak)))
             if not in_vision or then.display_type != _IN_VISION:
                 continue
             if worn_before is not None and (now := worn.get(unit._id, ())) != (was := worn_before.get(unit._id, ())):
-                self._record_buffs(unit, was, now, only_buffs)
+                self._record_buffs(side, unit, was, now, only_buffs)
             if report.unit_type != then.unit_type:
                 continue
             if damage and (lost := max(0.0, then.health - report.health) + max(0.0, then.shield - report.shield)):
-                if isinstance(unit, OwnUnit):
-                    changes.own_units_damaged.append((unit, lost))
-                else:
-                    changes.enemy_units_damaged.append((unit, lost))
+                side.damaged.append((unit, lost))
             if energy and (drained := then.energy - report.energy) > 0.0:
-                if isinstance(unit, OwnUnit):
-                    changes.own_units_energy_lost.append((unit, drained))
-                else:
-                    changes.enemy_units_energy_lost.append((unit, drained))
+                side.energy_lost.append((unit, drained))
         self._compared = compared
         self._compared_update = update
         if buffs:
@@ -105,10 +97,15 @@ class _UnitComparer:
         self._worn = {}
 
     def _record_buffs(
-        self, unit: Unit[Any], was: tuple[int, ...], now: tuple[int, ...], only: Collection[int] | None
+        self,
+        side: _SideChanges[Any],
+        unit: Unit[Any],
+        was: tuple[int, ...],
+        now: tuple[int, ...],
+        only: Collection[int] | None,
     ) -> None:
-        """Record the buffs of `only`, or every buff, that `unit` gained and lost between wearing `was` and `now`, each
-        in the order of their ids."""
+        """Record in `side` the buffs of `only`, or every buff, that `unit` gained and lost between wearing `was` and
+        `now`, each in the order of their ids."""
         if not was or not now:
             # A unit that wore nothing before or wears nothing now, as a worker picking up minerals or delivering them
             # does every trip, which is most changes (corpus).
@@ -116,13 +113,7 @@ class _UnitComparer:
         else:
             gained, lost = sorted(set(now).difference(was)), sorted(set(was).difference(now))
         if only is not None:
-            gained, lost = [buff for buff in gained if buff in only], [buff for buff in lost if buff in only]
-        gained_buffs = [BuffId.read(buff) for buff in gained]
-        lost_buffs = [BuffId.read(buff) for buff in lost]
-        changes = self._tracker.last_changes
-        if isinstance(unit, OwnUnit):
-            changes.own_units_gained_buff.extend((unit, buff) for buff in gained_buffs)
-            changes.own_units_lost_buff.extend((unit, buff) for buff in lost_buffs)
-        else:
-            changes.enemy_units_gained_buff.extend((unit, buff) for buff in gained_buffs)
-            changes.enemy_units_lost_buff.extend((unit, buff) for buff in lost_buffs)
+            gained = [buff for buff in gained if buff in only]
+            lost = [buff for buff in lost if buff in only]
+        side.gained_buff.extend((unit, BuffId.read(buff)) for buff in gained)
+        side.lost_buff.extend((unit, BuffId.read(buff)) for buff in lost)

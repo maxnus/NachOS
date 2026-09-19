@@ -15,23 +15,21 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
-    EnemyUnitEnergyReachedEvent,
     EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
-    EnemyUnitLifeFractionDroppedEvent,
-    EnemyUnitLifeFractionReachedEvent,
+    EnemyUnitVitalDroppedEvent,
+    EnemyUnitVitalReachedEvent,
     Event,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
-    OwnUnitEnergyReachedEvent,
     OwnUnitEnteredAreaEvent,
     OwnUnitLeftAreaEvent,
-    OwnUnitLifeFractionDroppedEvent,
-    OwnUnitLifeFractionReachedEvent,
+    OwnUnitVitalDroppedEvent,
+    OwnUnitVitalReachedEvent,
     UnitDiedEvent,
     UnitFoundDeadEvent,
 )
@@ -42,7 +40,7 @@ from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
 from sc2nachos.state._state import _State
-from sc2nachos.units import NotReportedError, OwnUnit, Unit, UnitType
+from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 from support import HAPPENINGS
 
@@ -177,16 +175,24 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     client.quit()
 
 
-_REACHED = (OwnUnitLifeFractionReachedEvent, EnemyUnitLifeFractionReachedEvent)
-_DROPPED = (OwnUnitLifeFractionDroppedEvent, EnemyUnitLifeFractionDroppedEvent)
+_REACHED = (OwnUnitVitalReachedEvent, EnemyUnitVitalReachedEvent)
+_DROPPED = (OwnUnitVitalDroppedEvent, EnemyUnitVitalDroppedEvent)
+# A value of each vital that units of a game cross: half their most, or an amount many units have.
+_VALUES = {
+    VitalType.HEALTH: 50.0,
+    VitalType.SHIELD: 20.0,
+    VitalType.LIFE: 100.0,
+    VitalType.ENERGY: 50.0,
+    **{vital: 0.5 for vital in VitalType if vital.is_fraction},
+}
 _ENTERED = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent)
 _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
-    """Each unit reported reaching an energy has it, each crossing a life fraction is on the side of it the unit crossed
-    to, each entering an area is inside it and each leaving outside it, and each unit crosses each way in turn."""
+    """Each unit crossing a value of a vital is on the side of it it crossed to, each entering an area is inside it and
+    each leaving outside it, and each unit crosses each way in turn."""
     recording = Recording(path)
     game_map = GameMap(
         next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
@@ -205,27 +211,20 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
             wrong.append(f"{event} twice in a row")
         crossed[unit.id, key] = onward
 
-    @api.event.on(OwnUnitEnergyReachedEvent.of(UnitType.AnyType, 50))
-    @api.event.on(EnemyUnitEnergyReachedEvent.of(UnitType.AnyType, 50))
-    def energy(event: Event) -> None:
-        assert isinstance(event, OwnUnitEnergyReachedEvent | EnemyUnitEnergyReachedEvent)
-        if event.unit.energy < event.energy:
-            wrong.append(f"{event} does not hold of {event.unit}")
-
-    def life(event: Event) -> None:
+    def vital(event: Event) -> None:
         assert isinstance(event, _REACHED + _DROPPED)
-        fraction, reached = event.unit.life_fraction, isinstance(event, _REACHED)
-        holds = fraction >= event.fraction if reached else fraction < event.fraction
-        crossing(event, event.unit, event.fraction, reached, holds=holds)
+        now, reached = getattr(event.unit, event.vital.value.replace(" ", "_")), isinstance(event, _REACHED)
+        holds = now >= event.value if reached else now < event.value
+        crossing(event, event.unit, (event.vital, event.value), reached, holds=holds)
 
     def area(event: Event) -> None:
         assert isinstance(event, _ENTERED + _LEFT)
         entered = isinstance(event, _ENTERED)
         crossing(event, event.unit, event.area, entered, holds=(event.unit.position in event.area) is entered)
 
-    for fraction in (1.0, 0.5):
+    for vital_type, value in _VALUES.items():
         for event_type in _REACHED + _DROPPED:
-            api.event.on(event_type.of(fraction))(life)
+            api.event.on(event_type.of(vital_type, value))(vital)
     # The units a game starts with stand around this player's main base, whose workers go to and fro across a circle
     # around them.
     starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]

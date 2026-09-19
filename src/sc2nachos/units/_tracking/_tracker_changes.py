@@ -9,12 +9,15 @@ if TYPE_CHECKING:
     from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
     from sc2nachos.units._own_unit import OwnUnit
     from sc2nachos.units._unit import Unit
-    from sc2nachos.units._values import Alliance, CloakState
+    from sc2nachos.units._values import Alliance, CloakState, VitalType
 
 
 @final
 class _TrackerChanges:
-    """What one update of the unit tracker found changed, each in the order it was found."""
+    """What one update of the unit tracker found changed, each in the order it was found.
+
+    What the comparer and the watcher find is kept for each side in `own` and `enemy`.
+    """
 
     __slots__ = (
         "own_units_created",
@@ -23,28 +26,10 @@ class _TrackerChanges:
         "units_alliance_changed",
         "own_units_finished",
         "own_upgrades_finished",
-        "own_units_damaged",
-        "enemy_units_damaged",
-        "own_units_energy_lost",
-        "enemy_units_energy_lost",
-        "own_units_energy_reached",
-        "enemy_units_energy_reached",
-        "own_units_life_fraction_reached",
-        "enemy_units_life_fraction_reached",
-        "own_units_life_fraction_dropped",
-        "enemy_units_life_fraction_dropped",
-        "own_units_cloak_changed",
-        "enemy_units_cloak_changed",
-        "own_units_gained_buff",
-        "enemy_units_gained_buff",
-        "own_units_lost_buff",
-        "enemy_units_lost_buff",
+        "own",
+        "enemy",
         "enemy_units_entered_sight",
         "enemy_units_left_sight",
-        "own_units_entered_area",
-        "own_units_left_area",
-        "enemy_units_entered_area",
-        "enemy_units_left_area",
         "units_died",
         "units_found_dead",
     )
@@ -62,57 +47,54 @@ class _TrackerChanges:
         """This player's units first seen unfinished that have finished: structures, add-ons and warp-ins."""
         self.own_upgrades_finished: list[UpgradeId] = []
         """This player's upgrades new to the observation, in the order of their ids."""
-        self.own_units_damaged: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units that lost health or shields, each with how much. Filled only by the comparer."""
-        self.enemy_units_damaged: list[tuple[Unit[Any], float]] = []
-        """The same for the enemy's units."""
-        self.own_units_energy_lost: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units that lost energy, each with how much. Filled only by the comparer."""
-        self.enemy_units_energy_lost: list[tuple[Unit[Any], float]] = []
-        """The same for the enemy's units."""
-        self.own_units_energy_reached: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units that reached an energy watched for their type, each with the energy. Filled only by the
-        watcher."""
-        self.enemy_units_energy_reached: list[tuple[Unit[Any], float]] = []
-        """The same for the enemy's units."""
-        self.own_units_life_fraction_reached: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units whose life rose to a fraction watched, each with the fraction. Filled only by the
-        watcher."""
-        self.enemy_units_life_fraction_reached: list[tuple[Unit[Any], float]] = []
-        """The same for the enemy's units."""
-        self.own_units_life_fraction_dropped: list[tuple[OwnUnit[Any], float]] = []
-        """This player's units whose life fell below a fraction watched, each with the fraction. Filled only by the
-        watcher."""
-        self.enemy_units_life_fraction_dropped: list[tuple[Unit[Any], float]] = []
-        """The same for the enemy's units."""
-        self.own_units_cloak_changed: list[tuple[OwnUnit[Any], CloakState]] = []
-        """This player's units whose cloak changed, each with the state it was. Filled only by the comparer."""
-        self.enemy_units_cloak_changed: list[tuple[Unit[Any], CloakState]] = []
-        """The same for the enemy's units."""
-        self.own_units_gained_buff: list[tuple[OwnUnit[Any], BuffId]] = []
-        """This player's units that wear a buff they did not, each with the buff, a unit's several in the order of
-        their ids. Filled only by the comparer."""
-        self.enemy_units_gained_buff: list[tuple[Unit[Any], BuffId]] = []
-        """The same for the enemy's units."""
-        self.own_units_lost_buff: list[tuple[OwnUnit[Any], BuffId]] = []
-        """This player's units that no longer wear a buff they did, each with the buff, a unit's several in the order of
-        their ids. Filled only by the comparer."""
-        self.enemy_units_lost_buff: list[tuple[Unit[Any], BuffId]] = []
-        """The same for the enemy's units."""
+        self.own: _SideChanges[OwnUnit[Any]] = _SideChanges()
+        """What the comparer and the watcher found of this player's units."""
+        self.enemy: _SideChanges[Unit[Any]] = _SideChanges()
+        """What the comparer and the watcher found of the enemy's units."""
         self.enemy_units_entered_sight: list[Unit[Any]] = []
         """The enemy's units in sight that were not in the observation before."""
         self.enemy_units_left_sight: list[Unit[Any]] = []
         """The enemy's units that were in sight in the observation before and are not now, the dead left out."""
-        self.own_units_entered_area: list[tuple[OwnUnit[Any], Area]] = []
-        """This player's units that came inside an area watched, each with the area. Filled only by the watcher."""
-        self.own_units_left_area: list[tuple[OwnUnit[Any], Area]] = []
-        """This player's units that came outside an area watched, each with the area. Filled only by the watcher."""
-        self.enemy_units_entered_area: list[tuple[Unit[Any], Area]] = []
-        """The same for the enemy's units."""
-        self.enemy_units_left_area: list[tuple[Unit[Any], Area]] = []
-        """The same for the enemy's units."""
         self.units_died: list[Unit[Any]] = []
         """The units the game reported dead."""
         self.units_found_dead: list[Unit[Any]] = []
         """The units found dead that the game did not report: a structure in the fog gone from its spot, and a drone
         that became a structure, should the game not report it by an update after the structure finishes or dies."""
+
+
+@final
+class _SideChanges[U: Unit[Any]]:
+    """What the comparer and the watcher found of one side's units in one update, each in the order it was found."""
+
+    __slots__ = (
+        "damaged",
+        "energy_lost",
+        "vital_reached",
+        "vital_dropped",
+        "cloak_changed",
+        "gained_buff",
+        "lost_buff",
+        "entered_area",
+        "left_area",
+    )
+
+    def __init__(self) -> None:
+        self.damaged: list[tuple[U, float]] = []
+        """The units that lost health or shields, each with how much."""
+        self.energy_lost: list[tuple[U, float]] = []
+        """The units that lost energy, each with how much."""
+        self.vital_reached: list[tuple[U, VitalType, float]] = []
+        """The units that reached a value of a vital watched, each with the vital and the value."""
+        self.vital_dropped: list[tuple[U, VitalType, float]] = []
+        """The units that dropped below a value of a vital watched, each with the vital and the value."""
+        self.cloak_changed: list[tuple[U, CloakState]] = []
+        """The units whose cloak changed, each with the state it was."""
+        self.gained_buff: list[tuple[U, BuffId]] = []
+        """The units that wear a buff they did not, each with the buff, a unit's several in the order of their ids."""
+        self.lost_buff: list[tuple[U, BuffId]] = []
+        """The units that no longer wear a buff they did, each with the buff, a unit's several in the order of their
+        ids."""
+        self.entered_area: list[tuple[U, Area]] = []
+        """The units that came inside an area watched, each with the area."""
+        self.left_area: list[tuple[U, Area]] = []
+        """The units that came outside an area watched, each with the area."""

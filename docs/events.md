@@ -28,8 +28,8 @@ handler that returns `Done` is called no more that game. Everything a handler ha
 ```python
 @api.event.on(AlertEvent.only(Alert.NUCLEAR_LAUNCH_DETECTED))
 @api.event.on(UnitDiedEvent.only(UnitType.Structure))
-@api.event.on(OwnUnitEnergyReachedEvent.of(UnitType.HighTemplar, 75))
-@api.event.on(OwnUnitLifeFractionDroppedEvent.of(0.3))
+@api.event.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar))
+@api.event.on(OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.3))
 @api.event.on(EnemyUnitEnteredAreaEvent.of(Circle(natural, 12)))
 @api.event.on(OwnUnitDamagedEvent.where(lambda event: event.damage > 20))
 ```
@@ -37,10 +37,10 @@ handler that returns `Done` is called no more that game. Everything a handler ha
 - **`only(...)`** narrows an event a handler can also take whole: to some alerts, buffs, upgrades or unit types. A
   `UnitType` group stands for every type in it, and a unit's type is the one it has as the event is made. It takes
   one value or several.
-- **`of(...)`** defines an event there is none of without its parameters: a unit's energy reaching a value, its life
-  rising to a fraction or falling below it, a unit crossing the edge of an area. Such a type derives from
-  `ParameterizedEvent`, and `on` refuses it bare, as a type checker does. One `of` takes one set of parameters; for
-  several, stack the decorators.
+- **`of(...)`** defines an event there is none of without its parameters: a unit's health, shields or energy, as an
+  amount or a fraction of its most, reaching a value or dropping below it, and a unit crossing the edge of an area.
+  Such a type derives from `ParameterizedEvent`, and `on` refuses it bare, as a type checker does. One `of` takes one
+  set of parameters; for several, stack the decorators.
 - **`where(predicate)`** narrows any event, or what `only` or `of` selected, to those `predicate` passes. Chained
   twice, it passes those both pass. Each handler's predicate is called as its turn comes, after the handlers before it
   have run.
@@ -56,9 +56,6 @@ every event, which has NachOS make every type of event it would otherwise not, t
 observation before included. A handler of `Event` is never handed a parameterized event but of the parameters other
 handlers asked for.
 
-Handlers run highest priority first, and those of one priority in the order they subscribed, whichever class each
-subscribed to.
-
 ## Events of your own
 
 ```python
@@ -67,13 +64,14 @@ class ExpansionTakenEvent(Event):
     by_enemy: bool = True
 
 
-api.event.emit(ExpansionTakenEvent(api.step, natural))
+api.event.emit(ExpansionTakenEvent(natural))
 ```
 
-A subclass of `Event` is a frozen, slotted dataclass of the fields it declares, `step` first, without a `@dataclass`
-of its own, which fails. `api.event.emit` hands an event to its handlers, which have all run by the time it returns;
-a handler may emit an event itself. It takes NachOS's own events too, so a bot's handlers can be tested without a
-game.
+A subclass of `Event` is a frozen, slotted dataclass of the fields it declares, without a `@dataclass` of its own,
+which fails. Every event has a `step`, given by keyword, and one made without it is given the step of the game being
+played as it is emitted. `api.event.emit` hands an event to its handlers, by their priority, and they have all run by
+the time it returns; a handler may emit an event itself. It takes NachOS's own events too, so a bot's handlers can be
+tested without a game, given a step.
 
 ## When events come
 
@@ -81,6 +79,12 @@ A game hands out `GameStartEvent`, then a turn for each observation but the last
 out `TurnStartEvent`, then what its observation reports has happened, in the order of the tables below, then
 `TurnEvent`.
 
+- **A turn goes out priority first.** After `TurnStartEvent`, every handler of the highest priority is handed each
+  event of the turn it selects, `TurnEvent` last, before any handler of the next priority is handed any. Priorities
+  run from `EventPriority.HIGHEST` to `LOWEST`, `MEDIUM` by default, and the handlers of one priority for one event in
+  the order they subscribed, whichever class each subscribed to. So a handler at `HIGH` sees every death and sighting
+  of a turn before any handler at `MEDIUM` acts on one, and a bot's `TurnEvent` handler comes after the turn's events
+  of its own priority. An event a handler emits goes out at once, by its own handlers' priorities.
 - **An event's step is when NachOS learned of it.** What happened out of sight is reported when it is next seen: a
   morph in the fog, a structure that died there, a unit's energy regenerated.
 - **The first turn reports the units the game starts with as created.** The observation a game ends on gets no turn,
@@ -126,9 +130,8 @@ Compared with the observation before, for units in vision in both, or watched fr
 |---|---|---|---|
 | `OwnUnitDamagedEvent`, `EnemyUnitDamagedEvent` | `unit`, `damage` | `only(*unit_types)` | a unit lost health or shields, and kept its type |
 | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent` | `unit`, `energy_lost` | `only(*unit_types)` | a unit lost energy, and kept its type |
-| `OwnUnitEnergyReachedEvent`, `EnemyUnitEnergyReachedEvent` | `unit`, `energy` | `of(unit_type, energy)` | a unit's energy is at or above the value, having last been below it |
-| `OwnUnitLifeFractionReachedEvent`, `EnemyUnitLifeFractionReachedEvent` | `unit`, `fraction` | `of(fraction)` | a unit's health and shields are at or above the fraction, having last been below it: `of(1.0)` is back to full |
-| `OwnUnitLifeFractionDroppedEvent`, `EnemyUnitLifeFractionDroppedEvent` | `unit`, `fraction` | `of(fraction)` | a unit's health and shields are below the fraction, having last been at or above it |
+| `OwnUnitVitalReachedEvent`, `EnemyUnitVitalReachedEvent` | `unit`, `vital`, `value` | `of(vital, value, *unit_types)` | a unit's vital is at or above the value, having last been below it: `of(VitalType.LIFE_FRACTION, 1.0)` is back to full |
+| `OwnUnitVitalDroppedEvent`, `EnemyUnitVitalDroppedEvent` | `unit`, `vital`, `value` | `of(vital, value, *unit_types)` | a unit's vital is below the value, having last been at or above it |
 | `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` | `unit`, `previous_cloak` | `only(*unit_types)` | a unit cloaked or uncloaked, or an enemy unit came to be detected or no longer is |
 | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent` | `unit`, `buff` | `only(*buffs)` | a unit wears a buff it did not |
 | `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` | `unit`, `buff` | `only(*buffs)` | a unit no longer wears a buff it did |
@@ -137,6 +140,9 @@ Compared with the observation before, for units in vision in both, or watched fr
 | `OwnUnitEnteredAreaEvent`, `EnemyUnitEnteredAreaEvent` | `unit`, `area` | `of(area)` | a unit in sight is inside the area, having last been outside it or never seen |
 | `OwnUnitLeftAreaEvent`, `EnemyUnitLeftAreaEvent` | `unit`, `area` | `of(area)` | a unit in sight is outside the area, having last been inside it |
 
+- **A vital is a `VitalType`**: health, shields, life (the two together) or energy, as an amount or a fraction of
+  its most. `of` takes the unit types to watch it for, or watches every type when given none. A unit without shields
+  or energy, whose most is 0, has none to cross.
 - **Reached and dropped never come for what a unit was first seen with**, and not again until the unit has been on the
   other side of the value. A value itself counts as reached.
 - **A watch takes what it finds on its first turn as it stands**, and reports from the turn after. An area watch then

@@ -1,6 +1,7 @@
 """What an api tells its handlers about."""
 
 from collections.abc import Callable, Hashable
+from dataclasses import field
 from typing import Any, Self
 
 from sc2nachos.events._event_filter import EventFilter
@@ -9,7 +10,10 @@ from sc2nachos.geometry import Area
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
-from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType
+from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
+
+# The step of an event made without one, which `EventBus.emit` replaces with the step of the game being played.
+_NO_STEP = -1
 
 
 class Event(metaclass=_EventMeta):
@@ -19,8 +23,9 @@ class Event(metaclass=_EventMeta):
     `@dataclass` of its own, which fails. A handler of a class is handed the events of its subclasses too.
     """
 
-    step: int
-    """The step of the observation it comes with."""
+    step: int = field(default=_NO_STEP, kw_only=True)
+    """The step of the observation it comes with. One made without it is given the step of the game being played as
+    it is emitted."""
 
     @classmethod
     def where(cls, predicate: Callable[[Self], bool], /) -> EventFilter[Self]:
@@ -171,89 +176,60 @@ class EnemyUnitEnergyLostEvent(_UnitEvent):
     """The energy it lost since the observation before, less what it regenerated in between."""
 
 
-class _EnergyReachedEvent(ParameterizedEvent):
-    """A unit's energy has reached a value."""
+class _VitalEvent(ParameterizedEvent):
+    """A unit's health, shields or energy has crossed a value."""
 
     unit: Unit[Any]
-    energy: float
-    """The value it reached, as `of` was given it."""
-
-    @classmethod
-    def of(cls, unit_type: type[UnitType.AnyType] | UnitTypeId, energy: float, /) -> EventFilter[Self]:
-        """The events of units of `unit_type` reaching `energy`, for `on`. `unit_type` is a `UnitType`, a group of
-        them, or a `UnitTypeId`.
-
-        Raises `ValueError` unless `energy` is above 0.
-        """
-        if not energy > 0:
-            raise ValueError(f"energy is reached above 0, not at {energy}")
-        return EventFilter(cls, keys=frozenset((type_id, float(energy)) for type_id in _type_ids((unit_type,))))
-
-    def _key(self) -> Hashable:
-        return self.unit.type_id, self.energy
-
-
-class OwnUnitEnergyReachedEvent(_EnergyReachedEvent):
-    """A unit of this player's in vision is seen with at least the energy `of` was given, having last been seen in
-    vision with less: never a unit first seen with it, and not again until it has been seen with less."""
-
-    unit: OwnUnit[Any]
-
-
-class EnemyUnitEnergyReachedEvent(_EnergyReachedEvent):
-    """A unit of the enemy's in vision is seen with at least the energy `of` was given, having last been seen in vision
-    with less: never a unit first seen with it, and not again until it has been seen with less. One that regenerated it
-    out of sight is reported when it is next seen."""
-
-
-class _LifeFractionEvent(ParameterizedEvent):
-    """A unit's health and shields together, as a fraction of their most, have crossed a value: risen to it, or fallen
-    below it."""
-
-    unit: Unit[Any]
-    fraction: float
+    vital: VitalType
+    """What of its health, shields and energy crossed the value."""
+    value: float
     """The value it crossed, as `of` was given it."""
 
     @classmethod
-    def of(cls, fraction: float, /) -> EventFilter[Self]:
-        """The events of units crossing `fraction` of their health and shields together, for `on`.
+    def of(
+        cls, vital: VitalType, value: float, /, *unit_types: type[UnitType.AnyType] | UnitTypeId
+    ) -> EventFilter[Self]:
+        """The events of units of `unit_types`, or of any type if none is given, whose `vital` crosses `value`, for
+        `on`. Each of `unit_types` is a `UnitType`, a group of them, or a `UnitTypeId`.
 
-        Raises `ValueError` unless `fraction` is above 0 and at most 1.
+        Raises `ValueError` unless `value` is above 0, and at most 1 for a fraction.
         """
-        if not 0 < fraction <= 1:
-            raise ValueError(f"a life fraction is above 0 and at most 1, not {fraction}")
-        return EventFilter(cls, keys=frozenset((float(fraction),)))
+        if not value > 0 or (vital.is_fraction and value > 1):
+            most = " and at most 1" if vital.is_fraction else ""
+            raise ValueError(f"a {vital.value} is crossed above 0{most}, not at {value}")
+        types = _type_ids(unit_types) if unit_types else _EVERY_TYPE
+        return EventFilter(cls, keys=frozenset((vital, float(value), type_id) for type_id in types))
 
     def _key(self) -> Hashable:
-        return self.fraction
+        return self.vital, self.value, self.unit.type_id
 
 
-class OwnUnitLifeFractionReachedEvent(_LifeFractionEvent):
-    """A unit of this player's in vision is seen with at least the fraction `of` was given of its health and shields
-    together, having last been seen in vision with less: `of(1.0)` is a unit back to full. Never a unit first seen at
-    it, and not again until it has been seen below it."""
+class OwnUnitVitalReachedEvent(_VitalEvent):
+    """A unit of this player's in vision is seen with at least the value `of` was given of a vital, having last been
+    seen in vision with less: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit back to full. Never a unit first seen at it,
+    and not again until it has been seen below it."""
 
     unit: OwnUnit[Any]
 
 
-class EnemyUnitLifeFractionReachedEvent(_LifeFractionEvent):
-    """A unit of the enemy's in vision is seen with at least the fraction `of` was given of its health and shields
-    together, having last been seen in vision with less. Never a unit first seen at it, and not again until it has been
-    seen below it."""
+class EnemyUnitVitalReachedEvent(_VitalEvent):
+    """A unit of the enemy's in vision is seen with at least the value `of` was given of a vital, having last been seen
+    in vision with less. One that regenerated past it out of sight is reported when it is next seen. Never a unit first
+    seen at it, and not again until it has been seen below it."""
 
 
-class OwnUnitLifeFractionDroppedEvent(_LifeFractionEvent):
-    """A unit of this player's in vision is seen with less than the fraction `of` was given of its health and shields
-    together, having last been seen in vision with at least it: `of(1.0)` is a unit hurt. Never a unit first seen below
+class OwnUnitVitalDroppedEvent(_VitalEvent):
+    """A unit of this player's in vision is seen with less than the value `of` was given of a vital, having last been
+    seen in vision with at least it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit hurt. Never a unit first seen below
     it, and not again until it has been seen at or above it."""
 
     unit: OwnUnit[Any]
 
 
-class EnemyUnitLifeFractionDroppedEvent(_LifeFractionEvent):
-    """A unit of the enemy's in vision is seen with less than the fraction `of` was given of its health and shields
-    together, having last been seen in vision with at least it. Never a unit first seen below it, and not again until
-    it has been seen at or above it."""
+class EnemyUnitVitalDroppedEvent(_VitalEvent):
+    """A unit of the enemy's in vision is seen with less than the value `of` was given of a vital, having last been
+    seen in vision with at least it. Never a unit first seen below it, and not again until it has been seen at or above
+    it."""
 
 
 class OwnUnitCloakChangedEvent(_UnitEvent):
@@ -412,6 +388,10 @@ class AlertEvent(Event):
 
     def _key(self) -> Hashable:
         return self.alert
+
+
+# Every type of unit, which a vital is watched for when `of` is given none.
+_EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType._type_ids
 
 
 def _type_ids(unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...]) -> frozenset[Hashable]:

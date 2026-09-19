@@ -260,7 +260,8 @@ def played(
         state = _State(observation, tracker, game_map)
         game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, observation, state, step)
     game._take_in(observation, step)
-    game.report(events)
+    events._at_step(step)
+    events._hand_out(game.report(events))
     return game
 
 

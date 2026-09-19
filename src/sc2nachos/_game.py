@@ -1,5 +1,6 @@
 """One game as it is played, and what each of its observations reports has happened, handed on as events."""
 
+import functools
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -16,16 +17,15 @@ from sc2nachos.events import (
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
-    EnemyUnitEnergyReachedEvent,
     EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
     EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
-    EnemyUnitLifeFractionDroppedEvent,
-    EnemyUnitLifeFractionReachedEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitVitalDroppedEvent,
+    EnemyUnitVitalReachedEvent,
     Event,
     EventBus,
     OwnActionEvent,
@@ -35,13 +35,12 @@ from sc2nachos.events import (
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
-    OwnUnitEnergyReachedEvent,
     OwnUnitEnteredAreaEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLeftAreaEvent,
-    OwnUnitLifeFractionDroppedEvent,
-    OwnUnitLifeFractionReachedEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitVitalDroppedEvent,
+    OwnUnitVitalReachedEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     ParameterizedEvent,
@@ -58,7 +57,7 @@ from sc2nachos.match import Result
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
 from sc2nachos.state._state import _State
-from sc2nachos.units import Unit
+from sc2nachos.units import Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeInference
 
@@ -123,79 +122,71 @@ class _Game:
         if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
             self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
-    def report(self, events: EventBus) -> None:
-        """Hand on to the handlers of `events` what the last observation reports has happened, as events a handler
-        still to run this game wants: every event of a type a handler takes whole, and those of the keys handlers
-        select through `only` or `of`."""
+    def report(self, events: EventBus) -> list[Event]:
+        """What the last observation reports has happened, as the events a handler of `events` still to run this game
+        wants, in the order they are handed out: every event of a type a handler takes whole, and those of the keys
+        handlers select through `only` or `of`."""
         tracker, observation = self.tracker, self.observation
         changes = tracker.last_changes
-        hand_on = self._hand_on
-        hand_on(events, OwnUnitCreatedEvent, changes.own_units_created, _unit_type)
-        hand_on(events, EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen, _unit_type)
-        hand_on(events, UnitTypeChangedEvent, changes.units_type_changed, _first_unit_type, pairs=True)
-        hand_on(events, UnitAllianceChangedEvent, changes.units_alliance_changed, _first_unit_type, pairs=True)
+        happened: list[Event] = []
+        hand_on = functools.partial(self._hand_on, events, happened)
+        hand_on(OwnUnitCreatedEvent, changes.own_units_created, _unit_type)
+        hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen, _unit_type)
+        hand_on(UnitTypeChangedEvent, changes.units_type_changed, _first_unit_type, tuples=True)
+        hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, _first_unit_type, tuples=True)
         if changes.own_units_created and _wants(events, OwnConstructionStartedEvent):
             started = [unit for unit in changes.own_units_created if not unit.is_complete and self._is_structure(unit)]
-            hand_on(events, OwnConstructionStartedEvent, started, _unit_type)
+            hand_on(OwnConstructionStartedEvent, started, _unit_type)
         if changes.own_units_finished:
             if _wants(events, OwnConstructionFinishedEvent):
                 built = [unit for unit in changes.own_units_finished if self._is_structure(unit)]
-                hand_on(events, OwnConstructionFinishedEvent, built, _unit_type)
+                hand_on(OwnConstructionFinishedEvent, built, _unit_type)
             if _wants(events, OwnWarpInFinishedEvent):
                 warped = [unit for unit in changes.own_units_finished if not self._is_structure(unit)]
-                hand_on(events, OwnWarpInFinishedEvent, warped, _unit_type)
-        hand_on(events, OwnUpgradeFinishedEvent, changes.own_upgrades_finished, _itself)
+                hand_on(OwnWarpInFinishedEvent, warped, _unit_type)
+        hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished, _itself)
         compared, watched = self._compare(events), self._watch(events)
+        own, enemy = changes.own, changes.enemy
         if compared:
-            hand_on(events, OwnUnitDamagedEvent, changes.own_units_damaged, _first_unit_type, pairs=True)
-            hand_on(events, EnemyUnitDamagedEvent, changes.enemy_units_damaged, _first_unit_type, pairs=True)
-            hand_on(events, OwnUnitEnergyLostEvent, changes.own_units_energy_lost, _first_unit_type, pairs=True)
-            hand_on(events, EnemyUnitEnergyLostEvent, changes.enemy_units_energy_lost, _first_unit_type, pairs=True)
+            hand_on(OwnUnitDamagedEvent, own.damaged, _first_unit_type, tuples=True)
+            hand_on(EnemyUnitDamagedEvent, enemy.damaged, _first_unit_type, tuples=True)
+            hand_on(OwnUnitEnergyLostEvent, own.energy_lost, _first_unit_type, tuples=True)
+            hand_on(EnemyUnitEnergyLostEvent, enemy.energy_lost, _first_unit_type, tuples=True)
         if watched:
-            own_energy, enemy_energy = changes.own_units_energy_reached, changes.enemy_units_energy_reached
-            hand_on(events, OwnUnitEnergyReachedEvent, own_energy, _unit_type_and_second, pairs=True)
-            hand_on(events, EnemyUnitEnergyReachedEvent, enemy_energy, _unit_type_and_second, pairs=True)
-            own_reached, enemy_reached = (
-                changes.own_units_life_fraction_reached,
-                changes.enemy_units_life_fraction_reached,
-            )
-            hand_on(events, OwnUnitLifeFractionReachedEvent, own_reached, _second, pairs=True)
-            hand_on(events, EnemyUnitLifeFractionReachedEvent, enemy_reached, _second, pairs=True)
-            own_dropped, enemy_dropped = (
-                changes.own_units_life_fraction_dropped,
-                changes.enemy_units_life_fraction_dropped,
-            )
-            hand_on(events, OwnUnitLifeFractionDroppedEvent, own_dropped, _second, pairs=True)
-            hand_on(events, EnemyUnitLifeFractionDroppedEvent, enemy_dropped, _second, pairs=True)
+            hand_on(OwnUnitVitalReachedEvent, own.vital_reached, _vital_key, tuples=True)
+            hand_on(EnemyUnitVitalReachedEvent, enemy.vital_reached, _vital_key, tuples=True)
+            hand_on(OwnUnitVitalDroppedEvent, own.vital_dropped, _vital_key, tuples=True)
+            hand_on(EnemyUnitVitalDroppedEvent, enemy.vital_dropped, _vital_key, tuples=True)
         if compared:
-            hand_on(events, OwnUnitCloakChangedEvent, changes.own_units_cloak_changed, _first_unit_type, pairs=True)
-            hand_on(events, EnemyUnitCloakChangedEvent, changes.enemy_units_cloak_changed, _first_unit_type, pairs=True)
-            hand_on(events, OwnUnitGainedBuffEvent, changes.own_units_gained_buff, _second, pairs=True)
-            hand_on(events, EnemyUnitGainedBuffEvent, changes.enemy_units_gained_buff, _second, pairs=True)
-            hand_on(events, OwnUnitLostBuffEvent, changes.own_units_lost_buff, _second, pairs=True)
-            hand_on(events, EnemyUnitLostBuffEvent, changes.enemy_units_lost_buff, _second, pairs=True)
-        hand_on(events, EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight, _unit_type)
-        hand_on(events, EnemyUnitLeftSightEvent, changes.enemy_units_left_sight, _unit_type)
+            hand_on(OwnUnitCloakChangedEvent, own.cloak_changed, _first_unit_type, tuples=True)
+            hand_on(EnemyUnitCloakChangedEvent, enemy.cloak_changed, _first_unit_type, tuples=True)
+            hand_on(OwnUnitGainedBuffEvent, own.gained_buff, _second, tuples=True)
+            hand_on(EnemyUnitGainedBuffEvent, enemy.gained_buff, _second, tuples=True)
+            hand_on(OwnUnitLostBuffEvent, own.lost_buff, _second, tuples=True)
+            hand_on(EnemyUnitLostBuffEvent, enemy.lost_buff, _second, tuples=True)
+        hand_on(EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight, _unit_type)
+        hand_on(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight, _unit_type)
         if watched:
-            hand_on(events, OwnUnitEnteredAreaEvent, changes.own_units_entered_area, _second, pairs=True)
-            hand_on(events, OwnUnitLeftAreaEvent, changes.own_units_left_area, _second, pairs=True)
-            hand_on(events, EnemyUnitEnteredAreaEvent, changes.enemy_units_entered_area, _second, pairs=True)
-            hand_on(events, EnemyUnitLeftAreaEvent, changes.enemy_units_left_area, _second, pairs=True)
-        hand_on(events, UnitDiedEvent, changes.units_died, _unit_type)
-        hand_on(events, UnitFoundDeadEvent, changes.units_found_dead, _unit_type)
-        emit, step = events.emit, self.step
+            hand_on(OwnUnitEnteredAreaEvent, own.entered_area, _second, tuples=True)
+            hand_on(OwnUnitLeftAreaEvent, own.left_area, _second, tuples=True)
+            hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, _second, tuples=True)
+            hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, _second, tuples=True)
+        hand_on(UnitDiedEvent, changes.units_died, _unit_type)
+        hand_on(UnitFoundDeadEvent, changes.units_found_dead, _unit_type)
+        emit, step = happened.append, self.step
         if observation.actions and events._has_handlers(OwnActionEvent):
             for action in self.state.actions:
-                emit(OwnActionEvent(step, action))
+                emit(OwnActionEvent(action, step=step))
         if observation.chat and events._has_handlers(ChatEvent):
             for message in observation.chat:
-                emit(ChatEvent(step, message.player_id, message.message))
+                emit(ChatEvent(message.player_id, message.message, step=step))
         if observation.observation.alerts and _wants(events, AlertEvent):
             every, keys = events._has_handlers(AlertEvent), events._wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
                 # `AlertError` and `TrainError` have no member, and are passed over.
                 if (alert := _ALERTS.get(value)) is not None and (every or alert in keys):
-                    emit(AlertEvent(step, alert))
+                    emit(AlertEvent(alert, step=step))
+        return happened
 
     def _compare(self, events: EventBus) -> bool:
         """Have the tracker compare each unit with the update before, as the damage, energy lost, cloak and buff events
@@ -221,30 +212,25 @@ class _Game:
         return True
 
     def _watch(self, events: EventBus) -> bool:
-        """Have the tracker watch each unit for the values and areas handlers select, or let go of what it kept when
+        """Have the tracker watch each unit for the vitals and areas handlers select, or let go of what it kept when
         none does. Say whether it watched."""
         watcher = self.tracker.watcher
         if not events._keyed:
             watcher.stop()
             return False
         keys = events._wanted_keys
-        own_energy, enemy_energy = keys(OwnUnitEnergyReachedEvent), keys(EnemyUnitEnergyReachedEvent)
-        own_reached, own_dropped = keys(OwnUnitLifeFractionReachedEvent), keys(OwnUnitLifeFractionDroppedEvent)
-        enemy_reached, enemy_dropped = keys(EnemyUnitLifeFractionReachedEvent), keys(EnemyUnitLifeFractionDroppedEvent)
+        own_reached, own_dropped = keys(OwnUnitVitalReachedEvent), keys(OwnUnitVitalDroppedEvent)
+        enemy_reached, enemy_dropped = keys(EnemyUnitVitalReachedEvent), keys(EnemyUnitVitalDroppedEvent)
         own_areas = keys(OwnUnitEnteredAreaEvent) | keys(OwnUnitLeftAreaEvent)
         enemy_areas = keys(EnemyUnitEnteredAreaEvent) | keys(EnemyUnitLeftAreaEvent)
-        if not any(
-            (own_energy, enemy_energy, own_reached, own_dropped, enemy_reached, enemy_dropped, own_areas, enemy_areas)
-        ):
+        if not any((own_reached, own_dropped, enemy_reached, enemy_dropped, own_areas, enemy_areas)):
             watcher.stop()
             return False
         watcher.watch(
-            own_energy=cast("frozenset[tuple[UnitTypeId, float]]", own_energy),
-            enemy_energy=cast("frozenset[tuple[UnitTypeId, float]]", enemy_energy),
-            own_life_reached=cast("frozenset[float]", own_reached),
-            own_life_dropped=cast("frozenset[float]", own_dropped),
-            enemy_life_reached=cast("frozenset[float]", enemy_reached),
-            enemy_life_dropped=cast("frozenset[float]", enemy_dropped),
+            own_reached=cast("frozenset[tuple[VitalType, float, UnitTypeId]]", own_reached),
+            own_dropped=cast("frozenset[tuple[VitalType, float, UnitTypeId]]", own_dropped),
+            enemy_reached=cast("frozenset[tuple[VitalType, float, UnitTypeId]]", enemy_reached),
+            enemy_dropped=cast("frozenset[tuple[VitalType, float, UnitTypeId]]", enemy_dropped),
             own_areas=cast("frozenset[Area]", own_areas),
             enemy_areas=cast("frozenset[Area]", enemy_areas),
         )
@@ -253,25 +239,27 @@ class _Game:
     def _hand_on(
         self,
         events: EventBus,
+        happened: list[Event],
         event_type: type[Event],
         found: Sequence[Any],
         key: Callable[[Any], Hashable],
         *,
-        pairs: bool = False,
+        tuples: bool = False,
     ) -> None:
-        """Hand on an event of `event_type` made of each of `found` a handler wants, of a pair if `pairs`: all of them
-        if a handler takes every event of the type, or else those whose key, read by `key`, a handler selects. A
-        parameterized event is made only for the keys selected, a handler of a base of it taking those."""
+        """Add to `happened` an event of `event_type` made of each of `found` a handler of `events` wants, of a tuple's
+        items if `tuples`: all of them if a handler takes every event of the type, or else those whose key, read by
+        `key`, a handler selects. A parameterized event is made only for the keys selected, a handler of a base of it
+        taking those."""
         if not found:
             return
         every = events._has_handlers(event_type) and not issubclass(event_type, ParameterizedEvent)
         keys = _NO_KEYS if every else events._wanted_keys(event_type)
         if not (every or keys):
             return
-        emit, step, make = events.emit, self.step, cast("Callable[..., Event]", event_type)
+        add, step, make = happened.append, self.step, cast("Callable[..., Event]", event_type)
         for item in found:
             if every or key(item) in keys:
-                emit(make(step, *item) if pairs else make(step, item))
+                add(make(*item, step=step) if tuples else make(item, step=step))
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""
@@ -325,10 +313,11 @@ def _first_unit_type(pair: tuple[Unit[Any], object]) -> Hashable:
 
 
 def _second(pair: tuple[object, Hashable]) -> Hashable:
-    """What `pair` holds beside its unit, the key of an event of it: a buff, a life fraction or an area."""
+    """What `pair` holds beside its unit, the key of an event of it: a buff or an area."""
     return pair[1]
 
 
-def _unit_type_and_second(pair: tuple[Unit[Any], float]) -> Hashable:
-    """The type of the unit `pair` starts with and the energy beside it, the key of an event of reaching it."""
-    return pair[0].type_id, pair[1]
+def _vital_key(crossed: tuple[Unit[Any], VitalType, float]) -> Hashable:
+    """The vital, the value and the type of the unit of `crossed`, the key of an event of crossing it."""
+    unit, vital, value = crossed
+    return vital, value, unit.type_id

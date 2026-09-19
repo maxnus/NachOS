@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import weakref
 from bisect import bisect_right
-from collections.abc import Callable, Hashable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, final, overload
@@ -61,18 +61,22 @@ class EventBus:
     An event is handed to the handlers of its class and of every class it derives from, in the order of their
     priorities, highest first, and those of one priority in the order they subscribed. So a handler of `Event` is
     handed every event, and has NachOS make every type of event it would otherwise not, the comparison of every unit
-    with the observation before included.
+    with the observation before included. The events of a turn go out priority first: every handler of one priority
+    is handed each event of the turn it selects, in the turn's order, before any handler of the next.
     """
 
     __slots__ = (
+        "_by_priority",
         "_handlers",
         "_keyed",
         "_marks",
         "_methods_of",
         "_resolved",
         "_selecting",
+        "_step",
         "_subscriptions",
         "_timings",
+        "_wanted",
     )
 
     def __init__(self, *, time_handlers: bool = False) -> None:
@@ -84,6 +88,11 @@ class EventBus:
         # run, and the classes among those one of whose handlers selects by key or predicate.
         self._resolved: dict[type[Event], tuple[_Handler, ...]] = {}
         self._selecting: set[type[Event]] = set()
+        # The same handlers grouped by priority, highest first, and the keys they select with those selecting them.
+        self._by_priority: dict[type[Event], tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]] = {}
+        self._wanted: dict[type[Event], tuple[frozenset[Hashable], tuple[_Handler, ...]]] = {}
+        # The step of the game being played, which an event emitted without one is given, or `None` between games.
+        self._step: int | None = None
         # How many handlers have subscribed, which numbers each to order the handlers of one priority across classes,
         # and how many subscribed now select by key.
         self._subscriptions = 0
@@ -144,11 +153,11 @@ class EventBus:
         A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
         method in a class body is marked instead, and is subscribed for an instance passed to `subscribe`.
 
-        `priority` says where among the event's handlers it runs. It runs on every event but the ones `every_steps`,
-        `at_step` or `once` hold it back from: `every_steps` waits until that many steps have passed since it last ran,
-        `at_step` runs it once, on the first event at or after that step, and `once` on the first event. These count
-        only the events selected. An exception it raises ends the game, unless `catch_exceptions`, which logs it and
-        goes on.
+        `priority` says where among the event's handlers it runs, and among a turn's, which goes out priority first. It
+        runs on every event but the ones `every_steps`, `at_step` or `once` hold it back from: `every_steps` waits until
+        that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that step,
+        and `once` on the first event. These count only the events selected. An exception it raises ends the game,
+        unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -288,6 +297,8 @@ class EventBus:
         """Forget which handlers each event class is handed to, since they have changed."""
         self._resolved.clear()
         self._selecting.clear()
+        self._by_priority.clear()
+        self._wanted.clear()
 
     def _resolve(self, event_type: type[Event]) -> tuple[_Handler, ...]:
         """The handlers the events of `event_type` are handed to, those of its bases included, in the order they run,
@@ -307,18 +318,20 @@ class EventBus:
         return bool(handlers) and any(not handler.done and handler.keys is None for handler in handlers)
 
     def _wanted_keys(self, event_type: type[Event]) -> frozenset[Hashable]:
-        """The keys of `event_type` a handler not done selects through `only` or `of`."""
+        """The keys of `event_type` a handler not done selects through `only` or `of`: the same set until one of those
+        handlers is done or the handlers change, since a unit type group makes a set of hundreds."""
         if not self._keyed:
             return _NO_KEYS
+        if (wanted := self._wanted.get(event_type)) is not None and not any(handler.done for handler in wanted[1]):
+            return wanted[0]
         if (handlers := self._resolved.get(event_type)) is None:
             handlers = self._resolve(event_type)
         if event_type not in self._selecting:
             return _NO_KEYS
-        wanted: set[Hashable] = set()
-        for handler in handlers:
-            if not handler.done and (keys := handler.keys) is not None:
-                wanted.update(keys)
-        return frozenset(wanted)
+        selecting = tuple(handler for handler in handlers if not handler.done and handler.keys is not None)
+        keys = frozenset().union(*(handler.keys for handler in selecting if handler.keys is not None))
+        self._wanted[event_type] = (keys, selecting)
+        return keys
 
     def _start_game(self) -> None:
         """Forget what every handler has done, and how long it took."""
@@ -326,21 +339,60 @@ class EventBus:
             for handler in handlers:
                 handler.last_step = None
                 handler.done = False
+        self._wanted.clear()
         if self._timings is not None:
             self._timings = {}
 
+    def _at_step(self, step: int | None) -> None:
+        """Give the events emitted without a step from now on `step`, the game's, or none once it has ended."""
+        self._step = step
+
     def emit(self, event: Event) -> None:
         """Hand `event` to every handler of its type, or of a type it derives from, that selects it and is due to run,
-        each done with it by the time this returns. A handler may emit an event itself."""
+        each done with it by the time this returns. A handler may emit an event itself.
+
+        An event made without a step is given the step of the game being played. Raises `ValueError` for one when no
+        game is.
+        """
+        if event.step < 0:
+            if self._step is None:
+                raise ValueError(f"{event!r} has no step, and no game is being played to give it one")
+            object.__setattr__(event, "step", self._step)
         if (handlers := self._resolved.get(type(event))) is None:
             handlers = self._resolve(type(event))
-        if not handlers:
-            return
-        if type(event) in self._selecting:
-            handlers = _selecting_handlers(handlers, event)
+        if handlers:
+            self._run(handlers, event)
+
+    def _hand_out(self, events: Sequence[Event]) -> None:
+        """Hand out the events of one turn, each with its step, priority first: every handler of the highest priority
+        is handed each event it selects, in the order of `events`, before any handler of the next priority is."""
+        passes: dict[EventPriority, list[tuple[Event, tuple[_Handler, ...]]]] = {}
+        for event in events:
+            for priority, handlers in self._grouped(type(event)):
+                passes.setdefault(priority, []).append((event, handlers))
+        for priority in sorted(passes, reverse=True):
+            for event, handlers in passes[priority]:
+                self._run(handlers, event)
+
+    def _grouped(self, event_type: type[Event]) -> tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]:
+        """The handlers the events of `event_type` are handed to, grouped by priority, highest first."""
+        if (grouped := self._by_priority.get(event_type)) is None:
+            if (handlers := self._resolved.get(event_type)) is None:
+                handlers = self._resolve(event_type)
+            groups: dict[EventPriority, list[_Handler]] = {}
+            for handler in handlers:
+                groups.setdefault(handler.priority, []).append(handler)
+            grouped = self._by_priority[event_type] = tuple(
+                (priority, tuple(group)) for priority, group in groups.items()
+            )
+        return grouped
+
+    def _run(self, handlers: tuple[_Handler, ...], event: Event) -> None:
+        """Hand `event` to each of `handlers` that selects it and is due to run."""
+        todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if type(event) in self._selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
         step = event.step
-        for handler in handlers:
+        for handler in todo:
             if handler.done:
                 continue
             if (every := handler.every_steps) is not None:
@@ -371,8 +423,8 @@ _NO_KEYS: frozenset[Hashable] = frozenset()
 
 
 def _selecting_handlers(handlers: tuple[_Handler, ...], event: Event) -> Iterator[_Handler]:
-    """The handlers of `handlers` that select `event`, and those done, which `emit` passes over. Each selects it as
-    its turn comes, after those before it have run. Kept out of `emit`, where the closure would slow every read of
+    """The handlers of `handlers` that select `event`, and those done, which `_run` passes over. Each selects it as
+    its turn comes, after those before it have run. Kept out of `_run`, where the closure would slow every read of
     its event."""
     key = event._key()
     return (handler for handler in handlers if handler.done or _selects(handler, event, key))
