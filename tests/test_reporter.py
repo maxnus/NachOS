@@ -1,6 +1,6 @@
 """What each observation reports has happened, handed on as events, driven by observations written here."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from typing import Any
 
@@ -16,13 +16,18 @@ from sc2nachos.events import (
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
+    EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
+    EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitVitalDroppedEvent,
+    EnemyUnitVitalReachedEvent,
     Event,
     EventBus,
+    EventFilter,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
@@ -30,8 +35,12 @@ from sc2nachos.events import (
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
+    OwnUnitEnteredAreaEvent,
     OwnUnitGainedBuffEvent,
+    OwnUnitLeftAreaEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitVitalDroppedEvent,
+    OwnUnitVitalReachedEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
@@ -40,14 +49,14 @@ from sc2nachos.events import (
     UnitTypeChangedEvent,
 )
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, Visibility
+from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, Visibility, VitalType
 from sc2nachos.units._tracking import _Tracker
 from support import (
     HAPPENINGS,
@@ -175,28 +184,28 @@ class TestWhatATurnReports:
         units = {unit.tag: unit for unit in game.tracker.units._units_by_id.values()}
         own = {tag: unit for tag, unit in units.items() if isinstance(unit, OwnUnit)}
         at_16 = {type(event): event for event in seen if event.step == 16}
-        assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(16, units[4], UnitTypeId.SIEGE_TANK)
-        assert at_16[UnitAllianceChangedEvent] == UnitAllianceChangedEvent(16, units[6], _ENEMY)
+        assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(units[4], UnitTypeId.SIEGE_TANK, step=16)
+        assert at_16[UnitAllianceChangedEvent] == UnitAllianceChangedEvent(units[6], _ENEMY, step=16)
         assert at_16[OwnConstructionFinishedEvent].unit is units[2]
         assert at_16[OwnWarpInFinishedEvent].unit is units[3]
-        assert at_16[OwnUpgradeFinishedEvent] == OwnUpgradeFinishedEvent(16, UpgradeId.STIMPACK)
-        assert at_16[OwnUnitDamagedEvent] == OwnUnitDamagedEvent(16, own[1], 5.0)
-        assert at_16[EnemyUnitDamagedEvent] == EnemyUnitDamagedEvent(16, units[13], 10.0)
-        assert at_16[OwnUnitEnergyLostEvent] == OwnUnitEnergyLostEvent(16, own[1], 25.0)
-        assert at_16[EnemyUnitEnergyLostEvent] == EnemyUnitEnergyLostEvent(16, units[13], 50.0)
-        assert at_16[OwnUnitCloakChangedEvent] == OwnUnitCloakChangedEvent(16, own[12], CloakState.NOT_CLOAKED)
-        assert at_16[EnemyUnitCloakChangedEvent] == EnemyUnitCloakChangedEvent(16, units[14], CloakState.CLOAKED)
-        assert at_16[OwnUnitGainedBuffEvent] == OwnUnitGainedBuffEvent(16, own[12], BuffId.GHOST_CLOAK)
-        assert at_16[OwnUnitLostBuffEvent] == OwnUnitLostBuffEvent(16, own[1], BuffId.MARINE_STIMMED)
-        gained = EnemyUnitGainedBuffEvent(16, units[13], BuffId.INFESTOR_FUNGAL_GROWTH)
+        assert at_16[OwnUpgradeFinishedEvent] == OwnUpgradeFinishedEvent(UpgradeId.STIMPACK, step=16)
+        assert at_16[OwnUnitDamagedEvent] == OwnUnitDamagedEvent(own[1], 5.0, step=16)
+        assert at_16[EnemyUnitDamagedEvent] == EnemyUnitDamagedEvent(units[13], 10.0, step=16)
+        assert at_16[OwnUnitEnergyLostEvent] == OwnUnitEnergyLostEvent(own[1], 25.0, step=16)
+        assert at_16[EnemyUnitEnergyLostEvent] == EnemyUnitEnergyLostEvent(units[13], 50.0, step=16)
+        assert at_16[OwnUnitCloakChangedEvent] == OwnUnitCloakChangedEvent(own[12], CloakState.NOT_CLOAKED, step=16)
+        assert at_16[EnemyUnitCloakChangedEvent] == EnemyUnitCloakChangedEvent(units[14], CloakState.CLOAKED, step=16)
+        assert at_16[OwnUnitGainedBuffEvent] == OwnUnitGainedBuffEvent(own[12], BuffId.GHOST_CLOAK, step=16)
+        assert at_16[OwnUnitLostBuffEvent] == OwnUnitLostBuffEvent(own[1], BuffId.MARINE_STIMMED, step=16)
+        gained = EnemyUnitGainedBuffEvent(units[13], BuffId.INFESTOR_FUNGAL_GROWTH, step=16)
         assert at_16[EnemyUnitGainedBuffEvent] == gained
-        lost = EnemyUnitLostBuffEvent(16, units[13], BuffId.SENTRY_GUARDIAN_SHIELD)
+        lost = EnemyUnitLostBuffEvent(units[13], BuffId.SENTRY_GUARDIAN_SHIELD, step=16)
         assert at_16[EnemyUnitLostBuffEvent] == lost
-        assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(16, units[5])
-        assert at_16[UnitDiedEvent] == UnitDiedEvent(16, units[8])
-        assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(16, units[900])
-        assert at_16[OwnActionEvent] == OwnActionEvent(16, CameraMove(12, Point((30.75, 139.0))))
-        assert at_16[ChatEvent] == ChatEvent(16, 2, "gl hf")
+        assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(units[5], step=16)
+        assert at_16[UnitDiedEvent] == UnitDiedEvent(units[8], step=16)
+        assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(units[900], step=16)
+        assert at_16[OwnActionEvent] == OwnActionEvent(CameraMove(12, Point((30.75, 139.0))), step=16)
+        assert at_16[ChatEvent] == ChatEvent(2, "gl hf", step=16)
         alerts = [event.alert for event in seen if isinstance(event, AlertEvent)]
         assert alerts == [Alert(value) for value in _EVERY_ALERT if value not in _PASSED_OVER]
 
@@ -225,13 +234,13 @@ class TestOnlyWhatIsWanted:
     ) -> None:
         game = _Game()
         made: list[type[Event]] = []
-        emit = EventBus._emit
+        hand_out = EventBus._hand_out
 
-        def counted(bus: EventBus, event: Event) -> None:
-            made.append(type(event))
-            emit(bus, event)
+        def counted(bus: EventBus, events: Sequence[Event]) -> None:
+            made.extend(type(event) for event in events)
+            hand_out(bus, events)
 
-        monkeypatch.setattr(EventBus, "_emit", counted)
+        monkeypatch.setattr(EventBus, "_hand_out", counted)
         record(game.events, wanted)
         _everything(game)
         assert made and set(made) == {wanted}
@@ -448,6 +457,308 @@ def _observer(cloak: CloakState, **fields: Any) -> raw_pb2.Unit:
     return make_unit(1, fields.pop("unit_type", UnitTypeId.OBSERVER), alliance=_ENEMY, cloak=cloak, **fields)
 
 
+# One key of each type `only` narrows, among several `_everything` reports events of that type for, or one.
+_ONE_KEY: list[EventFilter[Any]] = [
+    OwnUnitCreatedEvent.only(UnitTypeId.BARRACKS),
+    EnemyUnitFirstSeenEvent.only(UnitTypeId.ROACH),
+    UnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
+    UnitAllianceChangedEvent.only(UnitTypeId.MARINE),
+    OwnConstructionStartedEvent.only(UnitTypeId.BARRACKS),
+    OwnConstructionFinishedEvent.only(UnitTypeId.BARRACKS),
+    OwnWarpInFinishedEvent.only(UnitTypeId.ZEALOT),
+    OwnUpgradeFinishedEvent.only(UpgradeId.STIMPACK),
+    OwnUnitDamagedEvent.only(UnitTypeId.MARINE),
+    EnemyUnitDamagedEvent.only(UnitTypeId.HIGH_TEMPLAR),
+    OwnUnitEnergyLostEvent.only(UnitTypeId.MARINE),
+    EnemyUnitEnergyLostEvent.only(UnitTypeId.HIGH_TEMPLAR),
+    OwnUnitCloakChangedEvent.only(UnitTypeId.GHOST),
+    EnemyUnitCloakChangedEvent.only(UnitTypeId.OBSERVER),
+    OwnUnitGainedBuffEvent.only(BuffId.GHOST_CLOAK),
+    EnemyUnitGainedBuffEvent.only(BuffId.INFESTOR_FUNGAL_GROWTH),
+    OwnUnitLostBuffEvent.only(BuffId.MARINE_STIMMED),
+    EnemyUnitLostBuffEvent.only(BuffId.SENTRY_GUARDIAN_SHIELD),
+    EnemyUnitEnteredSightEvent.only(UnitTypeId.ROACH),
+    EnemyUnitLeftSightEvent.only(UnitTypeId.ZERGLING),
+    UnitDiedEvent.only(UnitTypeId.MARINE),
+    UnitFoundDeadEvent.only(UnitTypeId.SUPPLY_DEPOT),
+    AlertEvent.only(Alert.RESEARCH_COMPLETE),
+]
+
+
+class TestOnlySomeKeys:
+    @pytest.mark.parametrize("selected", _ONE_KEY, ids=lambda selected: selected.event_type.__name__)
+    def test_an_event_is_made_only_for_the_keys_selected(
+        self, selected: EventFilter[Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        game = _Game()
+        made: list[Event] = []
+        hand_out = EventBus._hand_out
+
+        def counted(bus: EventBus, events: Sequence[Event]) -> None:
+            made.extend(events)
+            hand_out(bus, events)
+
+        monkeypatch.setattr(EventBus, "_hand_out", counted)
+        game.events.on(selected)(lambda event: None)
+        _everything(game)
+        assert made and {type(event) for event in made} == {selected.event_type}
+        assert selected.keys is not None and all(event._key() in selected.keys for event in made)
+
+    def test_a_type_change_is_selected_by_the_type_changed_to(self) -> None:
+        game = _Game()
+        seen = record(game.events, UnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK))
+        _everything(game)
+        assert not seen
+
+    def test_a_buff_selected_is_the_only_one_compared_into_the_changes(self) -> None:
+        game = _Game()
+        game.events.on(OwnUnitLostBuffEvent.only(BuffId.MARINE_STIMMED))(lambda event: None)
+        _everything(game)
+        changes = game.tracker.last_changes
+        assert [buff for _, buff in changes.own.lost_buff] == [BuffId.MARINE_STIMMED]
+        assert not changes.own.gained_buff and not changes.enemy.gained_buff
+
+
+def _templar(energy: float, **fields: Any) -> raw_pb2.Unit:
+    tag, alliance = fields.pop("tag", 1), fields.pop("alliance", _ENEMY)
+    return make_unit(tag, UnitTypeId.HIGH_TEMPLAR, alliance=alliance, energy=energy, energy_max=200.0, **fields)
+
+
+def _zealot(health: float, shield: float, **fields: Any) -> raw_pb2.Unit:
+    return make_unit(
+        1,
+        UnitTypeId.ZEALOT,
+        alliance=fields.pop("alliance", _ENEMY),
+        health=health,
+        health_max=100.0,
+        shield=shield,
+        shield_max=50.0,
+        **fields,
+    )
+
+
+_STORM_READY = EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitTypeId.HIGH_TEMPLAR)
+
+
+class TestVitalReached:
+    def _steps(self, *units: raw_pb2.Unit | None, of: EventFilter[Any] = _STORM_READY) -> list[int]:
+        """The steps an enemy unit is reported reaching what `of` selects, 75 energy of a high templar unless told
+        otherwise, as each of `units` is observed in turn, `None` for an observation without it."""
+        game = _Game()
+        seen = record(game.events, of)
+        for step, unit in enumerate(units):
+            game.observe(step * 16, *([] if unit is None else [unit]))
+        return [event.step for event in seen]
+
+    def test_a_rise_across_the_value_is_reported_once(self) -> None:
+        assert self._steps(_templar(70), _templar(74), _templar(75), _templar(90), _templar(80)) == [32]
+
+    def test_a_drop_below_it_and_a_rise_again_is_reported_again(self) -> None:
+        assert self._steps(_templar(70), _templar(80), _templar(10), _templar(76)) == [16, 48]
+
+    def test_a_unit_first_seen_at_or_above_it_is_never_reported(self) -> None:
+        assert not self._steps(_templar(100), _templar(120))
+
+    def test_a_rise_out_of_vision_is_reported_when_the_unit_is_next_seen(self) -> None:
+        hidden = _templar(0, visibility=Visibility.INVISIBLE)
+        assert self._steps(_templar(70), None, hidden, _templar(90)) == [48]
+
+    def test_another_unit_type_is_not_watched(self) -> None:
+        archons = (make_unit(1, UnitTypeId.ARCHON, alliance=_ENEMY, energy=e, energy_max=200.0) for e in (70, 90))
+        assert not self._steps(*archons)
+
+    def test_a_unit_type_group_watches_every_type_in_it_and_none_every_type(self) -> None:
+        protoss = EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.Protoss)
+        assert self._steps(_templar(70), _templar(80), of=protoss) == [16]
+        assert self._steps(_templar(70), _templar(80), of=EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75)) == [16]
+
+    def test_each_side_is_reported_to_its_own_event(self) -> None:
+        game = _Game()
+        own = record(game.events, OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitTypeId.HIGH_TEMPLAR))
+        enemy = record(game.events, _STORM_READY)
+        game.observe(0, _templar(70, tag=1, alliance=Alliance.OWN), _templar(70, tag=2))
+        units = game.observe(16, _templar(80, tag=1, alliance=Alliance.OWN), _templar(70, tag=2))
+        assert [(event.step, event.unit, event.vital, event.value) for event in own] == [
+            (16, units[1], VitalType.ENERGY, 75.0)
+        ]
+        assert not enemy
+
+    def test_a_watch_starts_on_the_turn_its_handler_subscribed_reporting_nothing_that_turn(self) -> None:
+        game = _Game()
+        game.observe(0, _templar(70))
+        seen = record(game.events, _STORM_READY)
+        game.observe(16, _templar(80))
+        game.observe(32, _templar(10))
+        game.observe(48, _templar(80))
+        assert [event.step for event in seen] == [48]
+
+
+class TestVitals:
+    def _crossings(self, vital: VitalType, value: float, *units: raw_pb2.Unit) -> list[tuple[str, int]]:
+        """Each crossing of `value` of an enemy unit's `vital` reported, and its step, as each of `units` is observed in
+        turn."""
+        game = _Game()
+        watched = (EnemyUnitVitalReachedEvent.of(vital, value), EnemyUnitVitalDroppedEvent.of(vital, value))
+        seen = record(game.events, *watched)
+        for step, unit in enumerate(units):
+            game.observe(step * 16, unit)
+        return [(type(event).__name__, event.step) for event in seen]
+
+    def test_a_drop_below_the_value_and_a_rise_back_to_it_are_each_reported_once(self) -> None:
+        lives = [(100, 50), (50, 0), (30, 0), (70, 10), (100, 50)]
+        zealots = (_zealot(health, shield) for health, shield in lives)
+        assert self._crossings(VitalType.LIFE_FRACTION, 0.5, *zealots) == [
+            ("EnemyUnitVitalDroppedEvent", 16),
+            ("EnemyUnitVitalReachedEvent", 48),
+        ]
+
+    def test_the_value_itself_is_reached(self) -> None:
+        zealots = (_zealot(100, 50), _zealot(75, 0), _zealot(74, 0), _zealot(75, 0))
+        assert self._crossings(VitalType.LIFE_FRACTION, 0.5, *zealots) == [
+            ("EnemyUnitVitalDroppedEvent", 32),
+            ("EnemyUnitVitalReachedEvent", 48),
+        ]
+
+    @pytest.mark.parametrize(
+        ("vital", "value", "dropping"),
+        [
+            (VitalType.HEALTH, 80, _zealot(70, 50)),
+            (VitalType.SHIELD, 20, _zealot(100, 10)),
+            (VitalType.LIFE, 120, _zealot(90, 20)),
+            (VitalType.HEALTH_FRACTION, 0.8, _zealot(70, 50)),
+            (VitalType.SHIELD_FRACTION, 0.4, _zealot(100, 10)),
+            (VitalType.LIFE_FRACTION, 0.8, _zealot(90, 20)),
+            (VitalType.ENERGY, 50, _templar(40)),
+            (VitalType.ENERGY_FRACTION, 0.25, _templar(40)),
+        ],
+        ids=lambda value: value.name if isinstance(value, VitalType) else None,
+    )
+    def test_every_vital_is_read_as_its_type_says(self, vital: VitalType, value: float, dropping: raw_pb2.Unit) -> None:
+        full = _templar(100) if dropping.unit_type == UnitTypeId.HIGH_TEMPLAR else _zealot(100, 50)
+        assert self._crossings(vital, value, full, dropping, full) == [
+            ("EnemyUnitVitalDroppedEvent", 16),
+            ("EnemyUnitVitalReachedEvent", 32),
+        ]
+
+    @pytest.mark.parametrize("vital", [VitalType.SHIELD, VitalType.SHIELD_FRACTION, VitalType.ENERGY])
+    def test_a_unit_without_the_vital_has_none_to_cross(self, vital: VitalType) -> None:
+        marines = (make_unit(1, alliance=_ENEMY, health=health, health_max=45.0) for health in (45, 10, 45))
+        assert not self._crossings(vital, 0.5, *marines)
+
+    def test_a_unit_of_this_players_back_to_full(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0))
+        for step, health in enumerate((100, 60, 90, 100, 100)):
+            game.observe(step * 16, _zealot(health, 50, alliance=Alliance.OWN))
+        assert [event.step for event in seen] == [48]
+
+
+_AREA = Circle(Point((20.0, 20.0)), 5)
+_INSIDE, _OUTSIDE = (20.0, 21.0), (40.0, 40.0)
+
+
+class TestAreas:
+    def _crossings(
+        self, *positions: tuple[float, float] | None, area: Area = _AREA, **fields: Any
+    ) -> list[tuple[str, int]]:
+        """Each crossing of the edge of `area` reported of an enemy marine, and its step, as it is observed at each of
+        `positions` in turn, `None` for an observation without it."""
+        game = _Game()
+        seen = record(game.events, EnemyUnitEnteredAreaEvent.of(area), EnemyUnitLeftAreaEvent.of(area))
+        for step, at in enumerate(positions):
+            game.observe(step * 16, *([] if at is None else [make_unit(1, alliance=_ENEMY, at=at, **fields)]))
+        return [(type(event).__name__, event.step) for event in seen]
+
+    def test_entering_and_leaving(self) -> None:
+        assert self._crossings(_OUTSIDE, _INSIDE, _INSIDE, _OUTSIDE, _OUTSIDE) == [
+            ("EnemyUnitEnteredAreaEvent", 16),
+            ("EnemyUnitLeftAreaEvent", 48),
+        ]
+
+    def test_a_unit_first_seen_inside_has_entered(self) -> None:
+        assert self._crossings(None, _INSIDE) == [("EnemyUnitEnteredAreaEvent", 16)]
+
+    def test_what_the_watchs_first_turn_finds_inside_is_taken_as_it_stands(self) -> None:
+        assert self._crossings(_INSIDE, _INSIDE, _OUTSIDE) == [("EnemyUnitLeftAreaEvent", 32)]
+
+    def test_a_unit_out_of_sight_inside_that_turns_up_outside_has_left(self) -> None:
+        assert self._crossings(_OUTSIDE, _INSIDE, None, None, _OUTSIDE) == [
+            ("EnemyUnitEnteredAreaEvent", 16),
+            ("EnemyUnitLeftAreaEvent", 64),
+        ]
+
+    def test_a_unit_that_dies_inside_does_not_leave(self) -> None:
+        game = _Game()
+        seen = record(game.events, EnemyUnitEnteredAreaEvent.of(_AREA), EnemyUnitLeftAreaEvent.of(_AREA))
+        game.observe(0, make_unit(1, alliance=_ENEMY, at=_OUTSIDE))
+        game.observe(16, make_unit(1, alliance=_ENEMY, at=_INSIDE))
+        game.observe(32, dead=(1,))
+        game.observe(48)
+        assert [type(event) for event in seen] == [EnemyUnitEnteredAreaEvent]
+        assert not any(game.tracker.watcher._enemy._area_watches[_AREA].inside)
+
+    def test_an_enemy_unit_in_the_fog_is_not_counted(self) -> None:
+        assert not self._crossings(None, _INSIDE, visibility=Visibility.IN_FOG)
+
+    def test_a_cloaked_enemy_unit_in_sight_is_counted(self) -> None:
+        assert self._crossings(None, _INSIDE, visibility=Visibility.INVISIBLE) == [("EnemyUnitEnteredAreaEvent", 16)]
+
+    @pytest.mark.parametrize(
+        "area",
+        [Rectangle(18, 18, 4, 4), TileSet([Tile(20, 21)])],
+        ids=["Rectangle", "TileSet"],
+    )
+    def test_any_area(self, area: Area) -> None:
+        assert self._crossings(_OUTSIDE, _INSIDE, _OUTSIDE, area=area) == [
+            ("EnemyUnitEnteredAreaEvent", 16),
+            ("EnemyUnitLeftAreaEvent", 32),
+        ]
+
+    def test_units_of_this_players_to_their_own_events(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitEnteredAreaEvent.of(_AREA), OwnUnitLeftAreaEvent.of(_AREA))
+        for step, at in enumerate((_OUTSIDE, _INSIDE, _OUTSIDE)):
+            game.observe(step * 16, make_unit(1, at=at))
+        assert [(type(event), event.step, event.area) for event in seen] == [
+            (OwnUnitEnteredAreaEvent, 16, _AREA),
+            (OwnUnitLeftAreaEvent, 32, _AREA),
+        ]
+
+
+class TestWatching:
+    def test_nothing_is_watched_until_wanted_and_a_watch_ends_once_its_handlers_are_done(self) -> None:
+        game = _Game()
+        game.observe(0, _templar(70))
+        assert not game.tracker.watcher._enemy.watching
+        game.events.on(_STORM_READY)(lambda event: Done)
+        game.observe(16, _templar(70))
+        assert game.tracker.watcher._enemy._vital_ids
+        game.observe(32, _templar(80))
+        game.observe(48, _templar(80))
+        assert not game.tracker.watcher._enemy.watching
+
+    def test_what_is_watched_comes_in_its_place_in_a_turn(self) -> None:
+        game = _Game()
+        seen = record(
+            game.events,
+            EnemyUnitEnteredAreaEvent.of(_AREA),
+            EnemyUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.5),
+            _STORM_READY,
+            EnemyUnitEnergyLostEvent,
+            EnemyUnitLeftSightEvent,
+        )
+        leaving = make_unit(3, alliance=_ENEMY)
+        game.observe(0, _templar(100, tag=1), _templar(70, tag=2, at=_OUTSIDE, health=40, health_max=40), leaving)
+        game.observe(16, _templar(50, tag=1), _templar(80, tag=2, at=_INSIDE, health=10, health_max=40))
+        assert [type(event) for event in seen] == [
+            EnemyUnitEnergyLostEvent,
+            EnemyUnitVitalReachedEvent,
+            EnemyUnitVitalDroppedEvent,
+            EnemyUnitLeftSightEvent,
+            EnemyUnitEnteredAreaEvent,
+        ]
+
+
 @contextmanager
 def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
     """A game as `race` under `free` and `fast_build`, every event it hands out from its first observation on, and
@@ -494,6 +805,13 @@ def _of(seen: list[Any], *event_types: type[Event]) -> list[Any]:
     return [event for event in seen if type(event) in event_types]
 
 
+def _vitals(seen: list[Any], unit: Unit[Any]) -> list[Any]:
+    return [event for event in _of(seen, OwnUnitVitalReachedEvent, OwnUnitVitalDroppedEvent) if event.unit is unit]
+
+
+_AREAS = (OwnUnitEnteredAreaEvent, OwnUnitLeftAreaEvent)
+
+
 @pytest.mark.integration
 class TestAgainstTheRealGame:
     """Run with `pytest -m integration`. Each plays a few minutes of a game under cheats."""
@@ -515,7 +833,7 @@ class TestAgainstTheRealGame:
             assert died.unit is egg
             hatched = [event.unit.type_id for event in _of(seen, OwnUnitCreatedEvent) if event.step == died.step]
             assert UnitTypeId.DRONE in hatched
-            assert AlertEvent(died.step, Alert.TRAIN_WORKER_COMPLETE) in seen
+            assert AlertEvent(Alert.TRAIN_WORKER_COMPLETE, step=died.step) in seen
 
             # A drone becomes a spawning pool, and the game reports it dead as the pool finishes.
             drone = _own(game, UnitTypeId.DRONE)
@@ -531,7 +849,7 @@ class TestAgainstTheRealGame:
             _until(game, lambda: drone.is_dead)
             (drone_died,) = [event for event in _of(seen, UnitDiedEvent, UnitFoundDeadEvent) if event.unit is drone]
             assert type(drone_died) is UnitDiedEvent and drone_died.step - finished.step in (0, 4)
-            assert AlertEvent(finished.step, Alert.BUILDING_COMPLETE) in seen
+            assert AlertEvent(Alert.BUILDING_COMPLETE, step=finished.step) in seen
 
             # A zergling stays itself through its cocoon.
             game.debug(game.create(UnitTypeId.BANELING_NEST, game.open_ground(home.towards(middle, 10), size=3)))
@@ -565,7 +883,7 @@ class TestAgainstTheRealGame:
             assert [event.unit for event in _of(seen, OwnConstructionFinishedEvent)] == [depot]
             game.order(AbilityId.SUPPLY_DEPOT_LOWER, depot)
             _until(game, lambda: depot.type_id is UnitTypeId.SUPPLY_DEPOT_LOWERED)
-            assert UnitTypeChangedEvent(game.step, depot, UnitTypeId.SUPPLY_DEPOT) in seen
+            assert UnitTypeChangedEvent(depot, UnitTypeId.SUPPLY_DEPOT, step=game.step) in seen
 
             # An add-on is a unit of its own, seen as soon as it is started.
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 13), size=5)))
@@ -574,7 +892,7 @@ class TestAgainstTheRealGame:
             _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.REACTOR_BARRACKS), steps=1)
             reactor = _own(game, UnitTypeId.REACTOR_BARRACKS)
             assert reactor.build_progress < 0.1
-            assert OwnConstructionStartedEvent(game.step, reactor) in seen
+            assert OwnConstructionStartedEvent(reactor, step=game.step) in seen
             _until(game, lambda: reactor.is_complete)
             assert _alerts(seen, Alert.ADD_ON_COMPLETE)
 
@@ -582,8 +900,8 @@ class TestAgainstTheRealGame:
             center = _own(game, UnitTypeId.COMMAND_CENTER)
             game.order(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, center)
             _until(game, lambda: center.type_id is UnitTypeId.ORBITAL_COMMAND)
-            assert UnitTypeChangedEvent(game.step, center, UnitTypeId.COMMAND_CENTER) in seen
-            assert AlertEvent(game.step, Alert.UPGRADE_COMPLETE) in seen
+            assert UnitTypeChangedEvent(center, UnitTypeId.COMMAND_CENTER, step=game.step) in seen
+            assert AlertEvent(Alert.UPGRADE_COMPLETE, step=game.step) in seen
 
             # A research finishes.
             game.debug(game.create(UnitTypeId.ENGINEERING_BAY, game.open_ground(home.towards(middle, 18), size=3)))
@@ -601,7 +919,7 @@ class TestAgainstTheRealGame:
             bay = _of(seen, OwnConstructionStartedEvent)[-1].unit
             game.order(AbilityId.GENERAL_CANCEL_BUILDING, bay)
             _until(game, lambda: bay.is_dead)
-            assert UnitDiedEvent(game.step, bay) in seen
+            assert UnitDiedEvent(bay, step=game.step) in seen
 
             # A MULE is reported dead once it expires.
             field = min(
@@ -617,8 +935,8 @@ class TestAgainstTheRealGame:
             _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.MULE))
             mule = _own(game, UnitTypeId.MULE)
             _until(game, lambda: mule.is_dead, steps=100, turns=20)
-            assert UnitDiedEvent(game.step, mule) in seen
-            assert AlertEvent(game.step, Alert.MULE_EXPIRED) in seen
+            assert UnitDiedEvent(mule, step=game.step) in seen
+            assert AlertEvent(Alert.MULE_EXPIRED, step=game.step) in seen
 
     def test_cloaking_detection_and_buffs(self) -> None:
         with _played_as(Race.TERRAN) as (game, seen, middle):
@@ -692,8 +1010,8 @@ class TestAgainstTheRealGame:
             zealot = _own(game, UnitTypeId.ZEALOT)
             assert not zealot.is_complete
             _until(game, lambda: zealot.is_complete, steps=1)
-            assert OwnWarpInFinishedEvent(game.step, zealot) in seen
-            assert AlertEvent(game.step, Alert.WARP_IN_COMPLETE) in seen
+            assert OwnWarpInFinishedEvent(zealot, step=game.step) in seen
+            assert AlertEvent(Alert.WARP_IN_COMPLETE, step=game.step) in seen
 
             # Shields lost are damage.
             shields = debug_pb2.DebugSetUnitValue(
@@ -748,7 +1066,7 @@ class TestAgainstTheRealGame:
             game.turn(8)
             game.debug(game.create(UnitTypeId.OBSERVER, far + (3.0, 0.0)))
             _until(game, lambda: enemy.is_dead)
-            assert UnitFoundDeadEvent(game.step, enemy) in seen
+            assert UnitFoundDeadEvent(enemy, step=game.step) in seen
 
             # A feedback costs its caster 50 energy and drains its target's, which no buff or effect shows. `free`, a
             # toggle, would make it cost nothing, so it is turned off.
@@ -793,3 +1111,76 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.GHOST_EMP, ghost, target=raven.position)
             lost = lost_after(since, ghost, raven)
             assert lost[ghost] == pytest.approx(75, abs=1) and lost[raven] == pytest.approx(100, abs=1)
+
+    def test_energy_life_areas_and_selected_keys(self) -> None:
+        with _played_as(Race.PROTOSS) as (game, seen, middle):
+            home = _own(game, UnitTypeId.NEXUS).position
+            circle = Circle(home.towards(middle, 14), 4)
+            watched: list[Event] = []
+            for selected in (
+                OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar),
+                OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.7),
+                OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0),
+                OwnUnitEnteredAreaEvent.of(circle),
+                OwnUnitLeftAreaEvent.of(circle),
+                EnemyUnitEnteredAreaEvent.of(circle),
+            ):
+                game.events.on(selected)(lambda event: watched.append(event))
+            workers = record(game.events, AlertEvent.only(Alert.TRAIN_WORKER_COMPLETE))
+            structures = record(game.events, UnitDiedEvent.only(UnitType.Structure))
+
+            # A worker trained raises an alert the handler of that alert hears. Trained first, before the units made
+            # below take up the supply.
+            game.order(AbilityId.NEXUS_TRAIN_PROBE, _own(game, UnitTypeId.NEXUS))
+            _until(game, lambda: workers, steps=2)
+
+            # A high templar made with 50 energy, set to 70, regenerates across 75 once.
+            game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, home.towards(middle, 6)))
+            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.HIGH_TEMPLAR), steps=1)
+            templar = _own(game, UnitTypeId.HIGH_TEMPLAR)
+            energy = debug_pb2.DebugSetUnitValue(
+                unit_value=debug_pb2.DebugSetUnitValue.Energy, value=70, unit_tag=templar.tag
+            )
+            game.debug(debug_pb2.DebugCommand(unit_value=energy))
+            _until(game, lambda: _vitals(watched, templar))
+            (reached,) = _vitals(watched, templar)
+            assert (type(reached), reached.vital, reached.value) == (OwnUnitVitalReachedEvent, VitalType.ENERGY, 75)
+            assert templar.energy >= 75
+            game.turn(64)
+            assert len(_vitals(watched, templar)) == 1
+
+            # A zealot whose shields are set to 1 has 101 of 150 life left, and is back to full once they regenerate.
+            # The game passes over shields set to 0 (in game).
+            game.debug(game.create(UnitTypeId.ZEALOT, home.towards(middle, 20)))
+            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.ZEALOT), steps=1)
+            zealot = _own(game, UnitTypeId.ZEALOT)
+            shields = debug_pb2.DebugSetUnitValue(
+                unit_value=debug_pb2.DebugSetUnitValue.Shields, value=1, unit_tag=zealot.tag
+            )
+            game.debug(debug_pb2.DebugCommand(unit_value=shields))
+            _until(game, lambda: len(_vitals(watched, zealot)) == 2, steps=16)
+            assert [(type(event), event.vital, event.value) for event in _vitals(watched, zealot)] == [
+                (OwnUnitVitalDroppedEvent, VitalType.LIFE_FRACTION, 0.7),
+                (OwnUnitVitalReachedEvent, VitalType.LIFE_FRACTION, 1.0),
+            ]
+
+            # The zealot walks into the circle and out of it again, and an enemy overlord made inside it has entered it.
+            game.order(AbilityId.GENERAL_MOVE, zealot, target=circle.center)
+            _until(game, lambda: _of(watched, OwnUnitEnteredAreaEvent), steps=2)
+            game.order(AbilityId.GENERAL_MOVE, zealot, target=home.towards(middle, 20))
+            _until(game, lambda: _of(watched, OwnUnitLeftAreaEvent), steps=2)
+            assert [type(event) for event in _of(watched, *_AREAS) if event.unit is zealot] == list(_AREAS)
+            game.debug(game.create(UnitTypeId.OVERLORD, circle.center, owner=3 - game.player))
+            _until(game, lambda: _of(watched, EnemyUnitEnteredAreaEvent), steps=1)
+            (entered,) = _of(watched, EnemyUnitEnteredAreaEvent)
+            assert entered.unit.type_id is UnitTypeId.OVERLORD and entered.area == circle
+
+            # The handler of structures' deaths hears a pylon killed beside the zealot, and not the zealot.
+            game.debug(game.create(UnitTypeId.PYLON, game.open_ground(home.towards(middle, 9), size=2)))
+            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.PYLON), steps=1)
+            game.debug(game.kill(_own(game, UnitTypeId.PYLON), zealot))
+            _until(game, lambda: zealot.is_dead, steps=1)
+            assert [event.unit.type_id for event in structures] == [UnitTypeId.PYLON]
+            assert {event.unit.type_id for event in _of(seen, UnitDiedEvent)} >= {UnitTypeId.PYLON, UnitTypeId.ZEALOT}
+            assert {event.alert for event in workers} == {Alert.TRAIN_WORKER_COMPLETE}
+            assert workers == _alerts(seen, Alert.TRAIN_WORKER_COMPLETE)

@@ -8,7 +8,8 @@
 
 The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
-is in `docs/curating-ids.md`, and what the game has been seen to do in `docs/game-behavior.md`.
+is in `docs/curating-ids.md`, what the game has been seen to do in `docs/game-behavior.md`, and every event a game
+hands out in `docs/events.md`.
 
 ## Keep this file small
 
@@ -70,6 +71,7 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **Keyword-only args**: use `*` in signatures liberally.
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **Name a class for what it is responsible for**, so the name says what it does.
+- **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 - **Type hints** on all parameters and return types.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.

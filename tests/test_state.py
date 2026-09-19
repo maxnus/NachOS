@@ -347,7 +347,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         messages = record(game.events, ChatEvent)
         game.turn(1)
         game.turn(1)
-        assert messages == [ChatEvent(messages[0].step, game.player, "gl hf")]
+        assert messages == [ChatEvent(game.player, "gl hf", step=messages[0].step)]
 
         # A unit that dies is among the dead units in one observation only.
         game.debug(game.kill(zergling))

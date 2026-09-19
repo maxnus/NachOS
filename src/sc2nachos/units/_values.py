@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, final
 
 from s2clientprotocol import raw_pb2
@@ -53,6 +54,29 @@ class CloakState(ReadableIntEnum):
     """Not cloaked."""
     CLOAKED_ALLIED = raw_pb2.CloakState.CloakedAllied
     """Cloaked, and on this player's side, so seen all the same."""
+
+
+class VitalType(Enum):
+    """What of a unit's health, shields and energy a value is of: an amount, or a fraction of the most there can be.
+
+    A unit without shields or energy, whose most is 0, has none of either to read.
+    """
+
+    HEALTH = "health"
+    SHIELD = "shield"
+    LIFE = "life"
+    """Health and shields together."""
+    ENERGY = "energy"
+    HEALTH_FRACTION = "health fraction"
+    SHIELD_FRACTION = "shield fraction"
+    LIFE_FRACTION = "life fraction"
+    """Health and shields together, as a fraction of their most."""
+    ENERGY_FRACTION = "energy fraction"
+
+    @property
+    def is_fraction(self) -> bool:
+        """Whether it is a fraction of the most, from 0 to 1."""
+        return self.value.endswith("fraction")
 
 
 # The tag a rally is left holding once the unit it was onto is gone, as a mined-out mineral field is (corpus). No unit

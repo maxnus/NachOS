@@ -1,6 +1,7 @@
 """The recorded games everything above the protocol is tested against, and what they have to hold."""
 
 import contextlib
+from collections.abc import Hashable
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -14,23 +15,32 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
+    EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
+    EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
+    EnemyUnitVitalDroppedEvent,
+    EnemyUnitVitalReachedEvent,
     Event,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
+    OwnUnitEnteredAreaEvent,
+    OwnUnitLeftAreaEvent,
+    OwnUnitVitalDroppedEvent,
+    OwnUnitVitalReachedEvent,
     UnitDiedEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
+from sc2nachos.geometry import Circle, Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, ReplayTransport
 from sc2nachos.state._state import _State
-from sc2nachos.units import NotReportedError, OwnUnit, Unit
+from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 from support import HAPPENINGS
 
@@ -161,6 +171,76 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     drained = [event for event in seen if isinstance(event, OwnUnitEnergyLostEvent | EnemyUnitEnergyLostEvent)]
     assert all(event.energy_lost > 0 for event in drained)
     assert in_sight, "no enemy unit ever came into sight"
+    client.leave_game()
+    client.quit()
+
+
+_REACHED = (OwnUnitVitalReachedEvent, EnemyUnitVitalReachedEvent)
+_DROPPED = (OwnUnitVitalDroppedEvent, EnemyUnitVitalDroppedEvent)
+# A value of each vital that units of a game cross: half their most, or an amount many units have.
+_VALUES = {
+    VitalType.HEALTH: 50.0,
+    VitalType.SHIELD: 20.0,
+    VitalType.LIFE: 100.0,
+    VitalType.ENERGY: 50.0,
+    **{vital: 0.5 for vital in VitalType if vital.is_fraction},
+}
+_ENTERED = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent)
+_LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
+    """Each unit crossing a value of a vital is on the side of it it crossed to, each entering an area is inside it and
+    each leaving outside it, and each unit crosses each way in turn."""
+    recording = Recording(path)
+    game_map = GameMap(
+        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
+    )
+    client = Client(ReplayTransport(recording))
+    client.create_game("recorded", [Participant(), Computer()])
+    client.join_game(Race.RANDOM)
+    api = Api()
+    wrong: list[str] = []
+    crossed: dict[tuple[int, Hashable], bool] = {}
+
+    def crossing(event: Event, unit: Unit[Any], key: Hashable, onward: bool, *, holds: bool) -> None:
+        if not holds:
+            wrong.append(f"{event} does not hold of {unit}")
+        if crossed.get((unit.id, key)) is onward:
+            wrong.append(f"{event} twice in a row")
+        crossed[unit.id, key] = onward
+
+    def vital(event: Event) -> None:
+        assert isinstance(event, _REACHED + _DROPPED)
+        now, reached = getattr(event.unit, event.vital.value.replace(" ", "_")), isinstance(event, _REACHED)
+        holds = now >= event.value if reached else now < event.value
+        crossing(event, event.unit, (event.vital, event.value), reached, holds=holds)
+
+    def area(event: Event) -> None:
+        assert isinstance(event, _ENTERED + _LEFT)
+        entered = isinstance(event, _ENTERED)
+        crossing(event, event.unit, event.area, entered, holds=(event.unit.position in event.area) is entered)
+
+    for vital_type, value in _VALUES.items():
+        for event_type in _REACHED + _DROPPED:
+            api.event.on(event_type.of(vital_type, value))(vital)
+    # The units a game starts with stand around this player's main base, whose workers go to and fro across a circle
+    # around them.
+    starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]
+    home = Point((sum(pos.x for pos in starting) / len(starting), sum(pos.y for pos in starting) / len(starting)))
+    for watched in (
+        Circle(home, 4),
+        Circle(home, 20),
+        Circle(game_map.playable_area.center, 30),
+        *(Circle(at, 20) for at in game_map.opponent_start_locations),
+    ):
+        for event_type in _ENTERED + _LEFT:
+            api.event.on(event_type.of(watched))(area)
+    api.play(client)
+
+    assert not wrong, wrong[:5]
+    assert crossed, "no unit crossed anything watched"
     client.leave_game()
     client.quit()
 

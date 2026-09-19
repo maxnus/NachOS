@@ -23,6 +23,7 @@ from sc2nachos.events import (
     EnemyUnitLostBuffEvent,
     Event,
     EventBus,
+    EventFilter,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
@@ -229,8 +230,8 @@ HAPPENINGS: tuple[type[Event], ...] = (
 )
 
 
-def record(events: EventBus, *event_types: type[Event]) -> list[Any]:
-    """The events of `event_types` handed out from now on, in the order they were."""
+def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
+    """The events of `event_types`, or of what filters select, handed out from now on, in the order they were."""
     seen: list[Any] = []
     for event_type in event_types:
         events.on(event_type)(lambda event: seen.append(event))
@@ -259,7 +260,8 @@ def played(
         state = _State(observation, tracker, game_map)
         game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, observation, state, step)
     game._take_in(observation, step)
-    game.report(events)
+    events._set_step(step)
+    events._hand_out(game.report(events))
     return game
 
 

@@ -8,7 +8,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 ## The main changes
 
 - **A bot subscribes handlers to an `Api` rather than subclassing `BotAI`**, and nothing is `async`. `on_step` and
-  the other hooks become events ([Events](#events)).
+  the other hooks become events, of which a handler selects the ones it wants ([Events](#events),
+  [events.md](events.md)).
 - **Game time is counted in steps**, the game loop, never in iterations, and a turn is one step unless
   `steps_per_turn` says otherwise ([Running a game](#running-a-game), [Time](#time)).
 - **A unit is one object under one id for the whole game.** Out of sight it is stale, not gone, and only death ends
@@ -52,6 +53,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 
 ## Events
 
+[events.md](events.md) lists every event, what selects it, and when it comes.
+
 - **A bot's code runs in handlers, not in overridden methods.** `on_start`, `on_step` and `on_end` are handlers of
   `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.event.on(TurnEvent)`. A module-level
   function is subscribed as it is defined. A method is marked, and subscribed for an instance passed to
@@ -68,7 +71,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
   unsubscribes the old ones, or they go on handling events alongside the new.
 - **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent` in the
-  order `sc2nachos.events` gives, and made only for a type something subscribes to:
+  order [events.md](events.md) gives, and made only for a type something subscribes to:
 
   | python-sc2 | NachOS |
   |---|---|
@@ -82,8 +85,22 @@ reads it, is in [game-behavior.md](game-behavior.md).
   | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
   | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
   | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
-  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent`, whose `alert` is an `Alert` |
+  | nothing | a unit's health, shields or energy reaching a value or dropping below it, and a unit crossing the edge of an area, each through `of` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
 
+- **A handler selects the events it wants, rather than testing each one.** `AlertEvent.only(Alert.X)`,
+  `UnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` take the place of an `if` at
+  the top of a python-sc2 hook. `once` and `every_steps` then count only the events selected, and with `only` NachOS
+  does not make the rest. What python-sc2 leaves to a bot to compare every step, such as a caster's energy, is an
+  event through `of`: `OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)`.
+- **Priority orders a whole turn, not one event.** A turn's events go out priority first: every `HIGH` handler of
+  every event, then every `MEDIUM` one, with `TurnEvent` last in each. In python-sc2 the hooks run in a fixed order
+  before `on_step`, which a bot keeps by leaving its handlers at one priority.
+- **An event takes its step by keyword**, and one a bot emits without it is given the game's.
+- **A handler of a class is handed the events of its subclasses.** A handler of `Event` is handed every event, and
+  has NachOS make every type of event.
+- **A bot can define events of its own**, by subclassing `Event`, and send them with `api.event.emit`. python-sc2
+  has no events to extend.
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
   reported created on the first turn.
 - **An event's step is when NachOS learned of it.** A morph in the fog is reported when the unit is next seen, and a
