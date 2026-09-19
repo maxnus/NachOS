@@ -407,12 +407,16 @@ Each entry ends with how it was seen:
 - An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it. The tag it was
   seen under is refused, `NotSupported` (tool `sweep_orders`).
 - The game keeps a point to 1/4096, cut down: a move to x = 157.123456 is carried out and reported as 157.123291, and
-  one to 157.124456 as 157.124268. A builder's order shows its structure's site on the footprint's grid, a depot asked
-  at (162.3, 89.7) at (162, 90), and the reported action the point as sent (tool `sweep_orders`).
+  one to 157.124456 as 157.124268. A builder's order shows its structure's site snapped as the structure will stand,
+  on a tile corner for an even footprint and a tile center for an odd one: a depot asked at (86.3, 159.7) at
+  (86, 160), a barracks asked at (82.3, 158.7) at (82.5, 158.5). The reported action keeps the point as sent (tool
+  `sweep_orders`).
 - An unqueued order the same as a unit's first, by the ability it runs and the target to the 1/4096, is ignored: it
-  is answered `Success`, left out of the reported actions, and costs nothing. A marine's attack re-sent every step
-  dealt as much as one sent once, 186 to 202 over 448 steps either way, a move re-sent covered the same ground, and a
-  gather re-sent while the worker gathered mined as much. It still drops the orders queued behind the first. An
+  is answered `Success`, left out of the reported actions, and costs nothing. Four marines attacking pylons, each
+  standing at each of four sites in turn for 896 steps, dealt 1382 to 1397 in all whether their attack was sent once
+  or re-sent every step, every 4th or every 16th, each round within two shots of the others; a move re-sent covered the
+  same ground, and a gather re-sent while the worker gathered mined as much. It still drops the orders queued behind
+  the first. An
   order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the field with
   it, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool `sweep_orders`).
 - A builder whose site a unit of this player's holds position on gets a `CantBuildLocationInvalid` action error and

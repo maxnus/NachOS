@@ -171,6 +171,13 @@ class _Game:
         self.minerals = 0
         self.supply = (0, 0)
         self.running: Trial | None = None
+        # Every unit made by debug command, the enemy's among them, which a trial kills once done.
+        self.made: set[int] = set()
+        # What of the computer's can fight: everything with a weapon but its workers. It is killed as it comes, so
+        # that it never ends a long sweep's game.
+        workers = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE}
+        self._fighters = frozenset(row.id for row in self.data.units.values() if row.weapons) - workers
+        self._guarded_at = 0
         self.observe()
         self.ground = OpenGround(self.map, self.units.values())
         townhalls = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
@@ -202,6 +209,15 @@ class _Game:
             self.client.step(chunk)
             steps -= chunk
         self.observe()
+        if self.step - self._guarded_at >= 64:
+            self._guarded_at = self.step
+            fighters = [
+                tag
+                for tag, unit in self.units.items()
+                if unit.alliance == raw_pb2.Alliance.Enemy and unit.unit_type in self._fighters and tag not in self.made
+            ]
+            if fighters:
+                self.sandbox.kill(fighters)
 
     def until(self, done: Callable[[], bool], *, steps: int = 1, limit: int = 3000) -> bool:
         """Turn until `done`, for at most `limit` steps, and say whether it came to be."""
@@ -293,6 +309,7 @@ class _Game:
             made = [unit for tag, unit in self.units.items() if tag not in before and unit.unit_type == unit_type]
             if len(made) >= count:
                 break
+        self.made.update(unit.tag for unit in made)
         if len(made) < count:
             logger.warning("Made {} of the {} {} asked for", len(made), count, unit_type.name)
         return made
@@ -326,8 +343,12 @@ class _Game:
             trial.notes["failed"] = repr(error)
         finally:
             self.running = None
-        if clear and (made := [tag for tag, unit in self.units.items() if tag not in before and unit.owner != 16]):
-            self.kill(made)
+        # Only what this player has and what the trial made: killing what the computer makes has it give up.
+        new = [
+            tag for tag, unit in self.units.items() if tag not in before and (unit.alliance == _OWN or tag in self.made)
+        ]
+        if clear and new:
+            self.kill(new)
         logger.info("  verdicts {}, errors {}, notes {}", trial.verdicts, trial.errors, trial.notes)
         return trial
 
@@ -409,6 +430,7 @@ def _cast(game: _Game, performer: UnitTypeId, ability: int, queued: bool, pad: P
         requests += [(target, game.enemy, pad + (3, -2 + 2 * index)) for index, target in enumerate(_ENEMY_AIMS)]
         requests += [(target, game.player, pad + (-2, -2 + 4 * index)) for index, target in enumerate(_OWN_AIMS)]
     made = game.sandbox.spawn(requests)
+    game.made.update(unit.tag for unit in made)
     game.observe()
     caster = next((unit for unit in made if unit.unit_type == performer and unit.owner == game.player), None)
     if caster is None:
@@ -953,14 +975,22 @@ def _requests(game: _Game) -> list[Trial]:
         game.order(move, [unit], close)
         game.turn(2)
         game.read("sent 0.001 further", [unit])
-        (scv,) = game.own(UnitTypeId.SCV)[:1]
-        tile = game.spot(game.toward(18), 1)
-        off_grid = Point((int(tile.x) + 0.3, int(tile.y) + 0.7))
-        trial.notes["depot asked at"] = [off_grid.x, off_grid.y]
-        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], off_grid)
+        # A depot's footprint is even and a barracks' odd, each asked for off the grid.
+        builders = game.own(UnitTypeId.SCV)[:2]
+        asked: dict[str, list[float]] = {}
+        for builder, (label, ability, half) in zip(
+            builders,
+            (("depot", AbilityId.SCV_BUILD_SUPPLY_DEPOT, 1), ("barracks", AbilityId.SCV_BUILD_BARRACKS, 2)),
+            strict=True,
+        ):
+            tile = game.spot(game.toward(18), half)
+            off_grid = Point((int(tile.x) + 0.3, int(tile.y) + 0.7))
+            asked[label] = [off_grid.x, off_grid.y]
+            game.order(ability, [builder], off_grid)
+        trial.notes["structures asked at"] = asked
         game.turn(2)
-        game.read("an SCV sent to build off the grid", [scv])
-        game.order(AbilityId.GENERAL_STOP, [scv])
+        game.read("SCVs sent to build a depot and a barracks off the grid", builders)
+        game.order(AbilityId.GENERAL_STOP, builders)
 
     trials.append(game.trial("points kept to what precision", points))
 
@@ -1005,31 +1035,42 @@ def _repeats(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     attack_cadences = (*_CADENCES, ("every 16 steps", 16))
 
+    sites = [game.spot(game.toward(14 + 6 * index), 1) for index, _ in enumerate(attack_cadences)]
+
     def attacks(trial: Trial) -> None:
-        sites = [game.spot(game.toward(14 + 6 * index), 1) for index, _ in enumerate(attack_cadences)]
-        # Each marine is made first, so that it sees its pylon made.
-        marines = [game.create(UnitTypeId.MARINE, site.towards(game.home, 4))[0] for site in sites]
-        pylons = [game.create(UnitTypeId.PYLON, site, owner=game.enemy)[0] for site in sites]
-        life = {pylon.tag: pylon.health + pylon.shield for pylon in pylons}
-        for unit, pylon in zip(marines, pylons, strict=True):
-            game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
-        for step in range(1, 449):
-            game.turn(1)
-            for unit, pylon, (_, every) in zip(marines, pylons, attack_cadences, strict=True):
-                if every and step % every == 0:
-                    game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
-        trial.notes["damage over 448 steps"] = {
-            label: round(life[pylon.tag] - _life(game, pylon.tag), 1)
-            for (label, _), pylon in zip(attack_cadences, pylons, strict=True)
-        }
-        trial.notes["reports"] = {
-            label: sum(1 for entry in trial.reported if unit.tag in entry.get("units", []))  # type: ignore[operator]
-            for (label, _), unit in zip(attack_cadences, marines, strict=True)
-        }
+        # Each cadence stands at each site once, so that where a marine stands is told apart from how often its
+        # attack is re-sent.
+        damage: dict[str, list[float]] = {label: [] for label, _ in attack_cadences}
+        reports: dict[str, int] = dict.fromkeys(damage, 0)
+        for turn in range(len(sites)):
+            placed = [sites[(index + turn) % len(sites)] for index in range(len(attack_cadences))]
+            # Each marine is made first, so that it sees its pylon made, and the pylons are made in one request, so
+            # that every marine opens fire at the same step.
+            marines = [game.create(UnitTypeId.MARINE, site.towards(game.home, 4))[0] for site in placed]
+            pylons = _made_together(game, UnitTypeId.PYLON, placed, owner=game.enemy)
+            life = {pylon.tag: pylon.health + pylon.shield for pylon in pylons}
+            reported = len(trial.reported)
+            for unit, pylon in zip(marines, pylons, strict=True):
+                game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+            for step in range(1, 897):
+                game.turn(1)
+                for unit, pylon, (_, every) in zip(marines, pylons, attack_cadences, strict=True):
+                    if every and step % every == 0:
+                        game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+            for unit, pylon, (label, _) in zip(marines, pylons, attack_cadences, strict=True):
+                damage[label].append(round(life[pylon.tag] - _life(game, pylon.tag), 1))
+                reports[label] += sum(
+                    1
+                    for entry in trial.reported[reported:]
+                    if entry.get("ability") == "GENERAL_ATTACK_EXACT" and unit.tag in entry.get("units", [])  # type: ignore[operator]
+                )
+            game.kill([*marines, *pylons])
+        trial.notes["damage over 896 steps, at each site in turn"] = damage
+        trial.notes["damage in all"] = {label: round(sum(dealt), 1) for label, dealt in damage.items()}
+        trial.notes["attacks reported"] = reports
         _summarize(trial)
 
-    for attempt in (1, 2):
-        trials.append(game.trial(f"marines attacking pylons, their attacks re-sent, attempt {attempt}", attacks))
+    trials.append(game.trial("marines attacking pylons, their attacks re-sent, each cadence at each site", attacks))
 
     def moves(trial: Trial) -> None:
         covered: dict[str, float] = {}
@@ -1086,6 +1127,19 @@ def _repeats(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("an SCV mining, its gather re-sent", gathers, clear=False))
     return trials
+
+
+def _made_together(game: _Game, unit_type: UnitTypeId, sites: Sequence[Point], *, owner: int) -> list[raw_pb2.Unit]:
+    """One `unit_type` for `owner` at each of `sites`, all made in one request, in the order of `sites`."""
+    before = set(game.units)
+    game.sandbox.debug(*(game.sandbox.create(unit_type, owner, site) for site in sites))
+
+    def made() -> list[raw_pb2.Unit]:
+        return [unit for tag, unit in game.units.items() if tag not in before and unit.unit_type == unit_type]
+
+    game.until(lambda: len(made()) >= len(sites), limit=32)
+    game.made.update(unit.tag for unit in made())
+    return [min(made(), key=lambda unit: _at(unit).distance_to(site)) for site in sites]
 
 
 def _summarize(trial: Trial) -> None:

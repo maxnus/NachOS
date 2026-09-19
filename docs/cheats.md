@@ -11,7 +11,9 @@ sending one twice turns it off again.
   computer's attacks kill nothing a requirement is read off.
 - **`tech_tree` waives every requirement**, so what a unit is offered under it is not the command card a player has:
   a hydralisk den is offered `ResearchFrenzy` before a Hive stands. It also hands the player 42 upgrades within a few
-  steps. It can only add ids, so a dead id staying unoffered under it still counts as dead.
+  steps. It can only add ids, so a dead id staying unoffered under it still counts as dead. It changes production
+  too: under it a barracks without an add-on trains two marines at once, so `tools/sweep_orders.py` reads training
+  without it and makes what an order needs instead.
 - **`upgrade` grants campaign upgrades** as well as the ladder's, which lets campaign ids into what a unit is offered.
 - **`free` makes everything cost nothing, a spell's energy included; `all_resources` only hands out resources**, which
   run dry once add-ons have been rebuilt a few hundred times. Under `free` a high templar's feedback leaves it the
@@ -27,3 +29,5 @@ What debug commands make is not always what a player would have:
   can ever reach. Check `alliance` on the real thing before believing what a created one is offered.
 - **A creep tumor is created only on creep, and a plain `CREEP_TUMOR` never.** A queen's `CREEP_TUMOR_QUEEN` turned up
   beside a hatchery and at no spot off creep, and not at every spot on it either.
+- **A vital set to 0 is set to its most.** `DebugSetUnitValue` with 0 fills a unit's energy or shields rather than
+  emptying them, so a unit is drained to 1.
