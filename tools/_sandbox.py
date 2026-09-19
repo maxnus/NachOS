@@ -150,14 +150,16 @@ class Sandbox:
 
 
 @contextmanager
-def playing(race: Race, installation: Installation) -> Iterator[Sandbox]:
-    """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone."""
+def playing(race: Race, installation: Installation, *, realtime: bool = False) -> Iterator[Sandbox]:
+    """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone.
+    A `realtime` game runs on its own and is never stepped."""
     game_map = Map.find(MAP, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
         transport = WebSocketTransport.connect(game.url)
         with closing(Client(transport)) as client:
             try:
-                client.create_game(game_map.path, [Participant(), Computer(race, Difficulty.VERY_EASY)])
+                players = [Participant(), Computer(race, Difficulty.VERY_EASY)]
+                client.create_game(game_map.path, players, realtime=realtime)
                 player = client.join_game(race, name="NachOS")
                 yield Sandbox(client, transport, player)
             finally:
