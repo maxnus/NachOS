@@ -333,7 +333,8 @@ Each entry ends with how it was seen:
 - Creation abilities the tables name that are never offered and do nothing: the lurker's 2104 (2332 works), the rich
   refinery's 325 (a plain refinery on a rich geyser works), the baneling's 80 (4121), the auto-turret's 349 (1764,
   for 50 energy), the locust's 2018 (2704) and purification nova's 2546 (2346). Of the refinery rows 320 and 325,
-  only 320 works (#23, #29).
+  only 320 works. The rich assimilator's and rich extractor's rows name no creation ability; the plain one builds
+  on a rich geyser (#23, #29).
 - `RequestQueryAvailableAbilities` leaves out what a unit lacks the tech for, counts an add-on only for the structure
   it is attached to, ignores energy and cooldowns, and offers an unpowered structure nothing that needs power: a
   gateway trains nothing, though a probe is offered a gateway and a forge once a nexus stands, with no pylon (#29).
