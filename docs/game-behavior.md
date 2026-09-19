@@ -94,7 +94,8 @@ Each entry ends with how it was seen:
   research on debug-made structures included. Neither `free` nor `fast_build` grants an upgrade (#28, #33, #37).
 - `tech_tree` waives every requirement and grants 42 upgrades within a few steps, campaign ones included; the
   `upgrade` cheat grants campaign upgrades too. Both only ever add ids: a hydralisk is offered every race's
-  `BurrowDown` (#23, #28).
+  `BurrowDown` (#23, #28). Under `tech_tree` a barracks without an add-on trains two marines at once (tool
+  `sweep_orders`).
 - `god` stops this player's units taking damage and multiplies every weapon's damage in `ResponseData` by 10. Its
   effect on the tables is absent for a game's first ten steps, shows within 4 once 60 have run, and is gone within
   16 of turning it off (#30).
@@ -108,8 +109,10 @@ Each entry ends with how it was seen:
   and offered nothing, and Shatter ordered on it is refused (#23, #33).
 - A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
   a pylon powers it (#31).
-- Setting a unit's shields by debug command reads as shields lost (tested). Set to 0, they are left as they were;
-  set to 1, they regenerate straight away, 2 every 16 steps (#41; tested).
+- Setting a unit's shields by debug command reads as shields lost (tested). Set to 1, they regenerate straight away,
+  2 every 16 steps (#41; tested).
+- A vital set to 0 by debug command is set to its most: shields are left full, and energy reads 200 (#41, tool
+  `sweep_orders`).
 
 ## What an observation lists
 
@@ -358,14 +361,64 @@ Each entry ends with how it was seen:
   2, and the observation with the second carries a `NotEnoughFood` action error, as it does when the depot they need
   is killed. A depot ordered onto minerals gets `CantFindPlacementLocation`, and one whose ground a sieged tank then
   took a `CantBuildLocationInvalid` action error (tool `sweep_alerts`, #37).
-- A second SCV or drone ordered with no minerals left was answered `Success`, never made, and raised no error (tool
-  `sweep_alerts`, #37).
+- A second SCV or drone ordered with no minerals left, queued or not, is answered `Success`, never made, raises no
+  error, and is left out of the actions the next observation reports (tool `sweep_alerts`, #37; tool
+  `sweep_orders`).
 - A single passenger cannot be unloaded through `RequestAction`: it takes the UI action `ActionCargoPanelUnload`
   after a raw command with ability 0 selects the transport, with `raw_affects_selection` and a feature layer on. The
   medivac's unload abilities unload every passenger at once (stated).
 - Ability 0 is no ability, and Smart is the right-click order. `Cancel_Queue5` and
   `Cancel_QueueCancelToSelection` both remap to `Cancel_Last` (stated).
 - A player that gives no orders still has its workers mine: the game gives those orders itself (corpus).
+- Every action of a `RequestAction` gets a verdict, in the order sent, 500 in one request included, and the game
+  carries them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a
+  queued one clears it, and a queued one after an unqueued one goes behind it (tool `sweep_orders`).
+- Training and research go behind what a structure is making, queued or not: an unqueued train given to a command
+  center, hatchery or nexus that is training, or an unqueued research to an engineering bay, forge or evolution
+  chamber that is researching, waits its turn as a queued one does. A structure holds 5; a sixth is answered
+  `QueueIsFull`. A barracks with a reactor makes two marines at once, one without makes one (tool `sweep_orders`).
+- A morph given to a structure that is making something is refused, `NotSupported`, queued or not: an orbital command
+  or a planetary fortress to a command center training an SCV, a lair to a hatchery training a queen, a warp gate to
+  a gateway training a zealot. An idle command center morphs. A gateway that turns into a warp gate by itself once
+  the research is done waits for its zealot (tool `sweep_orders`).
+- A barracks training marines goes on training when given a rally or a cancel, which drops the last marine; a lift is
+  refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
+  production as it was, and a carrier goes on building interceptors through a stop (tool `sweep_orders`).
+- A research another structure of this player's is doing already is answered `Success`, and nothing is researched or
+  reported. A level queued behind the one before it, still being researched, is refused `NotSupported` (tool
+  `sweep_orders`).
+- A few abilities act at once and leave a unit's orders as they were, a move carrying on: stim, the banshee's and
+  ghost's cloak, the ghost's hold fire, the medivac's boost, Guardian Shield, the mothership's cloak field, the
+  oracle's pulsar beam, the void ray's prismatic alignment, the overlord's creep, the adept's shade and the
+  hydralisk's lunge. Every other ability a unit is offered replaces its orders when given unqueued: stop and hold
+  position, morphs, burrows, sieges and landing, blink, charge, hallucinations, force fields, and every spell aimed
+  at a unit or a point, even one within reach. Queued, each goes behind the move, but a cyclone's lock-on, which is
+  refused `NotSupported` (tool `sweep_orders`).
+- One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
+  their spacing, but a spell or a structure is carried out by one of them only: a storm by a templar with the energy
+  for it, a pylon by one of two probes. What cannot take the order is left out, and the verdict is `Success`: a
+  supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
+  `sweep_orders`).
+- A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
+  action it reports names the larva it used, which need not be the one ordered (tool `sweep_orders`).
+- An order to a dead unit's tag or to one never used is answered `Error`, and to an enemy unit
+  `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
+  move, a unit for a supply depot (tool `sweep_orders`).
+- An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it. The tag it was
+  seen under is refused, `NotSupported` (tool `sweep_orders`).
+- The game keeps a point to 1/4096, cut down: a move to x = 157.123456 is carried out and reported as 157.123291, and
+  one to 157.124456 as 157.124268. A builder's order shows its structure's site on the footprint's grid, a depot asked
+  at (162.3, 89.7) at (162, 90), and the reported action the point as sent (tool `sweep_orders`).
+- An unqueued order the same as a unit's first, by the ability it runs and the target to the 1/4096, is ignored: it
+  is answered `Success`, left out of the reported actions, and costs nothing. A marine's attack re-sent every step
+  dealt as much as one sent once, 186 to 202 over 448 steps either way, a move re-sent covered the same ground, and a
+  gather re-sent while the worker gathered mined as much. It still drops the orders queued behind the first. An
+  order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the field with
+  it, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool `sweep_orders`).
+- A builder whose site a unit of this player's holds position on gets a `CantBuildLocationInvalid` action error and
+  drops its order. One that gets there without the minerals waits there with its order, and no error, for 600 steps
+  at least. A storm queued behind a move, its energy gone meanwhile, is dropped with no error. An action error names
+  the unit and the ability, and comes in the observation the game gave up in (tool `sweep_orders`).
 
 ## Alerts and the camera
 
@@ -405,6 +458,12 @@ Each entry ends with how it was seen:
   chat is delivered (#28; tested).
 - An action names the ability as it runs: a move as `GENERAL_MOVE_EXACT` (16), a research ordered by its general id
   as its level (1186) (#28; tested).
+- The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
+  out at: one action per command, naming the units that took it, the ability as it runs, the target as sent and
+  whether it was queued. A camera move and an autocast toggle are reported too. An order refused, one answered
+  `Success` and not carried out, and one ignored as the same as a unit's first are not (tool `sweep_orders`).
+- In a local realtime game, an order shows in the unit's orders and among the reported actions in the same
+  observation, the next one (tool `sweep_orders`).
 
 ## Terrain, placement and pathing
 
