@@ -23,6 +23,9 @@ A function is subscribed as it is defined, and a method is marked, then subscrib
 `api.event.subscribe`. `on` takes a `priority`, and holds a handler back with `every_steps`, `at_step` or `once`. A
 handler that returns `Done` is called no more that game. Everything a handler has done starts afresh with each game.
 
+A bot that makes its api once can give `on` a short name beside it, `on = api.event.on`, and write `@on(TurnEvent)`,
+functions and methods alike. `api.event` still holds `subscribe`, `unsubscribe`, `emit` and `timings`.
+
 ## Selecting some events
 
 ```python
