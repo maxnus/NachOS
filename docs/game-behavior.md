@@ -377,11 +377,32 @@ Each entry ends with how it was seen:
 - Training and research go behind what a structure is making, queued or not: an unqueued train given to a command
   center, hatchery or nexus that is training, or an unqueued research to an engineering bay, forge or evolution
   chamber that is researching, waits its turn as a queued one does. A structure holds 5; a sixth is answered
-  `QueueIsFull`. A barracks with a reactor makes two marines at once, one without makes one (tool `sweep_orders`).
-- A morph given to a structure that is making something is refused, `NotSupported`, queued or not: an orbital command
-  or a planetary fortress to a command center training an SCV, a lair to a hatchery training a queen, a warp gate to
-  a gateway training a zealot. An idle command center morphs. A gateway that turns into a warp gate by itself once
-  the research is done waits for its zealot (tool `sweep_orders`).
+  `QueueIsFull`. A barracks with a reactor holds 8 and makes two marines at once; one with a tech lab or none holds 5
+  and makes one (tool `sweep_orders`).
+- A morph or an add-on given to a structure that is making something is refused, `NotSupported`, queued or not: an
+  orbital command or a planetary fortress to a command center training an SCV, a lair to a hatchery training a queen,
+  a warp gate to a gateway training a zealot, a tech lab to a barracks training a marine. An idle command center
+  morphs and an idle barracks builds its tech lab. A gateway that turns into a warp gate by itself once the research
+  is done waits for its zealot (tool `sweep_orders`).
+- Each action is judged against the game as the last step left it, not as the actions before it in the same step
+  leave it. When the game steps it carries them out in order, and drops what no longer fits without an error, and
+  leaves it out of the reported actions. Ten marines sent to a barracks one request at a time in one step are all
+  answered `Success`. Five are queued, or eight with a reactor, and the rest are dropped; of seven SCVs in one request
+  to a command center, five are queued. A cancel and then a marine to a barracks holding 5: the cancel is carried out
+  and the marine refused `QueueIsFull`, and a step later a marine is taken. To one holding 4, a cancel and then a
+  reaper are both carried out, and the reaper goes last. Cancels and then an orbital command to a command center
+  training SCVs, or a cancel and then a tech lab to a barracks training a marine, empty it and refuse the morph or
+  add-on `NotSupported`, and a step later it is taken. A cancel's refund pays for nothing sent in the same step. With
+  5 minerals, a cancel and then an SCV: the SCV is refused `NotEnoughMinerals`, and a step later the refunded 55 pay
+  for it. With none, 5 cancels and then an orbital command: the orbital is refused, and a step later the refunded 250
+  pay for it. Three cancels to a barracks training two marines are all answered `Success`, and two are carried out
+  (tool `sweep_orders`).
+- A structure's production can be cancelled through `RequestAction` only from its last item. `Cancel_Last` and a
+  structure's own cancel remove the last item, and a busy structure is offered no other: `Cancel_Queue5` for a
+  barracks or a bay, `Cancel_QueueCancelToSelection` for a command center. `Cancel_Slot` and the generic `Cancel` are
+  answered `Error`, and another structure's cancel and `CancelSlot_Queue5` `NotSupported`. The report names the
+  structure's own cancel, whichever was sent. A cancel to an idle structure is answered `Error`. An SCV cancelled
+  refunds its 50 minerals by the next observation, whether it was half made or only queued (tool `sweep_orders`).
 - A barracks training marines goes on training when given a rally or a cancel, which drops the last marine; a lift is
   refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
   production as it was, and a carrier goes on building interceptors through a stop (tool `sweep_orders`).

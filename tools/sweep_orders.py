@@ -19,6 +19,11 @@ names, and runs trials in turn::
 - `errors` plays without cheats, so that minerals and supply run short; `spell-errors` has orders fail for want of
   energy, and gives spells and builds to groups.
 - `realtime` plays a realtime game and watches for each order.
+- `queues` gives structures that are making something each cancel there is, more cancels than they hold, more to
+  make or a morph or an add-on after cancels, in the same request and a step later, and more marines than a barracks
+  with each add-on holds.
+- `refunds` plays without `free`, and has what a cancel refunds pay for what follows it, in the same request and a
+  step later.
 
 What it finds is written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
 the orders of the units the trial read, with when, what the game reported it carried out, every action error, and
@@ -30,6 +35,7 @@ what the trial measured. `docs/game-behavior.md` holds the findings. Measured in
   play without it and make what their orders need.
 - A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built before its move, so
   a unit's move is read off its orders rather than assumed.
+- The `gas` cheat hands out no vespene, so `refunds` has an SCV and an orbital command paid for, not a research.
 """
 
 import argparse
@@ -174,6 +180,7 @@ class _Game:
         self.step = 0
         self.units: dict[int, raw_pb2.Unit] = {}
         self.minerals = 0
+        self.vespene = 0
         self.supply = (0, 0)
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's among them, which a trial kills once done.
@@ -199,6 +206,7 @@ class _Game:
         self.units = {unit.tag: unit for unit in observation.raw_data.units}
         common = observation.player_common
         self.minerals = common.minerals
+        self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
@@ -1422,6 +1430,301 @@ def _realtime(game: _Game) -> list[Trial]:
     return trials
 
 
+# --- 9. Cancels, add-ons and how much a structure holds
+
+_CANCEL_LAST = AbilityId.GENERAL_CANCEL_LAST
+_TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
+_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
+_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
+_ORBITAL = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
+
+
+def _cancels(game: _Game, tag: int, count: int) -> list[sc2api_pb2.Action]:
+    return [game.command(_CANCEL_LAST, [tag]) for _ in range(count)]
+
+
+def _queues(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    # What an orbital command needs.
+    game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
+    tech_lab = AbilityId.BARRACKS_BUILD_TECH_LAB
+
+    def barracks(count: int) -> list[raw_pb2.Unit]:
+        # Room on the right for an add-on.
+        return [game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4))[0] for _ in range(count)]
+
+    def limits(trial: Trial) -> None:
+        paired, labbed, plain = barracks(3)
+        game.order(AbilityId.BARRACKS_BUILD_REACTOR, [paired])
+        game.order(tech_lab, [labbed])
+        game.until(
+            lambda: _add_on_finished(game, paired.tag) and _add_on_finished(game, labbed.tag), steps=16, limit=2400
+        )
+        cases = ((paired, "with a reactor"), (labbed, "with a tech lab"), (plain, "without an add-on"))
+        offered = game.sandbox.offered(each.tag for each, _ in cases)
+        for each, label in cases:
+            add_on = _add_on(game, each.tag)
+            trial.notes[f"{label}: its add-on, and the trains it is offered"] = [
+                None if add_on is None else [_type_name(add_on.unit_type), add_on.build_progress],
+                [_raw_name(ability) for ability in offered[each.tag] if "Train" in _raw_name(ability)],
+            ]
+            trial.notes[f"{label}: 10 marines in one step"] = [game.order(_MARINE, [each]) for _ in range(10)]
+            game.turn(2)
+            game.read(f"{label}, 10 marines given in one step", [each])
+            game.act(*_cancels(game, each.tag, 10))
+            game.turn(2)
+            stepped: list[str] = []
+            for _ in range(10):
+                stepped.append(game.order(_MARINE, [each]))
+                game.turn(1)
+            trial.notes[f"{label}: 10 marines one a step"] = stepped
+            game.read(f"{label}, 10 marines given one a step", [each])
+            game.act(*_cancels(game, each.tag, 10))
+        (center,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(12), 3))
+        game.act(*(game.command(_TRAIN_SCV, [center]) for _ in range(7)))
+        game.turn(2)
+        game.read("a command center given 7 SCVs in one request", [center])
+
+    # First, while there is room near the main base.
+    trials.append(game.trial("barracks with each add-on given 10 marines", limits))
+
+    def offered(trial: Trial) -> None:
+        (each,) = barracks(1)
+        (center,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(12), 3))
+        (bay,) = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(8), 2))
+        structures = [each, center, bay]
+        game.order(_MARINE, [each])
+        game.order(_TRAIN_SCV, [center])
+        game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, [bay])
+        game.turn(2)
+        game.read("each making something", structures)
+        trial.notes["cancels offered"] = {
+            _type_name(game.units[tag].unit_type): [_raw_name(a) for a in abilities if "ancel" in _raw_name(a)]
+            for tag, abilities in game.sandbox.offered(unit.tag for unit in structures).items()
+        }
+
+    trials.append(
+        game.trial("the cancels a barracks, a command center and a bay making something are offered", offered)
+    )
+
+    def which(trial: Trial) -> None:
+        tried = (
+            RawAbilityId.Cancel_Last,
+            RawAbilityId.Cancel_Slot,
+            RawAbilityId.Cancel_Queue5,
+            RawAbilityId.CancelSlot_Queue5,
+            RawAbilityId.Cancel_QueueCancelToSelection,
+            RawAbilityId.CancelSlot_QueueCancelToSelection,
+            RawAbilityId.Cancel,
+        )
+        pattern = (_MARINE, _REAPER, _MARINE, _REAPER, _MARINE)
+        trial.notes["queued"] = [_name(ability) for ability in pattern]
+        for ability, each in zip(tried, barracks(len(tried)), strict=True):
+            game.act(*(game.command(train, [each]) for train in pattern))
+            game.turn(2)
+            game.read(f"before {_raw_name(ability)}", [each])
+            game.order(ability, [each])
+            game.turn(2)
+            game.read(f"given {_raw_name(ability)}", [each])
+
+    trials.append(
+        game.trial("barracks with a marine, a reaper, a marine, a reaper and a marine given each cancel", which)
+    )
+
+    def beyond(trial: Trial) -> None:
+        busy, idle = barracks(2)
+        game.act(game.command(_MARINE, [busy]), game.command(_MARINE, [busy]))
+        game.turn(2)
+        trial.notes["given"] = [
+            "three cancels in one request to a barracks training two marines",
+            "a cancel to an idle one",
+        ]
+        game.act(*_cancels(game, busy.tag, 3))
+        game.order(_CANCEL_LAST, [idle])
+        game.turn(2)
+        game.read("after", [busy, idle])
+
+    trials.append(game.trial("more cancels than a barracks has marines", beyond))
+
+    def full(trial: Trial) -> None:
+        each, roomy = barracks(2)
+        game.act(*(game.command(_MARINE, [each]) for _ in range(5)))
+        game.act(*(game.command(_MARINE, [roomy]) for _ in range(4)))
+        game.turn(2)
+        game.read("5 marines and 4", [each, roomy])
+        trial.notes["given"] = [
+            "a cancel, then a marine, in one request to the one with 5",
+            "a cancel, then a reaper, in one request to the one with 4",
+            "a marine to the one with 5, a step later",
+        ]
+        game.act(game.command(_CANCEL_LAST, [each]), game.command(_MARINE, [each]))
+        game.act(game.command(_CANCEL_LAST, [roomy]), game.command(_REAPER, [roomy]))
+        game.turn(1)
+        game.read("after the requests", [each, roomy])
+        game.order(_MARINE, [each])
+        game.turn(1)
+        game.read("a marine a step later", [each])
+
+    trials.append(game.trial("barracks with 5 marines and with 4 given a cancel and one more", full))
+
+    def morph_after(trial: Trial) -> None:
+        centers = [game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(12), 3))[0] for _ in range(3)]
+        for each in centers:
+            game.act(game.command(_TRAIN_SCV, [each]), game.command(_TRAIN_SCV, [each]))
+        game.turn(2)
+        game.read("each training two SCVs", centers)
+        first, second, third = centers
+        trial.notes["given"] = [
+            "two cancels, then the orbital",
+            "one cancel, then the orbital",
+            "the orbital, then two cancels",
+            "then the orbital again to each, a step later",
+        ]
+        game.act(*_cancels(game, first.tag, 2), game.command(_ORBITAL, [first]))
+        game.act(*_cancels(game, second.tag, 1), game.command(_ORBITAL, [second]))
+        game.act(game.command(_ORBITAL, [third]), *_cancels(game, third.tag, 2))
+        game.turn(1)
+        game.read("after the requests", centers)
+        for each in centers:
+            game.order(_ORBITAL, [each])
+        game.turn(2)
+        game.read("the orbital again, a step later", centers)
+
+    trials.append(
+        game.trial("command centers training two SCVs given cancels and an orbital in one request", morph_after)
+    )
+
+    def add_ons(trial: Trial) -> None:
+        busy, queued, idle, cleared = barracks(4)
+        for each in (busy, queued, cleared):
+            game.order(_MARINE, [each])
+        game.turn(2)
+        trial.notes["given"] = [
+            "a tech lab to one training a marine",
+            "a tech lab queued to one training a marine",
+            "a tech lab to an idle one",
+            "a cancel, then a tech lab, in one request to one training a marine",
+            "then a tech lab to that one again, a step later",
+        ]
+        game.order(tech_lab, [busy])
+        game.order(tech_lab, [queued], queued=True)
+        game.order(tech_lab, [idle])
+        game.act(game.command(_CANCEL_LAST, [cleared]), game.command(tech_lab, [cleared]))
+        game.turn(1)
+        game.read("after the requests", [busy, queued, idle, cleared])
+        game.order(tech_lab, [cleared])
+        game.turn(2)
+        game.read("a tech lab again, a step later", [cleared])
+        game.turn(420)
+        game.read("420 steps later, a marine's time up", [busy, queued, idle, cleared])
+        trial.notes["add-ons"] = [
+            _type_name(add_on.unit_type) if (add_on := _add_on(game, each.tag)) is not None else None
+            for each in (busy, queued, idle, cleared)
+        ]
+
+    trials.append(game.trial("barracks given a tech lab", add_ons))
+    return trials
+
+
+def _refunds(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    (center,) = game.own(UnitTypeId.COMMAND_CENTER)[:1]
+    # What an orbital command needs.
+    game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
+    # Command centers whose SCVs take up what minerals are left over, so that a trial starts with as few as it asks.
+    sinks = [game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))[0] for _ in range(3)]
+
+    def mine_until(amount: int) -> None:
+        """Mine until there are `amount` minerals, then stop, so that no more come in."""
+        game.order(AbilityId.SCV_GATHER, game.own(UnitTypeId.SCV), _nearest_field(game))
+        game.until(lambda: game.minerals >= amount, steps=4, limit=6000)
+        game.order(AbilityId.GENERAL_STOP, game.own(UnitTypeId.SCV))
+        game.turn(2)
+
+    def spend_below(amount: int) -> None:
+        """Queue SCVs in the sinks until fewer than `amount` minerals are left."""
+        while game.minerals >= amount:
+            sink = next(sink for sink in sinks if len(game.units[sink.tag].orders) < 5)
+            game.order(_TRAIN_SCV, [sink])
+            game.turn(1)
+
+    def emptied(run: Callable[[Trial], None]) -> Callable[[Trial], None]:
+        """`run`, then the sinks and the command center emptied, their minerals back."""
+
+        def then_emptied(trial: Trial) -> None:
+            run(trial)
+            game.act(*(action for each in (*sinks, center) for action in _cancels(game, each.tag, 5)))
+
+        return then_emptied
+
+    def refund(trial: Trial) -> None:
+        mine_until(100)
+        game.act(game.command(_TRAIN_SCV, [center]), game.command(_TRAIN_SCV, [center]))
+        game.turn(136)
+        watched = [(game.step, game.minerals, [_order(order) for order in game.units[center.tag].orders])]
+        for _ in range(2):
+            game.order(_CANCEL_LAST, [center])
+            for _ in range(2):
+                game.turn(1)
+                watched.append((game.step, game.minerals, [_order(o) for o in game.units[center.tag].orders]))
+        trial.notes["step, minerals, orders; a cancel sent after the first and after the third"] = watched
+
+    trials.append(game.trial("two SCVs cancelled, the first half made", emptied(refund), clear=False))
+
+    def train_after(trial: Trial) -> None:
+        mine_until(200)
+        game.act(*(game.command(_TRAIN_SCV, [center]) for _ in range(4)))
+        game.turn(2)
+        spend_below(50)
+        game.read("4 SCVs queued", [center])
+        trial.notes["given"] = ["a cancel, then an SCV, in one request", "an SCV, a step later"]
+        minerals = [game.minerals]
+        game.act(game.command(_CANCEL_LAST, [center]), game.command(_TRAIN_SCV, [center]))
+        game.turn(1)
+        minerals.append(game.minerals)
+        game.read("after the request", [center])
+        game.order(_TRAIN_SCV, [center])
+        game.turn(1)
+        minerals.append(game.minerals)
+        game.read("an SCV a step later", [center])
+        trial.notes["minerals before, after the request, a step later"] = minerals
+
+    trials.append(
+        game.trial(
+            "a command center with 4 SCVs and too few minerals for another given a cancel and one",
+            emptied(train_after),
+            clear=False,
+        )
+    )
+
+    def orbital_after(trial: Trial) -> None:
+        (morphing,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))
+        mine_until(250)
+        game.act(*(game.command(_TRAIN_SCV, [morphing]) for _ in range(5)))
+        game.turn(2)
+        spend_below(50)
+        game.read("5 SCVs queued", [morphing])
+        trial.notes["given"] = ["5 cancels, then the orbital, in one request", "the orbital, a step later"]
+        minerals = [game.minerals]
+        game.act(*_cancels(game, morphing.tag, 5), game.command(_ORBITAL, [morphing]))
+        game.turn(1)
+        minerals.append(game.minerals)
+        game.read("after the request", [morphing])
+        game.order(_ORBITAL, [morphing])
+        game.turn(1)
+        minerals.append(game.minerals)
+        game.read("the orbital a step later", [morphing])
+        trial.notes["minerals before, after the request, a step later"] = minerals
+
+    trials.append(
+        game.trial(
+            "a command center with 5 SCVs, too few minerals for an orbital, given 5 cancels and the orbital",
+            emptied(orbital_after),
+        )
+    )
+    return trials
+
+
 _BASE_CHEATS = ("free", "food")
 # Each sweep: its race, its trials, the cheats it plays under, and whether it plays in realtime.
 _SWEEPS: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[str, ...], bool]] = {
@@ -1447,6 +1750,9 @@ _SWEEPS: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[str, ...], 
     "errors": (Race.TERRAN, _errors, (), False),
     "spell-errors": (Race.PROTOSS, _spell_errors, (*_BASE_CHEATS, "tech_tree"), False),
     "realtime": (Race.TERRAN, _realtime, _BASE_CHEATS, True),
+    "queues": (Race.TERRAN, _queues, _BASE_CHEATS, False),
+    # Not `free`, so that a cancel's refund counts.
+    "refunds": (Race.TERRAN, _refunds, ("food",), False),
 }
 
 
