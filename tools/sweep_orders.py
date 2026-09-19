@@ -47,7 +47,7 @@ from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_p
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
@@ -93,6 +93,11 @@ def _name(ability: int) -> str:
         return RawAbilityId(ability).name
     except ValueError:
         return str(ability)
+
+
+def _buff_name(buff: int) -> str:
+    curated = BuffId.get(buff)
+    return curated.name if curated is not None else str(buff)
 
 
 def _raw_name(ability: int) -> str:
@@ -251,6 +256,8 @@ class _Game:
             }
             if unit.energy_max:
                 entry["energy"] = round(unit.energy, 1)
+            if unit.buff_ids:
+                entry["buffs"] = [_buff_name(buff) for buff in unit.buff_ids]
             found.append(entry)
         if self.running is not None:
             self.running.reads.append({"label": label, "step": self.step, "units": found})
@@ -1148,6 +1155,33 @@ def _summarize(trial: Trial) -> None:
     trial.reported = trial.reported[:6]
 
 
+def _depot_site(game: _Game, trial: Trial) -> Point:
+    """A site far off that the game says a depot could go up on now, so that nothing but the minerals is in question."""
+    depot = AbilityId.SCV_BUILD_SUPPLY_DEPOT
+    site = game.spot(game.toward(32), 1) + (0.5, 0.5)
+    while not game.sandbox.placeable(depot, [site])[0]:
+        site = game.spot(game.toward(32), 1) + (0.5, 0.5)
+    trial.notes["site"] = [site.x, site.y]
+    return site
+
+
+def _watch_build(game: _Game, trial: Trial, builder: raw_pb2.Unit, site: Point, *, mining: bool) -> None:
+    """Record every 16 steps for 608 the minerals, how far `builder` is from `site`, its orders, and how far a depot
+    there has come. Unless `mining`, every other SCV that takes up work is stopped, so that no minerals come in."""
+    watched: list[tuple[int, int, float, list[str], float | None]] = []
+    for _ in range(38):
+        game.turn(16)
+        if not mining and (busy := [u for u in game.own(UnitTypeId.SCV) if u.tag != builder.tag and u.orders]):
+            game.order(AbilityId.GENERAL_STOP, busy)
+        unit = game.units[builder.tag]
+        there = next((u for u in game.own(UnitTypeId.SUPPLY_DEPOT) if _at(u).distance_to(site) < 1), None)
+        progress = None if there is None else round(there.build_progress, 2)
+        orders = [_name(order.ability_id) for order in unit.orders]
+        watched.append((game.step, game.minerals, round(_at(unit).distance_to(site), 1), orders, progress))
+    trial.notes["step, minerals, builder's distance, its orders, depot"] = watched
+    game.read("608 steps later", [builder])
+
+
 def _nearest_field(game: _Game) -> raw_pb2.Unit:
     fields = [unit for unit in game.units.values() if "MINERAL_FIELD" in _type_name(unit.unit_type)]
     return min(fields, key=lambda unit: _at(unit).distance_to(game.home))
@@ -1183,32 +1217,54 @@ def _errors(game: _Game) -> list[Trial]:
     def paid(trial: Trial) -> None:
         game.until(lambda: game.minerals >= 100, steps=16, limit=6000)
         builder, *others = game.own(UnitTypeId.SCV)
-        # A site the game says a depot could go up on now, so that nothing but the minerals is in question.
-        site = game.spot(game.toward(32), 1) + (0.5, 0.5)
-        while not game.sandbox.placeable(depot, [site])[0]:
-            site = game.spot(game.toward(32), 1) + (0.5, 0.5)
-        trial.notes["site"] = [site.x, site.y]
+        site = _depot_site(game, trial)
         # The rest stop mining, so that no minerals come in meanwhile.
         game.order(AbilityId.GENERAL_STOP, others)
         trial.notes["minerals before the depot"] = game.minerals
         game.order(depot, [builder], site)
         game.order(train_scv, [center])
-        # Every 16 steps: the minerals, how far the builder is from the site, and how far a depot there has come.
-        watched: list[tuple[int, int, float, float | None]] = []
-        for _ in range(38):
-            game.turn(16)
-            # An SCV trained meanwhile goes mining by itself, and is stopped as well.
-            if busy := [u for u in game.own(UnitTypeId.SCV) if u.tag != builder.tag and u.orders]:
-                game.order(AbilityId.GENERAL_STOP, busy)
-            unit = game.units[builder.tag]
-            depot_there = next((u for u in game.own(UnitTypeId.SUPPLY_DEPOT) if _at(u).distance_to(site) < 1), None)
-            progress = None if depot_there is None else round(depot_there.build_progress, 2)
-            watched.append((game.step, game.minerals, round(_at(unit).distance_to(site), 1), progress))
-        trial.notes["step, minerals, builder's distance, depot"] = watched
-        game.read("608 steps later", [builder, center])
+        _watch_build(game, trial, builder, site, mining=False)
         game.order(AbilityId.SCV_GATHER, others, _nearest_field(game))
 
     trials.append(game.trial("a depot ordered far off, then an SCV with the minerals left", paid, clear=False))
+
+    def queued_build(trial: Trial, *, short: bool) -> None:
+        game.until(lambda: game.minerals >= 100, steps=16, limit=6000)
+        builder, *others = game.own(UnitTypeId.SCV)
+        site = _depot_site(game, trial)
+        game.order(AbilityId.GENERAL_STOP, others)
+        if short:
+            # SCVs are queued until fewer minerals are left than a depot costs.
+            while game.minerals >= 100 and len(game.units[center.tag].orders) < 5:
+                game.order(train_scv, [center])
+                game.turn(1)
+        trial.notes["minerals before the orders"] = game.minerals
+        # Behind the command center first, so that the builder is a while on its way to the site.
+        waypoint = game.home.towards(game.middle, -10)
+        game.act(
+            game.command(AbilityId.GENERAL_MOVE, [builder], waypoint), game.command(depot, [builder], site, queued=True)
+        )
+        if short:
+            # The rest mine again, so that minerals come in while the builder is on its way.
+            game.order(AbilityId.SCV_GATHER, others, _nearest_field(game))
+        _watch_build(game, trial, builder, site, mining=short)
+        if not short:
+            game.order(AbilityId.SCV_GATHER, others, _nearest_field(game))
+
+    trials.append(
+        game.trial(
+            "a move, then a depot queued behind it, with the minerals for it",
+            lambda t: queued_build(t, short=False),
+            clear=False,
+        )
+    )
+    trials.append(
+        game.trial(
+            "a move, then a depot queued behind it, with too few minerals, and mining meanwhile",
+            lambda t: queued_build(t, short=True),
+            clear=False,
+        )
+    )
 
     def supply_short(trial: Trial) -> None:
         # Every depot goes, so that the command center's 15 is the cap.

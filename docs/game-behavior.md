@@ -372,7 +372,8 @@ Each entry ends with how it was seen:
 - A player that gives no orders still has its workers mine: the game gives those orders itself (corpus).
 - Every action of a `RequestAction` gets a verdict, in the order sent, 500 in one request included, and the game
   carries them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a
-  queued one clears it, and a queued one after an unqueued one goes behind it (tool `sweep_orders`).
+  queued one clears it, and a queued one after an unqueued one goes behind it. A stim and a move to one marine are
+  both carried out, either way round: it moves, stimmed (tool `sweep_orders`).
 - Training and research go behind what a structure is making, queued or not: an unqueued train given to a command
   center, hatchery or nexus that is training, or an unqueued research to an engineering bay, forge or evolution
   chamber that is researching, waits its turn as a queued one does. A structure holds 5; a sixth is answered
@@ -423,7 +424,10 @@ Each entry ends with how it was seen:
   drops its order. A build order takes its structure's cost as it is given, not once the builder gets there: a depot
   ordered 35 away took 100 of 120 minerals by the next observation, an SCV ordered with the 20 left was answered
   `Success` and never made, and the depot went up once the builder arrived. So a builder never finds its minerals
-  spent. A storm queued behind a move, its energy gone meanwhile, is dropped with no error. An action error names
+  spent. A build queued behind a move takes its cost as it is given too: with 100 minerals, an SCV ordered to move
+  and then a depot queued had 0 left while still on its way to the first point. With 65, the queued depot is refused
+  `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile bring the depot back no more. A storm
+  queued behind a move, its energy gone meanwhile, is dropped with no error. An action error names
   the unit and the ability, and comes in the observation the game gave up in (tool `sweep_orders`).
 
 ## Alerts and the camera
