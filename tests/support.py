@@ -23,6 +23,7 @@ from sc2nachos.events import (
     EnemyUnitLostBuffEvent,
     Event,
     EventBus,
+    EventFilter,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
@@ -229,8 +230,8 @@ HAPPENINGS: tuple[type[Event], ...] = (
 )
 
 
-def record(events: EventBus, *event_types: type[Event]) -> list[Any]:
-    """The events of `event_types` handed out from now on, in the order they were."""
+def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
+    """The events of `event_types`, or of what filters select, handed out from now on, in the order they were."""
     seen: list[Any] = []
     for event_type in event_types:
         events.on(event_type)(lambda event: seen.append(event))

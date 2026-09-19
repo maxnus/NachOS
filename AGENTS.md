@@ -8,7 +8,8 @@
 
 The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
-is in `docs/curating-ids.md`, and what the game has been seen to do in `docs/game-behavior.md`.
+is in `docs/curating-ids.md`, what the game has been seen to do in `docs/game-behavior.md`, and every event a game
+hands out in `docs/events.md`.
 
 ## Keep this file small
 

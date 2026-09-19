@@ -8,6 +8,7 @@ from sc2nachos.units._tracking._builder_tracker import _BuilderTracker
 from sc2nachos.units._tracking._tracker_changes import _TrackerChanges
 from sc2nachos.units._tracking._unit_comparer import _UnitComparer
 from sc2nachos.units._tracking._unit_tracker import _UnitTracker
+from sc2nachos.units._tracking._unit_watcher import _UnitWatcher
 from sc2nachos.units._tracking._upgrade_tracker import _UpgradeTracker
 
 if TYPE_CHECKING:
@@ -20,7 +21,8 @@ if TYPE_CHECKING:
 @final
 class _Tracker:
     """One game's observations read into its units, the builder of each of this player's structures, the upgrades
-    each side has, and a comparison of each unit with the update before, with what the last update found changed."""
+    each side has, a comparison of each unit with the update before, and a watch on what it crosses, with what the last
+    update found changed."""
 
     __slots__ = (
         "_builders",
@@ -31,6 +33,7 @@ class _Tracker:
         "_number_of_updates",
         "_units",
         "_upgrades",
+        "_watcher",
     )
 
     def __init__(self, data: GameData, enemy: Enemy) -> None:
@@ -43,6 +46,7 @@ class _Tracker:
         self._builders = _BuilderTracker(self)
         self._upgrades = _UpgradeTracker(data, enemy)
         self._comparer = _UnitComparer(self)
+        self._watcher = _UnitWatcher(self)
 
     @property
     def data(self) -> GameData:
@@ -82,6 +86,12 @@ class _Tracker:
         """Each unit compared with the update before, into the last changes, while something asks."""
         return self._comparer
 
+    @property
+    def watcher(self) -> _UnitWatcher:
+        """Each unit watched for crossing a value of its energy or its life, or the edge of an area, into the last
+        changes, while something asks."""
+        return self._watcher
+
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
         """Take in the observation at `step`: this player's upgrades, then the units it reports and what it says died.
 
@@ -99,4 +109,5 @@ class _Tracker:
         self._units.end()
         self._builders.end()
         self._comparer.stop()
+        self._watcher.stop()
         self._last_changes = _TrackerChanges()

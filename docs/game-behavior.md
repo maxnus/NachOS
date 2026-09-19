@@ -108,7 +108,8 @@ Each entry ends with how it was seen:
   and offered nothing, and Shatter ordered on it is refused (#23, #33).
 - A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
   a pylon powers it (#31).
-- Setting a unit's shields by debug command reads as shields lost (tested).
+- Setting a unit's shields by debug command reads as shields lost (tested). Set to 0, they are left as they were;
+  set to 1, they regenerate straight away, 2 every 16 steps (#41; tested).
 
 ## What an observation lists
 

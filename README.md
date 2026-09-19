@@ -35,11 +35,13 @@ api = Api()
 from my_bot.api import api
 
 
-@api.event.on(GameStepEvent, every=4)
+@api.event.on(TurnEvent, every_steps=4)
 def manage_workers(event):
     for worker in api.workers.idle:
         ...
 ```
+
+[Events](docs/events.md) lists every event a game hands out, and how to select some of them.
 
 NachOS itself never creates or exposes a singleton, and holds no module-level mutable state. The singleton is your
 choice, confined to one line of your own code, and one api plays any number of games in turn. Two bots playing

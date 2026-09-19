@@ -1,20 +1,9 @@
 """What an api tells a bot about as a game goes on, and the handlers it tells.
 
 A game hands out `GameStartEvent`, then a turn for each observation but the last, then `GameEndEvent`. A turn hands
-out `TurnStartEvent`, then what its observation reports has happened, then `TurnEvent`. What happened comes grouped by
-type, in this order:
-
-1. `OwnUnitCreatedEvent`, `EnemyUnitFirstSeenEvent`, `UnitTypeChangedEvent`, `UnitAllianceChangedEvent`;
-2. `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent`, `OwnWarpInFinishedEvent`, `OwnUpgradeFinishedEvent`;
-3. `OwnUnitDamagedEvent`, `EnemyUnitDamagedEvent`, `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`,
-   `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent`, `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`,
-   `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent`, `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent`;
-4. `UnitDiedEvent`, `UnitFoundDeadEvent`, so that a unit created and dead within one observation reads in order;
-5. `OwnActionEvent`, `ChatEvent`, `AlertEvent`, the alerts in the order the game raised them.
-
-The first turn reports the units the game starts with as created. An event is made only for a type with a handler
-still to run this game, and its step is when NachOS learned of it: a morph in the fog is reported when the unit is
-next seen.
+out `TurnStartEvent`, then what its observation reports has happened, then `TurnEvent`. `only`, `of` and `where` select
+some events of a type, and a subclass of `Event` is an event of a bot's own, sent with `EventBus.emit`.
+`docs/events.md` lists every event: its fields, what selects it, and when it comes.
 """
 
 from sc2nachos.events._done import Done
@@ -24,10 +13,15 @@ from sc2nachos.events._event import (
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
+    EnemyUnitEnergyReachedEvent,
+    EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
+    EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
+    EnemyUnitLifeFractionDroppedEvent,
+    EnemyUnitLifeFractionReachedEvent,
     EnemyUnitLostBuffEvent,
     Event,
     GameEndEvent,
@@ -39,10 +33,16 @@ from sc2nachos.events._event import (
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
     OwnUnitEnergyLostEvent,
+    OwnUnitEnergyReachedEvent,
+    OwnUnitEnteredAreaEvent,
     OwnUnitGainedBuffEvent,
+    OwnUnitLeftAreaEvent,
+    OwnUnitLifeFractionDroppedEvent,
+    OwnUnitLifeFractionReachedEvent,
     OwnUnitLostBuffEvent,
     OwnUpgradeFinishedEvent,
     OwnWarpInFinishedEvent,
+    ParameterizedEvent,
     TurnEvent,
     TurnStartEvent,
     UnitAllianceChangedEvent,
@@ -51,6 +51,7 @@ from sc2nachos.events._event import (
     UnitTypeChangedEvent,
 )
 from sc2nachos.events._event_bus import EventBus
+from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._handler_timings import HandlerTimings
 
@@ -61,13 +62,19 @@ __all__ = [
     "EnemyUnitCloakChangedEvent",
     "EnemyUnitDamagedEvent",
     "EnemyUnitEnergyLostEvent",
+    "EnemyUnitEnergyReachedEvent",
+    "EnemyUnitEnteredAreaEvent",
     "EnemyUnitEnteredSightEvent",
     "EnemyUnitFirstSeenEvent",
     "EnemyUnitGainedBuffEvent",
+    "EnemyUnitLeftAreaEvent",
     "EnemyUnitLeftSightEvent",
+    "EnemyUnitLifeFractionDroppedEvent",
+    "EnemyUnitLifeFractionReachedEvent",
     "EnemyUnitLostBuffEvent",
     "Event",
     "EventBus",
+    "EventFilter",
     "EventPriority",
     "GameEndEvent",
     "GameStartEvent",
@@ -79,10 +86,16 @@ __all__ = [
     "OwnUnitCreatedEvent",
     "OwnUnitDamagedEvent",
     "OwnUnitEnergyLostEvent",
+    "OwnUnitEnergyReachedEvent",
+    "OwnUnitEnteredAreaEvent",
     "OwnUnitGainedBuffEvent",
+    "OwnUnitLeftAreaEvent",
+    "OwnUnitLifeFractionDroppedEvent",
+    "OwnUnitLifeFractionReachedEvent",
     "OwnUnitLostBuffEvent",
     "OwnUpgradeFinishedEvent",
     "OwnWarpInFinishedEvent",
+    "ParameterizedEvent",
     "TurnEvent",
     "TurnStartEvent",
     "UnitAllianceChangedEvent",

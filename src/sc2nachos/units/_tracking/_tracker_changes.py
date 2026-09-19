@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 if TYPE_CHECKING:
+    from sc2nachos.geometry import Area
     from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
     from sc2nachos.units._own_unit import OwnUnit
     from sc2nachos.units._unit import Unit
@@ -26,6 +27,12 @@ class _TrackerChanges:
         "enemy_units_damaged",
         "own_units_energy_lost",
         "enemy_units_energy_lost",
+        "own_units_energy_reached",
+        "enemy_units_energy_reached",
+        "own_units_life_fraction_reached",
+        "enemy_units_life_fraction_reached",
+        "own_units_life_fraction_dropped",
+        "enemy_units_life_fraction_dropped",
         "own_units_cloak_changed",
         "enemy_units_cloak_changed",
         "own_units_gained_buff",
@@ -34,6 +41,10 @@ class _TrackerChanges:
         "enemy_units_lost_buff",
         "enemy_units_entered_sight",
         "enemy_units_left_sight",
+        "own_units_entered_area",
+        "own_units_left_area",
+        "enemy_units_entered_area",
+        "enemy_units_left_area",
         "units_died",
         "units_found_dead",
     )
@@ -59,6 +70,21 @@ class _TrackerChanges:
         """This player's units that lost energy, each with how much. Filled only by the comparer."""
         self.enemy_units_energy_lost: list[tuple[Unit[Any], float]] = []
         """The same for the enemy's units."""
+        self.own_units_energy_reached: list[tuple[OwnUnit[Any], float]] = []
+        """This player's units that reached an energy watched for their type, each with the energy. Filled only by the
+        watcher."""
+        self.enemy_units_energy_reached: list[tuple[Unit[Any], float]] = []
+        """The same for the enemy's units."""
+        self.own_units_life_fraction_reached: list[tuple[OwnUnit[Any], float]] = []
+        """This player's units whose life rose to a fraction watched, each with the fraction. Filled only by the
+        watcher."""
+        self.enemy_units_life_fraction_reached: list[tuple[Unit[Any], float]] = []
+        """The same for the enemy's units."""
+        self.own_units_life_fraction_dropped: list[tuple[OwnUnit[Any], float]] = []
+        """This player's units whose life fell below a fraction watched, each with the fraction. Filled only by the
+        watcher."""
+        self.enemy_units_life_fraction_dropped: list[tuple[Unit[Any], float]] = []
+        """The same for the enemy's units."""
         self.own_units_cloak_changed: list[tuple[OwnUnit[Any], CloakState]] = []
         """This player's units whose cloak changed, each with the state it was. Filled only by the comparer."""
         self.enemy_units_cloak_changed: list[tuple[Unit[Any], CloakState]] = []
@@ -77,6 +103,14 @@ class _TrackerChanges:
         """The enemy's units in sight that were not in the observation before."""
         self.enemy_units_left_sight: list[Unit[Any]] = []
         """The enemy's units that were in sight in the observation before and are not now, the dead left out."""
+        self.own_units_entered_area: list[tuple[OwnUnit[Any], Area]] = []
+        """This player's units that came inside an area watched, each with the area. Filled only by the watcher."""
+        self.own_units_left_area: list[tuple[OwnUnit[Any], Area]] = []
+        """This player's units that came outside an area watched, each with the area. Filled only by the watcher."""
+        self.enemy_units_entered_area: list[tuple[Unit[Any], Area]] = []
+        """The same for the enemy's units."""
+        self.enemy_units_left_area: list[tuple[Unit[Any], Area]] = []
+        """The same for the enemy's units."""
         self.units_died: list[Unit[Any]] = []
         """The units the game reported dead."""
         self.units_found_dead: list[Unit[Any]] = []

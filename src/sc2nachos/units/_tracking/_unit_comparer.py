@@ -11,6 +11,8 @@ from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from sc2nachos.units._tracking._tracker import _Tracker
     from sc2nachos.units._unit import Unit
 
@@ -39,10 +41,12 @@ class _UnitComparer:
         self._worn: dict[int, tuple[int, ...]] = {}
         self._worn_update = 0
 
-    def compare(self, *, damage: bool, energy: bool, cloak: bool, buffs: bool) -> None:
+    def compare(
+        self, *, damage: bool, energy: bool, cloak: bool, buffs: bool, only_buffs: Collection[int] | None = None
+    ) -> None:
         """Record in the tracker's last changes, as asked, the health and shields and the energy each unit lost since
-        the update before, how its cloak changed, and the buffs it gained and lost, if this ran on that update too.
-        Keep each unit's report for the next.
+        the update before, how its cloak changed, and the buffs it gained and lost, if this ran on that update too:
+        those of `only_buffs`, or every buff. Keep each unit's report for the next.
 
         Cloak is compared for a unit in sight in both, since an enemy unit nothing detects is listed cloaked but not in
         vision; buffs for one in vision in both, since such an enemy unit shows none (in game); loss for one in vision
@@ -76,7 +80,7 @@ class _UnitComparer:
             if not in_vision or then.display_type != _IN_VISION:
                 continue
             if worn_before is not None and (now := worn.get(unit._id, ())) != (was := worn_before.get(unit._id, ())):
-                self._record_buffs(unit, was, now)
+                self._record_buffs(unit, was, now, only_buffs)
             if report.unit_type != then.unit_type:
                 continue
             if damage and (lost := max(0.0, then.health - report.health) + max(0.0, then.shield - report.shield)):
@@ -100,14 +104,19 @@ class _UnitComparer:
         self._compared = {}
         self._worn = {}
 
-    def _record_buffs(self, unit: Unit[Any], was: tuple[int, ...], now: tuple[int, ...]) -> None:
-        """Record the buffs `unit` gained and lost between wearing `was` and `now`, each in the order of their ids."""
+    def _record_buffs(
+        self, unit: Unit[Any], was: tuple[int, ...], now: tuple[int, ...], only: Collection[int] | None
+    ) -> None:
+        """Record the buffs of `only`, or every buff, that `unit` gained and lost between wearing `was` and `now`, each
+        in the order of their ids."""
         if not was or not now:
             # A unit that wore nothing before or wears nothing now, as a worker picking up minerals or delivering them
             # does every trip, which is most changes (corpus).
             gained, lost = sorted(now), sorted(was)
         else:
             gained, lost = sorted(set(now).difference(was)), sorted(set(was).difference(now))
+        if only is not None:
+            gained, lost = [buff for buff in gained if buff in only], [buff for buff in lost if buff in only]
         gained_buffs = [BuffId.read(buff) for buff in gained]
         lost_buffs = [BuffId.read(buff) for buff in lost]
         changes = self._tracker.last_changes
