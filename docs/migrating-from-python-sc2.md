@@ -5,6 +5,27 @@ For bots moving over from [python-sc2](https://github.com/BurnySc2/python-sc2), 
 code goes wrong. It covers what NachOS has so far, and grows with it. What the game itself does, whichever library
 reads it, is in [game-behavior.md](game-behavior.md).
 
+## The main changes
+
+- **A bot subscribes handlers to an `Api` rather than subclassing `BotAI`**, and nothing is `async`. `on_step` and
+  the other hooks become events ([Events](#events)).
+- **Game time is counted in steps**, the game loop, never in iterations, and a turn is one step unless
+  `steps_per_turn` says otherwise ([Running a game](#running-a-game), [Time](#time)).
+- **A unit is one object under one id for the whole game.** Out of sight it is stale, not gone, and only death ends
+  it; a tag is only the game's current handle for it ([Units](#units)).
+- **Your own units are `OwnUnit`s**, the only ones with orders, cargo and weapon cooldown, and a unit's type can be a
+  type parameter: `units.own.of_type(UnitType.Marine)` is typed as your marines ([Units](#units)).
+- **Ids take the names players use**, `CONCUSSIVE_SHELLS` for `PUNISHERGRENADES`, cover only what a melee game
+  needs, and are ints ([Ids](#ids)).
+- **Points compare exactly and never mix 2D with 3D**, and grids are indexed `[x, y]`
+  ([Points, areas and grids](#points-areas-and-grids)).
+- **A unit's weapons, speed and armor count its owner's upgrades**, the enemy's too, and speeds are per second of
+  Faster speed ([Units](#units)).
+- **The tables are keyed by id, and what relates them was swept in game**, in place of python-sc2's hand-written
+  dicts ([The tables](#the-tables)).
+- **Orders are not in NachOS yet.** Until they are, a bot sends them as protocol messages through
+  `api.client.act`, and debug commands through `api.client.debug`.
+
 ## Running a game
 
 - **Nothing is subclassed, and nothing is `async`.** Construct an `Api`, at import time if you like, and hand it
@@ -71,15 +92,14 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **Damage is what a unit lost since the observation before**, less what it regained in between, and a unit that
   changed type took none. The energy lost events report energy the same way: a spell cast, a feedback or an EMP,
   but never what regenerates.
-- **A cloaked unit of yours reads `CLOAKED_ALLIED` whether the enemy detects it or not**, so no event says it was
-  detected, and nothing else of its report does either: not its display, not its buffs. Burrowing is no cloak: a
-  burrowed enemy nothing detects is not in the observation at all.
-- **An under-attack alert is raised only for what the camera does not show**, and not again for the same unit until
-  it has gone some 6000 steps without being attacked, the same as in python-sc2. The camera starts on the main base
-  and stays there until moved, so an attack on the main raises none. `OwnUnitDamagedEvent` reports every turn a unit
-  of yours loses health or shields, whatever the camera shows. `AlertError` and `TrainError` have no `Alert` members:
-  nothing in `tools/sweep_alerts.py` raised either, and training stalled for supply or a structure's ground found
-  blocked raise action errors instead.
+- **No event says a cloaked unit of yours was detected**, since nothing the game reports shows it: the unit reads
+  `CLOAKED_ALLIED` either way. A burrowed enemy nothing detects is not in the observation at all
+  ([game behavior](game-behavior.md#vision-fog-cloak-and-detection)).
+- **An under-attack alert comes only for what the camera does not show**, and not again for a unit attacked in the
+  last 6000 steps or so, as in python-sc2. The camera starts on the main base, so an attack there raises none until
+  something moves it. `OwnUnitDamagedEvent` reports every turn a unit of yours loses health or shields, whatever the
+  camera shows. `Alert` has no `AlertError` or `TrainError`, which the game was never seen to raise
+  ([game behavior](game-behavior.md#alerts-and-the-camera)).
 
 ## Errors
 
@@ -195,11 +215,10 @@ reads it, is in [game-behavior.md](game-behavior.md).
   remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
   lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
   copy and says nothing.
-- **A drone that becomes a structure is stale until the structure finishes, then dead.** The game gives the
-  structure a new tag, and reports the drone dead as the structure finishes or is killed, or a step later, so up to
-  an observation after the structure's `OwnConstructionFinishedEvent`. If the structure is
-  cancelled, the drone comes back as the same object. `builder` links the two for your own drones only, since only
-  your own units' orders are reported.
+- **A drone that becomes a structure is stale until the structure finishes or dies, then dead**, up to an
+  observation after the structure's `OwnConstructionFinishedEvent`. If the structure is cancelled, the drone comes
+  back as the same object ([game behavior](game-behavior.md#units-coming-changing-and-going)). `builder` links the
+  two for your own drones only, since only your own units' orders are reported.
 - **A unit names the units it points at by object.** An order's target, a rally target, a passenger, an add-on and
   an engaged target are units, stale or dead ones included, where python-sc2 gives tags to look up. An order aimed
   at nothing has `None` for its target, where python-sc2's is `0`.
@@ -210,7 +229,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   on its way is one whose first order is the build ability.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
-- **What the game never showed raises `NotReportedError`**, such as the health of a burrowed unit never detected
+- **What the game never showed raises `NotReportedError`**, such as the health of a cloaked enemy never detected
   or the contents of a mineral field no one has looked at. python-sc2 answers 0.
 - **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
@@ -242,14 +261,13 @@ reads it, is in [game-behavior.md](game-behavior.md).
   of sight.
 - **`unit.shield_armor` is the shields levels its owner has**, which is what python-sc2 writes as
   `enemy_shield_armor = target.shield_upgrade_level` inside `calculate_damage_vs_target`. The game's tables carry no
-  shield armor at all: this was measured in game, where a marine's 6 damage took 5 off a zealot's shields at level 1
-  and 3 at level 3.
+  shield armor at all ([game behavior](game-behavior.md#damage-energy-and-spells)).
 - **`unit.speed` counts no creep and no buff yet**, where python-sc2's `real_speed` counts both.
 - **Speeds are per second of the game's Faster speed, as `velocity` is.** The game's tables give them per second of
   its Normal speed, 16 steps, which python-sc2 hands on, so its code multiplies by 1.4 to get a distance a unit covers
   in a real second. NachOS has done it already: a zergling's `speed` is 4.13, not 2.95.
-- **`armor_upgrade_level` is armor, not a count of levels.** An ultralisk with Chitinous Plating and three levels
-  reports 5, and a structure with Neosteel Armor 2. `attack_upgrade_level` is a count.
+- **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
+  ([game behavior](game-behavior.md#what-is-reported-of-a-unit)).
 - **Reaper grenades and force fields stay units.** python-sc2 moves them into `state.effects`; in NachOS they are
   in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army count.
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
@@ -318,11 +336,10 @@ reads it, is in [game-behavior.md](game-behavior.md).
   step. A grid the map hands out is `readonly`, so a write raises `TypeError`; `copy()` gives one you can change.
 - **Height is the ground's height, not a byte, and python-sc2 decodes the byte a little low.** Its
   `terrain_height` holds the byte the game sends. Its `get_terrain_z_height` computes `-16 + 32 * byte / 255`,
-  which reads up to 0.03 below where units stand. A byte is an eighth of a unit of height, with 127 at zero.
+  which reads up to 0.03 below where units stand ([game behavior](game-behavior.md#terrain-placement-and-pathing)).
 - **A tile's height is its center's.** The game sends the height at each tile's lower left corner, and python-sc2
-  reads that as the tile's. On a ramp, that is up to 0.41 off the ground elsewhere in the tile, and beside a cliff
-  it can be the level on the other side. `api.map.height` averages the tile's corners on its own side of any
-  cliff, and `api.map.height_at(p)` interpolates between them.
+  reads that as the tile's, which on a ramp or beside a cliff can be well off the tile's ground. `api.map.height`
+  averages the tile's corners on its own side of any cliff, and `api.map.height_at(p)` interpolates between them.
 - **A ramp's ends are the tiles within a byte of its highest and lowest, and come out the same size whichever
   way it faces.** python-sc2's `upper` and `lower` are the tiles sharing the highest and lowest terrain byte,
   which it reads at each tile's lower left corner, so a ramp and its mirror image give ends of different sizes --
@@ -334,11 +351,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
   throws away any group of fewer than 8 of them. NachOS groups the ground a unit can walk over but cannot build
   on and reads the whole patch: one whose heights span half a level or more climbs from one level to the next,
   and is a ramp. On the 2026 ladder pool the two find the same ramps, tile for tile.
-- **There is no `vision_blockers`, because the map's grids cannot say.** A bridge, a stand of trees and the
-  ground under an indestructible doodad are all level, walkable and unbuildable, and nothing in
-  `ResponseGameInfo` separates them. python-sc2's `vision_blockers` is that whole mixture: on PylonAIE_v4 it
-  calls 33 tiles of each of the map's two bridges a vision blocker. A bot that needs the real ones can find them
-  in a game, from what its units can and cannot see.
+- **There is no `vision_blockers`, because the map's grids cannot say.** Nothing in `ResponseGameInfo` tells a
+  bridge, a stand of trees and the ground under an indestructible doodad apart
+  ([game behavior](game-behavior.md#terrain-placement-and-pathing)). python-sc2's `vision_blockers` is that whole
+  mixture: on PylonAIE_v4 it calls 33 tiles of each of the map's two bridges a vision blocker. A bot that needs the
+  real ones can find them in a game, from what its units can and cannot see.
 - **No wall-in placements.** python-sc2's `Ramp` also answers where to put supply depots and a barracks to wall
   off a ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 
@@ -381,43 +398,30 @@ reads it, is in [game-behavior.md](game-behavior.md).
   `units[UnitTypeId.MARINE.value]`.
 - **No row carries a name**, because the curated id is a better one than the game gives. A unit type, upgrade or
   effect names itself exactly as the catalog does, so `RawUnitTypeId(int(row.id)).name` is the game's spelling.
-  An ability has three names and none of them is it: `link_name` is the command card group, which 15 protoss
-  build abilities share; `button_name` is blank for ten of them and `BurrowDown` for twelve; `friendly_name` is
-  a sentence, "Attack Attack" for the exact attack. python-sc2 carries all three.
+  An ability has three names and none of them is it
+  ([game behavior](game-behavior.md#upgrades-and-the-games-tables)), and python-sc2 carries all three.
 - **`remaps_to` runs from the exact ability to the general one.** A unit always reports the exact id it is
-  running, and the general one is a spelling you may order instead: order `GENERAL_MOVE` and the unit reports
-  `GENERAL_MOVE_EXACT`. A general id is never offered by `RequestQuery`, but it is accepted as an order and
-  the game picks which exact one it meant, so `ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` researches whichever level
-  comes next and `GENERAL_BURROW` burrows whatever the unit is. python-sc2 folds this into `AbilityData.id`,
+  running, and the general one is a spelling you may order instead, which the game carries out as the exact one:
+  order `GENERAL_MOVE` and the unit reports `GENERAL_MOVE_EXACT`. python-sc2 folds this into `AbilityData.id`,
   which answers the remapped id while `exact_id` answers the row's own, and ships the same relation by hand as
-  `generic_redirect_abilities`. It does not catch every pair of that shape: a liberator reports
-  `LIBERATOR_SIEGE_EXACT` for the `LIBERATOR_SIEGE` it was ordered, and all four liberator rows leave
-  `remaps_to` empty. python-sc2 has the same blind spot, since it reads the same field.
-- **A table holds only the rows a bot can name.** The game describes its whole catalog -- 2005 unit types, 940
-  of them ids it skips and with no name at all, and 4134 abilities -- and a table keeps the ones the curated ids
-  name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters
-  instead on the `available` flag, which is no filter: the game marks `MorphZerglingToBaneling` unavailable, and
-  a zergling morphs anyway.
+  `generic_redirect_abilities`. Neither links the liberator's siege and unsiege, which the game's rows leave out
+  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **A table holds only the rows a bot can name.** It keeps the rows of the game's catalog that the curated ids
+  name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters instead
+  on the `available` flag, which filters nothing ([game behavior](game-behavior.md#upgrades-and-the-games-tables)).
 - **A field naming something uncurated reads as `None`, and `tech_aliases` drops it, except where an override
-  names what works.** Six unit types' rows name a creation ability the game no longer honors: a lurker's is
-  `LurkerAspectMPFromHydraliskBurrowed`, a baneling's is `MorphZerglingToBaneling`, a rich refinery's is a second
-  `TerranBuild` row, an auto turret's is `RavenBuild_AutoTurret`, a locust's is `SpawnInfestedTerran` and a
-  purification nova's is `PurificationNovaMorph` -- none is ever offered and none does anything when ordered. A rich
-  assimilator's and a rich extractor's rows name none at all. For these eight, `creation_ability` is the ability
-  that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas builds and so on, which
-  `gamedata/_techtree/_overrides.py` lists with its reasons and the tech tree sweep checks in game each time it runs
-  (`docs/curating-ids.md`). python-sc2 papers over only the lurker, by writing `MORPH_LURKER` into the message it
-  was handed. The rest name one nothing can order at all, and read `None`: the game disguises a changeling,
-  collapses a tower, takes a locust into the air and digs a creep tumor in by itself, and a bare tech lab or
-  reactor is a tech requirement no unit is built as.
-  The viking is the `tech_aliases` one: its alias is a row with no cost, speed, sight or weapon that nothing
-  requires and no unit is ever one of. python-sc2 keeps every one of these, because it filters unit types on
-  `available` and the game sets that flag on them.
-- **There is no ability for unloading one passenger.** The catalog's `UnloadUnit_*` rows cannot be ordered
-  through `RequestAction` at all: the game takes it as a UI action, `ActionCargoPanelUnload` against the
-  passenger's index, after a raw command with `ability_id=0` has selected the transport, and it needs both
-  `raw_affects_selection` and a feature layer turned on. NachOS asks for neither and has no UI path, so it
-  cannot do this yet; `MEDIVAC_UNLOAD` and `MEDIVAC_UNLOAD_AT` put everyone down at once.
+  names what works.** The rows of a lurker, a baneling, a rich refinery, an auto-turret, a locust and a purification
+  nova name a creation ability that is never offered and does nothing, and a rich assimilator's and a rich
+  extractor's name none ([game behavior](game-behavior.md#abilities-and-orders)). For these eight,
+  `creation_ability` is the ability that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas
+  builds and so on, which `gamedata/_techtree/_overrides.py` lists with its reasons and the tech tree sweep checks in
+  game each time it runs (`docs/curating-ids.md`). python-sc2 papers over only the lurker, by writing
+  `MORPH_LURKER` into the message it was handed. The rest name one nothing can order, such as a changeling's
+  disguise, and read `None`. The viking's alias is a row no unit is ever one of, so `tech_aliases` drops it.
+  python-sc2 keeps every one of these, because the game marks them available.
+- **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
+  no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `MEDIVAC_UNLOAD` and
+  `MEDIVAC_UNLOAD_AT` put everyone down at once.
 - **A row's `id` is its own.** python-sc2's `AbilityData.id` answers the generic id the ability remaps to, and
   `exact_id` the row's own. NachOS keeps `id` the row's own and puts `remaps_to` beside it.
 - **A cost is minerals and vespene, and times are seconds beside it.** python-sc2's `Cost` carries a `time`
@@ -431,11 +435,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
   subtracts the predecessor in `morph_cost` and `calculate_ability_cost`, reading a hand-written
   `UNIT_TRAINED_FROM` and hard-coding that zerglings come in pairs and that a baneling really costs 25/25.
   NachOS hands back the game's numbers as they stand, and `morphed_from` says what to subtract.
-- **What relates the tables to each other was swept in game, not read from the game's files.** `RequestData`
-  names no unit that performs an ability, gives a ghost, a thor, a battlecruiser and a mothership no requirement,
-  has room for only one, and holds no upgrade's requirements. python-sc2's dicts come from sc2-techtree, which
-  read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which asks the game what each
-  unit type is offered and sees what goes when a structure dies or an upgrade finishes (`docs/curating-ids.md`).
+- **What relates the tables to each other was swept in game, not read from the game's files**, since
+  `RequestData` holds little of it ([game behavior](game-behavior.md#upgrades-and-the-games-tables)). python-sc2's
+  dicts come from sc2-techtree, which read an older patch's data files; NachOS's come from
+  `tools/sweep_tech_tree.py`, which asks the game what each unit type is offered and sees what goes when a structure
+  dies or an upgrade finishes (`docs/curating-ids.md`).
   Where the two disagree, the game says a probe is offered a gateway and a forge once a nexus stands, whatever the
   pylons, and a roach a ravager once a roach warren stands, where python-sc2 says a pylon and a hatchery.
 - **Requirements belong to a unit type and an ability together**, since one ability can need different things of
@@ -460,12 +464,12 @@ reads it, is in [game-behavior.md](game-behavior.md).
   `tools/sweep_upgrades.py` read off the game's rows after each upgrade, and every upgrade raising a level the type's
   units report besides, with nothing added to the row: a shields level for every protoss type, and the attack levels
   for a void ray, a carrier and a sentry, which the rows give no weapon. Those rows take in weapon damage, bonuses and
-  range, armor and speed, and nothing else: no attack speed, since Adrenal Glands and Resonating Glaives change nothing
-  in them, and Anabolic Synthesis counts there whether or not the ultralisk is on creep. Where the two disagree, the
-  game says a cyclone's attack level adds 1 where python-sc2 says 2; Flux Vanes makes a void ray 1.21 times as fast,
-  Gravitic Boosters an observer 1.5, Muscular Augments a hydralisk 1.31 and Anabolic Synthesis an ultralisk 1.18, where
-  python-sc2 says 1.33, 2, 1.25 and 1.2; Pneumatized Carapace speeds up an overlord transport too; Adaptive Talons
-  changes no lurker's speed; and python-sc2's Rapid Deployment is an upgrade the game no longer has.
+  range, armor and speed, and nothing else, no attack speed, and Anabolic Synthesis counts there whether or not the
+  ultralisk is on creep. Where the two disagree, the game says a cyclone's attack level adds 1 where python-sc2 says
+  2; Flux Vanes, Gravitic Boosters, Muscular Augments and Anabolic Synthesis speed up by other factors;
+  Pneumatized Carapace speeds up an overlord transport too; Adaptive Talons changes no lurker's speed; and
+  python-sc2's Rapid Deployment is an upgrade the game no longer has
+  ([game behavior](game-behavior.md#upgrades-and-the-games-tables)).
 - **A row is as it stands before any upgrade, unless `with_upgrades` made it.** Asked again later in a game, the game
   folds in the asking player's upgrades, and only that player's, though a unit type has one row; NachOS asks once.
 - **Reading the tables leaves the message they came from alone.** Building python-sc2's `GameData` writes
