@@ -49,7 +49,7 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
-from sc2nachos.events._subscriptions import _Subscriptions
+from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area
@@ -188,7 +188,7 @@ class _Game:
                     add(AlertEvent(alert, step=step))
         return happened
 
-    def _compare(self, subscriptions: _Subscriptions) -> bool:
+    def _compare(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker compare each unit with the update before, as the damage, energy lost, cloak and buff events
         a handler wants need: the buffs handlers select, or every one if a handler takes them all. Have it let go of
         what it kept when no handler wants any. Say whether it compared."""
@@ -212,7 +212,7 @@ class _Game:
         )
         return True
 
-    def _watch(self, subscriptions: _Subscriptions) -> bool:
+    def _watch(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker watch each unit for the vitals and areas handlers select, or let go of what it kept when
         none does. Say whether it watched."""
         watcher = self.tracker.watcher
@@ -239,7 +239,7 @@ class _Game:
 
     def _hand_on(
         self,
-        subscriptions: _Subscriptions,
+        subscriptions: _EventSubscriptions,
         happened: list[Event],
         event_type: type[Event],
         found: Sequence[Any],
@@ -295,6 +295,6 @@ def _step(observation: sc2api_pb2.ResponseObservation) -> int:
 _NO_KEYS: frozenset[Hashable] = frozenset()
 
 
-def _wants_any(subscriptions: _Subscriptions, event_type: type[Event]) -> bool:
+def _wants_any(subscriptions: _EventSubscriptions, event_type: type[Event]) -> bool:
     """Whether a handler of `subscriptions` wants an event of `event_type`: every one, or one of some keys."""
     return subscriptions.wants_every(event_type) or bool(subscriptions.wanted_keys(event_type))

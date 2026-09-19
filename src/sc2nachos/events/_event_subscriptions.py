@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 @final
-class _Subscriptions:
+class _EventSubscriptions:
     """The handlers subscribed to an event bus, and which of them the events of each class are handed to: worked out
     on the first ask since the handlers last changed, and kept until they change again."""
 

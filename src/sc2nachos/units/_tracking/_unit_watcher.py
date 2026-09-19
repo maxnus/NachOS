@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast, final
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.units._tracking._side_watches import _SideWatches
+from sc2nachos.units._tracking._watches import _Watches
 
 if TYPE_CHECKING:
     from sc2nachos.geometry import Area
@@ -38,8 +38,8 @@ class _UnitWatcher:
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
-        self._own: _SideWatches[OwnUnit[Any]] = _SideWatches()
-        self._enemy: _SideWatches[Unit[Any]] = _SideWatches()
+        self._own: _Watches[OwnUnit[Any]] = _Watches()
+        self._enemy: _Watches[Unit[Any]] = _Watches()
 
     def watch(
         self,
@@ -75,5 +75,5 @@ class _UnitWatcher:
     def stop(self) -> None:
         """Let go of everything watched."""
         if self._own.watching or self._enemy.watching:
-            self._own = _SideWatches()
-            self._enemy = _SideWatches()
+            self._own = _Watches()
+            self._enemy = _Watches()

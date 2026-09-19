@@ -21,7 +21,7 @@ type _VitalWatch = tuple[Callable[[raw_pb2.Unit], float | None], VitalType, floa
 
 
 @final
-class _SideWatches[U: Unit[Any]]:
+class _Watches[U: Unit[Any]]:
     """What is watched of one side's units, and what was last seen of each: the vitals of each type, and areas."""
 
     __slots__ = (

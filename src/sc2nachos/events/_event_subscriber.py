@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 @final
-class _Subscriber:
+class _EventSubscriber:
     """A decorator that subscribes the function it decorates to the events it selects, or marks the method it decorates
     for `EventBus.subscribe`, with how often to call it. `where` narrows what it selects."""
 
@@ -39,7 +39,7 @@ class _Subscriber:
         self._bus._add(_Handler(function, self._selects, instance=instance, **self._options))
         return handler
 
-    def where(self, predicate: Callable[[Any], bool], /) -> _Subscriber:
+    def where(self, predicate: Callable[[Any], bool], /) -> _EventSubscriber:
         """This decorator, handing on only the events `predicate` passes too."""
         selects = self._selects
         if (first := selects.predicate) is None:
@@ -50,4 +50,4 @@ class _Subscriber:
                 return first(event) and predicate(event)
 
         narrowed = EventFilter(selects.event_type, keys=selects.keys, predicate=both)
-        return _Subscriber(self._bus, narrowed, self._options)
+        return _EventSubscriber(self._bus, narrowed, self._options)

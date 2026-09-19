@@ -14,10 +14,10 @@ from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
+from sc2nachos.events._event_subscriber import _EventSubscriber
+from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timings import HandlerTimings
-from sc2nachos.events._subscriber import _Subscriber
-from sc2nachos.events._subscriptions import _Subscriptions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 _E_co = TypeVar("_E_co", bound=Event, covariant=True)
 
 
-class _Decorator(Protocol[_E_co]):
+class _EventDecorator(Protocol[_E_co]):
     """What `on` answers: a decorator of a handler of `_E_co`, a function taking one or a method taking one after
     `self`, which `where` narrows.
 
@@ -36,7 +36,7 @@ class _Decorator(Protocol[_E_co]):
     type is typed as the callable it is, of the event it is decorated for.
     """
 
-    def where(self, predicate: Callable[[_E_co], bool], /) -> _Decorator[_E_co]:
+    def where(self, predicate: Callable[[_E_co], bool], /) -> _EventDecorator[_E_co]:
         """This decorator, handing on only the events `predicate` passes too. What a handler counts, such as `once`,
         counts only those."""
         ...
@@ -48,10 +48,10 @@ class _Decorator(Protocol[_E_co]):
     def __call__[F: Callable[[Any, Event], object]](self, handler: F, /) -> F: ...
 
     @overload
-    def __call__[H: Event, R](self: _Decorator[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
+    def __call__[H: Event, R](self: _EventDecorator[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
 
     @overload
-    def __call__[S, H: Event, R](self: _Decorator[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
+    def __call__[S, H: Event, R](self: _EventDecorator[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
 
 
 @final
@@ -74,7 +74,7 @@ class EventBus:
 
     def __init__(self, *, time_handlers: bool = False) -> None:
         """Time every handler's calls only if `time_handlers`, which costs some 200 ns a call."""
-        self._subscriptions = _Subscriptions()
+        self._subscriptions = _EventSubscriptions()
         # The handlers of methods marked in class bodies, of no instance yet, which `subscribe` binds to one.
         self._marks: weakref.WeakKeyDictionary[FunctionType, list[_Handler]] = weakref.WeakKeyDictionary()
         self._methods_of: weakref.WeakKeyDictionary[type, tuple[_Handler, ...]] = weakref.WeakKeyDictionary()
@@ -112,7 +112,7 @@ class EventBus:
         at_step: int | None = ...,
         once: bool = ...,
         catch_exceptions: bool = ...,
-    ) -> _Decorator[E]: ...
+    ) -> _EventDecorator[E]: ...
 
     def on(
         self,
@@ -163,7 +163,7 @@ class EventBus:
             "once": once,
             "catch_exceptions": catch_exceptions,
         }
-        return _Subscriber(self, selects, options)
+        return _EventSubscriber(self, selects, options)
 
     def subscribe(self, instance: object) -> None:
         """Subscribe every method of `instance` marked with `on`, until it is passed to `unsubscribe`.
