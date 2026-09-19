@@ -34,7 +34,7 @@ functions and methods alike. `api.event` still holds `subscribe`, `unsubscribe`,
 @api.event.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar))
 @api.event.on(OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.3))
 @api.event.on(EnemyUnitEnteredAreaEvent.of(Circle(natural, 12)))
-@api.event.on(OwnUnitDamagedEvent.where(lambda event: event.damage > 20))
+@api.event.on(OwnUnitDamagedEvent).where(lambda event: event.damage > 20)
 ```
 
 - **`only(...)`** narrows an event a handler can also take whole: to some alerts, buffs, upgrades or unit types. A
@@ -44,9 +44,10 @@ functions and methods alike. `api.event` still holds `subscribe`, `unsubscribe`,
   amount or a fraction of its most, reaching a value or dropping below it, and a unit crossing the edge of an area.
   Such a type derives from `ParameterizedEvent`, and `on` refuses it bare, as a type checker does. One `of` takes one
   set of parameters; for several, stack the decorators.
-- **`where(predicate)`** narrows any event, or what `only` or `of` selected, to those `predicate` passes. Chained
-  twice, it passes those both pass. Each handler's predicate is called as its turn comes, after the handlers before it
-  have run.
+- **`where(predicate)`**, on the decorator `on` answers, narrows what it hands a handler, of a type or what `only`
+  or `of` selected, to the events `predicate` passes. Chained twice, it passes those both pass. The decorator it makes
+  subscribes every handler it decorates, and each handler's predicate is called as its turn comes, after the handlers
+  before it have run.
 
 `once`, `every_steps`, `at_step` and `Done` count only the events a handler selects: `once` with `where` is the first
 event the predicate passes. `only` and `of` also spare NachOS making the events no handler wants, and `of` watching

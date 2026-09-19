@@ -44,7 +44,7 @@ class _Handler:
     ) -> None:
         self.function = function
         self.selects = selects
-        """The events it is handed: those of a type, or what `only`, `of` or `where` selects of them."""
+        """The events it is handed: those of a type, or what `only`, `of` and `where` select of them."""
         self.priority = priority
         self.every_steps = every_steps
         self.at_step = at_step

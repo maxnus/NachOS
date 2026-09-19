@@ -1,6 +1,6 @@
 """What an api tells its handlers about."""
 
-from collections.abc import Callable, Hashable
+from collections.abc import Hashable
 from dataclasses import field
 from typing import Any, Self
 
@@ -26,12 +26,6 @@ class Event(metaclass=_EventMeta):
     step: int = field(default=_NO_STEP, kw_only=True)
     """The step of the observation it comes with. One made without it is given the step of the game being played as
     it is emitted."""
-
-    @classmethod
-    def where(cls, predicate: Callable[[Self], bool], /) -> EventFilter[Self]:
-        """The events of this type that `predicate` passes, for `on`. What a handler counts, such as `once`, counts
-        only those."""
-        return EventFilter(cls, predicate=predicate)
 
     @classmethod
     def _key_of(cls, *made_of: Any) -> Hashable:

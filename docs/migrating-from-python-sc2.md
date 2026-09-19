@@ -89,7 +89,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
 
 - **A handler selects the events it wants, rather than testing each one.** `AlertEvent.only(Alert.X)`,
-  `UnitDiedEvent.only(UnitType.Structure)` and `OwnUnitDamagedEvent.where(predicate)` take the place of an `if` at
+  `UnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` take the place of an `if` at
   the top of a python-sc2 hook. `once` and `every_steps` then count only the events selected, and with `only` NachOS
   does not make the rest. What python-sc2 leaves to a bot to compare every step, such as a caster's energy, is an
   event through `of`: `OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)`.

@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 class EventFilter[E: Event]:
     """The events of one type a handler is handed: those of some keys, those a predicate passes, or both.
 
-    `only` and `of` on an event class make one, and `where` makes or narrows one; `on` takes it wherever it takes an
-    event type. The events handed out are of the type itself.
+    `only` and `of` on an event class make one, and `on` takes it wherever it takes an event type; `where` on what `on`
+    answers adds a predicate. The events handed out are of the type itself.
     """
 
     __slots__ = ("event_type", "keys", "predicate")
@@ -45,14 +45,3 @@ class EventFilter[E: Event]:
         if self.predicate is not None:
             details.append(f"predicate={getattr(self.predicate, '__qualname__', self.predicate)}")
         return details
-
-    def where(self, predicate: Callable[[E], bool], /) -> EventFilter[E]:
-        """These events, of those `predicate` passes too."""
-        if (first := self.predicate) is None:
-            both = predicate
-        else:
-
-            def both(event: E, /) -> bool:
-                return first(event) and predicate(event)
-
-        return EventFilter(self.event_type, keys=self.keys, predicate=both)

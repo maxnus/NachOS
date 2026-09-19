@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import weakref
 from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
@@ -17,6 +16,7 @@ from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timings import HandlerTimings
+from sc2nachos.events._subscriber import _Subscriber
 from sc2nachos.events._subscriptions import _Subscriptions
 
 if TYPE_CHECKING:
@@ -30,11 +30,16 @@ _E_co = TypeVar("_E_co", bound=Event, covariant=True)
 
 class _Decorator(Protocol[_E_co]):
     """What `on` answers: a decorator of a handler of `_E_co`, a function taking one or a method taking one after
-    `self`.
+    `self`, which `where` narrows.
 
     A handler taking any `Event` keeps its own type, so it can be decorated for several events. One taking a narrower
     type is typed as the callable it is, of the event it is decorated for.
     """
+
+    def where(self, predicate: Callable[[_E_co], bool], /) -> _Decorator[_E_co]:
+        """This decorator, handing on only the events `predicate` passes too. What a handler counts, such as `once`,
+        counts only those."""
+        ...
 
     @overload
     def __call__[F: Callable[[Event], object]](self, handler: F, /) -> F: ...
@@ -119,12 +124,12 @@ class EventBus:
         at_step: int | None = None,
         once: bool = False,
         catch_exceptions: bool = False,
-    ) -> _Decorator[Any] | None:
+    ) -> Any:
         """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`.
 
-        `event_type` is an event type, whose events and those of its subclasses the handler is handed, or what `only`,
-        `of` or `where` selects of them. A type that has `of` is subscribed to only through it, and a type checker
-        refuses it bare.
+        `event_type` is an event type, whose events and those of its subclasses the handler is handed, or what `only`
+        or `of` selects of them, and `where` on the decorator this answers narrows them further. A type that has `of` is
+        subscribed to only through it, and a type checker refuses it bare.
 
         A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
         method in a class body is marked instead, and is subscribed for an instance passed to `subscribe`.
@@ -151,34 +156,14 @@ class EventBus:
             if at_step is not None:
                 raise ValueError("a handler runs every so many steps or at one step, not both")
 
-        def decorate[F: Callable[..., object]](handler: F, /) -> F:
-            function: object = handler
-            instance = None
-            if isinstance(function, MethodType):
-                function, instance = function.__func__, function.__self__
-            if not isinstance(function, FunctionType):
-                raise TypeError(f"a handler is a function or a method, not {handler!r}")
-            if inspect.iscoroutinefunction(function):
-                raise TypeError(
-                    f"{function.__qualname__} is a coroutine function, and handlers are called synchronously"
-                )
-            subscription = _Handler(
-                function,
-                selects,
-                priority=priority,
-                every_steps=every_steps,
-                at_step=at_step,
-                once=once,
-                catch_exceptions=catch_exceptions,
-                instance=instance,
-            )
-            if instance is None and _in_class_body(function):
-                self._marks.setdefault(function, []).append(subscription)
-            else:
-                self._subscriptions.add(subscription)
-            return handler
-
-        return decorate
+        options = {
+            "priority": priority,
+            "every_steps": every_steps,
+            "at_step": at_step,
+            "once": once,
+            "catch_exceptions": catch_exceptions,
+        }
+        return _Subscriber(self, selects, options)
 
     def subscribe(self, instance: object) -> None:
         """Subscribe every method of `instance` marked with `on`, until it is passed to `unsubscribe`.
@@ -222,6 +207,13 @@ class EventBus:
         if self._timings is None:
             raise RuntimeError("handlers are timed only for an api made with time_handlers=True")
         return MappingProxyType({kind: MappingProxyType(timings) for kind, timings in self._timings.items()})
+
+    def _add(self, handler: _Handler) -> None:
+        """Subscribe `handler`, or mark it for `subscribe` if its function is a method in a class body."""
+        if handler.instance is None and _in_class_body(handler.function):
+            self._marks.setdefault(handler.function, []).append(handler)
+        else:
+            self._subscriptions.add(handler)
 
     def _marked_methods(self, cls: type) -> tuple[_Handler, ...]:
         """The handlers of the marked methods an instance of `cls` has: those its attributes resolve to, so an override

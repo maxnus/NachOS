@@ -541,7 +541,7 @@ class TestTyping:
     def test_what_only_of_and_where_select_is_typed_as_their_class(self) -> None:
         bus = EventBus()
 
-        @bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE).where(lambda event: event.step > 0))
+        @bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE)).where(lambda event: event.step > 0)
         def alert(event: AlertEvent) -> None:
             pass
 
@@ -551,6 +551,10 @@ class TestTyping:
 
         @bus.on(OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0))
         def full(event: OwnUnitVitalReachedEvent) -> None:
+            pass
+
+        @bus.on(TurnEvent).where(lambda event: event.alert is None)  # type: ignore
+        def no_alert_on_a_turn(event: TurnEvent) -> None:
             pass
 
         assert len(bus._subscriptions.by_type[AlertEvent]) == 2
@@ -772,9 +776,6 @@ class TestOnlyAndOf:
             def reached(event: OwnUnitVitalReachedEvent) -> None:
                 pass
 
-        with pytest.raises(TypeError, match="through `of`"):
-            bus.on(OwnUnitVitalReachedEvent.where(lambda event: True))
-
     @pytest.mark.parametrize(
         ("vital", "value"),
         [
@@ -840,7 +841,7 @@ class TestWhere:
 
     def test_a_predicate_selects_the_events_a_handler_is_handed(self) -> None:
         bus, fired = EventBus(), []
-        bus.on(TurnEvent.where(lambda event: event.step % 2 == 0))(lambda event: fired.append(event.step))
+        bus.on(TurnEvent).where(lambda event: event.step % 2 == 0)(lambda event: fired.append(event.step))
         self._turns(bus, 0, 1, 2, 3)
         assert fired == [0, 2]
 
@@ -853,15 +854,15 @@ class TestWhere:
         self, cadence: dict[str, int | bool], expected: list[int]
     ) -> None:
         bus, fired = EventBus(), []
-        odd = TurnEvent.where(lambda event: event.step % 2 == 1)
-        bus.on(odd, **cadence)(lambda event: fired.append(event.step))  # type: ignore
+        subscribing = bus.on(TurnEvent, **cadence)  # type: ignore
+        subscribing.where(lambda event: event.step % 2 == 1)(lambda event: fired.append(event.step))
         self._turns(bus, *range(9))
         assert fired == expected
 
     def test_done_stops_a_handler_at_the_first_event_it_selects(self) -> None:
         bus, fired = EventBus(), []
 
-        @bus.on(TurnEvent.where(lambda event: event.step >= 2))
+        @bus.on(TurnEvent).where(lambda event: event.step >= 2)
         def later(event: TurnEvent) -> object:
             fired.append(event.step)
             return Done
@@ -869,14 +870,21 @@ class TestWhere:
         self._turns(bus, 0, 1, 2, 3)
         assert fired == [2]
 
+    def test_one_decorator_subscribes_every_handler_it_decorates(self) -> None:
+        bus, fired = EventBus(), []
+        even = bus.on(TurnEvent).where(lambda event: event.step % 2 == 0)
+        even(lambda event: fired.append(("first", event.step)))
+        even(lambda event: fired.append(("second", event.step)))
+        self._turns(bus, 0, 1)
+        assert fired == [("first", 0), ("second", 0)]
+
     def test_it_chains_after_only_and_after_itself(self) -> None:
         bus, seen = EventBus(), []
-        selected = (
-            AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE)
+        (
+            bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE))
             .where(lambda event: event.step > 0)
             .where(lambda event: event.step < 3)
-        )
-        bus.on(selected)(lambda event: seen.append((event.step, event.alert)))
+        )(lambda event: seen.append((event.step, event.alert)))
         for step in range(4):
             for alert in (Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED):
                 bus.emit(AlertEvent(alert, step=step))
@@ -889,8 +897,9 @@ class TestWhere:
             calls.append(len(taken))
             taken.add(event.step)
 
-        bus.on(TurnEvent.where(lambda event: event.step not in taken))(take)
-        bus.on(TurnEvent.where(lambda event: event.step not in taken))(take)
+        untaken = bus.on(TurnEvent).where(lambda event: event.step not in taken)
+        untaken(take)
+        untaken(take)
         bus.emit(TurnEvent(step=0))
         assert calls == [0]
 
@@ -898,9 +907,9 @@ class TestWhere:
         self, logged: list[str]
     ) -> None:
         bus, fired = EventBus(), []
-        bus.on(TurnEvent.where(lambda event: 1 / 0 > 0), catch_exceptions=True)(lambda event: fired.append(event))
+        bus.on(TurnEvent, catch_exceptions=True).where(lambda event: 1 / 0 > 0)(lambda event: fired.append(event))
         bus.emit(TurnEvent(step=0))
         assert not fired and any("raised selecting" in message for message in logged)
-        bus.on(TurnEvent.where(lambda event: 1 / 0 > 0))(lambda event: fired.append(event))
+        bus.on(TurnEvent).where(lambda event: 1 / 0 > 0)(lambda event: fired.append(event))
         with pytest.raises(ZeroDivisionError):
             bus.emit(TurnEvent(step=1))
