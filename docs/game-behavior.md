@@ -384,25 +384,30 @@ Each entry ends with how it was seen:
   a warp gate to a gateway training a zealot, a tech lab to a barracks training a marine. An idle command center
   morphs and an idle barracks builds its tech lab. A gateway that turns into a warp gate by itself once the research
   is done waits for its zealot (tool `sweep_orders`).
+- A barracks is busy for one step more than its add-on: in the observation the tech lab or reactor first reads
+  finished, the barracks still shows the order that built it, is offered no train, and refuses a marine
+  `NotSupported`. A step later it takes it (tool `sweep_orders`).
 - Each action is judged against the game as the last step left it, not as the actions before it in the same step
-  leave it. When the game steps it carries them out in order, and drops what no longer fits without an error, and
+  leave it. When the game steps it carries them out in order, and drops what no longer fits without an error and
   leaves it out of the reported actions. Ten marines sent to a barracks one request at a time in one step are all
-  answered `Success`. Five are queued, or eight with a reactor, and the rest are dropped; of seven SCVs in one request
-  to a command center, five are queued. A cancel and then a marine to a barracks holding 5: the cancel is carried out
-  and the marine refused `QueueIsFull`, and a step later a marine is taken. To one holding 4, a cancel and then a
-  reaper are both carried out, and the reaper goes last. Cancels and then an orbital command to a command center
-  training SCVs, or a cancel and then a tech lab to a barracks training a marine, empty it and refuse the morph or
-  add-on `NotSupported`, and a step later it is taken. A cancel's refund pays for nothing sent in the same step. With
-  5 minerals, a cancel and then an SCV: the SCV is refused `NotEnoughMinerals`, and a step later the refunded 55 pay
-  for it. With none, 5 cancels and then an orbital command: the orbital is refused, and a step later the refunded 250
-  pay for it. Three cancels to a barracks training two marines are all answered `Success`, and two are carried out
-  (tool `sweep_orders`).
+  answered `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in one request
+  to a command center, five are queued (tool `sweep_orders`).
 - A structure's production can be cancelled through `RequestAction` only from its last item. `Cancel_Last` and a
   structure's own cancel remove the last item, and a busy structure is offered no other: `Cancel_Queue5` for a
   barracks or a bay, `Cancel_QueueCancelToSelection` for a command center. `Cancel_Slot` and the generic `Cancel` are
   answered `Error`, and another structure's cancel and `CancelSlot_Queue5` `NotSupported`. The report names the
-  structure's own cancel, whichever was sent. A cancel to an idle structure is answered `Error`. An SCV cancelled
-  refunds its 50 minerals by the next observation, whether it was half made or only queued (tool `sweep_orders`).
+  structure's own cancel, whichever was sent. A cancel to an idle structure is answered `Error`, and three cancels to
+  a barracks training two marines are all answered `Success`, and two are carried out (tool `sweep_orders`).
+- Cancels make no room for what follows them in the same step. A cancel and then a marine to a barracks holding 5:
+  the cancel is carried out and the marine refused `QueueIsFull`, and a step later a marine is taken. To one holding
+  4, a cancel and then a reaper are both carried out, and the reaper goes last. Cancels and then an orbital command to
+  a command center training SCVs, or a cancel and then a tech lab to a barracks training a marine, empty it and
+  refuse the morph or add-on `NotSupported`, and a step later it is taken (tool `sweep_orders`).
+- An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
+  refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
+  an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay
+  for it. With none, 5 cancels to a command center and an orbital command to another, idle one: the orbital is
+  refused `NotEnoughMinerals`, and a step later the refunded 250 pay for it (tool `sweep_orders`).
 - A barracks training marines goes on training when given a rally or a cancel, which drops the last marine; a lift is
   refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
   production as it was, and a carrier goes on building interceptors through a stop (tool `sweep_orders`).
@@ -438,9 +443,8 @@ Each entry ends with how it was seen:
   standing at each of four sites in turn for 896 steps, dealt 1382 to 1402 in all whether their attack was sent once
   or re-sent every step, every 4th or every 16th, each round within two shots of the others; a move re-sent covered the
   same ground, and a gather re-sent while the worker gathered mined as much. It still drops the orders queued behind
-  the first. An
-  order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the field with
-  it, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool `sweep_orders`).
+  the first. An order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the
+  field with it, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool `sweep_orders`).
 - A builder whose site a unit of this player's holds position on gets a `CantBuildLocationInvalid` action error and
   drops its order. A build order takes its structure's cost as it is given, not once the builder gets there: a depot
   ordered 35 away took 100 of 120 minerals by the next observation, an SCV ordered with the 20 left was answered

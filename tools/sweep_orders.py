@@ -22,8 +22,8 @@ names, and runs trials in turn::
 - `queues` gives structures that are making something each cancel there is, more cancels than they hold, more to
   make or a morph or an add-on after cancels, in the same request and a step later, and more marines than a barracks
   with each add-on holds.
-- `refunds` plays without `free`, and has what a cancel refunds pay for what follows it, in the same request and a
-  step later.
+- `refunds` plays without `free`, and has a cancel's refund pay for what follows it, on the same structure or
+  another, in the same request and a step later.
 
 What it finds is written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
 the orders of the units the trial read, with when, what the game reported it carried out, every action error, and
@@ -553,11 +553,13 @@ def _terran_production(game: _Game) -> list[Trial]:
         (paired,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 4))
         game.order(AbilityId.BARRACKS_BUILD_REACTOR, [paired])
         game.until(lambda: _add_on_finished(game, paired.tag), steps=16, limit=2400)
+        marine = AbilityId.BARRACKS_TRAIN_MARINE
+        # A barracks is offered no marine in the step its add-on first reads finished.
+        game.until(lambda: marine in game.sandbox.offered([paired.tag])[paired.tag], limit=64)
         trial.notes["add-ons"] = {
             label: _type_name(add_on.unit_type) if (add_on := _add_on(game, barracks.tag)) is not None else None
             for barracks, label in ((paired, "paired"), (plain, "plain"))
         }
-        marine = AbilityId.BARRACKS_TRAIN_MARINE
         for barracks, label in ((paired, "with a reactor"), (plain, "without an add-on")):
             game.act(game.command(marine, [barracks]), game.command(marine, [barracks]))
             game.turn(2)
@@ -1453,13 +1455,31 @@ def _queues(game: _Game) -> list[Trial]:
         # Room on the right for an add-on.
         return [game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4))[0] for _ in range(count)]
 
+    def ready(each: raw_pb2.Unit) -> list[list[object]]:
+        """From the step `each`'s add-on reads finished, a marine each step until one is taken, then cancelled."""
+        game.until(lambda: _add_on_finished(game, each.tag), limit=2400)
+        watched: list[list[object]] = []
+        for _ in range(32):
+            trains = [_raw_name(a) for a in game.sandbox.offered([each.tag])[each.tag] if "Train" in _raw_name(a)]
+            orders = [_order(order) for order in game.units[each.tag].orders]
+            verdict = game.order(_MARINE, [each])
+            watched.append([game.step, orders, trains, verdict])
+            game.turn(1)
+            if verdict == "Success":
+                break
+        game.order(_CANCEL_LAST, [each])
+        game.turn(2)
+        return watched
+
     def limits(trial: Trial) -> None:
         paired, labbed, plain = barracks(3)
         game.order(AbilityId.BARRACKS_BUILD_REACTOR, [paired])
         game.order(tech_lab, [labbed])
-        game.until(
-            lambda: _add_on_finished(game, paired.tag) and _add_on_finished(game, labbed.tag), steps=16, limit=2400
-        )
+        # The tech lab finishes first.
+        for each, label in ((labbed, "with a tech lab"), (paired, "with a reactor")):
+            trial.notes[f"{label}: step, orders, trains offered and a marine's verdict, from its add-on finished"] = (
+                ready(each)
+            )
         cases = ((paired, "with a reactor"), (labbed, "with a tech lab"), (plain, "without an add-on"))
         offered = game.sandbox.offered(each.tag for each, _ in cases)
         for each, label in cases:
@@ -1486,7 +1506,9 @@ def _queues(game: _Game) -> list[Trial]:
         game.read("a command center given 7 SCVs in one request", [center])
 
     # First, while there is room near the main base.
-    trials.append(game.trial("barracks with each add-on given 10 marines", limits))
+    trials.append(
+        game.trial("barracks watched from their add-on finished, given 10 marines, and a command center 7 SCVs", limits)
+    )
 
     def offered(trial: Trial) -> None:
         (each,) = barracks(1)
@@ -1698,27 +1720,30 @@ def _refunds(game: _Game) -> list[Trial]:
     )
 
     def orbital_after(trial: Trial) -> None:
-        (morphing,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))
+        (idle,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))
         mine_until(250)
-        game.act(*(game.command(_TRAIN_SCV, [morphing]) for _ in range(5)))
+        game.act(*(game.command(_TRAIN_SCV, [center]) for _ in range(5)))
         game.turn(2)
         spend_below(50)
-        game.read("5 SCVs queued", [morphing])
-        trial.notes["given"] = ["5 cancels, then the orbital, in one request", "the orbital, a step later"]
+        game.read("5 SCVs queued, and an idle command center", [center, idle])
+        trial.notes["given"] = [
+            "5 cancels to the one training, then the orbital to the idle one, in one request",
+            "the orbital, a step later",
+        ]
         minerals = [game.minerals]
-        game.act(*_cancels(game, morphing.tag, 5), game.command(_ORBITAL, [morphing]))
+        game.act(*_cancels(game, center.tag, 5), game.command(_ORBITAL, [idle]))
         game.turn(1)
         minerals.append(game.minerals)
-        game.read("after the request", [morphing])
-        game.order(_ORBITAL, [morphing])
+        game.read("after the request", [center, idle])
+        game.order(_ORBITAL, [idle])
         game.turn(1)
         minerals.append(game.minerals)
-        game.read("the orbital a step later", [morphing])
+        game.read("the orbital a step later", [idle])
         trial.notes["minerals before, after the request, a step later"] = minerals
 
     trials.append(
         game.trial(
-            "a command center with 5 SCVs, too few minerals for an orbital, given 5 cancels and the orbital",
+            "an idle command center given an orbital with too few minerals, after 5 cancels to another, in one request",
             emptied(orbital_after),
         )
     )
