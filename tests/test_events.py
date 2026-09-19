@@ -820,6 +820,19 @@ class TestATurnGoesOutPriorityFirst:
         bus._hand_out([_Scouted("main", step=0), AlertEvent(Alert.RESEARCH_COMPLETE, step=0), TurnEvent(step=0)])
         assert calls == ["scouted, high", "alert, high", "turn, high", "alert", "turn", "scouted, low"]
 
+    def test_a_subscription_during_a_turn_leaves_the_rest_of_it_selecting_as_before(self) -> None:
+        bus, alerts, steps = EventBus(), [], []
+        bus.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: bus.on(GameStartEvent)(lambda started: None))
+        bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE), priority=EventPriority.LOW)(
+            lambda event: alerts.append(event.alert)
+        )
+        bus.on(TurnEvent, priority=EventPriority.LOW).where(lambda event: event.step > 0)(
+            lambda event: steps.append(event.step)
+        )
+        research, exhausted = Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED
+        bus._hand_out([AlertEvent(research, step=0), AlertEvent(exhausted, step=0), TurnEvent(step=0)])
+        assert alerts == [research] and not steps
+
     def test_what_a_handler_emits_goes_out_at_once_all_priorities_through(self) -> None:
         bus, calls = EventBus(), []
 

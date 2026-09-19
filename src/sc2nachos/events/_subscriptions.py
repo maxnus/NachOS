@@ -29,8 +29,9 @@ class _Subscriptions:
         `EventBus.emit` directly, which a method call would slow."""
         self.selecting: set[type[Event]] = set()
         """The classes among those one of whose handlers selects by key or predicate."""
-        # The same handlers grouped by priority, highest first, and the keys they select with those selecting them.
-        self._by_priority: dict[type[Event], tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]] = {}
+        # The same handlers grouped by priority, highest first, each group with whether one of it selects, and the
+        # keys they select with those selecting them.
+        self._by_priority: dict[type[Event], tuple[tuple[EventPriority, tuple[_Handler, ...], bool], ...]] = {}
         self._wanted: dict[type[Event], tuple[frozenset[Hashable], tuple[_Handler, ...]]] = {}
         # How many handlers have subscribed, which numbers each to order the handlers of one priority across classes,
         # and how many subscribed now select by key.
@@ -95,13 +96,14 @@ class _Subscriptions:
         noting whether any of them selects by key or predicate."""
         found = [handler for cls in event_type.__mro__ for handler in self._handlers.get(cls, ())]
         found.sort(key=lambda handler: (-handler.priority, handler.order))
-        if any(handler.selects.keys is not None or handler.selects.predicate is not None for handler in found):
+        if any(_selects(handler) for handler in found):
             self.selecting.add(event_type)
         resolved = self.resolved[event_type] = tuple(found)
         return resolved
 
-    def grouped(self, event_type: type[Event]) -> tuple[tuple[EventPriority, tuple[_Handler, ...]], ...]:
-        """The handlers the events of `event_type` are handed to, grouped by priority, highest first."""
+    def grouped(self, event_type: type[Event]) -> tuple[tuple[EventPriority, tuple[_Handler, ...], bool], ...]:
+        """The handlers the events of `event_type` are handed to, grouped by priority, highest first, each group with
+        whether one of it selects by key or predicate."""
         if (grouped := self._by_priority.get(event_type)) is None:
             if (handlers := self.resolved.get(event_type)) is None:
                 handlers = self.resolve(event_type)
@@ -109,7 +111,8 @@ class _Subscriptions:
             for handler in handlers:
                 groups.setdefault(handler.priority, []).append(handler)
             grouped = self._by_priority[event_type] = tuple(
-                (priority, tuple(group)) for priority, group in groups.items()
+                (priority, tuple(group), any(_selects(handler) for handler in group))
+                for priority, group in groups.items()
             )
         return grouped
 
@@ -145,3 +148,8 @@ class _Subscriptions:
 
 
 _NO_KEYS: frozenset[Hashable] = frozenset()
+
+
+def _selects(handler: _Handler) -> bool:
+    """Whether `handler` selects some of the events of its type, by key or predicate."""
+    return handler.selects.keys is not None or handler.selects.predicate is not None

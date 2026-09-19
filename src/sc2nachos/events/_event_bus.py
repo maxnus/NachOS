@@ -256,22 +256,23 @@ class EventBus:
         if (handlers := subscriptions.resolved.get(type(event))) is None:
             handlers = subscriptions.resolve(type(event))
         if handlers:
-            self._run(handlers, event)
+            self._run(handlers, event, type(event) in subscriptions.selecting)
 
     def _hand_out(self, events: Sequence[Event]) -> None:
         """Hand out the events of one turn, each with its step, priority first: every handler of the highest priority
         is handed each event it selects, in the order of `events`, before any handler of the next priority is."""
-        passes: dict[EventPriority, list[tuple[Event, tuple[_Handler, ...]]]] = {}
+        # Each group keeps whether one of it selects, which a handler subscribing during the turn must not change.
+        passes: dict[EventPriority, list[tuple[Event, tuple[_Handler, ...], bool]]] = {}
         for event in events:
-            for priority, handlers in self._subscriptions.grouped(type(event)):
-                passes.setdefault(priority, []).append((event, handlers))
+            for priority, handlers, selecting in self._subscriptions.grouped(type(event)):
+                passes.setdefault(priority, []).append((event, handlers, selecting))
         for priority in sorted(passes, reverse=True):
-            for event, handlers in passes[priority]:
-                self._run(handlers, event)
+            for event, handlers, selecting in passes[priority]:
+                self._run(handlers, event, selecting)
 
-    def _run(self, handlers: tuple[_Handler, ...], event: Event) -> None:
-        """Hand `event` to each of `handlers` that selects it and is due to run."""
-        selecting = type(event) in self._subscriptions.selecting
+    def _run(self, handlers: tuple[_Handler, ...], event: Event, selecting: bool) -> None:
+        """Hand `event` to each of `handlers` that selects it and is due to run, checking what each selects if
+        `selecting`, since one of them selects by key or predicate."""
         todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
         step = event.step
