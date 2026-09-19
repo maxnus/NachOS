@@ -413,15 +413,17 @@ Each entry ends with how it was seen:
   `sweep_orders`).
 - An unqueued order the same as a unit's first, by the ability it runs and the target to the 1/4096, is ignored: it
   is answered `Success`, left out of the reported actions, and costs nothing. Four marines attacking pylons, each
-  standing at each of four sites in turn for 896 steps, dealt 1382 to 1397 in all whether their attack was sent once
+  standing at each of four sites in turn for 896 steps, dealt 1382 to 1402 in all whether their attack was sent once
   or re-sent every step, every 4th or every 16th, each round within two shots of the others; a move re-sent covered the
   same ground, and a gather re-sent while the worker gathered mined as much. It still drops the orders queued behind
   the first. An
   order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the field with
   it, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool `sweep_orders`).
 - A builder whose site a unit of this player's holds position on gets a `CantBuildLocationInvalid` action error and
-  drops its order. One that gets there without the minerals waits there with its order, and no error, for 600 steps
-  at least. A storm queued behind a move, its energy gone meanwhile, is dropped with no error. An action error names
+  drops its order. A build order takes its structure's cost as it is given, not once the builder gets there: a depot
+  ordered 35 away took 100 of 120 minerals by the next observation, an SCV ordered with the 20 left was answered
+  `Success` and never made, and the depot went up once the builder arrived. So a builder never finds its minerals
+  spent. A storm queued behind a move, its energy gone meanwhile, is dropped with no error. An action error names
   the unit and the ability, and comes in the observation the game gave up in (tool `sweep_orders`).
 
 ## Alerts and the camera

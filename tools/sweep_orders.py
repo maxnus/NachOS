@@ -1180,21 +1180,39 @@ def _errors(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("SCVs ordered with the 50 minerals the game starts with", minerals_short, clear=False))
 
-    def spent(trial: Trial) -> None:
+    def paid(trial: Trial) -> None:
         game.until(lambda: game.minerals >= 100, steps=16, limit=6000)
         builder, *others = game.own(UnitTypeId.SCV)
-        game.order(depot, [builder], game.spot(game.toward(32), 1) + (0.5, 0.5))
-        game.order(train_scv, [center])
-        # The rest stop mining, so that no minerals come in before the builder gets there.
+        # A site the game says a depot could go up on now, so that nothing but the minerals is in question.
+        site = game.spot(game.toward(32), 1) + (0.5, 0.5)
+        while not game.sandbox.placeable(depot, [site])[0]:
+            site = game.spot(game.toward(32), 1) + (0.5, 0.5)
+        trial.notes["site"] = [site.x, site.y]
+        # The rest stop mining, so that no minerals come in meanwhile.
         game.order(AbilityId.GENERAL_STOP, others)
-        trial.notes["minerals left"] = game.minerals - 50
-        game.turn(600)
-        game.read("600 steps later", [builder, center])
+        trial.notes["minerals before the depot"] = game.minerals
+        game.order(depot, [builder], site)
+        game.order(train_scv, [center])
+        # Every 16 steps: the minerals, how far the builder is from the site, and how far a depot there has come.
+        watched: list[tuple[int, int, float, float | None]] = []
+        for _ in range(38):
+            game.turn(16)
+            # An SCV trained meanwhile goes mining by itself, and is stopped as well.
+            if busy := [u for u in game.own(UnitTypeId.SCV) if u.tag != builder.tag and u.orders]:
+                game.order(AbilityId.GENERAL_STOP, busy)
+            unit = game.units[builder.tag]
+            depot_there = next((u for u in game.own(UnitTypeId.SUPPLY_DEPOT) if _at(u).distance_to(site) < 1), None)
+            progress = None if depot_there is None else round(depot_there.build_progress, 2)
+            watched.append((game.step, game.minerals, round(_at(unit).distance_to(site), 1), progress))
+        trial.notes["step, minerals, builder's distance, depot"] = watched
+        game.read("608 steps later", [builder, center])
         game.order(AbilityId.SCV_GATHER, others, _nearest_field(game))
 
-    trials.append(game.trial("a depot ordered far off, its minerals spent meanwhile", spent, clear=False))
+    trials.append(game.trial("a depot ordered far off, then an SCV with the minerals left", paid, clear=False))
 
     def supply_short(trial: Trial) -> None:
+        # Every depot goes, so that the command center's 15 is the cap.
+        game.kill(game.own(UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED))
         game.until(lambda: game.minerals >= 300, steps=16, limit=6000)
         trial.notes["supply"] = list(game.supply)
         game.act(*(game.command(train_scv, [center], queued=True) for _ in range(5)))
