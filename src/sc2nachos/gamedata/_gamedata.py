@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.gamedata._ability import AbilityData, order_behaviors
+from sc2nachos.gamedata._ability import AbilityData, ability_costs, order_behaviors
 from sc2nachos.gamedata._effect import EffectData
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamedata._unittype import Attribute, UnitTypeData
@@ -33,11 +33,15 @@ class GameData:
         self._units = _read_table(data.units, lambda unit: UnitTypeData.from_proto(unit, TECH_TREE), lambda row: row.id)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE, structures)
-        self._abilities = _read_table(
-            data.abilities, lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors), lambda row: row.id
-        )
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData.from_proto(upgrade, TECH_TREE), lambda row: row.id
+        )
+        # What an ability charges is read off what it makes, so the other tables come first.
+        charges = ability_costs(self._units, self._upgrades, TECH_TREE)
+        self._abilities = _read_table(
+            data.abilities,
+            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, charges),
+            lambda row: row.id,
         )
         self._effects = _read_table(data.effects, EffectData.from_proto, lambda row: row.id)
 

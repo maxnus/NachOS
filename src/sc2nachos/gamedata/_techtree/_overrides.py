@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
+from sc2nachos.gamedata._resources import Resources
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 MISNAMED_RESEARCH_ABILITIES: Final[Mapping[UpgradeId, AbilityId]] = MappingProxyType(
@@ -95,3 +96,38 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
     }
 )
+
+
+# What the game charges for an ability, where its type's own row does not give it away. Everything else is read off
+# the tables: what the ability makes costs, less what it is made out of, which is right for every other morph -- an
+# orbital command 150 of its row's 550, an extractor 25 of 75, a baneling 25/25, each held to the three quarters a
+# cancel was seen to give back (tool `sweep_orders`). These six are the prices the game has always charged
+# (stated), and `tests/test_gamedata.py` holds every entry to differing from what the tables derive, so one goes as
+# soon as a patch makes it unnecessary.
+CHARGED_COSTS: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
+    {
+        # The hatchery's row is 325, not the drone's 50 and the hatchery's 300, so the drone comes out twice.
+        AbilityId.DRONE_MORPH_HATCHERY: Resources(300, 0),
+        # A gateway turns itself into a warp gate once the research is in, and the game charges nothing. Its row
+        # keeps the gateway's own 150 and names nothing it is made out of.
+        AbilityId.GATEWAY_MORPH_WARP_GATE: Resources(0, 0),
+        # One order makes a pair, and the row prices one zergling.
+        AbilityId.LARVA_MORPH_ZERGLING: Resources(50, 0),
+        # The transport's row reads the same 100 as an overlord's, so the difference comes out as nothing.
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Resources(25, 25),
+        # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges.
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Resources(0, 0),
+    }
+)
+"""What ordering an ability takes, where the game's own rows do not say it."""
+
+# What an ability takes of the supply cap, where its type's row does not give it away.
+CHARGED_SUPPLY: Final[Mapping[AbilityId, float]] = MappingProxyType(
+    {
+        # Two zerglings take a supply between them, and the row holds the half one takes.
+        AbilityId.LARVA_MORPH_ZERGLING: 1.0,
+        # The nova's row carries the disruptor's own 3 supply, and a nova takes none.
+        AbilityId.DISRUPTOR_PURIFICATION_NOVA: 0.0,
+    }
+)
+"""What ordering an ability takes of the supply cap, where the game's own rows do not say it."""

@@ -1,19 +1,69 @@
 """The tables a game is played by, read from tables written here and from the recorded games."""
 
+import math
 import re
 from pathlib import Path
 
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import Attribute, GameData, OrderBehavior, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import KEEPS_ORDERS_ABILITIES, MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES
+from sc2nachos.gamedata import (
+    Attribute,
+    GameData,
+    OrderBehavior,
+    Resources,
+    TargetDomain,
+    TargetType,
+    UnitTypeData,
+)
+from sc2nachos.gamedata._techtree import (
+    CHARGED_COSTS,
+    CHARGED_SUPPLY,
+    KEEPS_ORDERS_ABILITIES,
+    MISNAMED_RESEARCH_ABILITIES,
+    UNNAMED_CREATION_ABILITIES,
+)
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
+
+# What the game takes as each of these is ordered, against what its type's row holds. A morph, an add-on and a
+# structure going up were each seen charged as the jump in the purse cancelling one gives back, three quarters
+# rounded up (tool `sweep_orders`, docs/game-behavior.md); the rest are what the game has always charged (stated).
+_CHARGED = {
+    AbilityId.BARRACKS_BUILD_REACTOR: (Resources(50, 50), 0.0),
+    AbilityId.BARRACKS_BUILD_TECH_LAB: (Resources(50, 25), 0.0),
+    AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: (Resources(100, 100), 0.0),
+    AbilityId.BARRACKS_TRAIN_MARINE: (Resources(50, 0), 1.0),
+    AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: (Resources(150, 0), 0.0),
+    AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: (Resources(150, 150), 0.0),
+    AbilityId.COMMAND_CENTER_TRAIN_SCV: (Resources(50, 0), 1.0),
+    AbilityId.DRONE_MORPH_EXTRACTOR: (Resources(25, 0), -1.0),
+    AbilityId.DRONE_MORPH_HATCHERY: (Resources(300, 0), -1.0),
+    AbilityId.DRONE_MORPH_SPAWNING_POOL: (Resources(200, 0), -1.0),
+    AbilityId.GATEWAY_MORPH_WARP_GATE: (Resources(0, 0), 0.0),
+    AbilityId.HATCHERY_MORPH_LAIR: (Resources(150, 100), 0.0),
+    AbilityId.LAIR_MORPH_HIVE: (Resources(200, 150), 0.0),
+    AbilityId.LARVA_MORPH_ZERGLING: (Resources(50, 0), 1.0),
+    AbilityId.NEXUS_TRAIN_PROBE: (Resources(50, 0), 1.0),
+    AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: (Resources(25, 25), 0.0),
+    AbilityId.PROBE_BUILD_PYLON: (Resources(100, 0), 0.0),
+    AbilityId.ROACH_MORPH_RAVAGER: (Resources(25, 75), 1.0),
+    AbilityId.SCV_BUILD_SUPPLY_DEPOT: (Resources(100, 0), 0.0),
+    AbilityId.ZERGLING_MORPH_BANELING: (Resources(25, 25), 0.0),
+}
+
+# What cancelling one gave back, at real prices, over the observation the cancel landed in (tool `sweep_orders`).
+_REFUNDED = {
+    AbilityId.BARRACKS_BUILD_TECH_LAB: Resources(38, 19),
+    AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Resources(113, 0),
+    AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: Resources(113, 113),
+    AbilityId.SCV_BUILD_SUPPLY_DEPOT: Resources(75, 0),
+}
+
 
 # The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling,
 # which an armory is never offered and which does nothing when ordered, and which no curated id names.
@@ -330,8 +380,24 @@ class TestARecordedGamesTables:
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
         """Measured for a rally and a cancel, and read the same way for the rest (docs/game-behavior.md)."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.GENERAL_CANCEL_QUEUE):
+        for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.ORBITAL_COMMAND_SCAN):
             assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
+    def test_a_structures_own_cancel_is_the_one_class_that_takes_back_what_it_is_making(self, path: Path) -> None:
+        """Every cancel the game remaps onto one of the two general ones, offered to nothing that can move."""
+        data = _tables(path)
+        cancels = (
+            AbilityId.GENERAL_CANCEL_LAST,
+            AbilityId.GENERAL_CANCEL_QUEUE,
+            AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION,
+            AbilityId.GENERAL_CANCEL_BUILDING,
+            AbilityId.HATCHERY_CANCEL_LAIR,
+            AbilityId.EGG_CANCEL,
+        )
+        for ability in cancels:
+            assert data.abilities[ability].behavior is OrderBehavior.CANCELS, ability.name
+        # A ghost and an infestor are offered the bare cancel, and it takes them off what they are channeling.
+        assert data.abilities[AbilityId.GENERAL_CANCEL].behavior is OrderBehavior.REPLACES
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
         """Its alias is an empty row no unit is ever one of; every other alias names a unit you can own."""
@@ -377,6 +443,68 @@ class TestARecordedGamesTables:
         # The build time is the morph alone, so it is shorter than building what it morphed from took.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
+    def test_an_ability_is_charged_what_the_game_takes_as_it_is_ordered(self, path: Path) -> None:
+        """Not what its type's row holds, which for a morph is everything spent to reach it."""
+        data = _tables(path)
+        charged = {ability: (data.abilities[ability].cost, data.abilities[ability].supply_cost) for ability in _CHARGED}
+        assert charged == _CHARGED
+
+    def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
+        """What a cancel gives back does not turn on how far the work got, so a refund measured in game says what the
+        order was charged, which is what these costs are held to."""
+        data = _tables(path)
+        for ability, refund in _REFUNDED.items():
+            cost = data.abilities[ability].cost
+            given_back = Resources(math.ceil(cost.minerals * 3 / 4), math.ceil(cost.vespene * 3 / 4))
+            assert given_back == refund, f"{ability.name} is charged {cost}"
+
+    def test_a_cost_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
+        """Once the game's own rows give a price away, the entry can go."""
+        data = _tables(path)
+        for ability, cost in CHARGED_COSTS.items():
+            assert _derived_cost(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
+        for ability, supply in CHARGED_SUPPLY.items():
+            assert _derived_supply(data, ability) != supply, f"the tables now take {supply} supply for {ability.name}"
+
+    def test_a_general_research_is_charged_the_least_of_the_levels_it_stands_for(self, path: Path) -> None:
+        """Which level a general id will research is not known until it is ordered, so it is charged the cheapest,
+        which refuses no order the game would take."""
+        data = _tables(path)
+        levels = [
+            data.abilities[ability].cost
+            for ability in (
+                AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
+                AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
+                AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3,
+            )
+        ]
+        assert levels[0].total < levels[2].total
+        general = data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS]
+        assert general.cost == min(levels, key=lambda cost: cost.total)
+
+    def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
+        """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""
+        data = _tables(path)
+        for ability in (AbilityId.MARINE_STIM, AbilityId.GENERAL_MOVE, AbilityId.GENERAL_CANCEL_LAST):
+            assert data.abilities[ability].cost == Resources(0, 0)
+            assert data.abilities[ability].supply_cost == 0
+
+    def test_a_morph_and_an_add_on_name_the_cancel_the_game_offers_for_them(self, path: Path) -> None:
+        """A command center morphing is offered another cancel than one training, and another again by which morph
+        it is running, so which cancel to send turns on the work (tool `sweep_tech_tree`)."""
+        data = _tables(path)
+        for ability, cancel in (
+            (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND),
+            (AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS, AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS),
+            (AbilityId.BARRACKS_BUILD_TECH_LAB, AbilityId.BARRACKS_CANCEL_ADD_ON),
+            (AbilityId.FACTORY_BUILD_TECH_LAB, AbilityId.FACTORY_CANCEL_ADD_ON),
+            (AbilityId.STARPORT_BUILD_TECH_LAB, AbilityId.STARPORT_CANCEL_ADD_ON),
+            (AbilityId.HATCHERY_MORPH_LAIR, AbilityId.HATCHERY_CANCEL_LAIR),
+            (AbilityId.LAIR_MORPH_HIVE, AbilityId.LAIR_CANCEL_HIVE),
+        ):
+            assert data.abilities[ability].cancelled_by is cancel, ability.name
+        assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
+
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
         for upgrade in UpgradeId:
@@ -405,3 +533,29 @@ class TestARecordedGamesTables:
             (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
         ):
             assert data.units[unit].base_type is base
+
+
+def _derived_cost(data: GameData, ability: AbilityId) -> Resources:
+    """What the game's own rows say the ability charges, before `CHARGED_COSTS` corrects them."""
+    made, used = _made_and_used(data, ability)
+    if made is None:
+        return Resources(0, 0)
+    return made.cost if used is None else made.cost - used.cost
+
+
+def _derived_supply(data: GameData, ability: AbilityId) -> float:
+    """What the game's own rows say the ability takes of the cap, before `CHARGED_SUPPLY` corrects them."""
+    made, used = _made_and_used(data, ability)
+    if made is None:
+        return 0.0
+    return made.supply_cost if used is None else made.supply_cost - used.supply_cost
+
+
+def _made_and_used(data: GameData, ability: AbilityId) -> tuple[UnitTypeData | None, UnitTypeData | None]:
+    """The rows of what the ability makes and of what it uses up making one."""
+    product = data.abilities[ability].product
+    if not isinstance(product, UnitTypeId):
+        return (None, None)
+    made = data.units[product]
+    source = made.morphed_from or made.base_type
+    return (made, data.units.get(source) if source is not None else None)

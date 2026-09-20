@@ -9,13 +9,16 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._techtree._overrides import KEEPS_ORDERS_ABILITIES
+from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._techtree._overrides import CHARGED_COSTS, CHARGED_SUPPLY, KEEPS_ORDERS_ABILITIES
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._unittype import UnitTypeData
+    from sc2nachos.gamedata._upgrade import UpgradeData
 
 
 class TargetType(ReadableIntEnum):
@@ -41,10 +44,15 @@ class OrderBehavior(Enum):
     morph, a lift."""
     KEEPS_ORDERS = "keeps orders"
     """It is carried out and the unit goes on with its orders, so it competes with nothing: stim, both halves of a
-    toggle and the rest of `KEEPS_ORDERS_ABILITIES`, and everything besides making something that is offered only to
-    a type the game offers no move — a structure's own rally, load, cancel and energy casts, and the way back out of
-    a sieged form. Every one of those a producer is offered leaves what it is making at the progress it stood at
-    (in game). `GENERAL_CANCEL` is not one of them: a ghost and an infestor are offered it too, and it takes them
+    toggle and the rest of `KEEPS_ORDERS_ABILITIES`, and everything besides making something and cancelling that is
+    offered only to a type the game offers no move — a structure's own rally, load and energy casts, and the way
+    back out of a sieged form. Every one of those a producer is offered leaves what it is making at the progress it
+    stood at (in game)."""
+    CANCELS = "cancels"
+    """It takes the last thing a structure is making off it and gives back what the game refunds, leaving the rest
+    of its queue where it was: the structure's own cancel, which is the one it is offered and which turns on what it
+    is making. It competes with nothing, and frees neither a slot nor a mineral before the game has stepped
+    (in game). `GENERAL_CANCEL` is not one of these: a ghost and an infestor are offered it too, and it takes them
     off what they are channeling."""
 
 
@@ -84,7 +92,60 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             # cocoon. They have nothing an order could take them off but what they are making, and a rally and a
             # cancel were both seen to leave that alone (docs/game-behavior.md).
             behaviors[ability] = OrderBehavior.KEEPS_ORDERS
+    for ability, performers in tech_tree.ability_performers.items():
+        # A cancel of a structure's own, which the game remaps onto one of the two general ones. `GENERAL_CANCEL`
+        # itself is left out by the same test as ever: a ghost and an infestor are offered it, and both can move.
+        if not performers & movers and _cancels(ability, tech_tree):
+            behaviors[ability] = OrderBehavior.CANCELS
     return behaviors
+
+
+def _cancels(ability: AbilityId, tech_tree: TechTree) -> bool:
+    """Whether the ability takes back what a structure is making, which the game's own tables say by remapping every
+    one of them onto `GENERAL_CANCEL` or `GENERAL_CANCEL_LAST`."""
+    return ability in _CANCELS or tech_tree.ability_remaps.get(ability) in _CANCELS
+
+
+def ability_costs(
+    units: Mapping[UnitTypeId, UnitTypeData],
+    upgrades: Mapping[UpgradeId, UpgradeData],
+    tech_tree: TechTree,
+) -> Mapping[AbilityId, tuple[Resources, float]]:
+    """What the game charges as each ability is ordered, and the supply it takes, for those that take anything.
+
+    A morph is charged the difference from what it is made out of, the game's row for a type holding everything
+    spent to reach it, and `CHARGED_COSTS` and `CHARGED_SUPPLY` hold what that leaves wrong.
+    """
+    charges: dict[AbilityId, tuple[Resources, float]] = {}
+    for ability, product in tech_tree.ability_products.items():
+        if isinstance(product, UpgradeId):
+            if (upgrade := upgrades.get(product)) is not None:
+                charges[ability] = (upgrade.cost, 0.0)
+            continue
+        if (made := units.get(product)) is None:
+            continue
+        source = made.morphed_from or made.base_type
+        used = units.get(source) if source is not None else None
+        if used is None:
+            charges[ability] = (made.cost, made.supply_cost)
+        else:
+            charges[ability] = (made.cost - used.cost, made.supply_cost - used.supply_cost)
+    for ability in CHARGED_COSTS.keys() | CHARGED_SUPPLY.keys():
+        cost, supply = charges.get(ability, (Resources(0, 0), 0.0))
+        charges[ability] = (CHARGED_COSTS.get(ability, cost), CHARGED_SUPPLY.get(ability, supply))
+    # A general id stands for exact ones of several prices -- the three levels of a research -- and which it will run
+    # is not known until it is ordered, so it is charged the least of them, which refuses no order the game takes.
+    for exact, general in tech_tree.ability_remaps.items():
+        charge = charges.get(exact)
+        if charge is None or general in tech_tree.ability_products or general in CHARGED_COSTS:
+            continue
+        standing = charges.get(general)
+        if standing is None or charge[0].total < standing[0].total:
+            charges[general] = charge
+    return charges
+
+
+_CANCELS = frozenset({AbilityId.GENERAL_CANCEL, AbilityId.GENERAL_CANCEL_LAST})
 
 
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
@@ -128,16 +189,33 @@ class AbilityData:
     reports, such as `LIBERATOR_SIEGE_EXACT`."""
     product: UnitTypeId | UpgradeId | None
     """The unit type it makes, or the upgrade it researches."""
+    cost: Resources
+    """What the game takes as it is ordered, which for a morph is the difference from what it is made out of: 150 for
+    an orbital command, not the 550 its type's row holds as everything spent to reach it. A general id that stands for
+    several prices, as a research level does, holds the least of them, and an ability that makes nothing costs
+    nothing."""
+    supply_cost: float
+    """What it takes of the supply cap as what it makes starts, and what it gives back where it uses up the unit that
+    orders it: 1 for a marine, -1 for a spawning pool, none for a baneling."""
+    cancelled_by: AbilityId | None
+    """The cancel the game offers a structure carrying this out, which is its own: `COMMAND_CENTER_CANCEL_ORBITAL_
+    COMMAND` for the orbital morph, `BARRACKS_CANCEL_ADD_ON` for an add-on, and the structure's queue cancel for a
+    train or a research. `None` for everything the game offers no cancel for (tool `sweep_tech_tree`)."""
     behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 
     @classmethod
     def from_proto(
-        cls, data: data_pb2.AbilityData, tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+        cls,
+        data: data_pb2.AbilityData,
+        tech_tree: TechTree,
+        behaviors: Mapping[AbilityId, OrderBehavior],
+        charges: Mapping[AbilityId, tuple[Resources, float]],
     ) -> Self:
-        """Read one ability out of the game's tables, with what `tech_tree` and `behaviors` found about it in
-        game."""
+        """Read one ability out of the game's tables, with what `tech_tree`, `behaviors` and `charges` found about it
+        in game."""
         ability = AbilityId(data.ability_id)
+        cost, supply_cost = charges.get(ability, (Resources(0, 0), 0.0))
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -148,5 +226,8 @@ class AbilityData:
             remaps_to=AbilityId.get(data.remaps_to_ability_id),
             performers=tech_tree.ability_performers.get(ability, frozenset()),
             product=tech_tree.ability_products.get(ability),
+            cost=cost,
+            supply_cost=supply_cost,
+            cancelled_by=tech_tree.ability_cancels.get(ability),
             behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

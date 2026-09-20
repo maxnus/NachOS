@@ -14,8 +14,17 @@ class OrderState(Enum):
     """The game reported carrying it out, or the unit was already doing it and it was not sent again."""
     DONE = "done"
     """No unit it was given to is carrying it out any more."""
+    LOST = "lost"
+    """Every unit it went out for died before it was done, so nothing came of it. The game reports a producer dying
+    and nothing more, and a unit that is gone is carrying nothing out, so this is what tells a marine that was
+    trained from a barracks killed half way through it. An order whose unit is used up carrying it out -- a larva
+    becoming a drone, a drone becoming a hatchery -- is `DONE` instead."""
+    CANCELLED = "cancelled"
+    """Taken back with `api.order.cancel`, which the game answered `SUCCESS`: what it was making is off the
+    structure, and the game gives back its share of what it charged in a later observation."""
     REFUSED = "refused"
-    """Sent, and answered something other than `SUCCESS`: the verdict says what."""
+    """Answered something other than `SUCCESS`, or never sent because the turn could not pay for it: the verdict
+    says what, and is what the game would have answered either way."""
     DROPPED = "dropped"
     """Answered `SUCCESS` and never carried out, which the game does silently where an order no longer fits by the
     time it steps: a sixth marine, an order there are no minerals left for."""
@@ -36,7 +45,9 @@ class OrderState(Enum):
 
 _FINAL = frozenset(
     {
+        OrderState.CANCELLED,
         OrderState.DONE,
+        OrderState.LOST,
         OrderState.REFUSED,
         OrderState.DROPPED,
         OrderState.FAILED,
