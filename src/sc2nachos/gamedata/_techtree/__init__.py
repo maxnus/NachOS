@@ -2,14 +2,14 @@
 
 from sc2nachos.gamedata._techtree._build_95841 import TECH_TREE
 from sc2nachos.gamedata._techtree._overrides import (
-    ACTS_AT_ONCE,
+    KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.gamedata._techtree._tech_tree import TechTree
 
 __all__ = [
-    "ACTS_AT_ONCE",
+    "KEEPS_ORDERS_ABILITIES",
     "MISNAMED_RESEARCH_ABILITIES",
     "TECH_TREE",
     "UNNAMED_CREATION_ABILITIES",

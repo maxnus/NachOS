@@ -156,7 +156,7 @@ class _PointND(tuple[float, ...]):
         snapped = (round(self[0] / step) * step, round(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
-    def cut_down(self, *, step: float) -> Self:
+    def rounded_down(self, *, step: float) -> Self:
         """The point on a lattice of `step` tiles at or below this one on each axis. Height is carried through.
 
         Where `snapped` rounds, this cuts down, which is what the game does to a point it is given: a move to

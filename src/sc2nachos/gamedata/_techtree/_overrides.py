@@ -60,10 +60,13 @@ this one is its creation ability, and otherwise it makes the type besides the on
 
 # Ordered unqueued while a unit moves, each of these was carried out and the move went on, where every other ability
 # a unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and
-# no ability belongs here that a sweep has not seen keep a unit's orders. The half of a toggle that turns one off, and
-# the general ids these remap to, were not measured; a general id counts as acting at once where an ability it stands
-# for does.
-ACTS_AT_ONCE: Final[frozenset[AbilityId]] = frozenset(
+# no ability belongs here that a sweep has not seen keep a moving unit's orders.
+#
+# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability.py` reads an ability that makes nothing
+# and is offered only to a type the game offers no move as keeping its orders too, which is a structure's own rally
+# and cancel. Nor were the half of a toggle that turns one off, or the general ids these remap to, measured; a
+# general id keeps a unit's orders where an ability it stands for does.
+KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
         AbilityId.ADEPT_SHADE,
         AbilityId.BANSHEE_CLOAK_ON,

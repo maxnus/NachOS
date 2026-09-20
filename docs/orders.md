@@ -43,12 +43,14 @@ api.order.camera(base)
 A unit takes the last order it was given in a turn, and the ones before it read `OVERRIDDEN`. This is what the game
 does with two unqueued orders in one request, so NachOS sends only the one that would have stood.
 
-The exception is an ability the unit carries out at once, which reads `OrderBehavior.AT_ONCE`: stim, the cloaks,
-Guardian Shield and the ten others that were seen to leave a moving unit's orders as they were, and everything
-besides making something that only a unit the game offers no move is offered — a structure's own rally and cancel,
-and the way back out of a sieged form. `GENERAL_CANCEL` is not one of them, being offered to a channeling ghost or
-infestor as well, which it takes off what they are doing. Those neither override nor are overridden,
-because the unit does both — a marine stims and goes on moving. `order.behavior` says which an ability is.
+The exception is `OrderBehavior.KEEPS_ORDERS`, an ability that leaves the unit doing what it was doing: stim, the
+cloaks, Guardian Shield and the ten others a sweep saw a moving unit carry out without breaking its move, and
+everything besides making something that is offered only to a type the game offers no move — a structure's own rally
+and cancel, and the way back out of a sieged form. `GENERAL_CANCEL` is not one of them, being offered to a
+channeling ghost or infestor as well, which it takes off what they are doing.
+
+Those neither override nor are overridden, because the unit does both — a marine stims and goes on moving.
+`order.behavior` says which an ability is.
 
 **A structure is a unit like any other here**: it takes the last thing a turn told it to make. The game would put a
 second train behind the first and pay for it from the step it was ordered, which is money spent before the

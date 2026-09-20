@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._techtree._overrides import ACTS_AT_ONCE
+from sc2nachos.gamedata._techtree._overrides import KEEPS_ORDERS_ABILITIES
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
@@ -39,11 +39,12 @@ class OrderBehavior(Enum):
     NEEDS_IDLE = "needs idle"
     """A structure takes it only while it is making nothing, and is answered `NOT_SUPPORTED` otherwise: an add-on, a
     morph, a lift."""
-    AT_ONCE = "at once"
+    KEEPS_ORDERS = "keeps orders"
     """It is carried out and the unit goes on with its orders, so it competes with nothing: stim and the twelve
-    others of `ACTS_AT_ONCE`, and everything besides making something that is offered only to what the game offers
-    no move — a structure's own rally and cancel, and the way back out of a sieged form. `GENERAL_CANCEL` is not one
-    of them: a ghost and an infestor are offered it too, and it takes them off what they are channeling."""
+    others of `KEEPS_ORDERS_ABILITIES`, and everything besides making something that is offered only to a type the
+    game offers no move — a structure's own rally and cancel, and the way back out of a sieged form.
+    `GENERAL_CANCEL` is not one of them: a ghost and an infestor are offered it too, and it takes them off what they
+    are channeling."""
 
 
 def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:
@@ -65,7 +66,7 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             # structure is kept: a gateway is offered no warp gate morph either, and turns itself into one.
             continue
         behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
-    behaviors.update(dict.fromkeys(ACTS_AT_ONCE, OrderBehavior.AT_ONCE))
+    behaviors.update(dict.fromkeys(KEEPS_ORDERS_ABILITIES, OrderBehavior.KEEPS_ORDERS))
     # A general id stands for exact ones, which are of one class: a research level queues, an add-on needs an idle
     # structure, a stim acts at once. A general id no exact one classifies is left for the pass below, which reads
     # every unit type it is offered to rather than one of them.
@@ -73,7 +74,7 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
         behavior = behaviors.get(exact)
         if behavior is not None:
             behaviors[general] = behavior
-    movers = _types_offered_a_move(tech_tree)
+    movers = _unit_types_offered_a_move(tech_tree)
     for ability, performers in tech_tree.ability_performers.items():
         if ability in behaviors or ability in tech_tree.ability_products or not performers:
             continue
@@ -81,11 +82,11 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             # An ability that makes nothing, offered only to things the game offers no move: a structure, an egg, a
             # cocoon. They have nothing an order could take them off but what they are making, and a rally and a
             # cancel were both seen to leave that alone (docs/game-behavior.md).
-            behaviors[ability] = OrderBehavior.AT_ONCE
+            behaviors[ability] = OrderBehavior.KEEPS_ORDERS
     return behaviors
 
 
-def _types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
+def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types the game offers a move, which are the ones an order can take off what they are doing.
 
     A structure is offered none, nor is an egg, a cocoon, or a unit in a form it cannot move in: a sieged tank, a

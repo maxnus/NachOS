@@ -94,20 +94,21 @@ class TestPoint2:
         with pytest.raises(ValueError, match="must be positive"):
             _ = Point((1.0, 2.0)).snapped(step=0)
 
-    def test_cut_down_goes_below_on_each_axis_where_snapped_rounds(self) -> None:
-        assert Point((3.4, 4.6)).cut_down(step=1) == (3.0, 4.0)
+    def test_rounded_down_goes_below_on_each_axis_where_snapped_rounds(self) -> None:
+        assert Point((3.4, 4.6)).rounded_down(step=1) == (3.0, 4.0)
         assert Point((3.4, 4.6)).snapped(step=1) == (3.0, 5.0)
 
-    def test_cut_down_keeps_a_point_already_on_the_lattice(self) -> None:
-        assert Point((3.5, 4.0)).cut_down(step=0.5) == (3.5, 4.0)
+    def test_rounded_down_keeps_a_point_already_on_the_lattice(self) -> None:
+        assert Point((3.5, 4.0)).rounded_down(step=0.5) == (3.5, 4.0)
 
-    def test_cut_down_is_how_the_game_keeps_a_point(self) -> None:
+    def test_rounded_down_is_how_the_game_keeps_a_point(self) -> None:
         """A move to x = 157.123456 is carried out at 157.123291, and one to 157.124456 at 157.124268 (in game)."""
-        assert Point((157.123456, 157.124456)).cut_down(step=POINT_PRECISION) == pytest.approx((157.123291, 157.124268))
+        kept = Point((157.123456, 157.124456)).rounded_down(step=POINT_PRECISION)
+        assert kept == pytest.approx((157.123291, 157.124268))
 
-    def test_cut_down_rejects_a_step_that_is_not_positive(self) -> None:
+    def test_rounded_down_rejects_a_step_that_is_not_positive(self) -> None:
         with pytest.raises(ValueError, match="must be positive"):
-            _ = Point((1.0, 2.0)).cut_down(step=0)
+            _ = Point((1.0, 2.0)).rounded_down(step=0)
 
     def test_length_squared_agrees_with_length(self) -> None:
         point = Point((3.0, 4.0))
@@ -198,8 +199,8 @@ class TestPoint3:
     def test_snapped_carries_height_through(self) -> None:
         assert Point3D((3.26, 4.24, 12.75)).snapped(step=0.5) == (3.5, 4.0, 12.75)
 
-    def test_cut_down_carries_height_through(self) -> None:
-        assert Point3D((3.26, 4.24, 12.75)).cut_down(step=0.5) == (3.0, 4.0, 12.75)
+    def test_rounded_down_carries_height_through(self) -> None:
+        assert Point3D((3.26, 4.24, 12.75)).rounded_down(step=0.5) == (3.0, 4.0, 12.75)
 
     def test_dot_and_length_squared_use_the_ground_plane(self) -> None:
         assert Point3D((3.0, 4.0, 99.0)).length_squared == 25.0

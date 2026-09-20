@@ -4,38 +4,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final, overload
 
-import numpy
-from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import raw_pb2, sc2api_pb2
 
-from sc2nachos.constants import POINT_PRECISION
-from sc2nachos.gamedata import OrderBehavior, TargetType
+from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
+from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
+from sc2nachos.orders._targets import aimed_at, as_sent, check_target, order_target, same_point
 from sc2nachos.protocol import ProtocolError
-from sc2nachos.state import ActionResult, UnitCommand, read_result
+from sc2nachos.state import ActionResult, UnitCommand
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from sc2nachos.gamedata import AbilityData, GameData
+    from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import PointLike
     from sc2nachos.protocol import Client
     from sc2nachos.state import ActionError
     from sc2nachos.state._state import _State
-    from sc2nachos.units import OwnUnit, Target
-
-# What each target type takes, for the message an order aimed at the wrong thing is refused with.
-_TARGETS_WANTED = {
-    TargetType.NOTHING: "no target",
-    TargetType.POINT: "a point",
-    TargetType.UNIT: "a unit",
-    TargetType.POINT_OR_UNIT: "a point or a unit",
-    TargetType.POINT_OR_NOTHING: "a point or no target",
-}
+    from sc2nachos.units import OwnUnit
 
 
 @final
@@ -98,8 +89,8 @@ class OrderBook:
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        aimed = _target(target)
-        _check_target(ability, aimed, row)
+        aimed = aimed_at(target)
+        check_target(ability, aimed, row)
         order = Order(
             ability,
             given,
@@ -133,7 +124,7 @@ class OrderBook:
         order: Order[None] = Order(
             ability,
             (unit,),
-            _order_target(unit, orders[0]),
+            order_target(unit, orders[0]),
             queued=False,
             data=None,
             behavior=behavior,
@@ -166,7 +157,7 @@ class OrderBook:
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, with the turn's orders. Only the last of a turn is sent."""
         aimed = coordinates(at)
-        self._camera_location = Point((_as_sent(aimed[0]), _as_sent(aimed[1])))
+        self._camera_location = Point((as_sent(aimed[0]), as_sent(aimed[1])))
 
     def _send(self, client: Client) -> None:
         """Send the turn's orders, and read the game's verdict onto each. Sends nothing where there is nothing."""
@@ -174,10 +165,10 @@ class OrderBook:
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
         for order, units in self._orders_to_send(given):
-            actions.append(_create_unit_command_action(order, units))
+            actions.append(create_unit_command_action(order, units))
             sent.append((order, units))
         if self._camera_location is not None:
-            actions.append(_create_camera_move_action(self._camera_location))
+            actions.append(create_camera_move_action(self._camera_location))
             self._camera_location = None
         if not actions:
             return
@@ -189,7 +180,7 @@ class OrderBook:
         replaced: set[int] = set()
         # A camera move, where there is one, is answered last and belongs to no order.
         for (order, units), result in zip(sent, results[: len(sent)], strict=True):
-            verdict = read_result(result)
+            verdict = ActionResult.read(result)
             order._verdict = verdict
             if verdict is not ActionResult.SUCCESS:
                 order._state = OrderState.REFUSED
@@ -262,7 +253,7 @@ class OrderBook:
         structure with a reactor is told to make two at once. An ability carried out at once competes with nothing
         either, because the unit does both (in game).
         """
-        return not order.queued and order.behavior is not OrderBehavior.AT_ONCE
+        return not order.queued and order.behavior is not OrderBehavior.KEEPS_ORDERS
 
     def _sent_whatever_a_unit_is_at(self, order: Order[Any]) -> bool:
         """Whether `order` goes out to every unit it names, whatever each is already carrying out.
@@ -282,7 +273,7 @@ class OrderBook:
         if not replaced:
             return
         for order in running:
-            if order.behavior is OrderBehavior.AT_ONCE or order.state.is_final:
+            if order.behavior is OrderBehavior.KEEPS_ORDERS or order.state.is_final:
                 continue
             if all(unit.id in replaced for unit in order._acting_units):
                 order._state = OrderState.OVERRIDDEN
@@ -338,7 +329,7 @@ class OrderBook:
         match first.WhichOneof("target"):
             case "target_world_space_pos":
                 point = first.target_world_space_pos
-                return isinstance(target, Point) and _same_point(target, point.x, point.y)
+                return isinstance(target, Point) and same_point(target, point.x, point.y)
             case "target_unit_tag":
                 return isinstance(target, Unit) and target.tag == first.target_unit_tag
             case _:
@@ -372,89 +363,6 @@ class OrderBook:
         return OrderBehavior.REPLACES if row is None else row.behavior
 
 
-def _target(target: PointLike | Unit[Any] | None) -> Target | None:
-    """An order's target: the unit itself, or the ground point it is aimed at, as the game will read it.
-
-    A height is left behind, since the game takes a target on the ground and reports a height of zero for every one.
-    What is left is cut to the 32 bits the protocol carries a coordinate in, so that the point an order holds is the
-    one the game is given, and the one it reports back.
-    """
-    if target is None or isinstance(target, Unit):
-        return target
-    aimed = coordinates(target)
-    return Point((_as_sent(aimed[0]), _as_sent(aimed[1])))
-
-
-def _as_sent(coordinate: float) -> float:
-    """A coordinate as the protocol carries it, which is a 32-bit float.
-
-    Everything the game reports is one already, widened to a Python float, so only a point going out is ever cut
-    this way: what comes back from a point sent unrounded is not the number that was sent.
-    """
-    return float(numpy.float32(coordinate))
-
-
-def _order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
-    """What an order a unit reports is aimed at, naming a unit through the tracker that holds `unit`."""
-    match order.WhichOneof("target"):
-        case "target_world_space_pos":
-            point = order.target_world_space_pos
-            return Point((point.x, point.y))
-        case "target_unit_tag":
-            return unit._tracker.units.by_tag(order.target_unit_tag)
-        case _:
-            return None
-
-
-def _check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:
-    """Raise `TypeError` where `ability` cannot be aimed at `target`. An ability with no row is left to the game."""
-    if row is None:
-        return
-    wanted = row.target_type
-    takes = {
-        TargetType.NOTHING: target is None,
-        TargetType.POINT: isinstance(target, Point),
-        TargetType.UNIT: isinstance(target, Unit),
-        TargetType.POINT_OR_UNIT: target is not None,
-        TargetType.POINT_OR_NOTHING: not isinstance(target, Unit),
-    }
-    if not takes[wanted]:
-        aimed = "no target" if target is None else "a point" if isinstance(target, Point) else "a unit"
-        raise TypeError(f"{ability.name} takes {_TARGETS_WANTED[wanted]}, and was given {aimed}")
-
-
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
     """The ability a raw order runs, or `NULL` where the curated ids leave it out, which no order of ours runs."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
-
-
-def _create_unit_command_action(order: Order[Any], units: Sequence[OwnUnit[Any]]) -> sc2api_pb2.Action:
-    """One raw command, giving `order` to `units`."""
-    target = order.target
-    tags = [unit.tag for unit in units]
-    if target is None:
-        command = raw_pb2.ActionRawUnitCommand(ability_id=order.ability, unit_tags=tags, queue_command=order.queued)
-    elif isinstance(target, Point):
-        command = raw_pb2.ActionRawUnitCommand(
-            ability_id=order.ability,
-            unit_tags=tags,
-            queue_command=order.queued,
-            target_world_space_pos=common_pb2.Point2D(x=target[0], y=target[1]),
-        )
-    else:
-        command = raw_pb2.ActionRawUnitCommand(
-            ability_id=order.ability, unit_tags=tags, queue_command=order.queued, target_unit_tag=target.tag
-        )
-    return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
-
-
-def _create_camera_move_action(at: Point) -> sc2api_pb2.Action:
-    """The action that moves this player's camera."""
-    center = common_pb2.Point(x=at[0], y=at[1])
-    move = raw_pb2.ActionRawCameraMove(center_world_space=center)
-    return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=move))
-
-
-def _same_point(target: Point, x: float, y: float) -> bool:
-    """Whether a point the game reports is the one ordered, which it keeps to `POINT_PRECISION`, cut down."""
-    return target.cut_down(step=POINT_PRECISION) == Point((x, y)).cut_down(step=POINT_PRECISION)

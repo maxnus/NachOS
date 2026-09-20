@@ -20,7 +20,7 @@ from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook, OrderState
 from sc2nachos.protocol import Client, WebSocketTransport
-from sc2nachos.state import ActionResult, UnknownActionResultError, read_result
+from sc2nachos.state import ActionResult, UnknownActionResultError
 from sc2nachos.state._state import _State
 from sc2nachos.units import OwnUnit
 from sc2nachos.units._tracking import _Tracker
@@ -274,7 +274,7 @@ class TestGivingAnOrder:
         game.observe(0, _marine(1))
 
         assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)).behavior is OrderBehavior.REPLACES
-        assert game.book.issue(game.own(1), _STIM).behavior is OrderBehavior.AT_ONCE
+        assert game.book.issue(game.own(1), _STIM).behavior is OrderBehavior.KEEPS_ORDERS
 
 
 class TestOneOrderAUnitATurn:
@@ -861,10 +861,10 @@ class TestAVerdictNachosCannotName:
     def test_it_says_which_result_the_game_answered_with(self) -> None:
         """The enum is generated from the protocol package, so a game newer than it could answer with a result it
         leaves out. The protocol itself refuses to carry one, so the reading is probed on its own."""
-        assert read_result(int(ActionResult.QUEUE_IS_FULL)) is ActionResult.QUEUE_IS_FULL
+        assert ActionResult.read(int(ActionResult.QUEUE_IS_FULL)) is ActionResult.QUEUE_IS_FULL
 
         with pytest.raises(UnknownActionResultError, match="no member for the result 250"):
-            read_result(250)
+            ActionResult.read(250)
 
 
 class _OrderingBot:
