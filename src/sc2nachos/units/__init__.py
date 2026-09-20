@@ -5,7 +5,16 @@ from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
-from sc2nachos.units._values import Alliance, CloakState, Order, Passenger, RallyTarget, Visibility, VitalType
+from sc2nachos.units._values import (
+    Alliance,
+    CloakState,
+    Passenger,
+    RallyTarget,
+    Target,
+    UnitOrder,
+    Visibility,
+    VitalType,
+)
 
 __all__ = [
     "Alliance",
@@ -15,8 +24,9 @@ __all__ = [
     "OwnUnit",
     "Passenger",
     "RallyTarget",
+    "Target",
     "Unit",
-    "Order",
+    "UnitOrder",
     "Units",
     "UnknownTagError",
     "Visibility",

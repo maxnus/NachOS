@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import Attribute, GameData, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
+from sc2nachos.gamedata import Attribute, GameData, OrderBehavior, Resources, TargetDomain, TargetType
+from sc2nachos.gamedata._techtree import KEEPS_ORDERS_ABILITIES, MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -16,13 +16,9 @@ from sc2nachos.protocol import Recording
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
 # The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling,
-# which an armory is never offered and which does nothing when ordered. The `ArmoryResearch` spelling is what an
-# armory offers and runs, and is what `ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1` and its levels name.
-_RESEARCHED_BY_A_DEAD_ID = {
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1,
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2,
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3,
-}
+# which an armory is never offered and which does nothing when ordered, and which no curated id names.
+# `gamedata/_techtree/_overrides.py` names the `ArmoryResearch` spelling an armory offers and runs for each.
+_RESEARCHED_BY_A_DEAD_ID = frozenset(MISNAMED_RESEARCH_ABILITIES)
 
 # Rows naming a maker the game no longer honors: tested in game, none is ever offered and ordering one does nothing.
 # `gamedata/_techtree/_overrides.py` names the ability that works for each.
@@ -271,6 +267,43 @@ class TestARecordedGamesTables:
         lost = {unit: named[unit] for unit in UnitTypeId if unit in named and data.units[unit].creation_ability is None}
         assert lost == _NO_MAKER
 
+    def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
+        """Each was seen in game to leave a moving unit's orders as they were, so each must still be orderable."""
+        data = _tables(path)
+        for ability in KEEPS_ORDERS_ABILITIES:
+            row = data.abilities[ability]
+            assert row.performers, f"{ability.name} is offered to nobody"
+            assert row.behavior is OrderBehavior.KEEPS_ORDERS
+
+    def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
+        data = _tables(path)
+        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_HOLD_FIRE_ON):
+            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS
+
+    def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
+        """Ordering one of these was seen in game to go behind what a structure was making, or to be refused while
+        it was making anything."""
+        data = _tables(path)
+        queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
+        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BARRACKS_BUILD_TECH_LAB)
+        replaces = (AbilityId.GENERAL_MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
+        assert [data.abilities[ability].behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
+        assert [data.abilities[ability].behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
+        assert [data.abilities[ability].behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
+
+    def test_a_general_ability_takes_the_class_of_the_ones_it_stands_for(self, path: Path) -> None:
+        """A general research id carries no product of its own: its levels do."""
+        data = _tables(path)
+        levels = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS
+        assert data.abilities[levels].behavior is OrderBehavior.QUEUES
+        assert data.abilities[AbilityId.GENERAL_BUILD_REACTOR].behavior is OrderBehavior.NEEDS_IDLE
+
+    def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
+        """Measured for a rally and a cancel, and read the same way for the rest (docs/game-behavior.md)."""
+        data = _tables(path)
+        for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.GENERAL_CANCEL_QUEUE):
+            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
         """Its alias is an empty row no unit is ever one of; every other alias names a unit you can own."""
         answer = _answer(path)
@@ -320,10 +353,20 @@ class TestARecordedGamesTables:
         for upgrade in UpgradeId:
             row = data.upgrades[upgrade]
             assert row.research_steps > 0
-            if upgrade in _RESEARCHED_BY_A_DEAD_ID:
-                assert row.research_ability is None, f"{upgrade} names a maker again"
-            else:
-                assert row.research_ability is not None, f"{upgrade} cannot be researched"
+            assert row.research_ability is not None, f"{upgrade} cannot be researched"
+
+    def test_a_misnamed_research_ability_stands_in_only_where_the_table_names_a_dead_one(self, path: Path) -> None:
+        """Once the table names a working id for these, the entry can go."""
+        answer = _answer(path)
+        data = GameData(answer)
+        named = {row.upgrade_id: row.ability_id for row in answer.upgrades}
+        for upgrade, ability in MISNAMED_RESEARCH_ABILITIES.items():
+            assert AbilityId.get(named[upgrade]) is None, f"the table names a curated ability for {upgrade.name}"
+            assert data.upgrades[upgrade].research_ability is ability
+            assert data.abilities[ability].product is upgrade
+            # Without the product it would read as an ability that makes nothing, which competes with nothing.
+            assert data.abilities[ability].behavior is OrderBehavior.QUEUES
+        assert _RESEARCHED_BY_A_DEAD_ID
 
     def test_a_transient_form_of_a_unit_names_the_one_it_is_a_form_of(self, path: Path) -> None:
         data = _tables(path)

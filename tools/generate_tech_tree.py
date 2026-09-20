@@ -20,7 +20,7 @@ from types import MappingProxyType
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.gamedata import Attribute, TechRequirements, UnitTypeUpgrade, UpgradeType, WeaponUpgrade
-from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES, TechTree
+from sc2nachos.gamedata._techtree import MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
 
@@ -259,9 +259,9 @@ def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, Abil
 def _products(
     creation_abilities: Mapping[UnitTypeId, AbilityId], findings: Mapping[str, object]
 ) -> dict[AbilityId, UnitTypeId | UpgradeId]:
-    """The unit type or upgrade each ability makes, the unnamed creation abilities included. One sharing its ability
-    with a type the game's table names it for, as a rich refinery shares the plain build with a refinery, leaves the
-    table's product standing."""
+    """The unit type or upgrade each ability makes, the unnamed creation abilities included, and the research
+    abilities the table misnames. One sharing its ability with a type the game's table names it for, as a rich
+    refinery shares the plain build with a refinery, leaves the table's product standing."""
     products: dict[AbilityId, UnitTypeId | UpgradeId] = {}
     for unit_type, ability in creation_abilities.items():
         if UNNAMED_CREATION_ABILITIES.get(ability) is not unit_type:
@@ -271,6 +271,8 @@ def _products(
     for upgrade_name, ability_name in _mapping(findings["research_abilities"]).items():
         if (upgrade := _upgrade(upgrade_name)) and (ability := _ability(str(ability_name))):
             products[ability] = upgrade
+    for upgrade, ability in MISNAMED_RESEARCH_ABILITIES.items():
+        products[ability] = upgrade
     return products
 
 

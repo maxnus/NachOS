@@ -24,8 +24,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   Faster speed ([Units](#units)).
 - **The tables are keyed by id, and what relates them was swept in game**, in place of python-sc2's hand-written
   dicts ([The tables](#the-tables)).
-- **Orders are not in NachOS yet.** Until they are, a bot sends them as protocol messages through
-  `api.client.act`, and debug commands through `api.client.debug`.
+- **Orders are buffered and sent once a turn**, through `api.order`, and each answers for itself
+  ([Orders](#orders)). Debug commands are still protocol messages through `api.client.debug`.
 
 ## Running a game
 
@@ -118,6 +118,34 @@ reads it, is in [game-behavior.md](game-behavior.md).
   camera shows. `Alert` has no `AlertError` or `TrainError`, which the game was never seen to raise
   ([game behavior](game-behavior.md#alerts-and-the-camera)).
 
+## Orders
+
+[orders.md](orders.md) says how an order is given, what it competes with, and what becomes of it.
+
+| python-sc2 | NachOS |
+|---|---|
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.order.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
+| `bot.do(action)`, `await bot._do_actions(...)` | `api.order.issue(...)`, sent once the turn's handlers have run |
+| nothing | `api.order.clear_queue(unit)`, `api.order.issued(unit)` |
+| `bot.do(action, queue=True)` | `api.order.issue(..., queued=True)` |
+| `bot.client.move_camera(p)` | `api.order.camera(p)` |
+| `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
+| nothing | `order.state`, `order.verdict`, `order.error`, `order.data` |
+
+- **An order is a thing you hold on to.** `issue` answers with an `Order` that says what the game answered, whether
+  it was carried out, and whether it has finished. python-sc2 hands back nothing.
+- **A unit takes one order a turn, the last it was given**, besides the abilities it carries out at once. There is
+  no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
+- **Nothing is subtracted as you order.** python-sc2's `subtract_cost` keeps its own tally; NachOS reads what the
+  game reports, which already counts a build's cost from the step it was ordered
+  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
+  unqueued order the same as a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
+  queued behind it, so re-sending one is not free after all. NachOS holds it back and the order reads `RUNNING`;
+  dropping a queue on purpose is `api.order.clear_queue(unit)`.
+- **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
+  `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
+
 ## Errors
 
 - **Everything NachOS raises for a failure of its own is a `NachOSError`.** python-sc2's `ProtocolError` whose
@@ -203,7 +231,6 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
-| `UnitOrder` | `Order` |
 | `unit.distance_to(p)` | `unit.position.distance_to(p)` |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
@@ -315,7 +342,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `state.effects` | `api.effects` |
 | `state.common.larva_count` | `len(api.units.own.of_type(UnitType.Larva))` |
 | `state.dead_units`, `chat`, `actions`, `alerts` | events: see Events |
-| `state.action_errors` | nothing yet |
+| `state.action_errors` | `api.action_errors` |
 
 - **Each read answers from the last observation, and nothing is read until asked for.** There is no `state`
   object to hold on to; `api.score` read next turn is next turn's score.

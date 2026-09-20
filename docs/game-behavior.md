@@ -433,6 +433,10 @@ Each entry ends with how it was seen:
   move, a unit for a supply depot (tool `sweep_orders`).
 - An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it. The tag it was
   seen under is refused, `NotSupported` (tool `sweep_orders`).
+- A point crosses the protocol as a 32-bit float, so a coordinate the game reports is one exactly, widened; a
+  point sent is cut to one on the way out, before the game rounds it down to its own lattice. The two are not
+  the same cut: x = 157.123288015625 goes out as 157.123291015625, a whole lattice step above where cutting it
+  down alone would land (tool `sweep_orders`; stated).
 - The game keeps a point to 1/4096, cut down: a move to x = 157.123456 is carried out and reported as 157.123291, and
   one to 157.124456 as 157.124268. A builder's order shows its structure's site snapped as the structure will stand,
   on a tile corner for an even footprint and a tile center for an odd one: a depot asked at (86.3, 159.7) at
@@ -558,3 +562,11 @@ Each entry ends with how it was seen:
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it stale and never finds it dead (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
+- **What a structure's own abilities do to what it is making** was measured for a rally and a cancel, which it
+  goes on making through, and for nothing else. NachOS reads every ability that makes nothing and is offered only to
+  things the game offers no move — a structure, an egg, a cocoon — as leaving their orders alone, loads, unloads,
+  salvage, landing and the energy casts included (tool `sweep_orders`).
+- **The half of a toggle that turns one off** was never measured: a unit is offered only the half that fits its
+  state, so the sweep of what an ability does to a moving unit's orders gave every `_ON` half and no `_OFF` one.
+  Whether un-cloaking, stopping creep or lowering hold fire keeps a unit's orders as the `_ON` half does is
+  unknown, so NachOS reads them as replacing its orders (tool `sweep_orders`).

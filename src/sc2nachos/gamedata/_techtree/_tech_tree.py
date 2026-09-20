@@ -7,13 +7,15 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
+from sc2nachos.ids import UpgradeId
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._tech_requirements import TechRequirements
     from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
     from sc2nachos.gamedata._upgrade import UpgradeType
-    from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+    from sc2nachos.ids import AbilityId, UnitTypeId
 
 
 @final
@@ -46,6 +48,8 @@ class TechTree:
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)
     """The unit types that perform each ability. A general ability's performers are those of the abilities that stand
     for it."""
+    research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
+    """The ability that researches each upgrade, read back from what each ability makes."""
 
     def __post_init__(self) -> None:
         performers: defaultdict[AbilityId, set[UnitTypeId]] = defaultdict(set)
@@ -56,3 +60,8 @@ class TechTree:
             performers[general] |= performers.get(exact, set())
         by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
         object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
+        researched: dict[UpgradeId, AbilityId] = {}
+        for ability, product in self.ability_products.items():
+            if isinstance(product, UpgradeId):
+                researched[product] = ability
+        object.__setattr__(self, "research_abilities", MappingProxyType(researched))

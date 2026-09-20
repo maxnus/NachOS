@@ -6,7 +6,7 @@ from typing import Any
 
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
-from sc2nachos.units._values import Order, Passenger, RallyTarget
+from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -18,10 +18,10 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     __slots__ = ()
 
     @property
-    def orders(self) -> tuple[Order, ...]:
+    def orders(self) -> tuple[UnitOrder, ...]:
         """What it is doing, then what it has queued."""
         unit_by_tag = self._tracker.units.by_tag
-        return tuple(Order.from_proto(order, unit_by_tag) for order in self._latest_data.orders)
+        return tuple(UnitOrder.from_proto(order, unit_by_tag) for order in self._latest_data.orders)
 
     @property
     def is_idle(self) -> bool:

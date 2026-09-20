@@ -43,6 +43,7 @@ def manage_workers(event):
 ```
 
 [Events](docs/events.md) lists every event a game hands out, and how to select some of them.
+[Orders](docs/orders.md) says how a bot orders its units, and what it learns of each order.
 
 NachOS itself never creates or exposes a singleton, and holds no module-level mutable state. The singleton is your
 choice, confined to one line of your own code, and one api plays any number of games in turn. Two bots playing

@@ -84,6 +84,10 @@ class VitalType(Enum):
 _NO_UNIT = 1 << 32
 
 
+type Target = Point | Unit[Any]
+"""What an order or a rally point names: a position on the ground, or a unit."""
+
+
 def _target_point(point: common_pb2.Point) -> Point:
     """The ground position an order or rally point names. The game reports a height of zero for every one."""
     return Point((point.x, point.y))
@@ -91,12 +95,12 @@ def _target_point(point: common_pb2.Point) -> Point:
 
 @final
 @dataclass(frozen=True, slots=True)
-class Order:
+class UnitOrder:
     """Something a unit has been told to do and is doing, or has queued."""
 
     ability: AbilityId
     """What it was ordered."""
-    target: Point | Unit[Any] | None
+    target: Target | None
     """Where it was sent, the unit it was sent at, or `None` for an order that needs neither."""
     progress: float
     """How far through the order it is, from 0 to 1, for an order that trains or researches, and 0 otherwise."""
@@ -106,7 +110,7 @@ class Order:
         """Read an order a unit reported, naming a unit through `unit_by_tag`."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
-                target: Point | Unit[Any] | None = _target_point(order.target_world_space_pos)
+                target: Target | None = _target_point(order.target_world_space_pos)
             case "target_unit_tag":
                 target = unit_by_tag(order.target_unit_tag)
             case _:
@@ -119,7 +123,7 @@ class Order:
 class RallyTarget:
     """Where a structure sends what it makes."""
 
-    target: Point | Unit[Any]
+    target: Target
     """The unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
 
     @classmethod

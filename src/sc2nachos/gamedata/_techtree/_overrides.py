@@ -1,16 +1,33 @@
-"""The abilities that make a unit type which the game's own table does not name for it.
+"""What the game's own tables get wrong or leave out, hand-written and never generated.
 
-Hand-written, and never generated, so a new sweep of the tech tree keeps every entry. `tools/sweep_tech_tree.py` orders
-each ability here in game, and `tools/generate_tech_tree.py` refuses to write the tech tree unless the sweep saw each
-make its unit type, so a patch that breaks one stops the regeneration. `tests/test_gamedata.py` fails once the game's
-table names an ability here for its type, and the entry can go.
+`tools/generate_tech_tree.py` writes none of this, so a new sweep keeps every entry. Each is held to the sweep that
+found it: the generator refuses to write the tech tree unless the sweep saw each creation ability here make its unit
+type, so a patch that breaks one stops the regeneration, and `tests/test_gamedata.py` fails once the game's table
+names an ability here for its type, so the entry can go.
 """
 
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+
+MISNAMED_RESEARCH_ABILITIES: Final[Mapping[UpgradeId, AbilityId]] = MappingProxyType(
+    {
+        # The upgrade table says these three are researched by the `ArmoryResearchSwarm` spelling, which an armory
+        # is never offered and which does nothing when ordered; it is uncurated, so without this the upgrade names
+        # no ability and the ability that does research it makes nothing. `ArmoryResearch` is what an armory offers
+        # and runs (#23, #28; tested).
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1,
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2,
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3,
+    }
+)
+"""The ability that researches each upgrade the game's own table names a dead id for.
+
+A nuke has no entry of its own kind: `GHOST_ACADEMY_BUILD_NUKE` makes something the curated unit types leave out,
+so there is no product to name it, and NachOS reads it as an ability that makes nothing.
+"""
 
 UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
     {
@@ -40,3 +57,29 @@ UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxy
 )
 """The unit type each ability makes, each seen doing so in game. Where the table names no working ability for the type,
 this one is its creation ability, and otherwise it makes the type besides the one the table names."""
+
+# Ordered unqueued while a unit moves, each of these was carried out and the move went on, where every other ability
+# a unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and
+# no ability belongs here that a sweep has not seen keep a moving unit's orders.
+#
+# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability.py` reads an ability that makes nothing
+# and is offered only to a type the game offers no move as keeping its orders too, which is a structure's own rally
+# and cancel. Nor were the half of a toggle that turns one off, or the general ids these remap to, measured; a
+# general id keeps a unit's orders where an ability it stands for does.
+KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
+    {
+        AbilityId.ADEPT_SHADE,
+        AbilityId.BANSHEE_CLOAK_ON,
+        AbilityId.GHOST_CLOAK_ON,
+        AbilityId.GHOST_HOLD_FIRE_ON,
+        AbilityId.HYDRALISK_LUNGE,
+        AbilityId.MARAUDER_STIM,
+        AbilityId.MARINE_STIM,
+        AbilityId.MEDIVAC_BOOST,
+        AbilityId.MOTHERSHIP_CLOAK_FIELD,
+        AbilityId.ORACLE_PULSAR_BEAM_ON,
+        AbilityId.OVERLORD_CREEP_ON,
+        AbilityId.SENTRY_GUARDIAN_SHIELD,
+        AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
+    }
+)
