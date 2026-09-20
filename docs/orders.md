@@ -44,10 +44,10 @@ A unit takes the last order it was given in a turn, and the ones before it read 
 does with two unqueued orders in one request, so NachOS sends only the one that would have stood.
 
 The exception is `OrderBehavior.KEEPS_ORDERS`, an ability that leaves the unit doing what it was doing: stim, the
-cloaks, Guardian Shield and the ten others a sweep saw a moving unit carry out without breaking its move, and
-everything besides making something that is offered only to a type the game offers no move — a structure's own rally
-and cancel, and the way back out of a sieged form. `GENERAL_CANCEL` is not one of them, being offered to a
-channeling ghost or infestor as well, which it takes off what they are doing.
+cloaks, Guardian Shield, both halves of every toggle, and the rest a sweep saw a moving unit carry out without
+breaking its move, and everything besides making something that is offered only to a type the game offers no move —
+a structure's own rally, load, cancel and energy casts, and the way back out of a sieged form. `GENERAL_CANCEL` is
+not one of them, being offered to a channeling ghost or infestor as well, which it takes off what they are doing.
 
 Those neither override nor are overridden, because the unit does both — a marine stims and goes on moving.
 `order.behavior` says which an ability is.

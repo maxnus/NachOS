@@ -63,21 +63,33 @@ this one is its creation ability, and otherwise it makes the type besides the on
 # no ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
 # This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability.py` reads an ability that makes nothing
-# and is offered only to a type the game offers no move as keeping its orders too, which is a structure's own rally
-# and cancel. Nor were the half of a toggle that turns one off, or the general ids these remap to, measured; a
-# general id keeps a unit's orders where an ability it stands for does.
+# and is offered only to a type the game offers no move as keeping its orders too, which is a structure's own rally,
+# load, cancel and energy casts. The general ids these remap to are not measured; a general id keeps a unit's orders
+# where an ability it stands for does.
+#
+# A toggle is here in both halves: a unit is offered the half that turns one off only once the half that turns it on
+# has taken, so each was given in turn to a unit moving, and both left its move first in its orders. A lurker's hold
+# fire is the toggle neither half of which could be given, since it is offered only burrowed, and the game offers a
+# burrowed lurker no move.
 KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
         AbilityId.ADEPT_SHADE,
+        AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
+        AbilityId.BANELING_ATTACK_STRUCTURES_ON,
+        AbilityId.BANSHEE_CLOAK_OFF,
         AbilityId.BANSHEE_CLOAK_ON,
+        AbilityId.GHOST_CLOAK_OFF,
         AbilityId.GHOST_CLOAK_ON,
+        AbilityId.GHOST_HOLD_FIRE_OFF,
         AbilityId.GHOST_HOLD_FIRE_ON,
         AbilityId.HYDRALISK_LUNGE,
         AbilityId.MARAUDER_STIM,
         AbilityId.MARINE_STIM,
         AbilityId.MEDIVAC_BOOST,
         AbilityId.MOTHERSHIP_CLOAK_FIELD,
+        AbilityId.ORACLE_PULSAR_BEAM_OFF,
         AbilityId.ORACLE_PULSAR_BEAM_ON,
+        AbilityId.OVERLORD_CREEP_OFF,
         AbilityId.OVERLORD_CREEP_ON,
         AbilityId.SENTRY_GUARDIAN_SHIELD,
         AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
