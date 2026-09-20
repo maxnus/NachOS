@@ -261,7 +261,7 @@ def played(
     step = observation.observation.game_loop
     if game is None:
         state = _State(observation, tracker, game_map)
-        orders = OrderBook(tracker.data)
+        orders = OrderBook(tracker.data, tracker, state)
         game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, orders, observation, state, step)
     game._take_in(observation, step)
     events._set_step(step)

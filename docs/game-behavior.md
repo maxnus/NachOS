@@ -311,6 +311,14 @@ Each entry ends with how it was seen:
 - A morph's cost includes what it came from (an orbital command 550 minerals, the command center's 400 included),
   though the game charges only the difference, and its build time only the morph (25 s). A consumed performer's
   cost is folded in: an extractor costs 75. Costs are whole numbers, and zerglings come in pairs (#23; corpus).
+- What the game charges as an ability is ordered is its product's row less that of what the product is made out of,
+  which is right for every creation ability but six. A hatchery is charged 300 where that leaves 275, its row
+  reading 325 rather than the drone's 50 and a hatchery's 300; a warp gate nothing, though a gateway's 150 stands
+  in its row and nothing is recorded as made out of; an overlord transport 25/25, where its row reads the same 100
+  an overlord's does; a pair of zerglings 50 minerals and a whole supply, where the row prices one; an auto turret
+  nothing but the raven's energy, where its row keeps a price the game no longer charges; and a purification nova
+  no supply, though its row carries the disruptor's 3. A reactor and a tech lab need no correction of their own any
+  more: their rows read 50/50 and 50/25 (corpus).
 - `unit_alias` names the type something morphed from; `is_building` means "needs placing"; an add-on's
   `footprint_radius` is 3.5, the reach past its host's far side; a bare tech lab or reactor is a requirement no unit
   is built as (#23).
@@ -431,6 +439,17 @@ Each entry ends with how it was seen:
   `Cancel_QueueCancelToSelection`, and a structure going up `Cancel_BuildInProgress`. `Cancel_Last` is answered
   `Error` by a morph and by an add-on, so the cancel to send is the one the game offers, not the generic one (tool
   `sweep_orders`).
+- Which cancel a structure is offered turns on what it is making, and every producer of all three races has one. A
+  command center morphing is offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, by which morph it is
+  running; a barracks, a factory and a starport building an add-on their own `Cancel_BarracksAddOn`,
+  `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`, either add-on taking the same one; a hatchery morphing
+  `Cancel_MorphLair`, a lair `Cancel_MorphHive` and a spire `Cancel_MorphGreaterSpire`; and everything training or
+  researching the queue cancel of its own kind -- `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a
+  forge, an evolution chamber and the rest, `Cancel_QueueCancelToSelection` for a command center, an orbital
+  command, a hatchery, a lair and a hive, `Cancel_QueuePasive` for a nexus and
+  `Cancel_QueuePassiveCancelToSelection` for a planetary fortress. It is offered only while the work is going on,
+  which is why an idle structure is offered none, and under `fast_build` an add-on is up again within two steps, so
+  a structure set to build one has to be read at every step (tool `sweep_tech_tree`).
 - An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
   refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
   an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay
@@ -618,6 +637,9 @@ Each entry ends with how it was seen:
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it stale and never finds it dead (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
+- **Whether a worker died or became what it was building.** A drone killed while its hatchery is half up is gone
+  from the observation exactly as one that became the hatchery is, and neither is reported, so an order to build
+  cannot tell the two apart (tool `sweep_orders`).
 - **What an ability a structure cannot use while it is busy does to what it is making** is still open for the ones
   the game refuses rather than takes: a lift is answered `NotSupported` and a morph and an add-on likewise, so what
   they would do to a queue was never seen. Everything a producer is offered that it does take leaves what it is

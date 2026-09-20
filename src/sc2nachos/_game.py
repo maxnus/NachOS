@@ -94,6 +94,7 @@ class _Game:
         enemy = Enemy()
         tracker = _Tracker(tables, enemy)
         game_map = GameMap(info)
+        state = _State(observation, tracker, game_map)
         game = cls(
             client,
             game_map,
@@ -101,9 +102,9 @@ class _Game:
             enemy,
             infer_enemy_upgrades,
             tracker,
-            OrderBook(tables),
+            OrderBook(tables, tracker, state),
             observation,
-            _State(observation, tracker, game_map),
+            state,
             step,
         )
         game._take_in(observation, step)

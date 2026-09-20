@@ -23,6 +23,7 @@ class Order[T]:
     __slots__ = (
         "_ability",
         "_behavior",
+        "_cancels",
         "_data",
         "_error",
         "_forced",
@@ -63,6 +64,7 @@ class Order[T]:
         self._verdict: ActionResult | None = None
         self._error: ActionError | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
+        self._cancels: Order[Any] | None = None
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
@@ -102,6 +104,11 @@ class Order[T]:
     def state(self) -> OrderState:
         """How far it has got."""
         return self._state
+
+    @property
+    def cancels(self) -> Order[Any] | None:
+        """The order this one takes back, for one `api.order.cancel` gave, and `None` for every other."""
+        return self._cancels
 
     @property
     def verdict(self) -> ActionResult | None:

@@ -37,6 +37,8 @@ api.order.camera(base)
   by sending that order back unqueued. It answers the order it sent, or `None` where there was nothing to drop — a
   structure making something is not cleared this way, since the game would only put another of the same behind it.
 - **`api.order.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
+- **`api.order.cancel(order)`** takes back what a structure is making, and **`api.order.budget`** says what the turn
+  can still pay for. Both have a section of their own below.
 
 ## One order a unit a turn
 
@@ -45,9 +47,11 @@ does with two unqueued orders in one request, so NachOS sends only the one that 
 
 The exception is `OrderBehavior.KEEPS_ORDERS`, an ability that leaves the unit doing what it was doing: stim, the
 cloaks, Guardian Shield, both halves of every toggle, and the rest a sweep saw a moving unit carry out without
-breaking its move, and everything besides making something that is offered only to a type the game offers no move —
-a structure's own rally, load, cancel and energy casts, and the way back out of a sieged form. `GENERAL_CANCEL` is
-not one of them, being offered to a channeling ghost or infestor as well, which it takes off what they are doing.
+breaking its move, and everything besides making something and cancelling that is offered only to a type the game
+offers no move — a structure's own rally, load and energy casts, and the way back out of a sieged form.
+`OrderBehavior.CANCELS`, a structure's own cancel, competes with nothing either: it takes the structure off nothing
+but the last thing it queued. `GENERAL_CANCEL` is neither, being offered to a channeling ghost or infestor as well,
+which it takes off what they are doing.
 
 Those neither override nor are overridden, because the unit does both — a marine stims and goes on moving.
 `order.behavior` says which an ability is.
@@ -82,6 +86,71 @@ An order a unit is already carrying out is not sent again. In game such an order
 nothing out and is left out of the reported actions — its one effect is that the unit's queued orders are gone. So
 NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose is `clear_queue`.
 
+## What a turn can pay for
+
+The game charges a train, a research, a morph and a build as the order is taken, so a turn that orders more than it
+has is a turn that burns it: what it cannot pay for is answered `SUCCESS` and then silently dropped, or hung in a
+queue that never starts. `api.order.budget` counts what the turn has already ordered, and an order it cannot cover
+is refused by NachOS and never sent.
+
+```python
+budget = api.order.budget
+budget.resources            # Resources(minerals, vespene) left after what the turn has ordered
+budget.supply_left          # what is left under the cap, the same way
+budget.slots_left(barracks) # what it will still take: 5, or 8 with a finished reactor
+budget.covers(AbilityId.BARRACKS_TRAIN_MARINE, barracks)   # whether the turn can pay for it
+budget.refusal(AbilityId.BARRACKS_TRAIN_MARINE, barracks)  # what it would be answered, or None
+```
+
+With 50 minerals and two barracks, the second marine of the turn comes back refused:
+
+```python
+first = api.order.issue(one, AbilityId.BARRACKS_TRAIN_MARINE)    # GIVEN
+second = api.order.issue(other, AbilityId.BARRACKS_TRAIN_MARINE)  # REFUSED, NOT_ENOUGH_MINERALS
+```
+
+- **The verdict is what the game would have answered**: `NOT_ENOUGH_MINERALS`, `NOT_ENOUGH_VESPENE`,
+  `NOT_ENOUGH_FOOD`, `QUEUE_IS_FULL`, or `NOT_SUPPORTED` for an ability this unit's type cannot run, whose tech is
+  not in, or that a structure must be idle to take.
+- **Nothing is held over.** A refused order is final; the bot decides again next turn, from next turn's state.
+- **An order withdrawn or overridden stops counting at once**, since the budget is summed from the orders the turn
+  still holds rather than kept as a running total.
+- **A cancel frees neither a slot nor a mineral in the same turn**, which is what the game does (in game), so the
+  budget counts nothing back for one until the next observation.
+- **`issue(..., checked=False)`** sends the order whatever the budget says. That is the way past a tech-tree row
+  that has gone stale on a new build, and the way to fill a queue the supply cap cannot feed yet on purpose.
+
+Two things to know about what it counts:
+
+- **Supply is where NachOS is stricter than the game.** The game charges supply as a unit *starts*, so it takes a
+  queued order the cap cannot feed, charges its minerals and hangs it at no progress for as long as it is left
+  there, with no error and nothing dropped. NachOS refuses it instead, so a bot is never left holding an order that
+  will never start.
+- **A research ordered by its general id is budgeted at the cheapest level it stands for**, since which level the
+  game will run is not knowable until it is ordered, and the cheapest refuses nothing the game would take.
+
+In a stepped game the check is exact: the turn's orders go out before the game steps, so the minerals NachOS read
+are the minerals the game charges against. In a realtime game the game moves on while the handlers run, so a
+refusal there is conservative.
+
+## Taking one back
+
+```python
+cancel = api.order.cancel(order)
+```
+
+`api.order.cancel` sends the cancel the game offers the structure for what it is making — its own, since
+`GENERAL_CANCEL_LAST` is answered `ERROR` by a morph and by an add-on — and answers the order that goes out, whose
+`cancels` names the one it takes back. That handle settles `CANCELLED` as soon as the game takes the cancel.
+
+- **Only the last thing a structure is making can be cancelled**: a raw command reaches no further, so an order
+  behind another raises `ValueError`, as does one given to more than one unit. Two cancels in a turn walk back two
+  items.
+- It answers `None` where there is nothing to cancel: an order the book is done with, one whose structure is gone,
+  or one the structure is not carrying out.
+- What comes back is the game's own rule — all of a train or a research, three quarters of a morph, an add-on or a
+  structure going up — and it comes back in a later observation, not this turn.
+
 ## What became of it
 
 `order.state` is where an order has got to, and `api.order.running` holds every order NachOS is still following.
@@ -92,7 +161,9 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
-| `REFUSED` | Answered something else: `order.verdict` says what. |
+| `LOST` | Every unit it went out for died before it was done, so nothing came of it. An order whose unit is used up carrying it out, a larva becoming a drone, is `DONE` instead. |
+| `CANCELLED` | Taken back with `api.order.cancel`, which the game took. |
+| `REFUSED` | Answered something else, or never sent because the turn could not pay for it: `order.verdict` says what the game would have answered. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |
 | `OVERRIDDEN` | A later order took every unit this one was given to, in this turn before it was sent, or in a later one. |

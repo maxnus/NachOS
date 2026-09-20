@@ -12,10 +12,10 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import OrderBehavior, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook, OrderState
@@ -37,9 +37,30 @@ _RALLY = AbilityId.GENERAL_RALLY
 # An unset `target` reads as the first value the enum declares, which is the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 
+_CANCEL_QUEUE = AbilityId.GENERAL_CANCEL_QUEUE
+_CANCEL_LAST = AbilityId.GENERAL_CANCEL_LAST
+_MORPH_ORBITAL = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
+_CANCEL_ORBITAL = AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND
+_CANCEL = AbilityId.GENERAL_CANCEL
+
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
-    data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.COMMAND_CENTER, attributes=[data_pb2.Attribute.Structure], mineral_cost=400
+    ),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.ORBITAL_COMMAND, attributes=[data_pb2.Attribute.Structure], mineral_cost=550
+    ),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological], mineral_cost=50, food_required=1
+    ),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.REAPER,
+        attributes=[data_pb2.Attribute.Biological],
+        mineral_cost=50,
+        vespene_cost=50,
+        food_required=1,
+    ),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
@@ -49,8 +70,19 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
+        data_pb2.AbilityData(ability_id=_CANCEL_QUEUE, remaps_to_ability_id=_CANCEL_LAST),
+        data_pb2.AbilityData(ability_id=_CANCEL_LAST),
+        data_pb2.AbilityData(ability_id=_MORPH_ORBITAL),
+        data_pb2.AbilityData(ability_id=_CANCEL_ORBITAL, remaps_to_ability_id=_CANCEL),
+        data_pb2.AbilityData(ability_id=_CANCEL),
     ],
 )
+
+
+# What the harness gives the player unless a test says otherwise: enough to pay for anything, and the research its
+# units are offered, so that a test of what an order does is not a test of what the budget covers.
+_RICH = 100_000
+_RESEARCHED = (UpgradeId.STIMPACK,)
 
 
 def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
@@ -70,7 +102,8 @@ class _Game:
         self.client, self.transport = make_client(*responses)
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info())
-        self.book = OrderBook(_TABLES)
+        self.book = OrderBook(_TABLES, self.tracker, _State(make_observation(0), self.tracker, self.map))
+        self.observe(0)
 
     def observe(
         self,
@@ -79,9 +112,26 @@ class _Game:
         actions: tuple[sc2api_pb2.Action, ...] = (),
         errors: tuple[sc2api_pb2.ActionError, ...] = (),
         dead: tuple[int, ...] = (),
+        minerals: int = _RICH,
+        vespene: int = _RICH,
+        supply: tuple[int, int] = (0, 200),
+        upgrades: tuple[UpgradeId, ...] = _RESEARCHED,
     ) -> None:
-        """Take in an observation of `units` at `step`, and settle the orders it answers for."""
-        observation = make_observation(step, units=units, actions=actions, action_errors=errors, dead=dead)
+        """Take in an observation of `units` at `step`, and settle the orders it answers for.
+
+        The player is rich, unfed by nothing and has researched what its units are offered unless told otherwise,
+        so that a test of what an order does is not a test of what the budget covers.
+        """
+        used, cap = supply
+        observation = make_observation(
+            step,
+            units=units,
+            actions=actions,
+            action_errors=errors,
+            dead=dead,
+            upgrades=[int(upgrade) for upgrade in upgrades],
+            common=sc2api_pb2.PlayerCommon(minerals=minerals, vespene=vespene, food_used=used, food_cap=cap),
+        )
         self.tracker.update(observation.observation.raw_data, step)
         self.book._take_in(_State(observation, self.tracker, self.map), step)
 
@@ -104,9 +154,26 @@ def _marine(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (10.
     return make_unit(tag, UnitTypeId.MARINE, at=at, orders=orders)
 
 
-def _barracks(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
-    """One of this player's barracks, making what `orders` say."""
-    return make_unit(tag, UnitTypeId.BARRACKS, at=(12.0, 12.0), orders=orders)
+def _barracks(tag: int, *orders: raw_pb2.UnitOrder, add_on_tag: int = 0) -> raw_pb2.Unit:
+    """One of this player's barracks, finished, making what `orders` say."""
+    return make_unit(
+        tag, UnitTypeId.BARRACKS, at=(12.0, 12.0), orders=orders, add_on_tag=add_on_tag, build_progress=1.0
+    )
+
+
+def _command_center(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """One of this player's command centers, finished, making what `orders` say."""
+    return make_unit(tag, UnitTypeId.COMMAND_CENTER, at=(20.0, 20.0), orders=orders, build_progress=1.0)
+
+
+def _morphing(progress: float = 0.5) -> raw_pb2.UnitOrder:
+    """The order a command center shows while it becomes an orbital command."""
+    return raw_pb2.UnitOrder(ability_id=_MORPH_ORBITAL, progress=progress)
+
+
+def _reactor(tag: int) -> raw_pb2.Unit:
+    """A finished reactor, which makes the structure it is attached to hold eight."""
+    return make_unit(tag, UnitTypeId.REACTOR_BARRACKS, at=(15.0, 12.0), build_progress=1.0)
 
 
 def _training(progress: float = 0.5) -> raw_pb2.UnitOrder:
@@ -491,7 +558,9 @@ class TestWhatBecameOfAnOrder:
         assert order.error.result is ActionResult.NOT_ENOUGH_FOOD
         assert order.error.unit is game.own(1)
 
-    def test_an_order_is_done_once_the_unit_it_was_given_to_is_dead(self) -> None:
+    def test_an_order_is_lost_once_the_unit_it_was_given_to_is_dead(self) -> None:
+        """Nothing came of it, and the game says nothing else: a producer killed half way through what it was
+        making is reported dying and no more (in game)."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -501,7 +570,7 @@ class TestWhatBecameOfAnOrder:
 
         game.observe(32, dead=(1,))
 
-        assert order.state is OrderState.DONE
+        assert order.state is OrderState.LOST
 
     def test_an_order_withdrawn_before_the_turn_ends_is_never_sent(self) -> None:
         game = _Game()
@@ -947,3 +1016,310 @@ class TestAgainstTheRealGame:
         assert bot.at_a_dead_tag is not None
         assert bot.at_a_dead_tag.state is OrderState.REFUSED
         assert bot.at_a_dead_tag.verdict is ActionResult.ERROR
+
+
+class _SpendingBot:
+    """A bot that asks a barracks for more than it can have, to see whether the game agrees with what NachOS
+    refused, and that takes one order back and loses another with its structure."""
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.made: list[Order[None]] = []
+        self.refused: Order[None] | None = None
+        self.the_game_answered: ActionResult | None = None
+        self.cancelled: Order[None] | None = None
+        self.cancel_sent: AbilityId | None = None
+        self.lost: Order[None] | None = None
+        self._step_of_last = 0
+
+    def turn(self, event: TurnEvent) -> None:
+        """One thing a turn: put a barracks up, fill its queue, ask for one more, take one back, then kill it."""
+        api = self.api
+        barracks = api.units.own.of_type(UnitTypeId.BARRACKS).complete
+        if not barracks:
+            if event.step < 64:
+                api.client.debug(
+                    [
+                        _create(UnitTypeId.BARRACKS, api.map.playable_area.center, self.player, quantity=1),
+                        debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.minerals),
+                        debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.food),
+                    ]
+                )
+            return
+        one = barracks[0]
+        if len(self.made) < 5:
+            self.made.append(api.order.issue(one, AbilityId.BARRACKS_TRAIN_MARINE, queued=True))
+            self._step_of_last = event.step
+            return
+        if self.refused is None:
+            if api.order.budget.slots_left(one) > 0:
+                return
+            # The queue is full as the game sees it, so NachOS refuses the sixth. The game is asked the same thing
+            # raw, to see whether it says what NachOS said it would.
+            self.refused = api.order.issue(one, AbilityId.BARRACKS_TRAIN_MARINE)
+            command = raw_pb2.ActionRawUnitCommand(ability_id=int(AbilityId.BARRACKS_TRAIN_MARINE), unit_tags=[one.tag])
+            action = sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
+            self.the_game_answered = ActionResult.read(api.client.act([action]).result[0])
+            return
+        if self.cancelled is None:
+            taken_back = api.order.cancel(self.made[-1])
+            if taken_back is not None:
+                self.cancelled = self.made[-1]
+                self.cancel_sent = taken_back.ability
+            return
+        if self.lost is None and self.made[0].state is OrderState.RUNNING:
+            self.lost = self.made[0]
+            api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[one.tag]))])
+
+
+@pytest.mark.integration
+class TestTheBudgetAgainstTheRealGame:
+    """Run with `pytest -m integration`. Holds what NachOS refuses to what the game answers for the same order."""
+
+    def test_the_budget_answers_what_the_game_would_have(self) -> None:
+        try:
+            game_map = Map.find("PylonAIE_v4")
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+        with (
+            GameProcess.launch(window=(640, 480)) as process,
+            closing(Client(WebSocketTransport.connect(process.url))) as client,
+        ):
+            client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
+            player = client.join_game(Race.TERRAN)
+            api = Api()
+            bot = _SpendingBot(api, player)
+            api.event.on(TurnEvent)(bot.turn)
+            api.play(client, steps_per_turn=8, time_limit=90)
+
+        # A sixth thing to make is refused by NachOS, and the game answers the same for the same order.
+        assert bot.refused is not None
+        assert bot.refused.state is OrderState.REFUSED
+        assert bot.refused.verdict is ActionResult.QUEUE_IS_FULL
+        assert bot.the_game_answered is ActionResult.QUEUE_IS_FULL
+
+        # What a cancel goes out as is the structure's own, and the handle it takes back settles cancelled.
+        assert bot.cancel_sent is AbilityId.GENERAL_CANCEL_QUEUE
+        assert bot.cancelled is not None
+        assert bot.cancelled.state is OrderState.CANCELLED
+
+        # A barracks killed while it is training leaves what it was making lost, not done.
+        assert bot.lost is not None
+        assert bot.lost.state is OrderState.LOST
+        assert bot.lost.error is None
+
+
+class TestWhatATurnCanPayFor:
+    def test_what_the_turn_has_ordered_is_gone_from_the_budget(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), minerals=200, vespene=0, supply=(10, 20))
+        assert game.book.budget.resources == Resources(200, 0)
+        assert game.book.budget.supply_left == 10
+
+        game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        assert game.book.budget.resources == Resources(150, 0)
+        assert game.book.budget.supply_left == 9
+
+    def test_an_order_a_later_one_overrides_is_paid_for_once(self) -> None:
+        """The game would take only the last of them, so only the last is counted."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), minerals=200, vespene=0)
+        game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        assert game.book.budget.resources == Resources(150, 0)
+
+    def test_an_order_taken_back_stops_counting_at_once(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), minerals=200, vespene=0)
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        assert game.book.budget.resources == Resources(150, 0)
+
+        order.withdraw()
+
+        assert game.book.budget.resources == Resources(200, 0)
+
+    def test_a_structure_is_charged_for_every_one_of_them_the_order_names(self) -> None:
+        """Each structure of a group takes the train it was given, so each is paid for."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), _barracks(2), minerals=200, vespene=0)
+
+        game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
+
+        assert game.book.budget.resources == Resources(100, 0)
+
+    def test_a_structure_holds_five_and_eight_with_a_reactor(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1), _barracks(2, add_on_tag=3), _reactor(3))
+
+        assert game.book.budget.slots_left(game.own(1)) == 5
+        assert game.book.budget.slots_left(game.own(2)) == 8
+
+    def test_what_a_structure_is_making_and_what_the_turn_ordered_it_take_its_slots(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1, _training(), _training(0.0)))
+        assert game.book.budget.slots_left(game.own(1)) == 3
+
+        game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+
+        assert game.book.budget.slots_left(game.own(1)) == 2
+
+
+class TestAnOrderTheBudgetRefuses:
+    def test_an_order_there_are_no_minerals_for_is_refused_and_never_sent(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1), minerals=30, vespene=0)
+
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        assert order.state is OrderState.REFUSED
+        assert order.verdict is ActionResult.NOT_ENOUGH_MINERALS
+        assert order not in game.book.pending
+        assert game.flush() is None
+
+    def test_an_order_there_is_no_vespene_for_is_refused(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1), minerals=200, vespene=10)
+
+        order = game.book.issue(game.own(1), _TRAIN_REAPER)
+
+        assert order.verdict is ActionResult.NOT_ENOUGH_VESPENE
+
+    def test_an_order_there_is_no_supply_for_is_refused_whether_it_would_start_or_wait(self) -> None:
+        """The game takes a queued one and hangs it at no progress for good, charging its minerals and reporting
+        nothing (in game), so NachOS refuses both."""
+        game = _Game()
+        game.observe(0, _barracks(1, _training()), supply=(20, 20))
+
+        at_once = game.book.issue(game.own(1), _TRAIN_MARINE)
+        queued = game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+
+        assert at_once.verdict is ActionResult.NOT_ENOUGH_FOOD
+        assert queued.verdict is ActionResult.NOT_ENOUGH_FOOD
+
+    def test_a_sixth_thing_to_make_is_refused_and_a_ninth_with_a_reactor(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1, *[_training()] * 5), _barracks(2, *[_training()] * 8, add_on_tag=3), _reactor(3))
+
+        assert game.book.issue(game.own(1), _TRAIN_MARINE).verdict is ActionResult.QUEUE_IS_FULL
+        assert game.book.issue(game.own(2), _TRAIN_MARINE).verdict is ActionResult.QUEUE_IS_FULL
+
+    def test_the_turn_counts_what_it_has_already_ordered(self) -> None:
+        """Two marines on 50 minerals: the game would take the first and silently drop the second (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), _barracks(2), minerals=50, vespene=0)
+
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        second = game.book.issue(game.own(2), _TRAIN_MARINE)
+
+        assert first.state is OrderState.GIVEN
+        assert second.verdict is ActionResult.NOT_ENOUGH_MINERALS
+        assert len(_commands(game.flush() or sc2api_pb2.RequestAction())) == 1
+
+    def test_an_order_to_several_structures_is_judged_whole(self) -> None:
+        """One command is one thing to the game, so a train to three barracks with money for two is refused
+        rather than sent for two of them."""
+        game = _Game()
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3), minerals=100, vespene=0)
+
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
+
+        assert order.verdict is ActionResult.NOT_ENOUGH_MINERALS
+
+    def test_an_order_the_budget_refuses_goes_out_when_the_bot_says_so(self) -> None:
+        """A table that has gone stale on a new build is not a wall a bot cannot get past."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), minerals=0, vespene=0)
+
+        order = game.book.issue(game.own(1), _TRAIN_MARINE, checked=False)
+
+        assert order.state is OrderState.GIVEN
+        assert order.verdict is None
+        assert _commands(game.flush()) != []
+
+    def test_nothing_is_held_over_to_the_next_turn(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1), minerals=0, vespene=0)
+        refused = game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        game.observe(16, _barracks(1), minerals=500, vespene=0)
+
+        assert refused.state is OrderState.REFUSED
+        assert game.book.pending == ()
+
+
+class TestTakingWhatAStructureIsMakingBack:
+    def test_a_cancel_goes_out_as_the_one_the_structure_is_offered(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1, _training()), actions=(_reported(_TRAIN_MARINE, 1, step=16),))
+        assert order.state is OrderState.RUNNING
+
+        cancel = game.book.cancel(order)
+        sent = _commands(game.flush())
+
+        assert cancel is not None
+        assert [command.ability_id for command in sent] == [_CANCEL_QUEUE]
+        assert order.state is OrderState.CANCELLED
+        assert cancel.behavior is OrderBehavior.CANCELS
+
+    def test_a_morph_is_cancelled_by_the_cancel_the_game_offers_for_that_morph(self) -> None:
+        """`Cancel_Last` is answered `Error` by a morph, and a command center has a cancel for each of its two
+        (in game)."""
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        # The game offers the morph only once a barracks stands, and NachOS refuses what it would not offer.
+        game.observe(0, _command_center(1), _barracks(2))
+        order = game.book.issue(game.own(1), _MORPH_ORBITAL)
+        game.flush()
+        game.observe(
+            16, _command_center(1, _morphing()), _barracks(2), actions=(_reported(_MORPH_ORBITAL, 1, step=16),)
+        )
+        assert order.state is OrderState.RUNNING
+
+        cancel = game.book.cancel(order)
+
+        assert cancel is not None
+        assert [command.ability_id for command in _commands(game.flush())] == [_CANCEL_ORBITAL]
+        assert order.state is OrderState.CANCELLED
+
+    def test_only_the_last_thing_a_structure_is_making_can_be_cancelled(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+        game.flush()
+        game.observe(
+            16,
+            _barracks(1, _training(), _training(0.0)),
+            actions=(_reported(_TRAIN_MARINE, 1, step=16), _reported(_TRAIN_MARINE, 1, step=16)),
+        )
+
+        with pytest.raises(ValueError, match="last thing"):
+            game.book.cancel(first)
+
+    def test_a_cancel_frees_neither_a_slot_nor_a_mineral_in_the_same_turn(self) -> None:
+        """Both take a step: a cancel and then a marine on a full barracks is answered `QueueIsFull` (in game)."""
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), minerals=50, vespene=0)
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(
+            16, _barracks(1, *[_training()] * 5), minerals=0, vespene=0, actions=(_reported(_TRAIN_MARINE, 1, step=16),)
+        )
+
+        game.book.cancel(order)
+
+        assert game.book.budget.slots_left(game.own(1)) == 0
+        assert game.book.budget.resources == Resources(0, 0)
+        assert game.book.issue(game.own(1), _TRAIN_MARINE).verdict is ActionResult.QUEUE_IS_FULL
+
+    def test_an_order_the_book_is_done_with_cancels_nothing(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        assert game.book.cancel(order) is None
