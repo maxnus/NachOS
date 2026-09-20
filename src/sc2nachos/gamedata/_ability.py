@@ -40,11 +40,12 @@ class OrderBehavior(Enum):
     """A structure takes it only while it is making nothing, and is answered `NOT_SUPPORTED` otherwise: an add-on, a
     morph, a lift."""
     KEEPS_ORDERS = "keeps orders"
-    """It is carried out and the unit goes on with its orders, so it competes with nothing: stim and the twelve
-    others of `KEEPS_ORDERS_ABILITIES`, and everything besides making something that is offered only to a type the
-    game offers no move — a structure's own rally and cancel, and the way back out of a sieged form.
-    `GENERAL_CANCEL` is not one of them: a ghost and an infestor are offered it too, and it takes them off what they
-    are channeling."""
+    """It is carried out and the unit goes on with its orders, so it competes with nothing: stim, both halves of a
+    toggle and the rest of `KEEPS_ORDERS_ABILITIES`, and everything besides making something that is offered only to
+    a type the game offers no move — a structure's own rally, load, cancel and energy casts, and the way back out of
+    a sieged form. Every one of those a producer is offered leaves what it is making at the progress it stood at
+    (in game). `GENERAL_CANCEL` is not one of them: a ghost and an infestor are offered it too, and it takes them
+    off what they are channeling."""
 
 
 def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:

@@ -268,17 +268,46 @@ class TestARecordedGamesTables:
         assert lost == _NO_MAKER
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
-        """Each was seen in game to leave a moving unit's orders as they were, so each must still be orderable."""
+        """Each was seen in game to leave a moving unit's orders as they were, so each must still be orderable.
+
+        The half of a toggle that turns one off is offered to nobody in the tables, since a unit is offered it only
+        once the half that turns it on has taken (in game); it stands on that half being offered instead.
+        """
         data = _tables(path)
         for ability in KEEPS_ORDERS_ABILITIES:
             row = data.abilities[ability]
-            assert row.performers, f"{ability.name} is offered to nobody"
+            offered = ability if not ability.name.endswith("_OFF") else AbilityId[f"{ability.name[:-4]}_ON"]
+            assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
             assert row.behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_HOLD_FIRE_ON):
-            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS
+        generals = (
+            AbilityId.GENERAL_STIM,
+            AbilityId.GENERAL_CLOAK_ON,
+            AbilityId.GENERAL_CLOAK_OFF,
+            AbilityId.GENERAL_HOLD_FIRE_ON,
+            AbilityId.GENERAL_HOLD_FIRE_OFF,
+        )
+        for ability in generals:
+            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
+    def test_both_halves_of_a_toggle_keep_a_unit_s_orders(self, path: Path) -> None:
+        """Each half was given in turn to a moving unit, and its move stayed first in its orders (in game)."""
+        data = _tables(path)
+        halves = (
+            (AbilityId.BANELING_ATTACK_STRUCTURES_ON, AbilityId.BANELING_ATTACK_STRUCTURES_OFF),
+            (AbilityId.BANSHEE_CLOAK_ON, AbilityId.BANSHEE_CLOAK_OFF),
+            (AbilityId.GHOST_CLOAK_ON, AbilityId.GHOST_CLOAK_OFF),
+            (AbilityId.GHOST_HOLD_FIRE_ON, AbilityId.GHOST_HOLD_FIRE_OFF),
+            (AbilityId.ORACLE_PULSAR_BEAM_ON, AbilityId.ORACLE_PULSAR_BEAM_OFF),
+            (AbilityId.OVERLORD_CREEP_ON, AbilityId.OVERLORD_CREEP_OFF),
+        )
+        for ability in (half for pair in halves for half in pair):
+            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+        # A lurker is offered its hold fire only burrowed, and the game offers a burrowed lurker no move, so neither
+        # half was ever given to one moving.
+        assert data.abilities[AbilityId.LURKER_HOLD_FIRE_OFF].behavior is OrderBehavior.REPLACES
 
     def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
         """Ordering one of these was seen in game to go behind what a structure was making, or to be refused while

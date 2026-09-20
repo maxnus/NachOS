@@ -145,6 +145,12 @@ reads it, is in [game-behavior.md](game-behavior.md).
   dropping a queue on purpose is `api.order.clear_queue(unit)`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
+- **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
+  item in the middle of a queue through the UI action `ActionProductionPanelRemoveFromQueue`, which names a slot and
+  needs the structure selected and a game joined with a feature layer. A raw unit command carries no slot, and the
+  ids that look as though they would — `Cancel_Slot`, `CancelSlot_Queue5` — are answered `Error` or `NotSupported`
+  however the structure was selected. Both libraries ask for the raw interface alone, so neither reaches past the
+  last item ([game behavior](game-behavior.md#abilities-and-orders)).
 
 ## Errors
 

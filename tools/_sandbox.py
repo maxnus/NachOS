@@ -40,13 +40,14 @@ class OpenGround:
         grid = game_map.placement
         self._origin = grid.origin
         self._free = numpy.array(grid.values, dtype=bool)
+        self._taken: dict[tuple[float, float], tuple[int, int, int]] = {}
         for unit in units:
             reach = int(unit.radius) + 2
-            self._claim(int(unit.pos.x), int(unit.pos.y), reach)
+            self._take(int(unit.pos.x), int(unit.pos.y), reach, free=False)
 
     def claim(self, near: Point, half: int) -> Point:
         """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken, so that
-        what is put down next does not land on it."""
+        what is put down next does not land on it. `release` gives it back."""
         size = 2 * half + 1
         # Every square of that size the grid holds, marked where all of its tiles are free, by its lowest corner.
         fits = sliding_window_view(self._free, (size, size)).all(axis=(2, 3))
@@ -56,12 +57,20 @@ class OpenGround:
         x0, y0 = near.x - self._origin.x - half, near.y - self._origin.y - half
         best = int(numpy.argmin((xs - x0) ** 2 + (ys - y0) ** 2))
         x, y = int(xs[best]) + half, int(ys[best]) + half
-        self._claim(x, y, half)
-        return Point((self._origin.x + x + 0.5, self._origin.y + y + 0.5))
+        self._take(x, y, half, free=False)
+        at = Point((self._origin.x + x + 0.5, self._origin.y + y + 0.5))
+        self._taken[at.x, at.y] = (x, y, half)
+        return at
 
-    def _claim(self, x: int, y: int, half: int) -> None:
-        """Take the square `2 * half + 1` tiles across centered on the tile at index `(x, y)`."""
-        self._free[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = False
+    def release(self, at: Point) -> None:
+        """Give back the square `claim` answered with `at`, so that a later claim can land on it again. A point
+        this never claimed is ignored, and the ground the map's own units stand on is never given back."""
+        if (square := self._taken.pop((at.x, at.y), None)) is not None:
+            self._take(*square, free=True)
+
+    def _take(self, x: int, y: int, half: int, *, free: bool) -> None:
+        """Take or give back the square `2 * half + 1` tiles across centered on the tile at index `(x, y)`."""
+        self._free[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = free
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,10 +158,33 @@ class Sandbox:
         return self.client.act([action]).result[0]
 
 
+def join_with(transport: WebSocketTransport, race: Race, interface: sc2api_pb2.InterfaceOptions) -> int:
+    """Join the waiting game as `race` asking for `interface`, and answer the player id.
+
+    NachOS's own client asks for the raw interface and nothing else, so a tool that needs another joins here.
+    """
+    request = sc2api_pb2.RequestJoinGame(race=race.value, options=interface, player_name="NachOS")
+    joined = transport.request(sc2api_pb2.Request(join_game=request)).join_game
+    # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+    if joined.HasField("error"):
+        reason = sc2api_pb2.ResponseJoinGame.Error.Name(joined.error)
+        raise RuntimeError(f"the game refused the join as {reason}: {joined.error_details or 'no detail given'}")
+    return joined.player_id
+
+
 @contextmanager
-def playing(race: Race, installation: Installation, *, realtime: bool = False) -> Iterator[Sandbox]:
+def playing(
+    race: Race,
+    installation: Installation,
+    *,
+    realtime: bool = False,
+    interface: sc2api_pb2.InterfaceOptions | None = None,
+) -> Iterator[Sandbox]:
     """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone.
-    A `realtime` game runs on its own and is never stepped."""
+
+    A `realtime` game runs on its own and is never stepped, and an `interface` other than the raw one is joined for
+    here rather than through the client.
+    """
     game_map = Map.find(MAP, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
         transport = WebSocketTransport.connect(game.url)
@@ -160,7 +192,10 @@ def playing(race: Race, installation: Installation, *, realtime: bool = False) -
             try:
                 players = [Participant(), Computer(race, Difficulty.VERY_EASY)]
                 client.create_game(game_map.path, players, realtime=realtime)
-                player = client.join_game(race, name="NachOS")
+                if interface is None:
+                    player = client.join_game(race, name="NachOS")
+                else:
+                    player = join_with(transport, race, interface)
                 yield Sandbox(client, transport, player)
             finally:
                 client.leave_game()
