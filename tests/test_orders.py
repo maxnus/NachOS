@@ -1142,7 +1142,8 @@ class TestWhatATurnCanPayFor:
         assert game.book.budget.resources == Resources(200, 0)
 
     def test_a_structure_is_charged_for_every_one_of_them_the_order_names(self) -> None:
-        """Each structure of a group takes the train it was given, so each is paid for."""
+        """NachOS's reading, not a measurement: a spell and a structure are carried out by one of the group, and
+        what a train does has not been asked (the `one-command-many-makers` sweep asks it)."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1), _barracks(2), minerals=200, vespene=0)
 
@@ -1218,6 +1219,17 @@ class TestAnOrderTheBudgetRefuses:
         assert second.verdict is ActionResult.NOT_ENOUGH_MINERALS
         assert len(_commands(game.flush() or sc2api_pb2.RequestAction())) == 1
 
+    def test_an_order_that_charges_nothing_is_never_refused_for_want_of_anything(self) -> None:
+        """A move and an attack take no minerals, no supply and no slot, so the turn's orders cannot stand in the
+        way of one, and the budget never walks them for it."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), minerals=0, vespene=0, supply=(20, 20))
+
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert order.state is OrderState.GIVEN
+        assert game.book.budget.covers(_MOVE, game.own(1))
+
     def test_an_order_to_several_structures_is_judged_whole(self) -> None:
         """One command is one thing to the game, so a train to three barracks with money for two is refused
         rather than sent for two of them."""
@@ -1287,6 +1299,41 @@ class TestTakingWhatAStructureIsMakingBack:
         assert order.state is OrderState.CANCELLED
 
     def test_only_the_last_thing_a_structure_is_making_can_be_cancelled(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+        game.flush()
+        game.observe(
+            16,
+            _barracks(1, _training(), _training(0.0)),
+            actions=(_reported(_TRAIN_MARINE, 1, step=16), _reported(_TRAIN_MARINE, 1, step=16)),
+        )
+
+        with pytest.raises(ValueError, match="last thing"):
+            game.book.cancel(first)
+
+    def test_two_cancels_in_a_turn_walk_back_two_items(self) -> None:
+        """The game takes them in the order they are sent, and each takes the last item then standing (in game)."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        second = game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+        game.flush()
+        game.observe(
+            16,
+            _barracks(1, _training(), _training(0.0)),
+            actions=(_reported(_TRAIN_MARINE, 1, step=16), _reported(_TRAIN_MARINE, 1, step=16)),
+        )
+
+        game.book.cancel(second)
+        game.book.cancel(first)
+        sent = _commands(game.flush())
+
+        assert [command.ability_id for command in sent] == [_CANCEL_QUEUE, _CANCEL_QUEUE]
+        assert (first.state, second.state) == (OrderState.CANCELLED, OrderState.CANCELLED)
+
+    def test_the_item_before_the_last_cannot_be_cancelled_first(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         first = game.book.issue(game.own(1), _TRAIN_MARINE)

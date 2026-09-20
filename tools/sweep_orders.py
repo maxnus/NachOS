@@ -2509,6 +2509,52 @@ class _Sweep:
     interface: sc2api_pb2.InterfaceOptions | None = None
 
 
+def _one_command_many_makers(game: _Game) -> list[Trial]:
+    """Find whether one command naming several structures is carried out by each of them or by one.
+
+    A group move sends every unit, and a spell, a structure and a morph are carried out by one of the group
+    (docs/game-behavior.md), and nobody has asked what a train does. `api.order.budget` charges a turn for one of
+    them or for all of them by the answer.
+    """
+    trials: list[Trial] = []
+
+    def trained(trial: Trial) -> None:
+        made = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4), count=3)
+        trial.notes["barracks"] = [unit.tag for unit in made]
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(_MARINE, made)
+        game.turn(4)
+        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+        game.read("given one train naming three barracks", made)
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+
+    trials.append(game.trial("one train naming three barracks", trained))
+
+    def researched(trial: Trial) -> None:
+        made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(16), 4), count=2)
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS, made)
+        game.turn(4)
+        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+        game.read("given one research naming two bays", made)
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+
+    trials.append(game.trial("one research naming two engineering bays", researched))
+
+    def added_on(trial: Trial) -> None:
+        made = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20), 4), count=2)
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, made)
+        game.turn(4)
+        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+        game.read("given one add-on naming two barracks", made)
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+
+    trials.append(game.trial("one add-on naming two barracks", added_on))
+
+    return trials
+
+
 _SWEEPS: dict[str, _Sweep] = {
     "keeps-terran": _Sweep(Race.TERRAN, lambda g: _keeps(g, Race.TERRAN), _KEEPS_CHEATS),
     "keeps-protoss": _Sweep(Race.PROTOSS, lambda g: _keeps(g, Race.PROTOSS), _KEEPS_CHEATS),
@@ -2540,6 +2586,8 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `free`, so that what a cancel gives back counts.
     "cancels-offered": _Sweep(Race.TERRAN, _cancels_offered, ("food", "all_resources")),
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
+    # Not `free`, so that what one command naming several structures charges counts.
+    "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, ("food", "all_resources")),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

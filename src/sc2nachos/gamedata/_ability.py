@@ -137,7 +137,7 @@ def ability_costs(
     # is not known until it is ordered, so it is charged the least of them, which refuses no order the game takes.
     for exact, general in tech_tree.ability_remaps.items():
         charge = charges.get(exact)
-        if charge is None or general in tech_tree.ability_products or general in CHARGED_COSTS:
+        if charge is None or general in tech_tree.ability_products or general in _CORRECTED:
             continue
         standing = charges.get(general)
         if standing is None or charge[0].total < standing[0].total:
@@ -146,6 +146,8 @@ def ability_costs(
 
 
 _CANCELS = frozenset({AbilityId.GENERAL_CANCEL, AbilityId.GENERAL_CANCEL_LAST})
+# What a hand-written price or supply is held for, which the pass over general ids must not undo.
+_CORRECTED = CHARGED_COSTS.keys() | CHARGED_SUPPLY.keys()
 
 
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:

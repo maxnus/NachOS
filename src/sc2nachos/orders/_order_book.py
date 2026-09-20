@@ -211,30 +211,36 @@ class OrderBook:
         return cancel
 
     def _is_last_item(self, order: Order[Any], structure: OwnUnit[Any]) -> bool:
-        """Whether `order` is the last thing `structure` is making.
+        """Whether `order` is the last thing `structure` is making, counting what the turn has already told it.
 
         Two orders of the same ability to one structure are reported alike, so which of them is last is read from
-        the book: it is the last of that structure's orders NachOS is still following. Anything the turn has told
-        the structure to make or to cancel goes behind it and leaves `order` no longer last; a rally or an energy
-        cast given the same turn changes nothing, taking no place in its queue.
+        the book: it is the last of that structure's orders NachOS is still following. Each cancel the turn has
+        already given walks that back one, since the game takes them in the order they are sent and each takes the
+        last item then standing (in game). Anything the turn has told the structure to make goes behind them all,
+        so nothing can be cancelled once one is given; a rally or an energy cast the same turn changes nothing.
         """
+        cancelled = sum(1 for given in self._given_orders if self._cancels_for(given, structure))
         making = [
             one
             for one in self._running_orders
             if one.behavior in _MAKES_SOMETHING and not one.state.is_final and structure in one._acting_units
         ]
-        if not making or making[-1] is not order:
+        if len(making) <= cancelled or making[-1 - cancelled] is not order:
             return False
-        general = self._general_ability(order.ability)
-        reported = [_ability_of_unit_order(one) for one in structure._latest_data.orders]
-        if not reported or self._general_ability(reported[-1]) is not general:
-            return False
-        return not any(
-            given.state is OrderState.GIVEN
-            and structure in given.units
-            and (given.behavior in _MAKES_SOMETHING or given.behavior is OrderBehavior.CANCELS)
+        if any(
+            given.state is OrderState.GIVEN and structure in given.units and given.behavior in _MAKES_SOMETHING
             for given in self._given_orders
-        )
+        ):
+            return False
+        reported = [_ability_of_unit_order(one) for one in structure._latest_data.orders]
+        standing = len(reported) - 1 - cancelled
+        if standing < 0:
+            return False
+        return self._general_ability(reported[standing]) is self._general_ability(order.ability)
+
+    def _cancels_for(self, given: Order[Any], structure: OwnUnit[Any]) -> bool:
+        """Whether `given` is a cancel this turn has told `structure` to carry out."""
+        return given.state is OrderState.GIVEN and given._cancels is not None and structure in given.units
 
     def _cancel_ability(self, order: Order[Any], structure: OwnUnit[Any]) -> AbilityId | None:
         """The cancel the game offers `structure` for what `order` has it making, which is its own: `Cancel_Last` is
