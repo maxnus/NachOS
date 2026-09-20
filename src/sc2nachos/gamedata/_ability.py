@@ -42,7 +42,8 @@ class OrderBehavior(Enum):
     AT_ONCE = "at once"
     """It is carried out and the unit goes on with its orders, so it competes with nothing: stim and the twelve
     others of `ACTS_AT_ONCE`, and everything besides making something that is offered only to what the game offers
-    no move: a structure's rally, a cancel."""
+    no move — a structure's own rally and cancel, and the way back out of a sieged form. `GENERAL_CANCEL` is not one
+    of them: a ghost and an infestor are offered it too, and it takes them off what they are channeling."""
 
 
 def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:
@@ -87,8 +88,8 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
 def _types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types the game offers a move, which are the ones an order can take off what they are doing.
 
-    A structure is offered none, nor is an egg or a cocoon; a structure in the air is offered one under its own
-    flying type, and a sieged unit under its sieged one.
+    A structure is offered none, nor is an egg, a cocoon, or a unit in a form it cannot move in: a sieged tank, a
+    burrowed lurker, a lowered depot, a warp gate. A structure in the air is offered one under its own flying type.
     """
     move = AbilityId.GENERAL_MOVE
     remaps = tech_tree.ability_remaps

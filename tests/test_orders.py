@@ -839,6 +839,24 @@ class TestAnOrderSentToSomeOfItsUnits:
         assert group.state is OrderState.OVERRIDDEN
 
 
+class TestWhoTookAnOrder:
+    def test_a_report_that_comes_after_the_unit_is_seen_doing_it_still_names_who_took_it(self) -> None:
+        """An order's effect can show up an observation before its report does (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+
+        game.observe(16, _marine(1, _moving()), _marine(2, _moving()))
+        assert order.state is OrderState.RUNNING
+        assert order.taken_by == ()
+
+        game.observe(32, _marine(1, _moving()), _marine(2, _moving()), actions=(_reported(_MOVE_EXACT, 1, 2, step=32),))
+
+        assert order.state is OrderState.RUNNING
+        assert order.taken_by == (game.own(1), game.own(2))
+
+
 class TestAVerdictNachosCannotName:
     def test_it_says_which_result_the_game_answered_with(self) -> None:
         """The enum is generated from the protocol package, so a game newer than it could answer with a result it

@@ -10,7 +10,24 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+
+MISNAMED_RESEARCH_ABILITIES: Final[Mapping[UpgradeId, AbilityId]] = MappingProxyType(
+    {
+        # The upgrade table says these three are researched by the `ArmoryResearchSwarm` spelling, which an armory
+        # is never offered and which does nothing when ordered; it is uncurated, so without this the upgrade names
+        # no ability and the ability that does research it makes nothing. `ArmoryResearch` is what an armory offers
+        # and runs (#23, #28; tested).
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1,
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2,
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3,
+    }
+)
+"""The ability that researches each upgrade the game's own table names a dead id for.
+
+A nuke has no entry of its own kind: `GHOST_ACADEMY_BUILD_NUKE` makes something the curated unit types leave out,
+so there is no product to name it, and NachOS reads it as an ability that makes nothing.
+"""
 
 UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
     {

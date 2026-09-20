@@ -7,7 +7,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, OrderBehavior, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import ACTS_AT_ONCE, UNNAMED_CREATION_ABILITIES
+from sc2nachos.gamedata._techtree import ACTS_AT_ONCE, MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -16,13 +16,9 @@ from sc2nachos.protocol import Recording
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
 # The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling,
-# which an armory is never offered and which does nothing when ordered. The `ArmoryResearch` spelling is what an
-# armory offers and runs, and is what `ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1` and its levels name.
-_RESEARCHED_BY_A_DEAD_ID = {
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1,
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2,
-    UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3,
-}
+# which an armory is never offered and which does nothing when ordered, and which no curated id names.
+# `gamedata/_techtree/_overrides.py` names the `ArmoryResearch` spelling an armory offers and runs for each.
+_RESEARCHED_BY_A_DEAD_ID = frozenset(MISNAMED_RESEARCH_ABILITIES)
 
 # Rows naming a maker the game no longer honors: tested in game, none is ever offered and ordering one does nothing.
 # `gamedata/_techtree/_overrides.py` names the ability that works for each.
@@ -357,10 +353,20 @@ class TestARecordedGamesTables:
         for upgrade in UpgradeId:
             row = data.upgrades[upgrade]
             assert row.research_steps > 0
-            if upgrade in _RESEARCHED_BY_A_DEAD_ID:
-                assert row.research_ability is None, f"{upgrade} names a maker again"
-            else:
-                assert row.research_ability is not None, f"{upgrade} cannot be researched"
+            assert row.research_ability is not None, f"{upgrade} cannot be researched"
+
+    def test_a_misnamed_research_ability_stands_in_only_where_the_table_names_a_dead_one(self, path: Path) -> None:
+        """Once the table names a working id for these, the entry can go."""
+        answer = _answer(path)
+        data = GameData(answer)
+        named = {row.upgrade_id: row.ability_id for row in answer.upgrades}
+        for upgrade, ability in MISNAMED_RESEARCH_ABILITIES.items():
+            assert AbilityId.get(named[upgrade]) is None, f"the table names a curated ability for {upgrade.name}"
+            assert data.upgrades[upgrade].research_ability is ability
+            assert data.abilities[ability].product is upgrade
+            # Without the product it would read as an ability that makes nothing, which competes with nothing.
+            assert data.abilities[ability].behavior is OrderBehavior.QUEUES
+        assert _RESEARCHED_BY_A_DEAD_ID
 
     def test_a_transient_form_of_a_unit_names_the_one_it_is_a_form_of(self, path: Path) -> None:
         data = _tables(path)

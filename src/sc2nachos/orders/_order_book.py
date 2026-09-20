@@ -300,14 +300,17 @@ class OrderBook:
             # they are, with the error on the order to read.
             order._state = OrderState.FAILED
             return
-        if order.state is OrderState.RUNNING:
-            if not carrying_out:
-                order._state = OrderState.DONE
-            return
+        # The report can come an observation after the unit is seen carrying the order out, so a running order reads
+        # it too, and only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
             order._taken_by = taken_by
+        if order.state is OrderState.RUNNING:
+            if not carrying_out:
+                order._state = OrderState.DONE
+            return
+        if taken_by:
             # An ability carried out at once is over as soon as it is reported: it never shows in a unit's orders.
             order._state = OrderState.RUNNING if carrying_out else OrderState.DONE
         elif carrying_out:

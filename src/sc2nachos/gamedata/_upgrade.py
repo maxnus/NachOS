@@ -54,7 +54,7 @@ class UpgradeData:
             id=upgrade,
             cost=Resources(data.mineral_cost, data.vespene_cost),
             research_steps=data.research_time,
-            research_ability=AbilityId.get(data.ability_id),
+            research_ability=AbilityId.get(data.ability_id) or tech_tree.research_abilities.get(upgrade),
             type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree.upgrade_levels.get(upgrade, 0),
         )
