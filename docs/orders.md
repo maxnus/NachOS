@@ -33,6 +33,9 @@ api.order.camera(base)
 - **`queued`** sends the order to go behind what each unit already has, rather than to replace it.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it, and `api.order.issue(..., data=x)` answers an `Order[type of x]`, so a type checker follows it through.
+- **`checked`** is on by default and is what lets NachOS refuse an order the turn cannot pay for before it is ever
+  sent. `checked=False` sends it whatever the budget says; [what a turn can pay for](#what-a-turn-can-pay-for) is
+  the whole of it.
 - **`api.order.clear_queue(unit)`** drops what a unit has queued and leaves it at the order it is carrying out,
   by sending that order back unqueued. It answers the order it sent, or `None` where there was nothing to drop — a
   structure making something is not cleared this way, since the game would only put another of the same behind it.

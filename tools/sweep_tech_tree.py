@@ -222,6 +222,8 @@ class TechSweep:
         self._pad = self._sandbox
         self._structure_types = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
         self._on_the_way: set[Pair] = set()
+        # The pylons put up to power a unit, by its tag, so that clearing the unit clears them too.
+        self._powering: dict[int, list[int]] = {}
         self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
 
     # --- Reading the game
@@ -647,7 +649,7 @@ class TechSweep:
 
     def _with_add_on(self, tag: int) -> set[int]:
         """The unit `tag` with the add-on it has and any going up beside it, which would otherwise be left standing
-        on ground the next trial wants."""
+        on ground the next trial wants. What `_clear` is given also takes with it the pylon put up to power it."""
         unit = next((one for one in self._mine() if one.tag == tag), None)
         if unit is None:
             return {tag}
@@ -821,7 +823,9 @@ class TechSweep:
             self._clear({u.tag for u in self._mine() if u.tag not in before})
 
     def _clear(self, tags: set[int]) -> None:
-        """Kill the units `tags`, and wait until they are gone and the ground they stood on is free again."""
+        """Kill the units `tags` and the pylons put up to power them, and wait until they are gone and the ground
+        they stood on is free again."""
+        tags = tags | {pylon for tag in tags for pylon in self._powering.pop(tag, ())}
         self._game.kill(tags)
         for _ in range(50):
             self._client.step(4)
@@ -864,7 +868,11 @@ class TechSweep:
         return unit
 
     def _put_up(self, unit_type: UnitTypeId, spot: Point) -> raw_pb2.Unit | None:
-        """A new unit of `unit_type` at `spot`, with a pylon where it needs power, charged and settled."""
+        """A new unit of `unit_type` at `spot`, with a pylon where it needs power, charged and settled.
+
+        A pylon put up for it is remembered under the unit's tag, so that what cleared the unit clears the pylon
+        too rather than leaving it standing on ground the next trial wants.
+        """
         requests = [(unit_type, self._player, spot)]
         if _unit_name(unit_type) in self.findings.powered:
             requests.append((UnitTypeId.PYLON, self._player, spot + (0, 4)))
@@ -872,6 +880,9 @@ class TechSweep:
         unit = next((one for one in made if one.unit_type == unit_type), None)
         if unit is None:
             return None
+        powered_by = [one.tag for one in made if one.unit_type == UnitTypeId.PYLON and one.tag != unit.tag]
+        if powered_by:
+            self._powering[unit.tag] = powered_by
         self._charge()
         self._client.step(_SWITCH_STEPS)
         return unit
