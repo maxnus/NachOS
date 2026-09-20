@@ -31,7 +31,8 @@ names, and runs trials in turn::
 - `supply` plays under a real supply cap, and gives structures more to make than the supply left.
 - `slots-terran`, `-protoss` and `-zerg` give a structure with a reactor more than it makes at once, a research
   structure every research it has, a larva three morphs and a warp gate two warp-ins.
-- `refunds-morphs` plays at real prices, and cancels a morph, an add-on, a research and a part-built structure.
+- `cancels-offered` asks a morph, an add-on, a research, a train and a part-built structure what cancels them,
+  at real prices, so that what each gives back is recorded too.
 - `producer-dies` kills what is making something, and reads what the observations after say.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name.
@@ -196,6 +197,8 @@ class _Game:
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's among them, which a trial kills once done.
         self.made: set[int] = set()
+        # Ground the trial running has claimed, given back once it has killed what it made.
+        self._claimed: list[Point] = []
         # What of the computer's can fight: everything with a weapon but its workers. It is killed as it comes, so
         # that it never ends a long sweep's game.
         workers = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE}
@@ -348,19 +351,27 @@ class _Game:
         self.turn(2)
 
     def spot(self, near: Point, half: int) -> Point:
-        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken."""
-        return self.ground.claim(near, half)
+        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken.
+
+        Ground claimed while a trial runs is given back once it has killed what it made, so a long sweep does not
+        push each trial further out than the last, until a structure has no room beside it for an add-on.
+        """
+        at = self.ground.claim(near, half)
+        if self.running is not None:
+            self._claimed.append(at)
+        return at
 
     def toward(self, distance: float) -> Point:
         """The point `distance` from home toward the middle of the map."""
         return self.home.towards(self.middle, distance)
 
     def trial(self, name: str, run: Callable[[Trial], None], *, clear: bool = True) -> Trial:
-        """Run `run` as the trial `name`, then kill what it made if `clear`."""
+        """Run `run` as the trial `name`, then kill what it made and give back the ground it claimed if `clear`."""
         logger.info("Trial: {}", name)
         trial = Trial(name)
         before = set(self.units)
         self.running = trial
+        self._claimed = []
         try:
             run(trial)
             self.turn(_SETTLE)
@@ -375,6 +386,11 @@ class _Game:
         ]
         if clear and new:
             self.kill(new)
+        if clear:
+            # Once nothing of the trial's stands there any more; a trial whose units stay keeps its ground too.
+            for at in self._claimed:
+                self.ground.release(at)
+        self._claimed = []
         logger.info("  verdicts {}, errors {}, notes {}", trial.verdicts, trial.errors, trial.notes)
         return trial
 
@@ -1778,7 +1794,11 @@ _BESIDE_AIMS = {
 
 
 def _puts_to_work(game: _Game, structure: UnitTypeId) -> AbilityId | None:
-    """The ability that has `structure` start making something, or `None` where it makes nothing of its own."""
+    """The ability that has `structure` start making something, or `None` where it makes nothing of its own.
+
+    The first by name, which is a ghost for a barracks and a mothership for a nexus, so the sweep plays under
+    `tech_tree`: without it the structure is offered neither and the trial records that it made nothing.
+    """
     works = sorted(
         row.id.name
         for row in game.data.abilities.values()
@@ -1863,33 +1883,45 @@ def _beside(
     trial.notes["class"] = _still_making(verdict, before, after)
 
 
-def _first_order(read: dict[str, object]) -> tuple[str, float] | None:
-    """The ability a unit read is carrying out and how far along it is, or `None` where it is doing nothing."""
+def _making(read: dict[str, object], work: str) -> tuple[int, float | None] | None:
+    """Where `work` stands in what a unit read is carrying out and how far along it is, or `None` where the unit is
+    not carrying it out at all. Progress is `None` where the order has not started, which the game leaves out."""
     orders = read.get("orders")
-    if not isinstance(orders, list) or not orders or not isinstance(first := orders[0], dict):
+    if not isinstance(orders, list):
         return None
-    progress = first.get("progress", 0.0)
-    return str(first.get("ability")), float(progress) if isinstance(progress, int | float) else 0.0
+    for place, order in enumerate(orders):
+        if not isinstance(order, dict) or order.get("ability") != work:
+            continue
+        progress = order.get("progress")
+        return place, float(progress) if isinstance(progress, int | float) else None
+    return None
 
 
 def _still_making(verdict: str, before: dict[str, object], after: Sequence[dict[str, object]]) -> str:
-    """What an ability left of what a structure was making, from the structure read before it and after."""
+    """What an ability left of what a structure was making, from the structure read before it and after.
+
+    Every read is looked at, so an ability that goes in front of what a structure is making is told from one that
+    takes it away: the first says so and goes on to say whether the work survived behind it.
+    """
     if verdict != "Success":
         return f"refused: {verdict}"
-    was = _first_order(before)
-    if was is None:
+    orders = before.get("orders")
+    if not isinstance(orders, list) or not orders or not isinstance(first := orders[0], dict):
         return "was making nothing"
+    work = str(first.get("ability"))
+    was = _making(before, work)
+    assert was is not None
+    ahead = False
     for read in after:
         if read.get("gone"):
             return "gone"
-        now = _first_order(read)
+        now = _making(read, work)
         if now is None:
-            return "stops making"
-        if now[0] != was[0]:
-            return "the ability goes first"
-        if now[1] + 1e-6 < was[1]:
+            return "goes first, and the work is gone" if ahead else "stops making"
+        if was[1] is not None and (now[1] is None or now[1] + 1e-6 < was[1]):
             return "starts over"
-    return "goes on making"
+        ahead = ahead or now[0] > was[0]
+    return "goes first, and the work goes on" if ahead else "goes on making"
 
 
 # --- 11. The half of a toggle that turns one off
@@ -1920,7 +1952,11 @@ def _toggles_off(game: _Game, race: Race) -> list[Trial]:
 
 
 def _toggled(game: _Game, performer: UnitTypeId, on: AbilityId, off: AbilityId, pad: Point, trial: Trial) -> None:
-    """Send `performer` off, turn `on` while it moves, then turn it `off`, and read what its move became."""
+    """Send `performer` off, turn `on` while it moves, then turn it `off`, and class what each half left of its move.
+
+    Both halves are classed, not only the off one: a unit is offered the on half of some toggles only under a name
+    the sweep of what an ability does to a moving unit passes over, such as the baneling's attack on structures.
+    """
     made = game.create(performer, pad)
     if not made:
         trial.notes["class"] = "not made"
@@ -1934,24 +1970,26 @@ def _toggled(game: _Game, performer: UnitTypeId, on: AbilityId, off: AbilityId, 
     moving = game.unit(mover.tag)
     shown = [_Shown.of(order) for order in moving.orders] if moving is not None else []
     move = next((order for order in shown if "MOVE" in order.ability), None)
-    trial.notes["turned on"] = game.order(on, [mover])
-    game.turn(2)
-    game.read("turned on", [mover])
+
+    def given(half: AbilityId, label: str) -> tuple[str, list[float | None]]:
+        """Give `half` and answer how it left the move, and how far the unit still has to go at each read."""
+        verdict = game.order(half, [mover])
+        orders: list[list[_Shown] | None] = []
+        distances: list[float | None] = []
+        last = 0
+        for at in _READS:
+            game.turn(at - last)
+            last = at
+            game.read(f"{at} after {label}", [mover])
+            seen = game.unit(mover.tag)
+            orders.append(None if seen is None else [_Shown.of(order) for order in seen.orders])
+            distances.append(None if seen is None else round(_at(seen).distance_to(destination), 1))
+        return _class(verdict, move, orders), distances
+
+    trial.notes["on: class"], trial.notes["on: distance left"] = given(on, on.name)
     offered = game.sandbox.offered([mover.tag]).get(mover.tag, [])
     trial.notes["the off half is offered"] = int(off) in offered
-    verdict = game.order(off, [mover])
-    orders: list[list[_Shown] | None] = []
-    distances: list[float | None] = []
-    last = 0
-    for at in _READS:
-        game.turn(at - last)
-        last = at
-        game.read(f"{at} after", [mover])
-        seen = game.unit(mover.tag)
-        orders.append(None if seen is None else [_Shown.of(order) for order in seen.orders])
-        distances.append(None if seen is None else round(_at(seen).distance_to(destination), 1))
-    trial.notes["class"] = _class(verdict, move, orders)
-    trial.notes["distance left"] = distances
+    trial.notes["class"], trial.notes["distance left"] = given(off, off.name)
 
 
 # --- 12. When supply is charged
@@ -1979,7 +2017,8 @@ def _supply(game: _Game) -> list[Trial]:
         trial.notes["supply filled to"] = list(game.supply)
 
     def queued(trial: Trial) -> None:
-        # A structure made by debug command carries its own supply, so the room left is read after it stands.
+        # The barracks stands before the supply is filled, so that what is left under the cap is read as it will be
+        # when the marines are ordered.
         (each,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4))
         crowd(trial, leaving=2)
         used, cap = game.supply
@@ -2199,11 +2238,16 @@ def _protoss_slots(game: _Game) -> list[Trial]:
     return trials
 
 
-# --- 14. What a cancelled morph, add-on, build and research give back
+# --- 14. Which cancel a structure part way through something is offered
 
 
-def _refunds_morphs(game: _Game) -> list[Trial]:
-    """Play at real prices, and record what comes back from a cancel, and in which observation."""
+def _cancels_offered(game: _Game) -> list[Trial]:
+    """Ask what each thing part way through something is offered to cancel it with, and cancel it with that.
+
+    It plays at real prices and records the purse each step besides, which shows what the cancel gave back.
+    What that comes to is the game's own rule -- three quarters of a morph, an add-on or a structure going
+    up, and all of a train or a research -- so the numbers are a check on it rather than the finding.
+    """
     trials: list[Trial] = []
     # What an orbital command and a planetary fortress need.
     game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
@@ -2494,7 +2538,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "slots-protoss": _Sweep(Race.PROTOSS, _protoss_slots),
     "slots-zerg": _Sweep(Race.ZERG, _zerg_slots),
     # Not `free`, so that what a cancel gives back counts.
-    "refunds-morphs": _Sweep(Race.TERRAN, _refunds_morphs, ("food", "all_resources")),
+    "cancels-offered": _Sweep(Race.TERRAN, _cancels_offered, ("food", "all_resources")),
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.

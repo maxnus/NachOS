@@ -419,12 +419,12 @@ Each entry ends with how it was seen:
   4, a cancel and then a reaper are both carried out, and the reaper goes last. Cancels and then an orbital command to
   a command center training SCVs, or a cancel and then a tech lab to a barracks training a marine, empty it and
   refuse the morph or add-on `NotSupported`, and a step later it is taken (tool `sweep_orders`).
-- What a cancel gives back turns on what was cancelled, not on how far it got. A train or a research gives back all
-  of it; a morph, an add-on or a structure part built gives back three quarters, rounded up. Measured at real
-  prices, each read as the difference over the observation the cancel landed in: an SCV 50 of 50 and a research
-  100/100 of 100/100; an orbital command 113 of 150, a planetary fortress 113/113 of 150/150, a tech lab 38/19 of
-  50/25, and a supply depot 75 of 100. An orbital cancelled 400 steps into its morph gives back the same 113 as one
-  cancelled 40 steps in, and a depot cancelled half way up the same 75 as one barely started (tool `sweep_orders`).
+- What a cancel gives back is the game's own rule, and does not turn on how far it got: all of a train or a
+  research, three quarters of a morph, an add-on or a structure going up, rounded up. Seen at real prices, as the
+  jump in the purse over the observation the cancel landed in: an SCV 50 of 50 and a research 100/100 of 100/100;
+  an orbital command 113 of 150, a planetary fortress 113/113 of 150/150, a tech lab 38/19 of 50/25, and a supply
+  depot 75 of 100. An orbital cancelled 400 steps into its morph gives back the same 113 as one cancelled 40 steps
+  in, and a depot cancelled half way up the same 75 as one barely started (tool `sweep_orders`).
 - A structure part way through something is offered one cancel, and it is its own. A command center morphing is
   offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, a barracks building an add-on
   `Cancel_BarracksAddOn`, an engineering bay researching `Cancel_Queue5`, a command center training
