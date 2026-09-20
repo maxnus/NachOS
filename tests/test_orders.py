@@ -14,7 +14,7 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
@@ -32,6 +32,7 @@ _ATTACK = AbilityId.GENERAL_ATTACK
 _STIM = AbilityId.MARINE_STIM
 _HOLD_FIRE = AbilityId.GHOST_HOLD_FIRE_ON
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
+_TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 # An unset `target` reads as the first value the enum declares, which is the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 
@@ -45,6 +46,7 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_STIM),
         data_pb2.AbilityData(ability_id=_HOLD_FIRE),
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
+        data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
     ],
 )
 
@@ -98,6 +100,16 @@ class _Game:
 def _marine(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (10.0, 10.0)) -> raw_pb2.Unit:
     """One of this player's marines, carrying out `orders`."""
     return make_unit(tag, UnitTypeId.MARINE, at=at, orders=orders)
+
+
+def _barracks(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """One of this player's barracks, making what `orders` say."""
+    return make_unit(tag, UnitTypeId.BARRACKS, at=(12.0, 12.0), orders=orders)
+
+
+def _training(progress: float = 0.5) -> raw_pb2.UnitOrder:
+    """The order a barracks shows while it makes a marine."""
+    return raw_pb2.UnitOrder(ability_id=_TRAIN_MARINE, progress=progress)
 
 
 def _moving(to: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.UnitOrder:
@@ -503,6 +515,104 @@ class TestWhatBecameOfAnOrder:
     def test_every_state_but_the_ones_still_going_is_final(self) -> None:
         going = {OrderState.GIVEN, OrderState.SENT, OrderState.RUNNING}
         assert {state for state in OrderState if not state.is_final} == going
+
+
+class TestOrdersThatQueue:
+    """A train goes behind what a structure is making, so it is neither a duplicate nor a replacement (in game)."""
+
+    def test_a_train_is_sent_though_the_structure_is_already_making_one(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1, _training()))
+
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _TRAIN_MARINE
+        assert order.behavior is OrderBehavior.QUEUES
+        assert order.state is OrderState.SENT
+
+    def test_a_train_does_not_end_the_order_the_structure_is_already_running(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        marine = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1, _training()), actions=(_reported(_TRAIN_MARINE, 1, step=16),))
+        assert marine.state is OrderState.RUNNING
+
+        game.book.issue(game.own(1), _TRAIN_REAPER)
+        game.flush()
+
+        assert marine.state is OrderState.RUNNING
+
+
+class TestWhatAnOrderSupersedes:
+    def test_a_refused_order_ends_nothing(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.NOT_SUPPORTED])
+        game.observe(0, _marine(1))
+        first = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving()), actions=(_reported(_MOVE_EXACT, 1, step=16),))
+        assert first.state is OrderState.RUNNING
+
+        refused = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.flush()
+
+        assert refused.state is OrderState.REFUSED
+        assert first.state is OrderState.RUNNING
+
+    def test_clearing_a_queue_keeps_the_order_it_leaves_the_unit_at(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        moving = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(
+            16,
+            _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))),
+            actions=(_reported(_MOVE_EXACT, 1, step=16),),
+        )
+        assert moving.state is OrderState.RUNNING
+
+        game.book.clear_queue(game.own(1))
+        game.flush()
+
+        assert moving.state is OrderState.RUNNING
+
+
+class TestAnOrderTheGameDropped:
+    def test_an_order_is_dropped_though_another_unit_ran_the_same_ability(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        reported = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        dropped = game.book.issue(game.own(2), _MOVE, target=(30.0, 31.0))
+        game.flush()
+
+        # The game carried out the first and dropped the second, which it does without a word (in game).
+        game.observe(16, _marine(1, _moving()), _marine(2), actions=(_reported(_MOVE_EXACT, 1, step=16),))
+
+        assert reported.state is OrderState.RUNNING
+        assert dropped.state is OrderState.DROPPED
+        assert dropped.taken_by == ()
+
+
+class TestATargetOffTheGround:
+    def test_a_height_is_left_behind(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+
+        order = game.book.issue(game.own(1), _MOVE, target=Point3D((20.0, 21.0, 5.0)))
+
+        assert order.target == Point((20.0, 21.0))
+        (command,) = _commands(game.flush())
+        assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
+
+    def test_a_unit_at_a_point_with_a_height_is_still_carrying_out_the_order(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1, _moving((20.0, 21.0))))
+
+        order = game.book.issue(game.own(1), _MOVE, target=Point3D((20.0, 21.0, 5.0)))
+
+        assert game.flush() is None
+        assert order.state is OrderState.RUNNING
 
 
 class _OrderingBot:

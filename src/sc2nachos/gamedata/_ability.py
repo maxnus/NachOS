@@ -57,10 +57,12 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             # Something that is not a structure performs it, so it replaces what that unit was doing: a worker's
             # build, a larva's train, a unit's own morph.
             continue
-        if isinstance(product, UnitTypeId) and product in structures:
-            behaviors[ability] = OrderBehavior.NEEDS_IDLE
-        elif performers:
-            behaviors[ability] = OrderBehavior.QUEUES
+        makes_structure = isinstance(product, UnitTypeId) and product in structures
+        if not performers and not makes_structure:
+            # An id a unit only reports and is never offered, such as `LIBERATOR_SIEGE_EXACT`. One that makes a
+            # structure is kept: a gateway is offered no warp gate morph either, and turns itself into one.
+            continue
+        behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
     behaviors.update(dict.fromkeys(ACTS_AT_ONCE, OrderBehavior.AT_ONCE))
     generals = (general for exact, general in tech_tree.ability_remaps.items() if exact in ACTS_AT_ONCE)
     behaviors.update(dict.fromkeys(generals, OrderBehavior.AT_ONCE))
