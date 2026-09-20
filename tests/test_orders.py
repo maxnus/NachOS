@@ -1031,6 +1031,7 @@ class _SpendingBot:
         self.cancelled: Order[None] | None = None
         self.cancel_sent: AbilityId | None = None
         self.lost: Order[None] | None = None
+        self.slots: list[int] = []
         self._step_of_last = 0
 
     def turn(self, event: TurnEvent) -> None:
@@ -1038,10 +1039,13 @@ class _SpendingBot:
         api = self.api
         barracks = api.units.own.of_type(UnitTypeId.BARRACKS).complete
         if not barracks:
-            if event.step < 64:
+            # Beside this player's town hall, which is ground a structure can stand on; the middle of the map
+            # need not be.
+            home = api.units.own.of_type(UnitTypeId.COMMAND_CENTER)
+            if event.step < 64 and home:
                 api.client.debug(
                     [
-                        _create(UnitTypeId.BARRACKS, api.map.playable_area.center, self.player, quantity=1),
+                        _create(UnitTypeId.BARRACKS, home[0].position + (8.0, 0.0), self.player, quantity=1),
                         debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.minerals),
                         debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.food),
                     ]
@@ -1053,7 +1057,9 @@ class _SpendingBot:
             self._step_of_last = event.step
             return
         if self.refused is None:
-            if api.order.budget.slots_left(one) > 0:
+            left = api.order.budget.slots_left(one)
+            self.slots.append(left)
+            if left > 0:
                 return
             # The queue is full as the game sees it, so NachOS refuses the sixth. The game is asked the same thing
             # raw, to see whether it says what NachOS said it would.
@@ -1094,7 +1100,8 @@ class TestTheBudgetAgainstTheRealGame:
             api.play(client, steps_per_turn=8, time_limit=90)
 
         # A sixth thing to make is refused by NachOS, and the game answers the same for the same order.
-        assert bot.refused is not None
+        made = [(order.state.name, order.verdict and order.verdict.name) for order in bot.made]
+        assert bot.refused is not None, f"the bot never asked for a sixth; its five read {made}, slots {bot.slots}"
         assert bot.refused.state is OrderState.REFUSED
         assert bot.refused.verdict is ActionResult.QUEUE_IS_FULL
         assert bot.the_game_answered is ActionResult.QUEUE_IS_FULL
