@@ -44,9 +44,22 @@ A unit takes the last order it was given in a turn, and the ones before it read 
 does with two unqueued orders in one request, so NachOS sends only the one that would have stood.
 
 The exception is an ability the unit carries out at once, which reads `OrderBehavior.AT_ONCE`: stim, the cloaks,
-Guardian Shield and the ten others that were seen to leave a moving unit's orders as they were. Those neither
-override nor are overridden, because the unit does both — a marine stims and goes on moving. `order.behavior` says
-which an ability is.
+Guardian Shield and the ten others that were seen to leave a moving unit's orders as they were, and everything a
+structure does besides making something, such as a rally or a cancel. Those neither override nor are overridden,
+because the unit does both — a marine stims and goes on moving. `order.behavior` says which an ability is.
+
+**A structure is a unit like any other here**: it takes the last thing a turn told it to make. The game would put a
+second train behind the first and pay for it from the step it was ordered, which is money spent before the
+structure can start on it, so NachOS sends only the last. To fill a queue on purpose — a reactor's second slot, say,
+which the structure starts at once — say so with `queued=True`:
+
+```python
+api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
+```
+
+Both go out, and a barracks with a reactor makes both marines at once. Two such orders name the same ability on the
+same structure, so NachOS cannot tell their reports apart: they run and finish together.
 
 NachOS has no priority of its own. Handlers already run highest-priority-first, and a handler late in a turn reads
 `api.order.issued(unit)` to leave a unit an earlier one has spoken for:

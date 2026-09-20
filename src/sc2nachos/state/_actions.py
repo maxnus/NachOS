@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self, final
 
+from sc2nachos._errors import NachOSError
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.state._action_result import ActionResult
@@ -15,6 +16,26 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2, sc2api_pb2
 
     from sc2nachos.units import Target, Unit
+
+
+class UnknownActionResultError(NachOSError, ValueError):
+    """The game answered with a result `ActionResult` leaves out, which a protocol release newer than the one it was
+    generated from would add. Regenerate it with `tools/generate_action_results.py`."""
+
+    def __init__(self, value: int) -> None:
+        super().__init__(f"ActionResult has no member for the result {value} the game answered with")
+        self.value = value
+
+
+def read_result(value: int) -> ActionResult:
+    """The verdict the game answered with, by its number.
+
+    Raises `UnknownActionResultError` for a result the generated enum leaves out.
+    """
+    try:
+        return ActionResult(value)
+    except ValueError:
+        raise UnknownActionResultError(value) from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +127,7 @@ class ActionError:
         """
         unit = unit_by_tag(error.unit_tag) if error.HasField("unit_tag") else None
         ability = AbilityId.read(error.ability_id) if error.HasField("ability_id") else None
-        return cls(step, unit, ability, ActionResult(error.result))
+        return cls(step, unit, ability, read_result(error.result))
 
 
 def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any]]) -> Action | None:

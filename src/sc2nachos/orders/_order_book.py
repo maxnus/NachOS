@@ -15,7 +15,7 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
 from sc2nachos.protocol import ProtocolError
-from sc2nachos.state import ActionResult, UnitCommand
+from sc2nachos.state import ActionResult, UnitCommand, read_result
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
@@ -160,8 +160,8 @@ class OrderBook:
     @property
     def running(self) -> tuple[Order[Any], ...]:
         """Every order sent and not finished with: what the game has yet to answer for, and what it is carrying
-        out."""
-        return tuple(self._running_orders)
+        out. One withdrawn since it was sent is left out."""
+        return tuple(order for order in self._running_orders if not order.state.is_final)
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, with the turn's orders. Only the last of a turn is sent."""
@@ -189,7 +189,7 @@ class OrderBook:
         replaced: set[int] = set()
         # A camera move, where there is one, is answered last and belongs to no order.
         for (order, units), result in zip(sent, results[: len(sent)], strict=True):
-            verdict = ActionResult(result)
+            verdict = read_result(result)
             order._verdict = verdict
             if verdict is not ActionResult.SUCCESS:
                 order._state = OrderState.REFUSED
@@ -243,18 +243,24 @@ class OrderBook:
                     continue
             fresh = units if self._sent_whatever_a_unit_is_at(order) else self._units_not_doing_it(units, order)
             if not fresh:
+                order._sent_to = units
                 order._taken_by = units
                 order._state = OrderState.RUNNING
                 self._running_orders.append(order)
                 continue
+            order._sent_to = fresh
             yield order, fresh
 
     def _competes(self, order: Order[Any]) -> bool:
         """Whether `order` takes its units from the other orders of the turn.
 
-        Only an unqueued order that replaces a unit's orders does. A queued one goes behind what the unit has, and
-        an ability carried out at once leaves the unit's orders alone, so both go out beside whatever else the turn
-        gave that unit (in game).
+        Every unqueued order does, whatever it would do to the unit. A unit takes the last it was given, and so does
+        a structure: the game would put a second train behind the first rather than replace it, and pay for it from
+        the step it was ordered, so NachOS sends only the last thing the turn asked a structure to make.
+
+        A queued order competes with nothing, since it is the bot asking for a place in the queue: it is how a
+        structure with a reactor is told to make two at once. An ability carried out at once competes with nothing
+        either, because the unit does both (in game).
         """
         return not order.queued and order.behavior is not OrderBehavior.AT_ONCE
 
@@ -272,25 +278,28 @@ class OrderBook:
 
     def _supersede_running_orders(self, replaced: set[int], running: Sequence[Order[Any]]) -> None:
         """End every order of `running` whose units this turn's orders all took: the game drops what an unqueued
-        order replaces."""
+        order replaces. An order the bot has taken back, or the game is otherwise done with, is left as it is."""
         if not replaced:
             return
         for order in running:
-            if order.behavior is OrderBehavior.AT_ONCE:
+            if order.behavior is OrderBehavior.AT_ONCE or order.state.is_final:
                 continue
-            if all(unit.id in replaced for unit in order.units):
+            if all(unit.id in replaced for unit in order._acting_units):
                 order._state = OrderState.OVERRIDDEN
 
     def _take_in_order(self, order: Order[Any], commands: Sequence[UnitCommand], errors: Sequence[ActionError]) -> None:
         """What one order's state becomes, from what the observation reported."""
         general = self._general_ability(order.ability)
-        units = order.units
-        for error in errors:
-            if error.unit in units and error.ability is not None and self._general_ability(error.ability) is general:
-                order._error = error
-                order._state = OrderState.FAILED
-                return
+        units = order._acting_units
+        errored = tuple(error for error in errors if self._error_is_of(error, order, units, general))
+        if errored:
+            order._error = errored[0]
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
+        if errored and not carrying_out and not set(units) - {error.unit for error in errored}:
+            # The game gave up on every unit it went out for. One of a group failing leaves the rest to settle as
+            # they are, with the error on the order to read.
+            order._state = OrderState.FAILED
+            return
         if order.state is OrderState.RUNNING:
             if not carrying_out:
                 order._state = OrderState.DONE
@@ -305,6 +314,12 @@ class OrderBook:
             order._state = OrderState.RUNNING
         else:
             order._state = OrderState.DROPPED
+
+    def _error_is_of(
+        self, error: ActionError, order: Order[Any], units: Sequence[OwnUnit[Any]], general: AbilityId
+    ) -> bool:
+        """Whether an action error names one of `units` and the ability `order` was given."""
+        return error.unit in units and error.ability is not None and self._general_ability(error.ability) is general
 
     def _unit_already_doing_order(self, unit: OwnUnit[Any], order: Order[Any]) -> bool:
         """Whether `unit`'s first order is the one `order` would send it unqueued."""

@@ -28,6 +28,7 @@ class Order[T]:
         "_forced",
         "_given_step",
         "_queued",
+        "_sent_to",
         "_state",
         "_taken_by",
         "_target",
@@ -58,6 +59,7 @@ class Order[T]:
         # Sent even where the unit is already carrying it out, which is how a queue is cleared.
         self._forced = forced
         self._state = OrderState.GIVEN
+        self._sent_to: tuple[OwnUnit[Any], ...] = ()
         self._verdict: ActionResult | None = None
         self._error: ActionError | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
@@ -116,6 +118,11 @@ class Order[T]:
         """The step of the observation the bot gave it in, which is the step it was sent at: a turn's orders go out
         before the game steps again."""
         return self._given_step
+
+    @property
+    def _acting_units(self) -> tuple[OwnUnit[Any], ...]:
+        """The units it went out for, which is every unit it names until the turn works out which of them it kept."""
+        return self._sent_to or self._units
 
     @property
     def taken_by(self) -> tuple[OwnUnit[Any], ...]:

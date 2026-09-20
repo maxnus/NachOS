@@ -1,7 +1,15 @@
 """What a game's observations report beyond its units: the score, the supply, effects and this player's actions."""
 
 from sc2nachos.state._action_result import ActionResult
-from sc2nachos.state._actions import Action, ActionError, AutocastToggle, CameraMove, UnitCommand
+from sc2nachos.state._actions import (
+    Action,
+    ActionError,
+    AutocastToggle,
+    CameraMove,
+    UnitCommand,
+    UnknownActionResultError,
+    read_result,
+)
 from sc2nachos.state._alert import Alert
 from sc2nachos.state._effect import Effect
 from sc2nachos.state._score import CategoryScore, Score, ValueScore, VitalScore
@@ -21,6 +29,8 @@ __all__ = [
     "Supply",
     "UiUnitCounts",
     "UnitCommand",
+    "UnknownActionResultError",
     "ValueScore",
     "VitalScore",
+    "read_result",
 ]

@@ -20,7 +20,7 @@ from sc2nachos.launch import GameProcess, Map, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook, OrderState
 from sc2nachos.protocol import Client, WebSocketTransport
-from sc2nachos.state import ActionResult
+from sc2nachos.state import ActionResult, UnknownActionResultError, read_result
 from sc2nachos.state._state import _State
 from sc2nachos.units import OwnUnit
 from sc2nachos.units._tracking import _Tracker
@@ -746,6 +746,107 @@ class TestWhatAnOrderStopsCountingFor:
         order.withdraw()
 
         assert order.state is OrderState.REFUSED
+
+
+class TestTellingAStructureToMakeTwo:
+    def test_a_second_train_is_sent_when_the_bot_asks_for_a_place_in_the_queue(self) -> None:
+        """Which is how a structure with a reactor is told to make two at once (in game)."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        second = game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+
+        one, two = _commands(game.flush())
+
+        assert (one.ability_id, one.queue_command) == (_TRAIN_MARINE, False)
+        assert (two.ability_id, two.queue_command) == (_TRAIN_MARINE, True)
+        assert (first.state, second.state) == (OrderState.SENT, OrderState.SENT)
+
+    def test_a_second_unqueued_train_takes_the_structure_from_the_first(self) -> None:
+        """Deliberate: the game would queue it and pay for it from the step it was ordered."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        first = game.book.issue(game.own(1), _TRAIN_MARINE)
+        second = game.book.issue(game.own(1), _TRAIN_REAPER)
+
+        (command,) = _commands(game.flush())
+
+        assert command.ability_id == _TRAIN_REAPER
+        assert (first.state, second.state) == (OrderState.OVERRIDDEN, OrderState.SENT)
+
+
+class TestAnErrorAboutOneOfAGroup:
+    def test_one_unit_failing_leaves_the_order_to_the_rest(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+
+        game.observe(
+            16,
+            _marine(1, _moving()),
+            _marine(2),
+            actions=(_reported(_MOVE_EXACT, 1, step=16),),
+            errors=(_failed(_MOVE_EXACT, 2),),
+        )
+
+        assert order.state is OrderState.RUNNING
+        assert order.error is not None
+        assert order.error.unit is game.own(2)
+
+    def test_an_order_fails_once_every_unit_it_went_out_for_failed(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+
+        game.observe(16, _marine(1), _marine(2), errors=(_failed(_MOVE_EXACT, 1), _failed(_MOVE_EXACT, 2)))
+
+        assert order.state is OrderState.FAILED
+
+
+class TestAnOrderTakenBack:
+    def test_the_turns_orders_do_not_undo_a_withdrawal(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving()), actions=(_reported(_MOVE_EXACT, 1, step=16),))
+
+        order.withdraw()
+        assert game.book.running == ()
+
+        game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.flush()
+
+        assert order.state is OrderState.WITHDRAWN
+
+
+class TestAnOrderSentToSomeOfItsUnits:
+    def test_it_is_superseded_by_what_took_the_units_it_kept(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        group = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _ATTACK, target=(30.0, 31.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving()), _marine(2), actions=(_reported(_MOVE_EXACT, 1, step=16),))
+        assert group.state is OrderState.RUNNING
+
+        # The group order went out for marine 1 alone, so marine 1 is all it takes to supersede it.
+        game.book.issue(game.own(1), _MOVE, target=(40.0, 41.0))
+        game.flush()
+
+        assert group.state is OrderState.OVERRIDDEN
+
+
+class TestAVerdictNachosCannotName:
+    def test_it_says_which_result_the_game_answered_with(self) -> None:
+        """The enum is generated from the protocol package, so a game newer than it could answer with a result it
+        leaves out. The protocol itself refuses to carry one, so the reading is probed on its own."""
+        assert read_result(int(ActionResult.QUEUE_IS_FULL)) is ActionResult.QUEUE_IS_FULL
+
+        with pytest.raises(UnknownActionResultError, match="no member for the result 250"):
+            read_result(250)
 
 
 class _OrderingBot:
