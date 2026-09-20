@@ -364,9 +364,24 @@ Each entry ends with how it was seen:
 - A second SCV or drone ordered with no minerals left, queued or not, is answered `Success`, never made, raises no
   error, and is left out of the actions the next observation reports (tool `sweep_alerts`, #37; tool
   `sweep_orders`).
+- Supply is taken as a unit starts, not as it is queued, and a full cap stops the queue rather than refusing it. A
+  barracks with two supply left given five marines takes all five: `food_used` rises by one as the first starts, and
+  the four behind it wait at no progress, taking nothing. One given three with the cap full takes all three, answers
+  each `Success`, and none of them starts: no progress for 380 steps, no action error, and nothing dropped. Two SCVs
+  trained take one supply between them, and cancelling the one that had not started gives none back (tool
+  `sweep_orders`).
 - A single passenger cannot be unloaded through `RequestAction`: it takes the UI action `ActionCargoPanelUnload`
   after a raw command with ability 0 selects the transport, with `raw_affects_selection` and a feature layer on. The
   medivac's unload abilities unload every passenger at once (stated).
+- The item in the middle of a queue can be cancelled, but only the same way: the UI action
+  `ActionProductionPanelRemoveFromQueue`, with the structure in the selection. A barracks holding a marine, a
+  reaper, a marine, a reaper and a marine, selected by a rally, and asked for index 2: answered `Success`, the third
+  goes, and the next observation reports it as a raw `CancelSlot_Queue5` command on the barracks. The same action in
+  a game joined with the raw interface and `raw_affects_selection` but no feature layer is answered `Error`, and the
+  slot ids sent raw to the selected barracks are answered as they are to an unselected one: `Cancel_Slot` `Error`,
+  `CancelSlot_Queue5` and `CancelSlot_QueueCancelToSelection` `NotSupported`. So a selection is not what they
+  wanted, and NachOS, which asks for the raw interface alone, can cancel only a structure's last item (tool
+  `sweep_orders`).
 - Ability 0 is no ability, and Smart is the right-click order. `Cancel_Queue5` and
   `Cancel_QueueCancelToSelection` both remap to `Cancel_Last` (stated).
 - A player that gives no orders still has its workers mine: the game gives those orders itself (corpus).
@@ -377,8 +392,9 @@ Each entry ends with how it was seen:
 - Training and research go behind what a structure is making, queued or not: an unqueued train given to a command
   center, hatchery or nexus that is training, or an unqueued research to an engineering bay, forge or evolution
   chamber that is researching, waits its turn as a queued one does. A structure holds 5; a sixth is answered
-  `QueueIsFull`. A barracks with a reactor holds 8 and makes two marines at once; one with a tech lab or none holds 5
-  and makes one (tool `sweep_orders`).
+  `QueueIsFull`. A reactor holds 8 and makes two at once, on a barracks, a factory and a starport alike, and a
+  structure with a tech lab or no add-on holds 5 and makes one: given 10 to make in one step, each kept its 8 or its
+  5, and exactly 2 or 1 of them carried progress (tool `sweep_orders`).
 - A morph or an add-on given to a structure that is making something is refused, `NotSupported`, queued or not: an
   orbital command or a planetary fortress to a command center training an SCV, a lair to a hatchery training a queen,
   a warp gate to a gateway training a zealot, a tech lab to a barracks training a marine. An idle command center
@@ -403,16 +419,40 @@ Each entry ends with how it was seen:
   4, a cancel and then a reaper are both carried out, and the reaper goes last. Cancels and then an orbital command to
   a command center training SCVs, or a cancel and then a tech lab to a barracks training a marine, empty it and
   refuse the morph or add-on `NotSupported`, and a step later it is taken (tool `sweep_orders`).
+- What a cancel gives back turns on what was cancelled, not on how far it got. A train or a research gives back all
+  of it; a morph, an add-on or a structure part built gives back three quarters, rounded up. Measured at real
+  prices, each read as the difference over the observation the cancel landed in: an SCV 50 of 50 and a research
+  100/100 of 100/100; an orbital command 113 of 150, a planetary fortress 113/113 of 150/150, a tech lab 38/19 of
+  50/25, and a supply depot 75 of 100. An orbital cancelled 400 steps into its morph gives back the same 113 as one
+  cancelled 40 steps in, and a depot cancelled half way up the same 75 as one barely started (tool `sweep_orders`).
+- A structure part way through something is offered one cancel, and it is its own. A command center morphing is
+  offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, a barracks building an add-on
+  `Cancel_BarracksAddOn`, an engineering bay researching `Cancel_Queue5`, a command center training
+  `Cancel_QueueCancelToSelection`, and a structure going up `Cancel_BuildInProgress`. `Cancel_Last` is answered
+  `Error` by a morph and by an add-on, so the cancel to send is the one the game offers, not the generic one (tool
+  `sweep_orders`).
 - An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
   refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
   an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay
   for it. With none, 5 cancels to a command center and an orbital command to another, idle one: the orbital is
   refused `NotEnoughMinerals`, and a step later the refunded 250 pay for it (tool `sweep_orders`).
+- Every ability a structure that makes something is offered that makes nothing leaves what it is making alone, at
+  the progress it stood at. Each was given to a structure part way through a train or a research, and the structure
+  went on with it: the rally of a barracks, factory, starport, robotics facility, stargate, nexus, command center,
+  orbital command, planetary fortress, hatchery, lair and hive, workers and units alike; a command center's and a
+  planetary's load; an orbital's MULE, scan and supply drop; a nexus's recall and energy recharge; a ghost academy's
+  nuke; and a planetary fortress's own stop and attack, which a barracks is answered `Error` for (tool
+  `sweep_orders`).
 - A barracks training marines goes on training when given a rally or a cancel, which drops the last marine; a lift is
   refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
   production as it was, and a carrier goes on building interceptors through a stop (tool `sweep_orders`).
 - A research another structure of this player's is doing already is answered `Success`, and nothing is researched or
   reported. A level queued behind the one before it, still being researched, is refused `NotSupported` (tool
+  `sweep_orders`).
+- A research structure researching is offered no research at all, its own included, though it takes every other line
+  queued: an engineering bay took infantry weapons 1, infantry armor 1, building armor and hi-sec auto tracking in
+  one request, a forge took ground weapons 1, ground armor 1 and shields 1, and an evolution chamber melee 1,
+  missile 1 and ground armor 1, each refusing the second level of a line it was already on `NotSupported` (tool
   `sweep_orders`).
 - A few abilities act at once and leave a unit's orders as they were, a move carrying on: stim, the banshee's and
   ghost's cloak, the ghost's hold fire, the medivac's boost, Guardian Shield, the mothership's cloak field, the
@@ -421,6 +461,12 @@ Each entry ends with how it was seen:
   position, morphs, burrows, sieges and landing, blink, charge, hallucinations, force fields, and every spell aimed
   at a unit or a point, even one within reach. Queued, each goes behind the move, but a cyclone's lock-on, which is
   refused `NotSupported` (tool `sweep_orders`).
+- The half of a toggle that turns one off keeps a unit's orders too, as the half that turns it on does. A unit is
+  offered the off half only once the on half has taken, and each was then given to a moving unit: the banshee's and
+  ghost's cloak, the ghost's hold fire, the oracle's pulsar beam, the overlord's creep and the baneling's attack on
+  structures. Every one is answered `Success`, leaves the move first in the unit's orders, and the unit goes on
+  closing on its point. A lurker's hold fire is the one that could not be given, since it is offered only burrowed,
+  and the game offers a burrowed lurker no move (tool `sweep_orders`).
 - One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
   their spacing, but a spell or a structure is carried out by one of them only: a storm by a templar with the energy
   for it, a pylon by one of two probes. What cannot take the order is left out, and the verdict is `Success`: a
@@ -428,9 +474,19 @@ Each entry ends with how it was seen:
   `sweep_orders`).
 - A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   action it reports names the larva it used, which need not be the one ordered (tool `sweep_orders`).
+- A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it
+  becomes an egg carrying the last of them alone, and the hatchery's own orders stay empty. Every larva of a
+  hatchery given a drone becomes a drone egg, and a second order to one already spoken for changes nothing (tool
+  `sweep_orders`).
+- A warp gate keeps no queue either: given two zealot warp-ins in one request, both answered `Success`, it shows no
+  orders at all, then or 16 steps later (tool `sweep_orders`).
 - An order to a dead unit's tag or to one never used is answered `Error`, and to an enemy unit
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).
+- A structure killed while it is making something is reported dying and nothing more. A barracks training three
+  marines, killed: the next observation still lists it with all three orders, the one after does not list it at all,
+  and neither carries an action for it nor an action error. An SCV killed on its way to build is the same. So what a
+  unit was making is told from the unit being gone, never from a report (tool `sweep_orders`).
 - An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it. The tag it was
   seen under is refused, `NotSupported` (tool `sweep_orders`).
 - A point crosses the protocol as a 32-bit float, so a coordinate the game reports is one exactly, widened; a
@@ -562,11 +618,7 @@ Each entry ends with how it was seen:
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it stale and never finds it dead (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
-- **What a structure's own abilities do to what it is making** was measured for a rally and a cancel, which it
-  goes on making through, and for nothing else. NachOS reads every ability that makes nothing and is offered only to
-  things the game offers no move — a structure, an egg, a cocoon — as leaving their orders alone, loads, unloads,
-  salvage, landing and the energy casts included (tool `sweep_orders`).
-- **The half of a toggle that turns one off** was never measured: a unit is offered only the half that fits its
-  state, so the sweep of what an ability does to a moving unit's orders gave every `_ON` half and no `_OFF` one.
-  Whether un-cloaking, stopping creep or lowering hold fire keeps a unit's orders as the `_ON` half does is
-  unknown, so NachOS reads them as replacing its orders (tool `sweep_orders`).
+- **What an ability a structure cannot use while it is busy does to what it is making** is still open for the ones
+  the game refuses rather than takes: a lift is answered `NotSupported` and a morph and an add-on likewise, so what
+  they would do to a queue was never seen. Everything a producer is offered that it does take leaves what it is
+  making alone (tool `sweep_orders`).

@@ -149,10 +149,33 @@ class Sandbox:
         return self.client.act([action]).result[0]
 
 
+def join_with(transport: WebSocketTransport, race: Race, interface: sc2api_pb2.InterfaceOptions) -> int:
+    """Join the waiting game as `race` asking for `interface`, and answer the player id.
+
+    NachOS's own client asks for the raw interface and nothing else, so a tool that needs another joins here.
+    """
+    request = sc2api_pb2.RequestJoinGame(race=race.value, options=interface, player_name="NachOS")
+    joined = transport.request(sc2api_pb2.Request(join_game=request)).join_game
+    # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+    if joined.HasField("error"):
+        reason = sc2api_pb2.ResponseJoinGame.Error.Name(joined.error)
+        raise RuntimeError(f"the game refused the join as {reason}: {joined.error_details or 'no detail given'}")
+    return joined.player_id
+
+
 @contextmanager
-def playing(race: Race, installation: Installation, *, realtime: bool = False) -> Iterator[Sandbox]:
+def playing(
+    race: Race,
+    installation: Installation,
+    *,
+    realtime: bool = False,
+    interface: sc2api_pb2.InterfaceOptions | None = None,
+) -> Iterator[Sandbox]:
     """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone.
-    A `realtime` game runs on its own and is never stepped."""
+
+    A `realtime` game runs on its own and is never stepped, and an `interface` other than the raw one is joined for
+    here rather than through the client.
+    """
     game_map = Map.find(MAP, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
         transport = WebSocketTransport.connect(game.url)
@@ -160,7 +183,10 @@ def playing(race: Race, installation: Installation, *, realtime: bool = False) -
             try:
                 players = [Participant(), Computer(race, Difficulty.VERY_EASY)]
                 client.create_game(game_map.path, players, realtime=realtime)
-                player = client.join_game(race, name="NachOS")
+                if interface is None:
+                    player = client.join_game(race, name="NachOS")
+                else:
+                    player = join_with(transport, race, interface)
                 yield Sandbox(client, transport, player)
             finally:
                 client.leave_game()
