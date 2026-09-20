@@ -2410,6 +2410,27 @@ def _producer_dies(game: _Game) -> list[Trial]:
             game.read(f"{step} after it died", [scv])
 
     trials.append(game.trial("an SCV killed on its way to build", builder))
+
+    def errored_and_killed(trial: Trial) -> None:
+        """Whether the game can report an action error for an order whose unit is gone by the same observation,
+        which is what decides whether an order reads `FAILED` or `LOST` when both happen at once."""
+        scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
+        if scv is None:
+            trial.notes["class"] = "no SCV"
+            return
+        at = game.spot(game.toward(20), 3)
+        trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
+        game.turn(2)
+        game.read("on its way", [scv])
+        # The site is taken by the enemy, which the game gives up on the build for, and the builder is killed in
+        # the same step.
+        game.create(UnitTypeId.PYLON, at, owner=game.enemy)
+        game.sandbox.kill([scv.tag])
+        for step in (1, 2, 8):
+            game.turn(step)
+            game.read(f"{step} after the site was taken and it died", [scv])
+
+    trials.append(game.trial("an SCV killed as the game gives up on its build", errored_and_killed))
     return trials
 
 

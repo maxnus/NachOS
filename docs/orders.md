@@ -147,7 +147,8 @@ cancel = api.order.cancel(order)
   behind another raises `ValueError`, as does one given to more than one unit. Two cancels in a turn walk back two
   items.
 - It answers `None` where there is nothing to cancel: an order the book is done with, one whose structure is gone,
-  or one the structure is not carrying out.
+  one the structure is not carrying out, and one this turn has not sent yet — that last is `order.withdraw()`'s,
+  which drops it before it costs anything.
 - What comes back is the game's own rule — all of a train or a research, three quarters of a morph, an add-on or a
   structure going up — and it comes back in a later observation, not this turn.
 

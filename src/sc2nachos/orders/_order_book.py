@@ -176,9 +176,9 @@ class OrderBook:
         """Take `order` off the structure carrying it out, by sending the cancel the game offers that structure,
         and answer the order that goes out.
 
-        It answers `None` where there is nothing to cancel: an order the book is done with, one whose structure is
-        gone, or one the structure is not carrying out. The cancelled handle settles `CANCELLED` once the game has
-        taken the cancel.
+        It answers `None` where there is nothing to cancel: an order the book is done with, one this turn has not
+        sent yet -- which `order.withdraw()` drops for nothing -- one whose structure is gone, or one the structure
+        is not carrying out. The cancelled handle settles `CANCELLED` once the game has taken the cancel.
 
         Only the last thing a structure is making can be cancelled, a raw command reaching no further (in game), so
         an order behind another raises `ValueError`, as does one given to more than one unit. A cancel frees

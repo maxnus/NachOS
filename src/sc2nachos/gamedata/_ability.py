@@ -100,6 +100,14 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
     return behaviors
 
 
+def _the_lesser(one: tuple[Resources, float], other: tuple[Resources, float]) -> tuple[Resources, float]:
+    """The least of two charges in each of its parts, which is what a general id takes of anything it might run."""
+    return (
+        Resources(min(one[0].minerals, other[0].minerals), min(one[0].vespene, other[0].vespene)),
+        min(one[1], other[1]),
+    )
+
+
 def _cancels(ability: AbilityId, tech_tree: TechTree) -> bool:
     """Whether the ability takes back what a structure is making, which the game's own tables say by remapping every
     one of them onto `GENERAL_CANCEL` or `GENERAL_CANCEL_LAST`."""
@@ -134,14 +142,14 @@ def ability_costs(
         cost, supply = charges.get(ability, (Resources(0, 0), 0.0))
         charges[ability] = (CHARGED_COSTS.get(ability, cost), CHARGED_SUPPLY.get(ability, supply))
     # A general id stands for exact ones of several prices -- the three levels of a research -- and which it will run
-    # is not known until it is ordered, so it is charged the least of them, which refuses no order the game takes.
+    # is not known until it is ordered, so it is charged the least minerals and the least vespene any of them takes.
+    # That is a floor rather than any one level's price, and a floor is what refuses no order the game would take.
     for exact, general in tech_tree.ability_remaps.items():
         charge = charges.get(exact)
         if charge is None or general in tech_tree.ability_products or general in _CORRECTED:
             continue
         standing = charges.get(general)
-        if standing is None or charge[0].total < standing[0].total:
-            charges[general] = charge
+        charges[general] = charge if standing is None else _the_lesser(standing, charge)
     return charges
 
 

@@ -467,8 +467,8 @@ class TestARecordedGamesTables:
             assert _derived_supply(data, ability) != supply, f"the tables now take {supply} supply for {ability.name}"
 
     def test_a_general_research_is_charged_the_least_of_the_levels_it_stands_for(self, path: Path) -> None:
-        """Which level a general id will research is not known until it is ordered, so it is charged the cheapest,
-        which refuses no order the game would take."""
+        """Which level a general id will research is not known until it is ordered, so it is charged the least of
+        each half any of them takes, which refuses no order the game would take."""
         data = _tables(path)
         levels = [
             data.abilities[ability].cost
@@ -480,7 +480,8 @@ class TestARecordedGamesTables:
         ]
         assert levels[0].total < levels[2].total
         general = data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS]
-        assert general.cost == min(levels, key=lambda cost: cost.total)
+        # The least of each half, so that no level it might run can cost more of anything than it was budgeted.
+        assert general.cost == Resources(min(cost.minerals for cost in levels), min(cost.vespene for cost in levels))
 
     def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
         """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""

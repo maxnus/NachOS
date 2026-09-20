@@ -568,6 +568,16 @@ class TechSweep:
         if self._game.order(raw, unit.tag, self._made_at(raw, unit)) == SUCCESS:
             found = self._read_until_idle(unit.tag)
             cancels = sorted({ability for _, ability in found if self._is_cancel(ability)})
+            if len(cancels) > 1:
+                # A structure is offered one cancel for what it is making, so more than one means the trial read
+                # something else as well, and which one belongs to this work cannot be told from here.
+                logger.warning(
+                    "A {} set to {} was offered {} cancels, so which is for it is not recorded: {}",
+                    unit_type.name,
+                    _ability_name(raw),
+                    len(cancels),
+                    cancels,
+                )
             if len(cancels) == 1:
                 # A structure part way through something is offered one cancel and it is its own, which turns on
                 # what it is making: a command center morphing to an orbital command is offered another than one
