@@ -95,17 +95,17 @@ is refused by NachOS and never sent.
 
 ```python
 budget = api.order.budget
-budget.resources            # Resources(minerals, vespene) left after what the turn has ordered
-budget.supply_left          # what is left under the cap, the same way
-budget.slots_left(barracks) # what it will still take: 5, or 8 with a finished reactor
-budget.covers(AbilityId.BARRACKS_TRAIN_MARINE, barracks)   # whether the turn can pay for it
+budget.resources  # Resources(minerals, vespene) left after what the turn has ordered
+budget.supply_left  # what is left under the cap, the same way
+budget.slots_left(barracks)  # what it will still take: 5, or 8 with a finished reactor
+budget.covers(AbilityId.BARRACKS_TRAIN_MARINE, barracks)  # whether the turn can pay for it
 budget.refusal(AbilityId.BARRACKS_TRAIN_MARINE, barracks)  # what it would be answered, or None
 ```
 
 With 50 minerals and two barracks, the second marine of the turn comes back refused:
 
 ```python
-first = api.order.issue(one, AbilityId.BARRACKS_TRAIN_MARINE)    # GIVEN
+first = api.order.issue(one, AbilityId.BARRACKS_TRAIN_MARINE)  # GIVEN
 second = api.order.issue(other, AbilityId.BARRACKS_TRAIN_MARINE)  # REFUSED, NOT_ENOUGH_MINERALS
 ```
 
