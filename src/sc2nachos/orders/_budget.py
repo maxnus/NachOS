@@ -37,9 +37,6 @@ _REACTORS = frozenset(
     }
 )
 
-# What a structure is charged for and given a slot for.
-_PRODUCTION = frozenset({OrderBehavior.QUEUES, OrderBehavior.NEEDS_IDLE})
-
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -111,8 +108,8 @@ class Budget:
         return self._refusal_for(ability, (performer,))
 
     def _refusal_for(self, ability: AbilityId, performers: Sequence[OwnUnit[Any]]) -> ActionResult | None:
-        """What an order of `ability` to all of `performers` would be answered. One command is one thing to the
-        game, so an order is judged whole: every unit it names is charged for before anything is looked at."""
+        """What an order of `ability` to all of `performers` would be answered. One command is one thing the game
+        takes or refuses, so it is charged once and refused as one, whichever of them it names."""
         row = self._book._game_data.abilities.get(ability)
         if row is None:
             # An ability NachOS holds no row for is the game's to judge, as it is today.
@@ -120,13 +117,15 @@ class Budget:
         for performer in performers:
             if not self._offered(ability, performer, row):
                 return ActionResult.NOT_SUPPORTED
-        if not row.cost.total and not row.supply_cost and row.behavior not in _PRODUCTION:
+        if not row.cost.total and not row.supply_cost and row.behavior is not OrderBehavior.QUEUES:
             # A move, an attack and every other ability that charges nothing and takes no slot: nothing the turn
             # has ordered can stand in the way of it, so the turn is never walked for one. Most orders are these.
             return None
-        if row.behavior in _PRODUCTION and any(self.slots_left(one) <= 0 for one in performers):
+        if row.behavior is OrderBehavior.QUEUES and any(self.slots_left(one) <= 0 for one in performers):
+            # Only a train and a research queue. A morph and an add-on are refused above, the game offering
+            # neither to a structure that is making anything (in game).
             return ActionResult.QUEUE_IS_FULL
-        tally = self._tally(adding=(ability, performers))
+        tally = self._tally(adding=ability)
         left = self._book._state.resources - tally.spent
         if left.minerals < 0:
             return ActionResult.NOT_ENOUGH_MINERALS
@@ -139,7 +138,7 @@ class Budget:
             return ActionResult.NOT_ENOUGH_FOOD
         return None
 
-    def _tally(self, adding: tuple[AbilityId, Sequence[OwnUnit[Any]]] | None = None) -> _Tally:
+    def _tally(self, adding: AbilityId | None = None) -> _Tally:
         """What the orders the turn still holds have taken, with `adding` counted as one more of them.
 
         It is summed afresh on every read rather than kept as a running total, so an order withdrawn or overridden
@@ -149,26 +148,25 @@ class Budget:
         book = self._book
         given = [order for order in book._given_orders if order.state is OrderState.GIVEN]
         holder = book._holder(given)
-        charges = [(order.ability, self._units_charged(order, holder)) for order in given]
+        # One command is charged once however many units it names: whatever it is, one of them carries it out --
+        # one marine from three barracks named in one train, one research from two engineering bays, one pylon
+        # from two probes (in game).
+        charged = [order.ability for order in given if self._still_stands(order, holder)]
         if adding is not None:
-            charges.append(adding)
+            charged.append(adding)
         spent, supply = Resources(0, 0), 0.0
-        for ability, units in charges:
-            row = book._game_data.abilities.get(ability)
-            if row is None or not units:
-                continue
-            # One command is charged once however many units it names: whatever it is, one of them carries it out
-            # -- one marine from three barracks named in one train, one research from two engineering bays, one
-            # pylon from two probes (in game).
-            spent += row.cost
-            supply += row.supply_cost
+        for ability in charged:
+            if (row := book._game_data.abilities.get(ability)) is not None:
+                spent += row.cost
+                supply += row.supply_cost
         return _Tally(spent, supply)
 
-    def _units_charged(self, order: Order[Any], holder: Mapping[int, Order[Any]]) -> Sequence[OwnUnit[Any]]:
-        """The units `order` would go out for, which is none of those a later order of the turn has taken."""
+    def _still_stands(self, order: Order[Any], holder: Mapping[int, Order[Any]]) -> bool:
+        """Whether `order` still has a unit to go out for, which it has not where a later order of the turn has
+        taken every one it names."""
         if not self._book._competes(order):
-            return order.units
-        return tuple(unit for unit in order.units if holder.get(unit.id) is order)
+            return True
+        return any(holder.get(unit.id) is order for unit in order.units)
 
     def _offered(self, ability: AbilityId, performer: OwnUnit[Any], row: AbilityData) -> bool:
         """Whether the game would offer `performer` the ability now: it is one its type performs, what it needs

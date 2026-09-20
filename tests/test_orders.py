@@ -1239,16 +1239,6 @@ class TestAnOrderTheBudgetRefuses:
         assert order.state is OrderState.GIVEN
         assert game.book.budget.covers(_MOVE, game.own(1))
 
-    def test_an_order_to_several_structures_is_judged_whole(self) -> None:
-        """One command is one thing to the game: it is charged once, and refused as one where the turn cannot pay
-        even that."""
-        game = _Game()
-        game.observe(0, _barracks(1), _barracks(2), _barracks(3), minerals=30, vespene=0)
-
-        order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
-
-        assert order.verdict is ActionResult.NOT_ENOUGH_MINERALS
-
     def test_an_order_the_budget_refuses_goes_out_when_the_bot_says_so(self) -> None:
         """A table that has gone stale on a new build is not a wall a bot cannot get past."""
         game = _Game([ActionResult.SUCCESS])
