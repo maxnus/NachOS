@@ -22,7 +22,9 @@ class OrderState(Enum):
     FAILED = "failed"
     """Carried out and then given up on, which an action error names: a builder's site taken meanwhile."""
     OVERRIDDEN = "overridden"
-    """A later order of the same turn took every unit this one was given to, so it was never sent."""
+    """A later order took every unit this one was given to: one of the same turn, before this was sent, or one of a
+    later turn, which the game carried out in its place. `verdict` says which, being `None` for an order never
+    sent."""
     WITHDRAWN = "withdrawn"
     """Taken back by the bot. One already sent is only forgotten: the unit goes on with it."""
 

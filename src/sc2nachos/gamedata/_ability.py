@@ -41,7 +41,8 @@ class OrderBehavior(Enum):
     morph, a lift."""
     AT_ONCE = "at once"
     """It is carried out and the unit goes on with its orders, so it competes with nothing: stim and the twelve
-    others of `ACTS_AT_ONCE`."""
+    others of `ACTS_AT_ONCE`, and everything besides making something that is offered only to what the game offers
+    no move: a structure's rally, a cancel."""
 
 
 def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:
@@ -64,9 +65,38 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             continue
         behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
     behaviors.update(dict.fromkeys(ACTS_AT_ONCE, OrderBehavior.AT_ONCE))
-    generals = (general for exact, general in tech_tree.ability_remaps.items() if exact in ACTS_AT_ONCE)
-    behaviors.update(dict.fromkeys(generals, OrderBehavior.AT_ONCE))
+    # A general id stands for exact ones, which are of one class: a research level queues, an add-on needs an idle
+    # structure, a stim acts at once. A general id no exact one classifies is left for the pass below, which reads
+    # every unit type it is offered to rather than one of them.
+    for exact, general in tech_tree.ability_remaps.items():
+        behavior = behaviors.get(exact)
+        if behavior is not None:
+            behaviors[general] = behavior
+    movers = _types_offered_a_move(tech_tree)
+    for ability, performers in tech_tree.ability_performers.items():
+        if ability in behaviors or ability in tech_tree.ability_products or not performers:
+            continue
+        if not performers & movers:
+            # An ability that makes nothing, offered only to things the game offers no move: a structure, an egg, a
+            # cocoon. They have nothing an order could take them off but what they are making, and a rally and a
+            # cancel were both seen to leave that alone (docs/game-behavior.md).
+            behaviors[ability] = OrderBehavior.AT_ONCE
     return behaviors
+
+
+def _types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
+    """The unit types the game offers a move, which are the ones an order can take off what they are doing.
+
+    A structure is offered none, nor is an egg or a cocoon; a structure in the air is offered one under its own
+    flying type, and a sieged unit under its sieged one.
+    """
+    move = AbilityId.GENERAL_MOVE
+    remaps = tech_tree.ability_remaps
+    return frozenset(
+        unit_type
+        for unit_type, abilities in tech_tree.ability_requirements.items()
+        if any(ability is move or remaps.get(ability) is move for ability in abilities)
+    )
 
 
 @final

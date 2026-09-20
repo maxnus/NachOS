@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final, overload
 
+import numpy
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.constants import POINT_PRECISION
@@ -112,23 +113,30 @@ class OrderBook:
         return order
 
     def clear_queue(self, unit: OwnUnit[Any]) -> Order[None] | None:
-        """Drop what `unit` has queued, leaving it at the order it is carrying out, or `None` where it has nothing
-        queued.
+        """Drop what `unit` has queued, leaving it at the order it is carrying out, or `None` where there is nothing
+        to drop.
 
         The order it is at is sent back unqueued, which the game answers `SUCCESS`, carries nothing out for, and
         drops everything behind (in game). An order given to the unit this turn overrides it, as it would any other.
+
+        It answers `None` where the unit has nothing queued, where what it is at is an ability NachOS cannot name,
+        and where that ability is a train, a research or a morph: the game would put a second of those behind the
+        first rather than drop anything, so a structure's queue is cancelled from its end instead.
         """
-        orders = unit.orders
+        orders = unit._latest_data.orders
         if len(orders) < 2:
             return None
-        ability = self._general_ability(orders[0].ability)
+        ability = self._general_ability(_ability_of_unit_order(orders[0]))
+        behavior = self._order_behavior_of_ability(ability)
+        if ability is AbilityId.NULL or behavior is not OrderBehavior.REPLACES:
+            return None
         order: Order[None] = Order(
             ability,
             (unit,),
-            orders[0].target,
+            _order_target(unit, orders[0]),
             queued=False,
             data=None,
-            behavior=self._order_behavior_of_ability(ability),
+            behavior=behavior,
             step=self._step,
             forced=True,
         )
@@ -139,14 +147,15 @@ class OrderBook:
         """What this turn has given `unit` so far, in the order it was given.
 
         A handler late in a turn reads this to leave a unit an earlier handler has spoken for, since the last order
-        a unit is given is the one that goes out.
+        a unit is given is the one that goes out. An order withdrawn or already overridden is left out: it speaks
+        for nothing.
         """
-        return tuple(order for order in self._given_orders if unit in order.units)
+        return tuple(order for order in self._given_orders if unit in order.units and not order.state.is_final)
 
     @property
     def pending(self) -> tuple[Order[Any], ...]:
-        """Every order given this turn and not sent yet."""
-        return tuple(self._given_orders)
+        """Every order given this turn and still to be sent, without those withdrawn or already overridden."""
+        return tuple(order for order in self._given_orders if not order.state.is_final)
 
     @property
     def running(self) -> tuple[Order[Any], ...]:
@@ -156,7 +165,8 @@ class OrderBook:
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, with the turn's orders. Only the last of a turn is sent."""
-        self._camera_location = Point(coordinates(at))
+        aimed = coordinates(at)
+        self._camera_location = Point((_as_sent(aimed[0]), _as_sent(aimed[1])))
 
     def _send(self, client: Client) -> None:
         """Send the turn's orders, and read the game's verdict onto each. Sends nothing where there is nothing."""
@@ -173,7 +183,7 @@ class OrderBook:
             return
         results = client.act(actions).result
         if len(results) < len(sent):
-            raise ProtocolError(f"the game answered {len(results)} of the {len(actions)} actions it was sent")
+            raise ProtocolError(f"the game answered {len(results)} of the {len(sent)} orders it was sent")
         # What was running before this turn's orders went out: only the orders the game takes supersede those.
         running = tuple(self._running_orders)
         replaced: set[int] = set()
@@ -208,21 +218,23 @@ class OrderBook:
     def _orders_to_send(self, given: Sequence[Order[Any]]) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
         """Each order of the turn that goes out, with the units it goes out for.
 
-        An order that acts at once competes with nothing. Of the rest, a unit keeps only the last it was given, and
-        an order left with no unit was overridden. An order that replaces a unit's orders is not sent to a unit
-        already carrying it out: re-sending costs nothing, but an unqueued order the same as a unit's first drops
-        what is queued behind it, which is what `clear_queue` is for. A train or a research is sent all the same,
-        since the game puts a second of the same behind the first (in game).
+        An order that acts at once, or that goes behind what a unit already has, competes with nothing. Of the
+        rest, a unit keeps only the last it was given, and an order left with no unit was overridden.
+
+        An order that replaces a unit's orders is not sent to a unit already carrying it out: re-sending costs
+        nothing, but an unqueued order the same as a unit's first drops what is queued behind it, which is what
+        `clear_queue` is for. A train or a research is sent all the same, since the game puts a second of the same
+        behind the first (in game).
         """
         holder: dict[int, Order[Any]] = {}
         for order in given:
-            if order.state is OrderState.GIVEN and order.behavior is not OrderBehavior.AT_ONCE:
+            if order.state is OrderState.GIVEN and self._competes(order):
                 for unit in order.units:
                     holder[unit.id] = order
         for order in given:
             if order.state is not OrderState.GIVEN:
                 continue
-            if order.behavior is OrderBehavior.AT_ONCE:
+            if not self._competes(order):
                 units = order.units
             else:
                 units = tuple(unit for unit in order.units if holder[unit.id] is order)
@@ -236,6 +248,15 @@ class OrderBook:
                 self._running_orders.append(order)
                 continue
             yield order, fresh
+
+    def _competes(self, order: Order[Any]) -> bool:
+        """Whether `order` takes its units from the other orders of the turn.
+
+        Only an unqueued order that replaces a unit's orders does. A queued one goes behind what the unit has, and
+        an ability carried out at once leaves the unit's orders alone, so both go out beside whatever else the turn
+        gave that unit (in game).
+        """
+        return not order.queued and order.behavior is not OrderBehavior.AT_ONCE
 
     def _sent_whatever_a_unit_is_at(self, order: Order[Any]) -> bool:
         """Whether `order` goes out to every unit it names, whatever each is already carrying out.
@@ -334,15 +355,37 @@ class OrderBook:
 
 
 def _target(target: PointLike | Unit[Any] | None) -> Target | None:
-    """An order's target: the unit itself, or the ground point it is aimed at.
+    """An order's target: the unit itself, or the ground point it is aimed at, as the game will read it.
 
-    A height is left behind. The game takes a target on the ground, and a point carrying one would match no order a
-    unit reports, since the game reports a height of zero for every one.
+    A height is left behind, since the game takes a target on the ground and reports a height of zero for every one.
+    What is left is cut to the 32 bits the protocol carries a coordinate in, so that the point an order holds is the
+    one the game is given, and the one it reports back.
     """
     if target is None or isinstance(target, Unit):
         return target
     aimed = coordinates(target)
-    return Point((aimed[0], aimed[1]))
+    return Point((_as_sent(aimed[0]), _as_sent(aimed[1])))
+
+
+def _as_sent(coordinate: float) -> float:
+    """A coordinate as the protocol carries it, which is a 32-bit float.
+
+    Everything the game reports is one already, widened to a Python float, so only a point going out is ever cut
+    this way: what comes back from a point sent unrounded is not the number that was sent.
+    """
+    return float(numpy.float32(coordinate))
+
+
+def _order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
+    """What an order a unit reports is aimed at, naming a unit through the tracker that holds `unit`."""
+    match order.WhichOneof("target"):
+        case "target_world_space_pos":
+            point = order.target_world_space_pos
+            return Point((point.x, point.y))
+        case "target_unit_tag":
+            return unit._tracker.units.by_tag(order.target_unit_tag)
+        case _:
+            return None
 
 
 def _check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:

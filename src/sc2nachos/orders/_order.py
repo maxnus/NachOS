@@ -124,5 +124,6 @@ class Order[T]:
 
     def withdraw(self) -> None:
         """Take it back. One not sent yet never is; one already sent is only forgotten, and the unit goes on with
-        it."""
-        self._state = OrderState.WITHDRAWN
+        it. One the game is already done with is left as it is, so how it ended is not lost."""
+        if not self._state.is_final:
+            self._state = OrderState.WITHDRAWN

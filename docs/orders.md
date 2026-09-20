@@ -25,14 +25,17 @@ api.order.camera(base)
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, which is what makes the
   game spread a group around the point it was sent to; ordering each on its own stacks them on the point instead.
-- **`target`** is a point, a unit, or nothing, as the ability takes. One of the wrong kind raises `TypeError` at
-  the call site rather than going out for the game to answer `ERROR` a turn later;
-  `api.data.abilities[ability].target_type` says which an ability wants.
+- **`target`** is a point, a unit, or nothing, as the ability takes. One of the wrong kind raises `TypeError` at the
+  call site rather than going out for the game to answer `ERROR` a turn later;
+  `api.data.abilities[ability].target_type` says which an ability wants. A point is kept as the game will read it,
+  since the protocol carries a coordinate as a 32-bit float, so `order.target` is the point the game was given
+  rather than quite the one passed in. `camera` keeps its point the same way.
 - **`queued`** sends the order to go behind what each unit already has, rather than to replace it.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it, and `api.order.issue(..., data=x)` answers an `Order[type of x]`, so a type checker follows it through.
 - **`api.order.clear_queue(unit)`** drops what a unit has queued and leaves it at the order it is carrying out,
-  by sending that order back unqueued. It answers the order it sent, or `None` where the unit had nothing queued.
+  by sending that order back unqueued. It answers the order it sent, or `None` where there was nothing to drop — a
+  structure making something is not cleared this way, since the game would only put another of the same behind it.
 - **`api.order.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
 
 ## One order a unit a turn
@@ -75,7 +78,7 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |
-| `OVERRIDDEN` | A later order took every unit this one was given to. |
+| `OVERRIDDEN` | A later order took every unit this one was given to, in this turn before it was sent, or in a later one. |
 | `WITHDRAWN` | Taken back with `order.withdraw()`. One already sent is only forgotten, and the unit goes on with it. |
 
 An order's effect can show up an observation late, so wait for the state rather than expecting it in the next

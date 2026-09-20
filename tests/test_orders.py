@@ -33,6 +33,7 @@ _STIM = AbilityId.MARINE_STIM
 _HOLD_FIRE = AbilityId.GHOST_HOLD_FIRE_ON
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
+_RALLY = AbilityId.GENERAL_RALLY
 # An unset `target` reads as the first value the enum declares, which is the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 
@@ -47,6 +48,7 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_HOLD_FIRE),
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
+        data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
     ],
 )
 
@@ -245,6 +247,17 @@ class TestGivingAnOrder:
         raw = [action.action_raw for action in request.actions]
         moves = [action.camera_move for action in raw if action.HasField("camera_move")]
         assert [(move.center_world_space.x, move.center_world_space.y) for move in moves] == [(7.0, 8.0)]
+
+    def test_a_camera_move_is_kept_as_the_protocol_carries_it(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.camera((157.123288015625, 3.0))
+
+        request = game.flush()
+
+        assert request is not None
+        (move,) = [action.action_raw.camera_move for action in request.actions]
+        assert move.center_world_space.x == 157.123291015625
 
     def test_a_camera_move_alone_is_sent_too(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -613,6 +626,126 @@ class TestATargetOffTheGround:
 
         assert game.flush() is None
         assert order.state is OrderState.RUNNING
+
+
+class TestWhatAStructureDoesBesidesMaking:
+    """A structure goes on making what it is making when given a rally or a cancel (in game)."""
+
+    def test_a_rally_does_not_take_the_turn_from_a_train(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        train = game.book.issue(game.own(1), _TRAIN_MARINE)
+        rally = game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
+
+        sent = [command.ability_id for command in _commands(game.flush())]
+
+        assert sent == [_TRAIN_MARINE, _RALLY]
+        assert (train.state, rally.state) == (OrderState.SENT, OrderState.SENT)
+
+    def test_a_rally_does_not_end_the_order_the_structure_is_running(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        train = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1, _training()), actions=(_reported(_TRAIN_MARINE, 1, step=16),))
+        assert train.state is OrderState.RUNNING
+
+        game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
+        game.flush()
+
+        assert train.state is OrderState.RUNNING
+        assert train in game.book.running
+
+
+class TestAQueuedOrder:
+    def test_a_queued_order_goes_out_beside_the_unqueued_one_it_follows(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        behind = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0), queued=True)
+
+        first, second = _commands(game.flush())
+
+        assert (first.ability_id, first.queue_command) == (_MOVE, False)
+        assert (second.ability_id, second.queue_command) == (_ATTACK, True)
+        assert (move.state, behind.state) == (OrderState.SENT, OrderState.SENT)
+
+    def test_an_unqueued_order_after_a_queued_one_takes_the_unit_from_nothing(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        behind = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0), queued=True)
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert len(_commands(game.flush())) == 2
+        assert (behind.state, move.state) == (OrderState.SENT, OrderState.SENT)
+
+
+class TestWhatCannotBeCleared:
+    def test_a_structure_making_something_is_not_cleared(self) -> None:
+        game = _Game()
+        game.observe(0, _barracks(1, _training(), _training(0.0)))
+
+        assert game.book.clear_queue(game.own(1)) is None
+        assert game.flush() is None
+
+    def test_an_ability_nachos_cannot_name_is_not_cleared(self) -> None:
+        game = _Game()
+        uncurated = raw_pb2.UnitOrder(ability_id=99991)
+        game.observe(0, _marine(1, uncurated, _moving()))
+
+        assert game.book.clear_queue(game.own(1)) is None
+        assert game.flush() is None
+
+    def test_the_order_it_sends_keeps_the_unit_it_was_aimed_at(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
+        game.observe(0, _marine(1, attacking, _moving()), _marine(2, at=(30.0, 30.0)))
+
+        order = game.book.clear_queue(game.own(1))
+
+        (command,) = _commands(game.flush())
+        assert command.target_unit_tag == 2
+        assert order is not None
+        assert order.target is game.own(2)
+
+
+class TestAPointAsTheGameReadsIt:
+    def test_a_target_is_kept_as_the_protocol_carries_it(self) -> None:
+        """A coordinate goes out as a 32-bit float, so the point an order holds is the one the game reports."""
+        game = _Game()
+        # Cut down to 1/4096 this reads a step lower than the 32-bit float the game is actually given.
+        crossing = 157.123288015625
+        game.observe(0, _marine(1, _moving((crossing, 3.0))))
+
+        order = game.book.issue(game.own(1), _MOVE, target=(crossing, 3.0))
+
+        assert order.target == Point((157.123291015625, 3.0))
+        assert game.flush() is None
+        assert order.state is OrderState.RUNNING
+
+
+class TestWhatAnOrderStopsCountingFor:
+    def test_a_withdrawn_order_speaks_for_no_unit(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        assert game.book.issued(game.own(1)) == (order,)
+
+        order.withdraw()
+
+        assert game.book.issued(game.own(1)) == ()
+        assert game.book.pending == ()
+
+    def test_withdrawing_an_order_the_game_is_done_with_keeps_how_it_ended(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED])
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        assert order.state is OrderState.REFUSED
+
+        order.withdraw()
+
+        assert order.state is OrderState.REFUSED
 
 
 class _OrderingBot:
