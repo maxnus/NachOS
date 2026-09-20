@@ -1148,15 +1148,15 @@ class TestWhatATurnCanPayFor:
 
         assert game.book.budget.resources == Resources(200, 0)
 
-    def test_a_structure_is_charged_for_every_one_of_them_the_order_names(self) -> None:
-        """NachOS's reading, not a measurement: a spell and a structure are carried out by one of the group, and
-        what a train does has not been asked (the `one-command-many-makers` sweep asks it)."""
+    def test_an_order_is_charged_once_however_many_units_it_names(self) -> None:
+        """One of them carries it out: one marine came of one train naming three barracks, and one research of one
+        research naming two engineering bays (in game)."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1), _barracks(2), minerals=200, vespene=0)
 
         game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
 
-        assert game.book.budget.resources == Resources(100, 0)
+        assert game.book.budget.resources == Resources(150, 0)
 
     def test_a_structure_holds_five_and_eight_with_a_reactor(self) -> None:
         game = _Game()
@@ -1165,14 +1165,16 @@ class TestWhatATurnCanPayFor:
         assert game.book.budget.slots_left(game.own(1)) == 5
         assert game.book.budget.slots_left(game.own(2)) == 8
 
-    def test_what_a_structure_is_making_and_what_the_turn_ordered_it_take_its_slots(self) -> None:
+    def test_a_structures_slots_are_what_the_game_says_it_is_making(self) -> None:
+        """What this turn has ordered it is not counted: only one command a turn adds to a queue unqueued, and
+        counting would cost every order of every turn a walk of the turn's own."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1, _training(), _training(0.0)))
         assert game.book.budget.slots_left(game.own(1)) == 3
 
         game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
 
-        assert game.book.budget.slots_left(game.own(1)) == 2
+        assert game.book.budget.slots_left(game.own(1)) == 3
 
 
 class TestAnOrderTheBudgetRefuses:
@@ -1238,10 +1240,10 @@ class TestAnOrderTheBudgetRefuses:
         assert game.book.budget.covers(_MOVE, game.own(1))
 
     def test_an_order_to_several_structures_is_judged_whole(self) -> None:
-        """One command is one thing to the game, so a train to three barracks with money for two is refused
-        rather than sent for two of them."""
+        """One command is one thing to the game: it is charged once, and refused as one where the turn cannot pay
+        even that."""
         game = _Game()
-        game.observe(0, _barracks(1), _barracks(2), _barracks(3), minerals=100, vespene=0)
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3), minerals=30, vespene=0)
 
         order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
 

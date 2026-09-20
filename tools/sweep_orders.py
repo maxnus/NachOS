@@ -2411,24 +2411,56 @@ def _producer_dies(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("an SCV killed on its way to build", builder))
 
-    def errored_and_killed(trial: Trial) -> None:
-        """Whether the game can report an action error for an order whose unit is gone by the same observation,
-        which is what decides whether an order reads `FAILED` or `LOST` when both happen at once."""
+    # How long the game took to give up on a build whose site was held, which the trial after it kills the builder
+    # at, to see whether the error and the death can land in one observation.
+    blocked_after: list[int] = []
+
+    def build_blocked(trial: Trial) -> None:
+        """When the game gives up on a build whose site a unit of this player's holds position on, which is the one
+        action error anyone has made the game produce for a builder (tool `sweep_orders`)."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
         if scv is None:
             trial.notes["class"] = "no SCV"
             return
-        at = game.spot(game.toward(20), 3)
+        at = game.spot(game.toward(24), 3)
+        (guard,) = game.create(UnitTypeId.MARINE, at)
+        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        given = game.step
         trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
-        game.turn(2)
-        game.read("on its way", [scv])
-        # The site is taken by the enemy, which the game gives up on the build for, and the builder is killed in
-        # the same step.
-        game.create(UnitTypeId.PYLON, at, owner=game.enemy)
+        for _ in range(30):
+            game.turn(4)
+            if trial.errors:
+                break
+        seen_at = [int(str(error["step"])) - given for error in trial.errors]
+        trial.notes["steps to the error"] = seen_at
+        blocked_after.extend(seen_at)
+        game.read("once the game had given up", [scv])
+
+    trials.append(game.trial("an SCV whose site a marine of its own holds", build_blocked))
+
+    def errored_and_killed(trial: Trial) -> None:
+        """Whether the game reports an action error for an order whose unit is gone by the same observation, which
+        is what says whether such an order should read `FAILED` or `LOST`."""
+        scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
+        if scv is None or not blocked_after:
+            trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"
+            return
+        at = game.spot(game.toward(28), 3)
+        (guard,) = game.create(UnitTypeId.MARINE, at)
+        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        given = game.step
+        waiting = max(blocked_after[0] - 2, 0)
+        trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
+        trial.notes["killed after"] = waiting
+        game.turn(waiting)
         game.sandbox.kill([scv.tag])
-        for step in (1, 2, 8):
-            game.turn(step)
-            game.read(f"{step} after the site was taken and it died", [scv])
+        seen: list[list[object]] = []
+        for _ in range(12):
+            game.turn(1)
+            alive = any(unit.tag == scv.tag for unit in game.units.values())
+            errors = [int(str(error["step"])) - given for error in trial.errors]
+            seen.append([game.step - given, alive, errors])
+        trial.notes["step, still listed, errors so far"] = seen
 
     trials.append(game.trial("an SCV killed as the game gives up on its build", errored_and_killed))
     return trials

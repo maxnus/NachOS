@@ -487,8 +487,9 @@ Each entry ends with how it was seen:
   closing on its point. A lurker's hold fire is the one that could not be given, since it is offered only burrowed,
   and the game offers a burrowed lurker no move (tool `sweep_orders`).
 - One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
-  their spacing, but a spell or a structure is carried out by one of them only: a storm by a templar with the energy
-  for it, a pylon by one of two probes. What cannot take the order is left out, and the verdict is `Success`: a
+  their spacing, but everything else is carried out by one of them only, and charged once: a storm by a templar with
+  the energy for it, a pylon by one of two probes, one marine from three barracks given one train (the purse fell
+  50 and one of the three carried the order), one research from two engineering bays given one (100/100). What cannot take the order is left out, and the verdict is `Success`: a
   supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
   `sweep_orders`).
 - A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the

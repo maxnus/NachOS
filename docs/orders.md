@@ -97,7 +97,7 @@ is refused by NachOS and never sent.
 budget = api.order.budget
 budget.resources  # Resources(minerals, vespene) left after what the turn has ordered
 budget.supply_left  # what is left under the cap, the same way
-budget.slots_left(barracks)  # what it will still take: 5, or 8 with a finished reactor
+budget.slots_left(barracks)  # what it is still to take: 5, or 8 with a finished reactor
 budget.covers(AbilityId.BARRACKS_TRAIN_MARINE, barracks)  # whether the turn can pay for it
 budget.refusal(AbilityId.BARRACKS_TRAIN_MARINE, barracks)  # what it would be answered, or None
 ```
@@ -115,6 +115,11 @@ second = api.order.issue(other, AbilityId.BARRACKS_TRAIN_MARINE)  # REFUSED, NOT
 - **Nothing is held over.** A refused order is final; the bot decides again next turn, from next turn's state.
 - **An order withdrawn or overridden stops counting at once**, since the budget is summed from the orders the turn
   still holds rather than kept as a running total.
+- **One command is charged once, however many units it names**: one of them carries it out, whether it is a storm,
+  a pylon, a train or a research (in game).
+- **`slots_left` counts what the last observation says a structure is making**, not what this turn has ordered it.
+  Only one command a turn can add to a structure's queue unqueued, so a bot filling one on purpose says
+  `queued=True` and watches the next observation.
 - **A cancel frees neither a slot nor a mineral in the same turn**, which is what the game does (in game), so the
   budget counts nothing back for one until the next observation.
 - **`issue(..., checked=False)`** sends the order whatever the budget says. That is the way past a tech-tree row

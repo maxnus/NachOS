@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, final
 
@@ -45,11 +44,10 @@ _PRODUCTION = frozenset({OrderBehavior.QUEUES, OrderBehavior.NEEDS_IDLE})
 @final
 @dataclass(frozen=True, slots=True)
 class _Tally:
-    """What the orders a turn still holds have taken: minerals and vespene, supply, and slots by unit id."""
+    """What the orders a turn still holds have taken: minerals and vespene, and supply."""
 
     spent: Resources
     supply: float
-    items: Mapping[int, int]
 
 
 @final
@@ -82,14 +80,20 @@ class Budget:
         return self._book._state.supply.left - self._tally().supply
 
     def slots_left(self, structure: OwnUnit[Any]) -> int:
-        """How many more things `structure` will take before the game answers `QUEUE_IS_FULL`, counting what it is
-        making and what the turn has ordered it.
+        """How many more things `structure` will take before the game answers `QUEUE_IS_FULL`, counting what the
+        last observation says it is making.
 
         A structure holds 5, or 8 with a finished reactor. A larva and a warp gate keep no queue at all and were
         never answered `QUEUE_IS_FULL`, so they answer one while they are making nothing, and an order to one is
         never refused for want of a slot (in game).
+
+        What this turn has ordered the structure is not counted: only one command in a turn can add to a queue
+        unqueued, a bot filling one on purpose is rare, and counting would cost every order of every turn a walk.
         """
-        return self._slots_left(structure, self._tally())
+        ordered = len(structure.orders)
+        if structure.type_id in _KEEPS_NO_QUEUE:
+            return max(1 - ordered, 0)
+        return (_QUEUE_DEPTH_WITH_REACTOR if _has_reactor(structure) else _QUEUE_DEPTH) - ordered
 
     def covers(self, ability: AbilityId, performer: OwnUnit[Any]) -> bool:
         """Whether the turn can still pay for `performer` running `ability`: its minerals, its vespene, the supply
@@ -120,9 +124,9 @@ class Budget:
             # A move, an attack and every other ability that charges nothing and takes no slot: nothing the turn
             # has ordered can stand in the way of it, so the turn is never walked for one. Most orders are these.
             return None
-        tally = self._tally(adding=(ability, performers))
-        if row.behavior in _PRODUCTION and any(self._slots_left(one, tally) < 0 for one in performers):
+        if row.behavior in _PRODUCTION and any(self.slots_left(one) <= 0 for one in performers):
             return ActionResult.QUEUE_IS_FULL
+        tally = self._tally(adding=(ability, performers))
         left = self._book._state.resources - tally.spent
         if left.minerals < 0:
             return ActionResult.NOT_ENOUGH_MINERALS
@@ -149,34 +153,22 @@ class Budget:
         if adding is not None:
             charges.append(adding)
         spent, supply = Resources(0, 0), 0.0
-        items: defaultdict[int, int] = defaultdict(int)
         for ability, units in charges:
             row = book._game_data.abilities.get(ability)
             if row is None or not units:
                 continue
-            # A spell, a structure and a morph are carried out by one of the units the order names and charged
-            # once (in game). What one command naming several structures trains has not been measured -- the
-            # `one-command-many-makers` sweep asks -- and until it has, each of them is charged for.
-            count = 1 if row.needs_placement else len(units)
-            spent += row.cost * count
-            supply += row.supply_cost * count
-            if row.behavior in _PRODUCTION:
-                for unit in units:
-                    items[unit.id] += 1
-        return _Tally(spent, supply, items)
+            # One command is charged once however many units it names: whatever it is, one of them carries it out
+            # -- one marine from three barracks named in one train, one research from two engineering bays, one
+            # pylon from two probes (in game).
+            spent += row.cost
+            supply += row.supply_cost
+        return _Tally(spent, supply)
 
     def _units_charged(self, order: Order[Any], holder: Mapping[int, Order[Any]]) -> Sequence[OwnUnit[Any]]:
         """The units `order` would go out for, which is none of those a later order of the turn has taken."""
         if not self._book._competes(order):
             return order.units
         return tuple(unit for unit in order.units if holder.get(unit.id) is order)
-
-    def _slots_left(self, structure: OwnUnit[Any], tally: _Tally) -> int:
-        """What `structure` will still take, counting `tally` as already ordered."""
-        ordered = tally.items.get(structure.id, 0) + len(structure.orders)
-        if structure.type_id in _KEEPS_NO_QUEUE:
-            return max(1 - ordered, 0)
-        return (_QUEUE_DEPTH_WITH_REACTOR if _has_reactor(structure) else _QUEUE_DEPTH) - ordered
 
     def _offered(self, ability: AbilityId, performer: OwnUnit[Any], row: AbilityData) -> bool:
         """Whether the game would offer `performer` the ability now: it is one its type performs, what it needs
