@@ -14,8 +14,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
+from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client
-from sc2nachos.state import Effect, Score, Supply, UiUnitCounts
+from sc2nachos.state import ActionError, Effect, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units
 from sc2nachos.upgrade_reader import UpgradeInference
 
@@ -94,6 +95,15 @@ class Api:
         return self._current_game().result
 
     @property
+    def order(self) -> OrderBook:
+        """What this player orders this turn, and what became of the orders it has given.
+
+        Orders given while the turn's handlers run go out in one request once the last of them has returned, so a
+        turn that orders nothing sends nothing.
+        """
+        return self._current_game().orders
+
+    @property
     def units(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, structures remembered out of sight and hidden units included."""
         return self._current_game().tracker.units.present
@@ -130,6 +140,14 @@ class Api:
         Raises `UncuratedIdError` where one is an upgrade the curated ids leave out.
         """
         return self._current_game().state.upgrades
+
+    @property
+    def action_errors(self) -> tuple[ActionError, ...]:
+        """The orders the game took and has given up on since the observation before.
+
+        Raises `UncuratedIdError` where one names an ability the curated ids leave out.
+        """
+        return self._current_game().state.action_errors
 
     @property
     def enemy(self) -> Enemy:
@@ -194,6 +212,8 @@ class Api:
 
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
+            # Every handler of the turn has returned, so what they ordered goes out now, as one request.
+            game.orders._send(client)
 
             if realtime:
                 # A realtime game runs whether or not anyone is watching, so each turn asks for the step it wants.

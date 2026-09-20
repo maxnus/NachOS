@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import Attribute, GameData, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
+from sc2nachos.gamedata import Attribute, GameData, OrderBehavior, Resources, TargetDomain, TargetType
+from sc2nachos.gamedata._techtree import ACTS_AT_ONCE, UNNAMED_CREATION_ABILITIES
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -270,6 +270,30 @@ class TestARecordedGamesTables:
         named = {row.unit_id: row.ability_id for row in answer.units if row.ability_id}
         lost = {unit: named[unit] for unit in UnitTypeId if unit in named and data.units[unit].creation_ability is None}
         assert lost == _NO_MAKER
+
+    def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
+        """Each was seen in game to leave a moving unit's orders as they were, so each must still be orderable."""
+        data = _tables(path)
+        for ability in ACTS_AT_ONCE:
+            row = data.abilities[ability]
+            assert row.performers, f"{ability.name} is offered to nobody"
+            assert row.behavior is OrderBehavior.AT_ONCE
+
+    def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
+        data = _tables(path)
+        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_HOLD_FIRE_ON):
+            assert data.abilities[ability].behavior is OrderBehavior.AT_ONCE
+
+    def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
+        """Ordering one of these was seen in game to go behind what a structure was making, or to be refused while
+        it was making anything."""
+        data = _tables(path)
+        queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
+        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BARRACKS_BUILD_TECH_LAB)
+        replaces = (AbilityId.GENERAL_MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
+        assert [data.abilities[ability].behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
+        assert [data.abilities[ability].behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
+        assert [data.abilities[ability].behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
         """Its alias is an empty row no unit is ever one of; every other alias names a unit you can own."""

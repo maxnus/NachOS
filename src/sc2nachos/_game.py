@@ -55,6 +55,7 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
+from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
 from sc2nachos.state._state import _State
@@ -76,6 +77,7 @@ class _Game:
     enemy: Final[Enemy]
     infer_enemy_upgrades: Final[UpgradeInference]
     tracker: Final[_Tracker]
+    orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
     state: _State
     # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
@@ -99,6 +101,7 @@ class _Game:
             enemy,
             infer_enemy_upgrades,
             tracker,
+            OrderBook(tables),
             observation,
             _State(observation, tracker, game_map),
             step,
@@ -117,6 +120,7 @@ class _Game:
         self.step = step
         self.tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.tracker, self.map)
+        self.orders._take_in(self.state, step)
         units, reader = self.tracker.units.present, self.tracker.upgrades.reader
         if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))

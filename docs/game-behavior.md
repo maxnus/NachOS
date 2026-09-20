@@ -558,3 +558,7 @@ Each entry ends with how it was seen:
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it stale and never finds it dead (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
+- **The half of a toggle that turns one off** was never measured: a unit is offered only the half that fits its
+  state, so the sweep of what an ability does to a moving unit's orders gave every `_ON` half and no `_OFF` one.
+  Whether un-cloaking, stopping creep or lowering hold fire keeps a unit's orders as the `_ON` half does is
+  unknown, so NachOS reads them as replacing its orders (tool `sweep_orders`).

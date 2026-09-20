@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.gamedata._techtree._overrides import ACTS_AT_ONCE
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from sc2nachos.gamedata._techtree import TechTree
 
 
@@ -23,6 +27,44 @@ class TargetType(ReadableIntEnum):
     UNIT = data_pb2.AbilityData.Target.Unit
     POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
     POINT_OR_NOTHING = data_pb2.AbilityData.Target.PointOrNone
+
+
+class OrderBehavior(Enum):
+    """What ordering an ability does to what a unit is already doing (tool `sweep_orders`)."""
+
+    REPLACES = "replaces"
+    """It drops the unit's orders and is carried out instead, as a move, an attack or a worker's build does."""
+    QUEUES = "queues"
+    """It goes behind what a structure is making, queued or not: a train or a research."""
+    NEEDS_IDLE = "needs idle"
+    """A structure takes it only while it is making nothing, and is answered `NOT_SUPPORTED` otherwise: an add-on, a
+    morph, a lift."""
+    AT_ONCE = "at once"
+    """It is carried out and the unit goes on with its orders, so it competes with nothing: stim and the twelve
+    others of `ACTS_AT_ONCE`."""
+
+
+def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:
+    """What each ability does to what a unit is already doing, for those that do not simply replace its orders.
+
+    `structures` names the unit types that stand on the ground, which is what tells a barracks training a marine from
+    a larva morphing into one.
+    """
+    behaviors: dict[AbilityId, OrderBehavior] = {}
+    for ability, product in tech_tree.ability_products.items():
+        performers = tech_tree.ability_performers.get(ability, frozenset())
+        if performers - structures:
+            # Something that is not a structure performs it, so it replaces what that unit was doing: a worker's
+            # build, a larva's train, a unit's own morph.
+            continue
+        if isinstance(product, UnitTypeId) and product in structures:
+            behaviors[ability] = OrderBehavior.NEEDS_IDLE
+        elif performers:
+            behaviors[ability] = OrderBehavior.QUEUES
+    behaviors.update(dict.fromkeys(ACTS_AT_ONCE, OrderBehavior.AT_ONCE))
+    generals = (general for exact, general in tech_tree.ability_remaps.items() if exact in ACTS_AT_ONCE)
+    behaviors.update(dict.fromkeys(generals, OrderBehavior.AT_ONCE))
+    return behaviors
 
 
 @final
@@ -51,10 +93,15 @@ class AbilityData:
     reports, such as `LIBERATOR_SIEGE_EXACT`."""
     product: UnitTypeId | UpgradeId | None
     """The unit type it makes, or the upgrade it researches."""
+    behavior: OrderBehavior
+    """What ordering it does to what the unit is already doing."""
 
     @classmethod
-    def from_proto(cls, data: data_pb2.AbilityData, tech_tree: TechTree) -> Self:
-        """Read one ability out of the game's tables, with what `tech_tree` found about it in game."""
+    def from_proto(
+        cls, data: data_pb2.AbilityData, tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+    ) -> Self:
+        """Read one ability out of the game's tables, with what `tech_tree` and `behaviors` found about it in
+        game."""
         ability = AbilityId(data.ability_id)
         return cls(
             id=ability,
@@ -66,4 +113,5 @@ class AbilityData:
             remaps_to=AbilityId.get(data.remaps_to_ability_id),
             performers=tech_tree.ability_performers.get(ability, frozenset()),
             product=tech_tree.ability_products.get(ability),
+            behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

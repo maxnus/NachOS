@@ -156,6 +156,17 @@ class _PointND(tuple[float, ...]):
         snapped = (round(self[0] / step) * step, round(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
+    def cut_down(self, *, step: float) -> Self:
+        """The point on a lattice of `step` tiles at or below this one on each axis. Height is carried through.
+
+        Where `snapped` rounds, this cuts down, which is what the game does to a point it is given: a move to
+        x = 157.123456 is carried out at 157.123291, a whole `POINT_PRECISION` below (in game).
+        """
+        if step <= 0:
+            raise ValueError(f"a lattice step must be positive, got {step}")
+        cut = (math.floor(self[0] / step) * step, math.floor(self[1] / step) * step)
+        return type(self)(cut + tuple(self[2:]))
+
     def closest[T: PointLike](self, points: Iterable[T]) -> T:
         """The nearest of the given points, returned as it was passed in."""
         candidates = list(points)

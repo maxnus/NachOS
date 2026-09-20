@@ -1,9 +1,9 @@
-"""The abilities that make a unit type which the game's own table does not name for it.
+"""What the game's own tables get wrong or leave out, hand-written and never generated.
 
-Hand-written, and never generated, so a new sweep of the tech tree keeps every entry. `tools/sweep_tech_tree.py` orders
-each ability here in game, and `tools/generate_tech_tree.py` refuses to write the tech tree unless the sweep saw each
-make its unit type, so a patch that breaks one stops the regeneration. `tests/test_gamedata.py` fails once the game's
-table names an ability here for its type, and the entry can go.
+`tools/generate_tech_tree.py` writes none of this, so a new sweep keeps every entry. Each is held to the sweep that
+found it: the generator refuses to write the tech tree unless the sweep saw each creation ability here make its unit
+type, so a patch that breaks one stops the regeneration, and `tests/test_gamedata.py` fails once the game's table
+names an ability here for its type, so the entry can go.
 """
 
 from collections.abc import Mapping
@@ -40,3 +40,26 @@ UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxy
 )
 """The unit type each ability makes, each seen doing so in game. Where the table names no working ability for the type,
 this one is its creation ability, and otherwise it makes the type besides the one the table names."""
+
+# Ordered unqueued while a unit moves, each of these was carried out and the move went on, where every other ability
+# a unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and
+# no ability belongs here that a sweep has not seen keep a unit's orders. The half of a toggle that turns one off, and
+# the general ids these remap to, were not measured; a general id counts as acting at once where an ability it stands
+# for does.
+ACTS_AT_ONCE: Final[frozenset[AbilityId]] = frozenset(
+    {
+        AbilityId.ADEPT_SHADE,
+        AbilityId.BANSHEE_CLOAK_ON,
+        AbilityId.GHOST_CLOAK_ON,
+        AbilityId.GHOST_HOLD_FIRE_ON,
+        AbilityId.HYDRALISK_LUNGE,
+        AbilityId.MARAUDER_STIM,
+        AbilityId.MARINE_STIM,
+        AbilityId.MEDIVAC_BOOST,
+        AbilityId.MOTHERSHIP_CLOAK_FIELD,
+        AbilityId.ORACLE_PULSAR_BEAM_ON,
+        AbilityId.OVERLORD_CREEP_ON,
+        AbilityId.SENTRY_GUARDIAN_SHIELD,
+        AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
+    }
+)

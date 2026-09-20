@@ -1,6 +1,6 @@
 """The tables a game is played by."""
 
-from sc2nachos.gamedata._ability import AbilityData, TargetType
+from sc2nachos.gamedata._ability import AbilityData, OrderBehavior, TargetType
 from sc2nachos.gamedata._effect import EffectData
 from sc2nachos.gamedata._gamedata import GameData
 from sc2nachos.gamedata._resources import Resources
@@ -14,6 +14,7 @@ __all__ = [
     "Attribute",
     "EffectData",
     "GameData",
+    "OrderBehavior",
     "TechRequirements",
     "Resources",
     "TargetDomain",

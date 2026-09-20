@@ -8,8 +8,8 @@
 
 The migration plan lives in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. How to decide which game ids are real, and to refresh them after a patch,
-is in `docs/curating-ids.md`, what the game has been seen to do in `docs/game-behavior.md`, and every event a game
-hands out in `docs/events.md`.
+is in `docs/curating-ids.md`, what the game has been seen to do in `docs/game-behavior.md`, every event a game
+hands out in `docs/events.md`, and how a bot orders its units in `docs/orders.md`.
 
 ## Keep this file small
 
@@ -116,6 +116,8 @@ reviewing code.
 - **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
+- **An `Order` is what the bot asked for, a `UnitOrder` what the game reports a unit doing.** Never name one
+  for the other.
 - **What an order does can show up an observation late.** On the ladder, and in any realtime game, an add-on or a
   stim buff may appear two observations after the order rather than in the next. Never write code, or a test, that
   needs an order's effect in the very next observation: wait for it.

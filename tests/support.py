@@ -45,6 +45,7 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
+from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
@@ -158,6 +159,7 @@ def make_observation(
     effects: Iterable[raw_pb2.Effect] = (),
     chat: Iterable[tuple[int, str]] = (),
     actions: Iterable[sc2api_pb2.Action] = (),
+    action_errors: Iterable[sc2api_pb2.ActionError] = (),
     alerts: Iterable[sc2api_pb2.Alert.ValueType] = (),
 ) -> sc2api_pb2.ResponseObservation:
     """What the game saw at `game_loop`: `units`, the tags of those that died, how it ended if it has, and the rest of
@@ -174,6 +176,7 @@ def make_observation(
     )
     return sc2api_pb2.ResponseObservation(
         actions=actions,
+        action_errors=action_errors,
         chat=[sc2api_pb2.ChatReceived(player_id=player, message=text) for player, text in chat],
         observation=observation,
         player_result=[sc2api_pb2.PlayerResult(player_id=player, result=result.value) for player, result in results],
@@ -238,9 +241,9 @@ def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> li
     return seen
 
 
-def make_tables(*units: data_pb2.UnitTypeData) -> GameData:
-    """Tables holding a row for each of `units`."""
-    return GameData(sc2api_pb2.ResponseData(units=units))
+def make_tables(*units: data_pb2.UnitTypeData, abilities: Iterable[data_pb2.AbilityData] = ()) -> GameData:
+    """Tables holding a row for each of `units`, and for each of `abilities`."""
+    return GameData(sc2api_pb2.ResponseData(units=units, abilities=abilities))
 
 
 def played(
@@ -258,7 +261,8 @@ def played(
     step = observation.observation.game_loop
     if game is None:
         state = _State(observation, tracker, game_map)
-        game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, observation, state, step)
+        orders = OrderBook(tracker.data)
+        game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, orders, observation, state, step)
     game._take_in(observation, step)
     events._set_step(step)
     events._hand_out(game.report(events))
