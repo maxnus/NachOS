@@ -2422,16 +2422,21 @@ def _producer_dies(game: _Game) -> list[Trial]:
         if scv is None:
             trial.notes["class"] = "no SCV"
             return
-        at = game.spot(game.toward(24), 3)
+        # Near enough that the builder is there well inside the watch: an SCV covers about 0.18 of the ground a
+        # step, so 24 away is 130 steps of walking on its own.
+        at = game.spot(game.toward(10), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
         game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
         given = game.step
         trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
-        for _ in range(30):
+        for _ in range(60):
             game.turn(4)
             if trial.errors:
                 break
-        seen_at = [int(str(error["step"])) - given for error in trial.errors]
+        walker = game.unit(scv.tag)
+        trial.notes["where it got to"] = None if walker is None else [walker.pos.x, walker.pos.y]
+        trial.notes["site"] = [at.x, at.y]
+        seen_at = [int(str(error["seen"])) - given for error in trial.errors]
         trial.notes["steps to the error"] = seen_at
         blocked_after.extend(seen_at)
         game.read("once the game had given up", [scv])
@@ -2445,7 +2450,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
         if scv is None or not blocked_after:
             trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"
             return
-        at = game.spot(game.toward(28), 3)
+        at = game.spot(game.toward(14), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
         game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
         given = game.step
@@ -2458,7 +2463,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
         for _ in range(12):
             game.turn(1)
             alive = any(unit.tag == scv.tag for unit in game.units.values())
-            errors = [int(str(error["step"])) - given for error in trial.errors]
+            errors = [int(str(error["seen"])) - given for error in trial.errors]
             seen.append([game.step - given, alive, errors])
         trial.notes["step, still listed, errors so far"] = seen
 

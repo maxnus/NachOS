@@ -430,8 +430,10 @@ class OrderBook:
             order._error = errored[0]
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
         if not carrying_out and all(unit.is_dead for unit in units) and not self._uses_up_its_unit(order):
-            # A unit that is gone is carrying nothing out, and the game reports a producer dying and nothing more
-            # (in game), so this is the one case a dead unit does not mean the order is over and done with.
+            # A unit that is gone is carrying nothing out, and the game reports one dying and nothing more, so
+            # this is the one case a dead unit does not mean the order is over and done with. It cannot take an
+            # action error's place: an error comes while the unit is alive, and once it is gone none comes at all
+            # (in game).
             order._state = OrderState.LOST
             return
         if errored and not carrying_out and not set(units) - {error.unit for error in errored}:

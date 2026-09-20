@@ -489,7 +489,8 @@ Each entry ends with how it was seen:
 - One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
   their spacing, but everything else is carried out by one of them only, and charged once: a storm by a templar with
   the energy for it, a pylon by one of two probes, one marine from three barracks given one train (the purse fell
-  50 and one of the three carried the order), one research from two engineering bays given one (100/100). What cannot take the order is left out, and the verdict is `Success`: a
+  50 and one of the three carried the order), one research from two engineering bays given one (100/100).
+  What cannot take the order is left out, and the verdict is `Success`: a
   supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
   `sweep_orders`).
 - A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
@@ -503,6 +504,11 @@ Each entry ends with how it was seen:
 - An order to a dead unit's tag or to one never used is answered `Error`, and to an enemy unit
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).
+- A builder killed before the game gives up on its build is reported dying and nothing else. An SCV whose site a
+  marine of this player's held position on was given up on 108 steps after the order, with
+  `CantBuildLocationInvalid`; the same trial with the builder killed at 106 got no error at all, then or twelve
+  steps later. So an order whose unit is gone and one the game gave up on never arrive together: the error comes
+  while the unit is alive, and once it is gone nothing comes (tool `sweep_orders`).
 - A structure killed while it is making something is reported dying and nothing more. A barracks training three
   marines, killed: the next observation still lists it with all three orders, the one after does not list it at all,
   and neither carries an action for it nor an action error. An SCV killed on its way to build is the same. So what a
