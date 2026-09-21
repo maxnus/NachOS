@@ -70,7 +70,7 @@ class Weapon:
     """What each attribute the target has adds to the damage of a hit."""
 
     @classmethod
-    def from_proto(cls, weapon: data_pb2.Weapon) -> Self:
+    def _from_proto(cls, weapon: data_pb2.Weapon) -> Self:
         """Read one weapon out of the game's tables."""
         damage_bonuses = {Attribute(bonus.attribute): bonus.bonus for bonus in weapon.damage_bonus}
         return cls(
@@ -172,7 +172,7 @@ class UnitTypeData:
         )
 
     @classmethod
-    def from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
+    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
         """Read one unit type out of the game's tables, with what `tech_tree` found about it in game."""
         unit_type = UnitTypeId(unit.unit_id)
         return cls(
@@ -187,7 +187,7 @@ class UnitTypeData:
             speed=unit.movement_speed * FASTER_PER_NORMAL_SPEED,
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
-            weapons=tuple(Weapon.from_proto(weapon) for weapon in unit.weapons),
+            weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree.creation_abilities.get(unit_type),
             morphed_from=tech_tree.morph_sources.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),

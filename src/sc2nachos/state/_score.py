@@ -34,7 +34,7 @@ class CategoryScore:
         return self.none + self.army + self.economy + self.technology + self.upgrade
 
     @classmethod
-    def from_proto(cls, proto: score_pb2.CategoryScoreDetails) -> Self:
+    def _from_proto(cls, proto: score_pb2.CategoryScoreDetails) -> Self:
         return cls(proto.none, proto.army, proto.economy, proto.technology, proto.upgrade)
 
 
@@ -53,7 +53,7 @@ class VitalScore:
         return self.life + self.shields + self.energy
 
     @classmethod
-    def from_proto(cls, proto: score_pb2.VitalScoreDetails) -> Self:
+    def _from_proto(cls, proto: score_pb2.VitalScoreDetails) -> Self:
         return cls(proto.life, proto.shields, proto.energy)
 
 
@@ -125,11 +125,11 @@ class Score:
     """What this player has healed and repaired."""
 
     @classmethod
-    def from_proto(cls, proto: score_pb2.Score) -> Self:
+    def _from_proto(cls, proto: score_pb2.Score) -> Self:
         """Read the score an observation reports."""
         details = proto.score_details
-        category = CategoryScore.from_proto
-        vital = VitalScore.from_proto
+        category = CategoryScore._from_proto
+        vital = VitalScore._from_proto
         return cls(
             score=proto.score,
             # Counted in seconds of the game's Normal speed, always whole steps (corpus).

@@ -47,7 +47,7 @@ class UpgradeData:
     """Which level of its line it is, from 1, or 0 for an upgrade that is no level, as Chitinous Plating is."""
 
     @classmethod
-    def from_proto(cls, data: data_pb2.UpgradeData, tech_tree: TechTree) -> Self:
+    def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree: TechTree) -> Self:
         """Read one upgrade out of the game's tables, with what `tech_tree` found about it in game."""
         upgrade = UpgradeId(data.upgrade_id)
         return cls(

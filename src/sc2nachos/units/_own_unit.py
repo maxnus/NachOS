@@ -21,7 +21,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def orders(self) -> tuple[UnitOrder, ...]:
         """What it is doing, then what it has queued."""
         unit_by_tag = self._tracker.units.by_tag
-        return tuple(UnitOrder.from_proto(order, unit_by_tag) for order in self._latest_data.orders)
+        return tuple(UnitOrder._from_proto(order, unit_by_tag) for order in self._latest_data.orders)
 
     @property
     def is_idle(self) -> bool:
@@ -47,7 +47,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def passengers(self) -> tuple[Passenger, ...]:
         """The units inside it."""
         unit_by_tag = self._tracker.units.by_tag
-        return tuple(Passenger.from_proto(passenger, unit_by_tag) for passenger in self._latest_data.passengers)
+        return tuple(Passenger._from_proto(passenger, unit_by_tag) for passenger in self._latest_data.passengers)
 
     @property
     def cargo_used(self) -> int:
@@ -63,7 +63,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where it sends what it makes."""
         unit_by_tag = self._tracker.units.by_tag
-        return tuple(RallyTarget.from_proto(rally, unit_by_tag) for rally in self._latest_data.rally_targets)
+        return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_data.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:

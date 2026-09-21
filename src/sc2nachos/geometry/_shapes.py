@@ -154,7 +154,7 @@ class Rectangle(Area):
         return cls(position[0] - width / 2, position[1] - height / 2, width, height)
 
     @classmethod
-    def from_proto(cls, data: common_pb2.RectangleI) -> Rectangle:
+    def _from_proto(cls, data: common_pb2.RectangleI) -> Rectangle:
         """Build from a protobuf `RectangleI`, which stores opposite corners rather than a size."""
         return cls(data.p0.x, data.p0.y, data.p1.x - data.p0.x, data.p1.y - data.p0.y)
 

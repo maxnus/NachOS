@@ -15,7 +15,6 @@ from sc2nachos.state._score import Score
 from sc2nachos.state._supply import Supply
 from sc2nachos.state._ui_unit_counts import UiUnitCounts
 from sc2nachos.units import Alliance
-from sc2nachos.units._tracking._unit_tracker import _IDS_PER_ALLIANCE
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -37,7 +36,7 @@ class _State:
 
     @cached_property
     def score(self) -> Score:
-        return Score.from_proto(self._observation.score)
+        return Score._from_proto(self._observation.score)
 
     # The player's counters.
 
@@ -64,7 +63,7 @@ class _State:
         rows = self._tracker.data.units
         taken = 0.0
         for unit in self._tracker.units.known:
-            if unit._id // _IDS_PER_ALLIANCE != Alliance.OWN:
+            if unit.first_alliance is not Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # What the unit takes beyond a whole supply: 0.5 for a zergling, 0 for a roach.
@@ -107,7 +106,7 @@ class _State:
 
     @cached_property
     def effects(self) -> tuple[Effect, ...]:
-        return tuple(Effect.from_proto(effect) for effect in self._observation.raw_data.effects)
+        return tuple(Effect._from_proto(effect) for effect in self._observation.raw_data.effects)
 
     # What this player did since the observation before. The game reports each action once, in the next observation
     # however many steps it spans, a realtime game's included (in game), as it does chat and alerts. Read by the
@@ -131,4 +130,4 @@ class _State:
         """
         unit_by_tag = self._tracker.units.by_tag
         step = self._observation.game_loop
-        return tuple(ActionFailure.from_proto(error, unit_by_tag, step) for error in self._response.action_errors)
+        return tuple(ActionFailure._from_proto(error, unit_by_tag, step) for error in self._response.action_errors)

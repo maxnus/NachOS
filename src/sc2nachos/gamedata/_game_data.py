@@ -30,21 +30,23 @@ class GameData:
 
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables out of the game's answer to `RequestData`."""
-        self._units = _read_table(data.units, lambda unit: UnitTypeData.from_proto(unit, TECH_TREE), lambda row: row.id)
+        self._units = _read_table(
+            data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
+        )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE, structures)
         self._upgrades = _read_table(
-            data.upgrades, lambda upgrade: UpgradeData.from_proto(upgrade, TECH_TREE), lambda row: row.id
+            data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
         # What an ability charges is read off what it makes, so the other tables come first.
         costs = ability_costs(self._units, self._upgrades, TECH_TREE)
         cancels = cancel_abilities(TECH_TREE, behaviors)
         self._abilities = _read_table(
             data.abilities,
-            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, costs, cancels),
+            lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
             lambda row: row.id,
         )
-        self._effects = _read_table(data.effects, EffectData.from_proto, lambda row: row.id)
+        self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
 
     @property
     def units(self) -> Mapping[UnitTypeId, UnitTypeData]:

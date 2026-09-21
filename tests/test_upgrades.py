@@ -460,7 +460,7 @@ def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...]
 
 def _storm(alliance: Alliance) -> Effect:
     position = common_pb2.Point2D(x=10.0, y=10.0)
-    return Effect.from_proto(
+    return Effect._from_proto(
         raw_pb2.Effect(effect_id=EffectId.HIGH_TEMPLAR_STORM, pos=[position], radius=1.5, alliance=alliance.value)
     )
 
