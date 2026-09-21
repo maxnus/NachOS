@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Self, final
@@ -9,13 +10,16 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._techtree._overrides import KEEPS_ORDERS_ABILITIES
+from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._techtree._overrides import CHARGED_COSTS, CHARGED_SUPPLY, KEEPS_ORDERS_ABILITIES
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._unittype import UnitTypeData
+    from sc2nachos.gamedata._upgrade import UpgradeData
 
 
 class TargetType(ReadableIntEnum):
@@ -87,6 +91,44 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
     return behaviors
 
 
+def ability_costs(
+    units: Mapping[UnitTypeId, UnitTypeData],
+    upgrades: Mapping[UpgradeId, UpgradeData],
+    tech_tree: TechTree,
+) -> Mapping[AbilityId, tuple[Resources, float]]:
+    """What the game charges as each ability is ordered, and the supply it takes, for those that take anything.
+
+    A morph is charged the difference from what it is made out of, the game's row for a type holding everything
+    spent to reach it, and `CHARGED_COSTS` and `CHARGED_SUPPLY` hold what that leaves wrong.
+    """
+    charges: dict[AbilityId, tuple[Resources, float]] = {}
+    for ability, product in tech_tree.ability_products.items():
+        if isinstance(product, UpgradeId):
+            if (upgrade := upgrades.get(product)) is not None:
+                charges[ability] = (upgrade.cost, 0.0)
+            continue
+        if (made := units.get(product)) is None:
+            continue
+        source = made.morphed_from or made.base_type
+        used = units.get(source) if source is not None else None
+        if used is None:
+            charges[ability] = (made.cost, made.supply_cost)
+        else:
+            charges[ability] = (made.cost - used.cost, made.supply_cost - used.supply_cost)
+    for ability in CHARGED_COSTS.keys() | CHARGED_SUPPLY.keys():
+        cost, supply = charges.get(ability, (Resources(0, 0), 0.0))
+        charges[ability] = (CHARGED_COSTS.get(ability, cost), CHARGED_SUPPLY.get(ability, supply))
+    # A general id takes the price the exact ones it stands for share, as every tech lab's 50/25. One that stands for
+    # several prices, as the three levels of a research do, takes none: which it runs is not known until the game
+    # runs it.
+    shared: defaultdict[AbilityId, set[tuple[Resources, float]]] = defaultdict(set)
+    for exact, general in tech_tree.ability_remaps.items():
+        if general not in charges and (charge := charges.get(exact)) is not None:
+            shared[general].add(charge)
+    charges.update({general: next(iter(seen)) for general, seen in shared.items() if len(seen) == 1})
+    return charges
+
+
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types the game offers a move, which are the ones an order can take off what they are doing.
 
@@ -128,16 +170,33 @@ class AbilityData:
     reports, such as `LIBERATOR_SIEGE_EXACT`."""
     product: UnitTypeId | UpgradeId | None
     """The unit type it makes, or the upgrade it researches."""
+    cost: Resources
+    """What the game takes as it is ordered, which for a morph is the difference from what it is made out of: 150 for
+    an orbital command, not the 550 its type's row holds as everything spent to reach it. A general id holds the
+    price the exact ones it stands for share, and nothing where they differ, as the three levels of a research do:
+    budget one of those by its exact id or its upgrade's row. An ability that makes nothing costs nothing."""
+    supply_cost: float
+    """What it takes of the supply cap as what it makes starts, and what it gives back where it uses up the unit that
+    orders it: 1 for a marine, -1 for a spawning pool, none for a baneling."""
+    cancelled_by: AbilityId | None
+    """The cancel the game offers a structure carrying this out, which is its own: `COMMAND_CENTER_CANCEL_ORBITAL_
+    COMMAND` for the orbital morph, `BARRACKS_CANCEL_ADD_ON` for an add-on, and the structure's queue cancel for a
+    train or a research. `None` for everything the game offers no cancel for (tool `sweep_tech_tree`)."""
     behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 
     @classmethod
     def from_proto(
-        cls, data: data_pb2.AbilityData, tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+        cls,
+        data: data_pb2.AbilityData,
+        tech_tree: TechTree,
+        behaviors: Mapping[AbilityId, OrderBehavior],
+        charges: Mapping[AbilityId, tuple[Resources, float]],
     ) -> Self:
-        """Read one ability out of the game's tables, with what `tech_tree` and `behaviors` found about it in
-        game."""
+        """Read one ability out of the game's tables, with what `tech_tree`, `behaviors` and `charges` found about it
+        in game."""
         ability = AbilityId(data.ability_id)
+        cost, supply_cost = charges.get(ability, (Resources(0, 0), 0.0))
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -148,5 +207,8 @@ class AbilityData:
             remaps_to=AbilityId.get(data.remaps_to_ability_id),
             performers=tech_tree.ability_performers.get(ability, frozenset()),
             product=tech_tree.ability_products.get(ability),
+            cost=cost,
+            supply_cost=supply_cost,
+            cancelled_by=tech_tree.ability_cancels.get(ability),
             behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

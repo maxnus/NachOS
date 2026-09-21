@@ -311,6 +311,14 @@ Each entry ends with how it was seen:
 - A morph's cost includes what it came from (an orbital command 550 minerals, the command center's 400 included),
   though the game charges only the difference, and its build time only the morph (25 s). A consumed performer's
   cost is folded in: an extractor costs 75. Costs are whole numbers, and zerglings come in pairs (#23; corpus).
+- What the game charges as an ability is ordered is its product's row less that of what the product is made out of,
+  which is right for every creation ability but six. A hatchery is charged 300 where that leaves 275, its row
+  reading 325 rather than the drone's 50 and a hatchery's 300; a warp gate nothing, though a gateway's 150 stands
+  in its row and nothing is recorded as made out of; an overlord transport 25/25, where its row reads the same 100
+  an overlord's does; a pair of zerglings 50 minerals and a whole supply, where the row prices one; an auto turret
+  nothing but the raven's energy, where its row keeps a price the game no longer charges; and a purification nova
+  no supply, though its row carries the disruptor's 3. A reactor and a tech lab need no correction of their own any
+  more: their rows read 50/50 and 50/25 (corpus).
 - `unit_alias` names the type something morphed from; `is_building` means "needs placing"; an add-on's
   `footprint_radius` is 3.5, the reach past its host's far side; a bare tech lab or reactor is a requirement no unit
   is built as (#23).
