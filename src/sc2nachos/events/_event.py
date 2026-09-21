@@ -66,8 +66,12 @@ class GameEndEvent(Event):
 # `TurnEvent`. What happened out of sight is reported when it is next seen.
 
 
-class _UnitEvent(Event):
-    """Something that happened to one unit, which `only` selects by the unit's type."""
+class UnitEvent(Event):
+    """Something that happened to one unit, which `only` selects by the unit's type.
+
+    A handler of it is handed every event with a `unit`, this player's and the enemy's alike, but the buff, vital and
+    area events, which have bases of their own.
+    """
 
     unit: Unit[Any]
 
@@ -87,19 +91,19 @@ class _UnitEvent(Event):
         return self._key_of(self.unit)
 
 
-class OwnUnitCreatedEvent(_UnitEvent):
+class OwnUnitCreatedEvent(UnitEvent):
     """A unit of this player's is first seen: one the game started with, or one trained, hatched, placed, or starting
     to warp in."""
 
     unit: OwnUnit[Any]
 
 
-class EnemyUnitFirstSeenEvent(_UnitEvent):
+class EnemyUnitFirstSeenEvent(UnitEvent):
     """A unit of the enemy's is seen for the first time, in sight or in the fog. One first seen in sight also gets
     `EnemyUnitEnteredSightEvent`."""
 
 
-class UnitTypeChangedEvent(_UnitEvent):
+class UnitTypeChangedEvent(UnitEvent):
     """A unit has changed type: it burrowed, sieged, lowered, became a cocoon, or finished a morph. `only` selects it by
     the type it changed to."""
 
@@ -107,27 +111,27 @@ class UnitTypeChangedEvent(_UnitEvent):
     """The type it was."""
 
 
-class UnitAllianceChangedEvent(_UnitEvent):
+class UnitAllianceChangedEvent(UnitEvent):
     """A unit has changed sides to or from this player's: a neural parasite took it over or let it go."""
 
     previous_alliance: Alliance
     """The side it was on."""
 
 
-class OwnConstructionStartedEvent(_UnitEvent):
+class OwnConstructionStartedEvent(UnitEvent):
     """A structure of this player's is first seen unfinished: an add-on and a creep tumor included, but not an
     auto-turret, which is first seen finished (in game)."""
 
     unit: OwnUnit[Any]
 
 
-class OwnConstructionFinishedEvent(_UnitEvent):
+class OwnConstructionFinishedEvent(UnitEvent):
     """A structure of this player's that got `OwnConstructionStartedEvent` has finished."""
 
     unit: OwnUnit[Any]
 
 
-class OwnWarpInFinishedEvent(_UnitEvent):
+class OwnWarpInFinishedEvent(UnitEvent):
     """A unit of this player's has finished warping in."""
 
     unit: OwnUnit[Any]
@@ -151,7 +155,7 @@ class OwnUpgradeFinishedEvent(Event):
         return self._key_of(self.upgrade)
 
 
-class OwnUnitDamagedEvent(_UnitEvent):
+class OwnUnitDamagedEvent(UnitEvent):
     """A unit of this player's has lost health or shields since the observation before, and kept its type."""
 
     unit: OwnUnit[Any]
@@ -159,7 +163,7 @@ class OwnUnitDamagedEvent(_UnitEvent):
     """The health and shields it lost since the observation before, less what it regained in between."""
 
 
-class EnemyUnitDamagedEvent(_UnitEvent):
+class EnemyUnitDamagedEvent(UnitEvent):
     """A unit of the enemy's in vision now and in the observation before has lost health or shields, and kept its
     type."""
 
@@ -167,7 +171,7 @@ class EnemyUnitDamagedEvent(_UnitEvent):
     """The health and shields it lost since the observation before, less what it regained in between."""
 
 
-class OwnUnitEnergyLostEvent(_UnitEvent):
+class OwnUnitEnergyLostEvent(UnitEvent):
     """A unit of this player's has less energy than in the observation before, and kept its type: it cast a spell, or
     lost energy to a feedback or an EMP."""
 
@@ -176,7 +180,7 @@ class OwnUnitEnergyLostEvent(_UnitEvent):
     """The energy it lost since the observation before, less what it regenerated in between."""
 
 
-class EnemyUnitEnergyLostEvent(_UnitEvent):
+class EnemyUnitEnergyLostEvent(UnitEvent):
     """A unit of the enemy's in vision now and in the observation before has less energy, and kept its type: it cast a
     spell, or lost energy to a feedback or an EMP."""
 
@@ -184,8 +188,12 @@ class EnemyUnitEnergyLostEvent(_UnitEvent):
     """The energy it lost since the observation before, less what it regenerated in between."""
 
 
-class _VitalEvent(ParameterizedEvent):
-    """A unit's health, shields or energy has crossed a value."""
+class VitalEvent(ParameterizedEvent):
+    """A unit's health, shields or energy has crossed a value.
+
+    A handler of `VitalEvent.of(...)` is handed the value reached and dropped below, by this player's units and the
+    enemy's alike.
+    """
 
     unit: Unit[Any]
     vital: VitalType
@@ -217,7 +225,7 @@ class _VitalEvent(ParameterizedEvent):
         return self._key_of(self.unit, self.vital, self.value)
 
 
-class OwnUnitVitalReachedEvent(_VitalEvent):
+class OwnUnitVitalReachedEvent(VitalEvent):
     """A unit of this player's in vision is seen with at least the value `of` was given of a vital, having last been
     seen in vision with less: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit back to full. Never a unit first seen at it,
     and not again until it has been seen below it."""
@@ -225,13 +233,13 @@ class OwnUnitVitalReachedEvent(_VitalEvent):
     unit: OwnUnit[Any]
 
 
-class EnemyUnitVitalReachedEvent(_VitalEvent):
+class EnemyUnitVitalReachedEvent(VitalEvent):
     """A unit of the enemy's in vision is seen with at least the value `of` was given of a vital, having last been seen
     in vision with less. One that regenerated past it out of sight is reported when it is next seen. Never a unit first
     seen at it, and not again until it has been seen below it."""
 
 
-class OwnUnitVitalDroppedEvent(_VitalEvent):
+class OwnUnitVitalDroppedEvent(VitalEvent):
     """A unit of this player's in vision is seen with less than the value `of` was given of a vital, having last been
     seen in vision with at least it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit hurt. Never a unit first seen below
     it, and not again until it has been seen at or above it."""
@@ -239,13 +247,13 @@ class OwnUnitVitalDroppedEvent(_VitalEvent):
     unit: OwnUnit[Any]
 
 
-class EnemyUnitVitalDroppedEvent(_VitalEvent):
+class EnemyUnitVitalDroppedEvent(VitalEvent):
     """A unit of the enemy's in vision is seen with less than the value `of` was given of a vital, having last been
     seen in vision with at least it. Never a unit first seen below it, and not again until it has been seen at or above
     it."""
 
 
-class OwnUnitCloakChangedEvent(_UnitEvent):
+class OwnUnitCloakChangedEvent(UnitEvent):
     """A unit of this player's has cloaked or uncloaked. Cloaked, it reads `CLOAKED_ALLIED` whether the enemy detects
     it or not, so no event says it was detected (in game)."""
 
@@ -254,7 +262,7 @@ class OwnUnitCloakChangedEvent(_UnitEvent):
     """The cloak it had."""
 
 
-class EnemyUnitCloakChangedEvent(_UnitEvent):
+class EnemyUnitCloakChangedEvent(UnitEvent):
     """A unit of the enemy's in sight now and in the observation before has cloaked or uncloaked, or has come to be
     detected or no longer is. Burrowing is no cloak: a burrowed unit nothing detects is not listed at all (in game)."""
 
@@ -262,8 +270,11 @@ class EnemyUnitCloakChangedEvent(_UnitEvent):
     """The cloak it had."""
 
 
-class _BuffEvent(Event):
-    """A unit has gained or lost a buff, which `only` selects by the buff."""
+class BuffEvent(Event):
+    """A unit has gained or lost a buff, which `only` selects by the buff.
+
+    A handler of it is handed every buff gained and lost, by this player's units and the enemy's alike.
+    """
 
     unit: Unit[Any]
     buff: BuffId
@@ -281,7 +292,7 @@ class _BuffEvent(Event):
         return self._key_of(self.unit, self.buff)
 
 
-class OwnUnitGainedBuffEvent(_BuffEvent):
+class OwnUnitGainedBuffEvent(BuffEvent):
     """A unit of this player's wears a buff it did not in the observation before: a spell, a stim, a cloak, or a
     worker picking up minerals or gas, which it does every trip. A unit's several come in the order of their ids."""
 
@@ -290,7 +301,7 @@ class OwnUnitGainedBuffEvent(_BuffEvent):
     """The buff it gained."""
 
 
-class EnemyUnitGainedBuffEvent(_BuffEvent):
+class EnemyUnitGainedBuffEvent(BuffEvent):
     """A unit of the enemy's in vision now and in the observation before wears a buff it did not then. An enemy unit
     nothing detects shows no buffs, so one coming to be detected gains none (in game). A unit's several come in the
     order of their ids."""
@@ -299,7 +310,7 @@ class EnemyUnitGainedBuffEvent(_BuffEvent):
     """The buff it gained."""
 
 
-class OwnUnitLostBuffEvent(_BuffEvent):
+class OwnUnitLostBuffEvent(BuffEvent):
     """A unit of this player's no longer wears a buff it wore in the observation before: it wore off, was ended, or a
     worker delivered its minerals or gas. A unit's several come in the order of their ids."""
 
@@ -308,7 +319,7 @@ class OwnUnitLostBuffEvent(_BuffEvent):
     """The buff it lost."""
 
 
-class EnemyUnitLostBuffEvent(_BuffEvent):
+class EnemyUnitLostBuffEvent(BuffEvent):
     """A unit of the enemy's in vision now and in the observation before no longer wears a buff it wore then. A
     unit's several come in the order of their ids."""
 
@@ -316,17 +327,21 @@ class EnemyUnitLostBuffEvent(_BuffEvent):
     """The buff it lost."""
 
 
-class EnemyUnitEnteredSightEvent(_UnitEvent):
+class EnemyUnitEnteredSightEvent(UnitEvent):
     """A unit of the enemy's has come into sight: seen for the first time, back in the observation, or back from the
     fog. A unit that cloaks where it stands is still in sight."""
 
 
-class EnemyUnitLeftSightEvent(_UnitEvent):
+class EnemyUnitLeftSightEvent(UnitEvent):
     """A unit of the enemy's in sight in the observation before is not now, and is not dead."""
 
 
-class _AreaEvent(ParameterizedEvent):
-    """A unit has crossed the edge of an area."""
+class AreaEvent(ParameterizedEvent):
+    """A unit has crossed the edge of an area.
+
+    A handler of `AreaEvent.of(area)` is handed every crossing of its edge, in and out, by this player's units and
+    the enemy's alike.
+    """
 
     unit: Unit[Any]
     area: Area
@@ -345,37 +360,37 @@ class _AreaEvent(ParameterizedEvent):
         return self._key_of(self.unit, self.area)
 
 
-class OwnUnitEnteredAreaEvent(_AreaEvent):
+class OwnUnitEnteredAreaEvent(AreaEvent):
     """A unit of this player's is seen inside the area `of` was given, having last been seen outside it, or first seen
     inside it once the area has been watched a turn."""
 
     unit: OwnUnit[Any]
 
 
-class OwnUnitLeftAreaEvent(_AreaEvent):
+class OwnUnitLeftAreaEvent(AreaEvent):
     """A unit of this player's is seen outside the area `of` was given, having last been seen inside it. One that dies
     inside it, or leaves the observation there, has not left it."""
 
     unit: OwnUnit[Any]
 
 
-class EnemyUnitEnteredAreaEvent(_AreaEvent):
+class EnemyUnitEnteredAreaEvent(AreaEvent):
     """A unit of the enemy's in sight is inside the area `of` was given, having last been seen in sight outside it, or
     first seen in sight inside it once the area has been watched a turn. One in the fog counts for neither."""
 
 
-class EnemyUnitLeftAreaEvent(_AreaEvent):
+class EnemyUnitLeftAreaEvent(AreaEvent):
     """A unit of the enemy's in sight is outside the area `of` was given, having last been seen in sight inside it. One
     that dies inside it, or goes out of sight there, has not left it."""
 
 
-class UnitDiedEvent(_UnitEvent):
+class UnitDiedEvent(UnitEvent):
     """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone as
     the structure it became finishes or is killed, or a step later (in game). A dead unit gets this or
     `UnitFoundDeadEvent`, never both."""
 
 
-class UnitFoundDeadEvent(_UnitEvent):
+class UnitFoundDeadEvent(UnitEvent):
     """A unit is dead that the game did not report: a structure remembered in the fog whose spot came into vision
     without it (in game), or a drone the game has not reported dead an update after its structure finished or was
     killed, which no game has needed."""

@@ -11,6 +11,8 @@ from sc2nachos import _game
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
+    AreaEvent,
+    BuffEvent,
     ChatEvent,
     Done,
     EnemyUnitCloakChangedEvent,
@@ -45,8 +47,10 @@ from sc2nachos.events import (
     OwnWarpInFinishedEvent,
     UnitAllianceChangedEvent,
     UnitDiedEvent,
+    UnitEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
+    VitalEvent,
 )
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
@@ -722,6 +726,64 @@ class TestAreas:
         assert [(type(event), event.step, event.area) for event in seen] == [
             (OwnUnitEnteredAreaEvent, 16, _AREA),
             (OwnUnitLeftAreaEvent, 32, _AREA),
+        ]
+
+
+class TestBases:
+    def test_a_handler_of_unit_event_is_handed_every_units_event_of_either_side(self) -> None:
+        game = _Game()
+        seen = record(game.events, UnitEvent)
+        _everything(game)
+        kinds = {type(event) for event in seen}
+        assert kinds == {event_type for event_type in HAPPENINGS if issubclass(event_type, UnitEvent)}
+        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, UnitDiedEvent} <= kinds
+        assert not kinds & {OwnUnitGainedBuffEvent, OwnUpgradeFinishedEvent, AlertEvent}
+        assert {event.unit.alliance for event in seen} == {Alliance.OWN, Alliance.ENEMY}
+
+    def test_only_on_unit_event_selects_by_type_across_every_kind(self) -> None:
+        game = _Game()
+        seen = record(game.events, UnitEvent.only(UnitTypeId.MARINE))
+        _everything(game)
+        assert seen and all(event.unit.type_id is UnitTypeId.MARINE for event in seen)
+        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, OwnUnitDamagedEvent, UnitDiedEvent} <= {
+            type(event) for event in seen
+        }
+
+    def test_a_handler_of_buff_event_is_handed_gains_and_losses_on_either_side(self) -> None:
+        game = _Game()
+        seen = record(game.events, BuffEvent.only(BuffId.MARINE_STIMMED))
+        for step, buffs in enumerate(([], [BuffId.MARINE_STIMMED], [])):
+            game.observe(step * 16, make_unit(1, buff_ids=buffs), make_unit(2, alliance=_ENEMY, buff_ids=buffs))
+        assert [type(event) for event in seen] == [
+            OwnUnitGainedBuffEvent,
+            EnemyUnitGainedBuffEvent,
+            OwnUnitLostBuffEvent,
+            EnemyUnitLostBuffEvent,
+        ]
+
+    def test_a_handler_of_vital_event_is_handed_the_drop_and_the_rise_on_either_side(self) -> None:
+        game = _Game()
+        seen = record(game.events, VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
+        for step, (health, shield) in enumerate(((100, 50), (50, 0), (100, 50))):
+            own = make_unit(2, UnitTypeId.ZEALOT, health=health, health_max=100.0, shield=shield, shield_max=50.0)
+            game.observe(step * 16, _zealot(health, shield), own)
+        assert [type(event) for event in seen] == [
+            OwnUnitVitalDroppedEvent,
+            EnemyUnitVitalDroppedEvent,
+            OwnUnitVitalReachedEvent,
+            EnemyUnitVitalReachedEvent,
+        ]
+
+    def test_a_handler_of_area_event_is_handed_the_entry_and_the_exit_on_either_side(self) -> None:
+        game = _Game()
+        seen = record(game.events, AreaEvent.of(_AREA))
+        for step, at in enumerate((_OUTSIDE, _INSIDE, _OUTSIDE)):
+            game.observe(step * 16, make_unit(1, alliance=_ENEMY, at=at), make_unit(2, at=at))
+        assert [type(event) for event in seen] == [
+            OwnUnitEnteredAreaEvent,
+            EnemyUnitEnteredAreaEvent,
+            OwnUnitLeftAreaEvent,
+            EnemyUnitLeftAreaEvent,
         ]
 
 
