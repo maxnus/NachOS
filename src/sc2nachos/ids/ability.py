@@ -187,13 +187,14 @@ class AbilityId(IdEnum):
     GENERAL_CANCEL = RawAbilityId.Cancel
     GENERAL_CANCEL_BUILDING = RawAbilityId.Cancel_BuildInProgress
     GENERAL_CANCEL_LAST = RawAbilityId.Cancel_Last
-    # What a structure cancels the last thing it queued with, in one kind of queue or the other, both remapping to
-    # CANCEL_LAST. Which structures have which is in the tables' performers. A morph or an add-on takes neither,
-    # answering CANCEL_LAST `Error`, and is cancelled by its own: COMMAND_CENTER_CANCEL_ORBITAL_COMMAND,
-    # COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR, LAIR_CANCEL_HIVE and SPIRE_CANCEL_GREATER_SPIRE
-    # for a morph, and BARRACKS_CANCEL_ADD_ON, FACTORY_CANCEL_ADD_ON and STARPORT_CANCEL_ADD_ON for either add-on
-    # (in game).
+    # What a structure cancels the last thing it queued with, by the kind of queue it keeps, each remapping to
+    # CANCEL_LAST; a tech lab keeps a queue of its own for its research. Which structures have which is in the
+    # tables' performers. A morph or an add-on takes none of them, answering CANCEL_LAST `Error`, and is cancelled by
+    # its own: COMMAND_CENTER_CANCEL_ORBITAL_COMMAND, COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR,
+    # LAIR_CANCEL_HIVE and SPIRE_CANCEL_GREATER_SPIRE for a morph, and BARRACKS_CANCEL_ADD_ON, FACTORY_CANCEL_ADD_ON
+    # and STARPORT_CANCEL_ADD_ON for either add-on (in game).
     GENERAL_CANCEL_QUEUE = RawAbilityId.Cancel_Queue5
+    GENERAL_CANCEL_QUEUE_ADD_ON = RawAbilityId.Cancel_QueueAddOn
     GENERAL_CANCEL_QUEUE_TO_SELECTION = RawAbilityId.Cancel_QueueCancelToSelection
     GENERAL_CLOAK_OFF = RawAbilityId.Behavior_CloakOff
     GENERAL_CLOAK_ON = RawAbilityId.Behavior_CloakOn

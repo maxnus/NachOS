@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, order_behaviors
+from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
@@ -38,9 +38,10 @@ class GameData:
         )
         # What an ability charges is read off what it makes, so the other tables come first.
         costs = ability_costs(self._units, self._upgrades, TECH_TREE)
+        cancels = cancel_abilities(TECH_TREE, behaviors)
         self._abilities = _read_table(
             data.abilities,
-            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, costs),
+            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, costs, cancels),
             lambda row: row.id,
         )
         self._effects = _read_table(data.effects, EffectData.from_proto, lambda row: row.id)

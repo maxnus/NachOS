@@ -437,7 +437,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
-| `bot.calculate_supply_cost(t)` | `ability_data.cost.supply` of what makes it |
+| `bot.calculate_supply_cost(t)` | `unit_data.cost.supply`, the type's own; `ability_data.cost.supply` of what makes it counts what the order frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
 | `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |

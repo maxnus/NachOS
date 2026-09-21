@@ -558,10 +558,44 @@ class TechSweep:
             for unit_type in sorted(set(self._race_types()) & self._structure_types, key=lambda one: one.name):
                 for raw in self._ways_to_try(unit_type):
                     found |= self._read_while_busy(unit_type, raw)
+            for host in sorted(_ADD_ONS, key=lambda one: one.name) if self._race is Race.TERRAN else ():
+                found |= self._read_tech_lab_researching(_ADD_ONS[host][0])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
             self._game.cheat("fast_build")
         self.read_requirements(found)
+
+    def _read_tech_lab_researching(self, unit_type: UnitTypeId) -> set[Pair]:
+        """What a tech lab of `unit_type` is offered while it researches, and whether `GENERAL_CANCEL_LAST` takes the
+        research back, which is what `cancelled_by` names for it.
+
+        Only a structure puts a tech lab up, and one put up alone is offered no research, so the one standing on its
+        host since the start is used, and left idle again.
+        """
+        standing = next((unit for unit in self._mine() if unit.unit_type == unit_type and not unit.orders), None)
+        ways = [] if standing is None else self._worth_trying(self._ways_to_be_busy(standing.tag))
+        research = next(iter(ways), None)
+        if standing is None or research is None:
+            logger.warning("No {} standing idle and offered a research", unit_type.name)
+            return set()
+        if self._game.order(research, standing.tag) != SUCCESS:
+            logger.warning("A {} would not run {}", unit_type.name, _ability_name(research))
+            return set()
+        found, busy = self._read_until_idle(standing.tag)
+        if not busy:
+            logger.warning("A {} set to {} was never seen busy", unit_type.name, _ability_name(research))
+        answer = self._game.order(int(AbilityId.GENERAL_CANCEL_LAST), standing.tag)
+        self._client.step(2)
+        after = next((unit for unit in self._mine() if unit.tag == standing.tag), None)
+        took_back = answer == SUCCESS and after is not None and not after.orders
+        logger.log(
+            "INFO" if took_back else "WARNING",
+            "GENERAL_CANCEL_LAST {} a {}'s {}",
+            "took back" if took_back else "did not take back",
+            unit_type.name,
+            _ability_name(research),
+        )
+        return found
 
     def _ways_to_try(self, unit_type: UnitTypeId) -> list[int]:
         """Every way a structure of `unit_type` can be set working that is worth a trial, read off one standing idle

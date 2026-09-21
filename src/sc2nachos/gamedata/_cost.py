@@ -45,3 +45,11 @@ class Cost:
     def __rmul__(self, count: float) -> Cost:
         """What `count` of this cost."""
         return self * count
+
+    def __truediv__(self, divisor: float) -> Cost:
+        """This cost shared out `divisor` ways."""
+        return Cost(self.minerals / divisor, self.vespene / divisor, self.supply / divisor)
+
+    def __neg__(self) -> Cost:
+        """This cost given back rather than paid."""
+        return Cost(-self.minerals, -self.vespene, -self.supply)

@@ -121,19 +121,57 @@ def ability_costs(
     return costs
 
 
+def cancel_abilities(
+    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+) -> Mapping[AbilityId, AbilityId]:
+    """The cancel that takes each ability back off a structure carrying it out, for those that have one.
+
+    A train or a research is taken back by `GENERAL_CANCEL_LAST`, which every queue cancel stands for, where each type
+    it is offered to keeps a queue: a warp gate keeps none (in game). A morph, an add-on and arming a nuke take the
+    cancel they were seen offered (tool `sweep_tech_tree`), and a general id the cancel the exact ones it stands for
+    share.
+    """
+    keeps_a_queue = {
+        unit_type
+        for unit_type, abilities in tech_tree.ability_requirements.items()
+        if any(_is_queue_cancel(ability, tech_tree) for ability in abilities)
+    }
+    cancels = dict(tech_tree.ability_cancels)
+    for ability, behavior in behaviors.items():
+        performers = tech_tree.ability_performers.get(ability, frozenset())
+        if behavior is OrderBehavior.QUEUES and performers and performers <= keeps_a_queue:
+            cancels[ability] = AbilityId.GENERAL_CANCEL_LAST
+    cancels_of: defaultdict[AbilityId, set[AbilityId | None]] = defaultdict(set)
+    for exact, general in tech_tree.ability_remaps.items():
+        if general not in cancels:
+            cancels_of[general].add(cancels.get(exact))
+    for general, shared in cancels_of.items():
+        if len(shared) == 1 and (cancel := next(iter(shared))) is not None:
+            cancels[general] = cancel
+    return cancels
+
+
+def _is_queue_cancel(ability: AbilityId, tech_tree: TechTree) -> bool:
+    """Whether `ability` takes back the last thing a queue holds, which the game says by remapping it onto
+    `GENERAL_CANCEL_LAST`."""
+    return AbilityId.GENERAL_CANCEL_LAST in (ability, tech_tree.ability_remaps.get(ability))
+
+
 def _derived_cost(
     product: UnitTypeId | UpgradeId, units: Mapping[UnitTypeId, UnitTypeData], upgrades: Mapping[UpgradeId, UpgradeData]
 ) -> Cost | None:
     """What the game's rows say the ability that makes `product` costs: an upgrade's cost, or a unit type's less that
-    of what it is made out of. `None` where the tables have no row for it."""
+    of what it is made out of. `None` where the tables have no row for it or for what it is made out of."""
     if isinstance(product, UpgradeId):
         upgrade = upgrades.get(product)
         return None if upgrade is None else upgrade.cost
     if (made := units.get(product)) is None:
         return None
     source = made.morphed_from or made.base_type
-    used = units.get(source) if source is not None else None
-    return made.cost if used is None else made.cost - used.cost
+    if source is None:
+        return made.cost
+    used = units.get(source)
+    return None if used is None else made.cost - used.cost
 
 
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
@@ -189,8 +227,10 @@ class AbilityData:
     `GENERAL_CANCEL_LAST`, which every structure's own queue cancel stands for and which takes the last item off a
     barracks, an engineering bay and a command center alike (in game). A morph and an add-on have their own, since
     `GENERAL_CANCEL_LAST` is answered `ERROR` by those: `COMMAND_CENTER_CANCEL_ORBITAL_COMMAND` for the orbital morph,
-    `BARRACKS_CANCEL_ADD_ON` for either add-on (tool `sweep_tech_tree`). `None` for anything else, a build among
-    them: a structure going up is cancelled on itself, with `GENERAL_CANCEL_BUILDING`."""
+    `BARRACKS_CANCEL_ADD_ON` for either add-on (tool `sweep_tech_tree`). A general id holds the cancel the exact
+    ones it stands for share, and none where they differ, as a general add-on's do: send the exact id's. `None` for
+    anything else, a warp-in and a build among them: a warp gate keeps no queue, and a structure going up is
+    cancelled on itself, with `GENERAL_CANCEL_BUILDING`."""
     behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 
@@ -201,15 +241,11 @@ class AbilityData:
         tech_tree: TechTree,
         behaviors: Mapping[AbilityId, OrderBehavior],
         costs: Mapping[AbilityId, Cost],
+        cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
-        """Read one ability out of the game's tables, with what `tech_tree`, `behaviors` and `costs` found about it
-        in game."""
+        """Read one ability out of the game's tables, with what `tech_tree`, `behaviors`, `costs` and `cancels`
+        found about it in game."""
         ability = AbilityId(data.ability_id)
-        behavior = behaviors.get(ability, OrderBehavior.REPLACES)
-        if behavior is OrderBehavior.QUEUES:
-            cancelled_by: AbilityId | None = AbilityId.GENERAL_CANCEL_LAST
-        else:
-            cancelled_by = tech_tree.ability_cancels.get(ability)
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -221,6 +257,6 @@ class AbilityData:
             performers=tech_tree.ability_performers.get(ability, frozenset()),
             product=tech_tree.ability_products.get(ability),
             cost=costs.get(ability, _FREE),
-            cancelled_by=cancelled_by,
-            behavior=behavior,
+            cancelled_by=cancels.get(ability),
+            behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

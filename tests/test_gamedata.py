@@ -177,6 +177,10 @@ class TestCost:
         assert Cost(550, 0, 0) - Cost(400, 0, 0) == Cost(150, 0)
         assert 3 * marine == marine * 3 == Cost(150, 0, 3)
 
+    def test_a_cost_shares_out_and_negates_as_resources_do(self) -> None:
+        assert Cost(150, 0, 3) / 3 == Cost(50, 0, 1)
+        assert -Cost(50, 25, 1) == Cost(-50, -25, -1)
+
     def test_a_cost_holds_its_minerals_and_vespene_as_resources_for_the_purse(self) -> None:
         """Supply is room under the cap, not something a player holds, so it is left out."""
         cost = Cost(150, 100, 2)
@@ -504,13 +508,28 @@ class TestARecordedGamesTables:
             assert data.abilities[ability].cancelled_by is cancel, ability.name
         assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
 
-    def test_every_train_and_research_is_cancelled_by_the_general_queue_cancel(self, path: Path) -> None:
-        """Every structure's own queue cancel stands for it, so it is right whatever the structure: an SCV is
-        trained from a command center and from a planetary fortress, which are offered different ones."""
+    def test_a_train_or_a_research_is_cancelled_by_the_general_queue_cancel_where_there_is_a_queue(
+        self, path: Path
+    ) -> None:
+        """Every queue cancel stands for it, so it is right whatever the structure: an SCV is trained from a command
+        center and from a planetary fortress, which are offered different ones, and a tech lab researching took it
+        (tool `sweep_tech_tree`). A warp gate keeps no queue, so what it warps in has no cancel."""
         data = _tables(path)
-        queues = [row for row in data.abilities.values() if row.behavior is OrderBehavior.QUEUES]
-        assert {AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.COMMAND_CENTER_TRAIN_SCV} <= {row.id for row in queues}
-        assert all(row.cancelled_by is AbilityId.GENERAL_CANCEL_LAST for row in queues)
+        for ability in (
+            AbilityId.BARRACKS_TRAIN_MARINE,
+            AbilityId.COMMAND_CENTER_TRAIN_SCV,
+            AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS,
+        ):
+            assert data.abilities[ability].cancelled_by is AbilityId.GENERAL_CANCEL_LAST, ability.name
+        warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
+        assert warp_ins
+        assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
+
+    def test_a_general_id_holds_a_cancel_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
+        """A tech lab on a barracks, a factory and a starport is each taken back by its host's own cancel."""
+        assert _tables(path).abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cancelled_by is None
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

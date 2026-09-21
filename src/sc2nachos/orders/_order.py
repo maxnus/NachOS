@@ -64,7 +64,8 @@ class Order[T]:
         self._verdict: ActionResult | None = None
         self._error: ActionError | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
-        # Every unit an observation has seen carrying it out: with one command to a group, not always all of them.
+        # The units the first observation to show any carrying it out saw doing so: with one command to a group, not
+        # always all of them.
         self._seen_carrying: frozenset[OwnUnit[Any]] = frozenset()
 
     def __repr__(self) -> str:

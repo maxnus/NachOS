@@ -102,10 +102,10 @@ difference for a morph, 150 for an orbital command rather than its type's 550, a
 the cap as it starts.
 
 A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the one to send to a structure
-carrying `ability` out: `GENERAL_CANCEL_LAST` for a train or a research, whatever the structure, and a morph's or an
-add-on's own cancel, since `GENERAL_CANCEL_LAST` is answered `ERROR` by those. It takes back only the structure's last
-item, and frees neither a slot nor a mineral within the same step
-([game behavior](game-behavior.md#abilities-and-orders)).
+carrying `ability` out: `GENERAL_CANCEL_LAST` for a train or a research on any structure that keeps a queue, a tech
+lab included, and a morph's or an add-on's own cancel, since `GENERAL_CANCEL_LAST` is answered `ERROR` by those. A
+warp-in has none, a warp gate keeping no queue. It takes back only the structure's last item, and frees neither a
+slot nor a mineral within the same step ([game behavior](game-behavior.md#abilities-and-orders)).
 
 ## What became of it
 
@@ -117,7 +117,7 @@ item, and frees neither a slot nor a mineral within the same step
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
-| `LOST` | Every unit seen carrying it out died before it was done, so nothing came of it: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
+| `LOST` | Every unit seen carrying it out died, before it was done or at least before the next observation: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |

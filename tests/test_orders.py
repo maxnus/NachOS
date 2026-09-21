@@ -562,6 +562,31 @@ class TestWhatBecameOfAnOrder:
         assert order.state is OrderState.FAILED
         assert order.error is not None
 
+    def test_a_group_order_fails_where_one_was_given_up_on_and_the_rest_died(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving()), _marine(2, _moving()))
+
+        game.observe(32, _marine(1), errors=(_failed(_MOVE_EXACT, 1),), dead=(2,))
+
+        assert order.state is OrderState.FAILED
+
+    def test_one_train_to_three_barracks_is_lost_with_the_one_reported_taking_it_before_it_was_seen_at_it(
+        self,
+    ) -> None:
+        """With several steps a turn, the barracks that took it can die before any observation shows it training;
+        the report still names it."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3))
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
+        game.flush()
+
+        game.observe(16, _barracks(1), _barracks(3), actions=(_reported(_TRAIN_MARINE, 2, step=16),), dead=(2,))
+
+        assert order.state is OrderState.LOST
+
     def test_who_took_an_order_is_kept_though_it_died_in_the_same_turn(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))

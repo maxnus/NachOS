@@ -19,8 +19,9 @@ class OrderState(Enum):
     every unit it went out for. The game reports a producer dying and nothing more, and a dead unit carries nothing
     out, so this is what tells a barracks killed half way through a marine from one that finished it. Of three
     barracks given one train, it is the one that took it. An ability whose effect is its unit's death, a baneling
-    exploding, reads `LOST` too. A larva's order is `DONE` instead: its egg is reported dead as what it makes
-    hatches, and an egg killed first reads the same (in game)."""
+    exploding, reads `LOST` too, and so does one whose unit finished it and died before the next observation, which
+    cannot be told apart from one killed at it. A larva's order is `DONE` instead: its egg is reported dead as what it
+    makes hatches, and an egg killed first reads the same (in game)."""
     REFUSED = "refused"
     """Sent, and answered something other than `SUCCESS`: the verdict says what."""
     DROPPED = "dropped"

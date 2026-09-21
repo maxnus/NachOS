@@ -459,10 +459,11 @@ Each entry ends with how it was seen:
   and a spire `Cancel_MorphGreaterSpire`. Everything training or researching is offered the queue cancel of its own
   kind: `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a forge, an evolution chamber and the rest,
   `Cancel_QueueCancelToSelection` for a command center, an orbital command, a hatchery, a lair and a hive,
-  `Cancel_QueuePasive` for a nexus and `Cancel_QueuePassiveCancelToSelection` for a planetary fortress. A cancel is
-  offered only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine or an
-  add-on can be done within the step its order lands in, before the structure is first read (tool
-  `sweep_tech_tree`).
+  `Cancel_QueuePasive` for a nexus, `Cancel_QueuePassiveCancelToSelection` for a planetary fortress and
+  `Cancel_QueueAddOn` for a tech lab researching on its host. `Cancel_Last` sent to a tech lab took back its research,
+  on a barracks, a factory and a starport alike. A warp gate is offered none, keeping no queue. A cancel is offered
+  only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine or an add-on can
+  be done within the step its order lands in, before the structure is first read (tool `sweep_tech_tree`).
 - An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
   refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
   an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay

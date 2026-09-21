@@ -133,6 +133,7 @@
   "BarracksReactor": [],
   "BarracksTechLab": [
    "BarracksTechLabResearch_Stimpack",
+   "Cancel_QueueAddOn",
    "Research_CombatShield",
    "Research_ConcussiveShells"
   ],
@@ -435,6 +436,7 @@
   ],
   "FactoryReactor": [],
   "FactoryTechLab": [
+   "Cancel_QueueAddOn",
    "Research_CycloneLockOnDamage",
    "Research_DrillingClaws",
    "Research_InfernalPreigniter",
@@ -1300,6 +1302,7 @@
   ],
   "StarportReactor": [],
   "StarportTechLab": [
+   "Cancel_QueueAddOn",
    "Research_BansheeCloakingField",
    "Research_BansheeHyperflightRotors",
    "StarportTechLabResearch_ResearchRavenInterferenceMatrix"
@@ -2287,6 +2290,13 @@
   },
   {
    "performer": "BarracksTechLab",
+   "ability": "Cancel_QueueAddOn",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BarracksTechLab",
    "ability": "Research_CombatShield",
    "structures": [],
    "attached": false,
@@ -3138,6 +3148,13 @@
   {
    "performer": "CyberneticsCore",
    "ability": "Research_WarpGate",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Cyclone",
+   "ability": "Cancel_LockOn",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -4054,6 +4071,13 @@
   {
    "performer": "FactoryFlying",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "FactoryTechLab",
+   "ability": "Cancel_QueueAddOn",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -9204,6 +9228,13 @@
   {
    "performer": "StarportFlying",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "StarportTechLab",
+   "ability": "Cancel_QueueAddOn",
    "structures": [],
    "attached": false,
    "upgrades": []
