@@ -28,6 +28,8 @@ _ALLIANCES = {int(member): member for member in Alliance}
 _CLOAKS = {int(member): member for member in CloakState}
 # Worn by a unit a phoenix holds in the air, which the game reports as not flying.
 _LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
+# An id is its alliance's digit followed by this many digits counting that alliance's units.
+_IDS_PER_ALLIANCE = 100_000
 
 
 def _copy(proto: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -186,6 +188,12 @@ class Unit[K: UnitType.AnyType]:
         the rest counts that alliance's units in the order they were first seen.
         """
         return self._id
+
+    @property
+    def first_alliance(self) -> Alliance:
+        """Whose side it was on when first seen, which its `id` keeps: a unit of this player's under a neural parasite
+        reads `Alliance.ENEMY` for `alliance` and `Alliance.OWN` here, and takes this player's supply still."""
+        return _ALLIANCES[self._id // _IDS_PER_ALLIANCE]
 
     @property
     def tag(self) -> int:

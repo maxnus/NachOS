@@ -46,7 +46,7 @@ class GameMap:
     def __init__(self, info: sc2api_pb2.ResponseGameInfo) -> None:
         """Read the map out of the game's answer to `RequestGameInfo`."""
         start = info.start_raw
-        playable = Rectangle.from_proto(start.playable_area)
+        playable = Rectangle._from_proto(start.playable_area)
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
         self._name = info.map_name
         self._playable = playable
@@ -56,7 +56,7 @@ class GameMap:
         self._placement = Grid(buildable, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
-        self._opponent_start_locations = tuple(Point.from_proto(location) for location in start.start_locations)
+        self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
 
     @property

@@ -243,7 +243,7 @@ class Point(_PointND, tuple[float, float]):
     __slots__ = ()
 
     @classmethod
-    def from_proto(cls, data: common_pb2.Point2D | common_pb2.PointI) -> Self:
+    def _from_proto(cls, data: common_pb2.Point2D | common_pb2.PointI) -> Self:
         """Build from a protobuf 2D point message."""
         return cls((data.x, data.y))
 

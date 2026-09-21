@@ -41,7 +41,7 @@ class UnitCommand(Action):
     """Whether the order went behind the ones they had, rather than replacing them."""
 
     @classmethod
-    def from_proto(
+    def _from_proto(
         cls, step: int, command: raw_pb2.ActionRawUnitCommand, unit_by_tag: Callable[[int], Unit[Any]]
     ) -> Self:
         match command.WhichOneof("target"):
@@ -65,7 +65,7 @@ class AutocastToggle(Action):
     units: tuple[Unit[Any], ...]
 
     @classmethod
-    def from_proto(
+    def _from_proto(
         cls, step: int, toggle: raw_pb2.ActionRawToggleAutocast, unit_by_tag: Callable[[int], Unit[Any]]
     ) -> Self:
         return cls(step, AbilityId.read(toggle.ability_id), tuple(unit_by_tag(tag) for tag in toggle.unit_tags))
@@ -100,7 +100,7 @@ class ActionFailure:
     site taken meanwhile."""
 
     @classmethod
-    def from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:
+    def _from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:
         """Read an action error the observation at `step` reports, which is what the protocol calls it, naming a unit
         through `unit_by_tag`.
 
@@ -121,9 +121,9 @@ def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any
     step = action.game_loop
     match raw.WhichOneof("action"):
         case "unit_command":
-            return UnitCommand.from_proto(step, raw.unit_command, unit_by_tag)
+            return UnitCommand._from_proto(step, raw.unit_command, unit_by_tag)
         case "toggle_autocast":
-            return AutocastToggle.from_proto(step, raw.toggle_autocast, unit_by_tag)
+            return AutocastToggle._from_proto(step, raw.toggle_autocast, unit_by_tag)
         case "camera_move":
             center = raw.camera_move.center_world_space
             return CameraMove(step, Point((center.x, center.y)))

@@ -10,7 +10,7 @@ from sc2nachos._errors import NachOSError
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
-from sc2nachos.units._unit import Unit
+from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
 from sc2nachos.units._units import Units
 
 if TYPE_CHECKING:
@@ -22,8 +22,6 @@ _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# An id is its alliance's digit followed by this many digits counting that alliance's units.
-_IDS_PER_ALLIANCE = 100_000
 # The types that can leave the spot they are remembered at, by lifting off or uprooting: the performers the curated
 # `*_LIFT` and `*_UPROOT` abilities name, which every other ability name puts first too.
 _MOVABLE_UNIT_TYPE_IDS = frozenset(

@@ -22,7 +22,7 @@ class EffectData:
     """How far it reaches from the point it is centered on."""
 
     @classmethod
-    def from_proto(cls, data: data_pb2.EffectData) -> Self:
+    def _from_proto(cls, data: data_pb2.EffectData) -> Self:
         """Read one effect out of the game's tables."""
         return cls(
             id=EffectId(data.effect_id),

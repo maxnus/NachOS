@@ -32,7 +32,7 @@ class Effect:
     """The id of the player it belongs to."""
 
     @classmethod
-    def from_proto(cls, proto: raw_pb2.Effect) -> Self:
+    def _from_proto(cls, proto: raw_pb2.Effect) -> Self:
         """Read an effect an observation reports. Raises `UncuratedIdError` for an effect the curated ids leave out."""
         return cls(
             id=EffectId.read(proto.effect_id),

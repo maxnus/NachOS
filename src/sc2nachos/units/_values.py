@@ -106,7 +106,7 @@ class UnitOrder:
     """How far through the order it is, from 0 to 1, for an order that trains or researches, and 0 otherwise."""
 
     @classmethod
-    def from_proto(cls, order: raw_pb2.UnitOrder, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
+    def _from_proto(cls, order: raw_pb2.UnitOrder, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
         """Read an order a unit reported, naming a unit through `unit_by_tag`."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
@@ -127,7 +127,7 @@ class RallyTarget:
     """The unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
 
     @classmethod
-    def from_proto(cls, rally: raw_pb2.RallyTarget, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
+    def _from_proto(cls, rally: raw_pb2.RallyTarget, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
         """Read a rally point a structure reported, naming a unit through `unit_by_tag`."""
         tag = rally.tag
         if rally.HasField("tag") and tag != _NO_UNIT:
@@ -151,7 +151,7 @@ class Passenger:
     energy_max: float
 
     @classmethod
-    def from_proto(cls, passenger: raw_pb2.PassengerUnit, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
+    def _from_proto(cls, passenger: raw_pb2.PassengerUnit, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
         """Read a passenger a transport reported, naming it through `unit_by_tag`."""
         return cls(
             unit=unit_by_tag(passenger.tag),

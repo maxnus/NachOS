@@ -87,6 +87,7 @@ class TestIds:
         game.observe(16, make_unit(1, alliance=Alliance.OWN))
         assert marine.id == 400001
         assert marine.alliance is Alliance.OWN
+        assert marine.first_alliance is Alliance.ENEMY
 
     def test_running_out_of_ids_raises(self) -> None:
         game = _Game()

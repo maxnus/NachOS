@@ -243,7 +243,7 @@ class AbilityData:
     """What ordering it does to what the unit is already doing."""
 
     @classmethod
-    def from_proto(
+    def _from_proto(
         cls,
         data: data_pb2.AbilityData,
         tech_tree: TechTree,
