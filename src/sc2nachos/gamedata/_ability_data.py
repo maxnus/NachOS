@@ -110,14 +110,22 @@ def ability_costs(
         if (derived := _derived_cost(product, units, upgrades)) is not None:
             costs[ability] = derived
     costs.update(COST_OVERRIDES)
-    # A general id takes the price the exact ones it stands for share, as every tech lab's 50/25. One that stands for
-    # several prices, as the three levels of a research do, takes none: which it runs is not known until the game
-    # runs it.
+    # A general id takes the price the exact ones it stands for share, as every tech lab's 50/25. A research's stands
+    # for its three levels, which differ, and takes the first's: the one it runs until that is done.
     prices_of: defaultdict[AbilityId, set[Cost]] = defaultdict(set)
+    first_level: dict[AbilityId, AbilityId] = {}
     for exact, general in tech_tree.ability_remaps.items():
-        if general not in costs:
-            prices_of[general].add(costs.get(exact, _FREE))
-    costs.update({general: next(iter(prices)) for general, prices in prices_of.items() if len(prices) == 1})
+        if general in costs:
+            continue
+        prices_of[general].add(costs.get(exact, _FREE))
+        product = tech_tree.ability_products.get(exact)
+        if isinstance(product, UpgradeId) and tech_tree.upgrade_levels.get(product) == 1:
+            first_level[general] = exact
+    for general, prices in prices_of.items():
+        if len(prices) == 1:
+            costs[general] = next(iter(prices))
+        elif general in first_level:
+            costs[general] = costs.get(first_level[general], _FREE)
     return costs
 
 
@@ -219,9 +227,9 @@ class AbilityData:
     """What the game takes as it is ordered, which for a morph is the difference from what it is made out of: 150 for
     an orbital command, not the 550 its type's row holds as everything spent to reach it. Its supply is taken as what
     it makes starts, less what the unit it uses up gives back: 1 for a marine, -1 for a spawning pool, 0 for a
-    baneling. A general id holds the cost the exact ones it stands for share, and nothing where they differ, as the
-    three levels of a research do: budget one of those by its exact id or its upgrade's row. An ability that makes
-    nothing costs nothing."""
+    baneling. A general id holds the cost the exact ones it stands for share, and a research's the first level's, which
+    is what it runs until that level is done: budget a later level by its exact id. An ability that makes nothing
+    costs nothing."""
     cancelled_by: AbilityId | None
     """The cancel that takes this back off a structure carrying it out. For a train or a research it is
     `GENERAL_CANCEL_LAST`, which every structure's own queue cancel stands for and which takes the last item off a

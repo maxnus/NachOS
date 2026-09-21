@@ -21,6 +21,7 @@ from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
+    TECH_TREE,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
@@ -467,8 +468,8 @@ class TestARecordedGamesTables:
         for ability, cost in COST_OVERRIDES.items():
             assert _derived(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
 
-    def test_a_general_id_holds_a_price_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
-        """Any tech lab is 50/25, but which level a general research runs is not known until the game runs it."""
+    def test_a_general_id_holds_the_price_what_it_stands_for_shares_or_the_first_level(self, path: Path) -> None:
+        """Any tech lab is 50/25, and a general research runs its first level until that is done."""
         data = _tables(path)
         assert data.abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cost == Cost(50, 25)
         levels = (
@@ -481,7 +482,14 @@ class TestARecordedGamesTables:
             Cost(150, 150),
             Cost(200, 200),
         ]
-        assert data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS].cost == Cost(0, 0)
+        assert data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS].cost == Cost(100, 100)
+
+    def test_every_general_id_that_makes_something_has_a_price(self, path: Path) -> None:
+        """None is left at nothing because what it stands for differs."""
+        data = _tables(path)
+        for exact, general in TECH_TREE.ability_remaps.items():
+            if exact in data.abilities and data.abilities[exact].cost != Cost(0, 0):
+                assert data.abilities[general].cost != Cost(0, 0), general.name
 
     def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
         """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""

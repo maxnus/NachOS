@@ -496,8 +496,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   extractor 25 and a baneling 25/25. python-sc2 does the same in `morph_cost` and `calculate_ability_cost` off a
   hand-written `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, the game's rows now pricing a
   reactor 50/50 and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325
-  rather than the drone's 50 and a hatchery's 300. A general research id, which stands for three levels, holds no
-  price, since which level it runs is not known until the game runs it.
+  rather than the drone's 50 and a hatchery's 300. A general research id, which stands for three levels, holds the
+  first level's price, which is what it runs until that level is done.
 - **What relates the tables to each other was swept in game, not read from the game's files**, since
   `RequestData` holds little of it ([game behavior](game-behavior.md#upgrades-and-the-games-tables)). python-sc2's
   dicts come from sc2-techtree, which read an older patch's data files; NachOS's come from
