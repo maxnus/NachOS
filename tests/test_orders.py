@@ -522,6 +522,57 @@ class TestWhatBecameOfAnOrder:
         assert order.state is OrderState.LOST
         assert order.error is None
 
+    def test_one_train_to_three_barracks_is_lost_with_the_one_that_took_it(self) -> None:
+        """One command naming several structures is carried out by one of them (in game), so the two left idle
+        say nothing about what became of it."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3))
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1), _barracks(2, _training()), _barracks(3))
+        assert order.state is OrderState.RUNNING
+
+        game.observe(32, _barracks(1), _barracks(3), dead=(2,))
+
+        assert order.state is OrderState.LOST
+
+    def test_a_group_move_one_of_which_arrived_is_done_though_the_rest_died(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving()), _marine(2, _moving()))
+        game.observe(32, _marine(1), _marine(2, _moving()))
+        assert order.state is OrderState.RUNNING
+
+        game.observe(48, _marine(1), dead=(2,))
+
+        assert order.state is OrderState.DONE
+
+    def test_an_order_the_game_gave_up_on_fails_though_its_unit_then_died(self) -> None:
+        """With several steps a turn, an error and the unit's death can arrive in one observation, and the error
+        came first."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+
+        game.observe(16, errors=(_failed(_MOVE_EXACT, 1),), dead=(1,))
+
+        assert order.state is OrderState.FAILED
+        assert order.error is not None
+
+    def test_who_took_an_order_is_kept_though_it_died_in_the_same_turn(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _STIM)
+        game.flush()
+
+        game.observe(16, actions=(_reported(_STIM, 1, step=16),), dead=(1,))
+
+        assert order.taken_by == (game.own(1),)
+        assert order.state is OrderState.LOST
+
     def test_a_larvas_order_is_done_once_its_egg_is_reported_dead(self) -> None:
         """An egg is reported dead as what it makes hatches (in game)."""
         game = _Game([ActionResult.SUCCESS])

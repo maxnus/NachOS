@@ -285,25 +285,28 @@ class OrderBook:
         errored = tuple(error for error in errors if self._error_is_of(error, order, units, general))
         if errored:
             order._error = errored[0]
-        carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
-        if not carrying_out and all(unit.is_dead and unit.type_id is not UnitTypeId.EGG for unit in units):
-            # A unit that is gone is carrying nothing out, and the game reports one dying and nothing more, so
-            # this is the one case a dead unit does not mean the order is over and done with. It cannot take an
-            # action error's place: an error comes while the unit is alive, and once it is gone none comes at all.
-            # An egg is the exception, being reported dead as what it makes hatches (in game).
-            order._state = OrderState.LOST
-            return
-        if errored and not carrying_out and not set(units) - {error.unit for error in errored}:
-            # The game gave up on every unit it went out for. One of a group failing leaves the rest to settle as
-            # they are, with the error on the order to read.
-            order._state = OrderState.FAILED
-            return
+        carriers = frozenset(unit for unit in units if self._unit_is_carrying_out_ability(unit, general))
+        carrying_out = bool(carriers)
         # The report can come an observation after the unit is seen carrying the order out, so a running order reads
         # it too, and only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
             order._taken_by = taken_by
+        if errored and not carrying_out and not set(units) - {error.unit for error in errored}:
+            # The game gave up on every unit it went out for, whether or not they died after. One of a group failing
+            # leaves the rest to settle as they are, with the error on the order to read.
+            order._state = OrderState.FAILED
+            return
+        if carrying_out:
+            order._carriers |= carriers
+        elif all(unit.is_dead and unit.type_id is not UnitTypeId.EGG for unit in order._carriers or units):
+            # Every unit ever seen carrying it out is gone, or every unit it went out for where none was: the game
+            # reports a producer dying and nothing more, so this is the one case a unit carrying nothing out does not
+            # mean the order is over and done with. One of a group that got where it was sent keeps it done. An egg
+            # is the exception, being reported dead as what it makes hatches (in game).
+            order._state = OrderState.LOST
+            return
         if order.state is OrderState.RUNNING:
             if not carrying_out:
                 order._state = OrderState.DONE

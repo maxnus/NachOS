@@ -141,8 +141,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
   the game's verdict says whether it was taken. A bot keeps its own budget within a turn
   ([orders](orders.md#what-an-order-needs)).
-- **An order whose units all died reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice; NachOS says so, a
-  producer killed half way through what it was making being reported dying and nothing more.
+- **An order whose unit died before it was done reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice;
+  NachOS says so, a producer killed half way through what it was making being reported dying and nothing more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
   unqueued order the same as a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free after all. NachOS holds it back and the order reads `RUNNING`;

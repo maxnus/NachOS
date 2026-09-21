@@ -2598,16 +2598,38 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("one research naming two engineering bays", researched))
 
-    def added_on(trial: Trial) -> None:
-        made = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20), 4), count=2)
-        before = [game.minerals, game.vespene]
-        trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, made)
-        game.turn(4)
-        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
-        game.read("given one add-on naming two barracks", made)
-        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+    def added_on(barracks: int, blocked: int) -> Callable[[Trial], None]:
+        """A trial giving one reactor, aimed at nothing as a bot's add-on usually is, to `barracks` barracks, the
+        first `blocked` of them with a supply depot where the reactor would stand."""
 
-    trials.append(game.trial("one add-on naming two barracks", added_on))
+        def run(trial: Trial) -> None:
+            made: list[raw_pb2.Unit] = []
+            for index in range(barracks):
+                made += game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20 + 9 * index), 4))
+            depots: list[raw_pb2.Unit] = []
+            for host in made[:blocked]:
+                # An add-on stands 2.5 right of its structure's center and 0.5 down, so a depot there fills its place.
+                depots += game.create(UnitTypeId.SUPPLY_DEPOT, Point((host.pos.x + 2.5, host.pos.y - 0.5)))
+            trial.notes["barracks at"] = [[unit.pos.x, unit.pos.y] for unit in made]
+            trial.notes["depots at"] = [[unit.pos.x, unit.pos.y] for unit in depots]
+            before = [game.minerals, game.vespene]
+            trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, made)
+            game.turn(4)
+            trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+            trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+            game.turn(20)
+            game.read("24 steps after the reactor was ordered", made)
+            trial.notes["an add-on each, 24 steps on"] = [bool((game.unit(u.tag) or u).add_on_tag) for u in made]
+
+        return run
+
+    for barracks, blocked, name in (
+        (1, 0, "one reactor to one barracks, its side free"),
+        (1, 1, "one reactor to one barracks, its side blocked"),
+        (2, 0, "one reactor naming two barracks"),
+        (2, 1, "one reactor naming two barracks, the first one's side blocked"),
+    ):
+        trials.append(game.trial(name, added_on(barracks, blocked)))
 
     return trials
 

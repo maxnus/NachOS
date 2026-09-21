@@ -101,16 +101,22 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
 # What the game charges for an ability, where its type's own row does not give it away. Everything else is read off
 # the tables: what the ability makes costs, less what it is made out of, which is right for every other morph -- an
 # orbital command 150 of its row's 550, an extractor 25 of 75, a baneling 25/25, each held to the three quarters a
-# cancel was seen to give back (tool `sweep_orders`). These six are the prices the game has always charged
-# (stated), and `tests/test_gamedata.py` holds every entry to differing from what the tables derive, so one goes as
-# soon as a patch makes it unnecessary.
-CHARGED_COSTS: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
+# cancel was seen to give back (tool `sweep_orders`). These are the prices the game has always charged (stated), and
+# `tests/test_gamedata.py` holds every entry to differing from what the tables derive, so one goes as soon as a patch
+# makes it unnecessary.
+COST_OVERRIDES: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
     {
-        # The hatchery's row is 325, not the drone's 50 and the hatchery's 300, so the drone comes out twice.
+        # An interceptor is no unit type the curated ids name, so nothing is derived for it; each costs 15, charged
+        # as the carrier is told to build it.
+        AbilityId.CARRIER_BUILD_INTERCEPTORS: Resources(15, 0),
+        # The game charges 300, but the hatchery's row reads 325, so taking off the 50 of the drone it is made out
+        # of leaves 275.
         AbilityId.DRONE_MORPH_HATCHERY: Resources(300, 0),
         # A gateway turns itself into a warp gate once the research is in, and the game charges nothing. Its row
         # keeps the gateway's own 150 and names nothing it is made out of.
         AbilityId.GATEWAY_MORPH_WARP_GATE: Resources(0, 0),
+        # A nuke is no unit type the curated ids name either, so nothing is derived for it.
+        AbilityId.GHOST_ACADEMY_BUILD_NUKE: Resources(100, 100),
         # One order makes a pair, and the row prices one zergling.
         AbilityId.LARVA_MORPH_ZERGLING: Resources(50, 0),
         # The transport's row reads the same 100 as an overlord's, so the difference comes out as nothing.
@@ -122,7 +128,7 @@ CHARGED_COSTS: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
 """What ordering an ability takes, where the game's own rows do not say it."""
 
 # What an ability takes of the supply cap, where its type's row does not give it away.
-CHARGED_SUPPLY: Final[Mapping[AbilityId, float]] = MappingProxyType(
+SUPPLY_OVERRIDES: Final[Mapping[AbilityId, float]] = MappingProxyType(
     {
         # Two zerglings take a supply between them, and the row holds the half one takes.
         AbilityId.LARVA_MORPH_ZERGLING: 1.0,

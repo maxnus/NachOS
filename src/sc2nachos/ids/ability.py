@@ -190,7 +190,9 @@ class AbilityId(IdEnum):
     # What a structure cancels the last thing it queued with, in one kind of queue or the other, both remapping to
     # CANCEL_LAST. Which structures have which is in the tables' performers. A morph or an add-on takes neither,
     # answering CANCEL_LAST `Error`, and is cancelled by its own: COMMAND_CENTER_CANCEL_ORBITAL_COMMAND,
-    # BARRACKS_CANCEL_ADD_ON and the rest (in game).
+    # COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR, LAIR_CANCEL_HIVE and SPIRE_CANCEL_GREATER_SPIRE
+    # for a morph, and BARRACKS_CANCEL_ADD_ON, FACTORY_CANCEL_ADD_ON and STARPORT_CANCEL_ADD_ON for either add-on
+    # (in game).
     GENERAL_CANCEL_QUEUE = RawAbilityId.Cancel_Queue5
     GENERAL_CANCEL_QUEUE_TO_SELECTION = RawAbilityId.Cancel_QueueCancelToSelection
     GENERAL_CLOAK_OFF = RawAbilityId.Behavior_CloakOff

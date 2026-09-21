@@ -194,7 +194,10 @@ Each entry ends with how it was seen:
 - Without `fast_build` a supply depot is still going up 120 steps after the order, and done within 600 more
   (tested).
 - An add-on is a unit of its own, seen the step after the order at 2% built. It sits 2.5 right of its host and 0.5
-  below; with no room the host lifts off to build it elsewhere (#37; tested).
+  below; with no room the host lifts off to build it elsewhere (#37; tested). Ordered with no point, as a bot's
+  add-on usually is, it is built where the host stands and charged at once, 50/50 for a reactor; but a host whose
+  add-on's place a supply depot fills is answered `Success`, and nothing is charged or started, then or 24 steps
+  later (tool `sweep_orders`).
 - A warp-in is first seen unfinished and finishes some steps later (#37; tested). A gateway becomes a warp gate by
   itself once Warp Gate is researched, and nothing else makes one (#29; tested).
 - The starting townhall is never seen unfinished. An auto-turret has the structure attribute but is first seen
@@ -360,7 +363,9 @@ Each entry ends with how it was seen:
   cyclone locked on gets none. Unload is offered only while a transport carries something, and a ghost its nuke only
   while one is armed (#29, #33).
 - Once Burrow is researched, every burrowing zerg unit is offered every zerg burrow ability, the infested terran's
-  included, and burrows as itself: a zergling given the infested terran's reports `ZERGLING_BURROW` (#29, #33).
+  included, and burrows as itself: a zergling given the infested terran's reports `ZERGLING_BURROW` (#29, #33). A
+  baneling rolling at an enemy it has seen is offered none of them, its own included, and an order to burrow is
+  answered `NotSupported` until it stops (tool `sweep_tech_tree`).
 - A roach is offered the ravager morph once a roach warren stands; a warp gate warps in all six gateway units;
   workers carrying minerals are offered a return fresh ones are not; brood lord and overlord cocoons can move,
   patrol and hold; a battlecruiser has its own attack, move, patrol, hold and stop (#29, #33).
@@ -488,11 +493,12 @@ Each entry ends with how it was seen:
   closing on its point. A lurker's hold fire is the one that could not be given, since it is offered only burrowed,
   and the game offers a burrowed lurker no move (tool `sweep_orders`).
 - One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
-  their spacing, but everything else is carried out by one of them only, and charged once: a storm by a templar with
-  the energy for it, a pylon by one of two probes, one marine from three barracks given one train (the purse fell
-  50 and one of the three carried the order), one research from two engineering bays given one (100/100). One add-on
-  to two barracks, given no point, was answered `Success` and neither charged nor built anything within 4 steps.
-  What cannot take the order is left out, and the verdict is `Success`: a
+  their spacing, but a spell, a structure, a train and a research are carried out by one of them only, and charged
+  once: a storm by a templar with the energy for it, a pylon by one of two probes, one marine from three barracks
+  given one train (the purse fell 50 and one of the three carried the order), one research from two engineering bays
+  given one (100/100), one reactor from two barracks given one, where the one with room beside it takes it if the
+  other's is blocked. A morph given to several was not tried. What cannot take the order is left out, and the
+  verdict is `Success`: a
   supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
   `sweep_orders`).
 - A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
@@ -508,9 +514,8 @@ Each entry ends with how it was seen:
   move, a unit for a supply depot (tool `sweep_orders`).
 - A builder killed before the game gives up on its build is reported dying and nothing else. An SCV whose site a
   marine of this player's held position on was given up on 108 steps after the order, with
-  `CantBuildLocationInvalid`; the same trial with the builder killed at 106 got no error at all, then or twelve
-  steps later. So an order whose unit is gone and one the game gave up on never arrive together: the error comes
-  while the unit is alive, and once it is gone nothing comes (tool `sweep_orders`).
+  `CantBuildLocationInvalid`; one sent to another such site and killed on its way got no error at all, then or twelve
+  steps later (tool `sweep_orders`).
 - A structure killed while it is making something is reported dying and nothing more. A barracks training three
   marines, killed: the next observation still lists it with all three orders, the one after does not list it at all,
   and neither carries an action for it nor an action error. An SCV killed on its way to build is the same. So what a

@@ -37,10 +37,10 @@ class GameData:
             data.upgrades, lambda upgrade: UpgradeData.from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
         # What an ability charges is read off what it makes, so the other tables come first.
-        charges = ability_costs(self._units, self._upgrades, TECH_TREE)
+        costs = ability_costs(self._units, self._upgrades, TECH_TREE)
         self._abilities = _read_table(
             data.abilities,
-            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, charges),
+            lambda ability: AbilityData.from_proto(ability, TECH_TREE, behaviors, costs),
             lambda row: row.id,
         )
         self._effects = _read_table(data.effects, EffectData.from_proto, lambda row: row.id)

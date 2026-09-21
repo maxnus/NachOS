@@ -102,9 +102,10 @@ orders in one turn keeps its own tally. `cost` is what the game charges as the a
 for a morph, 150 for an orbital command rather than its type's 550. `supply_cost` is what it takes of the cap as it
 starts.
 
-A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel the game offers a
-structure carrying `ability` out, which is the one to send: `Cancel_Last` is answered `ERROR` by a morph and by an
-add-on. It takes back only the structure's last item, and frees neither a slot nor a mineral within the same step
+A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the one to send to a structure
+carrying `ability` out: `GENERAL_CANCEL_LAST` for a train or a research, whatever the structure, and a morph's or an
+add-on's own cancel, since `GENERAL_CANCEL_LAST` is answered `ERROR` by those. It takes back only the structure's last
+item, and frees neither a slot nor a mineral within the same step
 ([game behavior](game-behavior.md#abilities-and-orders)).
 
 ## What became of it
@@ -117,7 +118,7 @@ add-on. It takes back only the structure's last item, and frees neither a slot n
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
-| `LOST` | Every unit it went out for died before it was done, so nothing came of it. A larva's order is `DONE` instead, since the egg it became is reported dead as what it makes hatches, and so an egg killed first reads `DONE` too. |
+| `LOST` | Every unit seen carrying it out died before it was done, so nothing came of it: of three barracks given one train, the one that took it. An ability whose effect is its unit's death, a baneling exploding, reads `LOST` too. A larva's order is `DONE` instead, since the egg it became is reported dead as what it makes hatches, and so an egg killed first reads `DONE` too. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |

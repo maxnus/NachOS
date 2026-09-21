@@ -14,13 +14,13 @@ from sc2nachos.gamedata import (
     Resources,
     TargetDomain,
     TargetType,
-    UnitTypeData,
 )
+from sc2nachos.gamedata._ability import _derived_cost
 from sc2nachos.gamedata._techtree import (
-    CHARGED_COSTS,
-    CHARGED_SUPPLY,
+    COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
+    SUPPLY_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
@@ -38,6 +38,7 @@ _CHARGED = {
     AbilityId.BARRACKS_BUILD_TECH_LAB: (Resources(50, 25), 0.0),
     AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: (Resources(100, 100), 0.0),
     AbilityId.BARRACKS_TRAIN_MARINE: (Resources(50, 0), 1.0),
+    AbilityId.CARRIER_BUILD_INTERCEPTORS: (Resources(15, 0), 0.0),
     AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: (Resources(150, 0), 0.0),
     AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: (Resources(150, 150), 0.0),
     AbilityId.COMMAND_CENTER_TRAIN_SCV: (Resources(50, 0), 1.0),
@@ -45,6 +46,7 @@ _CHARGED = {
     AbilityId.DRONE_MORPH_HATCHERY: (Resources(300, 0), -1.0),
     AbilityId.DRONE_MORPH_SPAWNING_POOL: (Resources(200, 0), -1.0),
     AbilityId.GATEWAY_MORPH_WARP_GATE: (Resources(0, 0), 0.0),
+    AbilityId.GHOST_ACADEMY_BUILD_NUKE: (Resources(100, 100), 0.0),
     AbilityId.HATCHERY_MORPH_LAIR: (Resources(150, 100), 0.0),
     AbilityId.LAIR_MORPH_HIVE: (Resources(200, 150), 0.0),
     AbilityId.LARVA_MORPH_ZERGLING: (Resources(50, 0), 1.0),
@@ -445,10 +447,10 @@ class TestARecordedGamesTables:
     def test_a_cost_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
         """Once the game's own rows give a price away, the entry can go."""
         data = _tables(path)
-        for ability, cost in CHARGED_COSTS.items():
-            assert _derived_cost(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
-        for ability, supply in CHARGED_SUPPLY.items():
-            assert _derived_supply(data, ability) != supply, f"the tables now take {supply} supply for {ability.name}"
+        for ability, cost in COST_OVERRIDES.items():
+            assert _derived(data, ability)[0] != cost, f"the tables now charge {ability.name} {cost}"
+        for ability, supply in SUPPLY_OVERRIDES.items():
+            assert _derived(data, ability)[1] != supply, f"the tables now take {supply} supply for {ability.name}"
 
     def test_a_general_id_holds_a_price_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
         """Any tech lab is 50/25, but which level a general research runs is not known until the game runs it."""
@@ -481,13 +483,24 @@ class TestARecordedGamesTables:
             (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND),
             (AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS, AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS),
             (AbilityId.BARRACKS_BUILD_TECH_LAB, AbilityId.BARRACKS_CANCEL_ADD_ON),
+            (AbilityId.BARRACKS_BUILD_REACTOR, AbilityId.BARRACKS_CANCEL_ADD_ON),
             (AbilityId.FACTORY_BUILD_TECH_LAB, AbilityId.FACTORY_CANCEL_ADD_ON),
+            (AbilityId.FACTORY_BUILD_REACTOR, AbilityId.FACTORY_CANCEL_ADD_ON),
             (AbilityId.STARPORT_BUILD_TECH_LAB, AbilityId.STARPORT_CANCEL_ADD_ON),
+            (AbilityId.STARPORT_BUILD_REACTOR, AbilityId.STARPORT_CANCEL_ADD_ON),
             (AbilityId.HATCHERY_MORPH_LAIR, AbilityId.HATCHERY_CANCEL_LAIR),
             (AbilityId.LAIR_MORPH_HIVE, AbilityId.LAIR_CANCEL_HIVE),
         ):
             assert data.abilities[ability].cancelled_by is cancel, ability.name
         assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
+
+    def test_every_train_and_research_is_cancelled_by_the_general_queue_cancel(self, path: Path) -> None:
+        """Every structure's own queue cancel stands for it, so it is right whatever the structure: an SCV is
+        trained from a command center and from a planetary fortress, which are offered different ones."""
+        data = _tables(path)
+        queues = [row for row in data.abilities.values() if row.behavior is OrderBehavior.QUEUES]
+        assert {AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.COMMAND_CENTER_TRAIN_SCV} <= {row.id for row in queues}
+        assert all(row.cancelled_by is AbilityId.GENERAL_CANCEL_LAST for row in queues)
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
@@ -519,27 +532,8 @@ class TestARecordedGamesTables:
             assert data.units[unit].base_type is base
 
 
-def _derived_cost(data: GameData, ability: AbilityId) -> Resources:
-    """What the game's own rows say the ability charges, before `CHARGED_COSTS` corrects them."""
-    made, used = _made_and_used(data, ability)
-    if made is None:
-        return Resources(0, 0)
-    return made.cost if used is None else made.cost - used.cost
-
-
-def _derived_supply(data: GameData, ability: AbilityId) -> float:
-    """What the game's own rows say the ability takes of the cap, before `CHARGED_SUPPLY` corrects them."""
-    made, used = _made_and_used(data, ability)
-    if made is None:
-        return 0.0
-    return made.supply_cost if used is None else made.supply_cost - used.supply_cost
-
-
-def _made_and_used(data: GameData, ability: AbilityId) -> tuple[UnitTypeData | None, UnitTypeData | None]:
-    """The rows of what the ability makes and of what it uses up making one."""
+def _derived(data: GameData, ability: AbilityId) -> tuple[Resources, float]:
+    """What the game's own rows say the ability charges and takes of the cap, before the overrides correct them."""
     product = data.abilities[ability].product
-    if not isinstance(product, UnitTypeId):
-        return (None, None)
-    made = data.units[product]
-    source = made.morphed_from or made.base_type
-    return (made, data.units.get(source) if source is not None else None)
+    derived = None if product is None else _derived_cost(product, data.units, data.upgrades)
+    return derived or (Resources(0, 0), 0.0)
