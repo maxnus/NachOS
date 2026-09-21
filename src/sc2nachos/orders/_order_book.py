@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
@@ -286,17 +286,34 @@ class OrderBook:
         if errored:
             order._error = errored[0]
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
-        if errored and not carrying_out and not set(units) - {error.unit for error in errored}:
-            # The game gave up on every unit it went out for. One of a group failing leaves the rest to settle as
-            # they are, with the error on the order to read.
-            order._state = OrderState.FAILED
-            return
         # The report can come an observation after the unit is seen carrying the order out, so a running order reads
         # it too, and only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
             order._taken_by = taken_by
+        done_with = {error.unit for error in errored} | {unit for unit in units if unit.is_dead}
+        if errored and not carrying_out and not set(units) - done_with:
+            # The game gave up on every unit it went out for that has not died since. One of a group failing leaves
+            # the rest to settle as they are, with the error on the order to read.
+            order._state = OrderState.FAILED
+            return
+        if carrying_out:
+            if not order._seen_carrying:
+                order._seen_carrying = frozenset(
+                    unit for unit in units if self._unit_is_carrying_out_ability(unit, general)
+                )
+        elif all(
+            unit.is_dead and unit.type_id is not UnitTypeId.EGG
+            for unit in order._seen_carrying or order._taken_by or units
+        ):
+            # Every unit seen carrying it out is dead: those the first observation that showed any saw, or where none
+            # was, those the game reported taking it, or every unit it went out for. The game reports a producer
+            # dying and nothing more, so this is the one way a unit carrying nothing out does not mean the order is
+            # done. One of a group that got where it was sent keeps it `DONE`, and so does an egg, which is reported
+            # dead as what it makes hatches (in game).
+            order._state = OrderState.LOST
+            return
         if order.state is OrderState.RUNNING:
             if not carrying_out:
                 order._state = OrderState.DONE

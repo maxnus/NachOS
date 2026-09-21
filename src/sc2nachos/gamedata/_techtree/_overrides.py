@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
+from sc2nachos.gamedata._cost import Cost
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 MISNAMED_RESEARCH_ABILITIES: Final[Mapping[UpgradeId, AbilityId]] = MappingProxyType(
@@ -95,3 +96,33 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
     }
 )
+
+
+COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
+    {
+        # Interceptors are not curated as a unit type, so nothing is derived for them; each costs 15, charged as the
+        # carrier is told to build it.
+        AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
+        # The nova's row carries the disruptor's own 3 supply, and a nova takes none.
+        AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),
+        # A drone's 50 is folded into the row of what it becomes, as an extractor's 75 is, so the hatchery's should
+        # read 350; it reads 325, and taking off the drone leaves 275 of the 300 the game charges.
+        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1),
+        # A gateway turns itself into a warp gate once the research is in, and the game charges nothing. Its row
+        # keeps the gateway's own 150 and names nothing it is made out of.
+        AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
+        # A nuke is not a unit, so nothing is derived for it.
+        AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
+        # One order makes a pair of zerglings, and the row prices one, and its half supply.
+        AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1),
+        # The transport's row reads the same 100 as an overlord's, so the difference comes out as nothing.
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25),
+        # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges.
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0),
+    }
+)
+"""What ordering an ability costs, where the tables get it wrong. Everything else is derived, what the ability makes
+less what that is made out of, which is right for every other morph: an orbital command 150 of its row's 550, its
+cancel giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke and an interceptor have
+no row to derive from. These are the prices the game has always charged (stated), and `tests/test_gamedata.py` holds
+every entry to differing from what the tables derive, so one goes as soon as a patch makes it unnecessary."""

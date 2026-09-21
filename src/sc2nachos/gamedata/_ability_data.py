@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Self, final
@@ -9,13 +10,16 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._techtree._overrides import KEEPS_ORDERS_ABILITIES
+from sc2nachos.gamedata._cost import Cost
+from sc2nachos.gamedata._techtree._overrides import COST_OVERRIDES, KEEPS_ORDERS_ABILITIES
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._unit_type_data import UnitTypeData
+    from sc2nachos.gamedata._upgrade_data import UpgradeData
 
 
 class TargetType(ReadableIntEnum):
@@ -87,6 +91,97 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
     return behaviors
 
 
+# What an ability that makes nothing charges.
+_FREE = Cost(0, 0)
+
+
+def ability_costs(
+    units: Mapping[UnitTypeId, UnitTypeData],
+    upgrades: Mapping[UpgradeId, UpgradeData],
+    tech_tree: TechTree,
+) -> Mapping[AbilityId, Cost]:
+    """What the game charges as each ability is ordered, supply included.
+
+    A type's row holds everything spent to reach it, so a morph is charged the difference from what it is made out
+    of; `COST_OVERRIDES` corrects the few that gets wrong.
+    """
+    costs: dict[AbilityId, Cost] = {}
+    for ability, product in tech_tree.ability_products.items():
+        if (derived := _derived_cost(product, units, upgrades)) is not None:
+            costs[ability] = derived
+    costs.update(COST_OVERRIDES)
+    # A general id takes the price the exact ones it stands for share, as every tech lab's 50/25. A research's stands
+    # for its three levels, which differ, and takes the first's: the one it runs until that is done.
+    prices_of: defaultdict[AbilityId, set[Cost]] = defaultdict(set)
+    first_level: dict[AbilityId, AbilityId] = {}
+    for exact, general in tech_tree.ability_remaps.items():
+        if general in costs:
+            continue
+        prices_of[general].add(costs.get(exact, _FREE))
+        product = tech_tree.ability_products.get(exact)
+        if isinstance(product, UpgradeId) and tech_tree.upgrade_levels.get(product) == 1:
+            first_level[general] = exact
+    for general, prices in prices_of.items():
+        if len(prices) == 1:
+            costs[general] = next(iter(prices))
+        elif general in first_level:
+            costs[general] = costs.get(first_level[general], _FREE)
+    return costs
+
+
+def cancel_abilities(
+    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+) -> Mapping[AbilityId, AbilityId]:
+    """The cancel that takes each ability back off a structure carrying it out, for those that have one.
+
+    A train or a research is taken back by `GENERAL_CANCEL_LAST`, which every queue cancel stands for, where each type
+    it is offered to keeps a queue: a warp gate keeps none (in game). A morph, an add-on and arming a nuke take the
+    cancel they were seen offered (tool `sweep_tech_tree`), and a general id the cancel the exact ones it stands for
+    share.
+    """
+    keeps_a_queue = {
+        unit_type
+        for unit_type, abilities in tech_tree.ability_requirements.items()
+        if any(_is_queue_cancel(ability, tech_tree) for ability in abilities)
+    }
+    cancels = dict(tech_tree.ability_cancels)
+    for ability, behavior in behaviors.items():
+        performers = tech_tree.ability_performers.get(ability, frozenset())
+        if behavior is OrderBehavior.QUEUES and performers and performers <= keeps_a_queue:
+            cancels[ability] = AbilityId.GENERAL_CANCEL_LAST
+    cancels_of: defaultdict[AbilityId, set[AbilityId | None]] = defaultdict(set)
+    for exact, general in tech_tree.ability_remaps.items():
+        if general not in cancels:
+            cancels_of[general].add(cancels.get(exact))
+    for general, shared in cancels_of.items():
+        if len(shared) == 1 and (cancel := next(iter(shared))) is not None:
+            cancels[general] = cancel
+    return cancels
+
+
+def _is_queue_cancel(ability: AbilityId, tech_tree: TechTree) -> bool:
+    """Whether `ability` takes back the last thing a queue holds, which the game says by remapping it onto
+    `GENERAL_CANCEL_LAST`."""
+    return AbilityId.GENERAL_CANCEL_LAST in (ability, tech_tree.ability_remaps.get(ability))
+
+
+def _derived_cost(
+    product: UnitTypeId | UpgradeId, units: Mapping[UnitTypeId, UnitTypeData], upgrades: Mapping[UpgradeId, UpgradeData]
+) -> Cost | None:
+    """What the game's rows say the ability that makes `product` costs: an upgrade's cost, or a unit type's less that
+    of what it is made out of. `None` where the tables have no row for it or for what it is made out of."""
+    if isinstance(product, UpgradeId):
+        upgrade = upgrades.get(product)
+        return None if upgrade is None else upgrade.cost
+    if (made := units.get(product)) is None:
+        return None
+    source = made.morphed_from or made.base_type
+    if source is None:
+        return made.cost
+    used = units.get(source)
+    return None if used is None else made.cost - used.cost
+
+
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types the game offers a move, which are the ones an order can take off what they are doing.
 
@@ -128,15 +223,36 @@ class AbilityData:
     reports, such as `LIBERATOR_SIEGE_EXACT`."""
     product: UnitTypeId | UpgradeId | None
     """The unit type it makes, or the upgrade it researches."""
+    cost: Cost
+    """What the game takes as it is ordered, which for a morph is the difference from what it is made out of: 150 for
+    an orbital command, not the 550 its type's row holds as everything spent to reach it. Its supply is taken as what
+    it makes starts, less what the unit it uses up gives back: 1 for a marine, -1 for a spawning pool, 0 for a
+    baneling. A general id holds the cost the exact ones it stands for share, and a research's the first level's, which
+    is what it runs until that level is done: budget a later level by its exact id. An ability that makes nothing
+    costs nothing."""
+    cancelled_by: AbilityId | None
+    """The cancel that takes this back off a structure carrying it out. For a train or a research it is
+    `GENERAL_CANCEL_LAST`, which every structure's own queue cancel stands for and which takes the last item off a
+    barracks, an engineering bay and a command center alike (in game). A morph and an add-on have their own, since
+    `GENERAL_CANCEL_LAST` is answered `ERROR` by those: `COMMAND_CENTER_CANCEL_ORBITAL_COMMAND` for the orbital morph,
+    `BARRACKS_CANCEL_ADD_ON` for either add-on (tool `sweep_tech_tree`). A general id holds the cancel the exact
+    ones it stands for share, and none where they differ, as a general add-on's do: send the exact id's. `None` for
+    anything else, a warp-in and a build among them: a warp gate keeps no queue, and a structure going up is
+    cancelled on itself, with `GENERAL_CANCEL_BUILDING`."""
     behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 
     @classmethod
     def from_proto(
-        cls, data: data_pb2.AbilityData, tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+        cls,
+        data: data_pb2.AbilityData,
+        tech_tree: TechTree,
+        behaviors: Mapping[AbilityId, OrderBehavior],
+        costs: Mapping[AbilityId, Cost],
+        cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
-        """Read one ability out of the game's tables, with what `tech_tree` and `behaviors` found about it in
-        game."""
+        """Read one ability out of the game's tables, with what `tech_tree`, `behaviors`, `costs` and `cancels`
+        found about it in game."""
         ability = AbilityId(data.ability_id)
         return cls(
             id=ability,
@@ -148,5 +264,7 @@ class AbilityData:
             remaps_to=AbilityId.get(data.remaps_to_ability_id),
             performers=tech_tree.ability_performers.get(ability, frozenset()),
             product=tech_tree.ability_products.get(ability),
+            cost=costs.get(ability, _FREE),
+            cancelled_by=cancels.get(ability),
             behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

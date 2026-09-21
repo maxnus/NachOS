@@ -43,6 +43,7 @@ class AbilityId(IdEnum):
     BANSHEE_CLOAK_ON = RawAbilityId.Behavior_CloakOn_Banshee
     BARRACKS_BUILD_REACTOR = RawAbilityId.Build_Reactor_Barracks
     BARRACKS_BUILD_TECH_LAB = RawAbilityId.Build_TechLab_Barracks
+    BARRACKS_CANCEL_ADD_ON = RawAbilityId.Cancel_BarracksAddOn
     BARRACKS_LAND = RawAbilityId.Land_Barracks
     BARRACKS_LIFT = RawAbilityId.Lift_Barracks
     BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD = RawAbilityId.Research_CombatShield
@@ -67,6 +68,8 @@ class AbilityId(IdEnum):
     BUNKER_UNLOAD_AT = RawAbilityId.BunkerTransport
     CARRIER_BUILD_INTERCEPTORS = RawAbilityId.Build_Interceptors
     CARRIER_CANCEL_INTERCEPTOR = RawAbilityId.Cancel_HangarQueue5
+    COMMAND_CENTER_CANCEL_ORBITAL_COMMAND = RawAbilityId.Cancel_MorphOrbital
+    COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS = RawAbilityId.Cancel_MorphPlanetaryFortress
     COMMAND_CENTER_LAND = RawAbilityId.Land_CommandCenter
     COMMAND_CENTER_LIFT = RawAbilityId.Lift_CommandCenter
     COMMAND_CENTER_LOAD_ALL = RawAbilityId.LoadAll_CommandCenter
@@ -136,6 +139,7 @@ class AbilityId(IdEnum):
     EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3 = RawAbilityId.Research_ZergMissileWeaponsLevel3
     FACTORY_BUILD_REACTOR = RawAbilityId.Build_Reactor_Factory
     FACTORY_BUILD_TECH_LAB = RawAbilityId.Build_TechLab_Factory
+    FACTORY_CANCEL_ADD_ON = RawAbilityId.Cancel_FactoryAddOn
     FACTORY_LAND = RawAbilityId.Land_Factory
     FACTORY_LIFT = RawAbilityId.Lift_Factory
     FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME = RawAbilityId.Research_InfernalPreigniter
@@ -183,9 +187,14 @@ class AbilityId(IdEnum):
     GENERAL_CANCEL = RawAbilityId.Cancel
     GENERAL_CANCEL_BUILDING = RawAbilityId.Cancel_BuildInProgress
     GENERAL_CANCEL_LAST = RawAbilityId.Cancel_Last
-    # What a structure cancels the last thing it queued with, in one kind of queue or the other, both remapping to
-    # CANCEL_LAST. Which structures have which is in the tables' performers.
+    # What a structure cancels the last thing it queued with, by the kind of queue it keeps, each remapping to
+    # CANCEL_LAST; a tech lab keeps a queue of its own for its research. Which structures have which is in the
+    # tables' performers. A morph or an add-on takes none of them, answering CANCEL_LAST `Error`, and is cancelled by
+    # its own: COMMAND_CENTER_CANCEL_ORBITAL_COMMAND, COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR,
+    # LAIR_CANCEL_HIVE and SPIRE_CANCEL_GREATER_SPIRE for a morph, and BARRACKS_CANCEL_ADD_ON, FACTORY_CANCEL_ADD_ON
+    # and STARPORT_CANCEL_ADD_ON for either add-on (in game).
     GENERAL_CANCEL_QUEUE = RawAbilityId.Cancel_Queue5
+    GENERAL_CANCEL_QUEUE_ADD_ON = RawAbilityId.Cancel_QueueAddOn
     GENERAL_CANCEL_QUEUE_TO_SELECTION = RawAbilityId.Cancel_QueueCancelToSelection
     GENERAL_CLOAK_OFF = RawAbilityId.Behavior_CloakOff
     GENERAL_CLOAK_ON = RawAbilityId.Behavior_CloakOn
@@ -451,6 +460,7 @@ class AbilityId(IdEnum):
     STARGATE_TRAIN_VOID_RAY = RawAbilityId.StargateTrain_VoidRay
     STARPORT_BUILD_REACTOR = RawAbilityId.Build_Reactor_Starport
     STARPORT_BUILD_TECH_LAB = RawAbilityId.Build_TechLab_Starport
+    STARPORT_CANCEL_ADD_ON = RawAbilityId.Cancel_StarportAddOn
     STARPORT_LAND = RawAbilityId.Land_Starport
     STARPORT_LIFT = RawAbilityId.Lift_Starport
     STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK = RawAbilityId.Research_BansheeCloakingField

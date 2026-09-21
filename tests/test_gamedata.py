@@ -1,19 +1,72 @@
 """The tables a game is played by, read from tables written here and from the recorded games."""
 
+import math
 import re
 from pathlib import Path
 
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import Attribute, GameData, OrderBehavior, Resources, TargetDomain, TargetType
-from sc2nachos.gamedata._techtree import KEEPS_ORDERS_ABILITIES, MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES
+from sc2nachos.gamedata import (
+    Attribute,
+    Cost,
+    GameData,
+    OrderBehavior,
+    Resources,
+    TargetDomain,
+    TargetType,
+)
+from sc2nachos.gamedata._ability_data import _derived_cost
+from sc2nachos.gamedata._techtree import (
+    COST_OVERRIDES,
+    KEEPS_ORDERS_ABILITIES,
+    MISNAMED_RESEARCH_ABILITIES,
+    TECH_TREE,
+    UNNAMED_CREATION_ABILITIES,
+)
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
+
+# What the game takes as each of these is ordered, against what its type's row holds. A morph, an add-on and a
+# structure going up were each seen charged as the jump in the purse cancelling one gives back, three quarters
+# rounded up (tool `sweep_orders`, docs/game-behavior.md); the rest are what the game has always charged (stated).
+_CHARGED = {
+    AbilityId.BARRACKS_BUILD_REACTOR: Cost(50, 50),
+    AbilityId.BARRACKS_BUILD_TECH_LAB: Cost(50, 25),
+    AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: Cost(100, 100),
+    AbilityId.BARRACKS_TRAIN_MARINE: Cost(50, 0, 1),
+    AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
+    AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Cost(150, 0),
+    AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: Cost(150, 150),
+    AbilityId.COMMAND_CENTER_TRAIN_SCV: Cost(50, 0, 1),
+    AbilityId.DRONE_MORPH_EXTRACTOR: Cost(25, 0, -1),
+    AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1),
+    AbilityId.DRONE_MORPH_SPAWNING_POOL: Cost(200, 0, -1),
+    AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
+    AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
+    AbilityId.HATCHERY_MORPH_LAIR: Cost(150, 100),
+    AbilityId.LAIR_MORPH_HIVE: Cost(200, 150),
+    AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1),
+    AbilityId.NEXUS_TRAIN_PROBE: Cost(50, 0, 1),
+    AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25),
+    AbilityId.PROBE_BUILD_PYLON: Cost(100, 0),
+    AbilityId.ROACH_MORPH_RAVAGER: Cost(25, 75, 1),
+    AbilityId.SCV_BUILD_SUPPLY_DEPOT: Cost(100, 0),
+    AbilityId.ZERGLING_MORPH_BANELING: Cost(25, 25),
+}
+
+# What cancelling one gave back, at real prices, over the observation the cancel landed in (tool `sweep_orders`).
+_REFUNDED = {
+    AbilityId.BARRACKS_BUILD_TECH_LAB: Resources(38, 19),
+    AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Resources(113, 0),
+    AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: Resources(113, 113),
+    AbilityId.SCV_BUILD_SUPPLY_DEPOT: Resources(75, 0),
+}
+
 
 # The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling,
 # which an armory is never offered and which does nothing when ordered, and which no curated id names.
@@ -118,6 +171,24 @@ class TestResources:
         assert sum(costs, start=Resources(0, 0)) == Resources(150, 100)
 
 
+class TestCost:
+    def test_a_cost_adds_subtracts_and_scales_its_supply_with_the_rest(self) -> None:
+        marine = Cost(50, 0, 1)
+        assert marine + Cost(100, 25, 2) == Cost(150, 25, 3)
+        assert Cost(550, 0, 0) - Cost(400, 0, 0) == Cost(150, 0)
+        assert 3 * marine == marine * 3 == Cost(150, 0, 3)
+
+    def test_a_cost_shares_out_and_negates_as_resources_do(self) -> None:
+        assert Cost(150, 0, 3) / 3 == Cost(50, 0, 1)
+        assert -Cost(50, 25, 1) == Cost(-50, -25, -1)
+
+    def test_a_cost_holds_its_minerals_and_vespene_as_resources_for_the_purse(self) -> None:
+        """Supply is room under the cap, not something a player holds, so it is left out."""
+        cost = Cost(150, 100, 2)
+        assert cost.resources == Resources(150, 100)
+        assert Resources(200, 100).covers(cost.resources)
+
+
 class TestReadingTheTables:
     def test_a_unit_type_is_read_under_the_curated_id_that_names_it(self) -> None:
         """A row carries no name of its own: the id is the name, and the catalog spelling comes off that."""
@@ -125,8 +196,7 @@ class TestReadingTheTables:
         marine = data.units[UnitTypeId.MARINE]
         assert marine.id is UnitTypeId.MARINE
         assert marine.race is Race.TERRAN
-        assert marine.cost == Resources(minerals=50, vespene=0)
-        assert marine.supply_cost == 1.0
+        assert marine.cost == Cost(minerals=50, vespene=0, supply=1)
         assert marine.attributes == {Attribute.LIGHT, Attribute.BIOLOGICAL}
         assert marine.creation_ability is AbilityId.BARRACKS_TRAIN_MARINE
 
@@ -200,7 +270,7 @@ class TestReadingTheTables:
         )
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
-        assert row.cost == Resources(minerals=100, vespene=100)
+        assert row.cost == Cost(minerals=100, vespene=100)
         assert row.research_steps == 2240.0
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
@@ -377,6 +447,98 @@ class TestARecordedGamesTables:
         # The build time is the morph alone, so it is shorter than building what it morphed from took.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
+    def test_an_ability_is_charged_what_the_game_takes_as_it_is_ordered(self, path: Path) -> None:
+        """Not what its type's row holds, which for a morph is everything spent to reach it."""
+        data = _tables(path)
+        charged = {ability: data.abilities[ability].cost for ability in _CHARGED}
+        assert charged == _CHARGED
+
+    def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
+        """What a cancel gives back does not turn on how far the work got, so a refund measured in game says what the
+        order was charged, which is what these costs are held to."""
+        data = _tables(path)
+        for ability, refund in _REFUNDED.items():
+            cost = data.abilities[ability].cost
+            given_back = Resources(math.ceil(cost.minerals * 3 / 4), math.ceil(cost.vespene * 3 / 4))
+            assert given_back == refund, f"{ability.name} is charged {cost}"
+
+    def test_a_cost_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
+        """Once the game's own rows give a price away, the entry can go."""
+        data = _tables(path)
+        for ability, cost in COST_OVERRIDES.items():
+            assert _derived(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
+
+    def test_a_general_id_holds_the_price_what_it_stands_for_shares_or_the_first_level(self, path: Path) -> None:
+        """Any tech lab is 50/25, and a general research runs its first level until that is done."""
+        data = _tables(path)
+        assert data.abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cost == Cost(50, 25)
+        levels = (
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3,
+        )
+        assert [data.abilities[level].cost for level in levels] == [
+            Cost(100, 100),
+            Cost(150, 150),
+            Cost(200, 200),
+        ]
+        assert data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS].cost == Cost(100, 100)
+
+    def test_every_general_id_that_makes_something_has_a_price(self, path: Path) -> None:
+        """None is left at nothing because what it stands for differs."""
+        data = _tables(path)
+        for exact, general in TECH_TREE.ability_remaps.items():
+            if exact in data.abilities and data.abilities[exact].cost != Cost(0, 0):
+                assert data.abilities[general].cost != Cost(0, 0), general.name
+
+    def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
+        """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""
+        data = _tables(path)
+        for ability in (AbilityId.MARINE_STIM, AbilityId.GENERAL_MOVE, AbilityId.GENERAL_CANCEL_LAST):
+            assert data.abilities[ability].cost == Cost(0, 0)
+
+    def test_a_morph_and_an_add_on_name_the_cancel_the_game_offers_for_them(self, path: Path) -> None:
+        """A command center morphing is offered another cancel than one training, and another again by which morph
+        it is running, so which cancel to send turns on the work (tool `sweep_tech_tree`)."""
+        data = _tables(path)
+        for ability, cancel in (
+            (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND),
+            (AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS, AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS),
+            (AbilityId.BARRACKS_BUILD_TECH_LAB, AbilityId.BARRACKS_CANCEL_ADD_ON),
+            (AbilityId.BARRACKS_BUILD_REACTOR, AbilityId.BARRACKS_CANCEL_ADD_ON),
+            (AbilityId.FACTORY_BUILD_TECH_LAB, AbilityId.FACTORY_CANCEL_ADD_ON),
+            (AbilityId.FACTORY_BUILD_REACTOR, AbilityId.FACTORY_CANCEL_ADD_ON),
+            (AbilityId.STARPORT_BUILD_TECH_LAB, AbilityId.STARPORT_CANCEL_ADD_ON),
+            (AbilityId.STARPORT_BUILD_REACTOR, AbilityId.STARPORT_CANCEL_ADD_ON),
+            (AbilityId.HATCHERY_MORPH_LAIR, AbilityId.HATCHERY_CANCEL_LAIR),
+            (AbilityId.LAIR_MORPH_HIVE, AbilityId.LAIR_CANCEL_HIVE),
+        ):
+            assert data.abilities[ability].cancelled_by is cancel, ability.name
+        assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
+
+    def test_a_train_or_a_research_is_cancelled_by_the_general_queue_cancel_where_there_is_a_queue(
+        self, path: Path
+    ) -> None:
+        """Every queue cancel stands for it, so it is right whatever the structure: an SCV is trained from a command
+        center and from a planetary fortress, which are offered different ones, and a tech lab researching took it
+        (tool `sweep_tech_tree`). A warp gate keeps no queue, so what it warps in has no cancel."""
+        data = _tables(path)
+        for ability in (
+            AbilityId.BARRACKS_TRAIN_MARINE,
+            AbilityId.COMMAND_CENTER_TRAIN_SCV,
+            AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
+            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS,
+        ):
+            assert data.abilities[ability].cancelled_by is AbilityId.GENERAL_CANCEL_LAST, ability.name
+        warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
+        assert warp_ins
+        assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
+
+    def test_a_general_id_holds_a_cancel_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
+        """A tech lab on a barracks, a factory and a starport is each taken back by its host's own cancel."""
+        assert _tables(path).abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cancelled_by is None
+
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
         for upgrade in UpgradeId:
@@ -405,3 +567,10 @@ class TestARecordedGamesTables:
             (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
         ):
             assert data.units[unit].base_type is base
+
+
+def _derived(data: GameData, ability: AbilityId) -> Cost:
+    """What the game's own rows say the ability costs, before the overrides correct them."""
+    product = data.abilities[ability].product
+    derived = None if product is None else _derived_cost(product, data.units, data.upgrades)
+    return derived or Cost(0, 0)

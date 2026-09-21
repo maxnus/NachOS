@@ -137,9 +137,14 @@ reads it, is in [game-behavior.md](game-behavior.md).
   it was carried out, and whether it has finished. python-sc2 hands back nothing.
 - **A unit takes one order a turn, the last it was given**, besides the abilities it carries out at once. There is
   no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
-- **Nothing is subtracted as you order.** python-sc2's `subtract_cost` keeps its own tally; NachOS reads what the
-  game reports, which already counts a build's cost from the step it was ordered
-  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
+  NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
+  ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
+  the game's verdict says whether it was taken. A bot keeps its own budget within a turn
+  ([orders](orders.md#what-an-order-needs)).
+- **An order whose unit died before it was done reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice;
+  NachOS says so, since the game reports a producer killed half way through what it was making as dying and nothing
+  more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
   unqueued order the same as a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free after all. NachOS holds it back and the order reads `RUNNING`;
@@ -417,9 +422,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Resources` without the time |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene and supply, without the time |
 | `unit_data.cost.time` | `unit_data.build_steps` |
-| `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_cost`, `unit_data.supply_provided` |
+| `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons` |
 | `unit_data.unit_alias` | `unit_data.base_type` |
@@ -431,7 +436,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
-| `game_data.calculate_ability_cost(a)` | nothing; see below |
+| `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
+| `bot.calculate_supply_cost(t)` | `unit_data.cost.supply`, the type's own; `ability_data.cost.supply` of what makes it counts what the order frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
+| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
@@ -475,17 +482,22 @@ reads it, is in [game-behavior.md](game-behavior.md).
   `MEDIVAC_UNLOAD_AT` put everyone down at once.
 - **A row's `id` is its own.** python-sc2's `AbilityData.id` answers the generic id the ability remaps to, and
   `exact_id` the row's own. NachOS keeps `id` the row's own and puts `remaps_to` beside it.
-- **A cost is minerals and vespene, and times are seconds beside it.** python-sc2's `Cost` carries a `time`
+- **A cost is minerals, vespene and supply, and times are steps beside it.** python-sc2's `Cost` carries a `time`
   in steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong
-  nearly everywhere. NachOS has `Resources`, which adds, subtracts, scales, divides and answers `covers`, and
-  `build_steps` and `research_steps` are their own fields. Its amounts are fractional, since half a
-  cost and an average cost are ordinary things to want; what the game gave stays whole until something divides
-  it.
-- **The cost of a morph is everything spent to reach it, and its build time is only the last step.** An orbital
-  command is 550 minerals, the command center's 400 included, and 25 seconds, the morph alone. python-sc2
-  subtracts the predecessor in `morph_cost` and `calculate_ability_cost`, reading a hand-written
-  `UNIT_TRAINED_FROM` and hard-coding that zerglings come in pairs and that a baneling really costs 25/25.
-  NachOS hands back the game's numbers as they stand, and `morphed_from` says what to subtract.
+  nearly everywhere. NachOS's `Cost` adds, subtracts and scales, supply included, and `build_steps` and
+  `research_steps` are their own fields. What a player holds is `Resources`, minerals and vespene alone, which adds,
+  subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
+  fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole
+  until something divides it.
+- **A unit type's cost is everything spent to reach it; an ability's is what the game charges.** An orbital
+  command's row reads 550 minerals, the command center's 400 included, and its build time is the 25 seconds of the
+  morph alone, so `unit_data.cost` hands the game's number back as it stands and `morphed_from` says what to
+  subtract. `ability_data.cost` has it subtracted already: `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` charges 150, an
+  extractor 25 and a baneling 25/25. python-sc2 does the same in `morph_cost` and `calculate_ability_cost` off a
+  hand-written `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, the game's rows now pricing a
+  reactor 50/50 and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325
+  rather than the drone's 50 and a hatchery's 300. A general research id, which stands for three levels, holds the
+  first level's price, which is what it runs until that level is done.
 - **What relates the tables to each other was swept in game, not read from the game's files**, since
   `RequestData` holds little of it ([game behavior](game-behavior.md#upgrades-and-the-games-tables)). python-sc2's
   dicts come from sc2-techtree, which read an older patch's data files; NachOS's come from
@@ -508,8 +520,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   to cancel, halt or unload. What a gateway warps in is not curated yet, so a warp gate trains nothing in the tables.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
-  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. Take the price of a morph as its
-  `cost` less that of what it came from; python-sc2's `calculate_ability_cost` does it with a hand-written table.
+  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. The price of a morph is its
+  `cost` less that of what it came from, which `ability_data.cost` has done already.
 - **What an upgrade changes was swept in game too, and is added, not multiplied.** python-sc2 writes
   `DAMAGE_BONUS_PER_UPGRADE` and its speed dicts by hand, the speeds as factors. `unit_data.upgrades` holds what
   `tools/sweep_upgrades.py` read off the game's rows after each upgrade, and every upgrade raising a level the type's

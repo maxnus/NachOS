@@ -41,7 +41,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from _sandbox import NEUTRAL, SUCCESS, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
@@ -92,7 +92,19 @@ _NOT_SWITCHES += (
 _WORKERS = {Race.TERRAN: UnitTypeId.SCV, Race.PROTOSS: UnitTypeId.PROBE, Race.ZERG: UnitTypeId.DRONE}
 # What a structure is set making while its cancel is read, arming a nuke among it.
 _MAKING = ("Train", "Research", "UpgradeTo", "Build")
+# Of those, the work a structure's one queue cancel takes back, which `GENERAL_CANCEL_LAST` stands for: each kind is
+# tried once per structure and paired with no cancel. Each morph and each add-on is tried and paired with the cancel
+# it was offered (tool `sweep_orders`).
+_QUEUE_WORK = ("Train", "Research")
+# How far from a structure an add-on of its stands, and then some.
+_ADD_ON_REACH = 4
+# How long a structure set working is read for, which is less than anything takes to make with `fast_build` off.
+_BUSY_STEPS = 24
+# What the game remaps every cancel onto, in the raw catalog's spelling.
+_CANCELS = ("Cancel", "Cancel_Last")
 _STRUCTURE_ROOM = 4
+# How far from a unit put up for a trial the computer's units are cleared, which is past any unit's sight.
+_ENEMIES_CLEARED_WITHIN = 16
 # What a new unit is not ordered at a target to see what it is offered while it carries the order out: anything that
 # sends it somewhere, gathers, loads or builds, none of which is a channel.
 _NOT_CASTS = ("Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest", "Load", "Unload", "Land", "Build")
@@ -122,6 +134,8 @@ class Findings:
     made: dict[tuple[str, str, str], str] = field(default_factory=dict)
     powered: set[str] = field(default_factory=set)
     races: set[str] = field(default_factory=set)
+    # The cancel a structure was offered for each morph and add-on it was set making, and for arming a nuke.
+    cancels: dict[str, str] = field(default_factory=dict)
     # What the game's own tables say: the general ability each one stands for, and what makes and researches what.
     remaps: dict[str, str] = field(default_factory=dict)
     creation_abilities: dict[str, str] = field(default_factory=dict)
@@ -148,6 +162,7 @@ class Findings:
                 for (performer, ability, product), result in sorted(self.made.items())
             ],
             "powered": sorted(self.powered),
+            "cancels": dict(sorted(self.cancels.items())),
             "remaps": dict(sorted(self.remaps.items())),
             "creation_abilities": dict(sorted(self.creation_abilities.items())),
             "research_abilities": dict(sorted(self.research_abilities.items())),
@@ -209,6 +224,8 @@ class TechSweep:
         self._pad = self._sandbox
         self._structure_types = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
         self._on_the_way: set[Pair] = set()
+        # The pylons put up to power a unit, by its tag, for `_clear`.
+        self._powering: dict[int, list[int]] = {}
         self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
 
     # --- Reading the game
@@ -390,11 +407,19 @@ class TechSweep:
                 ability for fragment, ability in _BUILD_ADD_ON.items() if fragment in _unit_name(add_on.unit_type)
             )
             if host is not None:
+                self._clear_enemies_near(Point((add_on.pos.x, add_on.pos.y)))
                 self._game.order(kind, host, Point((add_on.pos.x - 2.5, add_on.pos.y + 0.5)))
             else:
                 logger.warning("No host found to rebuild a {} on", _unit_name(add_on.unit_type))
         if add_ons:
             self._client.step(22 * 3)
+            standing = {(unit.unit_type, round(unit.pos.x), round(unit.pos.y)) for unit in self._mine()}
+            if lost := [
+                _unit_name(add_on.unit_type)
+                for add_on in add_ons.values()
+                if (add_on.unit_type, round(add_on.pos.x), round(add_on.pos.y)) not in standing
+            ]:
+                logger.warning("{} not built again, so what needs one is misread from here", lost)
         self._charge()
         self._client.step(2)
 
@@ -505,11 +530,7 @@ class TechSweep:
         for unit in sorted(self._mine(), key=lambda unit: unit.tag):
             if unit.unit_type in busy or unit.orders:
                 continue
-            makes = [
-                ability
-                for ability in self._game.offered([unit.tag])[unit.tag]
-                if self._targets.get(ability) == _NOTHING and any(verb in _ability_name(ability) for verb in _MAKING)
-            ]
+            makes = [ability for ability in self._ways_to_be_busy(unit.tag) if self._targets.get(ability) == _NOTHING]
             if makes and self._game.order(makes[0], unit.tag) == SUCCESS:
                 busy.add(unit.unit_type)
         self._client.step(2)
@@ -517,6 +538,185 @@ class TechSweep:
         found |= self._build_something()
         found |= self._carry_something()
         self.read_requirements(found)
+
+    def sweep_cancels(self) -> None:
+        """What each structure is offered while it is busy, in each way it can be busy.
+
+        A structure is offered one cancel, and which one turns on what it is making: a command center training is
+        offered `Cancel_QueueCancelToSelection`, one morphing to an orbital command `Cancel_MorphOrbital` and one
+        morphing to a planetary fortress `Cancel_MorphPlanetaryFortress`, and a barracks building an add-on
+        `Cancel_BarracksAddOn` (tool `sweep_orders`). Each way is read on a structure put up for it, since a morph
+        leaves the structure another type and an add-on takes the ground beside it. The phase runs before
+        `research_everything`, which would leave a research structure nothing to research.
+
+        `fast_build` is off for the phase: under it a marine or an add-on can be done within the step its order
+        lands in, before the structure is first read, and a cancel is offered only while the work goes on.
+        """
+        found: set[Pair] = set()
+        self._game.cheat("fast_build")
+        try:
+            for unit_type in sorted(set(self._race_types()) & self._structure_types, key=lambda one: one.name):
+                for raw in self._ways_to_try(unit_type):
+                    found |= self._read_while_busy(unit_type, raw)
+            for host in sorted(_ADD_ONS, key=lambda one: one.name) if self._race is Race.TERRAN else ():
+                found |= self._read_tech_lab_researching(_ADD_ONS[host][0])
+        finally:
+            # A cheat is a toggle, so the same command turns it back on.
+            self._game.cheat("fast_build")
+        self.read_requirements(found)
+
+    def _read_tech_lab_researching(self, unit_type: UnitTypeId) -> set[Pair]:
+        """What a tech lab of `unit_type` is offered while it researches, and whether `GENERAL_CANCEL_LAST` takes the
+        research back, which is what `cancelled_by` names for it.
+
+        Only a structure puts a tech lab up, and one put up alone is offered no research, so the one standing on its
+        host since the start is used, and left idle again.
+        """
+        standing = next((unit for unit in self._mine() if unit.unit_type == unit_type and not unit.orders), None)
+        ways = [] if standing is None else self._worth_trying(self._ways_to_be_busy(standing.tag))
+        research = next(iter(ways), None)
+        if standing is None or research is None:
+            logger.warning("No {} standing idle and offered a research", unit_type.name)
+            return set()
+        if self._game.order(research, standing.tag) != SUCCESS:
+            logger.warning("A {} would not run {}", unit_type.name, _ability_name(research))
+            return set()
+        found, busy = self._read_until_idle(standing.tag)
+        if not busy:
+            logger.warning("A {} set to {} was never seen busy", unit_type.name, _ability_name(research))
+        answer = self._game.order(int(AbilityId.GENERAL_CANCEL_LAST), standing.tag)
+        self._client.step(2)
+        after = next((unit for unit in self._mine() if unit.tag == standing.tag), None)
+        took_back = answer == SUCCESS and after is not None and not after.orders
+        logger.log(
+            "INFO" if took_back else "WARNING",
+            "GENERAL_CANCEL_LAST {} a {}'s {}",
+            "took back" if took_back else "did not take back",
+            unit_type.name,
+            _ability_name(research),
+        )
+        return found
+
+    def _ways_to_try(self, unit_type: UnitTypeId) -> list[int]:
+        """Every way a structure of `unit_type` can be set working that is worth a trial, read off one standing idle
+        or off one put up to be read."""
+        # One with an add-on already is offered none, so it would hide that way of being busy.
+        standing = next(
+            (unit for unit in self._mine() if unit.unit_type == unit_type and not unit.orders and not unit.add_on_tag),
+            None,
+        )
+        if standing is not None:
+            return self._worth_trying(self._ways_to_be_busy(standing.tag))
+        fresh = self._put_up(unit_type, self._pad - (1, 0))
+        if fresh is None:
+            return []
+        ways = self._worth_trying(self._ways_to_be_busy(fresh.tag))
+        self._clear(self._with_add_on(fresh.tag))
+        return ways
+
+    def _read_while_busy(self, unit_type: UnitTypeId, raw: int) -> set[Pair]:
+        """What a structure put up for it is offered while `raw` has it working, read at every step, and everything
+        the trial put up cleared again however it ended."""
+        before = {unit.tag for unit in self._game.units()}
+        try:
+            unit = self._performer(unit_type, AbilityId.read(raw))
+            if unit is None:
+                return set()
+            kind = _kind_of_work(raw)
+            if self._game.order(raw, unit.tag, self._aim_for(raw, unit)) != SUCCESS:
+                logger.warning("A {} would not run {}", unit_type.name, _ability_name(raw))
+                return set()
+            found, busy = self._read_until_idle(unit.tag)
+            if not busy:
+                logger.warning(
+                    "A {} set to {} was never seen busy, so what it is offered then is unread",
+                    unit_type.name,
+                    _ability_name(raw),
+                )
+            cancels = sorted({ability for _, ability in found if self._is_cancel(ability)})
+            if len(cancels) > 1:
+                # A structure is offered one cancel for what it is making, so more than one means the trial read
+                # something else as well, and which one belongs to this work cannot be told from here.
+                logger.warning(
+                    "A {} set to {} was offered {} cancels, so which is for it is not recorded: {}",
+                    unit_type.name,
+                    _ability_name(raw),
+                    len(cancels),
+                    cancels,
+                )
+            if len(cancels) == 1 and kind not in _QUEUE_WORK:
+                self.findings.cancels[_ability_name(raw)] = cancels[0]
+            logger.info("A {} set to {} was offered {}", unit_type.name, _ability_name(raw), cancels or "no cancel")
+            return found
+        finally:
+            self._clear({unit.tag for unit in self._mine() if unit.tag not in before})
+
+    def _is_cancel(self, ability: str) -> bool:
+        """Whether `ability` takes back what a unit is doing, which the game says by remapping every one of them
+        onto one of its two general cancels."""
+        return self.findings.remaps.get(ability) in _CANCELS or ability in _CANCELS
+
+    def _read_until_idle(self, tag: int) -> tuple[set[Pair], bool]:
+        """What the unit `tag` is offered at each step until it is making nothing again, or is gone, and whether it
+        was ever seen busy."""
+        found: set[Pair] = set()
+        busy = False
+        for _ in range(_BUSY_STEPS):
+            self._client.step(1)
+            unit = next((one for one in self._mine() if one.tag == tag), None)
+            if unit is None:
+                break
+            found |= self._pairs(self._read([tag]))
+            if unit.orders:
+                busy = True
+            elif busy:
+                break
+        return found, busy
+
+    def _ways_to_be_busy(self, tag: int) -> list[int]:
+        """Every ability the unit `tag` is offered that sets it making something, an add-on among them, sorted so
+        that a rerun of the sweep sets each structure making the same thing first."""
+        return sorted(
+            ability
+            for ability in self._game.offered([tag])[tag]
+            if self._targets.get(ability) in (_NOTHING, _POINT_OR_NOTHING) and _kind_of_work(ability) is not None
+        )
+
+    def _worth_trying(self, abilities: Sequence[int]) -> list[int]:
+        """Every way of being busy worth a trial of its own, leaving out what no curated id names: one train and one
+        research, and every morph and every add-on."""
+        once: set[str] = set()
+        chosen: list[int] = []
+        for ability in abilities:
+            kind = _kind_of_work(ability)
+            if kind is None or AbilityId.get(ability) is None:
+                continue
+            if kind in _QUEUE_WORK:
+                if kind in once:
+                    continue
+                once.add(kind)
+            chosen.append(ability)
+        return chosen
+
+    def _aim_for(self, ability: int, unit: raw_pb2.Unit) -> Point | None:
+        """Where an ability that sets `unit` making something is aimed: its own ground for an add-on, which the game
+        puts beside it, and nowhere for everything else."""
+        return Point((unit.pos.x, unit.pos.y)) if self._targets.get(ability) == _POINT_OR_NOTHING else None
+
+    def _with_add_on(self, tag: int) -> set[int]:
+        """The unit `tag` with the add-on it has and any going up beside it, which would otherwise be left standing
+        on ground the next trial wants."""
+        unit = next((one for one in self._mine() if one.tag == tag), None)
+        if unit is None:
+            return {tag}
+        beside = {
+            one.tag
+            for one in self._mine()
+            if _is_add_on(_unit_name(one.unit_type))
+            and abs(one.pos.x - unit.pos.x) < _ADD_ON_REACH
+            and abs(one.pos.y - unit.pos.y) < _ADD_ON_REACH
+        }
+        return {tag, *beside} | ({unit.add_on_tag} if unit.add_on_tag else set())
 
     def _carry_something(self) -> set[Pair]:
         """What a worker is offered while it carries minerals home."""
@@ -679,7 +879,9 @@ class TechSweep:
             self._clear({u.tag for u in self._mine() if u.tag not in before})
 
     def _clear(self, tags: set[int]) -> None:
-        """Kill the units `tags`, and wait until they are gone and the ground they stood on is free again."""
+        """Kill the units `tags` and the pylons put up to power them, which would otherwise stand on ground the next
+        trial wants, and wait until they are gone and the ground they stood on is free again."""
+        tags = tags | {pylon for tag in tags for pylon in self._powering.pop(tag, ())}
         self._game.kill(tags)
         for _ in range(50):
             self._client.step(4)
@@ -709,15 +911,9 @@ class TechSweep:
         spot = self._pad - ((1, 0) if performer in _ADD_ONS else (0, 0))
         if performer not in self._structure_types and self._data.abilities[ability].needs_placement:
             spot = self._home + (0, -6)
-        requests = [(performer, self._player, spot)]
-        if _unit_name(performer) in self.findings.powered:
-            requests.append((UnitTypeId.PYLON, self._player, spot + (0, 4)))
-        made = self._game.spawn(requests)
-        unit = next((u for u in made if u.unit_type == performer), None)
+        unit = self._put_up(performer, spot)
         if unit is None:
             return None
-        self._charge()
-        self._client.step(_SWITCH_STEPS)
         offered = self._game.offered([unit.tag])[unit.tag]
         if ability not in offered and performer in _ADD_ONS:
             self._build_tech_lab(unit, offered)
@@ -726,6 +922,45 @@ class TechSweep:
             logger.warning("A new {} is not offered {}", performer.name, _ability_name(ability))
             return None
         return unit
+
+    def _put_up(self, unit_type: UnitTypeId, spot: Point) -> raw_pb2.Unit | None:
+        """A new unit of `unit_type` at `spot`, with a pylon where it needs power, charged and settled. The pylon is
+        remembered under the unit's tag for `_clear`."""
+        self._clear_enemies_near(spot)
+        requests = [(unit_type, self._player, spot)]
+        if _unit_name(unit_type) in self.findings.powered:
+            requests.append((UnitTypeId.PYLON, self._player, spot + (0, 4)))
+        made = self._game.spawn(requests)
+        unit = next((one for one in made if one.unit_type == unit_type), None)
+        if unit is None:
+            return None
+        powered_by = [one.tag for one in made if one.unit_type == UnitTypeId.PYLON and one.tag != unit.tag]
+        if powered_by:
+            self._powering[unit.tag] = powered_by
+        self._charge()
+        self._client.step(_SWITCH_STEPS)
+        return unit
+
+    def _clear_enemies_near(self, spot: Point) -> None:
+        """Kill the computer's units in sight of `spot`: a unit put up there would set off after them, and they can
+        stand where a structure or an add-on is to go.
+
+        On one start of the map the pad lies beside the computer's natural, so a baneling put up there rolls at its
+        drones, is offered no burrow while it does, and blows up on reaching one. And under `god` the computer's army
+        walks into the base and stands about, a marine on an add-on's place leaving the host bare once the add-on is
+        killed to read a requirement. Both changed what a run read.
+        """
+        near = [
+            unit.tag
+            for unit in self._game.units()
+            if unit.owner not in (self._player, NEUTRAL_REPORTED)
+            and abs(unit.pos.x - spot.x) < _ENEMIES_CLEARED_WITHIN
+            and abs(unit.pos.y - spot.y) < _ENEMIES_CLEARED_WITHIN
+        ]
+        if near:
+            logger.debug("Killing {} of the computer's units in sight of {}", len(near), spot)
+            self._game.kill(near)
+            self._client.step(4)
 
     def _build_tech_lab(self, unit: raw_pb2.Unit, offered: Iterable[int]) -> None:
         build = next((a for a in offered if _ability_name(a).startswith("Build_TechLab")), None)
@@ -838,6 +1073,7 @@ class TechSweep:
 _NOTHING = data_pb2.AbilityData.Target.Value("None")
 _UNIT = data_pb2.AbilityData.Target.Value("Unit")
 _POINT = data_pb2.AbilityData.Target.Value("Point")
+_POINT_OR_NOTHING = data_pb2.AbilityData.Target.Value("PointOrNone")
 _AIMED = frozenset({_UNIT, _POINT, data_pb2.AbilityData.Target.Value("PointOrUnit")})
 _RAW_UNITS = {member.name for member in RawUnitTypeId}
 _RAW_ABILITIES = {member.name for member in RawAbilityId}
@@ -864,6 +1100,12 @@ def _ability_name(ability: int) -> str:
         return str(ability)
 
 
+def _kind_of_work(ability: int) -> str | None:
+    """Which of `_MAKING` an ability that sets a structure working is: a train, a research, a morph or an add-on."""
+    name = _ability_name(ability)
+    return next((verb for verb in _MAKING if verb in name), None)
+
+
 def _is_add_on(unit_type: str) -> bool:
     return "TechLab" in unit_type or "Reactor" in unit_type
 
@@ -877,6 +1119,7 @@ def sweep(race: Race, installation: Installation, findings: Findings) -> None:
                 run.set_up()
                 run.read_first_requirements()
                 run.sweep_makers()
+                run.sweep_cancels()
                 run.research_everything()
                 run.sweep_states()
                 run.sweep_busy()

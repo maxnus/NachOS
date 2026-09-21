@@ -29,7 +29,9 @@ _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 # makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered Shatter.
 # And once Burrow is researched every zerg unit that burrows is offered the infested terran's burrow, which burrows it
 # as itself, reporting its own burrow running.
-_UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Shatter"})
+# A cyclone locked on is offered `Cancel_LockOn`, which is a cast to take back rather than anything a
+# structure is making, and no curated id names it.
+_UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
 
 
 def _generator() -> ModuleType:
@@ -51,6 +53,7 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
         "requirements": [],
         "made": [],
         "powered": [],
+        "cancels": {},
         "remaps": {},
         "creation_abilities": {},
         "research_abilities": {},

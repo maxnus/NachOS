@@ -82,8 +82,9 @@ Carried over from AvocaDOS, so the two codebases read alike:
   argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
   where it enters, with `raise ... from`, and never reaches the caller.
 - **US spelling** everywhere in code, comments, docstrings and docs — `behavior`, `initialize`, `summarize`,
-  `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
-  (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".
+  `color`, `center`. Two exceptions: generated identifiers, where `ids/raw/` mirrors Blizzard's own names verbatim
+  (`BuildinProgressNonCancellable`) and those are data, never to be "corrected"; and **"cancelled"**, which the
+  code, the tests and the docs spell with two l's throughout.
 - Line length 120. `ruff check` and `ruff format --check` must pass.
 - **One game loop is a step.** Above the protocol layer time is counted in steps -- `Api.step`,
   `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
@@ -149,4 +150,6 @@ of its buildings.
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |
 | Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py`, which starts the game |
+| Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
+| Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |

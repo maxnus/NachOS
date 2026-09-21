@@ -82,6 +82,31 @@ An order a unit is already carrying out is not sent again. In game such an order
 nothing out and is left out of the reported actions — its one effect is that the unit's queued orders are gone. So
 NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose is `clear_queue`.
 
+## What an order needs
+
+The game answers an order it cannot pay for in one of three ways: it refuses it, which reads `REFUSED` with its
+verdict; it takes it and silently drops it, `DROPPED`; or, for a queued order the supply cap cannot feed, it takes it,
+charges it, and leaves it at no progress until supply frees up.
+
+A bot budgets for itself, since only it knows what matters most:
+
+```python
+cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
+if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
+    api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+```
+
+`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, so a bot
+giving several orders in one turn keeps its own tally. `cost` is what the game charges as the ability is ordered: the
+difference for a morph, 150 for an orbital command rather than its type's 550, and for `cost.supply`, what it takes of
+the cap as it starts.
+
+A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the one to send to a structure
+carrying `ability` out: `GENERAL_CANCEL_LAST` for a train or a research on any structure that keeps a queue, a tech
+lab included, and a morph's or an add-on's own cancel, since `GENERAL_CANCEL_LAST` is answered `ERROR` by those. A
+warp-in has none, a warp gate keeping no queue. It takes back only the structure's last item, and frees neither a
+slot nor a mineral within the same step ([game behavior](game-behavior.md#abilities-and-orders)).
+
 ## What became of it
 
 `order.state` is where an order has got to, and `api.order.running` holds every order NachOS is still following.
@@ -92,6 +117,7 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
+| `LOST` | Every unit seen carrying it out died, before it was done or at least before the next observation: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |

@@ -2410,6 +2410,64 @@ def _producer_dies(game: _Game) -> list[Trial]:
             game.read(f"{step} after it died", [scv])
 
     trials.append(game.trial("an SCV killed on its way to build", builder))
+
+    # How many steps the game took to give up on a build whose site was held; the next trial kills its builder that
+    # many steps in, to see whether the error and the death can land in one observation.
+    gave_up_after: list[int] = []
+
+    def build_blocked(trial: Trial) -> None:
+        """When the game gives up on a build whose site a unit of this player's holds position on, which is the only
+        action error a builder has been seen to get (tool `sweep_orders`)."""
+        scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
+        if scv is None:
+            trial.notes["class"] = "no SCV"
+            return
+        # Near enough that the builder is there well inside the watch: an SCV covers about 0.18 of the ground a
+        # step, so 24 away is 130 steps of walking on its own.
+        at = game.spot(game.toward(10), 3)
+        (guard,) = game.create(UnitTypeId.MARINE, at)
+        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        given = game.step
+        trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
+        for _ in range(60):
+            game.turn(4)
+            if trial.errors:
+                break
+        walker = game.unit(scv.tag)
+        trial.notes["where it got to"] = None if walker is None else [walker.pos.x, walker.pos.y]
+        trial.notes["site"] = [at.x, at.y]
+        seen_at = [int(str(error["seen"])) - given for error in trial.errors]
+        trial.notes["steps to the error"] = seen_at
+        gave_up_after.extend(seen_at)
+        game.read("once the game had given up", [scv])
+
+    trials.append(game.trial("an SCV whose site a marine of its own holds", build_blocked))
+
+    def errored_and_killed(trial: Trial) -> None:
+        """Whether the game reports an action error for an order whose unit is gone by the same observation, which
+        is what says whether such an order should read `FAILED` or `LOST`."""
+        scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
+        if scv is None or not gave_up_after:
+            trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"
+            return
+        at = game.spot(game.toward(14), 3)
+        (guard,) = game.create(UnitTypeId.MARINE, at)
+        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        given = game.step
+        waiting = max(gave_up_after[0] - 2, 0)
+        trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
+        trial.notes["killed after"] = waiting
+        game.turn(waiting)
+        game.sandbox.kill([scv.tag])
+        seen: list[list[object]] = []
+        for _ in range(12):
+            game.turn(1)
+            alive = any(unit.tag == scv.tag for unit in game.units.values())
+            errors = [int(str(error["seen"])) - given for error in trial.errors]
+            seen.append([game.step - given, alive, errors])
+        trial.notes["step, still listed, errors so far"] = seen
+
+    trials.append(game.trial("an SCV killed as the game gives up on its build", errored_and_killed))
     return trials
 
 
@@ -2509,6 +2567,124 @@ class _Sweep:
     interface: sc2api_pb2.InterfaceOptions | None = None
 
 
+def _add_on_while_flying(game: _Game) -> list[Trial]:
+    """Find what a barracks in the air does when told to build an add-on: with no point, at ground with room for the
+    add-on beside it, and at ground whose add-on place a supply depot fills."""
+    trials: list[Trial] = []
+
+    def flying_reactor(aimed: str) -> Callable[[Trial], None]:
+        def run(trial: Trial) -> None:
+            made = game.create(UnitTypeId.BARRACKS_FLYING, game.spot(game.toward(12), 4))
+            if not made:
+                trial.notes["class"] = "no barracks"
+                return
+            barracks = made[0]
+            # Where it is to land, with room beside it for the add-on unless a depot is put there.
+            site = game.spot(game.toward(24), 5)
+            if aimed == "blocked":
+                depots = game.create(UnitTypeId.SUPPLY_DEPOT, Point((site.x + 2.5, site.y - 0.5)))
+                trial.notes["depot at"] = [[unit.pos.x, unit.pos.y] for unit in depots]
+            target = None if aimed == "nothing" else site
+            trial.notes["barracks from"] = [barracks.pos.x, barracks.pos.y]
+            trial.notes["aimed at"] = None if target is None else [target.x, target.y]
+            before = [game.minerals, game.vespene]
+            trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, [barracks], target)
+            seen: list[object] = []
+            for _ in range(60):
+                game.turn(8)
+                now = game.unit(barracks.tag)
+                if now is None:
+                    seen.append("gone")
+                    break
+                kind = UnitTypeId.get(now.unit_type)
+                name = kind.name if kind else now.unit_type
+                where = [round(now.pos.x, 1), round(now.pos.y, 1)]
+                orders = [_order(order) for order in now.orders]
+                purse = [game.minerals, game.vespene]
+                seen.append([game.step, name, where, orders, bool(now.add_on_tag), purse])
+                if now.add_on_tag or not now.orders:
+                    break
+            trial.notes["step, type, at, orders, add-on, purse"] = seen
+            trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+
+        return run
+
+    for aimed, name in (
+        ("nothing", "a flying barracks given a reactor with no point"),
+        ("free", "a flying barracks given a reactor at ground with room beside it"),
+        ("blocked", "a flying barracks given a reactor at ground whose add-on place a depot fills"),
+    ):
+        trials.append(game.trial(name, flying_reactor(aimed)))
+    return trials
+
+
+def _one_command_many_makers(game: _Game) -> list[Trial]:
+    """Find whether one command naming several structures is carried out by each of them or by one.
+
+    A group move sends every unit, and a spell, a structure and a morph are carried out by one of the group
+    (docs/game-behavior.md); a train, a research and an add-on had not been tried.
+    """
+    trials: list[Trial] = []
+
+    def trained(trial: Trial) -> None:
+        made = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4), count=3)
+        trial.notes["barracks"] = [unit.tag for unit in made]
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(_MARINE, made)
+        game.turn(4)
+        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+        game.read("given one train naming three barracks", made)
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+
+    trials.append(game.trial("one train naming three barracks", trained))
+
+    def researched(trial: Trial) -> None:
+        made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(16), 4), count=2)
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS, made)
+        game.turn(4)
+        trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+        game.read("given one research naming two bays", made)
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+
+    trials.append(game.trial("one research naming two engineering bays", researched))
+
+    def one_reactor(barracks: int, blocked: int) -> Callable[[Trial], None]:
+        """A trial giving one reactor, aimed at nothing as a bot's add-on usually is, to `barracks` barracks, the
+        first `blocked` of them with a supply depot where the reactor would stand."""
+
+        def run(trial: Trial) -> None:
+            made: list[raw_pb2.Unit] = []
+            for index in range(barracks):
+                made += game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20 + 9 * index), 4))
+            depots: list[raw_pb2.Unit] = []
+            for host in made[:blocked]:
+                # An add-on stands 2.5 right of its structure's center and 0.5 down, so a depot there fills its place.
+                depots += game.create(UnitTypeId.SUPPLY_DEPOT, Point((host.pos.x + 2.5, host.pos.y - 0.5)))
+            trial.notes["barracks at"] = [[unit.pos.x, unit.pos.y] for unit in made]
+            trial.notes["depots at"] = [[unit.pos.x, unit.pos.y] for unit in depots]
+            before = [game.minerals, game.vespene]
+            trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, made)
+            game.turn(4)
+            trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+            trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+            game.turn(20)
+            game.read("24 steps after the reactor was ordered", made)
+            trial.notes["an add-on each, 24 steps on"] = [bool((game.unit(u.tag) or u).add_on_tag) for u in made]
+
+        return run
+
+    for barracks, blocked, name in (
+        (1, 0, "one reactor to one barracks, its side free"),
+        (1, 1, "one reactor to one barracks, its side blocked"),
+        (2, 0, "one reactor naming two barracks"),
+        (2, 1, "one reactor naming two barracks, the first one's side blocked"),
+    ):
+        trials.append(game.trial(name, one_reactor(barracks, blocked)))
+
+    return trials
+
+
 _SWEEPS: dict[str, _Sweep] = {
     "keeps-terran": _Sweep(Race.TERRAN, lambda g: _keeps(g, Race.TERRAN), _KEEPS_CHEATS),
     "keeps-protoss": _Sweep(Race.PROTOSS, lambda g: _keeps(g, Race.PROTOSS), _KEEPS_CHEATS),
@@ -2540,6 +2716,10 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `free`, so that what a cancel gives back counts.
     "cancels-offered": _Sweep(Race.TERRAN, _cancels_offered, ("food", "all_resources")),
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
+    # Not `free`, so that what one command naming several structures charges counts.
+    "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, ("food", "all_resources")),
+    # Not `free`, so that what a flying structure's add-on charges counts.
+    "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, ("food", "all_resources")),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

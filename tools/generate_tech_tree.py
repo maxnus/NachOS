@@ -107,6 +107,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
             }
         ),
         ability_remaps=MappingProxyType(_remaps(findings)),
+        ability_cancels=MappingProxyType(_cancels(findings)),
         creation_abilities=MappingProxyType(creation_abilities),
         ability_products=MappingProxyType(_products(creation_abilities, findings)),
         morph_sources=MappingProxyType(_morph_sources(trials)),
@@ -237,6 +238,12 @@ def _remaps(findings: Mapping[str, object]) -> dict[AbilityId, AbilityId]:
     """The general ability each ability stands for, as the game's table says, where the curated ids name both."""
     remaps = _mapping(findings["remaps"]).items()
     return {exact: general for e, g in remaps if (exact := _ability(e)) and (general := _ability(str(g)))}
+
+
+def _cancels(findings: Mapping[str, object]) -> dict[AbilityId, AbilityId]:
+    """The cancel a structure was offered for each thing it was set making, where the curated ids name both."""
+    cancels = _mapping(findings["cancels"]).items()
+    return {work: cancel for w, c in cancels if (work := _ability(w)) and (cancel := _ability(str(c)))}
 
 
 def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, AbilityId]:
