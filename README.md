@@ -33,6 +33,8 @@ on = api.event.on
 
 ```python
 # my_bot/economy.py — anywhere else in your bot
+from sc2nachos.events import TurnEvent
+
 from my_bot.api import api, on
 
 
@@ -57,6 +59,8 @@ gap in NachOS rather than a pattern to follow — please open an issue.
 handlers as your modules load. Connecting happens later, in the runner:
 
 ```python
+from sc2nachos import ApiBot, Computer, Difficulty, Race, run_local
+
 run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
 ```
 

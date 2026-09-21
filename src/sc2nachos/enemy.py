@@ -1,11 +1,28 @@
-"""The player on the other side, and what is known of it."""
+"""The player on the other side, what is known of it, and how much of that NachOS works out for itself."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, final
 
+from sc2nachos._enum import ReadableIntEnum
+
 if TYPE_CHECKING:
     from sc2nachos.ids import UpgradeId
+
+
+class UpgradeInference(ReadableIntEnum):
+    """How much of `Enemy.upgrades` NachOS works out for itself, each setting working out all the one before it does."""
+
+    NONE = 0
+    """Nothing: only a bot changes it."""
+    BASIC = 1
+    """The attack, armor and shield levels the enemy's units in sight report, which `UpgradeReader.read_basic_upgrades`
+    reads as the levels of each type's own lines."""
+    INTERMEDIATE = 2
+    """What only an upgrade can bring about, which `UpgradeReader.read_intermediate_upgrades` reads: Burrow, Warp Gate,
+    Stimpack, Combat Shield, Concussive Shells, Charge, Psionic Storm, Neural Parasite, Interference Matrix,
+    Nanomuscular Swell, Cloaking Field and Personal Cloaking. It reads the buffs every unit in sight wears, so a buff
+    the curated ids leave out raises `UncuratedIdError` where the settings below it never would."""
 
 
 @final

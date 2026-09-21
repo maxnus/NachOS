@@ -10,7 +10,7 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
@@ -61,7 +61,6 @@ from sc2nachos.state import Alert
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
-from sc2nachos.upgrade_reader import UpgradeInference
 
 # Each alert by the protocol's value.
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
@@ -75,7 +74,7 @@ class _Game:
     map: Final[GameMap]
     data: Final[GameData]
     enemy: Final[Enemy]
-    infer_enemy_upgrades: Final[UpgradeInference]
+    enemy_upgrade_inference: Final[UpgradeInference]
     tracker: Final[_Tracker]
     orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
@@ -85,7 +84,7 @@ class _Game:
     result: Result | None = None
 
     @classmethod
-    def start(cls, client: Client, *, infer_enemy_upgrades: UpgradeInference) -> Self:
+    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference) -> Self:
         """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
@@ -99,7 +98,7 @@ class _Game:
             game_map,
             tables,
             enemy,
-            infer_enemy_upgrades,
+            enemy_upgrade_inference,
             tracker,
             OrderBook(tables),
             observation,
@@ -122,9 +121,9 @@ class _Game:
         self.state = _State(observation, self.tracker, self.map)
         self.orders._take_in(self.state, step)
         units, reader = self.tracker.units.present, self.tracker.upgrades.reader
-        if self.infer_enemy_upgrades >= UpgradeInference.BASIC:
+        if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
-        if self.infer_enemy_upgrades >= UpgradeInference.INTERMEDIATE:
+        if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
             self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
     def report(self, events: EventBus) -> list[Event]:

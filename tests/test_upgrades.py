@@ -12,7 +12,7 @@ from s2clientprotocol import common_pb2, debug_pb2, raw_pb2
 
 from sc2nachos import Api
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -32,7 +32,7 @@ from sc2nachos.protocol import Client, Recording, ReplayTransport, WebSocketTran
 from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
-from sc2nachos.upgrade_reader import UpgradeInference, UpgradeReader
+from sc2nachos.upgrade_reader import UpgradeReader
 from support import RealGame, make_observation, make_unit
 
 _REPO = Path(__file__).parents[1]
@@ -581,13 +581,13 @@ def _replay(path: Path, api: Api) -> Api:
 def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, inference: UpgradeInference) -> None:
     """The computer researches while a corpus game runs, and its units carry the levels where NachOS reads them. None
     of them shows anything more, since nothing of this player's leaves its base to see it."""
-    api = Api(infer_enemy_upgrades=inference)
+    api = Api(enemy_upgrade_inference=inference)
     assert _replay(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
 @pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
 def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path: Path) -> None:
-    api = Api(infer_enemy_upgrades=UpgradeInference.NONE)
+    api = Api(enemy_upgrade_inference=UpgradeInference.NONE)
     assert not _replay(path, api).enemy.upgrades
 
 

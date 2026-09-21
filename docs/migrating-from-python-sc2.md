@@ -302,7 +302,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   `api.enemy.upgrades`, where every marauder of the enemy's counts them, in the fog as much as in sight. An
   ultralisk's armor is left out of this, since 2 could be two levels or Chitinous Plating. Anything the game never
   reports, such as Metabolic Boost, a bot adds with `api.enemy.assume_upgrades`, and can take back with
-  `forget_upgrades`, and with `Api(infer_enemy_upgrades=UpgradeInference.NONE)` NachOS adds nothing itself. With
+  `forget_upgrades`, and with `Api(enemy_upgrade_inference=UpgradeInference.NONE)` NachOS adds nothing itself. With
   `UpgradeInference.INTERMEDIATE` it also reads what only an upgrade brings about: an enemy warp gate or burrowed
   unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a unit of yours slowed by concussive
   shells or matrixed, and an enemy storm.
