@@ -103,17 +103,17 @@ class _UnitTracker:
             self._update_unfinished_units()
         self._set_present_units(present)
 
-    def _update_units(self, protos: Sequence[raw_pb2.Unit], step: int, dead: Iterable[int]) -> _UnitsByTag:
+    def _update_units(self, reports: Sequence[raw_pb2.Unit], step: int, dead: Iterable[int]) -> _UnitsByTag:
         """Take in the units the observation lists, and mark those that left it stale, or dead where they must be.
 
         Answers the units listed by tag, in the order the game listed them.
         """
         previous = self._present_units_by_tag
-        present, new = self._update_known_tags(protos, previous, step)
+        present, new = self._update_known_tags(reports, previous, step)
         if new:
             self._identify_new_tags(new, previous, present, step, set(dead))
             # Placed after the rest, so put back in the order the game listed them.
-            present = {proto.tag: present[proto.tag] for proto in protos if proto.tag in present}
+            present = {report.tag: present[report.tag] for report in reports if report.tag in present}
         self._handle_departed_units(previous, present, step)
         return present
 
@@ -123,7 +123,7 @@ class _UnitTracker:
         for tag in dead:
             if (unit := self._by_tag.get(tag)) is not None:
                 self._mark_unit_dead(unit, present, reported=True)
-        self._tracker.builders.update(present)
+        self._tracker.builder_tracker.update(present)
         changes = self._tracker.last_changes
         if changes.enemy_units_left_sight:
             # A unit that died went out of the observation first.
@@ -134,12 +134,12 @@ class _UnitTracker:
         self._present_units_by_tag = present
         self._present_units = Units(present.values())
         self._known_units = None
-        self._tracker.builders.forget_observation()
+        self._tracker.builder_tracker.forget_observation()
 
     def _update_known_tags(
-        self, protos: Iterable[raw_pb2.Unit], previous: _UnitsByTag, step: int
+        self, reports: Iterable[raw_pb2.Unit], previous: _UnitsByTag, step: int
     ) -> tuple[_UnitsByTag, list[raw_pb2.Unit]]:
-        """Update the unit behind every tag already linked, and answer those units by tag and the protos left over.
+        """Update the unit behind every tag already linked, and answer those units by tag and the reports left over.
 
         Takes each unit it updates out of `previous`, which is left holding the tags that did not come back.
         """
@@ -149,8 +149,8 @@ class _UnitTracker:
         ignored = self._ignored_tags
         pop_previous = previous.pop
         # Runs for every unit in every observation, so the common case, a tag in the last observation too, comes first.
-        for proto in protos:
-            tag = proto.tag
+        for report in reports:
+            tag = report.tag
             if not tag:
                 # A radar blip or a structure placed but not yet started, neither of which is a unit yet.
                 continue
@@ -160,22 +160,22 @@ class _UnitTracker:
                     continue
                 unit = by_tag.get(tag)
                 if unit is None:
-                    new.append(proto)
+                    new.append(report)
                     continue
                 if unit._stale:
                     del self._stale_units[unit._id]
-                    self._record_entered_sight(unit, proto)
+                    self._record_entered_sight(unit, report)
                 elif unit._tag in self._in_fog_tags:
                     self._ignore_structure_fog_copy(unit._tag, previous, present)
-                    self._record_entered_sight(unit, proto)
+                    self._record_entered_sight(unit, report)
                 unit._tag = tag
-            unit._update(proto, step)
+            unit._update(report, step)
             present[tag] = unit
         return present, new
 
-    def _record_entered_sight(self, unit: Unit[Any], proto: raw_pb2.Unit) -> None:
+    def _record_entered_sight(self, unit: Unit[Any], report: raw_pb2.Unit) -> None:
         """Record an enemy unit reported in sight again, having been out of the observation or in the fog."""
-        if proto.alliance == _ENEMY and proto.display_type != _IN_FOG:
+        if report.alliance == _ENEMY and report.display_type != _IN_FOG:
             self._tracker.last_changes.enemy_units_entered_sight.append(unit)
 
     def _ignore_structure_fog_copy(self, tag: int, previous: _UnitsByTag, present: _UnitsByTag) -> None:
@@ -191,9 +191,9 @@ class _UnitTracker:
         present.pop(tag, None)
 
     def _identify_new_tags(
-        self, protos: list[raw_pb2.Unit], previous: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]
+        self, reports: list[raw_pb2.Unit], previous: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]
     ) -> None:
-        """Find the unit each proto under a new tag is: a structure passing between vision and fog, or a new unit.
+        """Find the unit each report under a new tag is: a structure passing between vision and fog, or a new unit.
 
         A structure going out of vision is replaced, in the same observation, by a copy in the fog at the same
         position under a new tag, and coming back into vision swaps the other way. The type is not compared, since a
@@ -206,26 +206,26 @@ class _UnitTracker:
         ordered: list[Unit[Any]] = []
         for tag, unit in previous.items():
             if unit._step != step and tag not in dead:
-                report = unit._latest_data
-                departed[(report.alliance, report.pos.x, report.pos.y)] = unit
-                if unit._own and report.orders:
+                last_report = unit._latest_report
+                departed[(last_report.alliance, last_report.pos.x, last_report.pos.y)] = unit
+                if unit._own and last_report.orders:
                     ordered.append(unit)
-        for proto in protos:
-            display = proto.display_type
-            unit = departed.pop((proto.alliance, proto.pos.x, proto.pos.y), None)
-            if unit is not None and {display, unit._latest_data.display_type} == {_IN_VISION, _IN_FOG}:
-                if proto.alliance == _ENEMY:
+        for report in reports:
+            display = report.display_type
+            unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
+            if unit is not None and {display, unit._latest_report.display_type} == {_IN_VISION, _IN_FOG}:
+                if report.alliance == _ENEMY:
                     changes = self._tracker.last_changes
                     entered = display == _IN_VISION
                     sight = changes.enemy_units_entered_sight if entered else changes.enemy_units_left_sight
                     sight.append(unit)
-                unit._tag = proto.tag
-                unit._update(proto, step)
+                unit._tag = report.tag
+                unit._update(report, step)
             else:
-                unit = self._create_unit(proto, step)
+                unit = self._create_unit(report, step)
                 if ordered and unit._own:
-                    self._tracker.builders.link_builder(unit, ordered)
-            tag = proto.tag
+                    self._tracker.builder_tracker.link_builder(unit, ordered)
+            tag = report.tag
             self._by_tag[tag] = unit
             self._ids[tag] = unit._id
             if display == _IN_FOG:
@@ -237,7 +237,7 @@ class _UnitTracker:
         for unit_id, unit in list(self._unfinished.items()):
             if unit._dead:
                 del self._unfinished[unit_id]
-            elif unit._latest_data.build_progress == 1.0:
+            elif unit._latest_report.build_progress == 1.0:
                 del self._unfinished[unit_id]
                 self._tracker.last_changes.own_units_finished.append(unit)
 
@@ -252,15 +252,15 @@ class _UnitTracker:
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
             if unit._step != step and not unit._stale:
-                report = unit._latest_data
+                report = unit._latest_report
                 if report.alliance == _ENEMY and report.display_type != _IN_FOG:
                     self._tracker.last_changes.enemy_units_left_sight.append(unit)
                 unit._mark_stale()
                 self._stale_units[unit._id] = unit
 
-    def _create_unit(self, proto: raw_pb2.Unit, step: int) -> Unit[Any]:
-        """A unit first seen in `proto`, under the next id of its alliance."""
-        alliance = proto.alliance
+    def _create_unit(self, report: raw_pb2.Unit, step: int) -> Unit[Any]:
+        """A unit first seen in `report`, under the next id of its alliance."""
+        alliance = report.alliance
         count = self._units_seen_per_alliance[alliance] + 1
         if count >= _IDS_PER_ALLIANCE:
             raise NachOSError(f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids")
@@ -268,16 +268,16 @@ class _UnitTracker:
         unit_id = alliance * _IDS_PER_ALLIANCE + count
         changes = self._tracker.last_changes
         if alliance == _OWN:
-            own: OwnUnit[Any] = OwnUnit(proto, self._tracker, unit_id, step)
+            own: OwnUnit[Any] = OwnUnit(report, self._tracker, unit_id, step)
             changes.own_units_created.append(own)
-            if proto.build_progress < 1.0:
+            if report.build_progress < 1.0:
                 self._unfinished[unit_id] = own
             unit: Unit[Any] = own
         else:
-            unit = Unit(proto, self._tracker, unit_id, step)
+            unit = Unit(report, self._tracker, unit_id, step)
             if alliance == _ENEMY:
                 changes.enemy_units_first_seen.append(unit)
-                if proto.display_type != _IN_FOG:
+                if report.display_type != _IN_FOG:
                     changes.enemy_units_entered_sight.append(unit)
         self._units_by_id[unit_id] = unit
         return unit
@@ -286,7 +286,7 @@ class _UnitTracker:
         """Mark `unit` dead and let go of it: `reported` dead, or found dead, such as gone from a spot it could not have
         left."""
         # Its tags: the one it was last reported under, and the one it was last in vision under.
-        sighting = unit._latest_data_in_vision
+        sighting = unit._latest_report_in_vision
         tags = {unit._tag} if sighting is None else {unit._tag, sighting.tag}
         unit._mark_dead()
         changes = self._tracker.last_changes

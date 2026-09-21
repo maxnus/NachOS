@@ -95,7 +95,7 @@ class ActionFailure:
     """The unit it gave the order up for, or `None` where it named none."""
     ability: AbilityId | None
     """The order it gave up, or `None` where it named none."""
-    result: ActionResult
+    action_result: ActionResult
     """What it gave up for: `NOT_ENOUGH_FOOD` for a marine with no supply left, `CANT_BUILD_LOCATION_INVALID` for a
     site taken meanwhile."""
 

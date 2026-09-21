@@ -17,7 +17,7 @@ from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._event_subscriber import _EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
-from sc2nachos.events._handler_timings import HandlerTimings
+from sc2nachos.events._handler_timing import HandlerTiming
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -80,7 +80,7 @@ class EventBus:
         self._methods_of: weakref.WeakKeyDictionary[type, tuple[_Handler, ...]] = weakref.WeakKeyDictionary()
         # The step of the game being played, which an event emitted without one is given, or `None` between games.
         self._step: int | None = None
-        self._timings: dict[type[Event], dict[str, HandlerTimings]] | None = {} if time_handlers else None
+        self._timings: dict[type[Event], dict[str, HandlerTiming]] | None = {} if time_handlers else None
 
     def __repr__(self) -> str:
         by_type = self._subscriptions.by_type.items()
@@ -198,7 +198,7 @@ class EventBus:
             raise ValueError(f"nothing of {target!r} is subscribed")
 
     @property
-    def timings(self) -> Mapping[type[Event], Mapping[str, HandlerTimings]]:
+    def timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
         """How long each handler has taken in the game being played, or the one played last, by event and by handler.
 
         A handler is named by its module and qualified name, so every instance of a class counts under one. Raises
@@ -335,13 +335,13 @@ def _in_class_body(function: FunctionType) -> bool:
     return len(parts) > 1 and parts[-2] != "<locals>"
 
 
-def _timed(timings: dict[str, HandlerTimings], handler: _Handler, event: Event) -> object:
+def _timed(timings: dict[str, HandlerTiming], handler: _Handler, event: Event) -> object:
     """Call `handler` with `event`, and count how long it took under its name."""
     start = perf_counter()
     result = handler.function(event) if handler.instance is None else handler.function(handler.instance, event)
     seconds = perf_counter() - start
     if (timing := timings.get(handler.name)) is None:
-        timings[handler.name] = HandlerTimings(1, seconds, seconds)
+        timings[handler.name] = HandlerTiming(1, seconds, seconds)
     else:
         timing.calls += 1
         timing.total_seconds += seconds

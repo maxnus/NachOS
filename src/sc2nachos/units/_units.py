@@ -215,7 +215,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         order = sorted(range(len(distances)), key=distances.__getitem__)
         return Units(self._units[index] for index in order)
 
-    def closest(self, count: int, point: PointLike) -> Units[U]:
+    def closest_n_to(self, count: int, point: PointLike) -> Units[U]:
         """The `count` units nearest to `point`, nearest first, or all of them where there are fewer."""
         if count < 0:
             raise ValueError(f"cannot pick {count} units")

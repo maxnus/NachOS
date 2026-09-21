@@ -218,7 +218,7 @@ _ARMOR_LEVELS = [
 
 def _reports(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeType | None, int]]:
     """The upgrade level each of `upgrades` adds to where units report it, and which level of its line it is."""
-    return [(tables.upgrades[upgrade].type, tables.upgrades[upgrade].level) for upgrade in upgrades]
+    return [(tables.upgrades[upgrade].upgrade_type, tables.upgrades[upgrade].level) for upgrade in upgrades]
 
 
 def _weapon(row: UnitTypeData, domain: TargetDomain) -> Weapon:
@@ -332,8 +332,8 @@ def _tracker(tables: GameData) -> _Tracker:
 
 def _observe(tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*tracker.upgrades.reader.read_basic_upgrades(tracker.units.present))
-    by_tag = {unit.tag: unit for unit in tracker.units.present}
+    tracker.enemy.assume_upgrades(*tracker.upgrade_tracker.reader.read_basic_upgrades(tracker.unit_tracker.present))
+    by_tag = {unit.tag: unit for unit in tracker.unit_tracker.present}
     return [by_tag[unit.tag] for unit in units]
 
 
@@ -455,7 +455,7 @@ def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...]
     """What `units` and `effects`, in one observation, show of the enemy's upgrades beyond their levels."""
     tracker = _tracker(tables)
     _observe(tracker, *units)
-    return UpgradeReader(tables).read_intermediate_upgrades(tracker.units.present, effects)
+    return UpgradeReader(tables).read_intermediate_upgrades(tracker.unit_tracker.present, effects)
 
 
 def _storm(alliance: Alliance) -> Effect:
@@ -613,7 +613,7 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
         with closing(Client(transport)) as client:
             client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
             game = RealGame(client, client.join_game(Race.TERRAN))
-            tables = game.tracker.data
+            tables = game.tracker.game_data
             state = debug_pb2.DebugGameState
             game.debug(*(debug_pb2.DebugCommand(game_state=cheat) for cheat in (state.free, state.fast_build)))
             units = game.turn(1)
@@ -646,7 +646,7 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
                 if _upgraded(row.with_upgrades(game.state.upgrades)) != pytest.approx(_upgraded(asked.units[unit_type]))
             ]
             assert not differ
-            for unit in game.tracker.units.present.own:
+            for unit in game.tracker.unit_tracker.present.own:
                 assert unit.armor == asked.units[unit.type_id].armor
             marine = game.newest(UnitTypeId.MARINE)
             assert marine.weapons[0].damage == asked.units[UnitTypeId.MARINE].weapons[0].damage
@@ -695,7 +695,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
             units = game.turn(1)
             townhalls = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
             home = next(unit for unit in units.own if unit.type_id in townhalls).position
-            yield game, game.tracker.upgrades.reader, home.towards(game.map.playable_area.center, 10)
+            yield game, game.tracker.upgrade_tracker.reader, home.towards(game.map.playable_area.center, 10)
             client.leave_game()
 
 
@@ -729,7 +729,7 @@ def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, 
     """The tech lab a new `unit_type` builds, both standing in the 5 tiles a side around `at`."""
     structure = _made(game, unit_type, at - (1, 0))
     game.order(AbilityId.GENERAL_BUILD_TECH_LAB, structure)
-    _until(game, lambda: bool(game.tracker.units.present.own.of_type(tech_lab)), steps=22)
+    _until(game, lambda: bool(game.tracker.unit_tracker.present.own.of_type(tech_lab)), steps=22)
     return game.newest(tech_lab)
 
 
@@ -835,7 +835,7 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
     """Run with `pytest -m integration`. As the terran test, for the zerg signs, on the creep around the hatchery."""
     with _signs_game(Race.ZERG) as (game, reader, _):
         enemy = 3 - game.player
-        hatchery = game.tracker.units.present.own.of_type(UnitTypeId.HATCHERY)[0]
+        hatchery = game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HATCHERY)[0]
         near = hatchery.position.towards(game.map.playable_area.center, 7)
         game.debug(game.create(UnitTypeId.HIVE, game.open_ground(near + (6, 0), size=5)))
         game.turn(4)

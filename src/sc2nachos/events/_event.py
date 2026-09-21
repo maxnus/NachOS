@@ -258,7 +258,7 @@ class OwnUnitCloakChangedEvent(UnitEvent):
     it or not, so no event says it was detected (in game)."""
 
     unit: OwnUnit[Any]
-    previous_cloak: CloakState
+    previous_cloak_state: CloakState
     """The cloak it had."""
 
 
@@ -266,7 +266,7 @@ class EnemyUnitCloakChangedEvent(UnitEvent):
     """A unit of the enemy's in sight now and in the observation before has cloaked or uncloaked, or has come to be
     detected or no longer is. Burrowing is no cloak: a burrowed unit nothing detects is not listed at all (in game)."""
 
-    previous_cloak: CloakState
+    previous_cloak_state: CloakState
     """The cloak it had."""
 
 

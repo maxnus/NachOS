@@ -97,7 +97,7 @@ class OrderBook:
             aimed,
             queued=queued,
             data=data,
-            behavior=OrderBehavior.REPLACES if row is None else row.behavior,
+            order_behavior=OrderBehavior.REPLACES if row is None else row.order_behavior,
             step=self._step,
         )
         self._given_orders.append(order)
@@ -114,7 +114,7 @@ class OrderBook:
         and where that ability is a train, a research or a morph: the game would put a second of those behind the
         first rather than drop anything, so a structure's queue is cancelled from its end instead.
         """
-        orders = unit._latest_data.orders
+        orders = unit._latest_report.orders
         if len(orders) < 2:
             return None
         ability = self._general_ability(_ability_of_unit_order(orders[0]))
@@ -127,14 +127,14 @@ class OrderBook:
             order_target(unit, orders[0]),
             queued=False,
             data=None,
-            behavior=behavior,
+            order_behavior=behavior,
             step=self._step,
             forced=True,
         )
         self._given_orders.append(order)
         return order
 
-    def issued(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
+    def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
         """What this turn has given `unit` so far, in the order it was given.
 
         A handler late in a turn reads this to leave a unit an earlier handler has spoken for, since the last order
@@ -180,14 +180,14 @@ class OrderBook:
         replaced: set[int] = set()
         # A camera move, where there is one, is answered last and belongs to no order.
         for (order, units), result in zip(sent, results[: len(sent)], strict=True):
-            verdict = ActionResult.read(result)
-            order._verdict = verdict
-            if verdict is not ActionResult.SUCCESS:
+            action_result = ActionResult.read(result)
+            order._action_result = action_result
+            if action_result is not ActionResult.SUCCESS:
                 order._state = OrderState.REFUSED
                 continue
             order._state = OrderState.SENT
             self._running_orders.append(order)
-            if not order.queued and not order._forced and order.behavior is OrderBehavior.REPLACES:
+            if not order.queued and not order._forced and order.order_behavior is OrderBehavior.REPLACES:
                 replaced.update(unit.id for unit in units)
         self._supersede_running_orders(replaced, running)
 
@@ -253,7 +253,7 @@ class OrderBook:
         structure with a reactor is told to make two at once. An ability carried out at once competes with nothing
         either, because the unit does both (in game).
         """
-        return not order.queued and order.behavior is not OrderBehavior.KEEPS_ORDERS
+        return not order.queued and order.order_behavior is not OrderBehavior.KEEPS_ORDERS
 
     def _sent_whatever_a_unit_is_at(self, order: Order[Any]) -> bool:
         """Whether `order` goes out to every unit it names, whatever each is already carrying out.
@@ -261,7 +261,7 @@ class OrderBook:
         Only an order that replaces a unit's orders is held back as a duplicate. A train or a research goes behind
         what a structure is making, and a morph or an add-on is the game's to refuse (in game).
         """
-        return order._forced or order.behavior is not OrderBehavior.REPLACES
+        return order._forced or order.order_behavior is not OrderBehavior.REPLACES
 
     def _units_not_doing_it(self, units: Sequence[OwnUnit[Any]], order: Order[Any]) -> tuple[OwnUnit[Any], ...]:
         """The units of `order` that are not already carrying it out."""
@@ -273,7 +273,7 @@ class OrderBook:
         if not replaced:
             return
         for order in running:
-            if order.behavior is OrderBehavior.KEEPS_ORDERS or order.state.is_final:
+            if order.order_behavior is OrderBehavior.KEEPS_ORDERS or order.state.is_final:
                 continue
             if all(unit.id in replaced for unit in order._acting_units):
                 order._state = OrderState.OVERRIDDEN
@@ -340,7 +340,7 @@ class OrderBook:
         """Whether `unit`'s first order is the one `order` would send it unqueued."""
         if order.queued:
             return False
-        orders = unit._latest_data.orders
+        orders = unit._latest_report.orders
         if not orders:
             return False
         first = orders[0]
@@ -366,7 +366,7 @@ class OrderBook:
         if unit.is_dead or unit.is_stale:
             return False
         return any(
-            self._general_ability(_ability_of_unit_order(order)) is general for order in unit._latest_data.orders
+            self._general_ability(_ability_of_unit_order(order)) is general for order in unit._latest_report.orders
         )
 
     def _command_reports_ability(self, command: UnitCommand, general: AbilityId) -> bool:
@@ -381,7 +381,7 @@ class OrderBook:
     def _order_behavior_of_ability(self, ability: AbilityId) -> OrderBehavior:
         """What ordering `ability` does to what a unit is already doing."""
         row = self._game_data.abilities.get(ability)
-        return OrderBehavior.REPLACES if row is None else row.behavior
+        return OrderBehavior.REPLACES if row is None else row.order_behavior
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:

@@ -99,7 +99,7 @@ class _Game:
 
     def own(self, tag: int) -> OwnUnit[Any]:
         """The unit the game reported under `tag`, which is this player's."""
-        unit = self.tracker.units.by_tag(tag)
+        unit = self.tracker.unit_tracker.by_tag(tag)
         assert isinstance(unit, OwnUnit)
         return unit
 
@@ -159,7 +159,7 @@ class TestGivingAnOrder:
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
         assert not command.queue_command
         assert order.state is OrderState.SENT
-        assert order.verdict is ActionResult.SUCCESS
+        assert order.action_result is ActionResult.SUCCESS
 
     def test_one_unit_is_given_an_order_without_a_collection(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -278,8 +278,8 @@ class TestGivingAnOrder:
         game = _Game()
         game.observe(0, _marine(1))
 
-        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)).behavior is OrderBehavior.REPLACES
-        assert game.book.issue(game.own(1), _STIM).behavior is OrderBehavior.KEEPS_ORDERS
+        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)).order_behavior is OrderBehavior.REPLACES
+        assert game.book.issue(game.own(1), _STIM).order_behavior is OrderBehavior.KEEPS_ORDERS
 
 
 class TestOneOrderAUnitATurn:
@@ -345,14 +345,14 @@ class TestOneOrderAUnitATurn:
         game.observe(0, _marine(1), _marine(2))
         order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        assert game.book.issued(game.own(1)) == (order,)
-        assert game.book.issued(game.own(2)) == ()
+        assert game.book.issued_to(game.own(1)) == (order,)
+        assert game.book.issued_to(game.own(2)) == ()
         assert game.book.pending == (order,)
 
         game.flush()
         game.observe(16, _marine(1), _marine(2))
 
-        assert game.book.issued(game.own(1)) == ()
+        assert game.book.issued_to(game.own(1)) == ()
         assert game.book.pending == ()
 
 
@@ -469,7 +469,7 @@ class TestWhatBecameOfAnOrder:
         game.flush()
 
         assert order.state is OrderState.REFUSED
-        assert order.verdict is ActionResult.NOT_SUPPORTED
+        assert order.action_result is ActionResult.NOT_SUPPORTED
         assert game.book.running == ()
 
     def test_an_order_taken_and_never_carried_out_was_dropped(self) -> None:
@@ -481,7 +481,7 @@ class TestWhatBecameOfAnOrder:
         game.observe(16, _marine(1))
 
         assert order.state is OrderState.DROPPED
-        assert order.verdict is ActionResult.SUCCESS
+        assert order.action_result is ActionResult.SUCCESS
 
     def test_an_action_error_fails_the_order_it_names(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -493,7 +493,7 @@ class TestWhatBecameOfAnOrder:
 
         assert order.state is OrderState.FAILED
         assert order.failure is not None
-        assert order.failure.result is ActionResult.NOT_ENOUGH_FOOD
+        assert order.failure.action_result is ActionResult.NOT_ENOUGH_FOOD
         assert order.failure.unit is game.own(1)
 
     def test_an_order_is_lost_once_the_unit_it_was_given_to_is_dead(self) -> None:
@@ -650,7 +650,7 @@ class TestOrdersThatQueue:
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _TRAIN_MARINE
-        assert order.behavior is OrderBehavior.QUEUES
+        assert order.order_behavior is OrderBehavior.QUEUES
         assert order.state is OrderState.SENT
 
     def test_a_train_does_not_end_the_order_the_structure_is_already_running(self) -> None:
@@ -838,11 +838,11 @@ class TestWhatAnOrderStopsCountingFor:
         game = _Game()
         game.observe(0, _marine(1))
         order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        assert game.book.issued(game.own(1)) == (order,)
+        assert game.book.issued_to(game.own(1)) == (order,)
 
         order.withdraw()
 
-        assert game.book.issued(game.own(1)) == ()
+        assert game.book.issued_to(game.own(1)) == ()
         assert game.book.pending == ()
 
     def test_withdrawing_an_order_the_game_is_done_with_keeps_how_it_ended(self) -> None:
@@ -1085,21 +1085,21 @@ class TestAgainstTheRealGame:
             api.play(client, steps_per_turn=8, time_limit=60)
 
         assert bot.moved is not None
-        assert bot.moved.verdict is ActionResult.SUCCESS
+        assert bot.moved.action_result is ActionResult.SUCCESS
         assert bot.moved.state is OrderState.DONE
         assert bot.moved.data == "scouting"
         assert bot.moved.taken_by == bot.moved.units
 
         # Holding fire and a move to one ghost are both carried out, and neither overrides the other.
         assert bot.stim is not None and bot.stimmed_move is not None
-        assert bot.stim.verdict is ActionResult.SUCCESS
-        assert bot.stimmed_move.verdict is ActionResult.SUCCESS
+        assert bot.stim.action_result is ActionResult.SUCCESS
+        assert bot.stimmed_move.action_result is ActionResult.SUCCESS
         assert bot.stim.state is OrderState.DONE
 
         # An order to a dead unit's tag is refused (in game).
         assert bot.at_a_dead_tag is not None
         assert bot.at_a_dead_tag.state is OrderState.REFUSED
-        assert bot.at_a_dead_tag.verdict is ActionResult.ERROR
+        assert bot.at_a_dead_tag.action_result is ActionResult.ERROR
 
     def test_what_a_structure_killed_was_making_is_lost_and_a_hatched_drone_done(self) -> None:
         try:

@@ -156,7 +156,7 @@ The buff events are `BuffEvent`s, the vital events `VitalEvent`s, the area event
 | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent` | `unit`, `energy_lost` | `only(*unit_types)` | a unit lost energy, and kept its type |
 | `OwnUnitVitalReachedEvent`, `EnemyUnitVitalReachedEvent` | `unit`, `vital`, `value` | `of(vital, value, *unit_types)` | a unit's vital is at or above the value, having last been below it: `of(VitalType.LIFE_FRACTION, 1.0)` is back to full |
 | `OwnUnitVitalDroppedEvent`, `EnemyUnitVitalDroppedEvent` | `unit`, `vital`, `value` | `of(vital, value, *unit_types)` | a unit's vital is below the value, having last been at or above it |
-| `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` | `unit`, `previous_cloak` | `only(*unit_types)` | a unit cloaked or uncloaked, or an enemy unit came to be detected or no longer is |
+| `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` | `unit`, `previous_cloak_state` | `only(*unit_types)` | a unit cloaked or uncloaked, or an enemy unit came to be detected or no longer is |
 | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent` | `unit`, `buff` | `only(*buffs)` | a unit wears a buff it did not |
 | `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` | `unit`, `buff` | `only(*buffs)` | a unit no longer wears a buff it did |
 | `EnemyUnitEnteredSightEvent` | `unit` | `only(*unit_types)` | an enemy unit came into sight |

@@ -59,7 +59,7 @@ def order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
             point = order.target_world_space_pos
             return Point((point.x, point.y))
         case "target_unit_tag":
-            return unit._tracker.units.by_tag(order.target_unit_tag)
+            return unit._tracker.unit_tracker.by_tag(order.target_unit_tag)
         case _:
             return None
 

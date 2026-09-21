@@ -187,7 +187,7 @@ What the rows take in:
   Anabolic Synthesis is in them, though in play it counts only off creep.
 - **A unit reports how many attack levels it has, but in `armor_upgrade_level` the armor its upgrades add**: an
   ultralisk with Chitinous Plating and three levels reports 5. The sweep writes down whose reported levels each upgrade
-  raises, which is `UpgradeData.type`; an upgrade is a level where its curated name ends in the number, so
+  raises, which is `UpgradeData.upgrade_type`; an upgrade is a level where its curated name ends in the number, so
   Chitinous Plating raises the armor report and is no level. A leveled upgrade's name has to keep its number for this.
 - **Shield armor is the shields levels, and no row holds it.** Each level takes one more off every hit a protoss
   unit's shields receive. Nothing in `RequestData` says so, so `Unit.shield_armor` counts the levels instead.

@@ -120,7 +120,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
     for index, observation in enumerate(_observations(recording)):
         step = observation.observation.game_loop
         tracker.update(observation.observation.raw_data, step)
-        units = tracker.units.present
+        units = tracker.unit_tracker.present
         assert [unit.tag for unit in units] == [unit.tag for unit in observation.observation.raw_data.units if unit.tag]
         assert len({id(unit) for unit in units}) == len(units), "two tags of one observation are one unit"
         for unit in units:
@@ -130,7 +130,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
             for name in _NAMING:
                 getattr(unit, name)
         if index % 50 == 0:
-            for unit in tracker.units.known:
+            for unit in tracker.unit_tracker.known:
                 for name in _READS[type(unit)]:
                     with contextlib.suppress(NotReportedError):
                         getattr(unit, name)
@@ -155,7 +155,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     unreported = {
         unit.id for unit in (*tracker.last_changes.own_units_created, *tracker.last_changes.enemy_units_first_seen)
     }
-    ever = [unit_id for unit_id in tracker.units._units_by_id if unit_id not in unreported]
+    ever = [unit_id for unit_id in tracker.unit_tracker._units_by_id if unit_id not in unreported]
     created = [event.unit for event in seen if isinstance(event, OwnUnitCreatedEvent)]
     first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
     assert sorted(unit.id for unit in created) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 1]

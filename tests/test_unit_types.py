@@ -80,7 +80,7 @@ _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 def _unit(unit_type: int) -> Unit[Any]:
     tracker = _Tracker(_TABLES, Enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
-    return tracker.units.present[0]
+    return tracker.unit_tracker.present[0]
 
 
 class TestIncludes:

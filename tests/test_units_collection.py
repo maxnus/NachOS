@@ -31,7 +31,7 @@ def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
     """`protos` observed once."""
     tracker = _Tracker(_TABLES, Enemy())
     tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
-    return tracker.units.present
+    return tracker.unit_tracker.present
 
 
 def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
@@ -197,15 +197,15 @@ class TestWhereTheyAre:
         units = _mine(60, seed=3)
         by_distance = sorted(units, key=lambda unit: unit.position.distance_to(point))
         assert _tags(units.sorted_by_distance_to(point)) == [unit.tag for unit in by_distance]
-        assert _tags(units.closest(5, point)) == [unit.tag for unit in by_distance[:5]]
+        assert _tags(units.closest_n_to(5, point)) == [unit.tag for unit in by_distance[:5]]
         assert units.closest_to(point) is by_distance[0]
         assert units.closest_distance_to(point) == pytest.approx(by_distance[0].position.distance_to(point))
 
     def test_asking_for_more_than_there_are_answers_them_all(self) -> None:
         units = _mine(3)
-        assert len(units.closest(10, (0, 0))) == 3
+        assert len(units.closest_n_to(10, (0, 0))) == 3
         with pytest.raises(ValueError, match="cannot pick -1 units"):
-            units.closest(-1, (0, 0))
+            units.closest_n_to(-1, (0, 0))
 
     def test_units_at_equal_distance_keep_their_order(self) -> None:
         units = _units(make_unit(2, at=(1.0, 0.0)), make_unit(1, at=(-1.0, 0.0)), make_unit(3, at=(0.0, 1.0)))

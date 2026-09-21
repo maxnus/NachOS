@@ -24,13 +24,13 @@ class _UpgradeTracker:
     owner has leave it: this player's own for its units, what `Enemy.upgrades` holds for the enemy's, and none for
     anyone else's."""
 
-    __slots__ = ("_data", "_enemy", "_own", "_reader", "_rows")
+    __slots__ = ("_enemy", "_game_data", "_own", "_reader", "_rows")
 
-    def __init__(self, data: GameData, enemy: Enemy) -> None:
-        self._data = data
+    def __init__(self, game_data: GameData, enemy: Enemy) -> None:
+        self._game_data = game_data
         self._enemy = enemy
         self._own: frozenset[UpgradeId] = frozenset()
-        self._reader = UpgradeReader(data)
+        self._reader = UpgradeReader(game_data)
         # One upgraded row per unit type and set of upgrades held. Without it every read would build a type's weapons
         # again, and a bot reads them for every unit every step, where the sets of upgrades a game ever holds are few.
         self._rows: dict[tuple[UnitTypeId, frozenset[UpgradeId]], UnitTypeData] = {}
@@ -59,7 +59,7 @@ class _UpgradeTracker:
     def upgraded_type(self, unit: Unit[Any]) -> UnitTypeData:
         """The type of `unit` as the upgrades its owner has leave it."""
         unit_type = unit.type_id
-        row = self._data.units[unit_type]
+        row = self._game_data.units[unit_type]
         upgrades = self._of(unit)
         if not row.upgrades or not upgrades:
             return row
@@ -74,21 +74,21 @@ class _UpgradeTracker:
         A unit in sight reports that armor itself, which is exact, where what its owner is known to have is a floor.
         """
         upgraded = self.upgraded_type(unit)
-        if (seen := unit._latest_data_in_vision) is None:
+        if (report := unit._latest_report_in_vision) is None:
             return upgraded.armor
-        return max(upgraded.armor, self._data.units[unit.type_id].armor + seen.armor_upgrade_level)
+        return max(upgraded.armor, self._game_data.units[unit.type_id].armor + report.armor_upgrade_level)
 
     def shield_armor_of(self, unit: Unit[Any]) -> float:
         """The armor the shields of `unit` have, which is the shields levels its owner has, and 0 without shields."""
         upgrades = self._of(unit)
         levels = sum(1 for upgrade in self._reader.shields_of(unit.type_id) if upgrade in upgrades)
-        if (seen := unit._latest_data_in_vision) is None:
+        if (report := unit._latest_report_in_vision) is None:
             return levels
-        return max(levels, seen.shield_upgrade_level)
+        return max(levels, report.shield_upgrade_level)
 
     def _of(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades the owner of `unit` has: this player's own, the enemy's known ones, and nothing else."""
-        alliance = unit._latest_data.alliance
+        alliance = unit._latest_report.alliance
         if alliance == _OWN:
             return self._own
         return self._enemy.upgrades if alliance == _ENEMY else frozenset()

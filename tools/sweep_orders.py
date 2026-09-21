@@ -1802,7 +1802,7 @@ def _puts_to_work(game: _Game, structure: UnitTypeId) -> AbilityId | None:
     works = sorted(
         row.id.name
         for row in game.data.abilities.values()
-        if structure in row.performers and row.behavior is OrderBehavior.QUEUES
+        if structure in row.performers and row.order_behavior is OrderBehavior.QUEUES
     )
     return AbilityId[works[0]] if works else None
 

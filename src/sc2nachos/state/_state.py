@@ -32,7 +32,7 @@ class _State:
         self._response = observation
         self._observation = observation.observation
         self._tracker = tracker
-        self._map = game_map
+        self._game_map = game_map
 
     @cached_property
     def score(self) -> Score:
@@ -60,9 +60,9 @@ class _State:
     def _half_supply(self) -> float:
         """What the units first seen as this player's and not dead take beyond whole supplies, those inside another
         unit included: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
-        rows = self._tracker.data.units
+        rows = self._tracker.game_data.units
         taken = 0.0
-        for unit in self._tracker.units.known:
+        for unit in self._tracker.unit_tracker.known:
             if unit.first_alliance is not Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
@@ -80,12 +80,12 @@ class _State:
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        return self._tracker.upgrades.own
+        return self._tracker.upgrade_tracker.own
 
     @cached_property
     def _visibility(self) -> ndarray:
         """Per tile: 0 where it has never been in sight, 1 where it has been, and 2 where it is."""
-        return image_tiles(self._observation.raw_data.map_state.visibility, self._map.playable_area)
+        return image_tiles(self._observation.raw_data.map_state.visibility, self._game_map.playable_area)
 
     @cached_property
     def vision(self) -> Grid[bool]:
@@ -97,12 +97,12 @@ class _State:
 
     @cached_property
     def creep(self) -> Grid[bool]:
-        creep = image_tiles(self._observation.raw_data.map_state.creep, self._map.playable_area)
+        creep = image_tiles(self._observation.raw_data.map_state.creep, self._game_map.playable_area)
         return self._make_readonly_grid(creep != 0)
 
     def _make_readonly_grid(self, values: ndarray) -> Grid[bool]:
         """A grid over the playable area, as the map's grids are."""
-        return Grid(values, origin=self._map.pathing.origin, outside=False, readonly=True)
+        return Grid(values, origin=self._game_map.pathing.origin, outside=False, readonly=True)
 
     @cached_property
     def effects(self) -> tuple[Effect, ...]:
@@ -118,7 +118,7 @@ class _State:
 
         Raises `UncuratedIdError` where an action names an ability the curated ids leave out.
         """
-        unit_by_tag = self._tracker.units.by_tag
+        unit_by_tag = self._tracker.unit_tracker.by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
         return tuple(action for action in actions if action is not None)
 
@@ -128,6 +128,6 @@ class _State:
 
         Raises `UncuratedIdError` where one names an ability the curated ids leave out.
         """
-        unit_by_tag = self._tracker.units.by_tag
+        unit_by_tag = self._tracker.unit_tracker.by_tag
         step = self._observation.game_loop
         return tuple(ActionFailure._from_proto(error, unit_by_tag, step) for error in self._response.action_errors)

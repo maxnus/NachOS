@@ -218,7 +218,7 @@ class TestWhatHappened:
     def test_a_unit_command_names_its_units_and_its_target(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1), make_unit(2), make_unit(9, alliance=_ENEMY)])
-        present = game.tracker.units.present
+        present = game.tracker.unit_tracker.present
         marine, other, enemy = present.by_id(100001), present.by_id(100002), present.by_id(400001)
         actions = [
             _command(AbilityId.GENERAL_MOVE_EXACT, 1, 2, target_world_space_pos=common_pb2.Point2D(x=5.0, y=6.0)),
@@ -236,7 +236,7 @@ class TestWhatHappened:
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1, UnitTypeId.MEDIVAC)])
-        medivac: Unit[Any] = game.tracker.units.present[0]
+        medivac: Unit[Any] = game.tracker.unit_tracker.present[0]
         toggle = raw_pb2.ActionRawToggleAutocast(ability_id=AbilityId.MEDIVAC_HEAL, unit_tags=[1])
         camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
         actions = [

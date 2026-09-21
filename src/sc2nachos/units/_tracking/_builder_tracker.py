@@ -40,7 +40,7 @@ class _BuilderTracker:
         An SCV's build order is aimed at the structure's center once construction starts, and at the structure itself
         once construction is resumed (in game).
         """
-        orders = unit._latest_data.orders
+        orders = unit._latest_report.orders
         if not orders:
             return None
         order = orders[0]
@@ -63,7 +63,7 @@ class _BuilderTracker:
             return drone
         if self._builders_now is None:
             self._builders_now = {}
-            for unit in self._tracker.units.present:
+            for unit in self._tracker.unit_tracker.present:
                 if unit._own and (built := self.structure_built_by(unit)) is not None:
                     self._builders_now[built] = unit
         return self._builders_now.get(structure)
@@ -78,7 +78,7 @@ class _BuilderTracker:
         builder = None
         nearest = _BUILDER_REACH * _BUILDER_REACH
         for unit in ordered:
-            order = unit._latest_data.orders[0]
+            order = unit._latest_report.orders[0]
             if (
                 not self._order_makes_structure(order, structure)
                 or (target := self._order_target_position(order)) is None
@@ -103,7 +103,7 @@ class _BuilderTracker:
             return
         for builder in self._used_up_builders:
             if builder._stale and not builder._dead:
-                self._tracker.units._mark_unit_dead(builder, present, reported=False)
+                self._tracker.unit_tracker._mark_unit_dead(builder, present, reported=False)
         self._used_up_builders = []
         for structure, builder in list(self._builders.items()):
             if structure._dead or structure.is_complete:
@@ -125,7 +125,7 @@ class _BuilderTracker:
         goes on or an unfinished structure construction resumes on."""
         if order.HasField("target_world_space_pos"):
             return order.target_world_space_pos.x, order.target_world_space_pos.y
-        units = self._tracker.units
+        units = self._tracker.unit_tracker
         if order.HasField("target_unit_tag") and (unit_id := units._ids.get(order.target_unit_tag)) is not None:
             position = units._units_by_id[unit_id]._position
             return position[0], position[1]
@@ -133,13 +133,15 @@ class _BuilderTracker:
 
     def _order_makes_structure(self, order: raw_pb2.UnitOrder, structure: Unit[Any]) -> bool:
         """Whether `order` is the ability that makes `structure`'s type."""
-        row = self._tracker.data.units.get(structure._type_id)
+        row = self._tracker.game_data.units.get(structure._type_id)
         return row is not None and row.creation_ability == order.ability_id
 
     def _structures_under_construction(self) -> list[Unit[Any]]:
         """This player's unfinished units in the last observation."""
         if self._under_construction is None:
             self._under_construction = [
-                unit for unit in self._tracker.units.present if unit._own and unit._latest_data.build_progress < 1.0
+                unit
+                for unit in self._tracker.unit_tracker.present
+                if unit._own and unit._latest_report.build_progress < 1.0
             ]
         return self._under_construction

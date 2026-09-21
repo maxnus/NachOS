@@ -21,7 +21,7 @@ class UpgradeReader:
     """What the units and effects of an observation show of the upgrades their owners have, worked out once per unit
     type."""
 
-    __slots__ = ("_data", "_lines", "_types")
+    __slots__ = ("_game_data", "_lines", "_types")
 
     # The buffs whose wearer shows its owner has an upgrade, which the ability that puts each on needs.
     _BUFF_EVIDENCE_OF_OWNER: Final[Mapping[BuffId, UpgradeId]] = MappingProxyType(
@@ -58,8 +58,8 @@ class UpgradeReader:
         {UnitTypeId.MARINE: (45.0, UpgradeId.COMBAT_SHIELD)}
     )
 
-    def __init__(self, data: GameData) -> None:
-        self._data = data
+    def __init__(self, game_data: GameData) -> None:
+        self._game_data = game_data
         self._lines: dict[UnitTypeId, dict[UpgradeType, tuple[UpgradeId, ...]]] = {}
         self._types: dict[UnitTypeId, frozenset[UpgradeId]] = {}
 
@@ -100,11 +100,13 @@ class UpgradeReader:
         every zergling."""
         if (lines := self._lines.get(unit_type)) is None:
             rows = sorted(
-                (self._data.upgrades[upgrade] for upgrade in self._data.units[unit_type].upgrades),
+                (self._game_data.upgrades[upgrade] for upgrade in self._game_data.units[unit_type].upgrades),
                 key=lambda row: row.level,
             )
-            lines = {kind: tuple(row.id for row in rows if row.type is kind and row.level) for kind in UpgradeType}
-            if any(row.type is UpgradeType.ARMOR and not row.level for row in rows):
+            lines = {
+                kind: tuple(row.id for row in rows if row.upgrade_type is kind and row.level) for kind in UpgradeType
+            }
+            if any(row.upgrade_type is UpgradeType.ARMOR and not row.level for row in rows):
                 lines[UpgradeType.ARMOR] = ()
             self._lines[unit_type] = lines
         return lines
@@ -163,11 +165,11 @@ class UpgradeReader:
         needs for it, as a burrowed zergling needs Burrow, and those `_UNIT_TYPE_EVIDENCE` holds."""
         if (upgrades := self._types.get(unit_type)) is None:
             upgrades = frozenset()
-            if (ability := self._data.units[unit_type].creation_ability) is not None:
+            if (ability := self._game_data.units[unit_type].creation_ability) is not None:
                 needs = [
                     requirements.upgrades
-                    for performer in self._data.abilities[ability].performers
-                    if (requirements := self._data.units[performer].ability_requirements.get(ability)) is not None
+                    for performer in self._game_data.abilities[ability].performers
+                    if (requirements := self._game_data.units[performer].ability_requirements.get(ability)) is not None
                 ]
                 upgrades = frozenset.intersection(*needs) if needs else frozenset()
             if (only := self._UNIT_TYPE_EVIDENCE.get(unit_type)) is not None:

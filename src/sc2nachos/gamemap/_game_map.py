@@ -50,10 +50,10 @@ class GameMap:
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
         self._name = info.map_name
         self._playable = playable
-        walkable = image_tiles(start.pathing_grid, playable) != 0
-        buildable = image_tiles(start.placement_grid, playable) != 0
-        self._pathing = Grid(walkable, origin=origin, outside=False, readonly=True)
-        self._placement = Grid(buildable, origin=origin, outside=False, readonly=True)
+        pathing = image_tiles(start.pathing_grid, playable) != 0
+        placement = image_tiles(start.placement_grid, playable) != 0
+        self._pathing = Grid(pathing, origin=origin, outside=False, readonly=True)
+        self._placement = Grid(placement, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
         self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
