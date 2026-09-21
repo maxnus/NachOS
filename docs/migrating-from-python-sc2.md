@@ -98,7 +98,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   before `on_step`, which a bot keeps by leaving its handlers at one priority.
 - **An event takes its step by keyword**, and one a bot emits without it is given the game's.
 - **A handler of a class is handed the events of its subclasses.** A handler of `Event` is handed every event, and
-  has NachOS make every type of event.
+  has NachOS make every type of event. `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` each stand for a whole
+  kind, this player's units' and the enemy's alike.
 - **A bot can define events of its own**, by subclassing `Event`, and send them with `api.event.emit`. python-sc2
   has no events to extend.
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are

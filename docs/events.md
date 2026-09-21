@@ -55,10 +55,23 @@ what no handler asks for. `where` cannot: a handler with a predicate has NachOS 
 
 ## Handlers of a class and its subclasses
 
-An event is handed to the handlers of its class and of every class it derives from. So a handler of `Event` is handed
-every event, which has NachOS make every type of event it would otherwise not, the comparison of every unit with the
-observation before included. A handler of `Event` is never handed a parameterized event but of the parameters other
-handlers asked for.
+```python
+@api.event.on(UnitEvent.only(UnitType.Structure))
+@api.event.on(BuffEvent.only(BuffId.MARINE_STIMMED))
+@api.event.on(VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
+@api.event.on(AreaEvent.of(Circle(natural, 12)))
+```
+
+An event is handed to the handlers of its class and of every class it derives from. Four bases stand for a whole
+kind of event, this player's units' and the enemy's alike: `UnitEvent` is every event with a `unit` that `only`
+selects by the unit's type, `BuffEvent` a buff gained or lost, `VitalEvent` a value of a vital reached or dropped
+below, and `AreaEvent` the edge of an area crossed either way. The last two are parameterized, so a handler takes
+them through `of`, and is handed both directions of the crossing it asked for. A handler of a base is typed as taking
+it, so a handler of `UnitEvent` reads `event.unit` and asks `event.unit.alliance` for the side.
+
+A handler of `Event` is handed every event, which has NachOS make every type of event it would otherwise not, the
+comparison of every unit with the observation before included. A handler of `Event` or of `UnitEvent` is never handed
+a parameterized event but of the parameters other handlers asked for.
 
 ## Events of your own
 
@@ -97,7 +110,8 @@ out `TurnStartEvent`, then what its observation reports has happened, in the ord
 
 ## Every event
 
-"Selected by" says what `only` or `of` takes. Every event of a unit is selected by its unit's type.
+"Selected by" says what `only` or `of` takes. Every event of a unit is selected by its unit's type. Each table
+names the base its events share, for a handler that wants the whole kind.
 
 ### A game
 
@@ -110,6 +124,8 @@ out `TurnStartEvent`, then what its observation reports has happened, in the ord
 
 ### Units coming and changing
 
+All `UnitEvent`s.
+
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnUnitCreatedEvent` | `unit` | `only(*unit_types)` | a unit of this player's is first seen |
@@ -118,6 +134,8 @@ out `TurnStartEvent`, then what its observation reports has happened, in the ord
 | `UnitAllianceChangedEvent` | `unit`, `previous_alliance` | `only(*unit_types)` | a unit changes sides to or from this player's |
 
 ### Construction and research
+
+`UnitEvent`s but `OwnUpgradeFinishedEvent`.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
@@ -129,6 +147,8 @@ out `TurnStartEvent`, then what its observation reports has happened, in the ord
 ### What units went through
 
 Compared with the observation before, for units in vision in both, or watched from the turn the watch starts on.
+The buff events are `BuffEvent`s, the vital events `VitalEvent`s, the area events `AreaEvent`s, and the rest
+`UnitEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
@@ -156,6 +176,8 @@ Compared with the observation before, for units in vision in both, or watched fr
   burrowed enemy unit nothing detects is not in the observation at all.
 
 ### Deaths
+
+Both `UnitEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
