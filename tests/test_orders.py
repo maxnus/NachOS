@@ -952,6 +952,17 @@ class _LosingBot:
     def turn(self, event: TurnEvent) -> None:
         """Put an evolution chamber up, start a research and a drone, then kill the chamber."""
         api = self.api
+        if self.drone is not None and self.drone.state is OrderState.RUNNING:
+            self.drone_ran = True
+        if self.drone is None:
+            larvae = api.units.own.of_type(UnitTypeId.LARVA)
+            if len(larvae) > 1:
+                # One larva left, so the drone cannot be handed to another (in game). A kill lands as the game steps,
+                # so the drone waits for a turn that sees the rest gone.
+                kill = debug_pb2.DebugKillUnit(tag=[larva.tag for larva in larvae[1:]])
+                api.client.debug([debug_pb2.DebugCommand(kill_unit=kill)])
+            elif larvae:
+                self.drone = api.order.issue(larvae[0], AbilityId.LARVA_MORPH_DRONE)
         chambers = api.units.own.of_type(UnitTypeId.EVOLUTION_CHAMBER).complete
         if not chambers:
             home = api.units.own.of_type(UnitTypeId.HATCHERY)
@@ -965,15 +976,7 @@ class _LosingBot:
             return
         if self.research is None:
             self.research = api.order.issue(chambers[0], AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS)
-            # One larva left, so the drone cannot be handed to another (in game).
-            larvae = api.units.own.of_type(UnitTypeId.LARVA)
-            kill = debug_pb2.DebugKillUnit(tag=[larva.tag for larva in larvae[1:]])
-            api.client.debug([debug_pb2.DebugCommand(kill_unit=kill)])
-            self.drone = api.order.issue(larvae[0], AbilityId.LARVA_MORPH_DRONE)
-            return
-        if self.drone is not None and self.drone.state is OrderState.RUNNING:
-            self.drone_ran = True
-        if not self.killed and self.research.state is OrderState.RUNNING:
+        elif not self.killed and self.research.state is OrderState.RUNNING:
             self.killed = True
             api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[chambers[0].tag]))])
 
