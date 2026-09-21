@@ -138,3 +138,29 @@ class Order[T]:
         it. One the game is already done with is left as it is, so how it ended is not lost."""
         if not self._state.is_final:
             self._state = OrderState.WITHDRAWN
+
+    def _settle(
+        self,
+        state: OrderState | None = None,
+        *,
+        sent_to: tuple[OwnUnit[Any], ...] | None = None,
+        taken_by: tuple[OwnUnit[Any], ...] | None = None,
+        seen_carrying: frozenset[OwnUnit[Any]] | None = None,
+        action_result: ActionResult | None = None,
+        failure: ActionFailure | None = None,
+    ) -> None:
+        """Record what the order book found out: how far the order has got, if `state` says, and what it learned on the
+        way. The order book alone calls this, which is the one place an order changes after it is given, besides
+        `withdraw`."""
+        if state is not None:
+            self._state = state
+        if sent_to is not None:
+            self._sent_to = sent_to
+        if taken_by is not None:
+            self._taken_by = taken_by
+        if seen_carrying is not None:
+            self._seen_carrying = seen_carrying
+        if action_result is not None:
+            self._action_result = action_result
+        if failure is not None:
+            self._failure = failure
