@@ -431,6 +431,17 @@ Each entry ends with how it was seen:
   `Cancel_QueueCancelToSelection`, and a structure going up `Cancel_BuildInProgress`. `Cancel_Last` is answered
   `Error` by a morph and by an add-on, so the cancel to send is the one the game offers, not the generic one (tool
   `sweep_orders`).
+- Which cancel a structure is offered turns on what it is making, and every producer of all three races has one. A
+  command center morphing is offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, by which morph it is
+  running; a barracks, a factory and a starport building an add-on their own `Cancel_BarracksAddOn`,
+  `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`, either add-on taking the same one; a hatchery morphing
+  `Cancel_MorphLair`, a lair `Cancel_MorphHive` and a spire `Cancel_MorphGreaterSpire`; and everything training or
+  researching the queue cancel of its own kind -- `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a
+  forge, an evolution chamber and the rest, `Cancel_QueueCancelToSelection` for a command center, an orbital
+  command, a hatchery, a lair and a hive, `Cancel_QueuePasive` for a nexus and
+  `Cancel_QueuePassiveCancelToSelection` for a planetary fortress. It is offered only while the work is going on,
+  which is why an idle structure is offered none, and under `fast_build` an add-on is up again within two steps, so
+  a structure set to build one has to be read at every step (tool `sweep_tech_tree`).
 - An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
   refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
   an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay

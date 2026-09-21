@@ -54,6 +54,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1: TechRequirements(),
             AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_1})),
             AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_2})),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.ASSIMILATOR: MappingProxyType({}),
         UnitTypeId.ASSIMILATOR_RICH: MappingProxyType({}),
@@ -93,6 +94,7 @@ TECH_TREE: Final = TechTree(
         }),
         UnitTypeId.BANELING_NEST: MappingProxyType({
             AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: TechRequirements(structures=frozenset({UnitTypeId.LAIR})),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.BANSHEE: MappingProxyType({
             AbilityId.BANSHEE_CLOAK_OFF: TechRequirements(),
@@ -107,6 +109,7 @@ TECH_TREE: Final = TechTree(
         UnitTypeId.BARRACKS: MappingProxyType({
             AbilityId.BARRACKS_BUILD_REACTOR: TechRequirements(),
             AbilityId.BARRACKS_BUILD_TECH_LAB: TechRequirements(),
+            AbilityId.BARRACKS_CANCEL_ADD_ON: TechRequirements(),
             AbilityId.BARRACKS_LIFT: TechRequirements(),
             AbilityId.BARRACKS_TRAIN_GHOST: TechRequirements(structures=frozenset({UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS})),
             AbilityId.BARRACKS_TRAIN_MARAUDER: TechRequirements(structures=frozenset({UnitTypeId.TECH_LAB_BARRACKS})),
@@ -233,6 +236,8 @@ TECH_TREE: Final = TechTree(
             AbilityId.GENERAL_STOP_EXACT: TechRequirements(),
         }),
         UnitTypeId.COMMAND_CENTER: MappingProxyType({
+            AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND: TechRequirements(),
+            AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS: TechRequirements(),
             AbilityId.COMMAND_CENTER_LIFT: TechRequirements(),
             AbilityId.COMMAND_CENTER_LOAD_ALL: TechRequirements(),
             AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: TechRequirements(structures=frozenset({UnitTypeId.BARRACKS})),
@@ -275,6 +280,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2: TechRequirements(structures=frozenset({UnitTypeId.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_1})),
             AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3: TechRequirements(structures=frozenset({UnitTypeId.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_2})),
             AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.CYCLONE: MappingProxyType({
             AbilityId.CYCLONE_LOCK_ON: TechRequirements(),
@@ -287,6 +293,7 @@ TECH_TREE: Final = TechTree(
         }),
         UnitTypeId.DARK_SHRINE: MappingProxyType({
             AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.DARK_TEMPLAR: MappingProxyType({
             AbilityId.DARK_TEMPLAR_SHADOW_STRIDE: TechRequirements(upgrades=frozenset({UpgradeId.DARK_TEMPLAR_BLINK})),
@@ -358,6 +365,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1: TechRequirements(),
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2: TechRequirements(structures=frozenset({UnitTypeId.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})),
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3: TechRequirements(structures=frozenset({UnitTypeId.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_2})),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.EVOLUTION_CHAMBER: MappingProxyType({
             AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1: TechRequirements(),
@@ -369,12 +377,14 @@ TECH_TREE: Final = TechTree(
             AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1: TechRequirements(),
             AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2: TechRequirements(structures=frozenset({UnitTypeId.LAIR}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_1})),
             AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: TechRequirements(structures=frozenset({UnitTypeId.HIVE}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_2})),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.EXTRACTOR: MappingProxyType({}),
         UnitTypeId.EXTRACTOR_RICH: MappingProxyType({}),
         UnitTypeId.FACTORY: MappingProxyType({
             AbilityId.FACTORY_BUILD_REACTOR: TechRequirements(),
             AbilityId.FACTORY_BUILD_TECH_LAB: TechRequirements(),
+            AbilityId.FACTORY_CANCEL_ADD_ON: TechRequirements(),
             AbilityId.FACTORY_LIFT: TechRequirements(),
             AbilityId.FACTORY_TRAIN_CYCLONE: TechRequirements(structures=frozenset({UnitTypeId.TECH_LAB_FACTORY})),
             AbilityId.FACTORY_TRAIN_HELLBAT: TechRequirements(structures=frozenset({UnitTypeId.ARMORY})),
@@ -400,6 +410,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: TechRequirements(),
             AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE: TechRequirements(),
             AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.FORCE_FIELD: MappingProxyType({
             AbilityId.GENERAL_SMART: TechRequirements(),
@@ -414,11 +425,13 @@ TECH_TREE: Final = TechTree(
             AbilityId.FORGE_RESEARCH_SHIELDS_1: TechRequirements(),
             AbilityId.FORGE_RESEARCH_SHIELDS_2: TechRequirements(structures=frozenset({UnitTypeId.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_1})),
             AbilityId.FORGE_RESEARCH_SHIELDS_3: TechRequirements(structures=frozenset({UnitTypeId.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_2})),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.FUSION_CORE: MappingProxyType({
             AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE: TechRequirements(),
             AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION: TechRequirements(),
             AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
         }),
         UnitTypeId.GATEWAY: MappingProxyType({
             AbilityId.GATEWAY_TRAIN_ADEPT: TechRequirements(structures=frozenset({UnitTypeId.CYBERNETICS_CORE})),
@@ -427,6 +440,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GATEWAY_TRAIN_SENTRY: TechRequirements(structures=frozenset({UnitTypeId.CYBERNETICS_CORE})),
             AbilityId.GATEWAY_TRAIN_STALKER: TechRequirements(structures=frozenset({UnitTypeId.CYBERNETICS_CORE})),
             AbilityId.GATEWAY_TRAIN_ZEALOT: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.GENERAL_RALLY: TechRequirements(),
             AbilityId.GENERAL_SMART: TechRequirements(),
         }),
@@ -452,6 +466,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: TechRequirements(),
         }),
         UnitTypeId.GREATER_SPIRE: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION: TechRequirements(),
             AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: TechRequirements(),
             AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2: TechRequirements(structures=frozenset({UnitTypeId.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_1})),
             AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3: TechRequirements(structures=frozenset({UnitTypeId.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_2})),
@@ -461,6 +476,7 @@ TECH_TREE: Final = TechTree(
         }),
         UnitTypeId.HATCHERY: MappingProxyType({
             AbilityId.GENERAL_CANCEL_BUILDING: TechRequirements(),
+            AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION: TechRequirements(),
             AbilityId.GENERAL_SMART: TechRequirements(),
             AbilityId.HATCHERY_CANCEL_LAIR: TechRequirements(),
             AbilityId.HATCHERY_MORPH_LAIR: TechRequirements(structures=frozenset({UnitTypeId.SPAWNING_POOL})),
@@ -532,6 +548,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.ZERGLING_UNBURROW: TechRequirements(),
         }),
         UnitTypeId.HYDRALISK_DEN: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE: TechRequirements(structures=frozenset({UnitTypeId.HIVE})),
             AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: TechRequirements(),
             AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED: TechRequirements(),
@@ -545,6 +562,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GENERAL_STOP_EXACT: TechRequirements(),
         }),
         UnitTypeId.INFESTATION_PIT: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: TechRequirements(),
         }),
         UnitTypeId.INFESTOR: MappingProxyType({
@@ -589,6 +607,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GENERAL_STOP_EXACT: TechRequirements(),
         }),
         UnitTypeId.LAIR: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION: TechRequirements(),
             AbilityId.GENERAL_SMART: TechRequirements(),
             AbilityId.HATCHERY_RALLY_UNITS: TechRequirements(),
             AbilityId.HATCHERY_RALLY_WORKERS: TechRequirements(),
@@ -661,6 +680,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.LURKER_UNBURROW: TechRequirements(),
         }),
         UnitTypeId.LURKER_DEN: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: TechRequirements(structures=frozenset({UnitTypeId.HIVE})),
             AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE: TechRequirements(structures=frozenset({UnitTypeId.HIVE})),
         }),
@@ -1025,10 +1045,12 @@ TECH_TREE: Final = TechTree(
             AbilityId.ZERGLING_UNBURROW: TechRequirements(),
         }),
         UnitTypeId.ROACH_WARREN: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: TechRequirements(structures=frozenset({UnitTypeId.LAIR})),
             AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS: TechRequirements(structures=frozenset({UnitTypeId.LAIR})),
         }),
         UnitTypeId.ROBOTICS_BAY: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE: TechRequirements(),
             AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: TechRequirements(),
             AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED: TechRequirements(),
@@ -1115,6 +1137,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.SIEGE_TANK_UNSIEGE: TechRequirements(),
         }),
         UnitTypeId.SPAWNING_POOL: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: TechRequirements(structures=frozenset({UnitTypeId.HIVE})),
             AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED: TechRequirements(),
         }),
@@ -1134,6 +1157,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.SPINE_CRAWLER_ROOT: TechRequirements(),
         }),
         UnitTypeId.SPIRE: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION: TechRequirements(),
             AbilityId.SPIRE_CANCEL_GREATER_SPIRE: TechRequirements(),
             AbilityId.SPIRE_MORPH_GREATER_SPIRE: TechRequirements(structures=frozenset({UnitTypeId.HIVE})),
             AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: TechRequirements(),
@@ -1183,6 +1207,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GENERAL_SMART: TechRequirements(),
             AbilityId.STARPORT_BUILD_REACTOR: TechRequirements(),
             AbilityId.STARPORT_BUILD_TECH_LAB: TechRequirements(),
+            AbilityId.STARPORT_CANCEL_ADD_ON: TechRequirements(),
             AbilityId.STARPORT_LIFT: TechRequirements(),
             AbilityId.STARPORT_TRAIN_BANSHEE: TechRequirements(structures=frozenset({UnitTypeId.TECH_LAB_STARPORT})),
             AbilityId.STARPORT_TRAIN_BATTLECRUISER: TechRequirements(structures=frozenset({UnitTypeId.FUSION_CORE, UnitTypeId.TECH_LAB_STARPORT})),
@@ -1257,6 +1282,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.GENERAL_STOP_EXACT: TechRequirements(),
         }),
         UnitTypeId.TEMPLAR_ARCHIVE: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: TechRequirements(),
         }),
         UnitTypeId.THOR: MappingProxyType({
@@ -1278,6 +1304,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.THOR_EXPLOSIVE_MODE: TechRequirements(),
         }),
         UnitTypeId.TWILIGHT_COUNCIL: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: TechRequirements(),
             AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: TechRequirements(),
             AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: TechRequirements(),
@@ -1304,6 +1331,7 @@ TECH_TREE: Final = TechTree(
             AbilityId.ZERGLING_UNBURROW: TechRequirements(),
         }),
         UnitTypeId.ULTRALISK_CAVERN: MappingProxyType({
+            AbilityId.GENERAL_CANCEL_QUEUE: TechRequirements(),
             AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: TechRequirements(),
             AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: TechRequirements(),
         }),
@@ -1439,6 +1467,7 @@ TECH_TREE: Final = TechTree(
         AbilityId.BANSHEE_CLOAK_ON: AbilityId.GENERAL_CLOAK_ON,
         AbilityId.BARRACKS_BUILD_REACTOR: AbilityId.GENERAL_BUILD_REACTOR,
         AbilityId.BARRACKS_BUILD_TECH_LAB: AbilityId.GENERAL_BUILD_TECH_LAB,
+        AbilityId.BARRACKS_CANCEL_ADD_ON: AbilityId.GENERAL_CANCEL,
         AbilityId.BARRACKS_LAND: AbilityId.GENERAL_LAND,
         AbilityId.BARRACKS_LIFT: AbilityId.GENERAL_LIFT,
         AbilityId.BATTLECRUISER_ATTACK: AbilityId.GENERAL_ATTACK,
@@ -1453,6 +1482,8 @@ TECH_TREE: Final = TechTree(
         AbilityId.BUNKER_UNLOAD: AbilityId.GENERAL_UNLOAD,
         AbilityId.BUNKER_UNLOAD_AT: AbilityId.GENERAL_UNLOAD_AT,
         AbilityId.CARRIER_CANCEL_INTERCEPTOR: AbilityId.GENERAL_CANCEL_LAST,
+        AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND: AbilityId.GENERAL_CANCEL,
+        AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS: AbilityId.GENERAL_CANCEL,
         AbilityId.COMMAND_CENTER_LAND: AbilityId.GENERAL_LAND,
         AbilityId.COMMAND_CENTER_LIFT: AbilityId.GENERAL_LIFT,
         AbilityId.COMMAND_CENTER_LOAD_ALL: AbilityId.GENERAL_LOAD_ALL,
@@ -1490,6 +1521,7 @@ TECH_TREE: Final = TechTree(
         AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS,
         AbilityId.FACTORY_BUILD_REACTOR: AbilityId.GENERAL_BUILD_REACTOR,
         AbilityId.FACTORY_BUILD_TECH_LAB: AbilityId.GENERAL_BUILD_TECH_LAB,
+        AbilityId.FACTORY_CANCEL_ADD_ON: AbilityId.GENERAL_CANCEL,
         AbilityId.FACTORY_LAND: AbilityId.GENERAL_LAND,
         AbilityId.FACTORY_LIFT: AbilityId.GENERAL_LIFT,
         AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1: AbilityId.FORGE_RESEARCH_GROUND_ARMOR,
@@ -1589,6 +1621,7 @@ TECH_TREE: Final = TechTree(
         AbilityId.STALKER_BLINK: AbilityId.GENERAL_BLINK,
         AbilityId.STARPORT_BUILD_REACTOR: AbilityId.GENERAL_BUILD_REACTOR,
         AbilityId.STARPORT_BUILD_TECH_LAB: AbilityId.GENERAL_BUILD_TECH_LAB,
+        AbilityId.STARPORT_CANCEL_ADD_ON: AbilityId.GENERAL_CANCEL,
         AbilityId.STARPORT_LAND: AbilityId.GENERAL_LAND,
         AbilityId.STARPORT_LIFT: AbilityId.GENERAL_LIFT,
         AbilityId.SWARM_HOST_BURROW: AbilityId.GENERAL_BURROW,
@@ -1603,6 +1636,45 @@ TECH_TREE: Final = TechTree(
         AbilityId.WIDOW_MINE_UNBURROW: AbilityId.GENERAL_UNBURROW,
         AbilityId.ZERGLING_BURROW: AbilityId.GENERAL_BURROW,
         AbilityId.ZERGLING_UNBURROW: AbilityId.GENERAL_UNBURROW,
+    }),
+    ability_cancels=MappingProxyType({
+        AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.BARRACKS_BUILD_TECH_LAB: AbilityId.BARRACKS_CANCEL_ADD_ON,
+        AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND,
+        AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS,
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.FACTORY_BUILD_TECH_LAB: AbilityId.FACTORY_CANCEL_ADD_ON,
+        AbilityId.FACTORY_TRAIN_HELLION: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.GATEWAY_TRAIN_ZEALOT: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.GHOST_ACADEMY_BUILD_NUKE: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.HATCHERY_MORPH_LAIR: AbilityId.HATCHERY_CANCEL_LAIR,
+        AbilityId.HATCHERY_TRAIN_QUEEN: AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION,
+        AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.LAIR_MORPH_HIVE: AbilityId.LAIR_CANCEL_HIVE,
+        AbilityId.LAIR_RESEARCH_OVERLORD_SPEED: AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION,
+        AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.NEXUS_TRAIN_MOTHERSHIP: AbilityId.NEXUS_CANCEL_LAST,
+        AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.SPIRE_MORPH_GREATER_SPIRE: AbilityId.SPIRE_CANCEL_GREATER_SPIRE,
+        AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1: AbilityId.GENERAL_CANCEL_QUEUE_TO_SELECTION,
+        AbilityId.STARGATE_TRAIN_PHOENIX: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.STARPORT_BUILD_TECH_LAB: AbilityId.STARPORT_CANCEL_ADD_ON,
+        AbilityId.STARPORT_TRAIN_MEDIVAC: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: AbilityId.GENERAL_CANCEL_QUEUE,
+        AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: AbilityId.GENERAL_CANCEL_QUEUE,
     }),
     creation_abilities=MappingProxyType({
         UnitTypeId.ADEPT: AbilityId.GATEWAY_TRAIN_ADEPT,
@@ -1989,7 +2061,6 @@ TECH_TREE: Final = TechTree(
     }),
     morph_sources=MappingProxyType({
         UnitTypeId.BANELING: UnitTypeId.ZERGLING,
-        UnitTypeId.BANELING_BURROWED: UnitTypeId.BANELING,
         UnitTypeId.BANELING_NEST: UnitTypeId.DRONE,
         UnitTypeId.BARRACKS_FLYING: UnitTypeId.BARRACKS,
         UnitTypeId.BROOD_LORD: UnitTypeId.CORRUPTOR,

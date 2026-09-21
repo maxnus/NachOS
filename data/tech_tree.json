@@ -43,7 +43,8 @@
    "ArmoryResearch_TerranVehicleAndShipPlatingLevel3",
    "ArmoryResearch_TerranVehicleWeaponsLevel1",
    "ArmoryResearch_TerranVehicleWeaponsLevel2",
-   "ArmoryResearch_TerranVehicleWeaponsLevel3"
+   "ArmoryResearch_TerranVehicleWeaponsLevel3",
+   "Cancel_Queue5"
   ],
   "Assimilator": [],
   "AssimilatorRich": [],
@@ -93,6 +94,7 @@
    "Smart"
   ],
   "BanelingNest": [
+   "Cancel_Queue5",
    "Research_CentrifugalHooks"
   ],
   "Banshee": [
@@ -112,6 +114,7 @@
    "BarracksTrain_Reaper",
    "Build_Reactor_Barracks",
    "Build_TechLab_Barracks",
+   "Cancel_BarracksAddOn",
    "Cancel_Queue5",
    "Lift_Barracks",
    "Rally_Building",
@@ -241,6 +244,8 @@
   ],
   "CommandCenter": [
    "Cancel_BuildInProgress",
+   "Cancel_MorphOrbital",
+   "Cancel_MorphPlanetaryFortress",
    "Cancel_QueueCancelToSelection",
    "CommandCenterTrain_SCV",
    "Halt_Building",
@@ -275,6 +280,7 @@
    "Smart"
   ],
   "CyberneticsCore": [
+   "Cancel_Queue5",
    "CyberneticsCoreResearch_ProtossAirArmorLevel1",
    "CyberneticsCoreResearch_ProtossAirArmorLevel2",
    "CyberneticsCoreResearch_ProtossAirArmorLevel3",
@@ -284,6 +290,7 @@
    "Research_WarpGate"
   ],
   "Cyclone": [
+   "Cancel_LockOn",
    "HoldPosition_Hold",
    "LockOn_LockOn",
    "Move_Move",
@@ -293,6 +300,7 @@
    "stop_Stop"
   ],
   "DarkShrine": [
+   "Cancel_Queue5",
    "Research_ShadowStrike"
   ],
   "DarkTemplar": [
@@ -376,6 +384,7 @@
    "Smart"
   ],
   "EngineeringBay": [
+   "Cancel_Queue5",
    "EngineeringBayResearch_TerranInfantryArmorLevel1",
    "EngineeringBayResearch_TerranInfantryArmorLevel2",
    "EngineeringBayResearch_TerranInfantryArmorLevel3",
@@ -386,6 +395,7 @@
    "Research_TerranStructureArmorUpgrade"
   ],
   "EvolutionChamber": [
+   "Cancel_Queue5",
    "Research_ZergGroundArmorLevel1",
    "Research_ZergGroundArmorLevel2",
    "Research_ZergGroundArmorLevel3",
@@ -401,6 +411,7 @@
   "Factory": [
    "Build_Reactor_Factory",
    "Build_TechLab_Factory",
+   "Cancel_FactoryAddOn",
    "Cancel_Queue5",
    "FactoryTrain_Hellion",
    "FactoryTrain_SiegeTank",
@@ -430,6 +441,7 @@
    "Research_SmartServos"
   ],
   "FleetBeacon": [
+   "Cancel_Queue5",
    "FleetBeaconResearch_ResearchVoidRaySpeedUpgrade",
    "FleetBeaconResearch_TempestResearchGroundAttackUpgrade",
    "Research_PhoenixAnionPulseCrystals"
@@ -439,6 +451,7 @@
    "Smart"
   ],
   "Forge": [
+   "Cancel_Queue5",
    "ForgeResearch_ProtossGroundArmorLevel1",
    "ForgeResearch_ProtossGroundArmorLevel2",
    "ForgeResearch_ProtossGroundArmorLevel3",
@@ -450,11 +463,13 @@
    "ForgeResearch_ProtossShieldsLevel3"
   ],
   "FusionCore": [
+   "Cancel_Queue5",
    "FusionCoreResearch_ResearchBallisticRange",
    "FusionCoreResearch_ResearchMedivacEnergyUpgrade",
    "Research_BattlecruiserWeaponRefit"
   ],
   "Gateway": [
+   "Cancel_Queue5",
    "GatewayTrain_DarkTemplar",
    "GatewayTrain_HighTemplar",
    "GatewayTrain_Sentry",
@@ -486,6 +501,7 @@
    "Research_PersonalCloaking"
   ],
   "GreaterSpire": [
+   "Cancel_QueueCancelToSelection",
    "Research_ZergFlyerArmorLevel1",
    "Research_ZergFlyerArmorLevel2",
    "Research_ZergFlyerArmorLevel3",
@@ -496,6 +512,7 @@
   "Hatchery": [
    "Cancel_BuildInProgress",
    "Cancel_MorphLair",
+   "Cancel_QueueCancelToSelection",
    "Rally_Hatchery_Units",
    "Rally_Hatchery_Workers",
    "Research_Burrow",
@@ -577,6 +594,7 @@
    "BurrowUp_Zergling"
   ],
   "HydraliskDen": [
+   "Cancel_Queue5",
    "HydraliskDenResearch_ResearchFrenzy",
    "Research_GroovedSpines",
    "Research_MuscularAugments"
@@ -590,6 +608,7 @@
    "stop_Stop"
   ],
   "InfestationPit": [
+   "Cancel_Queue5",
    "Research_NeuralParasite"
   ],
   "Infestor": [
@@ -647,6 +666,7 @@
   "KD8Charge": [],
   "Lair": [
    "Cancel_MorphHive",
+   "Cancel_QueueCancelToSelection",
    "Rally_Hatchery_Units",
    "Rally_Hatchery_Workers",
    "Research_Burrow",
@@ -701,6 +721,7 @@
    "stop_Stop"
   ],
   "LurkerDenMP": [
+   "Cancel_Queue5",
    "LurkerDenResearch_ResearchLurkerRange",
    "Research_AdaptiveTalons"
   ],
@@ -1096,10 +1117,12 @@
    "stop_Stop"
   ],
   "RoachWarren": [
+   "Cancel_Queue5",
    "Research_GlialRegeneration",
    "Research_TunnelingClaws"
   ],
   "RoboticsBay": [
+   "Cancel_Queue5",
    "Research_ExtendedThermalLance",
    "Research_GraviticBooster",
    "Research_GraviticDrive"
@@ -1186,6 +1209,7 @@
    "stop_Stop"
   ],
   "SpawningPool": [
+   "Cancel_Queue5",
    "Research_ZerglingAdrenalGlands",
    "Research_ZerglingMetabolicBoost"
   ],
@@ -1206,6 +1230,7 @@
   ],
   "Spire": [
    "Cancel_MorphGreaterSpire",
+   "Cancel_QueueCancelToSelection",
    "Research_ZergFlyerArmorLevel1",
    "Research_ZergFlyerArmorLevel2",
    "Research_ZergFlyerArmorLevel3",
@@ -1252,6 +1277,7 @@
    "Build_Reactor_Starport",
    "Build_TechLab_Starport",
    "Cancel_Queue5",
+   "Cancel_StarportAddOn",
    "Lift_Starport",
    "Rally_Building",
    "Smart",
@@ -1328,6 +1354,7 @@
    "stop_Stop"
   ],
   "TemplarArchive": [
+   "Cancel_Queue5",
    "Research_PsiStorm"
   ],
   "Thor": [
@@ -1356,6 +1383,7 @@
    "Smart"
   ],
   "TwilightCouncil": [
+   "Cancel_Queue5",
    "Research_AdeptResonatingGlaives",
    "Research_Blink",
    "Research_Charge"
@@ -1393,6 +1421,7 @@
    "BurrowUp_Zergling"
   ],
   "UltraliskCavern": [
+   "Cancel_Queue5",
    "Research_AnabolicSynthesis",
    "Research_ChitinousPlating"
   ],
@@ -1750,6 +1779,13 @@
    ]
   },
   {
+   "performer": "Armory",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
    "performer": "AutoTurret",
    "ability": "Smart",
    "structures": [],
@@ -2032,6 +2068,13 @@
   },
   {
    "performer": "BanelingNest",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "BanelingNest",
    "ability": "Research_CentrifugalHooks",
    "structures": [
     "Lair"
@@ -2140,6 +2183,13 @@
   {
    "performer": "Barracks",
    "ability": "Build_TechLab_Barracks",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Barracks",
+   "ability": "Cancel_BarracksAddOn",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -2820,6 +2870,20 @@
   },
   {
    "performer": "CommandCenter",
+   "ability": "Cancel_MorphOrbital",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "CommandCenter",
+   "ability": "Cancel_MorphPlanetaryFortress",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "CommandCenter",
    "ability": "Cancel_QueueCancelToSelection",
    "structures": [],
    "attached": false,
@@ -3008,6 +3072,13 @@
   },
   {
    "performer": "CyberneticsCore",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "CyberneticsCore",
    "ability": "CyberneticsCoreResearch_ProtossAirArmorLevel1",
    "structures": [],
    "attached": false,
@@ -3116,6 +3187,13 @@
   {
    "performer": "Cyclone",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "DarkShrine",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -3653,6 +3731,13 @@
   },
   {
    "performer": "EngineeringBay",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "EngineeringBay",
    "ability": "EngineeringBayResearch_TerranInfantryArmorLevel1",
    "structures": [],
    "attached": false,
@@ -3719,6 +3804,13 @@
   {
    "performer": "EngineeringBay",
    "ability": "Research_TerranStructureArmorUpgrade",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "EvolutionChamber",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -3820,6 +3912,13 @@
   {
    "performer": "Factory",
    "ability": "Build_TechLab_Factory",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Factory",
+   "ability": "Cancel_FactoryAddOn",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -3993,6 +4092,13 @@
   },
   {
    "performer": "FleetBeacon",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "FleetBeacon",
    "ability": "FleetBeaconResearch_ResearchVoidRaySpeedUpgrade",
    "structures": [],
    "attached": false,
@@ -4022,6 +4128,13 @@
   {
    "performer": "ForceField",
    "ability": "Smart",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Forge",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -4115,6 +4228,13 @@
   },
   {
    "performer": "FusionCore",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "FusionCore",
    "ability": "FusionCoreResearch_ResearchBallisticRange",
    "structures": [],
    "attached": false,
@@ -4130,6 +4250,13 @@
   {
    "performer": "FusionCore",
    "ability": "Research_BattlecruiserWeaponRefit",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Gateway",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -4325,6 +4452,13 @@
   },
   {
    "performer": "GreaterSpire",
+   "ability": "Cancel_QueueCancelToSelection",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "GreaterSpire",
    "ability": "Research_ZergFlyerArmorLevel1",
    "structures": [],
    "attached": false,
@@ -4391,6 +4525,13 @@
   {
    "performer": "Hatchery",
    "ability": "Cancel_MorphLair",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Hatchery",
+   "ability": "Cancel_QueueCancelToSelection",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -4904,6 +5045,13 @@
   },
   {
    "performer": "HydraliskDen",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "HydraliskDen",
    "ability": "HydraliskDenResearch_ResearchFrenzy",
    "structures": [
     "Hive"
@@ -4963,6 +5111,13 @@
   {
    "performer": "Immortal",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "InfestationPit",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -5331,6 +5486,13 @@
   },
   {
    "performer": "Lair",
+   "ability": "Cancel_QueueCancelToSelection",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Lair",
    "ability": "Rally_Hatchery_Units",
    "structures": [],
    "attached": false,
@@ -5641,6 +5803,13 @@
   {
    "performer": "LocustMPFlying",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "LurkerDenMP",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -7972,6 +8141,13 @@
   },
   {
    "performer": "RoachWarren",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "RoachWarren",
    "ability": "Research_GlialRegeneration",
    "structures": [
     "Lair"
@@ -7985,6 +8161,13 @@
    "structures": [
     "Lair"
    ],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "RoboticsBay",
+   "ability": "Cancel_Queue5",
+   "structures": [],
    "attached": false,
    "upgrades": []
   },
@@ -8504,6 +8687,13 @@
   },
   {
    "performer": "SpawningPool",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "SpawningPool",
    "ability": "Research_ZerglingAdrenalGlands",
    "structures": [
     "Hive"
@@ -8598,6 +8788,13 @@
   {
    "performer": "Spire",
    "ability": "Cancel_MorphGreaterSpire",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Spire",
+   "ability": "Cancel_QueueCancelToSelection",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -8874,6 +9071,13 @@
   {
    "performer": "Starport",
    "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "Starport",
+   "ability": "Cancel_StarportAddOn",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -9322,6 +9526,13 @@
   },
   {
    "performer": "TemplarArchive",
+   "ability": "Cancel_Queue5",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TemplarArchive",
    "ability": "Research_PsiStorm",
    "structures": [],
    "attached": false,
@@ -9456,6 +9667,13 @@
   {
    "performer": "TransportOverlordCocoon",
    "ability": "Smart",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "TwilightCouncil",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -9695,6 +9913,13 @@
   {
    "performer": "UltraliskBurrowed",
    "ability": "BurrowUp_Zergling",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "UltraliskCavern",
+   "ability": "Cancel_Queue5",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -10435,12 +10660,6 @@
   }
  ],
  "made": [
-  {
-   "performer": "Baneling",
-   "ability": "BurrowDown_Baneling",
-   "product": "BanelingBurrowed",
-   "result": "morph"
-  },
   {
    "performer": "Baneling",
    "ability": "BurrowDown_Drone",
@@ -11886,6 +12105,45 @@
   "TwilightCouncil",
   "WarpGate"
  ],
+ "cancels": {
+  "ArmoryResearch_TerranVehicleWeaponsLevel1": "Cancel_Queue5",
+  "Build_Nuke": "Cancel_Queue5",
+  "Build_TechLab_Barracks": "Cancel_BarracksAddOn",
+  "Build_TechLab_Factory": "Cancel_FactoryAddOn",
+  "Build_TechLab_Starport": "Cancel_StarportAddOn",
+  "CyberneticsCoreResearch_ProtossAirWeaponsLevel1": "Cancel_Queue5",
+  "FactoryTrain_Hellion": "Cancel_Queue5",
+  "ForgeResearch_ProtossGroundWeaponsLevel1": "Cancel_Queue5",
+  "GatewayTrain_Zealot": "Cancel_Queue5",
+  "NexusTrainMothership_Mothership": "Cancel_QueuePasive",
+  "Research_AdaptiveTalons": "Cancel_Queue5",
+  "Research_AnabolicSynthesis": "Cancel_Queue5",
+  "Research_BattlecruiserWeaponRefit": "Cancel_Queue5",
+  "Research_CentrifugalHooks": "Cancel_Queue5",
+  "Research_Charge": "Cancel_Queue5",
+  "Research_GlialRegeneration": "Cancel_Queue5",
+  "Research_GraviticBooster": "Cancel_Queue5",
+  "Research_GroovedSpines": "Cancel_Queue5",
+  "Research_HiSecAutoTracking": "Cancel_Queue5",
+  "Research_NeuralParasite": "Cancel_Queue5",
+  "Research_PersonalCloaking": "Cancel_Queue5",
+  "Research_PhoenixAnionPulseCrystals": "Cancel_Queue5",
+  "Research_PneumatizedCarapace": "Cancel_QueueCancelToSelection",
+  "Research_PsiStorm": "Cancel_Queue5",
+  "Research_ShadowStrike": "Cancel_Queue5",
+  "Research_ZergFlyerAttackLevel1": "Cancel_QueueCancelToSelection",
+  "Research_ZergMeleeWeaponsLevel1": "Cancel_Queue5",
+  "Research_ZerglingAdrenalGlands": "Cancel_Queue5",
+  "RoboticsFacilityTrain_WarpPrism": "Cancel_Queue5",
+  "StargateTrain_Phoenix": "Cancel_Queue5",
+  "StarportTrain_Medivac": "Cancel_Queue5",
+  "TrainQueen_Queen": "Cancel_QueueCancelToSelection",
+  "UpgradeToGreaterSpire_GreaterSpire": "Cancel_MorphGreaterSpire",
+  "UpgradeToHive_Hive": "Cancel_MorphHive",
+  "UpgradeToLair_Lair": "Cancel_MorphLair",
+  "UpgradeToOrbital_OrbitalCommand": "Cancel_MorphOrbital",
+  "UpgradeToPlanetaryFortress_PlanetaryFortress": "Cancel_MorphPlanetaryFortress"
+ },
  "remaps": {
   "AdeptPhaseShift": "Cancel",
   "AdeptPhaseShiftCancel": "Cancel",
