@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, final
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from sc2nachos.gamedata._unittype import Attribute
+    from sc2nachos.gamedata._unit_type_data import Attribute
 
 
 @final

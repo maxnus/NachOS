@@ -9,7 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos._game import _Game
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
@@ -50,7 +50,6 @@ from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
-from sc2nachos.upgrade_reader import UpgradeInference
 
 
 class FakeTransport:

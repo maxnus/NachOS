@@ -39,9 +39,9 @@ from typing import Final
 
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._tech_tree import TechTree
+from sc2nachos.gamedata._unit_type_data import Attribute
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
-from sc2nachos.gamedata._unittype import Attribute
-from sc2nachos.gamedata._upgrade import UpgradeType
+from sc2nachos.gamedata._upgrade_data import UpgradeType
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 '''

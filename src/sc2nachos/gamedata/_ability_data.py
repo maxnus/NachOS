@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._techtree import TechTree
-    from sc2nachos.gamedata._unittype import UnitTypeData
-    from sc2nachos.gamedata._upgrade import UpgradeData
+    from sc2nachos.gamedata._unit_type_data import UnitTypeData
+    from sc2nachos.gamedata._upgrade_data import UpgradeData
 
 
 class TargetType(ReadableIntEnum):

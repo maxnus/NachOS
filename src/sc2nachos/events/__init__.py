@@ -2,13 +2,16 @@
 
 A game hands out `GameStartEvent`, then a turn for each observation but the last, then `GameEndEvent`. A turn hands
 out `TurnStartEvent`, then what its observation reports has happened, then `TurnEvent`. `only`, `of` and `where` select
-some events of a type, and a subclass of `Event` is an event of a bot's own, sent with `EventBus.emit`.
+some events of a type, `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` are the bases a handler takes a whole
+kind of event through, and a subclass of `Event` is an event of a bot's own, sent with `EventBus.emit`.
 `docs/events.md` lists every event: its fields, what selects it, and when it comes.
 """
 
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import (
     AlertEvent,
+    AreaEvent,
+    BuffEvent,
     ChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
@@ -45,8 +48,10 @@ from sc2nachos.events._event import (
     TurnStartEvent,
     UnitAllianceChangedEvent,
     UnitDiedEvent,
+    UnitEvent,
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
+    VitalEvent,
 )
 from sc2nachos.events._event_bus import EventBus
 from sc2nachos.events._event_filter import EventFilter
@@ -55,6 +60,8 @@ from sc2nachos.events._handler_timings import HandlerTimings
 
 __all__ = [
     "AlertEvent",
+    "AreaEvent",
+    "BuffEvent",
     "ChatEvent",
     "Done",
     "EnemyUnitCloakChangedEvent",
@@ -96,6 +103,8 @@ __all__ = [
     "TurnStartEvent",
     "UnitAllianceChangedEvent",
     "UnitDiedEvent",
+    "UnitEvent",
     "UnitFoundDeadEvent",
     "UnitTypeChangedEvent",
+    "VitalEvent",
 ]

@@ -63,7 +63,7 @@ this one is its creation ability, and otherwise it makes the type besides the on
 # a unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and
 # no ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
-# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability.py` reads an ability that makes nothing
+# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` reads an ability that makes nothing
 # and is offered only to a type the game offers no move as keeping its orders too, which is a structure's own rally,
 # load, cancel and energy casts. The general ids these remap to are not measured; a general id keeps a unit's orders
 # where an ability it stands for does.

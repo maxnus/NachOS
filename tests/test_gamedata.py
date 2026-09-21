@@ -15,7 +15,7 @@ from sc2nachos.gamedata import (
     TargetDomain,
     TargetType,
 )
-from sc2nachos.gamedata._ability import _derived_cost
+from sc2nachos.gamedata._ability_data import _derived_cost
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,

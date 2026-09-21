@@ -7,7 +7,7 @@ from loguru import logger
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.enemy import Enemy
+from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
@@ -18,7 +18,6 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client
 from sc2nachos.state import ActionError, Effect, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units
-from sc2nachos.upgrade_reader import UpgradeInference
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -41,11 +40,11 @@ class Api:
     """
 
     def __init__(
-        self, *, infer_enemy_upgrades: UpgradeInference = UpgradeInference.BASIC, time_handlers: bool = False
+        self, *, enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC, time_handlers: bool = False
     ) -> None:
-        """Work out as much of `api.enemy.upgrades` as `infer_enemy_upgrades` says, and time every handler's calls
+        """Work out as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler's calls
         if `time_handlers`. Nothing here connects to anything."""
-        self._infer_enemy_upgrades = infer_enemy_upgrades
+        self._enemy_upgrade_inference = enemy_upgrade_inference
         self._event = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
         self._game: _Game | None = None
@@ -154,7 +153,7 @@ class Api:
         """The other player of this game, and what is known of it.
 
         `api.enemy.upgrades` holds any upgrades a bot adds with `assume_upgrades`, and those its units have shown, which
-        NachOS reads as far as `infer_enemy_upgrades` says. Every read of an enemy unit that
+        NachOS reads as far as `enemy_upgrade_inference` says. Every read of an enemy unit that
         upgrades change counts them, `Unit.weapons` and `Unit.speed` among them.
         """
         return self._current_game().enemy
@@ -196,7 +195,7 @@ class Api:
         """
         if self._game is not None:
             self._game.tracker.end()
-        game = _Game.start(client, infer_enemy_upgrades=self._infer_enemy_upgrades)
+        game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)
         events = self._event
