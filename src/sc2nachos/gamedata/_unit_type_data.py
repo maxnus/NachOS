@@ -10,7 +10,7 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
-from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -105,12 +105,11 @@ class UnitTypeData:
     """Which type of unit this describes."""
     race: Race
     """The race it belongs to."""
-    cost: Resources
-    """Everything spent to reach this type: an orbital command is 550, the command center's 400 included."""
+    cost: Cost
+    """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
+    400 included."""
     build_steps: float
     """Steps to make one, counting only the last stage where it morphs from another type."""
-    supply_cost: float
-    """What it takes of the supply cap."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int
@@ -179,9 +178,8 @@ class UnitTypeData:
         return cls(
             id=unit_type,
             race=Race(unit.race),
-            cost=Resources(unit.mineral_cost, unit.vespene_cost),
+            cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             build_steps=unit.build_time,
-            supply_cost=unit.food_required,
             supply_provided=unit.food_provided,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,

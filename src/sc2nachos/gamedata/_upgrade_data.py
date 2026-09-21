@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._cost import Cost
 from sc2nachos.ids import AbilityId, UpgradeId
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ class UpgradeData:
 
     id: UpgradeId
     """Which upgrade this describes."""
-    cost: Resources
+    cost: Cost
     """What researching it takes."""
     research_steps: float
     """Steps it takes to research."""
@@ -52,7 +52,7 @@ class UpgradeData:
         upgrade = UpgradeId(data.upgrade_id)
         return cls(
             id=upgrade,
-            cost=Resources(data.mineral_cost, data.vespene_cost),
+            cost=Cost(data.mineral_cost, data.vespene_cost),
             research_steps=data.research_time,
             research_ability=AbilityId.get(data.ability_id) or tech_tree.research_abilities.get(upgrade),
             type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),

@@ -84,23 +84,22 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 
 ## What an order needs
 
-NachOS sends every order as it was given, and checks nothing it needs: minerals, vespene, supply, room in a
-structure's queue, tech. The game judges those, and the order's state says what it decided. An order it refuses
-reads `REFUSED` with its verdict, one it takes and silently drops reads `DROPPED`, and a queued order the supply cap
-cannot feed is taken, charged, and left at no progress until supply frees up.
+The game answers an order it cannot pay for in one of three ways: it refuses it, which reads `REFUSED` with its
+verdict; it takes it and silently drops it, `DROPPED`; or, for a queued order the supply cap cannot feed, it takes it,
+charges it, and leaves it at no progress until supply frees up.
 
 A bot budgets for itself, since only it knows what matters most:
 
 ```python
 cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
-if api.resources.covers(cost):
+if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
     api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-`api.resources` does not change as orders are given. It is what the game last reported, so a bot giving several
-orders in one turn keeps its own tally. `cost` is what the game charges as the ability is ordered: the difference
-for a morph, 150 for an orbital command rather than its type's 550. `supply_cost` is what it takes of the cap as it
-starts.
+`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, so a bot
+giving several orders in one turn keeps its own tally. `cost` is what the game charges as the ability is ordered: the
+difference for a morph, 150 for an orbital command rather than its type's 550, and for `cost.supply`, what it takes of
+the cap as it starts.
 
 A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the one to send to a structure
 carrying `ability` out: `GENERAL_CANCEL_LAST` for a train or a research, whatever the structure, and a morph's or an

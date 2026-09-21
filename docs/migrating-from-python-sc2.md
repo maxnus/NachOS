@@ -422,9 +422,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Resources` without the time |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene and supply, without the time |
 | `unit_data.cost.time` | `unit_data.build_steps` |
-| `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_cost`, `unit_data.supply_provided` |
+| `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons` |
 | `unit_data.unit_alias` | `unit_data.base_type` |
@@ -437,8 +437,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
-| `bot.calculate_supply_cost(t)` | `ability_data.supply_cost` of what makes it |
-| `bot.can_afford(x)` | `api.resources.covers(ability_data.cost)`, and the supply the bot checks itself |
+| `bot.calculate_supply_cost(t)` | `ability_data.cost.supply` of what makes it |
+| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
@@ -482,12 +482,13 @@ reads it, is in [game-behavior.md](game-behavior.md).
   `MEDIVAC_UNLOAD_AT` put everyone down at once.
 - **A row's `id` is its own.** python-sc2's `AbilityData.id` answers the generic id the ability remaps to, and
   `exact_id` the row's own. NachOS keeps `id` the row's own and puts `remaps_to` beside it.
-- **A cost is minerals and vespene, and times are seconds beside it.** python-sc2's `Cost` carries a `time`
+- **A cost is minerals, vespene and supply, and times are steps beside it.** python-sc2's `Cost` carries a `time`
   in steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong
-  nearly everywhere. NachOS has `Resources`, which adds, subtracts, scales, divides and answers `covers`, and
-  `build_steps` and `research_steps` are their own fields. Its amounts are fractional, since half a
-  cost and an average cost are ordinary things to want; what the game gave stays whole until something divides
-  it.
+  nearly everywhere. NachOS's `Cost` adds, subtracts and scales, supply included, and `build_steps` and
+  `research_steps` are their own fields. What a player holds is `Resources`, minerals and vespene alone, which adds,
+  subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
+  fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole
+  until something divides it.
 - **A unit type's cost is everything spent to reach it; an ability's is what the game charges.** An orbital
   command's row reads 550 minerals, the command center's 400 included, and its build time is the 25 seconds of the
   morph alone, so `unit_data.cost` hands the game's number back as it stands and `morphed_from` says what to

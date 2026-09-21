@@ -5,14 +5,12 @@ from sc2nachos.gamedata._techtree._overrides import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
-    SUPPLY_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.gamedata._techtree._tech_tree import TechTree
 
 __all__ = [
     "COST_OVERRIDES",
-    "SUPPLY_OVERRIDES",
     "KEEPS_ORDERS_ABILITIES",
     "MISNAMED_RESEARCH_ABILITIES",
     "TECH_TREE",

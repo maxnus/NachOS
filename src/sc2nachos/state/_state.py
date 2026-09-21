@@ -68,7 +68,7 @@ class _State:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # What the unit takes beyond a whole supply: 0.5 for a zergling, 0 for a roach.
-                taken += row.supply_cost % 1
+                taken += row.cost.supply % 1
         # What is left of the sum beyond whole supplies, which the game does count: two zerglings leave nothing.
         return taken % 1
 
