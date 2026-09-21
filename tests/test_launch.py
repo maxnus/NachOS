@@ -21,7 +21,7 @@ from sc2nachos.launch import (
     UnsupportedPlatformError,
     free_port,
 )
-from sc2nachos.launch._process import launch_command
+from sc2nachos.launch._game_process import launch_command
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, RecordingTransport, ReplayTransport, Status, WebSocketTransport
 

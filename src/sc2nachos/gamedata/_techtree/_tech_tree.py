@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata._tech_requirements import TechRequirements
     from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
-    from sc2nachos.gamedata._upgrade import UpgradeType
+    from sc2nachos.gamedata._upgrade_data import UpgradeType
     from sc2nachos.ids import AbilityId, UnitTypeId
 
 

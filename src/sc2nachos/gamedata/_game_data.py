@@ -5,11 +5,11 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.gamedata._ability import AbilityData, order_behaviors
-from sc2nachos.gamedata._effect import EffectData
+from sc2nachos.gamedata._ability_data import AbilityData, order_behaviors
+from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.gamedata._unittype import Attribute, UnitTypeData
-from sc2nachos.gamedata._upgrade import UpgradeData
+from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
+from sc2nachos.gamedata._upgrade_data import UpgradeData
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
