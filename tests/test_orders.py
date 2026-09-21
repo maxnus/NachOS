@@ -34,12 +34,16 @@ _HOLD_FIRE = AbilityId.GHOST_HOLD_FIRE_ON
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.GENERAL_RALLY
+_MORPH_DRONE = AbilityId.LARVA_MORPH_DRONE
 # An unset `target` reads as the first value the enum declares, which is the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.LARVA, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.EGG, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.DRONE, attributes=[data_pb2.Attribute.Biological]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
@@ -49,6 +53,7 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
+        data_pb2.AbilityData(ability_id=_MORPH_DRONE),
     ],
 )
 
@@ -491,7 +496,7 @@ class TestWhatBecameOfAnOrder:
         assert order.error.result is ActionResult.NOT_ENOUGH_FOOD
         assert order.error.unit is game.own(1)
 
-    def test_an_order_is_done_once_the_unit_it_was_given_to_is_dead(self) -> None:
+    def test_an_order_is_lost_once_the_unit_it_was_given_to_is_dead(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -500,6 +505,34 @@ class TestWhatBecameOfAnOrder:
         assert order.state is OrderState.RUNNING
 
         game.observe(32, dead=(1,))
+
+        assert order.state is OrderState.LOST
+
+    def test_what_a_structure_killed_half_way_was_making_is_lost(self) -> None:
+        """The game reports a producer dying and nothing more (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1, _training()), actions=(_reported(_TRAIN_MARINE, 1, step=16),))
+        assert order.state is OrderState.RUNNING
+
+        game.observe(32, dead=(1,))
+
+        assert order.state is OrderState.LOST
+        assert order.error is None
+
+    def test_a_larvas_order_is_done_once_its_egg_is_reported_dead(self) -> None:
+        """An egg is reported dead as what it makes hatches (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.LARVA))
+        order = game.book.issue(game.own(1), _MORPH_DRONE)
+        game.flush()
+        egg = make_unit(1, UnitTypeId.EGG, orders=[raw_pb2.UnitOrder(ability_id=_MORPH_DRONE, progress=0.5)])
+        game.observe(16, egg, actions=(_reported(_MORPH_DRONE, 1, step=16),))
+        assert order.state is OrderState.RUNNING
+
+        game.observe(32, make_unit(2, UnitTypeId.DRONE), dead=(1,))
 
         assert order.state is OrderState.DONE
 
@@ -904,6 +937,47 @@ class _OrderingBot:
             self.at_a_dead_tag = api.order.issue(self.killed, _MOVE, target=middle)
 
 
+class _LosingBot:
+    """A bot that has a structure killed while it researches, and a larva hatch a drone, to see which of the two
+    orders the real game leaves lost and which done."""
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.research: Order[None] | None = None
+        self.drone: Order[None] | None = None
+        self.drone_ran = False
+        self.killed = False
+
+    def turn(self, event: TurnEvent) -> None:
+        """Put an evolution chamber up, start a research and a drone, then kill the chamber."""
+        api = self.api
+        chambers = api.units.own.of_type(UnitTypeId.EVOLUTION_CHAMBER).complete
+        if not chambers:
+            home = api.units.own.of_type(UnitTypeId.HATCHERY)
+            if event.step < 64 and home:
+                api.client.debug(
+                    [
+                        _create(UnitTypeId.EVOLUTION_CHAMBER, home[0].position + (0.0, 6.0), self.player, quantity=1),
+                        debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.all_resources),
+                    ]
+                )
+            return
+        if self.research is None:
+            self.research = api.order.issue(chambers[0], AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS)
+            # One larva left, so the drone cannot be handed to another (in game).
+            larvae = api.units.own.of_type(UnitTypeId.LARVA)
+            kill = debug_pb2.DebugKillUnit(tag=[larva.tag for larva in larvae[1:]])
+            api.client.debug([debug_pb2.DebugCommand(kill_unit=kill)])
+            self.drone = api.order.issue(larvae[0], AbilityId.LARVA_MORPH_DRONE)
+            return
+        if self.drone is not None and self.drone.state is OrderState.RUNNING:
+            self.drone_ran = True
+        if not self.killed and self.research.state is OrderState.RUNNING:
+            self.killed = True
+            api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[chambers[0].tag]))])
+
+
 def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> debug_pb2.DebugCommand:
     """The command creating units of `unit_type` at `at`."""
     position = common_pb2.Point2D(x=at.x, y=at.y)
@@ -947,3 +1021,30 @@ class TestAgainstTheRealGame:
         assert bot.at_a_dead_tag is not None
         assert bot.at_a_dead_tag.state is OrderState.REFUSED
         assert bot.at_a_dead_tag.verdict is ActionResult.ERROR
+
+    def test_what_a_structure_killed_was_making_is_lost_and_a_hatched_drone_done(self) -> None:
+        try:
+            game_map = Map.find("PylonAIE_v4")
+        except MapNotFoundError as missing:
+            pytest.skip(str(missing))
+        with (
+            GameProcess.launch(window=(640, 480)) as process,
+            closing(Client(WebSocketTransport.connect(process.url))) as client,
+        ):
+            client.create_game(game_map.path, [Participant(), Computer(Race.TERRAN, Difficulty.VERY_EASY)])
+            player = client.join_game(Race.ZERG)
+            api = Api()
+            bot = _LosingBot(api, player)
+            api.event.on(TurnEvent)(bot.turn)
+            api.play(client, steps_per_turn=8, time_limit=60)
+
+        # The game reports the chamber dying and nothing more, so the research reads lost.
+        assert bot.killed
+        assert bot.research is not None
+        assert bot.research.state is OrderState.LOST
+        assert bot.research.error is None
+
+        # The egg the larva became is reported dead as the drone hatches, which is the order done.
+        assert bot.drone is not None
+        assert bot.drone_ran, f"the drone's order read {bot.drone.state.name}, never running"
+        assert bot.drone.state is OrderState.DONE

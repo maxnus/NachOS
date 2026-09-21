@@ -14,6 +14,11 @@ class OrderState(Enum):
     """The game reported carrying it out, or the unit was already doing it and it was not sent again."""
     DONE = "done"
     """No unit it was given to is carrying it out any more."""
+    LOST = "lost"
+    """Every unit it went out for died before it was done, so nothing came of it. The game reports a producer dying
+    and nothing more, and a unit that is gone is carrying nothing out, so this is what tells a marine that was
+    trained from a barracks killed half way through it. A larva's order is `DONE` instead: the egg it becomes is
+    reported dead as what it makes hatches, so an egg killed first reads the same (in game)."""
     REFUSED = "refused"
     """Sent, and answered something other than `SUCCESS`: the verdict says what."""
     DROPPED = "dropped"
@@ -37,6 +42,7 @@ class OrderState(Enum):
 _FINAL = frozenset(
     {
         OrderState.DONE,
+        OrderState.LOST,
         OrderState.REFUSED,
         OrderState.DROPPED,
         OrderState.FAILED,

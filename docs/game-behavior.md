@@ -175,7 +175,8 @@ Each entry ends with how it was seen:
 ## Units coming, changing and going
 
 - A larva stays one unit as it becomes an `EGG`. What hatches comes under new tags, two zerglings as two units, and
-  the egg is reported dead (#37; tested).
+  the egg is reported dead (#37; tested). The death comes in the same observation the egg's order is first missing
+  from, so a larva's order ends with its egg dying, and an egg killed before it hatches looks the same (tested).
 - A morph keeps the tag: a tank sieging, a depot lowering, a zergling through `BANELING_COCOON` to a baneling, an
   overlord through `OVERLORD_COCOON` to an overseer. A lair or an orbital command changes type only once the morph
   finishes (#37; tested). A unit's type changes on burrowing too (#37).
@@ -502,6 +503,11 @@ Each entry ends with how it was seen:
 - An order to a dead unit's tag or to one never used is answered `Error`, and to an enemy unit
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).
+- A builder killed before the game gives up on its build is reported dying and nothing else. An SCV whose site a
+  marine of this player's held position on was given up on 108 steps after the order, with
+  `CantBuildLocationInvalid`; the same trial with the builder killed at 106 got no error at all, then or twelve
+  steps later. So an order whose unit is gone and one the game gave up on never arrive together: the error comes
+  while the unit is alive, and once it is gone nothing comes (tool `sweep_orders`).
 - A structure killed while it is making something is reported dying and nothing more. A barracks training three
   marines, killed: the next observation still lists it with all three orders, the one after does not list it at all,
   and neither carries an action for it nor an action error. An SCV killed on its way to build is the same. So what a

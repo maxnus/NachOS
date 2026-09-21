@@ -92,6 +92,7 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
+| `LOST` | Every unit it went out for died before it was done, so nothing came of it. A larva's order is `DONE` instead, since the egg it became is reported dead as what it makes hatches, and so an egg killed first reads `DONE` too. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |

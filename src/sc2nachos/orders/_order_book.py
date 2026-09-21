@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
@@ -286,6 +286,13 @@ class OrderBook:
         if errored:
             order._error = errored[0]
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
+        if not carrying_out and all(unit.is_dead and unit.type_id is not UnitTypeId.EGG for unit in units):
+            # A unit that is gone is carrying nothing out, and the game reports one dying and nothing more, so
+            # this is the one case a dead unit does not mean the order is over and done with. It cannot take an
+            # action error's place: an error comes while the unit is alive, and once it is gone none comes at all.
+            # An egg is the exception, being reported dead as what it makes hatches (in game).
+            order._state = OrderState.LOST
+            return
         if errored and not carrying_out and not set(units) - {error.unit for error in errored}:
             # The game gave up on every unit it went out for. One of a group failing leaves the rest to settle as
             # they are, with the error on the order to read.

@@ -139,6 +139,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **Nothing is subtracted as you order.** python-sc2's `subtract_cost` keeps its own tally; NachOS reads what the
   game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior.md#abilities-and-orders)).
+- **An order whose units all died reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice; NachOS says so, a
+  producer killed half way through what it was making being reported dying and nothing more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
   unqueued order the same as a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free after all. NachOS holds it back and the order reads `RUNNING`;
