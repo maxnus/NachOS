@@ -16,7 +16,7 @@ from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook, OrderState
 from sc2nachos.protocol import Client, WebSocketTransport
@@ -492,9 +492,9 @@ class TestWhatBecameOfAnOrder:
         game.observe(16, _marine(1), errors=(_failed(_MOVE_EXACT, 1),))
 
         assert order.state is OrderState.FAILED
-        assert order.error is not None
-        assert order.error.result is ActionResult.NOT_ENOUGH_FOOD
-        assert order.error.unit is game.own(1)
+        assert order.failure is not None
+        assert order.failure.result is ActionResult.NOT_ENOUGH_FOOD
+        assert order.failure.unit is game.own(1)
 
     def test_an_order_is_lost_once_the_unit_it_was_given_to_is_dead(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -520,7 +520,7 @@ class TestWhatBecameOfAnOrder:
         game.observe(32, dead=(1,))
 
         assert order.state is OrderState.LOST
-        assert order.error is None
+        assert order.failure is None
 
     def test_one_train_to_three_barracks_is_lost_with_the_one_that_took_it(self) -> None:
         """One command naming several structures is carried out by one of them (in game), so the two left idle
@@ -560,7 +560,7 @@ class TestWhatBecameOfAnOrder:
         game.observe(16, errors=(_failed(_MOVE_EXACT, 1),), dead=(1,))
 
         assert order.state is OrderState.FAILED
-        assert order.error is not None
+        assert order.failure is not None
 
     def test_a_group_order_fails_where_one_was_given_up_on_and_the_rest_died(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -900,8 +900,8 @@ class TestAnErrorAboutOneOfAGroup:
         )
 
         assert order.state is OrderState.RUNNING
-        assert order.error is not None
-        assert order.error.unit is game.own(2)
+        assert order.failure is not None
+        assert order.failure.unit is game.own(2)
 
     def test_an_order_fails_once_every_unit_it_went_out_for_failed(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -1070,7 +1070,7 @@ class TestAgainstTheRealGame:
 
     def test_orders_go_out_each_turn_and_settle_from_what_the_game_reports(self) -> None:
         try:
-            game_map = Map.find("PylonAIE_v4")
+            game_map = MapFile.find("PylonAIE_v4")
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
         with (
@@ -1103,7 +1103,7 @@ class TestAgainstTheRealGame:
 
     def test_what_a_structure_killed_was_making_is_lost_and_a_hatched_drone_done(self) -> None:
         try:
-            game_map = Map.find("PylonAIE_v4")
+            game_map = MapFile.find("PylonAIE_v4")
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
         with (
@@ -1121,7 +1121,7 @@ class TestAgainstTheRealGame:
         assert bot.killed
         assert bot.research is not None
         assert bot.research.state is OrderState.LOST
-        assert bot.research.error is None
+        assert bot.research.failure is None
 
         # The egg the larva became is reported dead as the drone hatches, which is the order done.
         assert bot.drone is not None

@@ -17,7 +17,7 @@ class MapNotFoundError(NachOSError, LookupError):
 
 
 @dataclass(frozen=True, slots=True)
-class Map:
+class MapFile:
     """A map file the game can load.
 
     Construct one directly to play a map that lives outside the installation.

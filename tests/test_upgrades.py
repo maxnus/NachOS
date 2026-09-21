@@ -26,9 +26,9 @@ from sc2nachos.gamedata import (
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawBuffId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, Recording, ReplayTransport, WebSocketTransport
+from sc2nachos.protocol import Client, PlaybackTransport, Recording, WebSocketTransport
 from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -569,7 +569,7 @@ _LEARNED_IN_THE_CORPUS = {
 
 def _replay(path: Path, api: Api) -> Api:
     """`api` once it has played the recorded game at `path` to its end."""
-    client = Client(ReplayTransport(Recording(path)))
+    client = Client(PlaybackTransport(Recording(path)))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
     api.play(client)
@@ -604,7 +604,7 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
     """Run with `pytest -m integration`. Starts the game as terran, researches a leveled and an unleveled upgrade, and
     checks every curated unit type's row against the game's rows asked again, and every unit's armor."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
 
@@ -682,7 +682,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
     """A game as `race` under `free` and `fast_build`, how its units give away upgrades, and ground 10 tiles from home
     toward the middle."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
     with GameProcess.launch(window=(640, 480)) as process:

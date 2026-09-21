@@ -17,14 +17,14 @@ from sc2nachos.events import (
     TurnStartEvent,
     UnitDiedEvent,
 )
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError, free_port
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
+    PlaybackTransport,
     ProtocolError,
     Recording,
-    ReplayTransport,
     Status,
     WebSocketTransport,
 )
@@ -115,9 +115,9 @@ def _no_real_game(monkeypatch: pytest.MonkeyPatch, transport: FakeTransport) -> 
     return game
 
 
-def _somewhere() -> Map:
+def _somewhere() -> MapFile:
     """A map that needs no installation to find, because it was not looked up."""
-    return Map(Path("Somewhere.SC2Map"))
+    return MapFile(Path("Somewhere.SC2Map"))
 
 
 class TestBeforeAGame:
@@ -465,7 +465,7 @@ class TestAgainstTheRealGame:
 
     def test_a_bare_api_plays_a_full_game_and_the_recording_replays_it(self, tmp_path: Path) -> None:
         try:
-            Map.find(_LADDER_MAP)
+            MapFile.find(_LADDER_MAP)
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
 
@@ -485,7 +485,7 @@ class TestAgainstTheRealGame:
 
         # A recording holds the whole run, setup included, so replaying it means replaying the setup too.
         replayed = Api()
-        client = Client(ReplayTransport(Recording(path)))
+        client = Client(PlaybackTransport(Recording(path)))
         client.create_game(_LADDER_MAP, [Participant(), opponent])
         client.join_game(Race.TERRAN)
         assert replayed.play(client, steps_per_turn=16) is result
@@ -493,7 +493,7 @@ class TestAgainstTheRealGame:
 
     def test_a_bare_api_plays_a_full_game_joined_as_on_a_ladder(self) -> None:
         try:
-            game_map = Map.find(_LADDER_MAP)
+            game_map = MapFile.find(_LADDER_MAP)
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
 

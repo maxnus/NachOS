@@ -16,14 +16,14 @@ from sc2nachos.launch import (
     GameVersionError,
     Installation,
     InstallationNotFoundError,
-    Map,
+    MapFile,
     MapNotFoundError,
     UnsupportedPlatformError,
     free_port,
 )
 from sc2nachos.launch._game_process import launch_command
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, RecordingTransport, ReplayTransport, Status, WebSocketTransport
+from sc2nachos.protocol import Client, PlaybackTransport, RecordingTransport, Status, WebSocketTransport
 
 # A map from the current AIE ladder pool, which is what a test game should be played on.
 _LADDER_MAP = "PylonAIE_v4"
@@ -165,31 +165,31 @@ class TestLayout:
 class TestMaps:
     def test_a_map_is_found_by_name(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, map_files=["Ladder2019Season3/AcropolisLE.SC2Map"])
-        found = Map.find("AcropolisLE", installation=install)
+        found = MapFile.find("AcropolisLE", installation=install)
         assert found.name == "AcropolisLE"
         assert found.path == install.maps / "Ladder2019Season3" / "AcropolisLE.SC2Map"
 
     def test_the_extension_is_optional_and_the_case_is_not_read(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, map_files=["PylonAIE.SC2Map"])
         for asked in ("PylonAIE", "PylonAIE.SC2Map", "pylonaie", "PYLONAIE.sc2map"):
-            assert Map.find(asked, installation=install).name == "PylonAIE"
+            assert MapFile.find(asked, installation=install).name == "PylonAIE"
 
     def test_the_shallowest_of_several_copies_wins(self, tmp_path: Path) -> None:
         """Map packs install alongside the maps they replace, so one name really does match twice."""
         install = make_install(tmp_path, map_files=["AIE/TorchesAIE.SC2Map", "TorchesAIE.SC2Map"])
-        assert Map.find("TorchesAIE", installation=install).path == install.maps / "TorchesAIE.SC2Map"
+        assert MapFile.find("TorchesAIE", installation=install).path == install.maps / "TorchesAIE.SC2Map"
 
     def test_copies_at_one_depth_are_broken_alphabetically(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, map_files=["b/LeyLinesAIE.SC2Map", "a/LeyLinesAIE.SC2Map"])
-        assert Map.find("LeyLinesAIE", installation=install).path.parent.name == "a"
+        assert MapFile.find("LeyLinesAIE", installation=install).path.parent.name == "a"
 
     def test_a_missing_map_lists_what_is_there(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, map_files=["AIE/PylonAIE.SC2Map", "Custom/plain64.SC2Map"])
         with pytest.raises(MapNotFoundError, match=r"no map called Acropolis.*plain64"):
-            Map.find("Acropolis", installation=install)
+            MapFile.find("Acropolis", installation=install)
 
     def test_a_map_outside_the_installation_needs_no_lookup(self, tmp_path: Path) -> None:
-        assert Map(tmp_path / "elsewhere" / "Handmade.SC2Map").name == "Handmade"
+        assert MapFile(tmp_path / "elsewhere" / "Handmade.SC2Map").name == "Handmade"
 
 
 class TestCommand:
@@ -294,7 +294,7 @@ class TestAgainstTheRealGame:
     def test_a_created_game_is_joined_and_stepped(self) -> None:
         """One client against one computer: the shortest game that exercises the whole conversation."""
         try:
-            game_map = Map.find(_LADDER_MAP)
+            game_map = MapFile.find(_LADDER_MAP)
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
 
@@ -324,7 +324,7 @@ class TestAgainstTheRealGame:
     def test_a_recorded_game_replays_exactly(self, tmp_path: Path) -> None:
         """A recording is the corpus everything above the protocol is tested against, so it must be faithful."""
         try:
-            game_map = Map.find(_LADDER_MAP)
+            game_map = MapFile.find(_LADDER_MAP)
         except MapNotFoundError as missing:
             pytest.skip(str(missing))
 
@@ -347,7 +347,7 @@ class TestAgainstTheRealGame:
         # Twenty observations weigh well over a megabyte on the wire, which is the whole reason for compressing.
         assert path.stat().st_size < 500_000
 
-        replayed = Client(ReplayTransport(recorder.recording))
+        replayed = Client(PlaybackTransport(recorder.recording))
         replayed.create_game(game_map.path, [Participant(), opponent])
         assert replayed.join_game(Race.TERRAN) == 1
         assert replayed.game_info() == info

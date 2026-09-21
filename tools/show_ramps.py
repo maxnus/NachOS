@@ -23,7 +23,7 @@ from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Tile
-from sc2nachos.launch import GameProcess, Installation, Map
+from sc2nachos.launch import GameProcess, Installation, MapFile
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, GameEndedError, WebSocketTransport
 
@@ -87,7 +87,7 @@ def drawing(game_map: GameMap) -> list[debug_pb2.DebugCommand]:
 
 def show(name: str, seconds: float, installation: Installation) -> None:
     """Open `name`, reveal it, and hold the drawing of its ramps on the screen for `seconds`."""
-    game_map = Map.find(name, installation=installation)
+    game_map = MapFile.find(name, installation=installation)
     with (
         GameProcess.launch(installation, window=(1600, 900)) as game,
         closing(Client(WebSocketTransport.connect(game.url))) as client,

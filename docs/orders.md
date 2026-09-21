@@ -120,12 +120,12 @@ slot nor a mineral within the same step ([game behavior](game-behavior.md#abilit
 | `LOST` | Every unit seen carrying it out died, before it was done or at least before the next observation: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
-| `FAILED` | Carried out and then given up on: `order.error` holds the action error. |
+| `FAILED` | Carried out and then given up on: `order.failure` says what for. |
 | `OVERRIDDEN` | A later order took every unit this one was given to, in this turn before it was sent, or in a later one. |
 | `WITHDRAWN` | Taken back with `order.withdraw()`. One already sent is only forgotten, and the unit goes on with it. |
 
 An order's effect can show up an observation late, so wait for the state rather than expecting it in the next
-observation. `api.action_errors` lists every order the game gave up on since the observation before, whether or not
+observation. `api.action_failures` lists every order the game gave up on since the observation before, whether or not
 NachOS was still following it.
 
 ## Reading a unit's orders

@@ -16,7 +16,7 @@ from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client
-from sc2nachos.state import ActionError, Effect, Score, Supply, UiUnitCounts
+from sc2nachos.state import ActionFailure, Effect, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units
 
 
@@ -141,12 +141,12 @@ class Api:
         return self._current_game().state.upgrades
 
     @property
-    def action_errors(self) -> tuple[ActionError, ...]:
+    def action_failures(self) -> tuple[ActionFailure, ...]:
         """The orders the game took and has given up on since the observation before.
 
         Raises `UncuratedIdError` where one names an ability the curated ids leave out.
         """
-        return self._current_game().state.action_errors
+        return self._current_game().state.action_failures
 
     @property
     def enemy(self) -> Enemy:

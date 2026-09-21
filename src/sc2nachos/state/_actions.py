@@ -82,10 +82,11 @@ class CameraMove(Action):
 
 @final
 @dataclass(frozen=True, slots=True)
-class ActionError:
+class ActionFailure:
     """An order the game took and then gave up on, in the observation it gave up in (in game).
 
-    It is not an `Action`: an action is something this player did, and this is something the game undid.
+    It is not an `Action`: an action is something this player did, and this is something the game undid. Nor is it
+    an exception: the game reports it, and nothing raises it.
     """
 
     step: int
@@ -100,7 +101,8 @@ class ActionError:
 
     @classmethod
     def from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:
-        """Read an action error the observation at `step` reports, naming a unit through `unit_by_tag`.
+        """Read an action error the observation at `step` reports, which is what the protocol calls it, naming a unit
+        through `unit_by_tag`.
 
         Raises `UncuratedIdError` where it names an ability the curated ids leave out.
         """

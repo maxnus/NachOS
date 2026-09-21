@@ -9,7 +9,7 @@ from sc2nachos.protocol._errors import (
     ProtocolError,
 )
 from sc2nachos.protocol._ports import GamePorts, PortPair
-from sc2nachos.protocol._recording import Exchange, Recording, RecordingTransport, ReplayTransport
+from sc2nachos.protocol._recording import Exchange, PlaybackTransport, Recording, RecordingTransport
 from sc2nachos.protocol._status import Status
 from sc2nachos.protocol._transport import Transport
 from sc2nachos.protocol._websocket import WebSocketTransport
@@ -26,7 +26,7 @@ __all__ = [
     "ProtocolError",
     "Recording",
     "RecordingTransport",
-    "ReplayTransport",
+    "PlaybackTransport",
     "Status",
     "Transport",
     "WebSocketTransport",

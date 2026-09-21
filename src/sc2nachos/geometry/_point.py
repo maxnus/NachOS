@@ -65,11 +65,6 @@ class _PointND(tuple[float, ...]):
         return self[1]
 
     @property
-    def position(self) -> Self:
-        """The point itself, so points and units can be used interchangeably."""
-        return self
-
-    @property
     def length(self) -> float:
         """Distance from the origin, on the ground plane."""
         return math.hypot(self[0], self[1])
@@ -274,11 +269,6 @@ class Point3D(_PointND, tuple[float, float, float]):
     """An immutable 3D point, used for terrain height and debug drawing."""
 
     __slots__ = ()
-
-    @classmethod
-    def from_proto(cls, data: common_pb2.Point) -> Self:
-        """Build from a protobuf 3D point message."""
-        return cls((data.x, data.y, data.z))
 
     @property
     def z(self) -> float:

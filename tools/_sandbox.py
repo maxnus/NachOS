@@ -15,7 +15,7 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
-from sc2nachos.launch import GameProcess, Installation, Map, free_port
+from sc2nachos.launch import GameProcess, Installation, MapFile, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, GamePorts, PortPair, WebSocketTransport
 
@@ -185,7 +185,7 @@ def playing(
     A `realtime` game runs on its own and is never stepped, and an `interface` other than the raw one is joined for
     here rather than through the client.
     """
-    game_map = Map.find(MAP, installation=installation)
+    game_map = MapFile.find(MAP, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
         transport = WebSocketTransport.connect(game.url)
         with closing(Client(transport)) as client:
@@ -220,7 +220,7 @@ class Rivals:
 def playing_rivals(race: Race, installation: Installation) -> Iterator[Rivals]:
     """A game on `MAP` between two players of `race`, each on a client of its own. A debug cheat is a toggle for the
     whole game, so only one of them turns each on."""
-    game_map = Map.find(MAP, installation=installation)
+    game_map = MapFile.find(MAP, installation=installation)
     with ExitStack() as stack, ThreadPoolExecutor(2) as pool:
         games = [stack.enter_context(GameProcess.launch(installation, window=(800, 600))) for _ in range(2)]
         transports = [WebSocketTransport.connect(game.url) for game in games]

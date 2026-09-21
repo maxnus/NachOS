@@ -38,7 +38,7 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Circle, Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
-from sc2nachos.protocol import Client, Recording, ReplayTransport
+from sc2nachos.protocol import Client, PlaybackTransport, Recording
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
@@ -64,7 +64,7 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
     """A change to what the library asks a game, or in what order, shows up here as a question unanswered."""
     recording = Recording(path)
     last = _observations(recording)[-1]
-    client = Client(ReplayTransport(recording))
+    client = Client(PlaybackTransport(recording))
     # A recording answers each kind of request in turn and never reads what was asked, so the setup is asked again
     # without its details.
     client.create_game("recorded", [Participant(), Computer()])
@@ -141,7 +141,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     """Every unit of this player's is created once and every enemy unit first seen once, the dead are dead, a unit
     enters and leaves sight in turn, and damage is always some."""
     recording = Recording(path)
-    client = Client(ReplayTransport(recording))
+    client = Client(PlaybackTransport(recording))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
     api = Api()
@@ -197,7 +197,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
     game_map = GameMap(
         next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
     )
-    client = Client(ReplayTransport(recording))
+    client = Client(PlaybackTransport(recording))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
     api = Api()
