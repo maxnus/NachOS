@@ -136,9 +136,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
   it was carried out, and whether it has finished. python-sc2 hands back nothing.
 - **A unit takes one order a turn, the last it was given**, besides the abilities it carries out at once. There is
   no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
-- **Nothing is subtracted as you order.** python-sc2's `subtract_cost` keeps its own tally; NachOS reads what the
-  game reports, which already counts a build's cost from the step it was ordered
-  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
+  NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
+  ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
+  the game's verdict says whether it was taken. A bot keeps its own budget within a turn
+  ([orders](orders.md#what-an-order-needs)).
 - **An order whose units all died reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice; NachOS says so, a
   producer killed half way through what it was making being reported dying and nothing more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
@@ -434,6 +436,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
 | `bot.calculate_supply_cost(t)` | `ability_data.supply_cost` of what makes it |
+| `bot.can_afford(x)` | `api.resources.covers(ability_data.cost)`, and the supply the bot checks itself |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |

@@ -82,8 +82,12 @@ Carried over from AvocaDOS, so the two codebases read alike:
   argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
   where it enters, with `raise ... from`, and never reaches the caller.
 - **US spelling** everywhere in code, comments, docstrings and docs — `behavior`, `initialize`, `summarize`,
-  `color`, `center`. The exception is generated identifiers: `ids/raw/` mirrors Blizzard's own names verbatim
-  (`BuildinProgressNonCancellable`), and those are data, never to be "corrected".
+  `color`, `center`. Two exceptions: generated identifiers, where `ids/raw/` mirrors Blizzard's own names verbatim
+  (`BuildinProgressNonCancellable`) and those are data, never to be "corrected"; and **"cancelled"**, which the
+  code, the tests and the docs spell with two l's throughout.
+- **NachOS checks nothing an order needs.** Minerals, vespene, supply, room in a queue and tech are the game's to
+  judge and the bot's to budget: an order goes out as it was given, and its verdict and state say what came of it.
+  What NachOS knows about an order's needs it hands over as data, such as `AbilityData.cost`.
 - Line length 120. `ruff check` and `ruff format --check` must pass.
 - **One game loop is a step.** Above the protocol layer time is counted in steps -- `Api.step`,
   `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol

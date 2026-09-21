@@ -82,6 +82,31 @@ An order a unit is already carrying out is not sent again. In game such an order
 nothing out and is left out of the reported actions — its one effect is that the unit's queued orders are gone. So
 NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose is `clear_queue`.
 
+## What an order needs
+
+NachOS sends every order as it was given, and checks nothing it needs: minerals, vespene, supply, room in a
+structure's queue, tech. The game judges those, and the state says how it did. An order it refuses reads `REFUSED`
+with its verdict, one it takes and silently drops reads `DROPPED`, and a queued order the supply cap cannot feed is
+taken, charged, and left at no progress until supply frees up.
+
+A bot budgets for itself, since only it knows what matters most:
+
+```python
+cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
+if api.resources.covers(cost):
+    api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+```
+
+`api.resources` does not change as orders are given. It is what the game last reported, so a bot giving several
+orders in one turn keeps its own tally. `cost` is what the game charges as the ability is ordered: the difference
+for a morph, 150 for an orbital command rather than its type's 550. `supply_cost` is what it takes of the cap as it
+starts.
+
+A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel the game offers a
+structure carrying `ability` out, which is the one to send: `Cancel_Last` is answered `ERROR` by a morph and by an
+add-on. It takes back only the structure's last item, and frees neither a slot nor a mineral within the same step
+([game behavior](game-behavior.md#abilities-and-orders)).
+
 ## What became of it
 
 `order.state` is where an order has got to, and `api.order.running` holds every order NachOS is still following.
