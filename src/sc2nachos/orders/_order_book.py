@@ -181,11 +181,10 @@ class OrderBook:
         # A camera move, where there is one, is answered last and belongs to no order.
         for (order, units), result in zip(sent, results[: len(sent)], strict=True):
             action_result = ActionResult.read(result)
-            order._action_result = action_result
-            if action_result is not ActionResult.SUCCESS:
-                order._state = OrderState.REFUSED
+            taken = action_result is ActionResult.SUCCESS
+            order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
+            if not taken:
                 continue
-            order._state = OrderState.SENT
             self._running_orders.append(order)
             if not order.queued and not order._forced and order.order_behavior is OrderBehavior.REPLACES:
                 replaced.update(unit.id for unit in units)
@@ -230,16 +229,14 @@ class OrderBook:
             else:
                 units = tuple(unit for unit in order.units if holder[unit.id] is order)
                 if not units:
-                    order._state = OrderState.OVERRIDDEN
+                    order._settle(OrderState.OVERRIDDEN)
                     continue
             fresh = units if self._sent_whatever_a_unit_is_at(order) else self._units_not_doing_it(units, order)
             if not fresh:
-                order._sent_to = units
-                order._taken_by = units
-                order._state = OrderState.RUNNING
+                order._settle(OrderState.RUNNING, sent_to=units, taken_by=units)
                 self._running_orders.append(order)
                 continue
-            order._sent_to = fresh
+            order._settle(sent_to=fresh)
             yield order, fresh
 
     def _competes(self, order: Order[Any]) -> bool:
@@ -276,7 +273,7 @@ class OrderBook:
             if order.order_behavior is OrderBehavior.KEEPS_ORDERS or order.state.is_final:
                 continue
             if all(unit.id in replaced for unit in order._acting_units):
-                order._state = OrderState.OVERRIDDEN
+                order._settle(OrderState.OVERRIDDEN)
 
     def _take_in_order(
         self, order: Order[Any], commands: Sequence[UnitCommand], failures: Sequence[ActionFailure]
@@ -286,24 +283,24 @@ class OrderBook:
         units = order._acting_units
         failed = tuple(failure for failure in failures if self._failure_is_of(failure, order, units, general))
         if failed:
-            order._failure = failed[0]
+            order._settle(failure=failed[0])
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
         # The report can come an observation after the unit is seen carrying the order out, so a running order reads
         # it too, and only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
-            order._taken_by = taken_by
+            order._settle(taken_by=taken_by)
         done_with = {failure.unit for failure in failed} | {unit for unit in units if unit.is_dead}
         if failed and not carrying_out and not set(units) - done_with:
             # The game gave up on every unit it went out for that has not died since. One of a group failing leaves
             # the rest to settle as they are, with the failure on the order to read.
-            order._state = OrderState.FAILED
+            order._settle(OrderState.FAILED)
             return
         if carrying_out:
             if not order._seen_carrying:
-                order._seen_carrying = frozenset(
-                    unit for unit in units if self._unit_is_carrying_out_ability(unit, general)
+                order._settle(
+                    seen_carrying=frozenset(unit for unit in units if self._unit_is_carrying_out_ability(unit, general))
                 )
         elif all(
             unit.is_dead and unit.type_id is not UnitTypeId.EGG
@@ -314,19 +311,19 @@ class OrderBook:
             # dying and nothing more, so this is the one way a unit carrying nothing out does not mean the order is
             # done. One of a group that got where it was sent keeps it `DONE`, and so does an egg, which is reported
             # dead as what it makes hatches (in game).
-            order._state = OrderState.LOST
+            order._settle(OrderState.LOST)
             return
         if order.state is OrderState.RUNNING:
             if not carrying_out:
-                order._state = OrderState.DONE
+                order._settle(OrderState.DONE)
             return
         if taken_by:
             # An ability carried out at once is over as soon as it is reported: it never shows in a unit's orders.
-            order._state = OrderState.RUNNING if carrying_out else OrderState.DONE
+            order._settle(OrderState.RUNNING if carrying_out else OrderState.DONE)
         elif carrying_out:
-            order._state = OrderState.RUNNING
+            order._settle(OrderState.RUNNING)
         else:
-            order._state = OrderState.DROPPED
+            order._settle(OrderState.DROPPED)
 
     def _failure_is_of(
         self, failure: ActionFailure, order: Order[Any], units: Sequence[OwnUnit[Any]], general: AbilityId
