@@ -285,8 +285,8 @@ class OrderBook:
         errored = tuple(error for error in errors if self._error_is_of(error, order, units, general))
         if errored:
             order._error = errored[0]
-        carriers = frozenset(unit for unit in units if self._unit_is_carrying_out_ability(unit, general))
-        carrying_out = bool(carriers)
+        seen_carrying = frozenset(unit for unit in units if self._unit_is_carrying_out_ability(unit, general))
+        carrying_out = bool(seen_carrying)
         # The report can come an observation after the unit is seen carrying the order out, so a running order reads
         # it too, and only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
@@ -299,12 +299,12 @@ class OrderBook:
             order._state = OrderState.FAILED
             return
         if carrying_out:
-            order._carriers |= carriers
-        elif all(unit.is_dead and unit.type_id is not UnitTypeId.EGG for unit in order._carriers or units):
-            # Every unit ever seen carrying it out is gone, or every unit it went out for where none was: the game
-            # reports a producer dying and nothing more, so this is the one case a unit carrying nothing out does not
-            # mean the order is over and done with. One of a group that got where it was sent keeps it done. An egg
-            # is the exception, being reported dead as what it makes hatches (in game).
+            order._seen_carrying |= seen_carrying
+        elif all(unit.is_dead and unit.type_id is not UnitTypeId.EGG for unit in order._seen_carrying or units):
+            # Every unit ever seen carrying it out is dead, or every unit it went out for where none was. The game
+            # reports a producer dying and nothing more, so this is the one way a unit carrying nothing out does not
+            # mean the order is done. One of a group that got where it was sent keeps it `DONE`, and so does an egg,
+            # which is reported dead as what it makes hatches (in game).
             order._state = OrderState.LOST
             return
         if order.state is OrderState.RUNNING:

@@ -327,8 +327,9 @@ Each entry ends with how it was seen:
   in its row and nothing is recorded as made out of; an overlord transport 25/25, where its row reads the same 100
   an overlord's does; a pair of zerglings 50 minerals and a whole supply, where the row prices one; an auto turret
   nothing but the raven's energy, where its row keeps a price the game no longer charges; and a purification nova
-  no supply, though its row carries the disruptor's 3. A reactor and a tech lab need no correction of their own any
-  more: their rows read 50/50 and 50/25 (corpus).
+  no supply, though its row carries the disruptor's 3. A nuke, 100/100, and an interceptor, 15, have no row to derive
+  from at all, the curated ids naming no unit type for either. A reactor and a tech lab need no correction of their
+  own any more: their rows read 50/50 and 50/25 (corpus).
 - `unit_alias` names the type something morphed from; `is_building` means "needs placing"; an add-on's
   `footprint_radius` is 3.5, the reach past its host's far side; a bare tech lab or reactor is a requirement no unit
   is built as (#23).
@@ -451,17 +452,17 @@ Each entry ends with how it was seen:
   `Cancel_QueueCancelToSelection`, and a structure going up `Cancel_BuildInProgress`. `Cancel_Last` is answered
   `Error` by a morph and by an add-on, so the cancel to send is the one the game offers, not the generic one (tool
   `sweep_orders`).
-- Which cancel a structure is offered turns on what it is making, and every producer of all three races has one. A
+- Which cancel a structure is offered turns on what it is making, and every producer of the three races was read. A
   command center morphing is offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, by which morph it is
-  running; a barracks, a factory and a starport building an add-on their own `Cancel_BarracksAddOn`,
-  `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`, either add-on taking the same one; a hatchery morphing
-  `Cancel_MorphLair`, a lair `Cancel_MorphHive` and a spire `Cancel_MorphGreaterSpire`; and everything training or
-  researching the queue cancel of its own kind -- `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a
-  forge, an evolution chamber and the rest, `Cancel_QueueCancelToSelection` for a command center, an orbital
-  command, a hatchery, a lair and a hive, `Cancel_QueuePasive` for a nexus and
-  `Cancel_QueuePassiveCancelToSelection` for a planetary fortress. It is offered only while the work is going on,
-  which is why an idle structure is offered none, and under `fast_build` an add-on is up again within two steps, so
-  a structure set to build one has to be read at every step (tool `sweep_tech_tree`).
+  running; a barracks, a factory and a starport building either add-on `Cancel_BarracksAddOn`,
+  `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`; a hatchery morphing `Cancel_MorphLair`, a lair `Cancel_MorphHive`
+  and a spire `Cancel_MorphGreaterSpire`. Everything training or researching is offered the queue cancel of its own
+  kind: `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a forge, an evolution chamber and the rest,
+  `Cancel_QueueCancelToSelection` for a command center, an orbital command, a hatchery, a lair and a hive,
+  `Cancel_QueuePasive` for a nexus and `Cancel_QueuePassiveCancelToSelection` for a planetary fortress. A cancel is
+  offered only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine or an
+  add-on can be done within the step its order lands in, before the structure is first read (tool
+  `sweep_tech_tree`).
 - An SCV cancelled refunds its 50 minerals by the next observation, whether it was half made or only queued, and the
   refund pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then
   an SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay
@@ -499,13 +500,12 @@ Each entry ends with how it was seen:
   closing on its point. A lurker's hold fire is the one that could not be given, since it is offered only burrowed,
   and the game offers a burrowed lurker no move (tool `sweep_orders`).
 - One command to several units sends each moving unit to a point of its own around the one ordered, so they keep
-  their spacing, but a spell, a structure, a train and a research are carried out by one of them only, and charged
-  once: a storm by a templar with the energy for it, a pylon by one of two probes, one marine from three barracks
-  given one train (the purse fell 50 and one of the three carried the order), one research from two engineering bays
-  given one (100/100), one reactor from two barracks given one, where the one with room beside it takes it if the
-  other's is blocked. A morph given to several was not tried. What cannot take the order is left out, and the
-  verdict is `Success`: a
-  supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
+  their spacing, but a spell, a structure, a morph, a train and a research are carried out by one of them only: a
+  storm by a templar with the energy for it, a pylon by one of two probes, a morph as above, one marine from three
+  barracks given one train (the purse fell 50 and one of the three carried the order), one research from two
+  engineering bays given one (100/100), one reactor from two barracks given one, where the one with room beside it
+  takes it if the other's is blocked. What cannot take the order is left out, and the verdict is `Success`: a supply
+  depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
   `sweep_orders`).
 - A larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   action it reports names the larva it used, which need not be the one ordered (tool `sweep_orders`).

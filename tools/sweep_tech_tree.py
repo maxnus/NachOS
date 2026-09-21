@@ -92,10 +92,10 @@ _NOT_SWITCHES += (
 _WORKERS = {Race.TERRAN: UnitTypeId.SCV, Race.PROTOSS: UnitTypeId.PROBE, Race.ZERG: UnitTypeId.DRONE}
 # What a structure is set making while its cancel is read, arming a nuke among it.
 _MAKING = ("Train", "Research", "UpgradeTo", "Build")
-# Of those, the kinds one trial stands for, since every train and every research is cancelled by the structure's
-# one queue cancel, which `GENERAL_CANCEL_LAST` stands for, so no pair of theirs is recorded. Each morph and each
-# add-on is tried and paired with the cancel it was offered (tool `sweep_orders`).
-_ONE_TRIAL_EACH = ("Train", "Research")
+# Of those, the work a structure's one queue cancel takes back, which `GENERAL_CANCEL_LAST` stands for: each kind is
+# tried once per structure and paired with no cancel. Each morph and each add-on is tried and paired with the cancel
+# it was offered (tool `sweep_orders`).
+_QUEUE_WORK = ("Train", "Research")
 # How far from a structure an add-on of its stands, and then some.
 _ADD_ON_REACH = 4
 # How long a structure set working is read for, which is less than anything takes to make with `fast_build` off.
@@ -104,7 +104,7 @@ _BUSY_STEPS = 24
 _CANCELS = ("Cancel", "Cancel_Last")
 _STRUCTURE_ROOM = 4
 # How far from a unit put up for a trial the computer's units are cleared, which is past any unit's sight.
-_ENEMY_REACH = 16
+_ENEMIES_CLEARED_WITHIN = 16
 # What a new unit is not ordered at a target to see what it is offered while it carries the order out: anything that
 # sends it somewhere, gathers, loads or builds, none of which is a channel.
 _NOT_CASTS = ("Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest", "Load", "Unload", "Land", "Build")
@@ -134,7 +134,7 @@ class Findings:
     made: dict[tuple[str, str, str], str] = field(default_factory=dict)
     powered: set[str] = field(default_factory=set)
     races: set[str] = field(default_factory=set)
-    # The cancel a structure is offered for each way of being busy, which is its own and turns on the work.
+    # The cancel a structure was offered for each morph and add-on it was set making, and for arming a nuke.
     cancels: dict[str, str] = field(default_factory=dict)
     # What the game's own tables say: the general ability each one stands for, and what makes and researches what.
     remaps: dict[str, str] = field(default_factory=dict)
@@ -224,7 +224,7 @@ class TechSweep:
         self._pad = self._sandbox
         self._structure_types = {row.id for row in self._data.units.values() if Attribute.STRUCTURE in row.attributes}
         self._on_the_way: set[Pair] = set()
-        # The pylons put up to power a unit, by its tag, so that clearing the unit clears them too.
+        # The pylons put up to power a unit, by its tag, for `_clear`.
         self._powering: dict[int, list[int]] = {}
         self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
 
@@ -407,7 +407,7 @@ class TechSweep:
                 ability for fragment, ability in _BUILD_ADD_ON.items() if fragment in _unit_name(add_on.unit_type)
             )
             if host is not None:
-                self._drive_off(Point((add_on.pos.x, add_on.pos.y)))
+                self._clear_enemies_near(Point((add_on.pos.x, add_on.pos.y)))
                 self._game.order(kind, host, Point((add_on.pos.x - 2.5, add_on.pos.y + 0.5)))
             else:
                 logger.warning("No host found to rebuild a {} on", _unit_name(add_on.unit_type))
@@ -542,11 +542,12 @@ class TechSweep:
     def sweep_cancels(self) -> None:
         """What each structure is offered while it is busy, in each way it can be busy.
 
-        A structure is offered one cancel and which one turns on what it is making: a command center training is
-        offered `Cancel_QueueCancelToSelection`, one morphing `Cancel_MorphOrbital`, and one building an add-on
-        `Cancel_BarracksAddOn` (tool `sweep_orders`). Each way is read on a structure put up for it, a morph leaving
-        the structure another type and an add-on taking the ground beside it, and the phase comes before the
-        research one, which leaves a research structure with nothing left to research.
+        A structure is offered one cancel, and which one turns on what it is making: a command center training is
+        offered `Cancel_QueueCancelToSelection`, one morphing to an orbital command `Cancel_MorphOrbital` and one
+        morphing to a planetary fortress `Cancel_MorphPlanetaryFortress`, and a barracks building an add-on
+        `Cancel_BarracksAddOn` (tool `sweep_orders`). Each way is read on a structure put up for it, since a morph
+        leaves the structure another type and an add-on takes the ground beside it. The phase runs before
+        `research_everything`, which would leave a research structure nothing to research.
 
         `fast_build` is off for the phase: under it a marine or an add-on can be done within the step its order
         lands in, before the structure is first read, and a cancel is offered only while the work goes on.
@@ -555,14 +556,14 @@ class TechSweep:
         self._game.cheat("fast_build")
         try:
             for unit_type in sorted(set(self._race_types()) & self._structure_types, key=lambda one: one.name):
-                for raw in self._ways_of(unit_type):
+                for raw in self._ways_to_try(unit_type):
                     found |= self._read_while_busy(unit_type, raw)
         finally:
             # A cheat is a toggle, so the same command turns it back on.
             self._game.cheat("fast_build")
         self.read_requirements(found)
 
-    def _ways_of(self, unit_type: UnitTypeId) -> list[int]:
+    def _ways_to_try(self, unit_type: UnitTypeId) -> list[int]:
         """Every way a structure of `unit_type` can be set working that is worth a trial, read off one standing idle
         or off one put up to be read."""
         # One with an add-on already is offered none, so it would hide that way of being busy.
@@ -571,11 +572,11 @@ class TechSweep:
             None,
         )
         if standing is not None:
-            return self._one_of_each_way(self._ways_to_be_busy(standing.tag))
+            return self._worth_trying(self._ways_to_be_busy(standing.tag))
         fresh = self._put_up(unit_type, self._pad - (1, 0))
         if fresh is None:
             return []
-        ways = self._one_of_each_way(self._ways_to_be_busy(fresh.tag))
+        ways = self._worth_trying(self._ways_to_be_busy(fresh.tag))
         self._clear(self._with_add_on(fresh.tag))
         return ways
 
@@ -588,7 +589,7 @@ class TechSweep:
             if unit is None:
                 return set()
             kind = _kind_of_work(raw)
-            if self._game.order(raw, unit.tag, self._made_at(raw, unit)) != SUCCESS:
+            if self._game.order(raw, unit.tag, self._aim_for(raw, unit)) != SUCCESS:
                 logger.warning("A {} would not run {}", unit_type.name, _ability_name(raw))
                 return set()
             found, busy = self._read_until_idle(unit.tag)
@@ -609,10 +610,7 @@ class TechSweep:
                     len(cancels),
                     cancels,
                 )
-            if len(cancels) == 1 and kind not in _ONE_TRIAL_EACH:
-                # A structure part way through something is offered one cancel and it is its own, which turns on
-                # what it is making: a command center morphing to an orbital command is offered another than one
-                # morphing to a planetary fortress (tool `sweep_orders`).
+            if len(cancels) == 1 and kind not in _QUEUE_WORK:
                 self.findings.cancels[_ability_name(raw)] = cancels[0]
             logger.info("A {} set to {} was offered {}", unit_type.name, _ability_name(raw), cancels or "no cancel")
             return found
@@ -650,34 +648,30 @@ class TechSweep:
             if self._targets.get(ability) in (_NOTHING, _POINT_OR_NOTHING) and _kind_of_work(ability) is not None
         )
 
-    def _one_of_each_way(self, abilities: Sequence[int]) -> list[int]:
-        """Every way of being busy worth a trial of its own, leaving out what no curated id names.
-
-        A train and a research are tried once each, the cancel a structure is offered for either being its one queue
-        cancel, while every morph and every add-on is tried: a command center morphing to an orbital command is
-        offered another cancel than one morphing to a planetary fortress (tool `sweep_orders`).
-        """
+    def _worth_trying(self, abilities: Sequence[int]) -> list[int]:
+        """Every way of being busy worth a trial of its own, leaving out what no curated id names: one train and one
+        research, and every morph and every add-on."""
         once: set[str] = set()
         chosen: list[int] = []
         for ability in abilities:
             kind = _kind_of_work(ability)
             if kind is None or AbilityId.get(ability) is None:
                 continue
-            if kind in _ONE_TRIAL_EACH:
+            if kind in _QUEUE_WORK:
                 if kind in once:
                     continue
                 once.add(kind)
             chosen.append(ability)
         return chosen
 
-    def _made_at(self, ability: int, unit: raw_pb2.Unit) -> Point | None:
+    def _aim_for(self, ability: int, unit: raw_pb2.Unit) -> Point | None:
         """Where an ability that sets `unit` making something is aimed: its own ground for an add-on, which the game
         puts beside it, and nowhere for everything else."""
         return Point((unit.pos.x, unit.pos.y)) if self._targets.get(ability) == _POINT_OR_NOTHING else None
 
     def _with_add_on(self, tag: int) -> set[int]:
         """The unit `tag` with the add-on it has and any going up beside it, which would otherwise be left standing
-        on ground the next trial wants. What `_clear` is given also takes with it the pylon put up to power it."""
+        on ground the next trial wants."""
         unit = next((one for one in self._mine() if one.tag == tag), None)
         if unit is None:
             return {tag}
@@ -851,8 +845,8 @@ class TechSweep:
             self._clear({u.tag for u in self._mine() if u.tag not in before})
 
     def _clear(self, tags: set[int]) -> None:
-        """Kill the units `tags` and the pylons put up to power them, and wait until they are gone and the ground
-        they stood on is free again."""
+        """Kill the units `tags` and the pylons put up to power them, which would otherwise stand on ground the next
+        trial wants, and wait until they are gone and the ground they stood on is free again."""
         tags = tags | {pylon for tag in tags for pylon in self._powering.pop(tag, ())}
         self._game.kill(tags)
         for _ in range(50):
@@ -896,12 +890,9 @@ class TechSweep:
         return unit
 
     def _put_up(self, unit_type: UnitTypeId, spot: Point) -> raw_pb2.Unit | None:
-        """A new unit of `unit_type` at `spot`, with a pylon where it needs power, charged and settled.
-
-        A pylon put up for it is remembered under the unit's tag, so that what cleared the unit clears the pylon
-        too rather than leaving it standing on ground the next trial wants.
-        """
-        self._drive_off(spot)
+        """A new unit of `unit_type` at `spot`, with a pylon where it needs power, charged and settled. The pylon is
+        remembered under the unit's tag for `_clear`."""
+        self._clear_enemies_near(spot)
         requests = [(unit_type, self._player, spot)]
         if _unit_name(unit_type) in self.findings.powered:
             requests.append((UnitTypeId.PYLON, self._player, spot + (0, 4)))
@@ -916,22 +907,21 @@ class TechSweep:
         self._client.step(_SWITCH_STEPS)
         return unit
 
-    def _drive_off(self, spot: Point) -> None:
-        """Kill the computer's units in sight of `spot`, which a unit put up there would set off after and which can
+    def _clear_enemies_near(self, spot: Point) -> None:
+        """Kill the computer's units in sight of `spot`: a unit put up there would set off after them, and they can
         stand where a structure or an add-on is to go.
 
-        On one start of the map the pad lies beside the computer's natural: a baneling put up there rolls at its
-        drones, is offered no burrow while it does, and blows up on reaching one. And the computer's army comes to
-        stand about the base, `god` keeping it from harming anything, where a marine on an add-on's place leaves the
-        host bare once the add-on is killed to read a requirement. What the sweep read turned on both (tool
-        `sweep_tech_tree`).
+        On one start of the map the pad lies beside the computer's natural, so a baneling put up there rolls at its
+        drones, is offered no burrow while it does, and blows up on reaching one. And under `god` the computer's army
+        walks into the base and stands about, a marine on an add-on's place leaving the host bare once the add-on is
+        killed to read a requirement. Both changed what a run read.
         """
         near = [
             unit.tag
             for unit in self._game.units()
             if unit.owner not in (self._player, NEUTRAL_REPORTED)
-            and abs(unit.pos.x - spot.x) < _ENEMY_REACH
-            and abs(unit.pos.y - spot.y) < _ENEMY_REACH
+            and abs(unit.pos.x - spot.x) < _ENEMIES_CLEARED_WITHIN
+            and abs(unit.pos.y - spot.y) < _ENEMIES_CLEARED_WITHIN
         ]
         if near:
             logger.debug("Killing {} of the computer's units in sight of {}", len(near), spot)

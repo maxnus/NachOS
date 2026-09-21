@@ -2411,13 +2411,13 @@ def _producer_dies(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("an SCV killed on its way to build", builder))
 
-    # How long the game took to give up on a build whose site was held, which the trial after it kills the builder
-    # at, to see whether the error and the death can land in one observation.
-    blocked_after: list[int] = []
+    # How many steps the game took to give up on a build whose site was held; the next trial kills its builder that
+    # many steps in, to see whether the error and the death can land in one observation.
+    gave_up_after: list[int] = []
 
     def build_blocked(trial: Trial) -> None:
-        """When the game gives up on a build whose site a unit of this player's holds position on, which is the one
-        action error anyone has made the game produce for a builder (tool `sweep_orders`)."""
+        """When the game gives up on a build whose site a unit of this player's holds position on, which is the only
+        action error a builder has been seen to get (tool `sweep_orders`)."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
         if scv is None:
             trial.notes["class"] = "no SCV"
@@ -2438,7 +2438,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
         trial.notes["site"] = [at.x, at.y]
         seen_at = [int(str(error["seen"])) - given for error in trial.errors]
         trial.notes["steps to the error"] = seen_at
-        blocked_after.extend(seen_at)
+        gave_up_after.extend(seen_at)
         game.read("once the game had given up", [scv])
 
     trials.append(game.trial("an SCV whose site a marine of its own holds", build_blocked))
@@ -2447,14 +2447,14 @@ def _producer_dies(game: _Game) -> list[Trial]:
         """Whether the game reports an action error for an order whose unit is gone by the same observation, which
         is what says whether such an order should read `FAILED` or `LOST`."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
-        if scv is None or not blocked_after:
+        if scv is None or not gave_up_after:
             trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"
             return
         at = game.spot(game.toward(14), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
         game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
         given = game.step
-        waiting = max(blocked_after[0] - 2, 0)
+        waiting = max(gave_up_after[0] - 2, 0)
         trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
         trial.notes["killed after"] = waiting
         game.turn(waiting)
@@ -2567,12 +2567,12 @@ class _Sweep:
     interface: sc2api_pb2.InterfaceOptions | None = None
 
 
-def _flying_add_on(game: _Game) -> list[Trial]:
+def _add_on_while_flying(game: _Game) -> list[Trial]:
     """Find what a barracks in the air does when told to build an add-on: with no point, at ground with room for the
     add-on beside it, and at ground whose add-on place a supply depot fills."""
     trials: list[Trial] = []
 
-    def added_on(aimed: str) -> Callable[[Trial], None]:
+    def flying_reactor(aimed: str) -> Callable[[Trial], None]:
         def run(trial: Trial) -> None:
             made = game.create(UnitTypeId.BARRACKS_FLYING, game.spot(game.toward(12), 4))
             if not made:
@@ -2614,7 +2614,7 @@ def _flying_add_on(game: _Game) -> list[Trial]:
         ("free", "a flying barracks given a reactor at ground with room beside it"),
         ("blocked", "a flying barracks given a reactor at ground whose add-on place a depot fills"),
     ):
-        trials.append(game.trial(name, added_on(aimed)))
+        trials.append(game.trial(name, flying_reactor(aimed)))
     return trials
 
 
@@ -2622,7 +2622,7 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
     """Find whether one command naming several structures is carried out by each of them or by one.
 
     A group move sends every unit, and a spell, a structure and a morph are carried out by one of the group
-    (docs/game-behavior.md), and nobody had asked what a train, a research or an add-on does.
+    (docs/game-behavior.md); a train, a research and an add-on had not been tried.
     """
     trials: list[Trial] = []
 
@@ -2649,7 +2649,7 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("one research naming two engineering bays", researched))
 
-    def added_on(barracks: int, blocked: int) -> Callable[[Trial], None]:
+    def one_reactor(barracks: int, blocked: int) -> Callable[[Trial], None]:
         """A trial giving one reactor, aimed at nothing as a bot's add-on usually is, to `barracks` barracks, the
         first `blocked` of them with a supply depot where the reactor would stand."""
 
@@ -2680,7 +2680,7 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
         (2, 0, "one reactor naming two barracks"),
         (2, 1, "one reactor naming two barracks, the first one's side blocked"),
     ):
-        trials.append(game.trial(name, added_on(barracks, blocked)))
+        trials.append(game.trial(name, one_reactor(barracks, blocked)))
 
     return trials
 
@@ -2719,7 +2719,7 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `free`, so that what one command naming several structures charges counts.
     "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, ("food", "all_resources")),
     # Not `free`, so that what a flying structure's add-on charges counts.
-    "flying-add-on": _Sweep(Race.TERRAN, _flying_add_on, ("food", "all_resources")),
+    "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, ("food", "all_resources")),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

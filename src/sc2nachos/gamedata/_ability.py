@@ -91,6 +91,10 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
     return behaviors
 
 
+# What an ability that makes nothing charges.
+_FREE = (Resources(0, 0), 0.0)
+
+
 def ability_costs(
     units: Mapping[UnitTypeId, UnitTypeData],
     upgrades: Mapping[UpgradeId, UpgradeData],
@@ -98,8 +102,8 @@ def ability_costs(
 ) -> Mapping[AbilityId, tuple[Resources, float]]:
     """What the game charges as each ability is ordered, and the supply it takes, for those that take anything.
 
-    A morph is charged the difference from what it is made out of, the game's row for a type holding everything
-    spent to reach it, and `COST_OVERRIDES` and `SUPPLY_OVERRIDES` hold what that leaves wrong.
+    A type's row holds everything spent to reach it, so a morph is charged the difference from what it is made out
+    of; `COST_OVERRIDES` and `SUPPLY_OVERRIDES` correct the few that gets wrong.
     """
     costs: dict[AbilityId, tuple[Resources, float]] = {}
     for ability, product in tech_tree.ability_products.items():
@@ -122,8 +126,8 @@ def ability_costs(
 def _derived_cost(
     product: UnitTypeId | UpgradeId, units: Mapping[UnitTypeId, UnitTypeData], upgrades: Mapping[UpgradeId, UpgradeData]
 ) -> tuple[Resources, float] | None:
-    """What the game's own rows say ordering what makes `product` charges, and the supply it takes: an upgrade's
-    cost, or a unit type's less that of what it is made out of. `None` where the tables hold no row for it."""
+    """What the game's rows say the ability that makes `product` charges, and the supply it takes: an upgrade's
+    cost, or a unit type's less that of what it is made out of. `None` where the tables have no row for it."""
     if isinstance(product, UpgradeId):
         upgrade = upgrades.get(product)
         return None if upgrade is None else (upgrade.cost, 0.0)
@@ -134,10 +138,6 @@ def _derived_cost(
     if used is None:
         return made.cost, made.supply_cost
     return made.cost - used.cost, made.supply_cost - used.supply_cost
-
-
-# What an ability that makes nothing charges.
-_FREE = (Resources(0, 0), 0.0)
 
 
 def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
@@ -187,15 +187,15 @@ class AbilityData:
     price the exact ones it stands for share, and nothing where they differ, as the three levels of a research do:
     budget one of those by its exact id or its upgrade's row. An ability that makes nothing costs nothing."""
     supply_cost: float
-    """What it takes of the supply cap as what it makes starts, and what it gives back where it uses up the unit that
-    orders it: 1 for a marine, -1 for a spawning pool, none for a baneling."""
+    """The supply it takes as what it makes starts, less what the unit it uses up gives back: 1 for a marine, -1 for a
+    spawning pool, 0 for a baneling."""
     cancelled_by: AbilityId | None
     """The cancel that takes this back off a structure carrying it out. For a train or a research it is
     `GENERAL_CANCEL_LAST`, which every structure's own queue cancel stands for and which takes the last item off a
     barracks, an engineering bay and a command center alike (in game). A morph and an add-on have their own, since
     `GENERAL_CANCEL_LAST` is answered `ERROR` by those: `COMMAND_CENTER_CANCEL_ORBITAL_COMMAND` for the orbital morph,
-    `BARRACKS_CANCEL_ADD_ON` for either add-on (tool `sweep_tech_tree`). `None` for anything the game offers no
-    cancel for."""
+    `BARRACKS_CANCEL_ADD_ON` for either add-on (tool `sweep_tech_tree`). `None` for anything else, a build among
+    them: a structure going up is cancelled on itself, with `GENERAL_CANCEL_BUILDING`."""
     behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 

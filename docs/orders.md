@@ -85,9 +85,9 @@ NachOS holds it back, the order reads `RUNNING`, and dropping a queue on purpose
 ## What an order needs
 
 NachOS sends every order as it was given, and checks nothing it needs: minerals, vespene, supply, room in a
-structure's queue, tech. The game judges those, and the state says how it did. An order it refuses reads `REFUSED`
-with its verdict, one it takes and silently drops reads `DROPPED`, and a queued order the supply cap cannot feed is
-taken, charged, and left at no progress until supply frees up.
+structure's queue, tech. The game judges those, and the order's state says what it decided. An order it refuses
+reads `REFUSED` with its verdict, one it takes and silently drops reads `DROPPED`, and a queued order the supply cap
+cannot feed is taken, charged, and left at no progress until supply frees up.
 
 A bot budgets for itself, since only it knows what matters most:
 
@@ -118,7 +118,7 @@ item, and frees neither a slot nor a mineral within the same step
 | `SENT` | Sent and answered `SUCCESS`, with no observation since to say what came of it. |
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
-| `LOST` | Every unit seen carrying it out died before it was done, so nothing came of it: of three barracks given one train, the one that took it. An ability whose effect is its unit's death, a baneling exploding, reads `LOST` too. A larva's order is `DONE` instead, since the egg it became is reported dead as what it makes hatches, and so an egg killed first reads `DONE` too. |
+| `LOST` | Every unit seen carrying it out died before it was done, so nothing came of it: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
 | `REFUSED` | Answered something else: `order.verdict` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.error` holds the action error. |

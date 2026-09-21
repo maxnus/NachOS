@@ -30,8 +30,9 @@ class TechTree:
     ability_remaps: Mapping[AbilityId, AbilityId]
     """The general ability each ability stands for."""
     ability_cancels: Mapping[AbilityId, AbilityId]
-    """The cancel a structure is offered for each thing it can be set making, which is its own and turns on the work:
-    a command center morphing to an orbital command is offered another than one morphing to a planetary fortress."""
+    """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke, which turns on what it is
+    making: a command center morphing to an orbital command is offered a different one from one morphing to a
+    planetary fortress."""
     creation_abilities: Mapping[UnitTypeId, AbilityId]
     """The ability that makes each unit type."""
     ability_products: Mapping[AbilityId, UnitTypeId | UpgradeId]

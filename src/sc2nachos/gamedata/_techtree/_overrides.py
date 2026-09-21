@@ -98,12 +98,6 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
 )
 
 
-# What the game charges for an ability, where its type's own row does not give it away. Everything else is read off
-# the tables: what the ability makes costs, less what it is made out of, which is right for every other morph -- an
-# orbital command 150 of its row's 550, an extractor 25 of 75, a baneling 25/25, each held to the three quarters a
-# cancel was seen to give back (tool `sweep_orders`). These are the prices the game has always charged (stated), and
-# `tests/test_gamedata.py` holds every entry to differing from what the tables derive, so one goes as soon as a patch
-# makes it unnecessary.
 COST_OVERRIDES: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
     {
         # An interceptor is no unit type the curated ids name, so nothing is derived for it; each costs 15, charged
@@ -125,9 +119,12 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Resources]] = MappingProxyType(
         AbilityId.RAVEN_SPAWN_AUTO_TURRET: Resources(0, 0),
     }
 )
-"""What ordering an ability takes, where the game's own rows do not say it."""
+"""What ordering an ability charges, where the tables get it wrong. Everything else is derived, what the ability makes
+less what that is made out of, which is right for every other morph: an orbital command 150 of its row's 550, its
+cancel giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke and an interceptor have
+no row to derive from. These are the prices the game has always charged (stated), and `tests/test_gamedata.py` holds
+every entry to differing from what the tables derive, so one goes as soon as a patch makes it unnecessary."""
 
-# What an ability takes of the supply cap, where its type's row does not give it away.
 SUPPLY_OVERRIDES: Final[Mapping[AbilityId, float]] = MappingProxyType(
     {
         # Two zerglings take a supply between them, and the row holds the half one takes.
@@ -136,4 +133,4 @@ SUPPLY_OVERRIDES: Final[Mapping[AbilityId, float]] = MappingProxyType(
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: 0.0,
     }
 )
-"""What ordering an ability takes of the supply cap, where the game's own rows do not say it."""
+"""What ordering an ability takes of the supply cap, where the tables get it wrong."""

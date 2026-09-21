@@ -23,12 +23,12 @@ class Order[T]:
     __slots__ = (
         "_ability",
         "_behavior",
-        "_carriers",
         "_data",
         "_error",
         "_forced",
         "_given_step",
         "_queued",
+        "_seen_carrying",
         "_sent_to",
         "_state",
         "_taken_by",
@@ -64,8 +64,8 @@ class Order[T]:
         self._verdict: ActionResult | None = None
         self._error: ActionError | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
-        # Every unit an observation has seen carrying it out, which one command to a group need not be all of.
-        self._carriers: frozenset[OwnUnit[Any]] = frozenset()
+        # Every unit an observation has seen carrying it out: with one command to a group, not always all of them.
+        self._seen_carrying: frozenset[OwnUnit[Any]] = frozenset()
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
