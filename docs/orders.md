@@ -1,13 +1,13 @@
 # Orders
 
-A bot orders its units through `api.order` while its handlers run. Nothing goes out until the last handler of the
+A bot orders its units through `api.orders` while its handlers run. Nothing goes out until the last handler of the
 turn has returned, and then it all goes out in one request, so a turn that orders nothing sends nothing.
 
 ```python
-@api.event.on(TurnEvent)
+@api.events.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        api.order.issue(marine, AbilityId.GENERAL_ATTACK, target=enemy_base)
+        api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=enemy_base)
 ```
 
 `issue` answers with an `Order`, which the bot holds on to for as long as it cares what became of it.
@@ -15,12 +15,12 @@ def on_turn(event: TurnEvent) -> None:
 ## Giving one
 
 ```python
-order = api.order.issue(marine, AbilityId.MARINE_STIM)
-api.order.issue(squad, AbilityId.GENERAL_MOVE, target=ramp)
-api.order.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
-api.order.issue(marine, AbilityId.GENERAL_ATTACK, target=drone, data=Defending(base))
-api.order.clear_queue(scv)
-api.order.camera(base)
+order = api.orders.issue(marine, AbilityId.MARINE_STIM)
+api.orders.issue(squad, AbilityId.GENERAL_MOVE, target=ramp)
+api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
+api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=drone, data=Defending(base))
+api.orders.clear_queue(scv)
+api.orders.camera(base)
 ```
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, which is what makes the
@@ -32,11 +32,11 @@ api.order.camera(base)
   rather than quite the one passed in. `camera` keeps its point the same way.
 - **`queued`** sends the order to go behind what each unit already has, rather than to replace it.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
-  reads it, and `api.order.issue(..., data=x)` answers an `Order[type of x]`, so a type checker follows it through.
-- **`api.order.clear_queue(unit)`** drops what a unit has queued and leaves it at the order it is carrying out,
+  reads it, and `api.orders.issue(..., data=x)` answers an `Order[type of x]`, so a type checker follows it through.
+- **`api.orders.clear_queue(unit)`** drops what a unit has queued and leaves it at the order it is carrying out,
   by sending that order back unqueued. It answers the order it sent, or `None` where there was nothing to drop — a
   structure making something is not cleared this way, since the game would only put another of the same behind it.
-- **`api.order.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
+- **`api.orders.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
 
 ## One order a unit a turn
 
@@ -58,22 +58,22 @@ structure can start on it, so NachOS sends only the last. To fill a queue on pur
 which the structure starts at once — say so with `queued=True`:
 
 ```python
-api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
-api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
+api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
 ```
 
 Both go out, and a barracks with a reactor makes both marines at once. Two such orders name the same ability on the
 same structure, so NachOS cannot tell their reports apart: they run and finish together.
 
 NachOS has no priority of its own. Handlers already run highest-priority-first, and a handler late in a turn reads
-`api.order.issued_to(unit)` to leave a unit an earlier one has spoken for:
+`api.orders.issued_to(unit)` to leave a unit an earlier one has spoken for:
 
 ```python
-@api.event.on(TurnEvent, priority=EventPriority.LOW)
+@api.events.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        if not api.order.issued_to(marine):
-            api.order.issue(marine, AbilityId.GENERAL_MOVE, target=rally)
+        if not api.orders.issued_to(marine):
+            api.orders.issue(marine, AbilityId.GENERAL_MOVE, target=rally)
 ```
 
 A bot that wants its own ranking puts it in `data` and reads it back off the orders `issued` answers with.
@@ -93,7 +93,7 @@ A bot budgets for itself, since only it knows what matters most:
 ```python
 cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
 if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
-    api.order.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+    api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
 `api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, so a bot
@@ -109,7 +109,7 @@ slot nor a mineral within the same step ([game behavior](game-behavior.md#abilit
 
 ## What became of it
 
-`order.state` is where an order has got to, and `api.order.running` holds every order NachOS is still following.
+`order.state` is where an order has got to, and `api.orders.running` holds every order NachOS is still following.
 
 | State | What it means |
 | --- | --- |

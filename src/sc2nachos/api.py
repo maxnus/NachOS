@@ -45,17 +45,17 @@ class Api:
         """Work out as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler's calls
         if `time_handlers`. Nothing here connects to anything."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
-        self._event = EventBus(time_handlers=time_handlers)
+        self._events = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
         self._game: _Game | None = None
 
     @property
-    def event(self) -> EventBus:
+    def events(self) -> EventBus:
         """What the api tells its handlers about as a game goes on, and who they are.
 
         It answers before any game, so that handlers can subscribe as their modules are imported.
         """
-        return self._event
+        return self._events
 
     def _current_game(self) -> _Game:
         """The game being played, or the one played last."""
@@ -94,7 +94,7 @@ class Api:
         return self._current_game().result
 
     @property
-    def order(self) -> OrderBook:
+    def orders(self) -> OrderBook:
         """What this player orders this turn, and what became of the orders it has given.
 
         Orders given while the turn's handlers run go out in one request once the last of them has returned, so a
@@ -198,7 +198,7 @@ class Api:
         game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
-        events = self._event
+        events = self._events
         events._start_game()
         events._set_step(game.step)
         events.emit(GameStartEvent(step=game.step))

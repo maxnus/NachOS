@@ -43,7 +43,7 @@ These are the non-negotiables. They exist because this library is published for 
   their own modules as ordinary functions. A felt need to subclass is a signal that NachOS is missing an API —
   treat it as a bug report against this library, not as a pattern to support.
 - **`Api.__init__` must be cheap and must not require a live connection.** Consumers construct it at import
-  time so that `@api.event.on(...)` decorators can run as their modules load. Connecting happens in
+  time so that `@api.events.on(...)` decorators can run as their modules load. Connecting happens in
   `run_local` / `run_ladder`, which take an already-built instance.
 - **No AvocaDOS-shaped quirks.** Nothing may exist in NachOS solely to make something work in AvocaDOS. If in
   doubt, the awkwardness stays in AvocaDOS. Better still, fix it so neither side needs it.
