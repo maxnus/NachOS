@@ -71,7 +71,9 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **Keyword-only args**: use `*` in signatures liberally.
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **Name a class for what it is responsible for**, so the name says what it does.
-- **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
+- **A leading underscore marks what a bot must not use**, not what another NachOS module must not call. Where one
+  module does reach into another object's private members, `tests/test_seams.py` lists it, and a new one is a
+  line added there on purpose.
 - **Type hints** on all parameters and return types.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
