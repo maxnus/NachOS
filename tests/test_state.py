@@ -15,7 +15,7 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawEffectId, RawUpgradeId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, ProtocolError, Status, WebSocketTransport
 from sc2nachos.state import (
@@ -304,7 +304,7 @@ class TestThroughTheApi:
 def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
     """Run with `pytest -m integration`. Starts the game as zerg and plays half a minute of it."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
 

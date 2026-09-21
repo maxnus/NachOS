@@ -9,7 +9,7 @@ from sc2nachos.orders._order_state import OrderState
 if TYPE_CHECKING:
     from sc2nachos.gamedata import OrderBehavior
     from sc2nachos.ids import AbilityId
-    from sc2nachos.state import ActionError, ActionResult
+    from sc2nachos.state import ActionFailure, ActionResult
     from sc2nachos.units import OwnUnit, Target
 
 
@@ -24,7 +24,7 @@ class Order[T]:
         "_ability",
         "_behavior",
         "_data",
-        "_error",
+        "_failure",
         "_forced",
         "_given_step",
         "_queued",
@@ -62,7 +62,7 @@ class Order[T]:
         self._state = OrderState.GIVEN
         self._sent_to: tuple[OwnUnit[Any], ...] = ()
         self._verdict: ActionResult | None = None
-        self._error: ActionError | None = None
+        self._failure: ActionFailure | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
         # The units the first observation to show any carrying it out saw doing so: with one command to a group, not
         # always all of them.
@@ -113,9 +113,9 @@ class Order[T]:
         return self._verdict
 
     @property
-    def error(self) -> ActionError | None:
-        """The action error the game gave it up with, or `None`."""
-        return self._error
+    def failure(self) -> ActionFailure | None:
+        """What the game gave it up with, or `None`."""
+        return self._failure
 
     @property
     def given_step(self) -> int:

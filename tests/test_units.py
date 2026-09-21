@@ -13,7 +13,7 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, Status, WebSocketTransport
 from sc2nachos.units import (
@@ -853,7 +853,7 @@ class TestThroughTheApi:
 def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_death() -> None:
     """Run with `pytest -m integration`. Starts the game and plays a minute of it."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
 

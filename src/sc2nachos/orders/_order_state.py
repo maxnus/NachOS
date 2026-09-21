@@ -28,7 +28,7 @@ class OrderState(Enum):
     """Answered `SUCCESS` and never carried out, which the game does silently where an order no longer fits by the
     time it steps: a sixth marine, an order there are no minerals left for."""
     FAILED = "failed"
-    """Carried out and then given up on, which an action error names: a builder's site taken meanwhile."""
+    """Carried out and then given up on, which an `ActionFailure` names: a builder's site taken meanwhile."""
     OVERRIDDEN = "overridden"
     """A later order took every unit this one was given to: one of the same turn, before this was sent, or one of a
     later turn, which the game carried out in its place. `verdict` says which, being `None` for an order never

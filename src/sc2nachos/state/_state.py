@@ -9,7 +9,7 @@ from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
-from sc2nachos.state._actions import Action, ActionError, read_action
+from sc2nachos.state._actions import Action, ActionFailure, read_action
 from sc2nachos.state._effect import Effect
 from sc2nachos.state._score import Score
 from sc2nachos.state._supply import Supply
@@ -124,11 +124,11 @@ class _State:
         return tuple(action for action in actions if action is not None)
 
     @cached_property
-    def action_errors(self) -> tuple[ActionError, ...]:
+    def action_failures(self) -> tuple[ActionFailure, ...]:
         """The orders the game took and has given up on since the observation before.
 
         Raises `UncuratedIdError` where one names an ability the curated ids leave out.
         """
         unit_by_tag = self._tracker.units.by_tag
         step = self._observation.game_loop
-        return tuple(ActionError.from_proto(error, unit_by_tag, step) for error in self._response.action_errors)
+        return tuple(ActionFailure.from_proto(error, unit_by_tag, step) for error in self._response.action_errors)

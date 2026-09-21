@@ -14,7 +14,7 @@ from sc2nachos.gamedata import GameData, TechRequirements
 from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.units import Unit
@@ -423,7 +423,7 @@ def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
     """Run with `pytest -m integration`. Starts the game as terran, and rechecks a few of the tables' facts in it, so
     that a patch moving the tech tree fails here before anywhere else."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
 

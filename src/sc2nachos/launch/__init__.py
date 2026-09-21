@@ -8,7 +8,7 @@ from sc2nachos.launch._installation import (
     InstallationNotFoundError,
     UnsupportedPlatformError,
 )
-from sc2nachos.launch._map import Map, MapNotFoundError
+from sc2nachos.launch._map_file import MapFile, MapNotFoundError
 
 __all__ = [
     "MINIMUM_BASE_BUILD",
@@ -17,7 +17,7 @@ __all__ = [
     "GameVersionError",
     "Installation",
     "InstallationNotFoundError",
-    "Map",
+    "MapFile",
     "MapNotFoundError",
     "UnsupportedPlatformError",
     "free_port",

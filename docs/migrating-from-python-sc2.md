@@ -48,7 +48,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
   belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
-  `path`. A `Client` over `ReplayTransport(Recording(path))` then plays it back with no game running. A run that
+  `path`. A `Client` over `PlaybackTransport(Recording(path))` then plays it back with no game running. A run that
   is killed before it finishes leaves only part of the file.
 
 ## Events
@@ -131,7 +131,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `bot.do(action, queue=True)` | `api.order.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.order.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| nothing | `order.state`, `order.verdict`, `order.error`, `order.data` |
+| nothing | `order.state`, `order.verdict`, `order.failure`, `order.data` |
 
 - **An order is a thing you hold on to.** `issue` answers with an `Order` that says what the game answered, whether
   it was carried out, and whether it has finished. python-sc2 hands back nothing.
@@ -354,7 +354,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `state.effects` | `api.effects` |
 | `state.common.larva_count` | `len(api.units.own.of_type(UnitType.Larva))` |
 | `state.dead_units`, `chat`, `actions`, `alerts` | events: see Events |
-| `state.action_errors` | `api.action_errors` |
+| `state.action_errors` | `api.action_failures`, each an `ActionFailure`, which is a report and not an exception |
 
 - **Each read answers from the last observation, and nothing is read until asked for.** There is no `state`
   object to hold on to; `api.score` read next turn is next turn's score.

@@ -97,8 +97,8 @@ class RecordingTransport:
                 )
 
 
-class ReplayTransport:
-    """A `Transport` that answers from a recording, so everything above the seam runs with no game.
+class PlaybackTransport:
+    """A `Transport` that plays a recording back, so everything above the seam runs with no game.
 
     Answers come back in the order they were recorded. Only the kind of request is checked and not its
     contents, so a caller may ask about a different game loop than the recording did, but not a different thing.

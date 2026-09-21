@@ -17,11 +17,11 @@ from sc2nachos.protocol import (
     GameEndedError,
     GameNotStartedError,
     GamePorts,
+    PlaybackTransport,
     PortPair,
     ProtocolError,
     Recording,
     RecordingTransport,
-    ReplayTransport,
     Status,
     WebSocketTransport,
 )
@@ -552,24 +552,24 @@ class TestReplay:
         return recorder.recording
 
     def test_a_recorded_conversation_drives_a_client_with_no_game(self, tmp_path: Path) -> None:
-        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client = Client(PlaybackTransport(self._recorded(tmp_path)))
         client.create_game("map", [Participant(), Computer()])
         assert client.join_game(Race.TERRAN) == 2
         assert client.observation().observation.game_loop == 48
 
     def test_the_details_of_a_request_need_not_match(self, tmp_path: Path) -> None:
         """Only the question is replayed, so a caller may ask about a loop the recording did not."""
-        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client = Client(PlaybackTransport(self._recorded(tmp_path)))
         client.create_game("other map", [Computer()])
         assert client.join_game(Race.ZERG, name="someone else") == 2
 
     def test_a_question_the_recording_was_not_asked_raises(self, tmp_path: Path) -> None:
-        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client = Client(PlaybackTransport(self._recorded(tmp_path)))
         with pytest.raises(ProtocolError, match="answers create_game next, and was asked for ping"):
             client.ping()
 
     def test_a_recording_that_has_run_out_says_so(self, tmp_path: Path) -> None:
-        client = Client(ReplayTransport(self._recorded(tmp_path)))
+        client = Client(PlaybackTransport(self._recorded(tmp_path)))
         client.create_game("map", [Participant(), Computer()])
         client.join_game(Race.TERRAN)
         client.observation()
@@ -577,7 +577,7 @@ class TestReplay:
             client.ping()
 
     def test_a_request_after_closing_raises(self, tmp_path: Path) -> None:
-        transport = ReplayTransport(self._recorded(tmp_path))
+        transport = PlaybackTransport(self._recorded(tmp_path))
         transport.close()
         with pytest.raises(ConnectionClosedError):
             transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))

@@ -55,7 +55,7 @@ from sc2nachos.events import (
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
-from sc2nachos.launch import GameProcess, Map, MapNotFoundError
+from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import Alert, CameraMove
@@ -826,7 +826,7 @@ def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
     """A game as `race` under `free` and `fast_build`, every event it hands out from its first observation on, and
     the middle of the map."""
     try:
-        game_map = Map.find("PylonAIE_v4")
+        game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
     with (

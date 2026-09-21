@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import PointLike
     from sc2nachos.protocol import Client
-    from sc2nachos.state import ActionError
+    from sc2nachos.state import ActionFailure
     from sc2nachos.state._state import _State
     from sc2nachos.units import OwnUnit
 
@@ -197,11 +197,11 @@ class OrderBook:
         if not self._running_orders:
             return
         commands = [action for action in state.actions if isinstance(action, UnitCommand)]
-        errors = state.action_errors
+        failures = state.action_failures
         running: list[Order[Any]] = []
         for order in self._running_orders:
             if not order.state.is_final:
-                self._take_in_order(order, commands, errors)
+                self._take_in_order(order, commands, failures)
             if not order.state.is_final:
                 running.append(order)
         self._running_orders = running
@@ -278,13 +278,15 @@ class OrderBook:
             if all(unit.id in replaced for unit in order._acting_units):
                 order._state = OrderState.OVERRIDDEN
 
-    def _take_in_order(self, order: Order[Any], commands: Sequence[UnitCommand], errors: Sequence[ActionError]) -> None:
+    def _take_in_order(
+        self, order: Order[Any], commands: Sequence[UnitCommand], failures: Sequence[ActionFailure]
+    ) -> None:
         """What one order's state becomes, from what the observation reported."""
         general = self._general_ability(order.ability)
         units = order._acting_units
-        errored = tuple(error for error in errors if self._error_is_of(error, order, units, general))
-        if errored:
-            order._error = errored[0]
+        failed = tuple(failure for failure in failures if self._failure_is_of(failure, order, units, general))
+        if failed:
+            order._failure = failed[0]
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
         # The report can come an observation after the unit is seen carrying the order out, so a running order reads
         # it too, and only what it says about this order's own units is kept.
@@ -292,10 +294,10 @@ class OrderBook:
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
             order._taken_by = taken_by
-        done_with = {error.unit for error in errored} | {unit for unit in units if unit.is_dead}
-        if errored and not carrying_out and not set(units) - done_with:
+        done_with = {failure.unit for failure in failed} | {unit for unit in units if unit.is_dead}
+        if failed and not carrying_out and not set(units) - done_with:
             # The game gave up on every unit it went out for that has not died since. One of a group failing leaves
-            # the rest to settle as they are, with the error on the order to read.
+            # the rest to settle as they are, with the failure on the order to read.
             order._state = OrderState.FAILED
             return
         if carrying_out:
@@ -326,11 +328,13 @@ class OrderBook:
         else:
             order._state = OrderState.DROPPED
 
-    def _error_is_of(
-        self, error: ActionError, order: Order[Any], units: Sequence[OwnUnit[Any]], general: AbilityId
+    def _failure_is_of(
+        self, failure: ActionFailure, order: Order[Any], units: Sequence[OwnUnit[Any]], general: AbilityId
     ) -> bool:
-        """Whether an action error names one of `units` and the ability `order` was given."""
-        return error.unit in units and error.ability is not None and self._general_ability(error.ability) is general
+        """Whether `failure` names one of `units` and the ability `order` was given."""
+        return (
+            failure.unit in units and failure.ability is not None and self._general_ability(failure.ability) is general
+        )
 
     def _unit_already_doing_order(self, unit: OwnUnit[Any], order: Order[Any]) -> bool:
         """Whether `unit`'s first order is the one `order` would send it unqueued."""

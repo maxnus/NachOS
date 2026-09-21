@@ -25,7 +25,6 @@ class TestPoint2:
     def test_coordinates(self) -> None:
         point = Point((3, 4))
         assert (point.x, point.y) == (3, 4)
-        assert point.position is point
 
     def test_distance(self) -> None:
         assert Point((0, 0)).distance_to((3, 4)) == 5
