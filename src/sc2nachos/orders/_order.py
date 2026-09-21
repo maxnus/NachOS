@@ -49,7 +49,7 @@ class Order[T]:
         step: int,
         forced: bool = False,
     ) -> None:
-        """An order of `ability` to `units`, given at `step`. `api.order.issue` makes these; a bot does not."""
+        """An order of `ability` to `units`, given at `step`. `api.orders.issue` makes these; a bot does not."""
         self._ability = ability
         self._units = units
         self._target = target

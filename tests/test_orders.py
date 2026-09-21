@@ -999,9 +999,9 @@ class _OrderingBot:
             return
         if self.moved is None and len(marines) >= 2:
             first, second = marines[0], marines[1]
-            self.moved = api.order.issue(first, _MOVE, target=middle + (6.0, 0.0), data="scouting")
-            self.stim = api.order.issue(second, _HOLD_FIRE)
-            self.stimmed_move = api.order.issue(second, _MOVE, target=middle + (0.0, 6.0))
+            self.moved = api.orders.issue(first, _MOVE, target=middle + (6.0, 0.0), data="scouting")
+            self.stim = api.orders.issue(second, _HOLD_FIRE)
+            self.stimmed_move = api.orders.issue(second, _MOVE, target=middle + (0.0, 6.0))
             return
         if self.moved is None or self.stim is None:
             return
@@ -1010,7 +1010,7 @@ class _OrderingBot:
             api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[self.killed.tag]))])
             return
         if self.killed is not None and self.at_a_dead_tag is None and self.killed.is_dead:
-            self.at_a_dead_tag = api.order.issue(self.killed, _MOVE, target=middle)
+            self.at_a_dead_tag = api.orders.issue(self.killed, _MOVE, target=middle)
 
 
 class _LosingBot:
@@ -1038,7 +1038,7 @@ class _LosingBot:
                 kill = debug_pb2.DebugKillUnit(tag=[larva.tag for larva in larvae[1:]])
                 api.client.debug([debug_pb2.DebugCommand(kill_unit=kill)])
             elif larvae:
-                self.drone = api.order.issue(larvae[0], AbilityId.LARVA_MORPH_DRONE)
+                self.drone = api.orders.issue(larvae[0], AbilityId.LARVA_MORPH_DRONE)
         chambers = api.units.own.of_type(UnitTypeId.EVOLUTION_CHAMBER).complete
         if not chambers:
             home = api.units.own.of_type(UnitTypeId.HATCHERY)
@@ -1051,7 +1051,7 @@ class _LosingBot:
                 )
             return
         if self.research is None:
-            self.research = api.order.issue(chambers[0], AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS)
+            self.research = api.orders.issue(chambers[0], AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS)
         elif not self.killed and self.research.state is OrderState.RUNNING:
             self.killed = True
             api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[chambers[0].tag]))])
@@ -1081,7 +1081,7 @@ class TestAgainstTheRealGame:
             player = client.join_game(Race.TERRAN)
             api = Api()
             bot = _OrderingBot(api, player)
-            api.event.on(TurnEvent)(bot.turn)
+            api.events.on(TurnEvent)(bot.turn)
             api.play(client, steps_per_turn=8, time_limit=60)
 
         assert bot.moved is not None
@@ -1114,7 +1114,7 @@ class TestAgainstTheRealGame:
             player = client.join_game(Race.ZERG)
             api = Api()
             bot = _LosingBot(api, player)
-            api.event.on(TurnEvent)(bot.turn)
+            api.events.on(TurnEvent)(bot.turn)
             api.play(client, steps_per_turn=8, time_limit=60)
 
         # The game reports the chamber dying and nothing more, so the research reads lost.

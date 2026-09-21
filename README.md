@@ -28,7 +28,7 @@ however suits your bot — most bots will want a module-level singleton:
 from sc2nachos import Api
 
 api = Api()
-on = api.event.on
+on = api.events.on
 ```
 
 ```python

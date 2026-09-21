@@ -56,7 +56,7 @@ class _EventDecorator(Protocol[_E_co]):
 
 @final
 class EventBus:
-    """What an api tells its handlers about, and who they are. `api.event` is one.
+    """What an api tells its handlers about, and who they are. `api.events` is one.
 
     A function stays subscribed for the life of the api, and an instance until it is passed to `unsubscribe`. Both are
     held strongly, so a handler runs whether or not anything else keeps it. What a handler has done counts for one game

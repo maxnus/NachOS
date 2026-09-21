@@ -128,7 +128,7 @@ class TestBeforeAGame:
             getattr(Api(), name)
 
     def test_the_events_answer_so_handlers_can_subscribe_at_import(self) -> None:
-        assert isinstance(Api().event, EventBus)
+        assert isinstance(Api().events, EventBus)
 
 
 class TestPlaying:
@@ -224,7 +224,7 @@ def _record(api: Api, seen: list[tuple[str, int]]) -> None:
     """Note every event of a game `api` plays, by its type's name and its step."""
     for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
 
-        @api.event.on(kind)
+        @api.events.on(kind)
         def note(event: Event) -> None:
             seen.append((type(event).__name__, event.step))
 
@@ -234,7 +234,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4, ending=Result.DEFEAT))
         api, seen, results = Api(), [], []
         _record(api, seen)
-        api.event.on(GameEndEvent)(lambda event: results.append(event.result))
+        api.events.on(GameEndEvent)(lambda event: results.append(event.result))
         api.play(client, steps_per_turn=2)
         assert seen == [
             ("GameStartEvent", 0),
@@ -250,7 +250,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api, steps = Api(), []
         for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
-            api.event.on(kind)(lambda event: steps.append((event.step, api.step)))
+            api.events.on(kind)(lambda event: steps.append((event.step, api.step)))
         api.play(client, steps_per_turn=2)
         assert len(steps) == 6
         assert all(event_step == api_step for event_step, api_step in steps)
@@ -258,7 +258,7 @@ class TestEvents:
     def test_a_game_called_at_its_time_limit_ends_in_a_tie_all_the_same(self) -> None:
         client, _ = _joined(*_game(0, 112, ending=None))
         api, results = Api(), []
-        api.event.on(GameEndEvent)(lambda event: results.append((event.step, event.result)))
+        api.events.on(GameEndEvent)(lambda event: results.append((event.step, event.result)))
         api.play(client, steps_per_turn=112, time_limit=5)
         assert results == [(112, Result.TIE)]
 
@@ -268,26 +268,26 @@ class TestEvents:
         api = Api()
         fired: list[tuple[str, int]] = []
 
-        @api.event.on(TurnEvent, at_step=2)
+        @api.events.on(TurnEvent, at_step=2)
         def function(event: TurnEvent) -> None:
             fired.append(("function", event.step))
 
         class Handlers:
             def __init__(self, name: str) -> None:
                 self.name = name
-                api.event.subscribe(self)
+                api.events.subscribe(self)
 
-            @api.event.on(TurnEvent, once=True)
+            @api.events.on(TurnEvent, once=True)
             def on_turn(self, event: TurnEvent) -> None:
                 fired.append((self.name, event.step))
 
         Handlers("before")
 
-        @api.event.on(GameStartEvent)
+        @api.events.on(GameStartEvent)
         def make(event: GameStartEvent) -> None:
             # Made in the first game only, and subscribed from then on.
             Handlers("during")
-            api.event.unsubscribe(make)
+            api.events.unsubscribe(make)
 
         api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
         first = list(fired)
@@ -300,7 +300,7 @@ class TestEvents:
         seen: list[tuple[str, int]] = []
         _record(api, seen)
         for kind in (OwnUnitCreatedEvent, UnitDiedEvent):
-            api.event.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
+            api.events.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
 
         def game() -> list[sc2api_pb2.Response]:
             marine, scv = make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0)
@@ -333,7 +333,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api = Api()
 
-        @api.event.on(TurnEvent, at_step=2)
+        @api.events.on(TurnEvent, at_step=2)
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 

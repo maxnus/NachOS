@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 class OrderBook:
     """What this player orders in a turn, and what became of every order still worth following.
 
-    A bot gives orders through `api.order` while its handlers run; they go out in one request once the last handler
+    A bot gives orders through `api.orders` while its handlers run; they go out in one request once the last handler
     has returned. A unit takes one order a turn, the last it was given, besides the abilities it carries out at once.
     """
 

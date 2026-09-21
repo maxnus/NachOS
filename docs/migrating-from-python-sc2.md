@@ -24,7 +24,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   Faster speed ([Units](#units)).
 - **The tables are keyed by id, and what relates them was swept in game**, in place of python-sc2's hand-written
   dicts ([The tables](#the-tables)).
-- **Orders are buffered and sent once a turn**, through `api.order`, and each answers for itself
+- **Orders are buffered and sent once a turn**, through `api.orders`, and each answers for itself
   ([Orders](#orders)). Debug commands are still protocol messages through `api.client.debug`.
 
 ## Running a game
@@ -56,9 +56,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 [events.md](events.md) lists every event, what selects it, and when it comes.
 
 - **A bot's code runs in handlers, not in overridden methods.** `on_start`, `on_step` and `on_end` are handlers of
-  `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.event.on(TurnEvent)`. A module-level
+  `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.events.on(TurnEvent)`. A module-level
   function is subscribed as it is defined. A method is marked, and subscribed for an instance passed to
-  `api.event.subscribe(instance)`, usually by its own `__init__`.
+  `api.events.subscribe(instance)`, usually by its own `__init__`.
 - **`on_step` is best kept as one `TurnEvent` handler** that calls the bot's parts in the order it wants. Handlers
   run in the order of their priorities, highest first, then the order they subscribed, which is hard to follow
   across many modules.
@@ -68,7 +68,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   game as it ended, where python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`**, and one that is is refused when it subscribes.
 - **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it is
-  passed to `api.event.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
+  passed to `api.events.unsubscribe`, since both are held strongly. A bot that makes its objects afresh for each game
   unsubscribes the old ones, or they go on handling events alongside the new.
 - **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent` in the
   order [events.md](events.md) gives, and made only for a type something subscribes to:
@@ -100,7 +100,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **A handler of a class is handed the events of its subclasses.** A handler of `Event` is handed every event, and
   has NachOS make every type of event. `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` each stand for a whole
   kind, this player's units' and the enemy's alike.
-- **A bot can define events of its own**, by subclassing `Event`, and send them with `api.event.emit`. python-sc2
+- **A bot can define events of its own**, by subclassing `Event`, and send them with `api.events.emit`. python-sc2
   has no events to extend.
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
   reported created on the first turn.
@@ -125,11 +125,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.order.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
-| `bot.do(action)`, `await bot._do_actions(...)` | `api.order.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.order.clear_queue(unit)`, `api.order.issued_to(unit)` |
-| `bot.do(action, queue=True)` | `api.order.issue(..., queued=True)` |
-| `bot.client.move_camera(p)` | `api.order.camera(p)` |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
+| `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
+| nothing | `api.orders.clear_queue(unit)`, `api.orders.issued_to(unit)` |
+| `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
+| `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
 | nothing | `order.state`, `order.action_result`, `order.failure`, `order.data` |
 
@@ -148,7 +148,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game an
   unqueued order the same as a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free after all. NachOS holds it back and the order reads `RUNNING`;
-  dropping a queue on purpose is `api.order.clear_queue(unit)`.
+  dropping a queue on purpose is `api.orders.clear_queue(unit)`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
