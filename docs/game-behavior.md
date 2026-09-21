@@ -198,6 +198,12 @@ Each entry ends with how it was seen:
   add-on usually is, it is built where the host stands and charged at once, 50/50 for a reactor; but a host whose
   add-on's place a supply depot fills is answered `Success`, and nothing is charged or started, then or 24 steps
   later (tool `sweep_orders`).
+- A barracks in the air needs a point to build an add-on: the place it is to land on. Given one with room beside it,
+  it shows `BARRACKS_LAND` and then `BARRACKS_BUILD_REACTOR`, both aimed at the point, flies there, lands and builds
+  the add-on, and is charged at once: the reactor's 50/50 was gone at the next observation, while it still had 22 to
+  fly and 430 steps before it landed. Given no point it is answered `Success`, and nothing is charged or started;
+  given one whose add-on place a supply depot fills, `CantFindPlacementLocation`, and nothing is charged. A factory
+  and a starport were not tried and are taken to behave alike (tool `sweep_orders`).
 - A warp-in is first seen unfinished and finishes some steps later (#37; tested). A gateway becomes a warp gate by
   itself once Warp Gate is researched, and nothing else makes one (#29; tested).
 - The starting townhall is never seen unfinished. An auto-turret has the structure attribute but is first seen

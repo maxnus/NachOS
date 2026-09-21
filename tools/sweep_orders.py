@@ -2567,6 +2567,57 @@ class _Sweep:
     interface: sc2api_pb2.InterfaceOptions | None = None
 
 
+def _flying_add_on(game: _Game) -> list[Trial]:
+    """Find what a barracks in the air does when told to build an add-on: with no point, at ground with room for the
+    add-on beside it, and at ground whose add-on place a supply depot fills."""
+    trials: list[Trial] = []
+
+    def added_on(aimed: str) -> Callable[[Trial], None]:
+        def run(trial: Trial) -> None:
+            made = game.create(UnitTypeId.BARRACKS_FLYING, game.spot(game.toward(12), 4))
+            if not made:
+                trial.notes["class"] = "no barracks"
+                return
+            barracks = made[0]
+            # Where it is to land, with room beside it for the add-on unless a depot is put there.
+            site = game.spot(game.toward(24), 5)
+            if aimed == "blocked":
+                depots = game.create(UnitTypeId.SUPPLY_DEPOT, Point((site.x + 2.5, site.y - 0.5)))
+                trial.notes["depot at"] = [[unit.pos.x, unit.pos.y] for unit in depots]
+            target = None if aimed == "nothing" else site
+            trial.notes["barracks from"] = [barracks.pos.x, barracks.pos.y]
+            trial.notes["aimed at"] = None if target is None else [target.x, target.y]
+            before = [game.minerals, game.vespene]
+            trial.notes["verdict"] = game.order(AbilityId.BARRACKS_BUILD_REACTOR, [barracks], target)
+            seen: list[object] = []
+            for _ in range(60):
+                game.turn(8)
+                now = game.unit(barracks.tag)
+                if now is None:
+                    seen.append("gone")
+                    break
+                kind = UnitTypeId.get(now.unit_type)
+                name = kind.name if kind else now.unit_type
+                where = [round(now.pos.x, 1), round(now.pos.y, 1)]
+                orders = [_order(order) for order in now.orders]
+                purse = [game.minerals, game.vespene]
+                seen.append([game.step, name, where, orders, bool(now.add_on_tag), purse])
+                if now.add_on_tag or not now.orders:
+                    break
+            trial.notes["step, type, at, orders, add-on, purse"] = seen
+            trial.notes["purse before and after"] = [before, [game.minerals, game.vespene]]
+
+        return run
+
+    for aimed, name in (
+        ("nothing", "a flying barracks given a reactor with no point"),
+        ("free", "a flying barracks given a reactor at ground with room beside it"),
+        ("blocked", "a flying barracks given a reactor at ground whose add-on place a depot fills"),
+    ):
+        trials.append(game.trial(name, added_on(aimed)))
+    return trials
+
+
 def _one_command_many_makers(game: _Game) -> list[Trial]:
     """Find whether one command naming several structures is carried out by each of them or by one.
 
@@ -2667,6 +2718,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
     # Not `free`, so that what one command naming several structures charges counts.
     "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, ("food", "all_resources")),
+    # Not `free`, so that what a flying structure's add-on charges counts.
+    "flying-add-on": _Sweep(Race.TERRAN, _flying_add_on, ("food", "all_resources")),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
