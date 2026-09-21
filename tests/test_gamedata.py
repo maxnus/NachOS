@@ -348,7 +348,7 @@ class TestARecordedGamesTables:
             row = data.abilities[ability]
             offered = ability if not ability.name.endswith("_OFF") else AbilityId[f"{ability.name[:-4]}_ON"]
             assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
-            assert row.behavior is OrderBehavior.KEEPS_ORDERS
+            assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
@@ -360,7 +360,7 @@ class TestARecordedGamesTables:
             AbilityId.GENERAL_HOLD_FIRE_OFF,
         )
         for ability in generals:
-            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_both_halves_of_a_toggle_keep_a_unit_s_orders(self, path: Path) -> None:
         """Each half was given in turn to a moving unit, and its move stayed first in its orders (in game)."""
@@ -374,10 +374,10 @@ class TestARecordedGamesTables:
             (AbilityId.OVERLORD_CREEP_ON, AbilityId.OVERLORD_CREEP_OFF),
         )
         for ability in (half for pair in halves for half in pair):
-            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
         # A lurker is offered its hold fire only burrowed, and the game offers a burrowed lurker no move, so neither
         # half was ever given to one moving.
-        assert data.abilities[AbilityId.LURKER_HOLD_FIRE_OFF].behavior is OrderBehavior.REPLACES
+        assert data.abilities[AbilityId.LURKER_HOLD_FIRE_OFF].order_behavior is OrderBehavior.REPLACES
 
     def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
         """Ordering one of these was seen in game to go behind what a structure was making, or to be refused while
@@ -386,22 +386,22 @@ class TestARecordedGamesTables:
         queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
         idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BARRACKS_BUILD_TECH_LAB)
         replaces = (AbilityId.GENERAL_MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
-        assert [data.abilities[ability].behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
-        assert [data.abilities[ability].behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
-        assert [data.abilities[ability].behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
+        assert [data.abilities[ability].order_behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
+        assert [data.abilities[ability].order_behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
+        assert [data.abilities[ability].order_behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
 
     def test_a_general_ability_takes_the_class_of_the_ones_it_stands_for(self, path: Path) -> None:
         """A general research id carries no product of its own: its levels do."""
         data = _tables(path)
         levels = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS
-        assert data.abilities[levels].behavior is OrderBehavior.QUEUES
-        assert data.abilities[AbilityId.GENERAL_BUILD_REACTOR].behavior is OrderBehavior.NEEDS_IDLE
+        assert data.abilities[levels].order_behavior is OrderBehavior.QUEUES
+        assert data.abilities[AbilityId.GENERAL_BUILD_REACTOR].order_behavior is OrderBehavior.NEEDS_IDLE
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
         """Measured for a rally and a cancel, and read the same way for the rest (docs/game-behavior.md)."""
         data = _tables(path)
         for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.GENERAL_CANCEL_QUEUE):
-            assert data.abilities[ability].behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
         """Its alias is an empty row no unit is ever one of; every other alias names a unit you can own."""
@@ -556,7 +556,7 @@ class TestARecordedGamesTables:
             assert data.upgrades[upgrade].research_ability is ability
             assert data.abilities[ability].product is upgrade
             # Without the product it would read as an ability that makes nothing, which competes with nothing.
-            assert data.abilities[ability].behavior is OrderBehavior.QUEUES
+            assert data.abilities[ability].order_behavior is OrderBehavior.QUEUES
         assert _RESEARCHED_BY_A_DEAD_ID
 
     def test_a_transient_form_of_a_unit_names_the_one_it_is_a_form_of(self, path: Path) -> None:

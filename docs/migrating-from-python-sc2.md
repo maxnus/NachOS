@@ -127,11 +127,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
 |---|---|
 | `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.order.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
 | `bot.do(action)`, `await bot._do_actions(...)` | `api.order.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.order.clear_queue(unit)`, `api.order.issued(unit)` |
+| nothing | `api.order.clear_queue(unit)`, `api.order.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.order.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.order.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| nothing | `order.state`, `order.verdict`, `order.failure`, `order.data` |
+| nothing | `order.state`, `order.action_result`, `order.failure`, `order.data` |
 
 - **An order is a thing you hold on to.** `issue` answers with an `Order` that says what the game answered, whether
   it was carried out, and whether it has finished. python-sc2 hands back nothing.
@@ -255,7 +255,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
 | `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
 | `units.closer_than(d, p)` | `units.in_area(Circle(p, d))`, which counts a unit at exactly `d` |
-| `units.closest_n_units(p, n)` | `units.closest(n, p)` |
+| `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
 | `units.random` | `random.choice(units)` |
 
@@ -450,7 +450,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | a requirement's `requires_power` | `unit_data.needs_power` |
 | nothing | `ability_data.product`, `unit_data.morphed_from` |
 | `DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, `SPEED_INCREASE_DICT` | `unit_data.upgrades`, `unit_data.with_upgrades(upgrades)` |
-| nothing | `upgrade_data.type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
+| nothing | `upgrade_data.upgrade_type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
 
 - **A table is keyed by the id itself**, where python-sc2 keys by the number inside it and every lookup reads
   `units[UnitTypeId.MARINE.value]`.

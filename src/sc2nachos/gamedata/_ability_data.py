@@ -239,7 +239,7 @@ class AbilityData:
     ones it stands for share, and none where they differ, as a general add-on's do: send the exact id's. `None` for
     anything else, a warp-in and a build among them: a warp gate keeps no queue, and a structure going up is
     cancelled on itself, with `GENERAL_CANCEL_BUILDING`."""
-    behavior: OrderBehavior
+    order_behavior: OrderBehavior
     """What ordering it does to what the unit is already doing."""
 
     @classmethod
@@ -266,5 +266,5 @@ class AbilityData:
             product=tech_tree.ability_products.get(ability),
             cost=costs.get(ability, _FREE),
             cancelled_by=cancels.get(ability),
-            behavior=behaviors.get(ability, OrderBehavior.REPLACES),
+            order_behavior=behaviors.get(ability, OrderBehavior.REPLACES),
         )

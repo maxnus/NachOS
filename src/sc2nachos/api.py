@@ -71,12 +71,12 @@ class Api:
     @property
     def map(self) -> GameMap:
         """The map the game is played on."""
-        return self._current_game().map
+        return self._current_game().game_map
 
     @property
     def data(self) -> GameData:
         """The tables the game is played by, as they stood before any upgrade."""
-        return self._current_game().data
+        return self._current_game().game_data
 
     @property
     def step(self) -> int:
@@ -105,12 +105,12 @@ class Api:
     @property
     def units(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, structures remembered out of sight and hidden units included."""
-        return self._current_game().tracker.units.present
+        return self._current_game().tracker.unit_tracker.present
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
         """Every unit not known to be dead: those in the last observation, then those it left out."""
-        return self._current_game().tracker.units.known
+        return self._current_game().tracker.unit_tracker.known
 
     @property
     def score(self) -> Score:
@@ -197,7 +197,7 @@ class Api:
             self._game.tracker.end()
         game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference)
         self._game = game
-        logger.info("Playing {} at {} steps a turn", game.map.name, steps_per_turn)
+        logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._event
         events._start_game()
         events._set_step(game.step)

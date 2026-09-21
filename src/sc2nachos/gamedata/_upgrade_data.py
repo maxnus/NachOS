@@ -41,7 +41,7 @@ class UpgradeData:
     """Steps it takes to research."""
     research_ability: AbilityId | None
     """The ability that researches it."""
-    type: UpgradeType
+    upgrade_type: UpgradeType
     """The upgrade level the units it affects report it adds to, and `OTHER` where they report nothing of it."""
     level: int
     """Which level of its line it is, from 1, or 0 for an upgrade that is no level, as Chitinous Plating is."""
@@ -55,6 +55,6 @@ class UpgradeData:
             cost=Cost(data.mineral_cost, data.vespene_cost),
             research_steps=data.research_time,
             research_ability=AbilityId.get(data.ability_id) or tech_tree.research_abilities.get(upgrade),
-            type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),
+            upgrade_type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree.upgrade_levels.get(upgrade, 0),
         )

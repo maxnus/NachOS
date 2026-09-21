@@ -71,8 +71,8 @@ class _Game:
     """One game as it is played: the client it is played on, and everything seen of it so far."""
 
     client: Final[Client]
-    map: Final[GameMap]
-    data: Final[GameData]
+    game_map: Final[GameMap]
+    game_data: Final[GameData]
     enemy: Final[Enemy]
     enemy_upgrade_inference: Final[UpgradeInference]
     tracker: Final[_Tracker]
@@ -89,18 +89,18 @@ class _Game:
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
         step = _step(observation)
-        tables = GameData(data)
+        game_data = GameData(data)
         enemy = Enemy()
-        tracker = _Tracker(tables, enemy)
+        tracker = _Tracker(game_data, enemy)
         game_map = GameMap(info)
         game = cls(
             client,
             game_map,
-            tables,
+            game_data,
             enemy,
             enemy_upgrade_inference,
             tracker,
-            OrderBook(tables),
+            OrderBook(game_data),
             observation,
             _State(observation, tracker, game_map),
             step,
@@ -118,9 +118,9 @@ class _Game:
         self.observation = observation
         self.step = step
         self.tracker.update(observation.observation.raw_data, step)
-        self.state = _State(observation, self.tracker, self.map)
+        self.state = _State(observation, self.tracker, self.game_map)
         self.orders._take_in(self.state, step)
-        units, reader = self.tracker.units.present, self.tracker.upgrades.reader
+        units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
@@ -195,7 +195,7 @@ class _Game:
         """Have the tracker compare each unit with the update before, as the damage, energy lost, cloak and buff events
         a handler wants need: the buffs handlers select, or every one if a handler takes them all. Have it let go of
         what it kept when no handler wants any. Say whether it compared."""
-        comparer = self.tracker.comparer
+        comparer = self.tracker.unit_comparer
         wants = functools.partial(_wants_any, subscriptions)
         damage = wants(OwnUnitDamagedEvent) or wants(EnemyUnitDamagedEvent)
         energy = wants(OwnUnitEnergyLostEvent) or wants(EnemyUnitEnergyLostEvent)
@@ -218,7 +218,7 @@ class _Game:
     def _watch(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker watch each unit for the vitals and areas handlers select, or let go of what it kept when
         none does. Say whether it watched."""
-        watcher = self.tracker.watcher
+        watcher = self.tracker.unit_watcher
         if not subscriptions.any_keyed:
             watcher.stop()
             return False
@@ -269,7 +269,7 @@ class _Game:
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""
-        row = self.data.units.get(unit.type_id)
+        row = self.game_data.units.get(unit.type_id)
         return row is not None and Attribute.STRUCTURE in row.attributes
 
     def outcome(self) -> Result | None:

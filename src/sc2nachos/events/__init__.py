@@ -56,7 +56,7 @@ from sc2nachos.events._event import (
 from sc2nachos.events._event_bus import EventBus
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
-from sc2nachos.events._handler_timings import HandlerTimings
+from sc2nachos.events._handler_timing import HandlerTiming
 
 __all__ = [
     "AlertEvent",
@@ -82,7 +82,7 @@ __all__ = [
     "EventPriority",
     "GameEndEvent",
     "GameStartEvent",
-    "HandlerTimings",
+    "HandlerTiming",
     "OwnActionEvent",
     "OwnConstructionFinishedEvent",
     "OwnConstructionStartedEvent",

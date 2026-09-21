@@ -260,8 +260,10 @@ def played(
     step = observation.observation.game_loop
     if game is None:
         state = _State(observation, tracker, game_map)
-        orders = OrderBook(tracker.data)
-        game = _Game(client, game_map, tracker.data, tracker.enemy, infer, tracker, orders, observation, state, step)
+        orders = OrderBook(tracker.game_data)
+        game = _Game(
+            client, game_map, tracker.game_data, tracker.enemy, infer, tracker, orders, observation, state, step
+        )
     game._take_in(observation, step)
     events._set_step(step)
     events._hand_out(game.report(events))
@@ -299,7 +301,7 @@ class RealGame:
         """Let `steps` pass, then observe."""
         self.client.step(steps)
         self.state = self._observe()
-        return self.tracker.units.present
+        return self.tracker.unit_tracker.present
 
     def debug(self, *commands: debug_pb2.DebugCommand) -> None:
         self.client.debug(commands)
@@ -323,7 +325,7 @@ class RealGame:
 
     def newest(self, unit_type: UnitTypeId) -> Unit[Any]:
         """The unit of `unit_type` first seen last."""
-        return max(self.tracker.units.present.of_type(unit_type), key=lambda unit: unit.id)
+        return max(self.tracker.unit_tracker.present.of_type(unit_type), key=lambda unit: unit.id)
 
     def open_ground(self, near: Point, *, size: int = 2) -> Point:
         """The center nearest to `near` of a square of `size` tiles a side that can all be built on."""

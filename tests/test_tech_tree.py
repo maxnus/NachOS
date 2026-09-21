@@ -432,7 +432,7 @@ def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
         with closing(Client(transport)) as client:
             client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
             game = RealGame(client, client.join_game(Race.TERRAN))
-            tables = game.tracker.data
+            tables = game.tracker.game_data
             state = debug_pb2.DebugGameState
             game.debug(*(debug_pb2.DebugCommand(game_state=cheat) for cheat in (state.free, state.fast_build)))
             units = game.turn(1)

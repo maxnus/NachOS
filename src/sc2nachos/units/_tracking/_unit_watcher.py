@@ -60,8 +60,8 @@ class _UnitWatcher:
         own.watch(own_reached, own_dropped, own_areas)
         enemy.watch(enemy_reached, enemy_dropped, enemy_areas)
         changes = self._tracker.last_changes
-        for unit in self._tracker.units.present:
-            report = unit._latest_data
+        for unit in self._tracker.unit_tracker.present:
+            report = unit._latest_report
             alliance = report.alliance
             if alliance == _OWN:
                 if own.watching and (display := report.display_type) != _IN_FOG:

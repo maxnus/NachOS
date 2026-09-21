@@ -61,8 +61,8 @@ class _UnitComparer:
         worn_before = self._worn if buffs and self._worn_update == update - 1 else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
-        for unit in tracker.units.present:
-            report = unit._latest_data
+        for unit in tracker.unit_tracker.present:
+            report = unit._latest_report
             alliance = report.alliance
             if (alliance != _OWN and alliance != _ENEMY) or report.display_type == _IN_FOG:
                 continue

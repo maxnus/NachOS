@@ -23,7 +23,7 @@ class OrderState(Enum):
     cannot be told apart from one killed at it. A larva's order is `DONE` instead: its egg is reported dead as what it
     makes hatches, and an egg killed first reads the same (in game)."""
     REFUSED = "refused"
-    """Sent, and answered something other than `SUCCESS`: the verdict says what."""
+    """Sent, and answered something other than `SUCCESS`: `action_result` says what."""
     DROPPED = "dropped"
     """Answered `SUCCESS` and never carried out, which the game does silently where an order no longer fits by the
     time it steps: a sixth marine, an order there are no minerals left for."""
@@ -31,7 +31,7 @@ class OrderState(Enum):
     """Carried out and then given up on, which an `ActionFailure` names: a builder's site taken meanwhile."""
     OVERRIDDEN = "overridden"
     """A later order took every unit this one was given to: one of the same turn, before this was sent, or one of a
-    later turn, which the game carried out in its place. `verdict` says which, being `None` for an order never
+    later turn, which the game carried out in its place. `action_result` says which, being `None` for an order never
     sent."""
     WITHDRAWN = "withdrawn"
     """Taken back by the bot. One already sent is only forgotten: the unit goes on with it."""

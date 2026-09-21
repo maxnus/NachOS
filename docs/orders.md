@@ -50,7 +50,7 @@ a structure's own rally, load, cancel and energy casts, and the way back out of 
 not one of them, being offered to a channeling ghost or infestor as well, which it takes off what they are doing.
 
 Those neither override nor are overridden, because the unit does both — a marine stims and goes on moving.
-`order.behavior` says which an ability is.
+`order.order_behavior` says which an ability is.
 
 **A structure is a unit like any other here**: it takes the last thing a turn told it to make. The game would put a
 second train behind the first and pay for it from the step it was ordered, which is money spent before the
@@ -66,13 +66,13 @@ Both go out, and a barracks with a reactor makes both marines at once. Two such 
 same structure, so NachOS cannot tell their reports apart: they run and finish together.
 
 NachOS has no priority of its own. Handlers already run highest-priority-first, and a handler late in a turn reads
-`api.order.issued(unit)` to leave a unit an earlier one has spoken for:
+`api.order.issued_to(unit)` to leave a unit an earlier one has spoken for:
 
 ```python
 @api.event.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        if not api.order.issued(marine):
+        if not api.order.issued_to(marine):
             api.order.issue(marine, AbilityId.GENERAL_MOVE, target=rally)
 ```
 
@@ -118,7 +118,7 @@ slot nor a mineral within the same step ([game behavior](game-behavior.md#abilit
 | `RUNNING` | The game reported carrying it out, or the unit was already doing it. |
 | `DONE` | No unit it was given to is carrying it out any more. |
 | `LOST` | Every unit seen carrying it out died, before it was done or at least before the next observation: of three barracks given one train, the one that took it. A larva's order reads `DONE`, since its egg is reported dead as what it makes hatches. |
-| `REFUSED` | Answered something else: `order.verdict` says what. |
+| `REFUSED` | Answered something else: `order.action_result` says what. |
 | `DROPPED` | Answered `SUCCESS` and never carried out, which the game does silently for an order that no longer fits by the time it steps. |
 | `FAILED` | Carried out and then given up on: `order.failure` says what for. |
 | `OVERRIDDEN` | A later order took every unit this one was given to, in this turn before it was sent, or in a later one. |

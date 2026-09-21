@@ -22,7 +22,7 @@ class Order[T]:
 
     __slots__ = (
         "_ability",
-        "_behavior",
+        "_order_behavior",
         "_data",
         "_failure",
         "_forced",
@@ -34,7 +34,7 @@ class Order[T]:
         "_taken_by",
         "_target",
         "_units",
-        "_verdict",
+        "_action_result",
     )
 
     def __init__(
@@ -45,7 +45,7 @@ class Order[T]:
         *,
         queued: bool,
         data: T,
-        behavior: OrderBehavior,
+        order_behavior: OrderBehavior,
         step: int,
         forced: bool = False,
     ) -> None:
@@ -55,13 +55,13 @@ class Order[T]:
         self._target = target
         self._queued = queued
         self._data = data
-        self._behavior = behavior
+        self._order_behavior = order_behavior
         self._given_step = step
         # Sent even where the unit is already carrying it out, which is how a queue is cleared.
         self._forced = forced
         self._state = OrderState.GIVEN
         self._sent_to: tuple[OwnUnit[Any], ...] = ()
-        self._verdict: ActionResult | None = None
+        self._action_result: ActionResult | None = None
         self._failure: ActionFailure | None = None
         self._taken_by: tuple[OwnUnit[Any], ...] = ()
         # The units the first observation to show any carrying it out saw doing so: with one command to a group, not
@@ -93,9 +93,9 @@ class Order[T]:
         return self._queued
 
     @property
-    def behavior(self) -> OrderBehavior:
+    def order_behavior(self) -> OrderBehavior:
         """What the ability does to what a unit is already doing, which decides what it competes with."""
-        return self._behavior
+        return self._order_behavior
 
     @property
     def data(self) -> T:
@@ -108,9 +108,9 @@ class Order[T]:
         return self._state
 
     @property
-    def verdict(self) -> ActionResult | None:
+    def action_result(self) -> ActionResult | None:
         """What the game answered it with, or `None` while it has not been sent."""
-        return self._verdict
+        return self._action_result
 
     @property
     def failure(self) -> ActionFailure | None:

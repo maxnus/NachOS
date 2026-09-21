@@ -101,7 +101,7 @@ class _Game:
         observation = make_observation(step, units=units, **fields)
         self._game = played(self._game, self._client, self.map, self.tracker, observation, self.events)
         self.state = self._game.state
-        return {unit.tag: unit for unit in self.tracker.units.present}
+        return {unit.tag: unit for unit in self.tracker.unit_tracker.present}
 
 
 def _depot(tag: int, **fields: Any) -> raw_pb2.Unit:
@@ -174,7 +174,7 @@ class TestWhatATurnReports:
         game = _Game()
         seen = record(game.events, *HAPPENINGS)
         game.observe(0, make_unit(1, build_progress=1.0), make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5))
-        units = game.tracker.units.present
+        units = game.tracker.unit_tracker.present
         assert [(type(event), event.unit) for event in seen] == [
             (OwnUnitCreatedEvent, units[0]),
             (OwnUnitCreatedEvent, units[1]),
@@ -185,7 +185,7 @@ class TestWhatATurnReports:
         game = _Game()
         seen = record(game.events, *HAPPENINGS)
         _everything(game)
-        units = {unit.tag: unit for unit in game.tracker.units._units_by_id.values()}
+        units = {unit.tag: unit for unit in game.tracker.unit_tracker._units_by_id.values()}
         own = {tag: unit for tag, unit in units.items() if isinstance(unit, OwnUnit)}
         at_16 = {type(event): event for event in seen if event.step == 16}
         assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(units[4], UnitTypeId.SIEGE_TANK, step=16)
@@ -253,7 +253,7 @@ class TestOnlyWhatIsWanted:
         game = _Game()
         _everything(game)
         assert game.state is not None and "actions" not in vars(game.state)
-        assert not game.tracker.comparer._compared
+        assert not game.tracker.unit_comparer._compared
 
     def test_a_handler_that_is_done_stops_the_units_being_compared(self) -> None:
         game = _Game()
@@ -261,7 +261,7 @@ class TestOnlyWhatIsWanted:
         game.observe(0, make_unit(1, health=45.0))
         game.observe(16, make_unit(1, health=40.0))
         game.observe(32, make_unit(1, health=35.0))
-        assert not game.tracker.comparer._compared
+        assert not game.tracker.unit_comparer._compared
 
 
 def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Unit:
@@ -295,14 +295,14 @@ class TestEnergy:
         game.observe(0, _raven(100.0))
         game.observe(16, _raven(25.0))
         assert [event.energy_lost for event in seen] == [75.0]
-        assert game.tracker.comparer._compared
+        assert game.tracker.unit_comparer._compared
 
     def test_a_unit_of_this_players_loses_energy_to_the_event_of_its_own(self) -> None:
         game = _Game()
         own, enemy = record(game.events, OwnUnitEnergyLostEvent), record(game.events, EnemyUnitEnergyLostEvent)
         game.observe(0, _raven(100.0, alliance=Alliance.OWN))
         game.observe(16, _raven(50.0, alliance=Alliance.OWN))
-        assert [(event.unit, event.energy_lost) for event in own] == [(game.tracker.units.present[0], 50.0)]
+        assert [(event.unit, event.energy_lost) for event in own] == [(game.tracker.unit_tracker.present[0], 50.0)]
         assert not enemy
 
 
@@ -346,7 +346,7 @@ class TestDamage:
         game.observe(
             16, _marine(40.0), make_unit(2, health=30.0), make_unit(3, rock, alliance=Alliance.NEUTRAL, health=1000.0)
         )
-        units = {unit.tag: unit for unit in game.tracker.units.present}
+        units = {unit.tag: unit for unit in game.tracker.unit_tracker.present}
         assert [(event.unit, event.damage) for event in own] == [(units[2], 15.0)]
         assert [(event.unit, event.damage) for event in enemy] == [(units[1], 5.0)]
 
@@ -381,7 +381,7 @@ class TestCloak:
         seen = record(game.events, OwnUnitCloakChangedEvent, EnemyUnitCloakChangedEvent)
         for step, unit in enumerate(units):
             game.observe(step * 16, *([] if unit is None else [unit]))
-        return [(type(event), event.previous_cloak) for event in seen]
+        return [(type(event), event.previous_cloak_state) for event in seen]
 
     def test_a_unit_of_this_players_cloaking_and_uncloaking(self) -> None:
         assert self._changes(
@@ -699,7 +699,7 @@ class TestAreas:
         game.observe(32, dead=(1,))
         game.observe(48)
         assert [type(event) for event in seen] == [EnemyUnitEnteredAreaEvent]
-        assert not any(game.tracker.watcher._enemy._area_watches[_AREA].inside)
+        assert not any(game.tracker.unit_watcher._enemy._area_watches[_AREA].inside)
 
     def test_an_enemy_unit_in_the_fog_is_not_counted(self) -> None:
         assert not self._crossings(None, _INSIDE, visibility=Visibility.IN_FOG)
@@ -791,13 +791,13 @@ class TestWatching:
     def test_nothing_is_watched_until_wanted_and_a_watch_ends_once_its_handlers_are_done(self) -> None:
         game = _Game()
         game.observe(0, _templar(70))
-        assert not game.tracker.watcher._enemy.watching
+        assert not game.tracker.unit_watcher._enemy.watching
         game.events.on(_STORM_READY)(lambda event: Done)
         game.observe(16, _templar(70))
-        assert game.tracker.watcher._enemy._vital_ids
+        assert game.tracker.unit_watcher._enemy._vital_ids
         game.observe(32, _templar(80))
         game.observe(48, _templar(80))
-        assert not game.tracker.watcher._enemy.watching
+        assert not game.tracker.unit_watcher._enemy.watching
 
     def test_what_is_watched_comes_in_its_place_in_a_turn(self) -> None:
         game = _Game()
@@ -846,7 +846,7 @@ def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
 
 
 def _own(game: RealGame, unit_type: UnitTypeId) -> OwnUnit[Any]:
-    unit = next(unit for unit in game.tracker.units.present.own if unit.type_id is unit_type)
+    unit = next(unit for unit in game.tracker.unit_tracker.present.own if unit.type_id is unit_type)
     assert isinstance(unit, OwnUnit)
     return unit
 
@@ -882,7 +882,7 @@ class TestAgainstTheRealGame:
         with _played_as(Race.ZERG) as (game, seen, middle):
             # The units the game starts with are created on the first turn.
             started = {event.unit for event in _of(seen, OwnUnitCreatedEvent) if event.step == 0}
-            assert started == set(game.tracker.units.present.own)
+            assert started == set(game.tracker.unit_tracker.present.own)
             home = _own(game, UnitTypeId.HATCHERY).position
 
             # A larva becomes an egg, which is reported dead as the drone hatches out of it under a new tag.
@@ -951,7 +951,7 @@ class TestAgainstTheRealGame:
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 13), size=5)))
             game.turn(4)
             game.order(AbilityId.GENERAL_BUILD_REACTOR, _own(game, UnitTypeId.BARRACKS))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.REACTOR_BARRACKS), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.REACTOR_BARRACKS), steps=1)
             reactor = _own(game, UnitTypeId.REACTOR_BARRACKS)
             assert reactor.build_progress < 0.1
             assert OwnConstructionStartedEvent(reactor, step=game.step) in seen
@@ -985,7 +985,7 @@ class TestAgainstTheRealGame:
 
             # A MULE is reported dead once it expires.
             field = min(
-                (unit for unit in game.tracker.units.present if unit.type_id is UnitTypeId.MINERAL_FIELD),
+                (unit for unit in game.tracker.unit_tracker.present if unit.type_id is UnitTypeId.MINERAL_FIELD),
                 key=lambda unit: unit.position.distance_to(home),
             )
             energy = debug_pb2.DebugSetUnitValue(
@@ -994,7 +994,7 @@ class TestAgainstTheRealGame:
             game.debug(debug_pb2.DebugCommand(unit_value=energy))
             game.turn(2)
             game.order(AbilityId.ORBITAL_COMMAND_CALLDOWN_MULE, center, target=field)
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.MULE))
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.MULE))
             mule = _own(game, UnitTypeId.MULE)
             _until(game, lambda: mule.is_dead, steps=100, turns=20)
             assert UnitDiedEvent(mule, step=game.step) in seen
@@ -1011,16 +1011,19 @@ class TestAgainstTheRealGame:
             )
             _until(
                 game,
-                lambda: len(game.tracker.units.present.own.of_type([UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY])) == 2,
+                lambda: (
+                    len(game.tracker.unit_tracker.present.own.of_type([UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY]))
+                    == 2
+                ),
             )
             game.order(AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, _own(game, UnitTypeId.GHOST_ACADEMY))
-            _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrades.own)
+            _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrade_tracker.own)
             ghost = _own(game, UnitTypeId.GHOST)
             game.order(AbilityId.GHOST_CLOAK_ON, ghost)
             _until(game, lambda: _of(seen, OwnUnitCloakChangedEvent), steps=1)
             game.order(AbilityId.GHOST_CLOAK_OFF, ghost)
             _until(game, lambda: len(_of(seen, OwnUnitCloakChangedEvent)) == 2, steps=1)
-            assert [(event.unit, event.previous_cloak) for event in _of(seen, OwnUnitCloakChangedEvent)] == [
+            assert [(event.unit, event.previous_cloak_state) for event in _of(seen, OwnUnitCloakChangedEvent)] == [
                 (ghost, CloakState.NOT_CLOAKED),
                 (ghost, CloakState.CLOAKED_ALLIED),
             ]
@@ -1032,21 +1035,21 @@ class TestAgainstTheRealGame:
 
             # An enemy observer nothing detects is listed cloaked, out of vision, until a raven beside it detects it.
             game.debug(game.create(UnitTypeId.OBSERVER, home.towards(middle, 4), owner=3 - game.player))
-            _until(game, lambda: game.tracker.units.present.enemy.of_type(UnitTypeId.OBSERVER), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.enemy.of_type(UnitTypeId.OBSERVER), steps=1)
             observer = game.newest(UnitTypeId.OBSERVER)
-            assert observer.cloak is CloakState.CLOAKED and observer.visibility is Visibility.INVISIBLE
+            assert observer.cloak_state is CloakState.CLOAKED and observer.visibility is Visibility.INVISIBLE
             game.debug(game.create(UnitTypeId.RAVEN, observer.position))
             _until(game, lambda: _of(seen, EnemyUnitCloakChangedEvent), steps=1)
             (detected,) = _of(seen, EnemyUnitCloakChangedEvent)
-            assert detected.unit is observer and detected.previous_cloak is CloakState.CLOAKED
-            assert observer.cloak is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.IN_VISION
+            assert detected.unit is observer and detected.previous_cloak_state is CloakState.CLOAKED
+            assert observer.cloak_state is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.IN_VISION
 
             # A fungal growth on an enemy marine is a buff it gains, and loses as it wears off.
             game.debug(
                 game.create(UnitTypeId.MARINE, home.towards(middle, 22), owner=3 - game.player),
                 game.create(UnitTypeId.INFESTOR, home.towards(middle, 16)),
             )
-            _until(game, lambda: game.tracker.units.present.enemy.of_type(UnitTypeId.MARINE), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.enemy.of_type(UnitTypeId.MARINE), steps=1)
             marine = game.newest(UnitTypeId.MARINE)
             game.order(AbilityId.INFESTOR_FUNGAL_GROWTH, _own(game, UnitTypeId.INFESTOR), target=marine.position)
             _until(game, lambda: _of(seen, EnemyUnitLostBuffEvent), steps=2)
@@ -1068,7 +1071,7 @@ class TestAgainstTheRealGame:
             game.debug(game.create(UnitTypeId.WARP_GATE, game.open_ground(home.towards(middle, 13), size=3)))
             game.turn(8)
             game.order(AbilityId.WARP_GATE_WARP_IN_ZEALOT, _own(game, UnitTypeId.WARP_GATE), target=pylon + (3.0, 0.0))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.ZEALOT), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.ZEALOT), steps=1)
             zealot = _own(game, UnitTypeId.ZEALOT)
             assert not zealot.is_complete
             _until(game, lambda: zealot.is_complete, steps=1)
@@ -1087,9 +1090,11 @@ class TestAgainstTheRealGame:
             # Two templar ordered to merge walk to each other, each reporting the order it runs, and become an archon.
             at = home.towards(middle, 5)
             game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, at), game.create(UnitTypeId.HIGH_TEMPLAR, at + (6.0, 0.0)))
-            _until(game, lambda: len(game.tracker.units.present.own.of_type(UnitTypeId.HIGH_TEMPLAR)) == 2)
+            _until(game, lambda: len(game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HIGH_TEMPLAR)) == 2)
             templar = [
-                u for u in game.tracker.units.present.own.of_type(UnitTypeId.HIGH_TEMPLAR) if isinstance(u, OwnUnit)
+                u
+                for u in game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HIGH_TEMPLAR)
+                if isinstance(u, OwnUnit)
             ]
             merge = raw_pb2.ActionRawUnitCommand(
                 ability_id=AbilityId.GENERAL_MORPH_ARCHON, unit_tags=[unit.tag for unit in templar]
@@ -1098,7 +1103,7 @@ class TestAgainstTheRealGame:
             _until(game, lambda: all(unit.orders for unit in templar), steps=1)
             assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON_EXACT] * 2
             _until(game, lambda: _alerts(seen, Alert.MERGE_COMPLETE))
-            assert game.tracker.units.present.own.of_type(UnitTypeId.ARCHON)
+            assert game.tracker.unit_tracker.present.own.of_type(UnitTypeId.ARCHON)
 
             # An enemy pylon out of sight comes into sight beside an observer, goes out of it some steps after the
             # observer dies, and is found dead once its spot is seen again after it died in the fog.
@@ -1122,7 +1127,7 @@ class TestAgainstTheRealGame:
                 EnemyUnitLeftSightEvent,
             ]
             assert enemy.visibility is Visibility.IN_FOG
-            sighting = enemy._latest_data_in_vision
+            sighting = enemy._latest_report_in_vision
             assert sighting is not None
             game.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[sighting.tag])))
             game.turn(8)
@@ -1138,7 +1143,7 @@ class TestAgainstTheRealGame:
                 game.create(UnitTypeId.RAVEN, at + (4.0, 0.0), owner=3 - game.player),
             )
             pair = [UnitTypeId.HIGH_TEMPLAR, UnitTypeId.RAVEN]
-            _until(game, lambda: len(game.tracker.units.present.of_type(pair)) == 2)
+            _until(game, lambda: len(game.tracker.unit_tracker.present.of_type(pair)) == 2)
             caster, raven = game.newest(UnitTypeId.HIGH_TEMPLAR), game.newest(UnitTypeId.RAVEN)
 
             def charge(energy: float, *units: Unit[Any]) -> None:
@@ -1166,7 +1171,7 @@ class TestAgainstTheRealGame:
 
             # An EMP costs its caster 75 energy, and drains up to 100 of every unit's where it lands.
             game.debug(game.create(UnitTypeId.GHOST, at + (-4.0, 0.0)))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.GHOST))
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.GHOST))
             ghost = game.newest(UnitTypeId.GHOST)
             charge(150, ghost, raven)
             since = len(_of(seen, *drained))
@@ -1198,7 +1203,7 @@ class TestAgainstTheRealGame:
 
             # A high templar made with 50 energy, set to 70, regenerates across 75 once.
             game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, home.towards(middle, 6)))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.HIGH_TEMPLAR), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HIGH_TEMPLAR), steps=1)
             templar = _own(game, UnitTypeId.HIGH_TEMPLAR)
             energy = debug_pb2.DebugSetUnitValue(
                 unit_value=debug_pb2.DebugSetUnitValue.Energy, value=70, unit_tag=templar.tag
@@ -1214,7 +1219,7 @@ class TestAgainstTheRealGame:
             # A zealot whose shields are set to 1 has 101 of 150 life left, and is back to full once they regenerate.
             # The game passes over shields set to 0 (in game).
             game.debug(game.create(UnitTypeId.ZEALOT, home.towards(middle, 20)))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.ZEALOT), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.ZEALOT), steps=1)
             zealot = _own(game, UnitTypeId.ZEALOT)
             shields = debug_pb2.DebugSetUnitValue(
                 unit_value=debug_pb2.DebugSetUnitValue.Shields, value=1, unit_tag=zealot.tag
@@ -1239,7 +1244,7 @@ class TestAgainstTheRealGame:
 
             # The handler of structures' deaths hears a pylon killed beside the zealot, and not the zealot.
             game.debug(game.create(UnitTypeId.PYLON, game.open_ground(home.towards(middle, 9), size=2)))
-            _until(game, lambda: game.tracker.units.present.own.of_type(UnitTypeId.PYLON), steps=1)
+            _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.PYLON), steps=1)
             game.debug(game.kill(_own(game, UnitTypeId.PYLON), zealot))
             _until(game, lambda: zealot.is_dead, steps=1)
             assert [event.unit.type_id for event in structures] == [UnitTypeId.PYLON]
