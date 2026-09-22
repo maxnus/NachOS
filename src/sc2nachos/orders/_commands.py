@@ -1,4 +1,4 @@
-"""An order as the protocol carries it: the actions a turn's request is made of."""
+"""Orders as the protocol carries them: the actions in a turn's request."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def create_unit_command_action(order: Order[Any], units: Sequence[OwnUnit[Any]]) -> sc2api_pb2.Action:
-    """One raw command, giving `order` to `units`."""
+    """One raw command giving `order` to `units`."""
     target = order.target
     tags = [unit.tag for unit in units]
     if target is None:

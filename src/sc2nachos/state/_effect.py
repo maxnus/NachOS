@@ -1,4 +1,4 @@
-"""What an ability leaves on the ground for a while."""
+"""An effect an ability leaves on the ground for a while."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True)
 class Effect:
-    """What an ability leaves on the ground for a while, such as a storm or a corrosive bile about to land.
+    """An effect an ability leaves on the ground for a while, such as a storm or a corrosive bile about to land.
 
-    Force fields and reaper grenades are units, not effects, as the game reports them.
+    The game reports force fields and reaper grenades as units, not effects.
     """
 
     id: EffectId
     positions: tuple[Point, ...]
-    """Where it is: one point, or several along the line an effect such as a lurker's spines covers."""
+    """Where it is: one point, or several along a line, as for a lurker's spines."""
     radius: float
-    """How far from each of its positions it reaches."""
+    """How far it reaches from each of its positions."""
     alliance: Alliance
-    """Whose side the player it belongs to is on."""
+    """Whose side its owner is on."""
     owner_id: int
     """The id of the player it belongs to."""
 

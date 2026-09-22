@@ -14,16 +14,16 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True)
 class EffectData:
-    """What the game says about one effect, which is a patch of ground something is happening on."""
+    """One effect: a patch of ground something is happening on, as the game's table describes it."""
 
     id: EffectId
-    """Which effect this describes."""
+    """The effect described."""
     radius: float
-    """How far it reaches from the point it is centered on."""
+    """Its radius around its center."""
 
     @classmethod
     def _from_proto(cls, data: data_pb2.EffectData) -> Self:
-        """Read one effect out of the game's tables."""
+        """Read one effect from the game's table."""
         return cls(
             id=EffectId(data.effect_id),
             radius=data.radius,

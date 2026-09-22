@@ -58,7 +58,7 @@ class TestRemap:
         assert remap(10, 0, 10, lower_value=1, upper_value=0) == 0.0
 
     def test_degenerate_range_raises(self):
-        # A zero-width input range has no ramp to map onto; callers must handle the step themselves.
+        # A zero-width input range has no ramp to map onto; a step function is the caller's job.
         with pytest.raises(ValueError, match="not below upper bound"):
             remap(5, 5, 5, lower_value=2, upper_value=4)
 
@@ -90,8 +90,8 @@ class TestDamp:
         assert damp(0.5, 1.0, decay=0.0, seconds=1.0) == 0.5
 
     def test_never_overshoots(self):
-        # A linear blend would pass the end at decay * seconds > 1 and diverge beyond 2. Long intervals
-        # converge on the end value rather than crossing it.
+        # A linear blend would overshoot at decay * seconds > 1 and diverge beyond 2. A long interval converges on
+        # the end instead.
         for seconds in (1.0, 10.0, 1000.0):
             assert 0.0 <= damp(0.0, 1.0, decay=5.0, seconds=seconds) <= 1.0
 
@@ -99,7 +99,7 @@ class TestDamp:
         assert damp(0.0, 1.0, decay=1.0, seconds=100.0) == pytest.approx(1.0)
 
     def test_repeated_application_is_step_rate_independent(self):
-        """Damping every step must land where damping every eighth step lands, over the same ten seconds."""
+        """Damping every step lands where damping every eighth step does, over the same ten seconds."""
         fine = coarse = 0.0
         for _ in range(224):
             fine = damp(fine, 1.0, decay=0.5, seconds=SECONDS_PER_STEP)
@@ -127,7 +127,7 @@ class TestLogistic:
         assert logistic(0.5, k=10) > logistic(0.5, k=1)
 
     def test_extreme_inputs_do_not_overflow(self):
-        # `1 / (1 + exp(-k * x))` alone raises OverflowError here, both signs of k.
+        # `1 / (1 + exp(-k * x))` alone raises OverflowError here, for either sign of k.
         for x in (-1e6, 1e6):
             for k in (-3.0, 3.0):
                 assert 0.0 <= logistic(x, k=k) <= 1.0

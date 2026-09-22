@@ -1,21 +1,21 @@
-"""Find which alerts the game raises for this player, and when, by making happen what each one names.
+"""Find which alerts the game raises for this player, and when, by causing what each one names.
 
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `free`, `fast_build`,
-`food` and `show_map` cheats, killing whatever of the computer's could fight, and runs trials in turn. Each trial
-makes something happen a counted number of times, such as three marines trained, and records every alert raised
-meanwhile, every action error, and every order the game refused as it was given, with the step it came at.
+`food` and `show_map` cheats, killing any of the computer's units that could fight, and runs trials in turn. Each
+trial causes something a counted number of times, such as three marines trained, and records every alert raised
+meanwhile, every action error, and every order the game refused outright, with the step each came at.
 
 `errors` and `zerg-errors` play without the cheats, so that minerals and supply run short. `rivals` plays a game of
-two players, both from here, for what only an enemy brings about. `attacks` plays the attack trials alone, which
-`terran` begins with, and `suppression` the long ones that time how an attack alert is held back, which only run
-when named::
+two players, both from here, for what only an enemy causes. `attacks` runs the attack trials alone, which `terran`
+begins with. `suppression` runs the long trials that time how long an attack alert is held back; it runs only when
+named::
 
     uv run python tools/sweep_alerts.py
     uv run python tools/sweep_alerts.py rivals errors --out alerts-rivals.json
     uv run python tools/sweep_alerts.py suppression
 
-What it finds is written as JSON, one entry per trial: the steps what it made happen was seen at, and the steps each
-alert came at. An alert raised in no trial is one the sweep did not bring about, or one the game does not raise.
+The findings are written as JSON, one entry per trial: the steps at which what it caused was seen, and the steps at
+which each alert came. An alert raised in no trial is one the sweep did not cause, or one the game does not raise.
 """
 
 import argparse
@@ -35,24 +35,24 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 
-# Steps waited after each trial, so that an alert that comes late is not taken for the next trial's.
+# Steps waited after each trial, so a late alert is not credited to the next trial.
 _SETTLE = 96
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# What the attack trials make for the enemy, which the computer, playing zerg, never has of its own.
+# What the attack trials create for the enemy; the computer plays zerg and never has these itself.
 _ATTACKERS = frozenset({UnitTypeId.PYLON, UnitTypeId.PHOTON_CANNON})
 
 
 @dataclass(slots=True)
 class Trial:
-    """What one trial made happen, and the alerts raised meanwhile."""
+    """What one trial caused, and the alerts raised meanwhile."""
 
     name: str
     happened: list[int] = field(default_factory=list)
-    """The steps what it made happen was seen at, once for each time."""
+    """The step each occurrence was seen at."""
     alerts: dict[str, list[int]] = field(default_factory=dict)
-    """The steps each alert came at, each action error, spelled `error:` and its result, and each order the game
-    refused as it was given, `verdict:` and its answer."""
+    """The steps each alert came at. An action error is keyed `error:` plus its result, and an order refused outright
+    `verdict:` plus the game's answer."""
 
 
 def _at(unit: raw_pb2.Unit) -> Point:
@@ -63,8 +63,8 @@ class _Game:
     """A sweep's game, stepped and observed here only, so that no observation's alerts go unrecorded."""
 
     def __init__(self, sandbox: Sandbox, *, step: Callable[[int], object] | None = None, guarded: bool = True) -> None:
-        """Play the game `sandbox` has joined, stepping it with `step`, which in a game of two steps both players, and
-        killing what of the computer's could fight if `guarded`."""
+        """Play the game `sandbox` has joined, stepping it with `step` (in a game of two, one that steps both players),
+        and killing the computer's fighters if `guarded`."""
         self.sandbox = sandbox
         self.client = sandbox.client
         self._step = step or self.client.step
@@ -73,8 +73,8 @@ class _Game:
         self.enemy = 3 - sandbox.player
         self.map = GameMap(self.client.game_info())
         tables = GameData(self.client.game_data()).units
-        # What of the computer's can hurt anything: everything with a weapon but its workers, and banelings. The rest
-        # is left alone, since the computer gives up once it has nothing left to play with.
+        # The computer's units that can hurt anything: everything with a weapon except workers, plus banelings. The
+        # rest are left alone, since the computer gives up once it has nothing left.
         armed = {unit_type for unit_type, row in tables.items() if row.weapons and unit_type is not UnitTypeId.DRONE}
         self.fighters = frozenset(armed | {UnitTypeId.BANELING}) - _ATTACKERS
         self.step = 0
@@ -113,10 +113,10 @@ class _Game:
         )
 
     def turn(self, steps: int = 4) -> None:
-        """Let `steps` pass and observe, then kill every unit of the computer's that could fight, which `show_map`
-        shows wherever it is, so that it never attacks anything a trial counts or ends the game."""
+        """Let `steps` pass and observe, then kill every fighter of the computer's, which `show_map` reveals wherever
+        it is, so it never attacks what a trial counts or ends the game."""
         while steps > 0:
-            # A long wait is made of short ones, so that nothing the computer makes lives long.
+            # A long wait is split into short ones, so nothing the computer makes lives long.
             chunk = min(steps, 64)
             self._step(chunk)
             self.observe()
@@ -127,7 +127,7 @@ class _Game:
                 self.sandbox.kill(fighters)
 
     def until(self, done: Callable[[], bool], *, steps: int = 4, limit: int = 3000) -> bool:
-        """Turn until `done`, for at most `limit` steps, and say whether it came to be."""
+        """Turn until `done`, for at most `limit` steps, and return whether it did."""
         end = self.step + limit
         while not done():
             if self.step >= end:
@@ -151,7 +151,7 @@ class _Game:
         command = self.sandbox.create(unit_type, owner or self.player, at)
         self.sandbox.debug(*([command] * count))
         made: list[raw_pb2.Unit] = []
-        # What is made can show up a few steps late, as vision catches up with it.
+        # A new unit can show up a few steps late, once vision catches up with it.
         for _ in range(4):
             self.turn(4)
             made = [unit for unit in self.units if unit.tag not in before and unit.unit_type == unit_type]
@@ -173,7 +173,7 @@ class _Game:
         *,
         queued: bool = False,
     ) -> str:
-        """Order `ability` on `units` together, and answer the game's verdict."""
+        """Order `ability` on `units` together, and return the game's verdict."""
         command = raw_pb2.ActionRawUnitCommand(
             ability_id=ability, unit_tags=[unit.tag for unit in units], queue_command=queued
         )
@@ -193,7 +193,7 @@ class _Game:
         self.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=move))])
 
     def spot(self, near: Point, half: int) -> Point:
-        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken."""
+        """Take the free square `2 * half + 1` tiles across nearest to `near`, and return its center."""
         return self.ground.claim(near, half)
 
     def toward(self, distance: float) -> Point:
@@ -212,7 +212,7 @@ class _Game:
         return Trial(name, happened, alerts)
 
     def _first(self, found: Callable[[], Iterable[int]], count: int, *, steps: int, limit: int) -> list[int]:
-        """The steps the first `count` tags `found` answers are first answered at."""
+        """The step each of the first `count` tags `found` yields was first yielded at."""
         seen: dict[int, int] = {}
 
         def done() -> bool:
@@ -224,7 +224,7 @@ class _Game:
         return sorted(seen.values())
 
     def appear(self, unit_types: Iterable[UnitTypeId], count: int, *, steps: int = 4, limit: int = 3000) -> list[int]:
-        """The steps the next `count` units of this player's of `unit_types` are first seen at."""
+        """The step each of this player's next `count` units of `unit_types` is first seen at."""
         types = tuple(unit_types)
         before = {unit.tag for unit in self.own(*types)}
         return self._first(
@@ -232,7 +232,7 @@ class _Game:
         )
 
     def finish(self, tags: Iterable[int], *, steps: int = 4, limit: int = 3000) -> list[int]:
-        """The steps each unit of `tags` is first seen finished at."""
+        """The step each unit of `tags` is first seen finished at."""
         wanted = list(tags)
         return self._first(
             lambda: (unit.tag for unit in self.of_tags(wanted) if unit.build_progress == 1.0),
@@ -242,7 +242,7 @@ class _Game:
         )
 
     def become(self, tags: Iterable[int], unit_type: UnitTypeId, *, steps: int = 4, limit: int = 3000) -> list[int]:
-        """The steps each unit of `tags` is first seen as `unit_type` at."""
+        """The step each unit of `tags` is first seen as `unit_type` at."""
         wanted = list(tags)
         return self._first(
             lambda: (unit.tag for unit in self.of_tags(wanted) if unit.unit_type == unit_type),
@@ -252,14 +252,14 @@ class _Game:
         )
 
     def gone(self, tags: Iterable[int], count: int | None = None, *, steps: int = 4, limit: int = 3000) -> list[int]:
-        """The steps the first `count` units of `tags`, or all of them, are first missing from the observation at."""
+        """The step each of the first `count` units of `tags`, or all of them, is first missing from the observation."""
         wanted = set(tags)
         return self._first(
             lambda: wanted - {unit.tag for unit in self.units}, count or len(wanted), steps=steps, limit=limit
         )
 
     def researched(self, count: int, *, steps: int = 4, limit: int = 3000) -> list[int]:
-        """The steps this player's next `count` upgrades are first seen at."""
+        """The step each of this player's next `count` upgrades is first seen at."""
         before = set(self.upgrades)
         return self._first(lambda: self.upgrades - before, count, steps=steps, limit=limit)
 
@@ -268,8 +268,8 @@ class _Game:
         self.turn(4)
 
 
-# Where around its target each attack's cannon stands, its pylon beside it, in turn, so that none is put where the one
-# before died.
+# Where each attack's cannon stands around its target, pylon beside it, cycling so none is put where the last one
+# died.
 _CANNON_OFFSETS = ((3.0, 3.0), (-3.0, 3.0), (-3.0, -3.0), (3.0, -3.0))
 
 
@@ -288,7 +288,7 @@ def _cannon(game: _Game, at: Point, attack: int = 0) -> None:
 
 
 def _hit(game: _Game, life: dict[int, float]) -> bool:
-    """Waited for until one of the units whose health and shields `life` holds has lost some, or died."""
+    """Wait until one of the units in `life` (tag to health plus shields) has lost some, or died."""
     return game.until(
         lambda: (
             len(game.of_tags(life)) < len(life)
@@ -305,8 +305,8 @@ def _clear(game: _Game, at: Point) -> None:
 
 
 def _attacks(game: _Game, at: Point, *, gaps: Sequence[int], on_screen: bool, bait: UnitTypeId) -> list[int]:
-    """A new unit of this player's of type `bait` at `at`, attacked by an enemy photon cannon for 48 steps, then again
-    after each of `gaps` steps, each attack on a unit of its own. Answer the step each attack first hit."""
+    """Create a `bait` for this player at `at` and have an enemy photon cannon attack it for 48 steps, then again after
+    each of `gaps` steps, each attack on a fresh unit. Returns the step each attack first hit."""
     game.camera(at if on_screen else game.home)
     hit: list[int] = []
     for attack, gap in enumerate((0, *gaps)):
@@ -324,8 +324,8 @@ def _attacks(game: _Game, at: Point, *, gaps: Sequence[int], on_screen: bool, ba
 
 
 def _sustained(game: _Game, at: Point, unit_type: UnitTypeId, *, steps: int) -> list[int]:
-    """A unit of this player's of `unit_type` at `at`, out of sight of the camera, attacked by an enemy photon cannon
-    for `steps` steps and kept alive throughout. Answer the steps it was seen losing health at."""
+    """Create a `unit_type` for this player at `at`, off camera, and have an enemy photon cannon attack it for `steps`
+    steps, kept alive throughout. Returns the steps it was seen losing health at."""
     game.camera(game.home)
     (target,) = game.create(unit_type, at)
     _cannon(game, at)
@@ -346,8 +346,8 @@ def _sustained(game: _Game, at: Point, unit_type: UnitTypeId, *, steps: int) -> 
 
 
 def _bursts(game: _Game, at: Point, unit_type: UnitTypeId, *, gaps: Sequence[int]) -> list[int]:
-    """One unit of this player's of `unit_type` at `at`, out of sight of the camera and kept alive, attacked by an
-    enemy photon cannon for 48 steps, then again after each of `gaps` steps. Answer the step each attack first hit."""
+    """Create one `unit_type` for this player at `at`, off camera and kept alive, and have an enemy photon cannon
+    attack it for 48 steps, then again after each of `gaps` steps. Returns the step each attack first hit."""
     game.camera(game.home)
     if not (made := game.create(unit_type, at)):
         return []
@@ -380,8 +380,8 @@ def _bursts(game: _Game, at: Point, unit_type: UnitTypeId, *, gaps: Sequence[int
 
 
 def _together(game: _Game, spots: Sequence[Point]) -> list[int]:
-    """A marine of this player's at each of `spots`, out of sight of the camera, each attacked by an enemy photon
-    cannon of its own, all at once. Answer the step each was first hit at."""
+    """Create a marine for this player at each of `spots`, off camera, each attacked by its own enemy photon cannon,
+    all at once. Returns the step each was first hit at."""
     game.camera(game.home)
     marines = [game.create(UnitTypeId.MARINE, spot)[0] for spot in spots]
     life = {marine.tag: marine.health for marine in marines}
@@ -427,8 +427,8 @@ def _geysers(game: _Game) -> list[raw_pb2.Unit]:
 
 
 def _attack_trials(game: _Game) -> list[Trial]:
-    """Attacks by an enemy photon cannon on units and structures of this player's, each trial at ground of its own in
-    the middle of the map, where the camera is not unless a trial moves it there."""
+    """Enemy photon cannon attacks on this player's units and structures, each trial on its own ground in the middle of
+    the map, off camera unless a trial moves the camera there."""
     trials: list[Trial] = []
     gaps = (60, 150, 300, 600)
     for bait in (UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT):
@@ -489,8 +489,8 @@ def _attack_trials(game: _Game) -> list[Trial]:
 
 
 def _suppression_trials(game: _Game) -> list[Trial]:
-    """How long an attack alert for one unit keeps another for it back, and whether from its last attack or its last
-    alert: one attacked every 3000 steps, and new ones attacked again after ever longer waits."""
+    """How long an attack alert on one unit suppresses the next for it, and whether the clock runs from its last attack
+    or its last alert: one unit attacked every 3000 steps, and new units attacked again after ever longer gaps."""
     trials: list[Trial] = []
     every = game.spot(game.middle, 4)
     trials.append(
@@ -511,7 +511,7 @@ def _suppression_trials(game: _Game) -> list[Trial]:
 
 
 def _terran_errors(game: _Game) -> list[Trial]:
-    """Orders a player without cheats gives and the game cannot carry out, now or once it comes to them."""
+    """Orders a player without cheats gives that the game cannot carry out, at once or when it gets to them."""
     trials: list[Trial] = []
     center = game.own(UnitTypeId.COMMAND_CENTER)[0]
     scvs = [unit for unit in game.own(UnitTypeId.SCV)]
@@ -579,7 +579,7 @@ def _terran_errors(game: _Game) -> list[Trial]:
 
 
 def _zerg_errors(game: _Game) -> list[Trial]:
-    """Orders a zerg player without cheats gives and the game cannot carry out."""
+    """Orders a zerg player without cheats gives that the game cannot carry out."""
     trials: list[Trial] = []
 
     def minerals_short() -> list[int]:
@@ -614,8 +614,8 @@ def _zerg_errors(game: _Game) -> list[Trial]:
 
 
 def _rival_trials(me: _Game, enemy: _Game) -> list[Trial]:
-    """What only an enemy brings about, the enemy played from here too: its nukes and its nydus worms, where this
-    player sees and where it does not."""
+    """What only an enemy causes, with the enemy played from here too: its nukes and nydus worms, where this player
+    sees and where it does not."""
     trials: list[Trial] = []
     # A debug cheat is a toggle for the whole game, so one side turns each on.
     me.sandbox.cheat("free", "fast_build", "food")
@@ -874,7 +874,7 @@ def _zerg(game: _Game) -> list[Trial]:
         zerglings = game.create(UnitTypeId.ZERGLING, game.spot(game.toward(6), 1), count=2)
         roach = game.create(UnitTypeId.ROACH, game.spot(game.toward(6), 1))
         overlords = game.own(UnitTypeId.OVERLORD)[:2]
-        # A morph ordered of several units together morphs only one of them, so each is ordered alone.
+        # A morph ordered on several units together morphs only one of them, so each is ordered alone.
         for ability, units in (
             (AbilityId.ZERGLING_MORPH_BANELING, zerglings),
             (AbilityId.OVERLORD_MORPH_OVERSEER, overlords),
@@ -935,7 +935,7 @@ def _protoss(game: _Game) -> list[Trial]:
         game.create(UnitTypeId.PYLON, game.spot(at, 1) + (0.5, 0.5))
         return game.create(unit_type, at)
 
-    # What warps in does so beside a pylon with open ground around it.
+    # Warp-ins land beside a pylon with open ground around it.
     warp_field = game.spot(game.toward(20), 3)
     game.create(UnitTypeId.PYLON, warp_field)
     gateways = [powered(UnitTypeId.GATEWAY)[0] for _ in range(3)]
@@ -969,7 +969,8 @@ def _protoss(game: _Game) -> list[Trial]:
     trials.append(game.trial("warp gate, ground weapons level 1 and charge researched at once", research))
 
     def warp_gates() -> list[int]:
-        # Researching warp gate turns every gateway into one by itself, so one is turned back and then over again.
+        # Researching warp gate turns every gateway into one on its own, so one is turned back, then into a warp gate
+        # again.
         (gate,) = game.own(UnitTypeId.WARP_GATE)[:1]
         game.turn(64)
         game.order(AbilityId.WARP_GATE_MORPH_GATEWAY, [gate])
@@ -1009,8 +1010,8 @@ def _protoss(game: _Game) -> list[Trial]:
 
 
 _CHEATS = ("free", "fast_build", "food", "show_map")
-# The sweeps of one player against the computer: its race, its trials, and the cheats it plays under. The error trials
-# play without the cheats that would keep minerals and supply from running short.
+# The sweeps of one player against the computer: race, trials and cheats. The error sweeps play without the cheats
+# that would keep minerals and supply from running short.
 _SOLO: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[str, ...]]] = {
     "terran": (Race.TERRAN, _terran, _CHEATS),
     "zerg": (Race.ZERG, _zerg, _CHEATS),

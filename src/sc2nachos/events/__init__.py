@@ -1,10 +1,10 @@
-"""What an api tells a bot about as a game goes on, and the handlers it tells.
+"""The events the api hands out as a game goes on, and the bus that hands them to handlers.
 
 A game hands out `GameStartEvent`, then a turn for each observation but the last, then `GameEndEvent`. A turn hands
-out `TurnStartEvent`, then what its observation reports has happened, then `TurnEvent`. `only`, `of` and `where` select
-some events of a type, `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` are the bases a handler takes a whole
-kind of event through, and a subclass of `Event` is an event of a bot's own, sent with `EventBus.emit`.
-`docs/events.md` lists every event: its fields, what selects it, and when it comes.
+out `TurnStartEvent`, then the events its observation reports, then `TurnEvent`. `only`, `of` and `where` select some
+events of a type. `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` are bases through which a handler takes a
+whole kind of event. A subclass of `Event` is a bot's own event, sent with `EventBus.emit`. `docs/events.md` lists
+every event: its fields, what selects it, and when it comes.
 """
 
 from sc2nachos.events._done import Done

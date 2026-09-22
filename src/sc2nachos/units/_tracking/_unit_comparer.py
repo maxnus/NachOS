@@ -1,4 +1,4 @@
-"""Each unit compared with the update of the unit tracker before."""
+"""Each unit compared with the unit tracker's previous update."""
 
 from __future__ import annotations
 
@@ -24,35 +24,36 @@ _ENEMY = raw_pb2.Alliance.Enemy
 
 @final
 class _UnitComparer:
-    """What each unit of this player's or the enemy's lost since the tracker's update before, how its cloak changed,
-    and the buffs it gained and lost, recorded among the tracker's last changes as asked."""
+    """Records, on request, what each of this player's and the enemy's units lost since the tracker's previous
+    update, how its cloak changed, and the buffs it gained and lost, into the tracker's last changes."""
 
     __slots__ = ("_compared", "_compared_update", "_tracker", "_worn", "_worn_update")
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
-        # The report of each unit of this player's or the enemy's in sight, by id, as of the update `compare` last ran
-        # on.
+        # The report of each of this player's and the enemy's units in sight, by id, as of the update `compare` last
+        # ran on.
         self._compared: dict[int, raw_pb2.Unit] = {}
         self._compared_update = 0
-        # The buffs of each of those units in vision wearing any, by id, as of the update `compare` last compared buffs
-        # on. Kept apart, and only for units wearing something, since reading a unit's buffs costs some five times what
-        # reading another of its fields does.
+        # The buffs of each of those units in vision that has any, by id, as of the update `compare` last compared
+        # buffs on. Kept separately, and only for units with buffs, since reading a unit's buffs costs some five times
+        # what reading another field does.
         self._worn: dict[int, tuple[int, ...]] = {}
         self._worn_update = 0
 
     def compare(
         self, *, damage: bool, energy: bool, cloak: bool, buffs: bool, only_buffs: Collection[int] | None = None
     ) -> None:
-        """Record in the tracker's last changes, as asked, the health and shields and the energy each unit lost since
-        the update before, how its cloak changed, and the buffs it gained and lost, if this ran on that update too:
-        those of `only_buffs`, or every buff. Keep each unit's report for the next.
+        """Record into the tracker's last changes, as the flags ask, the health and shields and the energy each unit
+        lost since the previous update, how its cloak changed, and the buffs it gained and lost (those in
+        `only_buffs`, or every buff), provided this ran on that update too. Keep each unit's report for the next
+        update.
 
-        Cloak is compared for a unit in sight in both, since an enemy unit nothing detects is listed cloaked but not in
-        vision; buffs for one in vision in both, since such an enemy unit shows none (in game); loss for one in vision
-        in both and of the same type.
+        Cloak is compared for a unit in sight in both updates, since an enemy unit nothing detects is listed cloaked
+        but not in vision. Buffs are compared for a unit in vision in both, since such an enemy unit shows none (in
+        game). Loss is compared for a unit in vision in both and of the same type.
 
-        Raises `UncuratedIdError` for a buff the curated ids leave out, which belongs in them.
+        Raises `UncuratedIdError` for a buff the curated ids leave out. Such a buff belongs among them.
         """
         tracker = self._tracker
         changes = tracker.last_changes
@@ -92,7 +93,7 @@ class _UnitComparer:
             self._worn_update = update
 
     def stop(self) -> None:
-        """Let go of the reports and buffs kept."""
+        """Drop the reports and buffs kept."""
         self._compared = {}
         self._worn = {}
 
@@ -104,11 +105,11 @@ class _UnitComparer:
         now: tuple[int, ...],
         only: Collection[int] | None,
     ) -> None:
-        """Record in `side` the buffs of `only`, or every buff, that `unit` gained and lost between wearing `was` and
-        `now`, each in the order of their ids."""
+        """Record into `side` the buffs `unit` gained and lost between `was` and `now`, in order of id, limited to
+        `only` if given."""
         if not was or not now:
-            # A unit that wore nothing before or wears nothing now, as a worker picking up minerals or delivering them
-            # does every trip, which is most changes (corpus).
+            # The unit had no buffs before or has none now, as a worker picking up or delivering minerals does every
+            # trip. That is most changes (corpus).
             gained, lost = sorted(now), sorted(was)
         else:
             gained, lost = sorted(set(now).difference(was)), sorted(set(was).difference(now))

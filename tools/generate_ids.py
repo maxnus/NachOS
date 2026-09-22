@@ -1,15 +1,15 @@
 """Generate the raw identifier catalogs from `data/stableid.json`.
 
 The raw enums are the *complete* catalog: every entry Blizzard ships, named as closely to Blizzard's own name as a
-Python identifier allows. They are not the user-facing API — the curated enums in `sc2nachos/ids/` are, and each of
-their members is defined in terms of a raw member so that no game id is ever written out as a bare integer.
+Python identifier allows. They are not the public API — the curated enums in `sc2nachos/ids/` are, and each curated
+member is defined from a raw member so that no game id is ever written as a bare integer.
 
 Regenerate after a patch changes stableid.json::
 
     uv run python tools/generate_ids.py
 
-Vendoring stableid.json means this runs without StarCraft II installed. The game rewrites the file from whichever
-map it last loaded, so refresh it from a current ladder map, as `docs/curating-ids.md` says.
+`data/stableid.json` is vendored, so this runs without StarCraft II. The game rewrites the file from whichever map it
+last loaded, so refresh it from a current ladder map, as `docs/curating-ids.md` says.
 """
 
 import json
@@ -58,11 +58,11 @@ def make_identifier(name: str) -> str:
 
 
 def ability_name(entry: dict) -> str:
-    """Derive a name for an ability.
+    """The identifier for an ability.
 
-    Ability `name` is not unique — 894 of them repeat, because one name such as `TerranBuild` covers every
-    building it can produce. Blizzard's own disambiguator is `buttonname`, so the pair is what identifies an
-    ability, with `friendlyname` preferred when the game supplies one.
+    `name` is not unique — 894 repeat, since one name such as `TerranBuild` covers every structure it can build.
+    Blizzard's own disambiguator is `buttonname`, so the pair identifies an ability; `friendlyname` is preferred where
+    the game supplies one.
     """
     name, button = entry.get("name", ""), entry.get("buttonname", "")
     friendly = entry.get("friendlyname", "")
@@ -81,8 +81,8 @@ def collect(category: str, entries: list[dict]) -> dict[str, int]:
         if name:
             named.append((name, entry["id"]))
 
-    # A residual collision keeps the lowest id under the bare name and suffixes the rest, so every catalog entry
-    # stays reachable and the common member keeps the obvious name.
+    # On a collision the lowest id keeps the bare name and the rest get an id suffix, so every entry stays reachable
+    # and the common member keeps the obvious name.
     counts = Counter(name for name, _ in named)
     seen: set[str] = set()
     members: dict[str, int] = {}
@@ -107,7 +107,7 @@ def generate() -> None:
         (OUTPUT_DIR / f"{module}.py").write_text("".join(lines), encoding="utf-8")
         print(f"{module}.py: {len(members)} members")
 
-    # Sorted so the generated file satisfies the import linter without a post-pass.
+    # Sorted so the generated file passes the import linter as written.
     modules = sorted(CATEGORIES.values())
     exports = "\n".join(f"from sc2nachos.ids.raw.{module} import {enum}" for module, enum in modules)
     names = "\n".join(f'    "{enum}",' for _, enum in modules)

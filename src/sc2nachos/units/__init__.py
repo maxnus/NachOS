@@ -1,4 +1,4 @@
-"""The units of a game, each under an id of its own for the whole game, and collections of them."""
+"""The units of a game, each under one id for the whole game, and collections of them."""
 
 from sc2nachos.units._errors import NotReportedError, UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit

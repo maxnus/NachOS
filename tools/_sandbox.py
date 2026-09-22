@@ -1,5 +1,5 @@
-"""Talking to a game played to find things out, which the in-game tools share: a game to play, ground to put
-structures on, and the few requests those tools make of it."""
+"""What the in-game tools share: a game to play, free ground to put structures on, and the requests they make of the
+game."""
 
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +21,7 @@ from sc2nachos.protocol import Client, GamePorts, PortPair, WebSocketTransport
 
 MAP = "PylonAIE_v4"
 
-# A unit created for player 0 is the map's own, and the game then reports it as belonging to player 16.
+# A unit created for player 0 belongs to the map, and the game reports it as player 16's.
 NEUTRAL = 0
 NEUTRAL_REPORTED = 16
 
@@ -29,12 +29,12 @@ SUCCESS = error_pb2.ActionResult.Success
 
 
 def reported(owner: int) -> int:
-    """The player the game reports a unit created for `owner` as belonging to."""
+    """The owner the game reports for a unit created for `owner`."""
     return NEUTRAL_REPORTED if owner == NEUTRAL else owner
 
 
 class OpenGround:
-    """The ground a structure can be put on that nothing has claimed yet."""
+    """The placeable ground nothing has claimed yet."""
 
     def __init__(self, game_map: GameMap, units: Iterable[raw_pb2.Unit]) -> None:
         grid = game_map.placement
@@ -46,10 +46,10 @@ class OpenGround:
             self._take(int(unit.pos.x), int(unit.pos.y), reach, free=False)
 
     def claim(self, near: Point, half: int) -> Point:
-        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken, so that
-        what is put down next does not land on it. `release` gives it back."""
+        """Take the free square `2 * half + 1` tiles across nearest to `near`, and return its center. `release` gives
+        it back."""
         size = 2 * half + 1
-        # Every square of that size the grid holds, marked where all of its tiles are free, by its lowest corner.
+        # Each square of that size, by its lowest corner: True where every tile in it is free.
         fits = sliding_window_view(self._free, (size, size)).all(axis=(2, 3))
         xs, ys = numpy.nonzero(fits)
         if not len(xs):
@@ -63,33 +63,33 @@ class OpenGround:
         return at
 
     def release(self, at: Point) -> None:
-        """Give back the square `claim` answered with `at`, so that a later claim can land on it again. A point
-        this never claimed is ignored, and the ground the map's own units stand on is never given back."""
+        """Give back the square `claim` returned `at` for. A point never claimed is ignored, and the ground the map's
+        own units stand on is never given back."""
         if (square := self._taken.pop((at.x, at.y), None)) is not None:
             self._take(*square, free=True)
 
     def _take(self, x: int, y: int, half: int, *, free: bool) -> None:
-        """Take or give back the square `2 * half + 1` tiles across centered on the tile at index `(x, y)`."""
+        """Mark the square `2 * half + 1` tiles across centered on tile `(x, y)` as taken or free."""
         self._free[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = free
 
 
 @dataclass(frozen=True, slots=True)
 class Sandbox:
-    """The requests an in-game tool makes, for `player` in the game `client` has joined."""
+    """The requests an in-game tool makes of the game `client` has joined, as `player`."""
 
     client: Client
     transport: WebSocketTransport
     player: int
 
     def units(self) -> list[raw_pb2.Unit]:
-        """Every unit in an observation made now."""
+        """Every unit in a fresh observation."""
         return list(self.client.observation().observation.raw_data.units)
 
     def debug(self, *commands: debug_pb2.DebugCommand) -> None:
         self.client.debug(commands)
 
     def cheat(self, *names: str) -> None:
-        """Turn on the debug game states named, such as `all_resources`."""
+        """Turn on the named debug game states, such as `all_resources`."""
         state = debug_pb2.DebugGameState
         self.debug(*(debug_pb2.DebugCommand(game_state=getattr(state, name)) for name in names))
 
@@ -101,9 +101,9 @@ class Sandbox:
         )
 
     def spawn(self, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> list[raw_pb2.Unit]:
-        """Create every unit asked for, and return those the game really made, which it does not always.
+        """Create the units requested and return those the game made; it does not always make every one.
 
-        What the computer happened to make meanwhile is left out, unless it is of a type and owner asked for.
+        Units the computer made meanwhile are left out unless their type and owner match a request.
         """
         before = {unit.tag for unit in self.units()}
         self.debug(*(self.create(unit_type, owner, at) for unit_type, owner, at in requests))
@@ -129,7 +129,7 @@ class Sandbox:
             self.debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
 
     def offered(self, tags: Iterable[int]) -> dict[int, list[int]]:
-        """Every ability each unit is offered, whatever it would cost."""
+        """The abilities each unit is offered, ignoring what they cost."""
         query = query_pb2.RequestQuery(
             abilities=[query_pb2.RequestQueryAvailableAbilities(unit_tag=tag) for tag in tags],
             ignore_resource_requirements=True,
@@ -139,7 +139,7 @@ class Sandbox:
         return {answer.unit_tag: [ability.ability_id for ability in answer.abilities] for answer in answers}
 
     def placeable(self, ability: int, points: Sequence[Point]) -> list[bool]:
-        """Whether the structure `ability` puts up could be put up at each of `points` now."""
+        """Whether the structure `ability` builds could go up at each of `points` right now."""
         placements = [
             query_pb2.RequestQueryBuildingPlacement(ability_id=ability, target_pos=common_pb2.Point2D(x=p.x, y=p.y))
             for p in points
@@ -148,7 +148,7 @@ class Sandbox:
         return [answer.result == SUCCESS for answer in response.query.placements]
 
     def order(self, ability: int, tag: int, target: Point | int | None = None) -> error_pb2.ActionResult.ValueType:
-        """Order `ability` on the unit `tag`, aimed at a point, a unit's tag or nothing, and return the answer."""
+        """Order `ability` on the unit `tag`, aimed at a point, a unit's tag or nothing, and return the verdict."""
         command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=[tag])
         if isinstance(target, Point):
             command.target_world_space_pos.x, command.target_world_space_pos.y = target
@@ -159,13 +159,13 @@ class Sandbox:
 
 
 def join_with(transport: WebSocketTransport, race: Race, interface: sc2api_pb2.InterfaceOptions) -> int:
-    """Join the waiting game as `race` asking for `interface`, and answer the player id.
+    """Join the waiting game as `race` with `interface`, and return the player id.
 
-    NachOS's own client asks for the raw interface and nothing else, so a tool that needs another joins here.
+    The NachOS client asks only for the raw interface; a tool that needs another joins here.
     """
     request = sc2api_pb2.RequestJoinGame(race=race.value, options=interface, player_name="NachOS")
     joined = transport.request(sc2api_pb2.Request(join_game=request)).join_game
-    # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+    # An unset `error` reads as the proto's first refusal, so check that it is set.
     if joined.HasField("error"):
         reason = sc2api_pb2.ResponseJoinGame.Error.Name(joined.error)
         raise RuntimeError(f"the game refused the join as {reason}: {joined.error_details or 'no detail given'}")
@@ -182,8 +182,8 @@ def playing(
 ) -> Iterator[Sandbox]:
     """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone.
 
-    A `realtime` game runs on its own and is never stepped, and an `interface` other than the raw one is joined for
-    here rather than through the client.
+    A `realtime` game is never stepped. An `interface` other than the raw one is joined with here rather than through
+    the client.
     """
     game_map = MapFile.find(MAP, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
@@ -204,22 +204,22 @@ def playing(
 
 @dataclass(frozen=True, slots=True)
 class Rivals:
-    """A game on `MAP` between two players, both played from here: `me`, and `enemy`, whose units `me` meets."""
+    """A game on `MAP` between two players both played from here: `me`, and the `enemy` it meets."""
 
     me: Sandbox
     enemy: Sandbox
     _pool: ThreadPoolExecutor
 
     def step(self, count: int) -> None:
-        """Let `count` steps pass, which a game of two does only once both players ask for them."""
+        """Let `count` steps pass. A game of two steps only once both players have asked."""
         for future in [self._pool.submit(side.client.step, count) for side in (self.me, self.enemy)]:
             future.result()
 
 
 @contextmanager
 def playing_rivals(race: Race, installation: Installation) -> Iterator[Rivals]:
-    """A game on `MAP` between two players of `race`, each on a client of its own. A debug cheat is a toggle for the
-    whole game, so only one of them turns each on."""
+    """A game on `MAP` between two players of `race`, each on its own client. A debug cheat toggles for the whole
+    game, so only one player turns each on."""
     game_map = MapFile.find(MAP, installation=installation)
     with ExitStack() as stack, ThreadPoolExecutor(2) as pool:
         games = [stack.enter_context(GameProcess.launch(installation, window=(800, 600))) for _ in range(2)]

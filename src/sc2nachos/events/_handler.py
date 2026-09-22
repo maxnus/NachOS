@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 @final
 class _Handler:
-    """A function handling the events some filter selects, called alone or with the instance it is a method of: how
-    often it asked to be called, and what it has done in the game being played."""
+    """A function handling the events a filter selects, called alone or on the instance it is a method of, with how
+    often it runs and what it has done in the current game."""
 
     __slots__ = (
         "at_step",
@@ -51,10 +51,10 @@ class _Handler:
         self.once = once or at_step is not None
         self.catch_exceptions = catch_exceptions
         self.instance = instance
-        # When it subscribed among every handler of the bus, which orders the handlers of one priority across types.
+        # Its place in subscription order across the whole bus, which orders one priority's handlers across event types.
         self.order = 0
-        # What it has done this game, which the next one starts afresh. `done` also for one unsubscribed, which
-        # an event being handed out may still reach.
+        # What it has done this game; the next game resets it. An unsubscribed handler is `done` too, since an event
+        # being handed out may still reach it.
         self.last_step: int | None = None
         self.done = False
 
@@ -72,11 +72,11 @@ class _Handler:
 
     @property
     def name(self) -> str:
-        """Its function's module and qualified name, which every instance of a class shares."""
+        """The function's module and qualified name, shared by every instance of a class."""
         return f"{self.function.__module__}.{self.function.__qualname__}"
 
     def bound_to(self, instance: object) -> _Handler:
-        """This handler of a method marked in a class body, for `instance`, and with nothing done yet."""
+        """A copy of this handler, of a method marked in a class body, bound to `instance` with nothing done yet."""
         return _Handler(
             self.function,
             self.selects,

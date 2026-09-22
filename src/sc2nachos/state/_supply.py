@@ -12,15 +12,15 @@ class Supply:
     """The supply this player's units take and its structures and units provide."""
 
     used: float
-    """What this player's units take, those in production included. A zergling or a baneling takes half."""
+    """The supply this player's units take, including those in production. A zergling or a baneling takes half."""
     cap: int
-    """What this player's structures and units provide, as far as the game allows."""
+    """The supply this player's structures and units provide, up to the game's limit."""
     army: float
-    """What this player's units other than workers take."""
+    """The supply this player's units other than workers take."""
     workers: int
-    """What this player's workers take, those in production left out."""
+    """The supply this player's workers take, not counting those in production."""
 
     @property
     def left(self) -> float:
-        """What is still free under the cap, which is negative once units that provided supply are lost."""
+        """The supply still free under the cap. Negative once units that provided supply are lost."""
         return self.cap - self.used

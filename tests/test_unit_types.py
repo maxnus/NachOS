@@ -1,6 +1,6 @@
-"""`UnitType`: a class naming each type of unit and each group of types, and narrowing a unit to one."""
+"""`UnitType`: a class for each unit type and each group of types, which narrows a unit to one."""
 
-# Each `pyright: ignore` below is an error the type checker must go on reporting.
+# Each `pyright: ignore` below marks an error the type checker must keep reporting.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
 import importlib.util
@@ -24,7 +24,7 @@ _GENERATOR = Path(__file__).parents[1] / "tools" / "generate_unit_types.py"
 
 
 def _generator() -> Any:
-    """`tools/generate_unit_types.py`, which is no package to import from."""
+    """The `tools/generate_unit_types.py` module, loaded by path since `tools` is not a package."""
     spec = importlib.util.spec_from_file_location("generate_unit_types", _GENERATOR)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -38,7 +38,7 @@ def tables() -> GameData:
 
 
 def _types() -> list[Any]:
-    """The classes in `UnitType` that each name one type, rather than a group."""
+    """The classes in `UnitType` that name one type, not a group."""
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
 
 

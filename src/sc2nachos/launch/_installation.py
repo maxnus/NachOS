@@ -32,7 +32,7 @@ class GameVersionError(NachOSError):
 
 @dataclass(frozen=True, slots=True)
 class _Platform:
-    """What differs between operating systems about a StarCraft II installation."""
+    """The parts of an installation's layout that differ by operating system."""
 
     default_base: str
     executable: str
@@ -63,7 +63,7 @@ _PLATFORMS = {
 
 
 def _settings(system: str) -> _Platform:
-    """How `system` lays an installation out, or a refusal naming what was asked for."""
+    """The layout of an installation on `system`. Raises `UnsupportedPlatformError` for any other system."""
     try:
         return _PLATFORMS[system]
     except KeyError:
@@ -89,7 +89,7 @@ class Installation:
         """Locate the installation: `SC2PATH`, then the launcher's own record of it, then the platform default."""
         system = system or platform.system()
         settings = _settings(system)
-        # An SC2PATH set to nothing is not a path to anywhere, and `Path("")` is the working directory.
+        # An empty SC2PATH is no path at all, and `Path("")` would be the working directory.
         candidates = (os.environ.get("SC2PATH") or None, cls._from_execute_info(settings), settings.default_base)
         for candidate in candidates:
             if candidate is None:
@@ -130,7 +130,7 @@ class Installation:
 
     @property
     def working_directory(self) -> Path | None:
-        """The directory the client must be started from, where the platform demands one."""
+        """The directory the client must be started from, on a platform that demands one."""
         directory = _settings(self.system).working_directory
         return None if directory is None else self.base / directory
 
@@ -147,7 +147,7 @@ class Installation:
 
     @staticmethod
     def _from_execute_info(settings: _Platform) -> str | None:
-        """The install path the launcher last recorded, which is where a non-default install shows up."""
+        """The install path the launcher last recorded, where a non-default install shows up."""
         if settings.execute_info is None:
             return None
         record = Path.home().expanduser() / settings.execute_info

@@ -21,21 +21,21 @@ if TYPE_CHECKING:
 _ORIGIN = Tile(0, 0)
 
 
-# Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64`
-# subclasses `float`; without them the operand round-trips through numpy and back, at twice the cost.
-# Held as a constant because an inline `a | b` union is rebuilt on every call, at seven times the cost.
+# Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64` subclasses
+# `float`; without them listed, the operand round-trips through numpy and back at twice the cost. A module constant,
+# because an inline tuple is rebuilt on every call at seven times the cost.
 SCALAR_TYPES = (int, float, numpy.number, numpy.bool_)
 
 
 @final
 class Grid[T: float]:
-    """A grid of values covering whole tiles, addressed by map position rather than by array index.
+    """A grid of per-tile values, addressed by map position rather than by array index.
 
-    `origin` is the tile at the grid's lower left corner, so a grid can cover the playable area alone. An
-    area reaching past the edge is clipped to the tiles the grid holds; a point outside it raises `IndexError`.
+    `origin` is the tile at the grid's lower left corner, so a grid can cover the playable area alone. An area
+    reaching past the edge is clipped to the tiles the grid holds; a point outside it raises `IndexError`.
 
-    A grid the library hands out while keeping it, such as the map's, is `readonly` and refuses every write.
-    `copy()` gives one to change, as does anything else derived from a grid.
+    A grid the library shares, such as the map's, is `readonly` and refuses every write. `copy()` gives a writable
+    one, as does every other grid derived from it.
     """
 
     __slots__ = ("_data", "_origin", "_outside", "_readonly")
@@ -52,8 +52,8 @@ class Grid[T: float]:
     ) -> None:
         """A grid holding `data`, whose `[0, 0]` entry is the tile at `origin`.
 
-        `outside` is what reading a point beyond the grid answers; without it such a read raises. Writing
-        beyond the grid always raises, and a `readonly` grid refuses every write.
+        `outside` is what a read beyond the grid returns; without it such a read raises. A write beyond the grid
+        always raises, and a `readonly` grid refuses every write.
         """
         if data.ndim != 2:
             raise ValueError(f"a grid is two-dimensional, got {data.ndim} dimensions")
@@ -104,9 +104,9 @@ class Grid[T: float]:
         return view
 
     def index_of(self, point: PointLike) -> tuple[int, int]:
-        """The index into `values` of the tile holding `point`, for handing the array to other code.
+        """The index into `values` of the tile holding `point`.
 
-        Raises `IndexError` for a point the grid does not cover, `outside` notwithstanding.
+        Raises `IndexError` for a point the grid does not cover, whatever `outside` is.
         """
         tile = Tile.containing(point)
         x = tile[0] - self._origin[0]
@@ -124,18 +124,18 @@ class Grid[T: float]:
 
     @property
     def outside(self) -> T | None:
-        """What a read beyond the grid answers, or None if one raises."""
+        """What a read beyond the grid returns, or `None` if one raises."""
         return self._outside
 
     @property
     def readonly(self) -> bool:
-        """Whether this grid refuses to be written to."""
+        """Whether the grid refuses writes."""
         return self._readonly
 
     def with_outside(self, value: T | None) -> Grid[T]:
-        """The same grid, reading `value` beyond its edge. Shares the data rather than copying it.
+        """The same grid, reading `value` beyond its edge.
 
-        A read-only grid stays one, since the values are the same.
+        It shares the data rather than copying it, and stays read-only if this grid is.
         """
         return Grid(self._data, origin=self._origin, outside=value, readonly=self._readonly)
 
@@ -160,9 +160,8 @@ class Grid[T: float]:
 
     # --- Reading and writing
 
-    # `Tile` is an `Area`, and the only one that addresses a single tile, so it has to be matched first.
-    # The overlap is real and cannot be narrowed away: a key typed `Area` that holds a `Tile` is annotated
-    # `ndarray` and answers with a scalar.
+    # `Tile` is an `Area`, and the only one that addresses a single tile, so it must be matched first. The overlap
+    # is real: a key typed `Area` that holds a `Tile` is annotated `ndarray` but returns a scalar.
     @overload
     def __getitem__(self, key: Tile) -> T: ...  # pyright: ignore[reportOverlappingOverload]
 
@@ -173,8 +172,8 @@ class Grid[T: float]:
 
     def __getitem__(self, key: PointLike | Area | Grid[bool]) -> T | ndarray:
         """The value at a point, the values over an area, or the values a mask selects."""
-        # Points first, and by tuple: `Tile` is the only `Area` that is one, and it addresses a single
-        # tile like any other point. A miss here is cheap, where a miss against an `Area` subclass is not.
+        # Points first, checked as tuples: `Tile` is the only `Area` that is a tuple, and it addresses a single tile
+        # like any other point. A miss here is cheap; a miss against an `Area` subclass is not.
         if isinstance(key, tuple):
             return self._value_at(key)
         if isinstance(key, Rectangle):
@@ -230,7 +229,8 @@ class Grid[T: float]:
         return addresses[:, 0], addresses[:, 1]
 
     def _mask(self, mask: Grid[bool]) -> ndarray:
-        """The values of a mask covering the same tiles, which numpy would read as row indices if not boolean."""
+        """The values of `mask`, which must cover the same tiles and hold booleans; numpy would read any other dtype
+        as row indices."""
         values = self._aligned(mask)
         if values.dtype != bool:
             raise TypeError(f"a grid used as a mask must hold booleans, got {values.dtype}")
@@ -245,13 +245,13 @@ class Grid[T: float]:
     def where(self, condition: Grid[bool], other: T | Grid[T]) -> Grid[T]:
         """This grid where `condition` holds, and `other` everywhere else."""
         values = self._aligned(other) if isinstance(other, Grid) else other
-        # Chosen first: `_aligned` is what rejects a condition that is not a grid, and the off-grid
-        # value reads `condition._outside`, which only means anything once that check has passed.
+        # `_aligned` runs before `_where_outside`: it rejects a condition that is not a grid, and `_where_outside`
+        # reads `condition._outside`, which needs that check to have passed.
         chosen = numpy.where(self._aligned(condition), self._data, values)
         return Grid(chosen, origin=self._origin, outside=self._where_outside(condition, other))
 
     def _where_outside(self, condition: Grid[bool], other: T | Grid[T]) -> T | None:
-        """The off-grid value of the operand the condition picks there, or None if it has none."""
+        """The off-grid value of whichever operand the condition picks off-grid, or `None` if it has none."""
         if condition._outside is None:
             return None
         if condition._outside:
@@ -317,15 +317,15 @@ class Grid[T: float]:
     def sum(self) -> T: ...
 
     def sum(self) -> T | int:
-        """The total over every tile, which for a boolean grid is the number of true ones."""
+        """The total over every tile; for a boolean grid, the number of true ones."""
         return self._data.sum().item()
 
     def argmin(self) -> Tile:
-        """The tile holding the smallest value, the lowest address of them if several tie."""
+        """The tile with the smallest value; the lowest address if several tie."""
         return self._tile_at(int(numpy.argmin(self._data)))
 
     def argmax(self) -> Tile:
-        """The tile holding the largest value, the lowest address of them if several tie."""
+        """The tile with the largest value; the lowest address if several tie."""
         return self._tile_at(int(numpy.argmax(self._data)))
 
     def _tile_at(self, flat_index: int) -> Tile:
@@ -347,7 +347,7 @@ class Grid[T: float]:
         return Grid(op(left, right), origin=self._origin, outside=self._combine_outside(other, op, flip=flip))
 
     def _combine_outside(self, other: object, op: Callable[..., ndarray], *, flip: bool) -> T | None:
-        """`op` applied to the operands' own off-grid values, or None if either has none."""
+        """`op` applied to both operands' off-grid values, or `None` if either has none."""
         if self._outside is None:
             return None
         if isinstance(other, Grid):
@@ -439,7 +439,7 @@ class Grid[T: float]:
         return self._combine(other, numpy.greater_equal)
 
     def __bool__(self) -> bool:
-        """Refused: `grid == other` answers per tile, so `if grid == other` would always be true."""
+        """Refused: `grid == other` compares per tile, so `if grid == other` would always be true."""
         raise TypeError("a grid has no truth value; use .any() or .all()")
 
     def any(self) -> bool:

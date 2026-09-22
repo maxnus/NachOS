@@ -1,4 +1,4 @@
-"""Handing what a game comes to to the handlers subscribed to it."""
+"""Handing events to the handlers subscribed to them."""
 
 from __future__ import annotations
 
@@ -23,22 +23,21 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-# Covariant, so that a decorator for one event type is one for any type its handler takes: that is how a handler's
-# parameter is checked, since a type variable's bound cannot name another.
+# Covariant, so a decorator for one event type is one for any type its handler takes. That is how a handler's
+# parameter is checked: a type variable's bound cannot name another.
 _E_co = TypeVar("_E_co", bound=Event, covariant=True)
 
 
 class _EventDecorator(Protocol[_E_co]):
-    """What `on` answers: a decorator of a handler of `_E_co`, a function taking one or a method taking one after
-    `self`, which `where` narrows.
+    """The decorator `on` returns, for a handler of `_E_co`: a function taking one, or a method taking one after
+    `self`. `where` narrows it.
 
     A handler taking any `Event` keeps its own type, so it can be decorated for several events. One taking a narrower
-    type is typed as the callable it is, of the event it is decorated for.
+    type is typed as a callable of the event it is decorated for.
     """
 
     def where(self, predicate: Callable[[_E_co], bool], /) -> _EventDecorator[_E_co]:
-        """This decorator, handing on only the events `predicate` passes too. What a handler counts, such as `once`,
-        counts only those."""
+        """This decorator, narrowed to the events `predicate` also passes. `once` and the like count only those."""
         ...
 
     @overload
@@ -56,29 +55,29 @@ class _EventDecorator(Protocol[_E_co]):
 
 @final
 class EventBus:
-    """What an api tells its handlers about, and who they are. `api.events` is one.
+    """The event bus: the events the api hands out, and the handlers subscribed to them. `api.events` is one.
 
     A function stays subscribed for the life of the api, and an instance until it is passed to `unsubscribe`. Both are
-    held strongly, so a handler runs whether or not anything else keeps it. What a handler has done counts for one game
-    and starts afresh with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned
+    held strongly, so a handler runs whether or not anything else keeps it alive. What a handler has done counts for
+    one game and resets with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned
     `Done`.
 
-    An event is handed to the handlers of its class and of every class it derives from, in the order of their
-    priorities, highest first, and those of one priority in the order they subscribed. So a handler of `Event` is
-    handed every event, and has NachOS make every type of event it would otherwise not, the comparison of every unit
-    with the observation before included. The events of a turn go out priority first: every handler of one priority
-    is handed each event of the turn it selects, in the turn's order, before any handler of the next.
+    An event is handed to the handlers of its class and of every base class, highest priority first, and within one
+    priority in subscription order. So a handler of `Event` is handed every event, which makes NachOS produce every
+    type of event it otherwise would not, including comparing every unit with the observation before. A turn's events
+    go out priority first: every handler of one priority is handed each event of the turn it selects, in the turn's
+    order, before any handler of the next priority.
     """
 
     __slots__ = ("_marks", "_methods_of", "_step", "_subscriptions", "_timings")
 
     def __init__(self, *, time_handlers: bool = False) -> None:
-        """Time every handler's calls only if `time_handlers`, which costs some 200 ns a call."""
+        """Time every handler call if `time_handlers`, at some 200 ns a call."""
         self._subscriptions = _EventSubscriptions()
-        # The handlers of methods marked in class bodies, of no instance yet, which `subscribe` binds to one.
+        # Handlers of methods marked in class bodies, unbound until `subscribe` binds them to an instance.
         self._marks: weakref.WeakKeyDictionary[FunctionType, list[_Handler]] = weakref.WeakKeyDictionary()
         self._methods_of: weakref.WeakKeyDictionary[type, tuple[_Handler, ...]] = weakref.WeakKeyDictionary()
-        # The step of the game being played, which an event emitted without one is given, or `None` between games.
+        # The current step, given to an event emitted without one, or `None` between games.
         self._step: int | None = None
         self._timings: dict[type[Event], dict[str, HandlerTiming]] | None = {} if time_handlers else None
 
@@ -87,7 +86,7 @@ class EventBus:
         counts = ", ".join(f"{kind.__name__}: {len(handlers)}" for kind, handlers in by_type)
         return f"EventBus({counts})"
 
-    # A type checker refuses a parameterized event subscribed to bare, since nothing is callable on `None`.
+    # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
     @overload
     def on[E: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
         self,
@@ -127,18 +126,18 @@ class EventBus:
     ) -> Any:
         """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`.
 
-        `event_type` is an event type, whose events and those of its subclasses the handler is handed, or what `only`
-        or `of` selects of them, and `where` on the decorator this answers narrows them further. A type that has `of` is
-        subscribed to only through it, and a type checker refuses it bare.
+        `event_type` is an event type, whose events and its subclasses' the handler is handed, or a filter from `only`
+        or `of`. `where` on the returned decorator narrows further. A type that has `of` is subscribed to only through
+        it, and a type checker refuses it bare.
 
         A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
-        method in a class body is marked instead, and is subscribed for an instance passed to `subscribe`.
+        method in a class body is marked instead, and subscribed for each instance passed to `subscribe`.
 
-        `priority` says where among the event's handlers it runs, and among a turn's, which goes out priority first. It
-        runs on every event but the ones `every_steps`, `at_step` or `once` hold it back from: `every_steps` waits until
-        that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that step,
-        and `once` on the first event. These count only the events selected. An exception it raises ends the game,
-        unless `catch_exceptions`, which logs it and goes on.
+        `priority` orders the handler among the event's handlers, and among a turn's, which go out priority first. The
+        handler runs on every event unless held back: `every_steps` waits until that many steps have passed since it
+        last ran, `at_step` runs it once, on the first event at or after that step, and `once` on the first event. These
+        count only the events selected. An exception it raises ends the game, unless `catch_exceptions`, which logs it
+        and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -166,10 +165,10 @@ class EventBus:
         return _EventSubscriber(self, selects, options)
 
     def subscribe(self, instance: object) -> None:
-        """Subscribe every method of `instance` marked with `on`, until it is passed to `unsubscribe`.
+        """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
 
-        An override that is not marked leaves the method it overrides unsubscribed. Raises `ValueError` where
-        `instance` has no marked method, or is subscribed already.
+        An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
+        marked method, or is subscribed already.
         """
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
@@ -179,9 +178,9 @@ class EventBus:
             self._subscriptions.add(handler.bound_to(instance))
 
     def unsubscribe(self, target: object) -> None:
-        """Call `target` no more: a function, a method bound to its instance, or every method of an instance.
+        """Unsubscribe `target`: a function, a bound method, or every method of an instance.
 
-        Raises `ValueError` where nothing of it is subscribed.
+        Raises `ValueError` if nothing of it is subscribed.
         """
         if isinstance(target, MethodType):
             function, instance = target.__func__, target.__self__
@@ -199,9 +198,9 @@ class EventBus:
 
     @property
     def timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
-        """How long each handler has taken in the game being played, or the one played last, by event and by handler.
+        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
 
-        A handler is named by its module and qualified name, so every instance of a class counts under one. Raises
+        A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
         `RuntimeError` unless the api was made with `time_handlers=True`.
         """
         if self._timings is None:
@@ -216,8 +215,8 @@ class EventBus:
             self._subscriptions.add(handler)
 
     def _marked_methods(self, cls: type) -> tuple[_Handler, ...]:
-        """The handlers of the marked methods an instance of `cls` has: those its attributes resolve to, so an override
-        that is not marked hides one that is."""
+        """The handlers of the marked methods an instance of `cls` has: those its attributes resolve to, so an unmarked
+        override hides a marked method."""
         if (marked := self._methods_of.get(cls)) is None:
             found: list[_Handler] = []
             seen: set[str] = set()
@@ -238,15 +237,15 @@ class EventBus:
             self._timings = {}
 
     def _set_step(self, step: int | None) -> None:
-        """Give the events emitted without a step from now on `step`, the game's, or none once it has ended."""
+        """Set the step given to events emitted without one: the game's, or `None` once it has ended."""
         self._step = step
 
     def emit(self, event: Event) -> None:
-        """Hand `event` to every handler of its type, or of a type it derives from, that selects it and is due to run,
-        each done with it by the time this returns. A handler may emit an event itself.
+        """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
+        when this returns. A handler may itself emit an event.
 
-        An event made without a step is given the step of the game being played. Raises `ValueError` for one when no
-        game is.
+        An event made without a step is given the current step. Raises `ValueError` for one when no game is being
+        played.
         """
         if event.step < 0:
             if self._step is None:
@@ -259,9 +258,9 @@ class EventBus:
             self._run(handlers, event, type(event) in subscriptions.selecting)
 
     def _hand_out(self, events: Sequence[Event]) -> None:
-        """Hand out the events of one turn, each with its step, priority first: every handler of the highest priority
-        is handed each event it selects, in the order of `events`, before any handler of the next priority is."""
-        # Each group keeps whether one of it selects, which a handler subscribing during the turn must not change.
+        """Hand out one turn's events, priority first: every handler of the highest priority is handed each event it
+        selects, in the order of `events`, before any handler of the next priority."""
+        # Each group carries whether one of its handlers selects; a handler subscribing mid-turn must not change it.
         passes: dict[EventPriority, list[tuple[Event, tuple[_Handler, ...], bool]]] = {}
         for event in events:
             for priority, handlers, selecting in self._subscriptions.grouped(type(event)):
@@ -271,8 +270,8 @@ class EventBus:
                 self._run(handlers, event, selecting)
 
     def _run(self, handlers: tuple[_Handler, ...], event: Event, selecting: bool) -> None:
-        """Hand `event` to each of `handlers` that selects it and is due to run, checking what each selects if
-        `selecting`, since one of them selects by key or predicate."""
+        """Hand `event` to each of `handlers` that selects it and is due to run. `selecting` says one of them selects by
+        key or predicate, so each is checked."""
         todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
         step = event.step
@@ -304,16 +303,16 @@ class EventBus:
 
 
 def _selecting_handlers(handlers: tuple[_Handler, ...], event: Event) -> Iterator[_Handler]:
-    """The handlers of `handlers` that select `event`, and those done, which `_run` passes over. Each selects it as
-    its turn comes, after those before it have run. Kept out of `_run`, where the closure would slow every read of
-    its event."""
+    """The handlers in `handlers` that select `event`, plus those done, which `_run` skips. Each is checked as its turn
+    comes, after the ones before it have run. Kept out of `_run`, where a closure would slow every read of the
+    event."""
     key = event._key()
     return (handler for handler in handlers if handler.done or _selects(handler, event, key))
 
 
 def _selects(handler: _Handler, event: Event, key: Hashable) -> bool:
-    """Whether `handler` selects `event`, whose key is `key`: by its keys, then by its predicate, which is logged and
-    taken as not passing if it raises and the handler catches exceptions."""
+    """Whether `handler` selects `event`, whose key is `key`: by its keys first, then its predicate. A predicate that
+    raises is logged and counted as failing if the handler catches exceptions."""
     selects = handler.selects
     if (keys := selects.keys) is not None and key not in keys:
         return False
@@ -329,14 +328,14 @@ def _selects(handler: _Handler, event: Event, key: Hashable) -> bool:
 
 
 def _in_class_body(function: FunctionType) -> bool:
-    """Whether `function` was defined in a class body, which the compiler writes into its qualified name: a class's
-    name comes before its own there, where a function has nothing, or `<locals>` for one defined in another."""
+    """Whether `function` was defined in a class body, read off its qualified name: a class's name comes before its
+    own, where a module-level function has nothing and a nested one has `<locals>`."""
     parts = function.__qualname__.rsplit(".", 2)
     return len(parts) > 1 and parts[-2] != "<locals>"
 
 
 def _timed(timings: dict[str, HandlerTiming], handler: _Handler, event: Event) -> object:
-    """Call `handler` with `event`, and count how long it took under its name."""
+    """Call `handler` with `event`, and add how long it took to the timing under its name."""
     start = perf_counter()
     result = handler.function(event) if handler.instance is None else handler.function(handler.instance, event)
     seconds = perf_counter() - start

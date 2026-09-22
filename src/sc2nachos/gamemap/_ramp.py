@@ -1,4 +1,4 @@
-"""The ramps the map's grids describe."""
+"""Ramps, found from the map's grids."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ if TYPE_CHECKING:
 # Ground touching at a corner is one patch, so a ramp that runs diagonally is one ramp.
 _TOUCHING = numpy.ones((3, 3), dtype=bool)
 
-# The levels a unit stands on are two apart, so ground spanning this much runs from one of them to another.
+# Levels are two apart in height, so ground spanning this much climbs from one to the next.
 _HALF_A_LEVEL = 1.0
 
-# How near the end of a ramp a tile counts as part of it, which is one byte of the height the game sends. A row
-# straight across a ramp is not quite level, its tiles differing by up to half a byte, while the next row up is
+# How close in height to a ramp's end a tile must be to count as part of it: one byte of the height the game sends.
+# A row straight across a ramp is not quite level, its tiles differing by up to half a byte, while the next row up is
 # 0.1875 away, so a byte cannot reach it (in game).
 _A_BYTE = 0.125
 
@@ -30,10 +30,10 @@ _A_BYTE = 0.125
 @final
 @dataclass(frozen=True, slots=True)
 class Ramp:
-    """The slope a ground unit walks up to reach the level above.
+    """A slope a ground unit walks up to the level above.
 
-    `top` and `bottom` are the rows it is entered by, unless something stands in one of them: the tiles within
-    a byte of its highest and of its lowest. Its middle is `tiles.center`.
+    `top` and `bottom` are the rows it is entered by, unless something stands in one: the tiles within a byte of its
+    highest and its lowest height. Its middle is `tiles.center`.
     """
 
     tiles: TileSet
@@ -42,11 +42,11 @@ class Ramp:
 
 
 def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) -> tuple[Ramp, ...]:
-    """The map's ramps, ordered by their lower left tile.
+    """The map's ramps, ordered by lower left tile.
 
-    A ramp is ground a unit can walk over but cannot build on that climbs from one level to the next, so the
-    patches of such ground are read whole and the ones that climb are the ramps. The level patches are bridges,
-    stands of trees, and the ground under an indestructible doodad, which the map's grids cannot tell apart.
+    A ramp is a patch of ground that is pathable but not buildable and climbs from one level to the next. The level
+    patches are bridges, stands of trees and the ground under an indestructible doodad, which the grids cannot tell
+    apart.
     """
     unbuildable = pathing.values & ~placement.values
     # `label` is unannotated, and pyright reads the return type off an early-return branch of its body.
@@ -62,7 +62,7 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
             ramps.append(
                 Ramp(
                     tiles=TileSet(_tiles(patch, origin)),
-                    # A ramp climbs a level and an end reaches a byte into it, so the two cannot meet.
+                    # A ramp climbs a whole level and each end reaches a byte into it, so top and bottom cannot overlap.
                     top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
                     bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
                 )
@@ -71,6 +71,6 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
 
 
 def _tiles(mask: ndarray, origin: Tile) -> list[Tile]:
-    """The tiles a mask over a grid holds true, addressed from the grid's `origin`."""
+    """The tiles where `mask` is true, addressed from the grid's `origin`."""
     xs, ys = numpy.nonzero(mask)
     return [Tile(origin[0] + x, origin[1] + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]

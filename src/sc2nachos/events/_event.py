@@ -1,4 +1,4 @@
-"""What an api tells its handlers about."""
+"""The events the api hands out."""
 
 from collections.abc import Hashable
 from dataclasses import field
@@ -12,65 +12,64 @@ from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 
-# The step of an event made without one, which `EventBus.emit` replaces with the step of the game being played.
+# The step of an event made without one; `EventBus.emit` replaces it with the current step.
 _NO_STEP = -1
 
 
 class Event(metaclass=_EventMeta):
-    """Something a game has come to, as of the step a bot learns of it.
+    """Something that happened in the game, stamped with the step the bot learns of it.
 
-    A subclass is an event of its own, made a frozen, slotted dataclass of the fields it declares, so it takes no
-    `@dataclass` of its own, which fails. A handler of a class is handed the events of its subclasses too.
+    A subclass is a new event, made a frozen, slotted dataclass of the fields it declares; adding `@dataclass` to
+    it fails. A handler of a class is handed the events of its subclasses too.
     """
 
     step: int = field(default=_NO_STEP, kw_only=True)
-    """The step of the observation it comes with. One made without it is given the step of the game being played as
-    it is emitted."""
+    """The step of the observation it comes with. An event made without one gets the current step when emitted."""
 
     @classmethod
     def _key_of(cls, *made_of: Any) -> Hashable:
-        """What `only` or `of` selects an event of this type by, read off what it is made of: its fields but `step`, in
-        order. `None` for a type that has neither."""
+        """The key `only` or `of` selects an event of this type by, from what it is made of: its fields but `step`, in
+        order. `None` for a type with neither."""
         return None
 
     def _key(self) -> Hashable:
-        """What `only` or `of` selects this event by, for a type that has either."""
+        """The key `only` or `of` selects this event by, for a type that has either."""
         return None
 
 
 class ParameterizedEvent(Event):
-    """An event there is none of without its parameters: a handler subscribes to one through `of`, which takes them,
-    and `on` refuses the type bare."""
+    """An event that exists only for given parameters. A handler subscribes through `of`, which takes them; `on`
+    refuses the bare type."""
 
 
 class GameStartEvent(Event):
-    """A game has started, and everything the api answers comes from it."""
+    """A game has started. Everything the api answers now comes from it."""
 
 
 class TurnStartEvent(Event):
-    """A turn is starting, before anything else of it."""
+    """A turn is starting. It comes before the turn's other events."""
 
 
 class TurnEvent(Event):
-    """A bot's turn, after the events of what the new observation reports."""
+    """The bot's turn, after the events the new observation reports."""
 
 
 class GameEndEvent(Event):
-    """A game has ended. The observation it ended on gets no turn of its own."""
+    """The game has ended. The observation it ended on gets no turn."""
 
     result: Result
     """How it ended for this player."""
 
 
-# What an observation reports has happened since the one before, handed on in this order between `TurnStartEvent` and
-# `TurnEvent`. What happened out of sight is reported when it is next seen.
+# What an observation reports since the one before, handed out in this order between `TurnStartEvent` and
+# `TurnEvent`. What happened out of sight is reported when next seen.
 
 
 class UnitEvent(Event):
-    """Something that happened to one unit, which `only` selects by the unit's type.
+    """Something happened to one unit. `only` selects by the unit's type.
 
-    A handler of it is handed every event with a `unit`, this player's and the enemy's alike, but the buff, vital and
-    area events, which have bases of their own.
+    A handler of it is handed every event with a `unit`, this player's and the enemy's alike, except the buff, vital
+    and area events, which have bases of their own.
     """
 
     unit: Unit[Any]
@@ -79,8 +78,8 @@ class UnitEvent(Event):
     def only(
         cls, unit_type: type[UnitType.AnyType] | UnitTypeId, /, *unit_types: type[UnitType.AnyType] | UnitTypeId
     ) -> EventFilter[Self]:
-        """The events of units of these types, for `on`: each a `UnitType`, a group of them, or a `UnitTypeId`. A
-        unit's type is the one it has as the event is made."""
+        """The events of units of these types, for `on`. Each is a `UnitType`, a group of them, or a `UnitTypeId`. A
+        unit is matched by its type at the time of the event."""
         return EventFilter(cls, keys=_unit_type_ids_in((unit_type, *unit_types)))
 
     @classmethod
@@ -119,8 +118,8 @@ class UnitAllianceChangedEvent(UnitEvent):
 
 
 class OwnConstructionStartedEvent(UnitEvent):
-    """A structure of this player's is first seen unfinished: an add-on and a creep tumor included, but not an
-    auto-turret, which is first seen finished (in game)."""
+    """A structure of this player's is first seen unfinished, add-ons and creep tumors included. Not an auto-turret,
+    which is first seen finished (in game)."""
 
     unit: OwnUnit[Any]
 
@@ -138,7 +137,7 @@ class OwnWarpInFinishedEvent(UnitEvent):
 
 
 class OwnUpgradeFinishedEvent(Event):
-    """This player has finished researching an upgrade. Several of one observation come in the order of their ids."""
+    """This player has finished researching an upgrade. Several in one observation come in id order."""
 
     upgrade: UpgradeId
 
@@ -189,24 +188,24 @@ class EnemyUnitEnergyLostEvent(UnitEvent):
 
 
 class VitalEvent(ParameterizedEvent):
-    """A unit's health, shields or energy has crossed a value.
+    """A unit's health, shields or energy crossed a value.
 
-    A handler of `VitalEvent.of(...)` is handed the value reached and dropped below, by this player's units and the
-    enemy's alike.
+    A handler of `VitalEvent.of(...)` is handed both reaching and dropping below the value, by this player's units and
+    the enemy's alike.
     """
 
     unit: Unit[Any]
     vital: VitalType
-    """What of its health, shields and energy crossed the value."""
+    """Which of health, shields and energy crossed the value."""
     value: float
-    """The value it crossed, as `of` was given it."""
+    """The value crossed, as given to `of`."""
 
     @classmethod
     def of(
         cls, vital: VitalType, value: float, /, *unit_types: type[UnitType.AnyType] | UnitTypeId
     ) -> EventFilter[Self]:
-        """The events of units of `unit_types`, or of any type if none is given, whose `vital` crosses `value`, for
-        `on`. Each of `unit_types` is a `UnitType`, a group of them, or a `UnitTypeId`.
+        """The events of units whose `vital` crosses `value`, for `on`, limited to `unit_types` if any are given. Each
+        of `unit_types` is a `UnitType`, a group of them, or a `UnitTypeId`.
 
         Raises `ValueError` unless `value` is above 0, and at most 1 for a fraction.
         """
@@ -226,36 +225,35 @@ class VitalEvent(ParameterizedEvent):
 
 
 class OwnUnitVitalReachedEvent(VitalEvent):
-    """A unit of this player's in vision is seen with at least the value `of` was given of a vital, having last been
-    seen in vision with less: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit back to full. Never a unit first seen at it,
-    and not again until it has been seen below it."""
+    """A unit of this player's in vision has at least the value given to `of`, having last been seen in vision below
+    it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit back to full. Not for a unit first seen at it, and not again until
+    it has been seen below it."""
 
     unit: OwnUnit[Any]
 
 
 class EnemyUnitVitalReachedEvent(VitalEvent):
-    """A unit of the enemy's in vision is seen with at least the value `of` was given of a vital, having last been seen
-    in vision with less. One that regenerated past it out of sight is reported when it is next seen. Never a unit first
-    seen at it, and not again until it has been seen below it."""
+    """A unit of the enemy's in vision has at least the value given to `of`, having last been seen in vision below it.
+    One that regenerated past it out of sight is reported when next seen. Not for a unit first seen at it, and not
+    again until it has been seen below it."""
 
 
 class OwnUnitVitalDroppedEvent(VitalEvent):
-    """A unit of this player's in vision is seen with less than the value `of` was given of a vital, having last been
-    seen in vision with at least it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit hurt. Never a unit first seen below
-    it, and not again until it has been seen at or above it."""
+    """A unit of this player's in vision has less than the value given to `of`, having last been seen in vision at or
+    above it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit hurt. Not for a unit first seen below it, and not again
+    until it has been seen at or above it."""
 
     unit: OwnUnit[Any]
 
 
 class EnemyUnitVitalDroppedEvent(VitalEvent):
-    """A unit of the enemy's in vision is seen with less than the value `of` was given of a vital, having last been
-    seen in vision with at least it. Never a unit first seen below it, and not again until it has been seen at or above
-    it."""
+    """A unit of the enemy's in vision has less than the value given to `of`, having last been seen in vision at or
+    above it. Not for a unit first seen below it, and not again until it has been seen at or above it."""
 
 
 class OwnUnitCloakChangedEvent(UnitEvent):
-    """A unit of this player's has cloaked or uncloaked. Cloaked, it reads `CLOAKED_ALLIED` whether the enemy detects
-    it or not, so no event says it was detected (in game)."""
+    """A unit of this player's has cloaked or uncloaked. Cloaked, it reads `CLOAKED_ALLIED` whether or not the enemy
+    detects it, so no event says it was detected (in game)."""
 
     unit: OwnUnit[Any]
     previous_cloak_state: CloakState
@@ -263,17 +261,17 @@ class OwnUnitCloakChangedEvent(UnitEvent):
 
 
 class EnemyUnitCloakChangedEvent(UnitEvent):
-    """A unit of the enemy's in sight now and in the observation before has cloaked or uncloaked, or has come to be
-    detected or no longer is. Burrowing is no cloak: a burrowed unit nothing detects is not listed at all (in game)."""
+    """A unit of the enemy's in sight now and in the observation before has cloaked or uncloaked, or become detected or
+    undetected. Burrowing is not a cloak: a burrowed unit nothing detects is not listed at all (in game)."""
 
     previous_cloak_state: CloakState
     """The cloak it had."""
 
 
 class BuffEvent(Event):
-    """A unit has gained or lost a buff, which `only` selects by the buff.
+    """A unit has gained or lost a buff. `only` selects by the buff.
 
-    A handler of it is handed every buff gained and lost, by this player's units and the enemy's alike.
+    A handler of it is handed every buff gained or lost, by this player's units and the enemy's alike.
     """
 
     unit: Unit[Any]
@@ -293,8 +291,8 @@ class BuffEvent(Event):
 
 
 class OwnUnitGainedBuffEvent(BuffEvent):
-    """A unit of this player's wears a buff it did not in the observation before: a spell, a stim, a cloak, or a
-    worker picking up minerals or gas, which it does every trip. A unit's several come in the order of their ids."""
+    """A unit of this player's has a buff it did not have in the observation before: a spell, a stim, a cloak, or a
+    worker picking up minerals or gas, which it does every trip. Several on one unit come in id order."""
 
     unit: OwnUnit[Any]
     buff: BuffId
@@ -302,17 +300,17 @@ class OwnUnitGainedBuffEvent(BuffEvent):
 
 
 class EnemyUnitGainedBuffEvent(BuffEvent):
-    """A unit of the enemy's in vision now and in the observation before wears a buff it did not then. An enemy unit
-    nothing detects shows no buffs, so one coming to be detected gains none (in game). A unit's several come in the
-    order of their ids."""
+    """A unit of the enemy's in vision now and in the observation before has a buff it did not have then. An enemy unit
+    nothing detects shows no buffs, so one becoming detected gains none (in game). Several on one unit come in id
+    order."""
 
     buff: BuffId
     """The buff it gained."""
 
 
 class OwnUnitLostBuffEvent(BuffEvent):
-    """A unit of this player's no longer wears a buff it wore in the observation before: it wore off, was ended, or a
-    worker delivered its minerals or gas. A unit's several come in the order of their ids."""
+    """A unit of this player's no longer has a buff it had in the observation before: it wore off, was ended, or a
+    worker delivered its minerals or gas. Several on one unit come in id order."""
 
     unit: OwnUnit[Any]
     buff: BuffId
@@ -320,20 +318,20 @@ class OwnUnitLostBuffEvent(BuffEvent):
 
 
 class EnemyUnitLostBuffEvent(BuffEvent):
-    """A unit of the enemy's in vision now and in the observation before no longer wears a buff it wore then. A
-    unit's several come in the order of their ids."""
+    """A unit of the enemy's in vision now and in the observation before no longer has a buff it had then. Several on
+    one unit come in id order."""
 
     buff: BuffId
     """The buff it lost."""
 
 
 class EnemyUnitEnteredSightEvent(UnitEvent):
-    """A unit of the enemy's has come into sight: seen for the first time, back in the observation, or back from the
-    fog. A unit that cloaks where it stands is still in sight."""
+    """A unit of the enemy's has come into sight: seen for the first time, back in the observation, or out of the fog.
+    A unit that cloaks where it stands stays in sight."""
 
 
 class EnemyUnitLeftSightEvent(UnitEvent):
-    """A unit of the enemy's in sight in the observation before is not now, and is not dead."""
+    """A unit of the enemy's that was in sight in the observation before is not now, and is not dead."""
 
 
 class AreaEvent(ParameterizedEvent):
@@ -345,7 +343,7 @@ class AreaEvent(ParameterizedEvent):
 
     unit: Unit[Any]
     area: Area
-    """The area, as `of` was given it."""
+    """The area, as given to `of`."""
 
     @classmethod
     def of(cls, area: Area, /) -> EventFilter[Self]:
@@ -361,50 +359,50 @@ class AreaEvent(ParameterizedEvent):
 
 
 class OwnUnitEnteredAreaEvent(AreaEvent):
-    """A unit of this player's is seen inside the area `of` was given, having last been seen outside it, or first seen
-    inside it once the area has been watched a turn."""
+    """A unit of this player's is inside the area given to `of`, having last been seen outside it, or first seen inside
+    it once the area has been watched for a turn."""
 
     unit: OwnUnit[Any]
 
 
 class OwnUnitLeftAreaEvent(AreaEvent):
-    """A unit of this player's is seen outside the area `of` was given, having last been seen inside it. One that dies
-    inside it, or leaves the observation there, has not left it."""
+    """A unit of this player's is outside the area given to `of`, having last been seen inside it. One that dies inside
+    it, or leaves the observation there, has not left it."""
 
     unit: OwnUnit[Any]
 
 
 class EnemyUnitEnteredAreaEvent(AreaEvent):
-    """A unit of the enemy's in sight is inside the area `of` was given, having last been seen in sight outside it, or
-    first seen in sight inside it once the area has been watched a turn. One in the fog counts for neither."""
+    """A unit of the enemy's in sight is inside the area given to `of`, having last been seen in sight outside it, or
+    first seen in sight inside it once the area has been watched for a turn. One in the fog counts for neither."""
 
 
 class EnemyUnitLeftAreaEvent(AreaEvent):
-    """A unit of the enemy's in sight is outside the area `of` was given, having last been seen in sight inside it. One
+    """A unit of the enemy's in sight is outside the area given to `of`, having last been seen in sight inside it. One
     that dies inside it, or goes out of sight there, has not left it."""
 
 
 class UnitDiedEvent(UnitEvent):
-    """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone as
+    """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone when
     the structure it became finishes or is killed, or a step later (in game). A dead unit gets this or
     `UnitFoundDeadEvent`, never both."""
 
 
 class UnitFoundDeadEvent(UnitEvent):
-    """A unit is dead that the game did not report: a structure remembered in the fog whose spot came into vision
-    without it (in game), or a drone the game has not reported dead an update after its structure finished or was
-    killed, which no game has needed."""
+    """A unit is dead without the game reporting it: a structure remembered in the fog whose spot came into vision
+    empty (in game), or a drone not reported dead an update after its structure finished or was killed, which no game
+    has needed."""
 
 
 class OwnActionEvent(Event):
-    """This player did something, as the game carried it out."""
+    """The game carried out an action of this player's."""
 
     action: Action
-    """What it did, whose `step` is when the game carried it out."""
+    """The action. Its `step` is when the game carried it out."""
 
 
 class ChatEvent(Event):
-    """Any player has sent a message to the game's chat (in game)."""
+    """A player, this one included, sent a message to the game's chat (in game)."""
 
     player_id: int
     """The id of the player who sent it."""
@@ -412,10 +410,10 @@ class ChatEvent(Event):
 
 
 class AlertEvent(Event):
-    """The game has alerted this player. Several of one observation come in the order the game raised them."""
+    """The game alerted this player. Several in one observation come in the order the game raised them."""
 
     alert: Alert
-    """What it alerted to, whose docstring says when the game raises it."""
+    """The alert. Its docstring says when the game raises it."""
 
     @classmethod
     def only(cls, alert: Alert, /, *alerts: Alert) -> EventFilter[Self]:
@@ -430,12 +428,12 @@ class AlertEvent(Event):
         return self._key_of(self.alert)
 
 
-# Every type of unit, which a vital is watched for when `of` is given none.
+# Every unit type: what a vital is watched for when `of` is given no types.
 _EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType._type_ids
 
 
 def _unit_type_ids_in(unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...]) -> frozenset[Hashable]:
-    """The ids of the unit types `unit_types` stand for, a group for each type in it."""
+    """The ids `unit_types` stand for, expanding each `UnitType` to its group."""
     ids: set[UnitTypeId] = set()
     for unit_type in unit_types:
         ids.update((unit_type,) if isinstance(unit_type, UnitTypeId) else unit_type._type_ids)

@@ -1,13 +1,13 @@
-"""Generate `sc2nachos/gamedata/_techtree/_build_<build>.py` from `data/tech_tree.json` and `data/upgrades.json`, which
-`tools/sweep_tech_tree.py` and `tools/sweep_upgrades.py` write.
+"""Generate `sc2nachos/gamedata/_techtree/_build_<build>.py` from `data/tech_tree.json` and `data/upgrades.json`,
+written by `tools/sweep_tech_tree.py` and `tools/sweep_upgrades.py`.
 
-Keeps what the curated ids name, and runs without StarCraft II. Run it again after sweeping, or after changing the
+Keeps only what the curated ids name, and runs without StarCraft II. Run it again after a sweep, or after changing the
 curated ids::
 
     uv run python tools/generate_tech_tree.py
 
-A sweep on a new build writes a new module beside the old one, and `gamedata/_techtree/__init__.py` imports the one
-NachOS plays by.
+A sweep on a new build writes a new module beside the old one; `gamedata/_techtree/__init__.py` imports the one NachOS
+plays by.
 """
 
 import json
@@ -51,17 +51,16 @@ type Trial = tuple[UnitTypeId, AbilityId, UnitTypeId, str]
 
 
 def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object]) -> TechTree:
-    """What `findings` and `upgrade_findings`, as the sweeps write them, say about what the curated ids name.
+    """The tech tree for what the curated ids name, from `findings` and `upgrade_findings` as the sweeps write them.
 
-    A unit type offered an ability that makes something, which then turned it into something else, is taken as not
-    offered it: once Burrow is researched, a zergling is offered every zerg unit's burrow, and burrows as a zergling
-    whichever it is ordered.
+    A unit type offered a creation ability that turned it into something else is taken as not offered it: once Burrow
+    is researched, a zergling is offered every zerg unit's burrow, and burrows as a zergling whichever it is ordered.
 
-    Raises `ValueError` where a requirement is something no curated id names, where an add-on required was not seen
-    to count only on the unit's own structure, where a unit type is offered an ability whose requirements were never
-    read, which would otherwise read as needing nothing, or where the sweep did not see an ability in
-    `gamedata/_techtree/_overrides.py` make its unit type, or where that file lists more than one ability for a type the
-    table names no working ability for. Raises it too for what `read_upgrades` raises for, and where the two sweeps
+    Raises `ValueError` where a requirement is something no curated id names; where a required add-on was not seen to
+    count only on the unit's own structure; where a unit type is offered an ability whose requirements were never read,
+    which would otherwise read as needing nothing; where the sweep did not see an ability in
+    `gamedata/_techtree/_overrides.py` make its unit type; or where that file lists more than one ability for a type the
+    table names no working ability for. Also raises for whatever `read_upgrades` raises for, and where the two sweeps
     played different builds.
     """
     if findings["base_build"] != upgrade_findings["base_build"]:
@@ -134,18 +133,18 @@ class Upgrades:
 
 
 def read_upgrades(upgrade_findings: Mapping[str, object]) -> Upgrades:
-    """What each upgrade adds to each curated unit type, and which upgrade level units report it adds to.
+    """What each upgrade adds to each curated unit type, and which reported upgrade level it raises.
 
-    An upgrade affects a unit type where it changes the type's row or raises a level units of the type report, which
-    the void ray's attack upgrades do though it has no weapon in the rows. An upgrade raising a level any unit reports
-    is taken to raise it for every type whose row it changes, since a type the sweep put up none of reports nothing. A
-    level is the number the curated name ends in, and an upgrade raising a report with no number is no level, as
-    Chitinous Plating is.
+    An upgrade affects a unit type where it changes the type's row or raises a level units of the type report, as the
+    void ray's attack upgrades do though it has no weapon in the rows. An upgrade that raises a level on any unit is
+    taken to raise it for every type whose row it changes, since a type the sweep put up none of reports nothing. A
+    level is the number the curated name ends in; an upgrade that raises a report but has no number, such as Chitinous
+    Plating, is no level.
 
-    Raises `ValueError` where the sweep found something the changes do not account for, where one research finished
-    more than one upgrade, where a change is to a weapon's attacks or cooldown, which the tables carry no change to,
-    where an upgrade no curated id names affects a curated unit type, where one upgrade raises more than one kind of
-    report, or where the levels of one kind affecting a type are not 1 onwards or add different amounts to it.
+    Raises `ValueError` where the sweep found something the changes do not account for; where one research finished
+    more than one upgrade; where a change is to a weapon's attacks or cooldown, which the tables cannot hold; where an
+    upgrade no curated id names affects a curated unit type; where one upgrade raises more than one kind of report; or
+    where the levels of one kind affecting a type are not 1 onwards or add different amounts.
     """
     if unexplained := _strings(upgrade_findings["unexplained"]):
         raise ValueError(f"the changes do not account for: {'; '.join(unexplained)}")
@@ -188,7 +187,7 @@ def read_upgrades(upgrade_findings: Mapping[str, object]) -> Upgrades:
 
 
 def _level(upgrade: UpgradeId) -> int:
-    """The number the curated name of `upgrade` ends in, or 0 where it ends in none."""
+    """The number `upgrade`'s curated name ends in, or 0."""
     last = upgrade.name.rsplit("_", 1)[-1]
     return int(last) if last.isdigit() else 0
 
@@ -206,8 +205,8 @@ def uncurated_upgraded(upgrade_findings: Mapping[str, object]) -> frozenset[str]
 
 
 def _unit_type_upgrade(upgrade: str, unit_type: str, change: Mapping[str, object]) -> UnitTypeUpgrade:
-    """`change`, as the sweep writes it, as what the tables hold: a speed in distance per second of the game's Faster
-    speed rather than its Normal one, as `UnitTypeData.speed` is."""
+    """`change`, as the sweep writes it, in the tables' terms: speed in distance per second at the game's Faster speed
+    rather than Normal, as `UnitTypeData.speed` is."""
     weapons: list[WeaponUpgrade] = []
     for weapon in _records(change.get("weapons", [])):
         if "attacks" in weapon or "cooldown" in weapon:
@@ -222,7 +221,7 @@ def _unit_type_upgrade(upgrade: str, unit_type: str, change: Mapping[str, object
                 range=float(str(weapon.get("range", 0.0))),
             )
         )
-    # Rounded to what the game's 32-bit floats hold, which the conversion otherwise dresses up in digits of its own.
+    # Rounded to what the game's 32-bit floats hold; the conversion otherwise adds spurious digits.
     speed = round(float(str(change.get("speed", 0.0))) * FASTER_PER_NORMAL_SPEED, 6)
     return UnitTypeUpgrade(armor=float(str(change.get("armor", 0.0))), speed=speed, weapons=tuple(weapons))
 
@@ -247,8 +246,8 @@ def _cancels(findings: Mapping[str, object]) -> dict[AbilityId, AbilityId]:
 
 
 def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, AbilityId]:
-    """The ability that makes each unit type: what the game's table names where that works, and the unnamed creation
-    ability where it does not, which there may be only one of."""
+    """The ability that makes each unit type: the game's table's where that works, else the unnamed creation ability,
+    of which there may be only one."""
     named = {
         unit_type: ability
         for type_name, ability_name in _mapping(findings["creation_abilities"]).items()
@@ -266,9 +265,9 @@ def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, Abil
 def _products(
     creation_abilities: Mapping[UnitTypeId, AbilityId], findings: Mapping[str, object]
 ) -> dict[AbilityId, UnitTypeId | UpgradeId]:
-    """The unit type or upgrade each ability makes, the unnamed creation abilities included, and the research
-    abilities the table misnames. One sharing its ability with a type the game's table names it for, as a rich
-    refinery shares the plain build with a refinery, leaves the table's product standing."""
+    """The unit type or upgrade each ability makes, including the unnamed creation abilities and the research abilities
+    the table misnames. A type that shares its ability with the type the table names it for, as a rich refinery shares
+    the plain build with a refinery, leaves the table's product in place."""
     products: dict[AbilityId, UnitTypeId | UpgradeId] = {}
     for unit_type, ability in creation_abilities.items():
         if UNNAMED_CREATION_ABILITIES.get(ability) is not unit_type:
@@ -284,10 +283,10 @@ def _products(
 
 
 def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
-    """The type each unit type is made out of, from the trials that used the unit ordered up.
+    """The type each unit type is made from, from the trials that used up the unit ordered.
 
-    Where several types can be used up making one, it is the one the others are themselves made out of: an overseer is
-    made out of an overlord, and out of the overlord transport an overlord becomes.
+    Where several types can be used up making one, the source is the one the others are themselves made from: an
+    overseer is made from an overlord, and from the overlord transport an overlord becomes.
     """
     used_up: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
     for performer, _, product, result in trials:
@@ -302,19 +301,19 @@ def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
 
 
 def render(tech_tree: TechTree) -> str:
-    """The module holding `tech_tree`."""
+    """The module source for `tech_tree`."""
     return HEADER.format(base_build=tech_tree.base_build) + f"TECH_TREE: Final = {_literal(tech_tree, 0)}\n"
 
 
 def output(tech_tree: TechTree) -> Path:
-    """Where the module holding `tech_tree` goes."""
+    """The path of the module for `tech_tree`."""
     return TECHTREE / f"_build_{tech_tree.base_build}.py"
 
 
 def _literal(value: object, indent: int) -> str:
-    """`value` as a Python expression starting at column `indent`: one member a line, each bracket beside the
-    parenthesis it opens in, and what the tech tree holds for one ability on one line. `pyproject.toml` keeps the module
-    out of ruff's formatter and its line length, which would undo both."""
+    """`value` as a Python expression starting at column `indent`: one member per line, each bracket beside the
+    parenthesis it opens in, and one line per ability entry. `pyproject.toml` keeps the module out of ruff's formatter
+    and line length, which would undo both."""
     pad, inner = " " * indent, " " * (indent + 4)
     if isinstance(value, IntEnum | bool | int | float | tuple):
         return _inline(value)
@@ -330,7 +329,7 @@ def _literal(value: object, indent: int) -> str:
         lines = "".join(f"{inner}{_literal(k, indent + 4)}: {_literal(v, indent + 4)},\n" for k, v in entries)
         return f"MappingProxyType({{\n{lines}{pad}}})"
     if is_dataclass(value) and not isinstance(value, type):
-        # What a class works out for itself is not given to it, and a default is left to it.
+        # Fields the class computes itself are not given, and neither are defaults.
         given = [(field.name, getattr(value, field.name)) for field in fields(value) if field.init]
         given = [(name, member) for name, member in given if member != _default(value, name)]
         if indent:
@@ -366,7 +365,7 @@ def _inline(value: object) -> str:
 
 
 def _default(value: object, name: str) -> object:
-    """The default of the field `name` of the dataclass `value`, which no value equals where there is none."""
+    """The default of the dataclass `value`'s field `name`, or `MISSING`, which no value equals."""
     field = next(field for field in fields(value) if field.name == name)  # type: ignore[arg-type]
     return field.default_factory() if field.default_factory is not MISSING else field.default
 
@@ -402,7 +401,7 @@ def _upgrade(name: str) -> UpgradeId | None:
 
 
 def _required[IdT](lookup: Callable[[str], IdT | None], names: object) -> Iterable[IdT]:
-    """Each name curated, raising where one is not."""
+    """Each name as its curated id, raising where one has none."""
     for name in _strings(names):
         if (member := lookup(name)) is None:
             raise ValueError(f"{name} is required, and no curated id names it")

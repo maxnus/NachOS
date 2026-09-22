@@ -1,4 +1,4 @@
-"""The small values a unit is read into."""
+"""The small value types a unit's report is read into."""
 
 from __future__ import annotations
 
@@ -35,31 +35,30 @@ class Visibility(ReadableIntEnum):
     IN_VISION = raw_pb2.DisplayType.Visible
     """In sight."""
     IN_FOG = raw_pb2.DisplayType.Snapshot
-    """A structure out of sight, remembered where it was when last seen."""
+    """A structure out of sight, remembered where it was last seen."""
     INVISIBLE = raw_pb2.DisplayType.Hidden
-    """In sight, but cloaked where nothing detects it. A burrowed unit nothing detects is not listed at all (in
-    game)."""
+    """In sight, but cloaked and undetected. A burrowed unit nothing detects is not listed at all (in game)."""
 
 
 class CloakState(ReadableIntEnum):
     """Whether a unit is cloaked, and whether this player sees through it."""
 
     UNKNOWN = raw_pb2.CloakState.CloakedUnknown
-    """Remembered, so whether it is cloaked is not known."""
+    """A remembered unit, so whether it is cloaked is not known."""
     CLOAKED = raw_pb2.CloakState.Cloaked
     """Cloaked, and nothing of this player's detects it."""
     CLOAKED_DETECTED = raw_pb2.CloakState.CloakedDetected
-    """Cloaked, and detected."""
+    """Cloaked and detected."""
     NOT_CLOAKED = raw_pb2.CloakState.NotCloaked
     """Not cloaked."""
     CLOAKED_ALLIED = raw_pb2.CloakState.CloakedAllied
-    """Cloaked, and on this player's side, so seen all the same."""
+    """Cloaked, but on this player's side, so seen anyway."""
 
 
 class VitalType(Enum):
-    """What of a unit's health, shields and energy a value is of: an amount, or a fraction of the most there can be.
+    """A vital of a unit, health, shields or energy, as an amount or as a fraction of its maximum.
 
-    A unit without shields or energy, whose most is 0, has none of either to read.
+    A unit without shields or energy, whose maximum is 0, has neither to read.
     """
 
     HEALTH = "health"
@@ -70,22 +69,22 @@ class VitalType(Enum):
     HEALTH_FRACTION = "health fraction"
     SHIELD_FRACTION = "shield fraction"
     LIFE_FRACTION = "life fraction"
-    """Health and shields together, as a fraction of their most."""
+    """Health and shields together, as a fraction of their combined maximum."""
     ENERGY_FRACTION = "energy fraction"
 
     @property
     def is_fraction(self) -> bool:
-        """Whether it is a fraction of the most, from 0 to 1."""
+        """Whether the vital is a fraction of its maximum, from 0 to 1."""
         return self.value.endswith("fraction")
 
 
-# The tag a rally is left holding once the unit it was onto is gone, as a mined-out mineral field is (corpus). No unit
-# is ever reported under it.
+# The tag a rally holds once the unit it was set on is gone, as a mined-out mineral field is (corpus). No unit is ever
+# reported under it.
 _NO_UNIT = 1 << 32
 
 
 type Target = Point | Unit[Any]
-"""What an order or a rally point names: a position on the ground, or a unit."""
+"""What an order or a rally point is aimed at: a position on the ground, or a unit."""
 
 
 def _target_point(point: common_pb2.Point) -> Point:
@@ -96,18 +95,18 @@ def _target_point(point: common_pb2.Point) -> Point:
 @final
 @dataclass(frozen=True, slots=True)
 class UnitOrder:
-    """Something a unit has been told to do and is doing, or has queued."""
+    """An order a unit is carrying out or has queued, as the unit reports it."""
 
     ability: AbilityId
-    """What it was ordered."""
+    """The ability ordered."""
     target: Target | None
-    """Where it was sent, the unit it was sent at, or `None` for an order that needs neither."""
+    """The point or unit the order is aimed at, or `None` for an order that takes neither."""
     progress: float
-    """How far through the order it is, from 0 to 1, for an order that trains or researches, and 0 otherwise."""
+    """The order's progress from 0 to 1 for a train or a research, and 0 otherwise."""
 
     @classmethod
     def _from_proto(cls, order: raw_pb2.UnitOrder, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read an order a unit reported, naming a unit through `unit_by_tag`."""
+        """Read an order a unit reported, looking up a unit target through `unit_by_tag`."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
                 target: Target | None = _target_point(order.target_world_space_pos)
@@ -124,11 +123,11 @@ class RallyTarget:
     """Where a structure sends what it makes."""
 
     target: Target
-    """The unit rallied onto, or the point rallied to: the ground, or where a unit now gone stood."""
+    """The unit rallied to, or the point: a spot on the ground, or where a unit now gone stood."""
 
     @classmethod
     def _from_proto(cls, rally: raw_pb2.RallyTarget, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read a rally point a structure reported, naming a unit through `unit_by_tag`."""
+        """Read a rally point a structure reported, looking up a unit target through `unit_by_tag`."""
         tag = rally.tag
         if rally.HasField("tag") and tag != _NO_UNIT:
             return cls(unit_by_tag(tag))
@@ -138,10 +137,10 @@ class RallyTarget:
 @final
 @dataclass(frozen=True, slots=True)
 class Passenger:
-    """A unit inside a transport, bunker or other unit that holds units, as the one holding it reports it."""
+    """A unit inside a transport, bunker or other carrier, as the carrier reports it."""
 
     unit: Unit[Any]
-    """The unit, which is stale while it is inside, reading as it was when it went in."""
+    """The unit itself. It is stale while inside, and reads as it was when it went in."""
     type_id: UnitTypeId
     health: float
     health_max: float
@@ -152,7 +151,7 @@ class Passenger:
 
     @classmethod
     def _from_proto(cls, passenger: raw_pb2.PassengerUnit, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read a passenger a transport reported, naming it through `unit_by_tag`."""
+        """Read a passenger a carrier reported, looking up the unit through `unit_by_tag`."""
         return cls(
             unit=unit_by_tag(passenger.tag),
             type_id=UnitTypeId.read(passenger.unit_type),

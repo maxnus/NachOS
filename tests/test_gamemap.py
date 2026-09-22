@@ -1,4 +1,4 @@
-"""The map as a game describes it, read from maps drawn here and from the recorded games."""
+"""The map as the game describes it, from maps drawn here and from the recorded games."""
 
 from pathlib import Path
 
@@ -15,14 +15,14 @@ from support import make_bytes, make_game_info
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 _TOWNHALLS = {UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.NEXUS}
 
-# Six tiles wide, climbing a level over the middle four: the corner bytes give tile heights 8.0, 8.125,
-# 8.625, 9.375, 9.875 and 10.0, no two corners of one tile a cliff apart.
+# Six tiles wide, climbing a level over the middle four. The corner bytes give tile heights 8.0, 8.125, 8.625,
+# 9.375, 9.875 and 10.0, and no tile has two corners a cliff apart.
 _SLOPE = make_bytes(*[[191, 191, 193, 199, 205, 207, 207]] * 8)
 
 
 class TestReadingAMap:
     def test_the_grids_read_the_map_the_way_up_it_is_drawn(self) -> None:
-        # Sixteen across, so each row spans two bytes and a wrong bit order moves the open tile.
+        # Sixteen across, so each row spans two bytes and a wrong bit order would move the open tile.
         game_map = GameMap(
             make_game_info(
                 "................",
@@ -40,13 +40,13 @@ class TestReadingAMap:
         for grid in (game_map.pathing, game_map.placement, game_map.height):
             assert grid.bounds == game_map.playable_area
         assert game_map.pathing[Tile(1, 2)]
-        # Open on the drawing, but off the playable area.
+        # Open in the drawing, but outside the playable area.
         assert not game_map.pathing[Tile(0, 0)]
         assert not game_map.placement[Point((7.5, 4.5))]
         with pytest.raises(IndexError, match="lies outside"):
             _ = game_map.height[Tile(0, 0)]
 
-    # 191, 207, 223 and 239 are the levels units stand on, at 8, 10, 12 and 14.
+    # 191, 207, 223 and 239 are the levels units stand on: 8, 10, 12 and 14.
     @pytest.mark.parametrize(
         ("byte", "height"), [(0, -15.875), (127, 0.0), (191, 8.0), (207, 10.0), (223, 12.0), (239, 14.0), (255, 16.0)]
     )
@@ -55,7 +55,7 @@ class TestReadingAMap:
         assert game_map.height[Tile(0, 0)] == game_map.height_at(Point((0.3, 0.8))) == height
 
     def test_a_tile_on_a_ramp_is_as_high_as_its_corners_on_average(self) -> None:
-        # The heights are the tiles' corners, so four tiles across have five corners, rising a quarter each.
+        # The bytes are corner heights, so four tiles have five corners, each a quarter higher.
         heights = make_bytes(*[[191, 193, 195, 197, 199]] * 3)
         game_map = GameMap(make_game_info(*["#####"] * 3, playable=(0, 0, 4, 2), heights=heights))
         assert [game_map.height[Tile(x, 0)] for x in range(4)] == [8.125, 8.375, 8.625, 8.875]
@@ -65,9 +65,9 @@ class TestReadingAMap:
     @pytest.mark.parametrize(
         ("rows", "height"),
         [
-            # A ramp's top beside the cliff it runs along: the corner on the cliff line holds the level below.
+            # The top of a ramp beside the cliff it runs along: the corner on the cliff line is on the level below.
             ([[207, 207, 207], [207, 207, 207], [191, 207, 207]], 10.0),
-            # The foot of a cliff, whose corner on the cliff line holds the level above.
+            # The foot of a cliff: the corner on the cliff line is on the level above.
             ([[239, 239, 239], [239, 239, 239], [255, 239, 239]], 14.0),
             # Two corners on each level: the tile is on the upper one.
             ([[207, 207, 207], [207, 207, 207], [191, 191, 207]], 10.0),
@@ -110,8 +110,8 @@ class TestReadingAMap:
         assert ramp.top.center == Point((4.5, 1.5))
 
     def test_a_ramp_end_is_the_whole_row_where_the_row_is_not_quite_level(self) -> None:
-        # The two corners down the left edge are a byte low, so the tile standing on them sits half a byte below
-        # the rest of its row. Read exactly, the bottom of this ramp would be that one tile.
+        # The two corners on the left edge are a byte low, so the tile on them sits half a byte below the rest of its
+        # row. Read exactly, the bottom of this ramp would be that one tile.
         heights = make_bytes(
             [207, 207, 207, 207, 207],
             [205, 205, 205, 205, 205],
@@ -126,13 +126,13 @@ class TestReadingAMap:
         assert set(ramp.top) == {Tile(x, 3) for x in range(4)}
 
     def test_a_ramp_that_runs_diagonally_is_one_ramp(self) -> None:
-        # No two of the three tiles share an edge, so counting only edges would find no ramp at all.
+        # No two of the three tiles share an edge, so connecting only across edges would find no ramp.
         game_map = GameMap(make_game_info("#~####", "##~###", "###~##", heights=_SLOPE))
         (ramp,) = game_map.ramps
         assert set(ramp.tiles) == {Tile(1, 2), Tile(2, 1), Tile(3, 0)}
 
     def test_ground_that_climbs_no_level_is_no_ramp(self) -> None:
-        # A bridge or a stand of trees, level all through, and the first two tiles of the slope, 0.5 apart.
+        # A bridge or a stand of trees, level throughout, and the first two tiles of the slope, 0.5 apart.
         assert not GameMap(make_game_info("####", "#~~#", "####")).ramps
         assert not GameMap(make_game_info(*["#~~###"] * 3, heights=_SLOPE)).ramps
 
@@ -152,7 +152,7 @@ class TestReadingAMap:
 
 
 def _start(path: Path) -> tuple[sc2api_pb2.ResponseGameInfo, sc2api_pb2.Observation]:
-    """The map a recorded game was played on, and the first observation of it."""
+    """The map of a recorded game and its first observation."""
     info = None
     for exchange in Recording(path):
         response = exchange.response
@@ -165,7 +165,7 @@ def _start(path: Path) -> tuple[sc2api_pb2.ResponseGameInfo, sc2api_pb2.Observat
 
 
 def _own_townhall(observation: sc2api_pb2.Observation) -> Point:
-    """Where this player's townhall stood as the game started."""
+    """Where this player's townhall stood at the start."""
     return next(
         Point((unit.pos.x, unit.pos.y))
         for unit in observation.raw_data.units
@@ -182,8 +182,8 @@ class TestARecordedMap:
             tile = Tile(int(unit.pos.x), int(unit.pos.y))
             around = {game_map.height[Tile(tile.x + dx, tile.y + dy)] for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
             if not unit.is_flying and len(around) == 1:
-                # Units stand up to a few hundredths below it, and the ground can sit a little above: Pylon's main
-                # base by 0.15.
+                # Units stand up to a few hundredths below the ground, and the ground can sit a little above, by
+                # 0.15 in Pylon's main base.
                 position = Point((unit.pos.x, unit.pos.y))
                 assert -0.03 < unit.pos.z - game_map.height_at(position) < 0.16
                 assert game_map.height_at(position) == game_map.height[tile]
@@ -227,7 +227,7 @@ class TestARecordedMap:
             assert 1.0 <= climb < 2.0
 
     def test_a_ramp_has_two_ends_that_do_not_meet(self, path: Path) -> None:
-        """The ends reach a byte into a ramp that climbs at least half a level, so they cannot overlap."""
+        """Each end reaches a byte into a ramp that climbs at least half a level, so the ends cannot overlap."""
         info, _ = _start(path)
         game_map = GameMap(info)
         for ramp in game_map.ramps:

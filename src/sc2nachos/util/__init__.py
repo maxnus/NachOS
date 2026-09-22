@@ -1,4 +1,4 @@
-"""General-purpose helpers a bot needs but the protocol does not provide."""
+"""General-purpose helpers for bots."""
 
 from sc2nachos.util._math import (
     clip,

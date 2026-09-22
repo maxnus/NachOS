@@ -21,39 +21,39 @@ from sc2nachos.units import Unit, Units
 
 
 class NotPlayingError(NachOSError, RuntimeError):
-    """There is no game to answer from, because none has been joined."""
+    """No game has been joined, so there is nothing to answer from."""
 
 
 class Api:
-    """Everything a bot talks to, built before there is a game to talk to.
+    """Everything a bot talks to. It is built before there is a game.
 
-    Construct one where the rest of your bot can reach it, which may be module scope, and hand it to `run_local`
-    or `run_ladder` for every game it plays. Never subclass it: helpers of your own belong in your own modules, as
+    Construct one where the rest of your bot can reach it, module scope included, and pass it to `run_local` or
+    `run_ladder` for every game it plays. Never subclass it: your own helpers belong in your own modules, as
     ordinary functions.
 
-    Time is counted in steps. One step is one game loop, 22.4 of them make a second, and the bot takes a turn
-    every `steps_per_turn` of them, which the game is played with. Each turn hands its handlers a `TurnStartEvent`,
-    then what its observation reports has happened, in the order `sc2nachos.events` gives, then a `TurnEvent`.
+    Time is counted in steps. One step is one game loop, 22.4 steps make a second, and the bot takes a turn every
+    `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
+    the events its observation reports, in the order `sc2nachos.events` gives, then a `TurnEvent`.
 
-    What belongs to a game raises `NotPlayingError` until the first game starts. Once a game is over it goes on
-    answering from that game until the next one starts.
+    Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
+    answering from it until the next one starts.
     """
 
     def __init__(
         self, *, enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC, time_handlers: bool = False
     ) -> None:
-        """Work out as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler's calls
-        if `time_handlers`. Nothing here connects to anything."""
+        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call if
+        `time_handlers`. This connects to nothing."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
         self._events = EventBus(time_handlers=time_handlers)
-        # Everything that belongs to one game and nothing that outlives it, so each game replaces it whole.
+        # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
 
     @property
     def events(self) -> EventBus:
-        """What the api tells its handlers about as a game goes on, and who they are.
+        """The event bus: the events the api hands out, and the handlers subscribed to them.
 
-        It answers before any game, so that handlers can subscribe as their modules are imported.
+        Available before any game, so handlers can subscribe as their modules are imported.
         """
         return self._events
 
@@ -75,41 +75,40 @@ class Api:
 
     @property
     def data(self) -> GameData:
-        """The tables the game is played by, as they stood before any upgrade."""
+        """The game's data tables, as they were before any upgrade."""
         return self._current_game().game_data
 
     @property
     def step(self) -> int:
-        """The step the game had reached when it was last observed."""
+        """The step of the last observation."""
         return self._current_game().step
 
     @property
     def time(self) -> float:
-        """How long the game has been played, in seconds."""
+        """The game time in seconds."""
         return steps_to_seconds(self.step)
 
     @property
     def result(self) -> Result | None:
-        """How the game ended for this player, or `None` while it is still being played."""
+        """How the game ended for this player, or `None` while it is being played."""
         return self._current_game().result
 
     @property
     def orders(self) -> OrderBook:
-        """What this player orders this turn, and what became of the orders it has given.
+        """This player's orders: the ones given this turn, and what became of earlier ones.
 
-        Orders given while the turn's handlers run go out in one request once the last of them has returned, so a
-        turn that orders nothing sends nothing.
+        Orders are sent in one request after the turn's last handler returns. A turn that orders nothing sends nothing.
         """
         return self._current_game().orders
 
     @property
     def units(self) -> Units[Unit[Any]]:
-        """Every unit in the last observation, structures remembered out of sight and hidden units included."""
+        """Every unit in the last observation, including remembered structures out of sight and hidden units."""
         return self._current_game().tracker.unit_tracker.present
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
-        """Every unit not known to be dead: those in the last observation, then those it left out."""
+        """Every unit not known to be dead: those in the last observation first, then those it left out."""
         return self._current_game().tracker.unit_tracker.known
 
     @property
@@ -129,43 +128,40 @@ class Api:
 
     @property
     def ui_unit_counts(self) -> UiUnitCounts:
-        """The counts of this player's idle workers, army units and warp gates the game's interface shows."""
+        """The game interface's counts of this player's idle workers, army units and warp gates."""
         return self._current_game().state.ui_unit_counts
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        """Every upgrade this player has finished researching.
-
-        Raises `UncuratedIdError` where one is an upgrade the curated ids leave out.
-        """
+        """Every upgrade this player has finished. Raises `UncuratedIdError` if one is one the curated ids leave out."""
         return self._current_game().state.upgrades
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:
-        """The orders the game took and has given up on since the observation before.
+        """The orders the game accepted and then gave up on since the observation before.
 
-        Raises `UncuratedIdError` where one names an ability the curated ids leave out.
+        Raises `UncuratedIdError` if one names an ability the curated ids leave out.
         """
         return self._current_game().state.action_failures
 
     @property
     def enemy(self) -> Enemy:
-        """The other player of this game, and what is known of it.
+        """The other player, and what is known of it.
 
-        `api.enemy.upgrades` holds any upgrades a bot adds with `assume_upgrades`, and those its units have shown, which
-        NachOS reads as far as `enemy_upgrade_inference` says. Every read of an enemy unit that
-        upgrades change counts them, `Unit.weapons` and `Unit.speed` among them.
+        `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
+        which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,
+        `Unit.weapons` and `Unit.speed` among them, counts them.
         """
         return self._current_game().enemy
 
     @property
     def vision(self) -> Grid[bool]:
-        """Where this player can see now, over the playable area, as the map's grids are."""
+        """Where this player can see now, over the playable area like the map's grids."""
         return self._current_game().state.vision
 
     @property
     def explored(self) -> Grid[bool]:
-        """Where this player has seen at some point in the game, over the playable area."""
+        """Where this player has seen at any point in the game, over the playable area."""
         return self._current_game().state.explored
 
     @property
@@ -175,23 +171,20 @@ class Api:
 
     @property
     def effects(self) -> tuple[Effect, ...]:
-        """Every effect this player can see.
-
-        Raises `UncuratedIdError` where one is an effect the curated ids leave out.
-        """
+        """Every effect this player can see. Raises `UncuratedIdError` if one is an effect the curated ids leave out."""
         return self._current_game().state.effects
 
     def play(
         self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
     ) -> Result:
-        """Play the game `client` has already joined to its end, taking a turn every `steps_per_turn` steps, and return
-        how it ended for this player.
+        """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
+        for this player.
 
-        `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way,
-        such as a recording. `time_limit` gives up on a game that is taking too long, in game seconds.
+        `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
+        recording. `time_limit`, in game seconds, calls a game that runs past it a tie.
 
-        Each call starts its game from nothing, so one api plays any number of games, one after another. Handlers
-        stay subscribed from one to the next, and what each has done starts afresh.
+        Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
+        one game to the next; what each has done starts afresh.
         """
         if self._game is not None:
             self._game.tracker.end()
@@ -211,11 +204,11 @@ class Api:
 
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
-            # Every handler of the turn has returned, so what they ordered goes out now, as one request.
+            # The turn's handlers have all returned, so their orders go out now as one request.
             game.orders._send(client)
 
             if realtime:
-                # A realtime game runs whether or not anyone is watching, so each turn asks for the step it wants.
+                # A realtime game runs on its own, so each turn asks for the step it wants.
                 game.observe(game.step + steps_per_turn)
             else:
                 client.step(steps_per_turn)

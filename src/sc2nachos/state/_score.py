@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True)
 class CategoryScore:
-    """An amount split by what it went to."""
+    """An amount split by category."""
 
     none: float
-    """What the game's tables give no category."""
+    """Whatever the game's tables give no category."""
     army: float
     """Military units, not workers."""
     economy: float
@@ -26,11 +26,11 @@ class CategoryScore:
     technology: float
     """Structures that produce units or research, such as a barracks or an engineering bay."""
     upgrade: float
-    """Upgrades, such as the warp gate or weapons."""
+    """Upgrades, such as warp gate or weapons."""
 
     @property
     def total(self) -> float:
-        """The amount across every category."""
+        """The sum over every category."""
         return self.none + self.army + self.economy + self.technology + self.upgrade
 
     @classmethod
@@ -49,7 +49,7 @@ class VitalScore:
 
     @property
     def total(self) -> float:
-        """The amount across life, shields and energy."""
+        """The sum over life, shields and energy."""
         return self.life + self.shields + self.energy
 
     @classmethod
@@ -60,30 +60,30 @@ class VitalScore:
 @final
 @dataclass(frozen=True, slots=True)
 class ValueScore:
-    """What units and structures cost, in minerals and vespene together."""
+    """The cost of units and structures, minerals and vespene together."""
 
     units: float
     structures: float
 
     @property
     def total(self) -> float:
-        """The value of the units and the structures together."""
+        """The value of the units and structures together."""
         return self.units + self.structures
 
 
 @final
 @dataclass(frozen=True, slots=True)
 class Score:
-    """The score the game keeps for this player, as it stands in the last observation.
+    """The score the game keeps for this player, as of the last observation.
 
-    The game's recent APM is left out, since it reads zero in a game played through the raw interface.
+    The game's recent APM is left out: it reads zero in a game played through the raw interface.
     """
 
     score: int
-    """The score the game shows at the end of a game: what the units and structures, finished or not, are worth,
-    and the resources in the bank."""
+    """The score the game shows at the end of a game: the value of all units and structures, finished or not, plus
+    the resources in the bank."""
     idle_production_steps: int
-    """The steps structures able to produce have spent producing nothing, summed over the structures."""
+    """The steps production structures have spent producing nothing, summed over the structures."""
     idle_worker_steps: int
     """The steps workers have spent neither mining nor building, summed over the workers."""
     total_value: ValueScore
@@ -92,37 +92,39 @@ class Score:
     """The value of the opponent's units and structures this player destroyed."""
     collected: Resources
     collection_rate: Resources
-    """What the current income brings in a minute."""
+    """The current income per minute."""
     spent: Resources
-    """What was spent, counted when an order is queued and taken back when it is cancelled."""
+    """The resources spent. Counted when an order is queued and refunded when it is cancelled."""
     food_used: CategoryScore
     """The supply in use."""
     killed_minerals: CategoryScore
-    """The minerals the opponent's units and structures this player destroyed cost."""
+    """The mineral cost of the opponent's units and structures this player destroyed."""
     killed_vespene: CategoryScore
-    """The vespene the opponent's units and structures this player destroyed cost."""
+    """The vespene cost of the opponent's units and structures this player destroyed."""
     lost_minerals: CategoryScore
-    """The minerals this player's units and structures that were destroyed cost."""
+    """The mineral cost of this player's units and structures that were destroyed."""
     lost_vespene: CategoryScore
-    """The vespene this player's units and structures that were destroyed cost."""
+    """The vespene cost of this player's units and structures that were destroyed."""
     friendly_fire_minerals: CategoryScore
-    """The minerals this player's units and structures it destroyed itself cost."""
+    """The mineral cost of this player's units and structures that it destroyed itself."""
     friendly_fire_vespene: CategoryScore
-    """The vespene this player's units and structures it destroyed itself cost."""
+    """The vespene cost of this player's units and structures that it destroyed itself."""
     used_minerals: CategoryScore
-    """The minerals this player's units, structures and upgrades cost, less those destroyed."""
+    """The mineral cost of this player's units, structures and upgrades, less those destroyed."""
     used_vespene: CategoryScore
-    """The vespene this player's units, structures and upgrades cost, less those destroyed."""
+    """The vespene cost of this player's units, structures and upgrades, less those destroyed."""
     total_used_minerals: CategoryScore
-    """The minerals this player's units, structures and upgrades have cost over the game, those destroyed included."""
+    """The mineral cost of this player's units, structures and upgrades over the whole game, those destroyed
+    included."""
     total_used_vespene: CategoryScore
-    """The vespene this player's units, structures and upgrades have cost over the game, those destroyed included."""
+    """The vespene cost of this player's units, structures and upgrades over the whole game, those destroyed
+    included."""
     total_damage_dealt: VitalScore
     """The damage dealt to the opponent."""
     total_damage_taken: VitalScore
     """The damage this player's units and structures have taken."""
     total_healed: VitalScore
-    """What this player has healed and repaired."""
+    """The healing and repair this player has done."""
 
     @classmethod
     def _from_proto(cls, proto: score_pb2.Score) -> Self:
@@ -132,7 +134,7 @@ class Score:
         vital = VitalScore._from_proto
         return cls(
             score=proto.score,
-            # Counted in seconds of the game's Normal speed, always whole steps (corpus).
+            # The game counts these in seconds at Normal speed, always a whole number of steps (corpus).
             idle_production_steps=round(details.idle_production_time * STEPS_PER_NORMAL_SECOND),
             idle_worker_steps=round(details.idle_worker_time * STEPS_PER_NORMAL_SECOND),
             total_value=ValueScore(details.total_value_units, details.total_value_structures),

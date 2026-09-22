@@ -1,4 +1,4 @@
-"""What the game says about a type of unit."""
+"""What the game's table says about a unit type."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
 
-# What an upgrade adds to a type's row where it adds nothing, as a shields level does: it only raises a level the
+# The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
 
@@ -44,7 +44,7 @@ class Attribute(ReadableIntEnum):
 
 
 class TargetDomain(ReadableIntEnum):
-    """Where the things a weapon can be fired at stand."""
+    """Whether a weapon fires at ground, air or both."""
 
     GROUND = data_pb2.Weapon.TargetType.Ground
     AIR = data_pb2.Weapon.TargetType.Air
@@ -54,32 +54,32 @@ class TargetDomain(ReadableIntEnum):
 @final
 @dataclass(frozen=True, slots=True)
 class Weapon:
-    """One of a unit's attacks, as it stands before any upgrade unless `UnitTypeData.with_upgrades` made it."""
+    """One of a unit type's attacks, before any upgrade unless `UnitTypeData.with_upgrades` made it."""
 
     target_domain: TargetDomain
-    """Where the things it can be fired at stand, rather than what it is firing at."""
+    """Whether it can fire at ground, air or both."""
     damage: float
-    """What one hit takes off, before the target's armor."""
+    """The damage of one hit, before the target's armor."""
     attacks: int
-    """Hits landed per attack, which is two for a colossus."""
+    """Hits per attack: two for a colossus."""
     range: float
-    """How far it reaches."""
+    """Its range."""
     cooldown_steps: float
     """Steps between one attack and the next."""
     damage_bonuses: Mapping[Attribute, float]
-    """What each attribute the target has adds to the damage of a hit."""
+    """The extra damage per hit against a target with each attribute."""
 
     @classmethod
     def _from_proto(cls, weapon: data_pb2.Weapon) -> Self:
-        """Read one weapon out of the game's tables."""
+        """Read one weapon from the game's table."""
         damage_bonuses = {Attribute(bonus.attribute): bonus.bonus for bonus in weapon.damage_bonus}
         return cls(
             target_domain=TargetDomain(weapon.type),
             damage=weapon.damage,
             attacks=weapon.attacks,
             range=weapon.range,
-            # The game calls this the weapon's speed, though a longer one means a slower weapon, and gives it in
-            # seconds of the game's Normal speed, which runs 16 steps a second.
+            # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
+            # seconds at Normal speed, 16 steps a second.
             cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
@@ -99,62 +99,62 @@ class Weapon:
 @final
 @dataclass(frozen=True, slots=True)
 class UnitTypeData:
-    """What the game says about one type of unit, as it stands before any upgrade unless `with_upgrades` made it."""
+    """One unit type, before any upgrade unless `with_upgrades` made it."""
 
     id: UnitTypeId
-    """Which type of unit this describes."""
+    """The unit type described."""
     race: Race
     """The race it belongs to."""
     cost: Cost
     """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
     400 included."""
     build_steps: float
-    """Steps to make one, counting only the last stage where it morphs from another type."""
+    """Steps to make one; for a morph, only the last stage."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int
     """Slots it fills in a transport."""
     sight_range: float
-    """How far it reveals."""
+    """Its sight range."""
     speed: float
-    """How fast it moves, in distance per second of the game's Faster speed, 22.4 steps, and zero for a structure."""
+    """Its movement speed, in distance per second at the game's Faster speed (22.4 steps); zero for a structure."""
     armor: float
-    """What it takes off each hit it receives."""
+    """The damage it takes off each hit."""
     attributes: frozenset[Attribute]
-    """What it is made of, which weapons earn bonus damage against."""
+    """Its attributes, which weapons deal bonus damage against."""
     weapons: tuple[Weapon, ...]
-    """Every attack it carries."""
+    """Its attacks."""
     creation_ability: AbilityId | None
-    """The ability that makes one, or `None` where nothing does."""
+    """The ability that makes one, or `None` if nothing does."""
     morphed_from: UnitTypeId | None
-    """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, and `None`
-    for a marine."""
+    """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
+    a marine."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
-    """Each ability a unit of this type can be offered, with what must stand or be researched first."""
+    """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
     """Whether it needs to be powered by a pylon or a warp prism."""
     tech_aliases: tuple[UnitTypeId, ...]
-    """Other types that satisfy the same tech requirement, an orbital command counting as a command center."""
+    """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
     base_type: UnitTypeId | None
-    """The type this is a temporary form of, a sieged tank's being the siege tank."""
+    """The type this is a temporary form of: a siege tank, for a sieged tank."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
     """Whether vespene can be mined from it."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
-    """Every upgrade that affects it, with what each adds to its weapons, armor and speed: nothing, for one that only
-    raises a level its units report, as a shields level does."""
+    """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
+    a level its units report, such as a shields level, adds nothing."""
 
     @property
     def abilities(self) -> frozenset[AbilityId]:
-        """Each ability a unit of this type can be offered."""
+        """The abilities a unit of this type can be offered."""
         return frozenset(self.ability_requirements)
 
     def with_upgrades(self, upgrades: Iterable[UpgradeId]) -> UnitTypeData:
-        """This type as it stands once `upgrades` are researched: the weapons, armor and speed they change.
+        """This type with `upgrades` researched: the weapons, armor and speed they change.
 
-        Not the rest of what an upgrade does, such as attack speed. Anabolic Synthesis counts whether or not the unit
-        is on creep, as it does in the game's rows.
+        Nothing else an upgrade does, such as attack speed, is applied. Anabolic Synthesis counts whether or not the
+        unit is on creep, as in the game's rows.
         """
         changes = [self.upgrades[upgrade] for upgrade in sorted(set(upgrades) & self.upgrades.keys())]
         changes = [change for change in changes if change != _NO_CHANGE]
@@ -173,7 +173,7 @@ class UnitTypeData:
 
     @classmethod
     def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
-        """Read one unit type out of the game's tables, with what `tech_tree` found about it in game."""
+        """Read one unit type from the game's table, with what `tech_tree` found about it in game."""
         unit_type = UnitTypeId(unit.unit_id)
         return cls(
             id=unit_type,
@@ -183,7 +183,7 @@ class UnitTypeData:
             supply_provided=unit.food_provided,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,
-            # The game gives it in distance per second of its Normal speed, which runs 16 steps a second.
+            # The game gives it in distance per second at Normal speed, 16 steps a second.
             speed=unit.movement_speed * FASTER_PER_NORMAL_SPEED,
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
@@ -192,7 +192,7 @@ class UnitTypeData:
             morphed_from=tech_tree.morph_sources.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree.power_consumers,
-            # An alias the curated ids leave out is dropped: a viking's names an empty row nothing is ever one of.
+            # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
             # The game calls this the morphed variant, though it names the type morphed from.
             base_type=UnitTypeId.get(unit.unit_alias),

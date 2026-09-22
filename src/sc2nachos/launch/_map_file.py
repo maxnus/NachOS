@@ -27,15 +27,15 @@ class MapFile:
 
     @property
     def name(self) -> str:
-        """The file name without its extension, which is what the map is known by."""
+        """The file name without its extension, which is the name the map is known by."""
         return self.path.stem
 
     @classmethod
     def find(cls, name: str, *, installation: Installation | None = None) -> Self:
         """The map called `name`, anywhere under the installation's map directory.
 
-        The extension is optional and the name is matched without regard to case. Map packs install alongside
-        the maps they replace, so a name can match more than once: the shallowest match wins, ties alphabetically.
+        The extension is optional and the match ignores case. Map packs install alongside the maps they replace, so
+        a name can match more than once: the shallowest match wins, ties alphabetically.
         """
         installation = installation or Installation.find()
         wanted = name[: -len(_SUFFIX)] if name.lower().endswith(_SUFFIX.lower()) else name

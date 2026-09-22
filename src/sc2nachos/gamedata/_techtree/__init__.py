@@ -1,4 +1,4 @@
-"""The tech tree NachOS plays by, as it was found in game, and what corrects the game's own table."""
+"""The tech tree, as swept in game, and the hand-written corrections to the game's tables."""
 
 from sc2nachos.gamedata._techtree._build_95841 import TECH_TREE
 from sc2nachos.gamedata._techtree._overrides import (

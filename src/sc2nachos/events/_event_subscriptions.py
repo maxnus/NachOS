@@ -15,26 +15,26 @@ if TYPE_CHECKING:
 
 @final
 class _EventSubscriptions:
-    """The handlers subscribed to an event bus, and which of them the events of each class are handed to: worked out
-    on the first ask since the handlers last changed, and kept until they change again."""
+    """The handlers subscribed to an event bus, and which of them each event class is handed to. The latter is worked
+    out on first ask and cached until the handlers change."""
 
     __slots__ = ("_by_priority", "_count", "_handlers", "_keyed", "_wanted", "resolved", "selecting")
 
     def __init__(self) -> None:
-        # Each event type's handlers in the order they run, replaced whole on every change, so that one subscribed
-        # while an event is being handed out waits for the next.
+        # Each event type's handlers in run order, replaced whole on every change, so a handler subscribed while an
+        # event is being handed out waits for the next.
         self._handlers: dict[type[Event], tuple[_Handler, ...]] = {}
         self.resolved: dict[type[Event], tuple[_Handler, ...]] = {}
-        """The handlers of each event class asked for, those of its bases included, in the order they run. Read by
-        `EventBus.emit` directly, which a method call would slow."""
+        """The handlers of each event class asked for so far, its bases' included, in run order. `EventBus.emit` reads
+        it directly; a method call would slow it."""
         self.selecting: set[type[Event]] = set()
-        """The classes among those one of whose handlers selects by key or predicate."""
-        # The same handlers grouped by priority, highest first, each group with whether one of it selects, and the
-        # keys they select with those selecting them.
+        """The resolved classes with a handler that selects by key or predicate."""
+        # The same handlers grouped by priority, highest first, each group with whether one of it selects; and the keys
+        # handlers select for each class, with the handlers that select them.
         self._by_priority: dict[type[Event], tuple[tuple[EventPriority, tuple[_Handler, ...], bool], ...]] = {}
         self._wanted: dict[type[Event], tuple[frozenset[Hashable], tuple[_Handler, ...]]] = {}
-        # How many handlers have subscribed, which numbers each to order the handlers of one priority across classes,
-        # and how many subscribed now select by key.
+        # How many handlers have ever subscribed, which numbers each one to order one priority's handlers across
+        # classes, and how many currently subscribed select by key.
         self._count = 0
         self._keyed = 0
 
@@ -49,7 +49,7 @@ class _EventSubscriptions:
 
     @property
     def any_keyed(self) -> bool:
-        """Whether a handler subscribed selects by key."""
+        """Whether any subscribed handler selects by key."""
         return self._keyed > 0
 
     def add(self, handler: _Handler) -> None:
@@ -64,14 +64,13 @@ class _EventSubscriptions:
         self._forget()
 
     def remove(self, removing: Callable[[_Handler], bool]) -> bool:
-        """Drop the handlers `removing` picks, and say whether there were any."""
+        """Drop the handlers `removing` picks. Returns whether there were any."""
         removed = False
         for event_type, handlers in list(self._handlers.items()):
             kept = []
             for handler in handlers:
                 if removing(handler):
-                    # So that an event being handed out skips it too. It is in no list any more, so no new game
-                    # starts it afresh.
+                    # So an event being handed out skips it too. It is in no list any more, so no new game resets it.
                     handler.done = removed = True
                     self._keyed -= handler.selects.keys is not None
                 else:
@@ -92,8 +91,8 @@ class _EventSubscriptions:
         self._wanted.clear()
 
     def resolve(self, event_type: type[Event]) -> tuple[_Handler, ...]:
-        """The handlers the events of `event_type` are handed to, those of its bases included, in the order they run,
-        noting whether any of them selects by key or predicate."""
+        """The handlers events of `event_type` are handed to, its bases' included, in run order. Notes whether any of
+        them selects by key or predicate."""
         found = [handler for cls in event_type.__mro__ for handler in self._handlers.get(cls, ())]
         found.sort(key=lambda handler: (-handler.priority, handler.order))
         if any(_selects(handler) for handler in found):
@@ -102,7 +101,7 @@ class _EventSubscriptions:
         return resolved
 
     def grouped(self, event_type: type[Event]) -> tuple[tuple[EventPriority, tuple[_Handler, ...], bool], ...]:
-        """The handlers the events of `event_type` are handed to, grouped by priority, highest first, each group with
+        """The handlers events of `event_type` are handed to, grouped by priority, highest first, each group with
         whether one of it selects by key or predicate."""
         if (grouped := self._by_priority.get(event_type)) is None:
             if (handlers := self.resolved.get(event_type)) is None:
@@ -117,15 +116,15 @@ class _EventSubscriptions:
         return grouped
 
     def wants_every(self, event_type: type[Event]) -> bool:
-        """Whether a handler not done takes every event of `event_type` that its predicate passes: one subscribed to
-        it or to a base of it, without `only` or `of`."""
+        """Whether a handler not yet done takes every event of `event_type` its predicate passes: one subscribed to it
+        or a base of it without `only` or `of`."""
         if (handlers := self.resolved.get(event_type)) is None:
             handlers = self.resolve(event_type)
         return bool(handlers) and any(not handler.done and handler.selects.keys is None for handler in handlers)
 
     def wanted_keys(self, event_type: type[Event]) -> frozenset[Hashable]:
-        """The keys of `event_type` a handler not done selects through `only` or `of`: the same set until one of those
-        handlers is done or the handlers change, since a unit type group makes a set of hundreds."""
+        """The keys of `event_type` that handlers not yet done select through `only` or `of`. The same set is returned
+        until one of those handlers is done or the handlers change; a unit type group makes a set of hundreds."""
         if not self._keyed:
             return _NO_KEYS
         if (wanted := self._wanted.get(event_type)) is not None and not any(handler.done for handler in wanted[1]):
@@ -140,7 +139,7 @@ class _EventSubscriptions:
         return keys
 
     def _forget(self) -> None:
-        """Forget which handlers each event class is handed to, since they have changed."""
+        """Forget which handlers each event class is handed to, after the handlers change."""
         self.resolved.clear()
         self.selecting.clear()
         self._by_priority.clear()

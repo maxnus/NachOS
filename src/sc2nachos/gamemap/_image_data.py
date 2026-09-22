@@ -1,4 +1,4 @@
-"""The images the game sends a grid in, read into arrays indexed by tile."""
+"""The images the game sends its grids as, read into arrays indexed by tile."""
 
 from __future__ import annotations
 
@@ -16,7 +16,10 @@ if TYPE_CHECKING:
 
 
 def image_array(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """The whole of `image`, indexed `[x, y]`, once it is known to be as large as it says and to cover `area`."""
+    """The whole of `image`, indexed `[x, y]`.
+
+    Raises `ProtocolError` if the image is not as large as it says or does not cover `area`.
+    """
     width, height, bits = image.size.x, image.size.y, image.bits_per_pixel
     if bits not in (1, 8) or len(image.data) != math.ceil(width * height * bits / 8):
         raise ProtocolError(f"a {width} by {height} image of {bits} bits a pixel cannot be {len(image.data)} bytes")
@@ -30,6 +33,6 @@ def image_array(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
 
 
 def image_tiles(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
-    """What `image` says about each tile of `area`, one pixel to a tile."""
+    """The pixel of `image` for each tile of `area`."""
     xs, ys = area.tile_range()
     return numpy.ascontiguousarray(image_array(image, area)[xs.start : xs.stop, ys.start : ys.stop])

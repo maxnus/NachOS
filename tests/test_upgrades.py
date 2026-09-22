@@ -1,4 +1,4 @@
-"""The upgrade tables: what the sweep's findings generate, what the tables then say, and what a unit reads with them."""
+"""The upgrade tables: what the sweep's findings generate, what the tables then say, and what units reveal."""
 
 import importlib.util
 from collections.abc import Callable, Iterable, Iterator
@@ -39,12 +39,12 @@ _REPO = Path(__file__).parents[1]
 _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 _NO_LEVELS = {"attack": [], "armor": [], "shield": []}
-# A zergling's speed with Metabolic Boost: the game's rows give 4.6992188 a second of its Normal speed.
+# A zergling's speed with Metabolic Boost: the game's rows give 4.6992188 per second at Normal speed.
 _BOOSTED_ZERGLING_SPEED = 4.6992188 * FASTER_PER_NORMAL_SPEED
 
 
 def _generator() -> ModuleType:
-    """`tools/generate_tech_tree.py`, which is no package to import from."""
+    """The `tools/generate_tech_tree.py` module, loaded by path since `tools` is not a package."""
     spec = importlib.util.spec_from_file_location("generate_tech_tree", _GENERATOR)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -75,8 +75,8 @@ class TestGeneratingTheUpgrades:
         assert UpgradeId.BLUE_FLAME not in found.types
 
     def test_a_level_affects_every_type_it_raises_the_report_of_or_changes_the_row_of(self) -> None:
-        """A void ray reports its attack level with no weapon in the rows, and no mothership stands in the sweep to
-        report its level while air weapons change its weapon all the same."""
+        """A void ray reports its attack level though the rows give it no weapon, and the sweep has no mothership to
+        report its level though air weapons change its weapon."""
         weapons = _research(
             "ProtossAirWeaponsLevel1",
             {"Phoenix": {"weapons": [{"damage": 1.0}]}, "Mothership": {"weapons": [{"damage": 1.0}]}},
@@ -101,7 +101,7 @@ class TestGeneratingTheUpgrades:
         assert found.types[UpgradeId.PROTOSS_SHIELDS_1] is UpgradeType.SHIELD
 
     def test_levels_that_add_different_amounts_to_one_type_are_refused(self) -> None:
-        """A unit reports only how many attack levels it has, so what each adds has to be the same."""
+        """A unit reports only how many attack levels it has, so each level must add the same amount."""
         levels = [
             _research("ProtossGroundWeaponsLevel1", {"Stalker": _stalker_weapons(1.0, 1.0)}, attack=["Stalker"]),
             _research("ProtossGroundWeaponsLevel2", {"Stalker": _stalker_weapons(2.0, 1.0)}, attack=["Stalker"]),
@@ -124,7 +124,7 @@ class TestGeneratingTheUpgrades:
             _generator().read_upgrades(_findings(unexplained=("Marine is (0.0, 2.25, [])",)))
 
     def test_a_change_to_a_weapons_cooldown_is_refused(self) -> None:
-        """The tables carry no change to it, since no upgrade makes one in the game's rows."""
+        """The tables carry no cooldown change, since no upgrade makes one in the game's rows."""
         glands = _research("zerglingattackspeed", {"Zergling": {"weapons": [{"cooldown": -0.2}]}})
         with pytest.raises(ValueError, match="cooldown"):
             _generator().read_upgrades(_findings(glands))
@@ -151,7 +151,7 @@ class TestGeneratingTheUpgrades:
 
 @pytest.fixture(scope="module")
 def tables() -> GameData:
-    """The tables of the first corpus game, which every game on the current ladder shares."""
+    """The game data of the first corpus game, which every game on the current ladder shares."""
     recording = Recording(_CORPUS[0])
     return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
 
@@ -164,8 +164,8 @@ def _levels(family: str) -> tuple[UpgradeId, UpgradeId, UpgradeId]:
 _GROUND, _AIR, _ANY = TargetDomain.GROUND, TargetDomain.AIR, TargetDomain.ANY
 _LIGHT, _ARMORED, _MASSIVE = Attribute.LIGHT, Attribute.ARMORED, Attribute.MASSIVE
 
-# A weapon's damage before any level and at each of the three, and its bonus against one attribute likewise, as the
-# game's help gives them. One level adds different amounts to different types, and to a type's bonus or not.
+# A weapon's damage before any level and at each of the three, and likewise its bonus against one attribute, as the
+# game's help gives them. One level adds different amounts to different types, and may or may not add to a bonus.
 _WEAPON_LEVELS: list[tuple[UnitTypeId, str, TargetDomain, list[int], Attribute | None, list[int]]] = [
     (UnitTypeId.MARINE, "TERRAN_INFANTRY_WEAPONS", _ANY, [6, 7, 8, 9], None, []),
     (UnitTypeId.MARAUDER, "TERRAN_INFANTRY_WEAPONS", _GROUND, [10, 11, 12, 13], _ARMORED, [10, 11, 12, 13]),
@@ -217,7 +217,7 @@ _ARMOR_LEVELS = [
 
 
 def _reports(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeType | None, int]]:
-    """The upgrade level each of `upgrades` adds to where units report it, and which level of its line it is."""
+    """For each of `upgrades`, the level type units report it under, and which level of its line it is."""
     return [(tables.upgrades[upgrade].upgrade_type, tables.upgrades[upgrade].level) for upgrade in upgrades]
 
 
@@ -284,7 +284,7 @@ class TestWhatTheTablesSay:
         assert _reports(tables, [UpgradeId.ULTRALISK_ARMOR]) == [(UpgradeType.ARMOR, 0)]
 
     def test_a_shields_level_affects_protoss_types_and_changes_no_row(self, tables: GameData) -> None:
-        """The game's rows hold no armor for shields, so the levels, which add to it, change nothing a row holds."""
+        """The game's rows hold no shield armor, so the levels that add to it change nothing in a row."""
         shields = _levels("PROTOSS_SHIELDS")
         assert _reports(tables, shields) == [(UpgradeType.SHIELD, level) for level in (1, 2, 3)]
         for unit_type in (UnitTypeId.ZEALOT, UnitTypeId.PYLON, UnitTypeId.VOID_RAY, UnitTypeId.NEXUS):
@@ -344,7 +344,7 @@ class TestWhatAUnitReads:
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
 
     def test_this_players_units_show_it_nothing_it_has_not_researched(self, tables: GameData) -> None:
-        """What its own units report is what its own upgrades say, so nothing is read off them."""
+        """This player's units report only this player's upgrades, so nothing is inferred from them."""
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, attack_upgrade_level=3))
         assert not tracker.enemy.upgrades
@@ -414,7 +414,7 @@ class TestWhatAUnitReads:
         assert tracker.enemy.upgrades == {UpgradeId.ZERG_GROUND_ARMOR_1, UpgradeId.ZERG_GROUND_ARMOR_2}
 
     def test_the_armor_an_ultralisk_shows_says_nothing_about_the_levels(self, tables: GameData) -> None:
-        """Its 2 could be two levels or Chitinous Plating, and taking it for levels would armor every zergling."""
+        """Its 2 could be two levels or Chitinous Plating, and reading it as levels would armor every zergling."""
         tracker = _tracker(tables)
         (ultralisk,) = _observe(
             tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=2)
@@ -452,7 +452,7 @@ class TestWhatAUnitReads:
 
 
 def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...] = ()) -> frozenset[UpgradeId]:
-    """What `units` and `effects`, in one observation, show of the enemy's upgrades beyond their levels."""
+    """The enemy upgrades beyond levels that `units` and `effects` reveal in one observation."""
     tracker = _tracker(tables)
     _observe(tracker, *units)
     return UpgradeReader(tables).read_intermediate_upgrades(tracker.unit_tracker.present, effects)
@@ -512,7 +512,7 @@ class TestWhatAUnitGivesAway:
         assert not _evident(tables, plain)
 
     def test_a_unit_the_enemy_has_parasited_shows_only_neural_parasite(self, tables: GameData) -> None:
-        """What it wore and was made as belong to the player it was taken from."""
+        """Its buffs and its type belong to the player it was taken from."""
         taken = make_unit(
             1,
             alliance=Alliance.ENEMY,
@@ -540,8 +540,7 @@ class TestWhatAUnitGivesAway:
             _evident(tables, make_unit(1, alliance=Alliance.ENEMY, buff_ids=[RawBuffId.DutchMarauderSlow]))
 
 
-# What the enemy's units show of their upgrades in each recorded game, which is nothing in the two the enemy
-# researched nothing in.
+# The upgrades the enemy's units reveal in each recorded game: nothing in the two where the enemy researched nothing.
 _LEARNED_IN_THE_CORPUS = {
     "IncorporealAIE_v4-PvZ": {
         UpgradeId.ZERG_GROUND_ARMOR_1,
@@ -568,7 +567,7 @@ _LEARNED_IN_THE_CORPUS = {
 
 
 def _replay(path: Path, api: Api) -> Api:
-    """`api` once it has played the recorded game at `path` to its end."""
+    """`api` after playing the recorded game at `path` to its end."""
     client = Client(PlaybackTransport(Recording(path)))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
@@ -579,8 +578,8 @@ def _replay(path: Path, api: Api) -> Api:
 @pytest.mark.parametrize("inference", [UpgradeInference.BASIC, UpgradeInference.INTERMEDIATE])
 @pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
 def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, inference: UpgradeInference) -> None:
-    """The computer researches while a corpus game runs, and its units carry the levels where NachOS reads them. None
-    of them shows anything more, since nothing of this player's leaves its base to see it."""
+    """The computer researches during a corpus game, and its units carry the levels NachOS reads. They reveal nothing
+    more, since none of this player's units leaves its base to see it."""
     api = Api(enemy_upgrade_inference=inference)
     assert _replay(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
@@ -592,7 +591,7 @@ def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:
-    """What upgrades change of `row`, as numbers in a fixed order."""
+    """The values of `row` that upgrades change, as numbers in a fixed order."""
     values = [row.armor, row.speed]
     for weapon in row.weapons:
         values += [weapon.damage, weapon.range, *(weapon.damage_bonuses.get(a, 0.0) for a in Attribute)]
@@ -601,8 +600,8 @@ def _upgraded(row: UnitTypeData) -> list[float]:
 
 @pytest.mark.integration
 def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_says_asked_again() -> None:
-    """Run with `pytest -m integration`. Starts the game as terran, researches a leveled and an unleveled upgrade, and
-    checks every curated unit type's row against the game's rows asked again, and every unit's armor."""
+    """Run with `pytest -m integration`. Plays as terran, researches a leveled and an unleveled upgrade, then checks
+    every curated unit type's row against the game's rows asked again, and every unit's armor."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -652,8 +651,8 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
             assert marine.weapons[0].damage == asked.units[UnitTypeId.MARINE].weapons[0].damage
             assert marine.shield_armor == 0
 
-            # The shields levels are the armor a protoss unit's shields have, which no row carries.
-            # A forge and the pylon beside it fill five tiles a side.
+            # The shield levels are a protoss unit's shield armor, which no row carries.
+            # A forge and the pylon beside it fill a five by five square.
             spot = game.open_ground(toward.towards(home, -16), size=5) - (1, 1)
             game.debug(
                 game.create(UnitTypeId.FORGE, spot),
@@ -679,7 +678,7 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
 
 @contextmanager
 def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
-    """A game as `race` under `free` and `fast_build`, how its units give away upgrades, and ground 10 tiles from home
+    """A game as `race` under the `free` and `fast_build` cheats, its upgrade reader, and a point 10 tiles from home
     toward the middle."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
@@ -711,7 +710,7 @@ def _made(game: RealGame, unit_type: UnitTypeId, at: Point, *, owner: int | None
 
 
 def _research_in_game(game: RealGame, *research: tuple[AbilityId, Unit[Any], UpgradeId]) -> None:
-    """Research each upgrade in turn, and wait until it is done."""
+    """Research each upgrade in turn, waiting for each to finish."""
     for ability, structure, upgrade in research:
         game.order(ability, structure)
         _until(game, lambda upgrade=upgrade: upgrade in game.state.upgrades, steps=22)
@@ -726,7 +725,7 @@ def _until(game: RealGame, done: Callable[[], bool], *, steps: int = 2, turns: i
 
 
 def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, at: Point) -> Unit[Any]:
-    """The tech lab a new `unit_type` builds, both standing in the 5 tiles a side around `at`."""
+    """The tech lab a new `unit_type` builds, both within the five by five square around `at`."""
     structure = _made(game, unit_type, at - (1, 0))
     game.order(AbilityId.GENERAL_BUILD_TECH_LAB, structure)
     _until(game, lambda: bool(game.tracker.unit_tracker.present.own.of_type(tech_lab)), steps=22)
@@ -735,8 +734,8 @@ def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, 
 
 @pytest.mark.integration
 def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
-    """Run with `pytest -m integration`. Researches what each terran sign needs, brings each about with this player's
-    units, and reads what each gives away as NachOS reads the enemy's."""
+    """Run with `pytest -m integration`. Researches what each terran sign needs, produces each with this player's
+    units, and reads what each reveals as NachOS reads the enemy's."""
     with _signs_game(Race.TERRAN) as (game, reader, toward):
         enemy = 3 - game.player
         barracks_lab = _with_tech_lab(
@@ -783,7 +782,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         game.order(AbilityId.GENERAL_ATTACK, marauder, target=roach)
         _until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
         assert reader._of_opponent(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
-        # Gone, or the marauder would slow the tank too.
+        # Killed, or the marauder would slow the tank too.
         game.debug(game.kill(marauder, roach))
 
         raven = _made(game, UnitTypeId.RAVEN, toward + (-6, 8))

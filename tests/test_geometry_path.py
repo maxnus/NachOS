@@ -8,7 +8,7 @@ from sc2nachos.geometry import Point, Tile, TilePath, TileSet
 
 
 def diagonal() -> TilePath:
-    """A three-step diagonal walk, priced as a pathfinder would price it."""
+    """A three-step diagonal walk, with the distance a pathfinder would give it."""
     return TilePath([Tile(0, 0), Tile(1, 1), Tile(2, 2), Tile(3, 3)], 3 * math.sqrt(2))
 
 
@@ -58,7 +58,7 @@ class TestDistance:
         assert path.distance is path.distance
 
     def test_a_given_distance_is_kept_over_a_measured_one(self) -> None:
-        # A pathfinder that charges more than the straight line is believed.
+        # A pathfinder's distance is trusted even when it exceeds the straight line.
         assert TilePath([Tile(0, 0), Tile(1, 0)], 7.0).distance == 7.0
 
 
@@ -99,7 +99,7 @@ class TestCoverage:
         assert Point((2.5, 3.5)) not in diagonal()
 
     def test_a_coordinate_pair_reads_as_a_position(self) -> None:
-        # (3.0, 3.0) is the corner of Tile(3, 3), which the walk ends on.
+        # (3.0, 3.0) is a corner of Tile(3, 3), the walk's last tile.
         assert (3.0, 3.0) in diagonal()
         assert (4.0, 4.0) not in diagonal()
 

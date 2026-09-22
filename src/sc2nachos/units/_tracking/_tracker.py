@@ -1,4 +1,4 @@
-"""Everything one game's observations are read into, part by part."""
+"""Everything one game's observations are read into."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 @final
 class _Tracker:
-    """One game's observations read into its units, the builder of each of this player's structures, the upgrades
-    each side has, a comparison of each unit with the update before, and a watch on what it crosses, with what the last
-    update found changed."""
+    """One game's observations read into: its units, the builder of each of this player's structures, the upgrades
+    each side has, a comparison of each unit with the previous update, a watch on the values each unit crosses, and
+    what the last update found changed."""
 
     __slots__ = (
         "_builder_tracker",
@@ -38,7 +38,7 @@ class _Tracker:
     def __init__(self, game_data: GameData, enemy: Enemy) -> None:
         self._game_data = game_data
         self._enemy = enemy
-        # What the last update found changed, and which update it was.
+        # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
         self._unit_tracker = _UnitTracker(self)
         self._builder_tracker = _BuilderTracker(self)
@@ -48,19 +48,19 @@ class _Tracker:
 
     @property
     def game_data(self) -> GameData:
-        """The tables the game is played by."""
+        """The game's data tables."""
         return self._game_data
 
     @property
     def enemy(self) -> Enemy:
-        """The other player of the game, and what is known of it."""
+        """The other player, and what is known of it."""
         return self._enemy
 
     @property
     def last_changes(self) -> _TrackerChanges:
         """What the last update found changed.
 
-        The game also reports deaths under tags it never reported a unit under (corpus), which name no unit.
+        The game also reports deaths under tags it never reported a unit under (corpus). Those name no unit.
         """
         return self._last_changes
 
@@ -71,7 +71,7 @@ class _Tracker:
 
     @property
     def builder_tracker(self) -> _BuilderTracker:
-        """The builder of each of this player's structures being built."""
+        """The builder of each of this player's structures under construction."""
         return self._builder_tracker
 
     @property
@@ -81,20 +81,20 @@ class _Tracker:
 
     @property
     def unit_comparer(self) -> _UnitComparer:
-        """Each unit compared with the update before, into the last changes, while something asks."""
+        """Compares each unit with the previous update, recording into the last changes, on request."""
         return self._unit_comparer
 
     @property
     def unit_watcher(self) -> _UnitWatcher:
-        """Each unit watched for crossing a value of its energy or its life, or the edge of an area, into the last
-        changes, while something asks."""
+        """Watches each unit for crossing a value of its energy or life, or the edge of an area, recording into the
+        last changes, on request."""
         return self._unit_watcher
 
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
-        """Take in the observation at `step`: this player's upgrades, then the units it reports and what it says died.
+        """Take in the observation at `step`: this player's upgrades, then the units it reports and the deaths.
 
-        Raises `UncuratedIdError` where this player holds an upgrade, or a unit is of a type, the curated ids leave
-        out, which belongs among them.
+        Raises `UncuratedIdError` if this player holds an upgrade, or a unit is of a type, that the curated ids leave
+        out. Those belong among the curated ids.
         """
         self._last_changes = _TrackerChanges(self._last_changes.update + 1)
         if new_upgrades := self._upgrade_tracker.update(observation.player):
@@ -102,7 +102,7 @@ class _Tracker:
         self._unit_tracker.update(observation, step)
 
     def end(self) -> None:
-        """Mark every unit stale, and forget what was kept for the next update, since the game is over."""
+        """Mark every unit stale and forget what was kept for the next update. The game is over."""
         self._unit_tracker.end()
         self._builder_tracker.end()
         self._unit_comparer.stop()

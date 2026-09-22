@@ -1,4 +1,4 @@
-"""What the game's tables leave out about how unit types and abilities relate, as it was found in game."""
+"""How unit types, abilities and upgrades relate, swept in game where the game's tables leave it out."""
 
 from __future__ import annotations
 
@@ -24,36 +24,35 @@ class TechTree:
     """How unit types, abilities and upgrades relate on one build of the game, as the sweeps in `tools` found it."""
 
     base_build: int
-    """The build of the game swept."""
+    """The game build that was swept."""
     ability_requirements: Mapping[UnitTypeId, Mapping[AbilityId, TechRequirements]]
-    """Each ability each unit type can be offered, with what must stand or be researched first."""
+    """The abilities each unit type can be offered, with the tech each needs first."""
     ability_remaps: Mapping[AbilityId, AbilityId]
-    """The general ability each ability stands for."""
+    """The general ability each exact ability remaps to."""
     ability_cancels: Mapping[AbilityId, AbilityId]
-    """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke, which turns on what it is
-    making: a command center morphing to an orbital command is offered a different one from one morphing to a
-    planetary fortress."""
+    """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke. It depends on the product: a
+    command center morphing to an orbital command is offered a different cancel from one morphing to a planetary
+    fortress."""
     creation_abilities: Mapping[UnitTypeId, AbilityId]
     """The ability that makes each unit type."""
     ability_products: Mapping[AbilityId, UnitTypeId | UpgradeId]
     """The unit type or upgrade each ability makes."""
     morph_sources: Mapping[UnitTypeId, UnitTypeId]
-    """The unit type used up to make each unit type made out of another."""
+    """The source type of each unit type morphed from another."""
     power_consumers: frozenset[UnitTypeId]
     """The unit types that need to be powered by a pylon or a warp prism."""
     unit_type_upgrades: Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]
     """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
     `tools/sweep_upgrades.py` found it."""
     upgrade_types: Mapping[UpgradeId, UpgradeType]
-    """The kind of each upgrade a unit reports something of: the upgrade level it adds to. The rest are `OTHER`, and
-    left out."""
+    """The upgrade level each upgrade adds to, for the upgrades a unit reports. The rest are `OTHER` and left out."""
     upgrade_levels: Mapping[UpgradeId, int]
-    """Which level of its line each leveled upgrade is."""
+    """The level of each leveled upgrade within its line."""
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)
-    """The unit types that perform each ability. A general ability's performers are those of the abilities that stand
-    for it."""
+    """The unit types offered each ability. A general ability's performers are those of the exact abilities that remap
+    to it."""
     research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
-    """The ability that researches each upgrade, read back from what each ability makes."""
+    """The ability that researches each upgrade, inverted from `ability_products`."""
 
     def __post_init__(self) -> None:
         performers: defaultdict[AbilityId, set[UnitTypeId]] = defaultdict(set)

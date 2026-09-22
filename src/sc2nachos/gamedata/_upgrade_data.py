@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 
 
 class UpgradeType(ReadableIntEnum):
-    """The kind of upgrade an upgrade is, which is the upgrade level a unit reports it adds to."""
+    """The upgrade level a unit reports an upgrade adding to."""
 
     OTHER = 0
-    """One a unit reports nothing of, such as Stimpack or Grooved Spines."""
+    """An upgrade a unit reports nothing of, such as Stimpack or Grooved Spines."""
     ATTACK = 1
     """`Unit.attack_upgrade_level`, a count of levels."""
     ARMOR = 2
@@ -31,24 +31,24 @@ class UpgradeType(ReadableIntEnum):
 @final
 @dataclass(frozen=True, slots=True)
 class UpgradeData:
-    """What the game says about one upgrade."""
+    """One upgrade, as the game's table describes it."""
 
     id: UpgradeId
-    """Which upgrade this describes."""
+    """The upgrade described."""
     cost: Cost
-    """What researching it takes."""
+    """The cost of researching it."""
     research_steps: float
     """Steps it takes to research."""
     research_ability: AbilityId | None
     """The ability that researches it."""
     upgrade_type: UpgradeType
-    """The upgrade level the units it affects report it adds to, and `OTHER` where they report nothing of it."""
+    """The upgrade level the units it affects report it adding to, or `OTHER` if they report nothing of it."""
     level: int
-    """Which level of its line it is, from 1, or 0 for an upgrade that is no level, as Chitinous Plating is."""
+    """Its level within its line, from 1; 0 for an upgrade that is no level, such as Chitinous Plating."""
 
     @classmethod
     def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree: TechTree) -> Self:
-        """Read one upgrade out of the game's tables, with what `tech_tree` found about it in game."""
+        """Read one upgrade from the game's table, with what `tech_tree` found about it in game."""
         upgrade = UpgradeId(data.upgrade_id)
         return cls(
             id=upgrade,

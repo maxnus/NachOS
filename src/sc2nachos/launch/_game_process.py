@@ -21,7 +21,7 @@ class GameLaunchError(NachOSError):
 
 
 def free_port() -> int:
-    """A port nothing is listening on, which the client is asked to take."""
+    """A port nothing is listening on, for the client to take."""
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -63,12 +63,12 @@ def launch_command(
 class GameProcess:
     """A StarCraft II client started by this library, and the temporary directory it was given.
 
-    Use it as a context manager, or call `terminate` when the game is over. A process still running at
-    interpreter exit is terminated, so a crashed run does not leave a client holding the graphics card.
+    Use it as a context manager, or call `terminate` when the game is over. A process still running at interpreter
+    exit is terminated.
     """
 
     def __init__(self, process: "subprocess.Popen[bytes]", *, url: str, temp_directory: Path) -> None:
-        """Adopt an already-started client reachable at `url`, owning `temp_directory` until termination."""
+        """Adopt a running client at `url`, and own `temp_directory` until it is terminated."""
         self._process = process
         self._url = url
         self._temp_directory = temp_directory
@@ -128,7 +128,10 @@ class GameProcess:
         return self._process.poll() is None
 
     def wait_until_listening(self, *, host: str, port: int, timeout: float = 180) -> None:
-        """Block until the client accepts connections, and raise if it dies or never does."""
+        """Block until the client accepts connections.
+
+        Raises `GameLaunchError` if the client exits first or is not listening within `timeout` seconds.
+        """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if not self.is_running:

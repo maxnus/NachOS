@@ -1,4 +1,4 @@
-"""The orders a bot gives in a turn, sent once its handlers have run."""
+"""The orders a bot gives in a turn, sent after its handlers have run."""
 
 from __future__ import annotations
 
@@ -31,16 +31,17 @@ if TYPE_CHECKING:
 
 @final
 class OrderBook:
-    """What this player orders in a turn, and what became of every order still worth following.
+    """This player's orders for the turn, and what became of every order still being followed.
 
-    A bot gives orders through `api.orders` while its handlers run; they go out in one request once the last handler
-    has returned. A unit takes one order a turn, the last it was given, besides the abilities it carries out at once.
+    A bot gives orders through `api.orders` while its handlers run. They are sent in one request after the turn's
+    last handler returns. A unit carries out only the last order it is given in a turn, plus any abilities it
+    carries out at once.
     """
 
     __slots__ = ("_camera_location", "_game_data", "_given_orders", "_running_orders", "_step")
 
     def __init__(self, game_data: GameData) -> None:
-        """A book for one game, reading `game_data` for what each ability does and what it must be aimed at."""
+        """A book for one game. `game_data` says what each ability does and what it must be aimed at."""
         self._game_data = game_data
         self._given_orders: list[Order[Any]] = []
         self._running_orders: list[Order[Any]] = []
@@ -77,11 +78,11 @@ class OrderBook:
         queued: bool = False,
         data: Any = None,
     ) -> Order[Any]:
-        """Order `ability` of `units`, aimed at a point, at a unit or at nothing, and answer the order to hold on to.
+        """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Order`.
 
-        One command goes out for the order, so units given one together keep their spacing where the game spreads
-        them, and `queued` sends it to go behind what each unit already has. `data` is the bot's own, carried and
-        never read. Nothing is sent before the turn's handlers have all run.
+        The order goes out as one command, so units ordered together keep their spacing where the game spreads them.
+        `queued` puts the order behind each unit's current orders. `data` is the bot's own; NachOS carries it and
+        never reads it. Nothing is sent until the turn's handlers have all run.
 
         Raises `TypeError` for a target the ability cannot be aimed at.
         """
@@ -104,15 +105,16 @@ class OrderBook:
         return order
 
     def clear_queue(self, unit: OwnUnit[Any]) -> Order[None] | None:
-        """Drop what `unit` has queued, leaving it at the order it is carrying out, or `None` where there is nothing
-        to drop.
+        """Drop `unit`'s queued orders, leaving the one it is carrying out, or return `None` if there is nothing to
+        drop.
 
-        The order it is at is sent back unqueued, which the game answers `SUCCESS`, carries nothing out for, and
-        drops everything behind (in game). An order given to the unit this turn overrides it, as it would any other.
+        The unit's current order is sent again, unqueued. The game answers `SUCCESS`, carries nothing out for it, and
+        drops everything queued behind it (in game). An order given to the unit this turn overrides it, like any
+        other.
 
-        It answers `None` where the unit has nothing queued, where what it is at is an ability NachOS cannot name,
-        and where that ability is a train, a research or a morph: the game would put a second of those behind the
-        first rather than drop anything, so a structure's queue is cancelled from its end instead.
+        Returns `None` if the unit has nothing queued, if its current order is an ability NachOS cannot name, or if
+        that ability is a train, a research or a morph: the game would queue a second of those behind the first
+        instead of dropping anything, so a structure's queue is cancelled from its end instead.
         """
         orders = unit._latest_report.orders
         if len(orders) < 2:
@@ -135,32 +137,31 @@ class OrderBook:
         return order
 
     def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
-        """What this turn has given `unit` so far, in the order it was given.
+        """The orders given to `unit` so far this turn, in the order they were given.
 
-        A handler late in a turn reads this to leave a unit an earlier handler has spoken for, since the last order
-        a unit is given is the one that goes out. An order withdrawn or already overridden is left out: it speaks
-        for nothing.
+        A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
+        order a unit is given goes out. Withdrawn and overridden orders are left out.
         """
         return tuple(order for order in self._given_orders if unit in order.units and not order.state.is_final)
 
     @property
     def pending(self) -> tuple[Order[Any], ...]:
-        """Every order given this turn and still to be sent, without those withdrawn or already overridden."""
+        """Every order given this turn and still to be sent. Withdrawn and overridden orders are left out."""
         return tuple(order for order in self._given_orders if not order.state.is_final)
 
     @property
     def running(self) -> tuple[Order[Any], ...]:
-        """Every order sent and not finished with: what the game has yet to answer for, and what it is carrying
-        out. One withdrawn since it was sent is left out."""
+        """Every order sent and not yet final: those the game has yet to report on, and those it is carrying out.
+        An order withdrawn since it was sent is left out."""
         return tuple(order for order in self._running_orders if not order.state.is_final)
 
     def camera(self, at: PointLike) -> None:
-        """Move this player's camera to `at`, with the turn's orders. Only the last of a turn is sent."""
+        """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
         aimed = coordinates(at)
         self._camera_location = Point((as_sent(aimed[0]), as_sent(aimed[1])))
 
     def _send(self, client: Client) -> None:
-        """Send the turn's orders, and read the game's verdict onto each. Sends nothing where there is nothing."""
+        """Send the turn's orders and record the game's answer on each. Sends nothing if there is nothing to send."""
         given, self._given_orders = self._given_orders, []
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
@@ -175,10 +176,10 @@ class OrderBook:
         results = client.act(actions).result
         if len(results) < len(sent):
             raise ProtocolError(f"the game answered {len(results)} of the {len(sent)} orders it was sent")
-        # What was running before this turn's orders went out: only the orders the game takes supersede those.
+        # The orders running before this turn's went out. Only orders the game accepts supersede them.
         running = tuple(self._running_orders)
         replaced: set[int] = set()
-        # A camera move, where there is one, is answered last and belongs to no order.
+        # A camera move, if any, is answered last and belongs to no order.
         for (order, units), result in zip(sent, results[: len(sent)], strict=True):
             action_result = ActionResult.read(result)
             taken = action_result is ActionResult.SUCCESS
@@ -191,7 +192,7 @@ class OrderBook:
         self._supersede_running_orders(replaced, running)
 
     def _take_in(self, state: _State, step: int) -> None:
-        """Read what the observation at `step` says became of the orders sent before it."""
+        """Read from the observation at `step` what became of the orders sent before it."""
         self._step = step
         if not self._running_orders:
             return
@@ -206,14 +207,14 @@ class OrderBook:
         self._running_orders = running
 
     def _orders_to_send(self, given: Sequence[Order[Any]]) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
-        """Each order of the turn that goes out, with the units it goes out for.
+        """Each order of the turn that goes out, with the units it goes out to.
 
-        An order that acts at once, or that goes behind what a unit already has, competes with nothing. Of the
-        rest, a unit keeps only the last it was given, and an order left with no unit was overridden.
+        An order that acts at once, or that is queued behind a unit's current orders, competes with nothing. Of the
+        rest, a unit keeps only the last it was given, and an order left with no unit is overridden.
 
-        An order that replaces a unit's orders is not sent to a unit already carrying it out: re-sending costs
-        nothing, but an unqueued order the same as a unit's first drops what is queued behind it, which is what
-        `clear_queue` is for. A train or a research is sent all the same, since the game puts a second of the same
+        An order that replaces a unit's orders is not sent to a unit already carrying it out. Re-sending costs
+        nothing, but an unqueued order equal to a unit's first drops everything queued behind it, which is what
+        `clear_queue` is for. A train or a research is sent regardless, since the game queues a second of the same
         behind the first (in game).
         """
         holder: dict[int, Order[Any]] = {}
@@ -240,22 +241,22 @@ class OrderBook:
             yield order, fresh
 
     def _competes(self, order: Order[Any]) -> bool:
-        """Whether `order` takes its units from the other orders of the turn.
+        """Whether `order` competes with the turn's other orders for its units.
 
-        Every unqueued order does, whatever it would do to the unit. A unit takes the last it was given, and so does
-        a structure: the game would put a second train behind the first rather than replace it, and pay for it from
-        the step it was ordered, so NachOS sends only the last thing the turn asked a structure to make.
+        Every unqueued order does, whatever it would do to the unit. A unit takes the last order it was given, and so
+        does a structure: the game would queue a second train behind the first instead of replacing it, and pay for
+        it from the step it was ordered, so NachOS sends only the last thing the turn asked a structure to make.
 
-        A queued order competes with nothing, since it is the bot asking for a place in the queue: it is how a
+        A queued order competes with nothing, since the bot is asking for a place in the queue. This is how a
         structure with a reactor is told to make two at once. An ability carried out at once competes with nothing
-        either, because the unit does both (in game).
+        either: the unit does both (in game).
         """
         return not order.queued and order.order_behavior is not OrderBehavior.KEEPS_ORDERS
 
     def _sent_whatever_a_unit_is_at(self, order: Order[Any]) -> bool:
-        """Whether `order` goes out to every unit it names, whatever each is already carrying out.
+        """Whether `order` goes out to every unit it names, whatever each is already doing.
 
-        Only an order that replaces a unit's orders is held back as a duplicate. A train or a research goes behind
+        Only an order that replaces a unit's orders is held back as a duplicate. A train or a research queues behind
         what a structure is making, and a morph or an add-on is the game's to refuse (in game).
         """
         return order._forced or order.order_behavior is not OrderBehavior.REPLACES
@@ -265,8 +266,8 @@ class OrderBook:
         return tuple(unit for unit in units if not self._unit_already_doing_order(unit, order))
 
     def _supersede_running_orders(self, replaced: set[int], running: Sequence[Order[Any]]) -> None:
-        """End every order of `running` whose units this turn's orders all took: the game drops what an unqueued
-        order replaces. An order the bot has taken back, or the game is otherwise done with, is left as it is."""
+        """Mark overridden every order in `running` whose units were all taken by this turn's orders, since the game
+        drops what an unqueued order replaces. An order already final, withdrawn or otherwise, is left as it is."""
         if not replaced:
             return
         for order in running:
@@ -278,23 +279,23 @@ class OrderBook:
     def _take_in_order(
         self, order: Order[Any], commands: Sequence[UnitCommand], failures: Sequence[ActionFailure]
     ) -> None:
-        """What one order's state becomes, from what the observation reported."""
+        """Update one order's state from what the observation reported."""
         general = self._general_ability(order.ability)
         units = order._acting_units
         failed = tuple(failure for failure in failures if self._failure_is_of(failure, order, units, general))
         if failed:
             order._settle(failure=failed[0])
         carrying_out = any(self._unit_is_carrying_out_ability(unit, general) for unit in units)
-        # The report can come an observation after the unit is seen carrying the order out, so a running order reads
-        # it too, and only what it says about this order's own units is kept.
+        # The report can arrive an observation after the unit is seen carrying the order out, so a running order
+        # reads it too. Only what it says about this order's own units is kept.
         reported = tuple(command for command in commands if self._command_reports_ability(command, general))
         taken_by = tuple(unit for unit in units if any(unit in command.units for command in reported))
         if taken_by:
             order._settle(taken_by=taken_by)
         done_with = {failure.unit for failure in failed} | {unit for unit in units if unit.is_dead}
         if failed and not carrying_out and not set(units) - done_with:
-            # The game gave up on every unit it went out for that has not died since. One of a group failing leaves
-            # the rest to settle as they are, with the failure on the order to read.
+            # The game gave up on every unit the order went to that has not died since. If only some of a group
+            # fail, the rest settle as they are, and the failure is left on the order to read.
             order._settle(OrderState.FAILED)
             return
         if carrying_out:
@@ -306,11 +307,11 @@ class OrderBook:
             unit.is_dead and unit.type_id is not UnitTypeId.EGG
             for unit in order._seen_carrying or order._taken_by or units
         ):
-            # Every unit seen carrying it out is dead: those the first observation that showed any saw, or where none
-            # was, those the game reported taking it, or every unit it went out for. The game reports a producer
-            # dying and nothing more, so this is the one way a unit carrying nothing out does not mean the order is
-            # done. One of a group that got where it was sent keeps it `DONE`, and so does an egg, which is reported
-            # dead as what it makes hatches (in game).
+            # Every unit seen carrying the order out is dead: those seen in the first observation that showed any,
+            # or failing that those the game reported taking it, or failing that every unit it went out to. The game
+            # reports only that a producer died, so this is the one case where a unit carrying nothing out does not
+            # mean the order is done. One unit of a group that got where it was sent keeps the order `DONE`, and so
+            # does an egg, which is reported dead when what it makes hatches (in game).
             order._settle(OrderState.LOST)
             return
         if order.state is OrderState.RUNNING:
@@ -318,7 +319,7 @@ class OrderBook:
                 order._settle(OrderState.DONE)
             return
         if taken_by:
-            # An ability carried out at once is over as soon as it is reported: it never shows in a unit's orders.
+            # An ability carried out at once is done as soon as it is reported: it never shows in a unit's orders.
             order._settle(OrderState.RUNNING if carrying_out else OrderState.DONE)
         elif carrying_out:
             order._settle(OrderState.RUNNING)
@@ -328,13 +329,13 @@ class OrderBook:
     def _failure_is_of(
         self, failure: ActionFailure, order: Order[Any], units: Sequence[OwnUnit[Any]], general: AbilityId
     ) -> bool:
-        """Whether `failure` names one of `units` and the ability `order` was given."""
+        """Whether `failure` names one of `units` and `order`'s ability."""
         return (
             failure.unit in units and failure.ability is not None and self._general_ability(failure.ability) is general
         )
 
     def _unit_already_doing_order(self, unit: OwnUnit[Any], order: Order[Any]) -> bool:
-        """Whether `unit`'s first order is the one `order` would send it unqueued."""
+        """Whether `unit`'s first order is what `order` would send it, unqueued."""
         if order.queued:
             return False
         orders = unit._latest_report.orders
@@ -354,11 +355,11 @@ class OrderBook:
                 return target is None
 
     def _unit_is_carrying_out_ability(self, unit: OwnUnit[Any], general: AbilityId) -> bool:
-        """Whether any order of `unit`'s runs `general`.
+        """Whether any of `unit`'s orders runs `general`.
 
-        A unit dead or gone from the observation is carrying out nothing, whatever it was last seen doing. The target
-        is not compared: the game snaps a build's, and reports a spell's out of reach under the id it was ordered by
-        (in game).
+        A unit that is dead or gone from the observation is carrying out nothing, whatever it was last seen doing.
+        The target is not compared: the game snaps a build's target, and reports a spell out of reach under the id
+        it was ordered by (in game).
         """
         if unit.is_dead or unit.is_stale:
             return False
@@ -367,20 +368,22 @@ class OrderBook:
         )
 
     def _command_reports_ability(self, command: UnitCommand, general: AbilityId) -> bool:
-        """Whether a reported command is the one `general` was ordered by."""
+        """Whether a reported command runs `general`."""
         return self._general_ability(command.ability) is general
 
     def _general_ability(self, ability: AbilityId) -> AbilityId:
-        """The ability an id stands for, which is what a unit reports and what the game reports carrying out."""
+        """The general ability `ability` remaps to. That is what a unit reports, and what the game reports carrying
+        out."""
         row = self._game_data.abilities.get(ability)
         return ability if row is None or row.remaps_to is None else row.remaps_to
 
     def _order_behavior_of_ability(self, ability: AbilityId) -> OrderBehavior:
-        """What ordering `ability` does to what a unit is already doing."""
+        """What ordering `ability` does to a unit's current orders."""
         row = self._game_data.abilities.get(ability)
         return OrderBehavior.REPLACES if row is None else row.order_behavior
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
-    """The ability a raw order runs, or `NULL` where the curated ids leave it out, which no order of ours runs."""
+    """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
+    ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL

@@ -1,5 +1,5 @@
-"""The root of the exceptions the library raises for failures of its own."""
+"""The base of the exceptions the library raises for its own failures."""
 
 
 class NachOSError(Exception):
-    """Something the library was asked to do failed. Misuse, such as a bad argument, raises a built-in instead."""
+    """A failure of the library's own. Misuse, such as a bad argument, raises a built-in instead."""

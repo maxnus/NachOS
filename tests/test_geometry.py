@@ -216,7 +216,7 @@ class TestPoint3:
         assert (total.x, total.y, total.z) == (11, 22, 33)
 
     def test_towards_rejects_mixed_dimensionality(self) -> None:
-        """The same rule as arithmetic, so there is one rule to remember rather than a rule with exceptions."""
+        """The same rule as arithmetic, so there is one rule and no exceptions."""
         with pytest.raises(ValueError, match="cannot combine"):
             _ = Point3D((1, 2, 3)).towards(Point((10, 10)), 1)
 
@@ -286,11 +286,10 @@ class TestUnsupportedOperands:
 
 
 class TestPointsAreCoordinates:
-    """A point is coordinates, not anything that merely knows where it stands.
+    """A point is coordinates, not anything that has a position.
 
-    Something whose position changes under you is not a point: the caller writes `.position` to say they meant
-    where it is now. `Tile` is the one exception, and only because a tile's address is not the point it stands
-    for; `TestTile` pins that.
+    Something that moves is not a point: the caller writes `.position` to mean where it is now. `Tile` is the one
+    exception, because a tile's address is not the point it stands for; `TestTile` pins that.
     """
 
     def test_a_position_written_out_is_a_point(self) -> None:
@@ -325,7 +324,7 @@ class TestRectangle:
         assert not isinstance(Rectangle(1, 2, 3, 4), tuple)
 
     def test_is_not_a_point(self) -> None:
-        """A rectangle is deliberately not a Point — it should not be usable where a point is expected."""
+        """A rectangle is not a Point and cannot be used where a point is expected."""
         rect = Rectangle(10, 20, 30, 40)
         assert not isinstance(rect, Point)
         assert not hasattr(rect, "distance_to")
@@ -469,10 +468,10 @@ class TestTile:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
 
     def test_it_is_an_address_not_a_point(self) -> None:
-        """A tile is a patch of ground that has a center, so point math must be given that center.
+        """A tile is a patch of ground with a center, so point math must be given that center.
 
-        Its tuple is the grid address. Reading it as a point would measure from the tile's corner, which is a
-        whole half-tile out and would never announce itself, so it is refused instead.
+        Its tuple is the grid address. Read as a point it would measure from the tile's corner, half a tile out and
+        silently, so it is refused.
         """
         tile = Tile(3, 4)
         with pytest.raises(TypeError, match="a Tile is an area, not a point"):

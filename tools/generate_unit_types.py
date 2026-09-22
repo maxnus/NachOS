@@ -1,7 +1,7 @@
 """Generate `sc2nachos/units/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group.
 
-A type is in the group of its race, and in `Structure` where the game's tables give it the structure attribute. Both
-come from the tables of a corpus game, so this runs without StarCraft II. Run it again after changing `UnitTypeId`::
+A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. Both are
+read from a corpus game's tables, so this runs without StarCraft II. Run it again after changing `UnitTypeId`::
 
     uv run python tools/generate_unit_types.py
 """
@@ -87,7 +87,7 @@ def class_name(unit_type: UnitTypeId) -> str:
 
 
 def render(tables: GameData) -> str:
-    """The module, for the types in `tables`."""
+    """The module source for the types in `tables`."""
     groups = {
         "Structure": ("AnyType", "A type the game's tables give the structure attribute."),
         **{name: ("AnyType", f"A {name} type.") for name in RACES.values()},
@@ -111,7 +111,7 @@ def render(tables: GameData) -> str:
 
 
 def corpus_tables() -> GameData:
-    """The tables of the first corpus game, which every game on the current ladder shares."""
+    """The tables of the first corpus game; every game on the current ladder shares them."""
     recording = Recording(sorted(CORPUS.glob("*.sc2rec"))[0])
     return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
 

@@ -1,11 +1,11 @@
-"""What a handler returns once it has nothing more to do in a game."""
+"""What a handler returns when it is done for the game."""
 
 from typing import NoReturn, final
 
 
 @final
 class Done:
-    """Returned by a handler, the class itself, to be called no more this game. It is called again from the next.
+    """A handler returns this class itself to be called no more this game. It is called again from the next game.
 
     Any other return value is ignored.
     """

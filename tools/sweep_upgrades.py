@@ -6,24 +6,25 @@ Needs StarCraft II installed. Plays one game as each race, or only those named, 
     uv run python tools/sweep_upgrades.py
     uv run python tools/sweep_upgrades.py zerg --out upgrades-zerg.json
 
-The game folds the upgrades the asking player holds into the unit types' rows of `RequestData`, so each upgrade is
-researched on its own and the rows are asked for again once it is done. Measured in game while writing this:
+`RequestData` folds the asking player's upgrades into the unit type rows, so each upgrade is researched on its own and
+the rows are read again once it is done. Measured in game while writing this:
 
-- The rows take in weapon damage, damage bonuses and range, armor and speed, and a bonus can be new: Infernal
-  Pre-Igniter gives a hellbat one against light. They take in no attack speed (Adrenal Glands, Resonating Glaives), no
-  shield armor, and nothing an ability or a buff does. Anabolic Synthesis is in them, though it counts only off creep.
-- Every level of a leveled upgrade adds the same to every unit type.
-- A unit reports how many attack levels it has, but in `armor_upgrade_level` the armor its upgrades add, which counts
-  Chitinous Plating's 2 as well as each level.
-- The `god` cheat multiplies every weapon's damage in the rows by 10, a few steps after it is turned on, so it is never
+- The rows reflect weapon damage, damage bonuses and range, armor and speed, and a bonus can be new: Infernal
+  Pre-Igniter gives a hellbat one against light. They do not reflect attack speed (Adrenal Glands, Resonating
+  Glaives), shield armor, or anything an ability or a buff does. Anabolic Synthesis is in them, though it counts only
+  off creep.
+- Every level of a leveled upgrade adds the same amount to every unit type.
+- A unit reports its attack upgrades as a level count, but `armor_upgrade_level` is the armor its upgrades add, which
+  counts Chitinous Plating's 2 as well as each level.
+- The `god` cheat multiplies every weapon's damage in the rows by 10 a few steps after it is turned on, so it is never
   on here.
 
 Each game puts up every structure of the race and one of every other unit type, then researches one upgrade at a time
-and reads how every row changed, and whose reported levels rose. Once everything is researched it checks that the rows
-are the first ones with every change added up, and after each upgrade that every unit's type armor with its reported
-armor upgrades is its row's armor.
+and records how every row changed and whose reported levels rose. Once everything is researched it checks that each row
+equals the first row plus every change found, and after each upgrade that every unit's base armor plus its reported
+armor upgrades equals its row's armor.
 
-What it finds is written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
+The findings are written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
 """
 
 import argparse
@@ -48,9 +49,9 @@ from sc2nachos.protocol import GameEndedError
 
 OUT = Path(__file__).parents[1] / "data" / "upgrades.json"
 
-# The fields of a row the game folds upgrades into. Any other that changes is reported as unexplained.
+# The row fields upgrades change. A change to any other field is reported as unexplained.
 _UPGRADED_FIELDS = ("armor", "movement_speed", "weapons")
-# How far apart two of the game's values may be and still be the same, since it keeps them as 32-bit floats.
+# How far apart two values may be and still count as equal; the game keeps them as 32-bit floats.
 _TOLERANCE = 1e-4
 
 type Change = dict[str, object]
@@ -63,9 +64,9 @@ class Findings:
 
     base_build: int = 0
     races: set[str] = field(default_factory=set)
-    # Each upgrade researched, in the order it was, with how every row changed and whose reported levels rose.
+    # Each upgrade researched, in order, with how every row changed and whose reported levels rose.
     research: list[dict[str, object]] = field(default_factory=list)
-    # What the changes do not account for, which the generator refuses.
+    # What the changes do not account for; the generator refuses these.
     unexplained: list[str] = field(default_factory=list)
 
     def as_json(self) -> dict[str, object]:
@@ -81,7 +82,7 @@ class UpgradeSweep(TechSweep):
     """One game played as `race`, and what each of its upgrades changes."""
 
     def __init__(self, game: Sandbox, race: Race, findings: Findings) -> None:
-        # The rows as they are before any cheat, which every change found is added up against.
+        # The rows before any cheat, which every change found is summed against.
         self._first = _rows(game.client.game_data(abilities=False, upgrades=False, buffs=False, effects=False))
         super().__init__(game, race, TechFindings(), cheats=("free", "fast_build", "food"))
         self.upgrade_findings = findings
@@ -118,7 +119,7 @@ class UpgradeSweep(TechSweep):
         return _rows(self._client.game_data(abilities=False, upgrades=False, buffs=False, effects=False))
 
     def _levels(self) -> dict[int, tuple[int, int, int]]:
-        """The attack, armor and shield upgrade levels each type of this player's units in sight reports."""
+        """The attack, armor and shield upgrade levels reported by each type of this player's visible units."""
         levels: dict[int, tuple[int, int, int]] = {}
         for unit in self._seen_units():
             reported = (unit.attack_upgrade_level, unit.armor_upgrade_level, unit.shield_upgrade_level)
@@ -129,7 +130,7 @@ class UpgradeSweep(TechSweep):
         return [unit for unit in self._mine() if unit.display_type == raw_pb2.DisplayType.Visible]
 
     def _check_armor(self, rows: dict[int, data_pb2.UnitTypeData], names: list[str]) -> None:
-        """Note every unit whose type armor with its reported armor upgrades is not its row's armor."""
+        """Note every unit whose base armor plus its reported armor upgrades is not its row's armor."""
         for unit in self._seen_units():
             expected = self._first[unit.unit_type].armor + unit.armor_upgrade_level
             if not math.isclose(rows[unit.unit_type].armor, expected, abs_tol=_TOLERANCE):
@@ -139,7 +140,7 @@ class UpgradeSweep(TechSweep):
                 )
 
     def _check_sums(self, rows: dict[int, data_pb2.UnitTypeData], changed: dict[int, list[Change]]) -> None:
-        """Note every row that is not the first one with every change found added up."""
+        """Note every row that is not the first row plus every change found."""
         for unit_type, row in rows.items():
             expected = _values(self._first[unit_type])
             for change in changed.get(unit_type, []):
@@ -157,7 +158,7 @@ def _rows(data: sc2api_pb2.ResponseData) -> dict[int, data_pb2.UnitTypeData]:
 def _change(
     old: data_pb2.UnitTypeData, new: data_pb2.UnitTypeData, names: list[str], unexplained: list[str]
 ) -> Change | None:
-    """What `new` adds to `old`, or `None` where it adds nothing. What cannot be written as a change is noted in
+    """What `new` adds to `old`, or `None` where nothing. A difference that cannot be written as a change goes in
     `unexplained` instead."""
     if old == new:
         return None
@@ -185,7 +186,7 @@ def _change(
 
 
 def _weapon_change(old: data_pb2.Weapon, new: data_pb2.Weapon) -> dict[str, object]:
-    """What `new` adds to `old`, holding only what changed."""
+    """What `new` adds to `old`: only the fields that changed."""
     change: dict[str, object] = {}
     for key, before, after in (
         ("damage", old.damage, new.damage),
@@ -216,7 +217,7 @@ type _Values = tuple[float, float, list[_Weapon]]
 
 
 def _values(row: data_pb2.UnitTypeData) -> _Values:
-    """What upgrades change of `row`."""
+    """The parts of `row` that upgrades change."""
     weapons = [
         {
             "damage": weapon.damage,
@@ -247,7 +248,7 @@ def _added(values: _Values, change: Change) -> _Values:
 
 
 def _rounded(values: _Values) -> object:
-    """`values` rounded to what the game's 32-bit floats can tell apart, a bonus of nothing left out."""
+    """`values` rounded to what the game's 32-bit floats can tell apart, with zero bonuses dropped."""
     armor, speed, weapons = values
     return (
         round(armor, 3),
@@ -287,7 +288,7 @@ def sweep(race: Race, installation: Installation, findings: Findings) -> None:
 
 
 def main(argv: Sequence[str]) -> None:
-    """Sweep the races named, or all three, and write what turned up."""
+    """Sweep the races named, or all three, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("races", nargs="*", help="terran, protoss or zerg; all three when none are named")
     parser.add_argument("--out", type=Path, default=OUT, help="where to write the findings")

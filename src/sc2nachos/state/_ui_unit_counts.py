@@ -12,8 +12,8 @@ class UiUnitCounts:
     """The counts of this player's units the game's interface shows beside the minimap, as the game counts them."""
 
     idle_workers: int
-    """How many workers have nothing to do."""
+    """The workers with nothing to do."""
     army: int
-    """How many units other than workers there are."""
+    """The units other than workers."""
     warp_gates: int
-    """How many warp gates there are."""
+    """The warp gates."""

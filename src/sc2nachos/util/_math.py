@@ -6,7 +6,7 @@ import math
 
 
 def clip[T: float](value: T, minimum: T = 0, maximum: T = 1) -> T:
-    """`value` confined to `[minimum, maximum]`, by default the unit interval."""
+    """`value` clamped to `[minimum, maximum]`, by default the unit interval."""
     return max(min(value, maximum), minimum)
 
 
@@ -28,9 +28,9 @@ def remap(value: float, lower: float, upper: float, *, lower_value: float = 0.0,
 
 
 def sticky_round(value: float, previous_value: int, *, tolerance: float = 1.0) -> int:
-    """`value` rounded, except that it holds `previous_value` while within `tolerance` of it.
+    """`value` rounded, except that it stays at `previous_value` while within `tolerance` of it.
 
-    Stops an estimate recomputed each step from flickering between neighboring integers.
+    Stops an estimate recomputed every step from flickering between neighboring integers.
     """
     if abs(value - previous_value) < tolerance:
         return previous_value
@@ -38,9 +38,9 @@ def sticky_round(value: float, previous_value: int, *, tolerance: float = 1.0) -
 
 
 def damp(start: float, end: float, *, decay: float, seconds: float) -> float:
-    """`start` moved toward `end` by exponential damping, at a `decay` rate per second over `seconds`.
+    """`start` moved toward `end` by exponential damping at rate `decay` per second, over `seconds`.
 
-    Applied repeatedly, converges on `end` at a rate independent of how often it is called. Never overshoots.
+    Applied repeatedly, it converges on `end` at a rate independent of how often it is called. It never overshoots.
     """
     return lerp(start, end, 1 - math.exp(-decay * seconds))
 

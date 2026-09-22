@@ -1,4 +1,4 @@
-"""A game's conversation, kept so it can be played back without the game."""
+"""A game's requests and answers, recorded so they can be played back without the game."""
 
 import lzma
 from collections.abc import Generator
@@ -14,14 +14,14 @@ from sc2nachos.protocol._errors import ConnectionClosedError, ProtocolError
 from sc2nachos.protocol._transport import Transport
 
 # The format: this header, then every message length-prefixed, all of it xz-compressed. Protobuf messages are
-# not self-delimiting, and consecutive observations are near-identical, which is worth some 200x to xz.
+# not self-delimiting, and consecutive observations are near-identical, which xz compresses some 200x.
 _HEADER = b"NACHOS RECORDING 1\n"
 _LENGTH = 4
 
 
 @dataclass(frozen=True, slots=True)
 class Exchange:
-    """One request a game was asked, and the answer it gave."""
+    """One request to the game, and its answer."""
 
     request: sc2api_pb2.Request
     response: sc2api_pb2.Response
@@ -29,15 +29,15 @@ class Exchange:
 
 @dataclass(frozen=True, slots=True)
 class Recording:
-    """A game's whole conversation, on disk.
+    """A whole game's exchanges, on disk.
 
-    Iterating re-reads the file, so a game is never held in memory whole and a recording can be read again.
+    Iterating re-reads the file, so a game is never held in memory whole, and a recording can be read again.
     """
 
     path: Path
 
     def __iter__(self) -> Generator[Exchange, None, None]:
-        """Every exchange, in the order the game answered them."""
+        """Every exchange, in the order the game answered."""
         with lzma.open(self.path, "rb") as stream:
             try:
                 if stream.read(len(_HEADER)) != _HEADER:
@@ -56,18 +56,18 @@ class Recording:
 
 
 class RecordingTransport:
-    """A `Transport` that writes every exchange to disk on its way through to another one.
+    """A `Transport` that writes every exchange to disk on its way through to another transport.
 
-    The file is whole only once the transport is closed. A run that dies first leaves what the compressor had
-    already written out, which misses the last stretch of the game, or all of a short one.
+    The file is complete only once the transport is closed. A run that dies first leaves what the compressor had
+    already written, which misses the last stretch of the game, or all of a short one.
     """
 
     def __init__(self, transport: Transport, path: Path) -> None:
-        """Forward to `transport`, recording into `path`, which is overwritten if it already exists."""
+        """Forward to `transport`, recording into `path`. An existing file at `path` is overwritten."""
         self._transport = transport
         self._recording = Recording(path)
         self._exchanges = 0
-        # The file stays open for the length of the game, and is closed with the transport.
+        # The file stays open for the whole game and is closed with the transport.
         self._stream = lzma.open(path, "wb")  # noqa: SIM115
         self._stream.write(_HEADER)
 
@@ -77,7 +77,7 @@ class RecordingTransport:
         return self._recording
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        """Send `request` on, and record it with the answer before handing that answer back."""
+        """Forward `request`, record it with its answer, and return the answer."""
         response = self._transport.request(request)
         _write(self._stream, request)
         _write(self._stream, response)
@@ -85,7 +85,7 @@ class RecordingTransport:
         return response
 
     def close(self) -> None:
-        """Close the transport underneath, then finish the file. Doing this twice is not an error."""
+        """Close the underlying transport, then finish the file. Closing twice is not an error."""
         try:
             self._transport.close()
         finally:
@@ -98,10 +98,10 @@ class RecordingTransport:
 
 
 class PlaybackTransport:
-    """A `Transport` that plays a recording back, so everything above the seam runs with no game.
+    """A `Transport` that plays a recording back, so everything above the seam runs without a game.
 
-    Answers come back in the order they were recorded. Only the kind of request is checked and not its
-    contents, so a caller may ask about a different game loop than the recording did, but not a different thing.
+    Answers come back in the order they were recorded. Only the kind of request is checked, not its contents, so a
+    caller may ask about a different game loop than the recording did, but not for a different thing.
     """
 
     def __init__(self, recording: Recording) -> None:
@@ -110,7 +110,7 @@ class PlaybackTransport:
         self._closed = False
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        """The next recorded answer, once the recording proves to have been asked the same kind of question."""
+        """The next recorded answer, if the recording was asked the same kind of question."""
         if self._closed:
             raise ConnectionClosedError("the recording is closed")
         asked = request.WhichOneof("request") or "nothing"
@@ -123,13 +123,13 @@ class PlaybackTransport:
         return exchange.response
 
     def close(self) -> None:
-        """Stop answering, and release the file. A request after this raises, as a closed socket would."""
+        """Stop answering and release the file. A request after this raises, as it would on a closed socket."""
         self._closed = True
         self._exchanges.close()
 
 
 def _read[MessageT: Message](stream: IO[bytes], kind: type[MessageT]) -> MessageT | None:
-    """The next `kind` in `stream`, or `None` once the stream has run out."""
+    """The next `kind` message in `stream`, or `None` once the stream has run out."""
     header = stream.read(_LENGTH)
     if not header:
         return None
@@ -148,7 +148,7 @@ def _read[MessageT: Message](stream: IO[bytes], kind: type[MessageT]) -> Message
 
 
 def _write(stream: IO[bytes], message: Message) -> None:
-    """Append `message` to `stream`, prefixed with its length."""
+    """Append `message` to `stream`, length-prefixed."""
     payload = message.SerializeToString()
     stream.write(len(payload).to_bytes(_LENGTH, "big"))
     stream.write(payload)

@@ -182,7 +182,7 @@ class TestOutsidePropagation:
 
 
 class TestArrayIndices:
-    """`values` goes to code that speaks array indices — pathfinding, scipy — which needs both directions."""
+    """`values` goes to code that uses array indices — pathfinding, scipy — so both conversions are needed."""
 
     def test_index_of_is_relative_to_the_origin(self) -> None:
         grid = playable_grid()
@@ -196,7 +196,7 @@ class TestArrayIndices:
             assert grid.tile_at(grid.index_of(point)) == Tile.containing(point)
 
     def test_a_point_off_the_grid_raises_rather_than_going_negative(self) -> None:
-        """An index the caller hands on is not bounds-checked again: pathfinding answers inf for every tile."""
+        """An index the caller passes on is not bounds-checked again: pathfinding returns inf for every tile."""
         grid = playable_grid()
         with pytest.raises(IndexError, match="lies outside"):
             _ = grid.index_of(Point((1.0, 7.0)))
@@ -347,7 +347,7 @@ class TestComparisons:
         assert (grid > 40).sum() == (grid.values > 40).sum()
 
     def test_a_grid_has_no_truth_value(self) -> None:
-        """The one mistake tilewise comparison invites, kept loud rather than silently true."""
+        """The one mistake tilewise comparison invites, so it raises instead of reading as true."""
         with pytest.raises(TypeError, match="no truth value"):
             bool(Grid.zeros(2, 2) > 1)
         with pytest.raises(TypeError, match="no truth value"):
@@ -464,7 +464,7 @@ class TestSummaries:
 
 class TestReadOnly:
     def grid(self) -> Grid[float]:
-        """A grid as the library hands one out, sharing its values with everything that reads them."""
+        """A grid as the library returns one, sharing its values with every reader."""
         return Grid(numpy.ones((4, 4)), readonly=True)
 
     def test_writing_to_one_raises_and_says_what_to_do(self) -> None:

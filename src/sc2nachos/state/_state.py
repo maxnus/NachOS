@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 
 
 class _State:
-    """What one observation reports beyond its units, each read out of it when first asked for."""
+    """What one observation reports beyond its units. Each part is read from the observation when first asked for."""
 
     def __init__(self, observation: sc2api_pb2.ResponseObservation, tracker: _Tracker, game_map: GameMap) -> None:
-        """Read `observation`, whose units `tracker` has taken in, on `game_map`."""
+        """Wrap `observation`, whose units `tracker` has already taken in, on `game_map`."""
         self._response = observation
         self._observation = observation.observation
         self._tracker = tracker
@@ -47,9 +47,9 @@ class _State:
 
     @cached_property
     def supply(self) -> Supply:
-        """The supply as the game reports it, with the half supply it rounds away added back.
+        """The supply as the game reports it, with the half supply the game rounds away added back.
 
-        The game rounds the supply in use, and the army's, down (in game): one zergling leaves both where they were.
+        The game rounds the supply in use, and the army's, down (in game): one zergling leaves both unchanged.
         """
         common = self._observation.player_common
         rounded_away = self._half_supply()
@@ -58,17 +58,17 @@ class _State:
         )
 
     def _half_supply(self) -> float:
-        """What the units first seen as this player's and not dead take beyond whole supplies, those inside another
-        unit included: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
+        """The fractional supply of this player's living units, counting those first seen as this player's and those
+        inside another unit: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
         rows = self._tracker.game_data.units
         taken = 0.0
         for unit in self._tracker.unit_tracker.known:
             if unit.first_alliance is not Alliance.OWN:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
-                # What the unit takes beyond a whole supply: 0.5 for a zergling, 0 for a roach.
+                # The unit's fractional supply: 0.5 for a zergling, 0 for a roach.
                 taken += row.cost.supply % 1
-        # What is left of the sum beyond whole supplies, which the game does count: two zerglings leave nothing.
+        # The fraction left after the whole supplies, which the game does count: two zerglings leave nothing.
         return taken % 1
 
     @cached_property
@@ -76,7 +76,7 @@ class _State:
         common = self._observation.player_common
         return UiUnitCounts(common.idle_worker_count, common.army_count, common.warp_gate_count)
 
-    # The map as it stands.
+    # The map's current state.
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
@@ -84,7 +84,7 @@ class _State:
 
     @cached_property
     def _visibility(self) -> ndarray:
-        """Per tile: 0 where it has never been in sight, 1 where it has been, and 2 where it is."""
+        """Per tile: 0 if never in sight, 1 if seen before, 2 if in sight now."""
         return image_tiles(self._observation.raw_data.map_state.visibility, self._game_map.playable_area)
 
     @cached_property
@@ -101,22 +101,22 @@ class _State:
         return self._make_readonly_grid(creep != 0)
 
     def _make_readonly_grid(self, values: ndarray) -> Grid[bool]:
-        """A grid over the playable area, as the map's grids are."""
+        """A read-only grid over the playable area, like the map's grids."""
         return Grid(values, origin=self._game_map.pathing.origin, outside=False, readonly=True)
 
     @cached_property
     def effects(self) -> tuple[Effect, ...]:
         return tuple(Effect._from_proto(effect) for effect in self._observation.raw_data.effects)
 
-    # What this player did since the observation before. The game reports each action once, in the next observation
-    # however many steps it spans, a realtime game's included (in game), as it does chat and alerts. Read by the
-    # events that hand them on.
+    # What this player did since the previous observation. The game reports each action once, in the next
+    # observation, however many steps that spans and in a realtime game too (in game), as it does chat and alerts.
+    # Read by the events that hand them on.
 
     @cached_property
     def actions(self) -> tuple[Action, ...]:
-        """What this player did.
+        """This player's actions since the previous observation.
 
-        Raises `UncuratedIdError` where an action names an ability the curated ids leave out.
+        Raises `UncuratedIdError` if an action names an ability the curated ids leave out.
         """
         unit_by_tag = self._tracker.unit_tracker.by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
@@ -124,9 +124,9 @@ class _State:
 
     @cached_property
     def action_failures(self) -> tuple[ActionFailure, ...]:
-        """The orders the game took and has given up on since the observation before.
+        """The orders the game accepted and then gave up on since the previous observation.
 
-        Raises `UncuratedIdError` where one names an ability the curated ids leave out.
+        Raises `UncuratedIdError` if one names an ability the curated ids leave out.
         """
         unit_by_tag = self._tracker.unit_tracker.by_tag
         step = self._observation.game_loop

@@ -1,4 +1,4 @@
-"""What is watched of one side's units, and what was last seen of each."""
+"""The watches on one side's units, and what was last seen of each unit."""
 
 from __future__ import annotations
 
@@ -15,14 +15,15 @@ if TYPE_CHECKING:
     from sc2nachos.units._tracking._tracker_changes import _ComparedChanges
     from sc2nachos.units._unit import Unit
 
-# A vital watched: how to read it, which it is, the value, whether it is to be reached rather than dropped below, and
-# the ids last seen on the far side of the value: below it to be reached, at or above it to be dropped below.
+# A vital watch: the reader, the vital, the value, whether the value is to be reached (rather than dropped below), and
+# the ids of the units last seen on the far side of the value: below it for a reach watch, at or above it for a drop
+# watch.
 type _VitalWatch = tuple[Callable[[raw_pb2.Unit], float | None], VitalType, float, bool, set[int]]
 
 
 @final
 class _Watches[U: Unit[Any]]:
-    """What is watched of one side's units, and what was last seen of each: the vitals of each type, and areas."""
+    """The watches on one side's units, vital values per unit type and areas, and what was last seen of each unit."""
 
     __slots__ = (
         "_area_watches",
@@ -34,11 +35,12 @@ class _Watches[U: Unit[Any]]:
     )
 
     def __init__(self) -> None:
-        # The keys of the vitals watched to be reached and to be dropped below, each a vital, a value and a unit type,
-        # as last given, so that the watches are made anew only when they change.
+        # The reach and drop watches as last given, each a vital, a value and a unit type, so the watches are rebuilt
+        # only when they change.
         self._reached_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
         self._dropped_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
-        # The ids of each vital watch, shared by the unit types it is watched for, and the watches by raw unit type.
+        # The unit ids of each vital watch, shared across the unit types it is watched for, and the watches by raw
+        # unit type.
         self._vital_ids: dict[tuple[VitalType, float, bool], set[int]] = {}
         self._vital_watches_by_type: dict[int, list[_VitalWatch]] = {}
         self._area_watches: dict[Area, _AreaWatch] = {}
@@ -50,8 +52,8 @@ class _Watches[U: Unit[Any]]:
         dropped: Collection[tuple[VitalType, float, UnitTypeId]],
         areas: Collection[Area],
     ) -> None:
-        """Watch these from now on, keeping what was last seen for what was watched before."""
-        # The bus hands over the same sets while its handlers stay the same, sparing a comparison of hundreds a turn.
+        """Watch these from now on, keeping what was last seen for watches that continue."""
+        # The bus passes the same sets while its handlers stay the same, which saves comparing hundreds of keys a turn.
         if reached is not self._reached_keys or dropped is not self._dropped_keys:
             if reached != self._reached_keys or dropped != self._dropped_keys:
                 self._watch_vitals(reached, dropped)
@@ -64,7 +66,8 @@ class _Watches[U: Unit[Any]]:
         reached: Collection[tuple[VitalType, float, UnitTypeId]],
         dropped: Collection[tuple[VitalType, float, UnitTypeId]],
     ) -> None:
-        """Make the vital watches of `reached` and `dropped` anew, keeping the ids of each still watched."""
+        """Rebuild the vital watches from `reached` and `dropped`, keeping the unit ids of each watch that
+        continues."""
         kept: dict[tuple[VitalType, float, bool], set[int]] = {}
         by_type: dict[int, list[_VitalWatch]] = {}
         for keys, reaching in ((reached, True), (dropped, False)):
@@ -75,7 +78,7 @@ class _Watches[U: Unit[Any]]:
         self._vital_ids, self._vital_watches_by_type = kept, by_type
 
     def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, in_vision: bool) -> None:
-        """Record in `found` what `unit`, in sight and reading as `report`, crossed since it was last seen."""
+        """Record into `found` what `unit`, in sight with `report`, crossed since it was last seen."""
         unit_id = unit._id
         if in_vision and (watches := self._vital_watches_by_type.get(report.unit_type)) is not None:
             for read, vital, value, reaching, ids in watches:
@@ -93,7 +96,7 @@ class _Watches[U: Unit[Any]]:
                 if (bounds := watch.bounds) is None:
                     continue
                 inside = watch.inside
-                # The rectangle around the area rules out most units for a fraction of what `in` costs.
+                # The area's bounding rectangle rules out most units at a fraction of what `in` costs.
                 if bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3] and position in area:
                     if unit_id not in inside:
                         inside.add(unit_id)
@@ -104,7 +107,7 @@ class _Watches[U: Unit[Any]]:
                     found.left_area.append((unit, area))
 
     def end_update(self, dead: list[int]) -> None:
-        """Forget the units in `dead`, and count every area watched as watched for a turn."""
+        """Forget the units in `dead`, and mark every area watch as no longer fresh."""
         if not self.watching:
             return
         for watched in (*self._vital_ids.values(), *(watch.inside for watch in self._area_watches.values())):
@@ -115,8 +118,8 @@ class _Watches[U: Unit[Any]]:
 
 @final
 class _AreaWatch:
-    """An area watched: the ids last seen inside it, the corners of the rectangle around it, and whether it has yet to
-    be watched for a turn."""
+    """A watch on an area: the ids of the units last seen inside it, its bounding rectangle, and whether it has yet to
+    run for a full turn."""
 
     __slots__ = ("bounds", "fresh", "inside")
 
@@ -126,14 +129,14 @@ class _AreaWatch:
         try:
             box = area.bounding_rectangle()
         except ValueError:
-            # An area covering nothing, which no unit is ever inside.
+            # An empty area. No unit is ever inside it.
             self.bounds: tuple[float, float, float, float] | None = None
         else:
             self.bounds = (box.left, box.bottom, box.right, box.top)
 
 
 def _keep_only(watches: dict[Area, _AreaWatch], wanted: Collection[Area]) -> None:
-    """Keep the watches of the areas of `wanted` only, starting one for each new area."""
+    """Keep only the watches on areas in `wanted`, starting one for each new area."""
     for area in [area for area in watches if area not in wanted]:
         del watches[area]
     for area in wanted:
@@ -142,11 +145,11 @@ def _keep_only(watches: dict[Area, _AreaWatch], wanted: Collection[Area]) -> Non
 
 
 def _fraction(amount: float, most: float) -> float | None:
-    """`amount` as a fraction of `most`, or `None` for a unit with none of it, whose most is 0."""
+    """`amount` as a fraction of `most`, or `None` if `most` is 0, as for a unit without that vital."""
     return amount / most if most else None
 
 
-# How to read each vital off a unit's report, `None` for a unit that has none of it.
+# How to read each vital from a unit's report. `None` for a unit that lacks the vital.
 _VITAL_READERS: dict[VitalType, Callable[[raw_pb2.Unit], float | None]] = {
     VitalType.HEALTH: lambda report: report.health,
     VitalType.SHIELD: lambda report: report.shield if report.shield_max else None,
