@@ -20,7 +20,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `order.action_result`, `AbilityData.order_behavior`, `UpgradeData.upgrade_type`, `Unit.cloak_state`,
   `Units.closest_n_to`, `launch.MapFile`, `PlaybackTransport`, `_from_proto`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
-  `nachos-migration`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR;
+  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR;
   its `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
   AvocaDOS `51d0ed1`.
 
@@ -141,7 +141,7 @@ said "leave it for later".
 
 ## 4. After each nachOS pull request merges
 
-Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `nachos-migration`: a paragraph under "M4 status" saying
+Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under "M4 status" saying
 what it settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS checkout; its tests
 (`uv run pytest`, `tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push
 only when the owner says so.
