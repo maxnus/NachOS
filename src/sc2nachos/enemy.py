@@ -14,7 +14,7 @@ class UpgradeInference(ReadableIntEnum):
     """How much of `Enemy.upgrades` NachOS infers. Each level includes the ones below it."""
 
     NONE = 0
-    """Nothing. Only the bot adds upgrades."""
+    """Nothing. Only the bot changes the upgrades."""
     BASIC = 1
     """The attack, armor and shield levels enemy units in sight report. `UpgradeReader.read_basic_upgrades` reads them
     as levels of each unit type's own upgrade lines."""

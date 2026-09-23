@@ -13,7 +13,7 @@ the rows are read again once it is done. Measured in game while writing this:
   Pre-Igniter gives a hellbat one against light. They do not reflect attack speed (Adrenal Glands, Resonating
   Glaives), shield armor, or anything an ability or a buff does. Anabolic Synthesis is in them, though it counts only
   off creep.
-- Every level of a leveled upgrade adds the same amount to every unit type.
+- Every level of a leveled upgrade adds the same as the level before, for every unit type.
 - A unit reports its attack upgrades as a level count, but `armor_upgrade_level` is the armor its upgrades add, which
   counts Chitinous Plating's 2 as well as each level.
 - The `god` cheat multiplies every weapon's damage in the rows by 10 a few steps after it is turned on, so it is never

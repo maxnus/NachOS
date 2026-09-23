@@ -137,7 +137,7 @@ class RallyTarget:
 @final
 @dataclass(frozen=True, slots=True)
 class Passenger:
-    """A unit inside a transport, bunker or other carrier, as the carrier reports it."""
+    """A unit inside a transport, bunker or other unit that holds units, as the unit holding it reports it."""
 
     unit: Unit[Any]
     """The unit itself. It is stale while inside, and reads as it was when it went in."""
@@ -151,7 +151,7 @@ class Passenger:
 
     @classmethod
     def _from_proto(cls, passenger: raw_pb2.PassengerUnit, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read a passenger a carrier reported, looking up the unit through `unit_by_tag`."""
+        """Read a passenger a transport reported, looking up the unit through `unit_by_tag`."""
         return cls(
             unit=unit_by_tag(passenger.tag),
             type_id=UnitTypeId.read(passenger.unit_type),

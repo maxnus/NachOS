@@ -192,9 +192,9 @@ class _Game:
         return happened
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
-        """Have the tracker compare each unit with the update before, for the damage, energy, cloak and buff events
-        handlers want: the buffs handlers select, or every buff if a handler takes them all. Stop it when no handler
-        wants any of these. Returns whether it compared."""
+        """Have the tracker compare each unit with the update before, for the damage, energy lost, cloak and buff
+        events handlers want: the buffs handlers select, or every buff if a handler takes them all. Stop it when no
+        handler wants any of these. Returns whether it compared."""
         comparer = self.tracker.unit_comparer
         wants = functools.partial(_wants_any, subscriptions)
         damage = wants(OwnUnitDamagedEvent) or wants(EnemyUnitDamagedEvent)

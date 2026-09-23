@@ -1,6 +1,7 @@
 """Constants of the game itself."""
 
-# Steps in one second at the game's Normal speed. The game gives some times in these, such as a weapon's cooldown.
+# Steps in one second at the game's Normal speed. The game gives some times, such as a weapon's cooldown, in Normal
+# seconds.
 STEPS_PER_NORMAL_SECOND = 16
 # Ladder and multiplayer games run at the "Faster" speed, 1.4x Normal: 22.4 steps per second of real time.
 STEPS_PER_SECOND = 22.4

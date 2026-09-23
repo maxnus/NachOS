@@ -58,8 +58,8 @@ class _State:
         )
 
     def _half_supply(self) -> float:
-        """The fractional supply of this player's living units, counting those first seen as this player's and those
-        inside another unit: 0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
+        """The fractional supply of the living units first seen as this player's, those inside another unit included:
+        0.5 for an odd number of zerglings and banelings, and 0 otherwise."""
         rows = self._tracker.game_data.units
         taken = 0.0
         for unit in self._tracker.unit_tracker.known:

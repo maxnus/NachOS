@@ -69,8 +69,8 @@ _NOT_FOR_RESEARCH = frozenset(
     | {UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}
 )
 _ADD_ON_BUILDERS = frozenset({UnitTypeId.BARRACKS, UnitTypeId.FACTORY, UnitTypeId.STARPORT})
-# Abilities that make, research or send a unit somewhere put no buff on anything, and the sandbox has nothing to
-# gather. Carrying a harvest is a buff all the same.
+# Skipped: abilities whose names say they make, research or send a unit somewhere, which put no buff on anything,
+# and gathering, since the sandbox has nothing to gather. Carrying a harvest is a buff all the same.
 _SKIPPED_ANYWHERE = ("Train", "Research", "UpgradeTo")
 _SKIPPED_PREFIXES = (
     "TerranBuild_",

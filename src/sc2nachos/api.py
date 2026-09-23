@@ -181,7 +181,7 @@ class Api:
         for this player.
 
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
-        recording. `time_limit`, in game seconds, calls a game that runs past it a tie.
+        recording. `time_limit`, in game seconds, calls a game that reaches it a tie.
 
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.

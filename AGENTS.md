@@ -130,11 +130,11 @@ reviewing code.
 marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everything else runs against recorded
 protobuf fixtures via the fixture transport.
 
-**The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer on each map of the current
-ladder pool, recorded by `tools/record_corpus.py`, which says what each one is. Replaying a game asks the same
-questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until the corpus
-is recorded again. The bare api gives no orders, so the only orders in the corpus are the game's own, nearly all of
-them workers mining, and since nothing leaves its base the corpus shows the computer's army but none of its
+**The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer, one on each map of the
+current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is. Replaying a game asks the
+same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until the
+corpus is recorded again. The bare api gives no orders, so the only orders in the corpus are the game's own, nearly
+all of them workers mining, and since nothing leaves its base the corpus shows the computer's army but none of its
 buildings.
 
 | Task | Command |

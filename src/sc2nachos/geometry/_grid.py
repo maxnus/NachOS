@@ -23,7 +23,7 @@ _ORIGIN = Tile(0, 0)
 
 # Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64` subclasses
 # `float`; without them listed, the operand round-trips through numpy and back at twice the cost. A module constant,
-# because an inline tuple is rebuilt on every call at seven times the cost.
+# because an inline `a | b` union is rebuilt on every call at seven times the cost.
 SCALAR_TYPES = (int, float, numpy.number, numpy.bool_)
 
 
