@@ -1,4 +1,4 @@
-"""A collection of units, each query checked against working it out unit by unit."""
+"""A collection of units, each query checked against a unit-by-unit computation."""
 
 import math
 import random
@@ -35,7 +35,7 @@ def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
 
 
 def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
-    """`count` of this player's units of assorted types, readiness and orders, scattered over a small map."""
+    """`count` of this player's units, of assorted types, completeness and orders, scattered over a small map."""
     rng = random.Random(seed)
     protos = []
     for tag in range(1, count + 1):
@@ -53,7 +53,7 @@ def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
 
 
 def _mixed() -> Units[Unit[Any]]:
-    """A unit of every alliance, the enemy's hidden and remembered too."""
+    """A unit of every alliance, plus a hidden and a remembered enemy."""
     return _units(
         make_unit(1, alliance=Alliance.OWN),
         make_unit(2, alliance=Alliance.ENEMY),
@@ -174,7 +174,7 @@ class TestFilters:
         assert _tags(units.idle) == [unit.tag for unit in units if not unit.orders]
 
     def test_a_filter_over_what_was_never_shown_in_sight_raises(self) -> None:
-        """The hidden enemy was never in sight, so how far it is built was never reported."""
+        """The hidden enemy was never in sight, so its build progress was never reported."""
         with pytest.raises(NotReportedError):
             _ = _mixed().complete
         assert _tags(_mixed().own.idle) == [1]

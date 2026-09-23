@@ -1,4 +1,4 @@
-"""Stand-ins for the game, shared by the tests that drive the library without one."""
+"""Fakes and builders shared by the tests that run the library without a game."""
 
 from collections import deque
 from collections.abc import Iterable
@@ -53,7 +53,7 @@ from sc2nachos.units._tracking import _Tracker
 
 
 class FakeTransport:
-    """A `Transport` that answers from a prepared queue and remembers what it was asked."""
+    """A `Transport` that returns prepared responses in order and records every request."""
 
     def __init__(self, *responses: sc2api_pb2.Response) -> None:
         self.requests: list[sc2api_pb2.Request] = []
@@ -71,7 +71,7 @@ class FakeTransport:
 
 
 class FakeWebSocket:
-    """The three methods `WebSocketTransport` uses, over a prepared queue of payloads or a `failure` to raise."""
+    """The three methods `WebSocketTransport` uses, over prepared payloads, or raising `failure` from `recv`."""
 
     def __init__(self, *payloads: str | bytes, failure: Exception | None = None) -> None:
         self.sent: list[bytes] = []
@@ -97,7 +97,7 @@ class FakeWebSocket:
 
 
 def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2api_pb2.Response:
-    """A response carrying `fields`, and `status` unless it is given as `None`."""
+    """A response with `fields`, and `status` unless that is `None`."""
     response = sc2api_pb2.Response(**fields)
     if status is not None:
         response.status = status.value
@@ -105,14 +105,14 @@ def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2a
 
 
 def make_bits(*rows: str, drawn: str = "#") -> common_pb2.ImageData:
-    """A one-bit image drawn as rows of characters, the top row first, set wherever one of `drawn` stands."""
+    """A one-bit image from `rows` of characters, top row first, set where the character is in `drawn`."""
     bits = [char in drawn for row in reversed(rows) for char in row]
     size = common_pb2.Size2DI(x=len(rows[0]), y=len(rows))
     return common_pb2.ImageData(bits_per_pixel=1, size=size, data=numpy.packbits(bits).tobytes())
 
 
 def make_bytes(*rows: list[int]) -> common_pb2.ImageData:
-    """A one-byte image of `rows` of values, the top row first, the way the map would look."""
+    """A one-byte image from `rows` of values, top row first."""
     data = bytes(value for row in reversed(rows) for value in row)
     return common_pb2.ImageData(bits_per_pixel=8, size=common_pb2.Size2DI(x=len(rows[0]), y=len(rows)), data=data)
 
@@ -123,11 +123,10 @@ def make_game_info(
     heights: common_pb2.ImageData | None = None,
     start_locations: tuple[tuple[float, float], ...] = (),
 ) -> sc2api_pb2.ResponseGameInfo:
-    """A map drawn in rows, the top row first, or eight by eight of open ground.
+    """A map drawn in `rows`, top row first, or eight by eight of open ground.
 
-    `#` is open ground, `~` ground a unit can walk over but not build on, and `.` ground it can do neither on.
-    The map is playable from corner to corner unless `playable` gives the corners `(x0, y0, x1, y1)` of a smaller
-    area, and level unless `heights` says otherwise.
+    `#` is open ground, `~` is pathable but not buildable, and `.` is neither. The whole map is playable unless
+    `playable` gives a smaller area as `(x0, y0, x1, y1)`, and flat unless `heights` is given.
     """
     rows = rows or ("#" * 8,) * 8
     width, height = len(rows[0]), len(rows)
@@ -161,8 +160,8 @@ def make_observation(
     action_errors: Iterable[sc2api_pb2.ActionError] = (),
     alerts: Iterable[sc2api_pb2.Alert.ValueType] = (),
 ) -> sc2api_pb2.ResponseObservation:
-    """What the game saw at `game_loop`: `units`, the tags of those that died, how it ended if it has, and the rest of
-    what an observation reports, each message sent to the chat as the sender's id and the text."""
+    """An observation at `game_loop` with `units`, the tags of the `dead`, the `results` if the game is over, and the
+    rest of what an observation reports. `chat` holds each message as the sender's player id and the text."""
     raw = raw_pb2.ObservationRaw(
         player=raw_pb2.PlayerRaw(upgrade_ids=upgrades),
         units=units,
@@ -191,7 +190,7 @@ def make_unit(
     visibility: Visibility = Visibility.IN_VISION,
     **fields: Any,
 ) -> raw_pb2.Unit:
-    """A unit as the game would report it: this player's marine, in sight, unless told otherwise."""
+    """A unit as the game reports it: this player's marine, in sight, unless the arguments say otherwise."""
     return raw_pb2.Unit(
         tag=tag,
         unit_type=unit_type,
@@ -233,7 +232,7 @@ HAPPENINGS: tuple[type[Event], ...] = (
 
 
 def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
-    """The events of `event_types`, or of what filters select, handed out from now on, in the order they were."""
+    """A list that collects every event of `event_types`, or matching the filters, handed out from now on."""
     seen: list[Any] = []
     for event_type in event_types:
         events.on(event_type)(lambda event: seen.append(event))
@@ -241,7 +240,7 @@ def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> li
 
 
 def make_tables(*units: data_pb2.UnitTypeData, abilities: Iterable[data_pb2.AbilityData] = ()) -> GameData:
-    """Tables holding a row for each of `units`, and for each of `abilities`."""
+    """Game data with a row for each of `units` and each of `abilities`."""
     return GameData(sc2api_pb2.ResponseData(units=units, abilities=abilities))
 
 
@@ -255,8 +254,8 @@ def played(
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
 ) -> _Game:
-    """`game` having taken in `observation` and reported it to `events`, as `Api.play` does each turn. For the first
-    observation, `game` is `None` and a game over `tracker` is made as `_Game.start` makes one, without asking."""
+    """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
+    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
     step = observation.observation.game_loop
     if game is None:
         state = _State(observation, tracker, game_map)
@@ -277,8 +276,8 @@ def make_client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]
 
 
 class RealGame:
-    """A game against the computer, played a step at a time by hand, with its units tracked and what each observation
-    reports has happened handed to the handlers of `events`."""
+    """A game against the computer, stepped by hand, with its units tracked and each observation's events handed to
+    `events`."""
 
     def __init__(self, client: Client, player: int, events: EventBus | None = None) -> None:
         self.client = client
@@ -307,7 +306,7 @@ class RealGame:
         self.client.debug(commands)
 
     def create(self, unit_type: UnitTypeId, at: Point, *, owner: int | None = None) -> debug_pb2.DebugCommand:
-        """The command creating a unit of `unit_type` at `at`, the player's own unless another `owner` is given."""
+        """A debug command that creates a `unit_type` at `at`, owned by this player unless `owner` says otherwise."""
         position = common_pb2.Point2D(x=at.x, y=at.y)
         unit = debug_pb2.DebugCreateUnit(unit_type=unit_type, owner=owner or self.player, pos=position, quantity=1)
         return debug_pb2.DebugCommand(create_unit=unit)
@@ -324,11 +323,11 @@ class RealGame:
         self.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))])
 
     def newest(self, unit_type: UnitTypeId) -> Unit[Any]:
-        """The unit of `unit_type` first seen last."""
+        """The newest unit of `unit_type`, by id."""
         return max(self.tracker.unit_tracker.present.of_type(unit_type), key=lambda unit: unit.id)
 
     def open_ground(self, near: Point, *, size: int = 2) -> Point:
-        """The center nearest to `near` of a square of `size` tiles a side that can all be built on."""
+        """The center of the buildable `size` by `size` square nearest `near`."""
         placement = self.map.placement
         center = near.snapped(step=1) + ((0.5, 0.5) if size % 2 else (0.0, 0.0))
         half = (size - 1) / 2

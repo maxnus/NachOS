@@ -17,11 +17,11 @@ if TYPE_CHECKING:
     from s2clientprotocol import common_pb2
 
 
-# Coordinates on the ground plane, or on it with a height: anything a point *is*.
+# Coordinates on the ground plane, with or without a height: anything that *is* a point.
 #
-# Something that merely *has* a point is deliberately not one, and the caller names the point it means. An area
-# has a `.center`; a unit has a `.position`, read at that moment — a shape built straight from a moving object
-# would snapshot it and then silently stop following it.
+# Something that merely *has* a point is not one; the caller names the point it means. An area has a `.center` and a
+# unit a `.position`, read at that moment — a shape built from a moving object would snapshot it and silently stop
+# following it.
 PointLike = Union["Point", "Point3D", tuple[float, float], tuple[float, float, float]]
 
 
@@ -31,9 +31,10 @@ SCALAR_TYPES = (int, float, numbers.Real)
 
 
 def coordinates(value: PointLike) -> PointLike:
-    """`value` itself, once it is known to be coordinates. A caller that is not type-checked fails here.
+    """`value` itself, checked to be coordinates. Raises `TypeError` otherwise, which catches a caller that is not
+    type-checked.
 
-    A `Tile` is rejected despite being a coordinate pair: it is an address, not the point it stands for.
+    A `Tile` is rejected although it is a coordinate pair: it is an address, not the point it stands for.
     """
     # Points first: the common case, and a concrete class is far quicker to test than an ABC.
     if isinstance(value, _PointND) or type(value) is tuple:
@@ -48,8 +49,8 @@ def coordinates(value: PointLike) -> PointLike:
 class _PointND(tuple[float, ...]):
     """A point of any dimensionality: the coordinate math shared by `Point` and `Point3D`.
 
-    Operations preserve the operand's type, and reject operands of a different dimensionality. The arithmetic
-    operators are vector operations, not tuple ones: `point * 3` scales rather than repeating the sequence.
+    Operations keep the operand's type and reject an operand of a different dimensionality. The arithmetic operators
+    are vector operations, not tuple ones: `point * 3` scales rather than repeating.
     """
 
     __slots__ = ()
@@ -104,11 +105,10 @@ class _PointND(tuple[float, ...]):
     def towards(self, other: PointLike, distance: float = 1, *, limit: bool = False) -> Self:
         """The point moved `distance` toward another of the same dimensionality.
 
-        `distance` is measured on the ground plane. With `limit`, never overshoots. A negative distance moves
-        away.
+        `distance` is measured on the ground plane. With `limit`, it never overshoots. A negative distance moves away.
         """
         position = coordinates(other)
-        # Checked up front rather than left to the zip below, which the zero-separation early return would skip.
+        # Checked here because the zero-separation early return would skip the zip below.
         if len(position) != len(self):
             raise self._dimension_error(position)
         separation = self.distance_to(position)
@@ -154,7 +154,7 @@ class _PointND(tuple[float, ...]):
     def rounded_down(self, *, step: float) -> Self:
         """The point on a lattice of `step` tiles at or below this one on each axis. Height is carried through.
 
-        Where `snapped` rounds, this cuts down, which is what the game does to a point it is given: a move to
+        Where `snapped` rounds to nearest, this rounds down, as the game does to a point it is given: a move to
         x = 157.123456 is carried out at 157.123291, a whole `POINT_PRECISION` below (in game).
         """
         if step <= 0:
@@ -210,9 +210,9 @@ class _PointND(tuple[float, ...]):
     def __truediv__(self, other: PointLike | float) -> Self:
         return self._combine(other, operator.truediv)
 
-    # Required, not conveniences: without them `(1, 2) + point` inherits tuple concatenation and `2 * point`
-    # inherits sequence repetition, both silently returning a 4-tuple. Delegating to the forward operator keeps
-    # `Point`'s fast path. Addition and multiplication are commutative, so no operand order is lost.
+    # Required: without them `(1, 2) + point` is tuple concatenation and `2 * point` is sequence repetition, both
+    # silently returning a 4-tuple. Delegating to the forward operator keeps `Point`'s fast path; addition and
+    # multiplication are commutative, so nothing is lost.
 
     def __radd__(self, other: PointLike | float) -> Self:
         return self.__add__(other)
@@ -244,7 +244,7 @@ class Point(_PointND, tuple[float, float]):
 
     @classmethod
     def _from_proto(cls, data: common_pb2.Point2D | common_pb2.PointI) -> Self:
-        """Build from a protobuf 2D point message."""
+        """Read a point from the game's 2D point message."""
         return cls((data.x, data.y))
 
     def with_height(self, z: float = 0.0) -> Point3D:

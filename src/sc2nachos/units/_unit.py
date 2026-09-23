@@ -21,35 +21,35 @@ if TYPE_CHECKING:
 _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
-# Looked up by the protocol's value, which is quicker than calling the enum. A placeholder has no tag, so it is never
+# Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
 # read into a unit.
 _VISIBILITIES = {int(member): member for member in Visibility}
 _ALLIANCES = {int(member): member for member in Alliance}
 _CLOAKS = {int(member): member for member in CloakState}
-# Worn by a unit a phoenix holds in the air, which the game reports as not flying.
+# Worn by a unit a phoenix holds in the air. The game reports such a unit as not flying.
 _LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
-# An id is its alliance's digit followed by this many digits counting that alliance's units.
+# An id is the alliance's digit followed by a count of that alliance's units, below this.
 _IDS_PER_ALLIANCE = 100_000
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
-    """A message of its own holding what `report` holds, which keeps no observation alive."""
+    """A standalone copy of `report`, which keeps no observation alive."""
     copy = raw_pb2.Unit()
     copy.CopyFrom(report)
     return copy
 
 
 class Unit[K: UnitType.AnyType]:
-    """A unit of the game, one object under one id for the whole game, reading as the game last reported it.
+    """A unit of the game: one object under one id for the whole game, reading as the game last reported it.
 
-    Where it is, what type it is and how it is seen read as of the last observation that held it. Everything else
-    reads as of the last observation that showed it in sight, `last_seen`, and raises `NotReportedError` for a unit
-    never shown in sight. A structure out of sight stays in the observation, `IN_FOG`. A unit that leaves the
-    observation is stale, keeps what it last read, and is observed again under the same id if it comes back.
+    Position, type and visibility read as of the last observation that listed the unit. Everything else reads as
+    of the last observation that showed it in sight, `last_seen`, and raises `NotReportedError` for a unit never
+    shown in sight. A structure out of sight stays in the observation as `IN_FOG`. A unit that leaves the
+    observation is stale: it keeps its last values, and is observed under the same id again if it comes back.
     """
 
-    # `OwnUnit` declares none, so that a unit can change between the two classes in place. `__weakref__` lets a bot
-    # key data of its own by unit, in a `weakref.WeakKeyDictionary`, which slots otherwise rule out.
+    # `OwnUnit` declares no slots, so a unit can change between the two classes in place. `__weakref__` lets a bot
+    # key its own data by unit in a `weakref.WeakKeyDictionary`, which slots would otherwise rule out.
     __slots__ = (
         "__weakref__",
         "_dead",
@@ -91,7 +91,7 @@ class Unit[K: UnitType.AnyType]:
         self._tag = report.tag
         self._latest_report = report
         self._latest_report_in_vision = report if report.display_type == _IN_VISION else None
-        # Kept only for a unit out of sight; one in sight was last seen at its last observation.
+        # Set only for a unit out of sight; a unit in sight was last seen at its last observation.
         self._last_seen = None
         self._position = Point((report.pos.x, report.pos.y))
         self._own = report.alliance == _OWN
@@ -103,14 +103,14 @@ class Unit[K: UnitType.AnyType]:
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
-        """Read what the observation at `step` reports of this unit, under the tag it had last time.
+        """Read this unit's report from the observation at `step`, under the tag it had before.
 
-        The tracker sets `_tag` itself when the unit is observed under another.
+        The tracker sets `_tag` itself when the unit is observed under a new one.
         """
         position = self._position
         last = self._step
         if self._stale:
-            # Back in the observation: how it moved while away is not known.
+            # Back in the observation. How it moved while away is not known.
             self._stale = False
             self._previous_position = None
         elif step != last:
@@ -119,17 +119,17 @@ class Unit[K: UnitType.AnyType]:
         self._step = step
         reported = report.pos
         x, y = reported.x, reported.y
-        # Most units stand still, and comparing is quicker than building another point.
+        # Most units stand still, and comparing is faster than building a new point.
         if x != position[0] or y != position[1]:
             self._position = Point((x, y))
         if report.display_type == _IN_VISION:
             self._latest_report_in_vision = report
         elif self._latest_report_in_vision is self._latest_report:
-            # Out of sight from now on: what was last seen outlives the observation it came in.
+            # Just went out of sight: the last sighting must outlive the observation it came in.
             self._latest_report_in_vision = _copy(self._latest_report)
             self._last_seen = last
         if (report.alliance == _OWN) is not self._own:
-            # Read before the report it came in replaces the last one.
+            # The old alliance is read before the new report replaces the old one.
             self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._latest_report.alliance]))
             self._update_alliance()
         self._latest_report = report
@@ -139,7 +139,8 @@ class Unit[K: UnitType.AnyType]:
             self._tracker.last_changes.units_type_changed.append((self, previous))
 
     def _mark_stale(self) -> None:
-        """Be stale: out of the observation, keeping what it last read without keeping that observation alive."""
+        """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
+        alive."""
         self._stale = True
         report = self._latest_report
         copy = _copy(report)
@@ -148,22 +149,23 @@ class Unit[K: UnitType.AnyType]:
         self._latest_report = copy
 
     def _mark_dead(self) -> None:
-        """Be dead: out of the observation for good."""
+        """Mark the unit dead: out of the observation for good."""
         if not self._stale:
             self._mark_stale()
         self._dead = True
 
     def _update_unit_type(self, raw_type: int) -> None:
-        """Become a unit of `raw_type`: the one place a unit's type is set, on creation and at every morph.
+        """Set the unit's type to `raw_type`. This is the one place a type is set, on creation and at every morph.
 
-        Raises `UncuratedIdError` for a type the curated ids leave out, as the observation is taken in, since a type
-        the game reports belongs among them.
+        Raises `UncuratedIdError`, as the observation is taken in, for a type the curated ids leave out: a type the
+        game reports belongs among them.
         """
         self._raw_type = raw_type
         self._type_id = UnitTypeId.read(raw_type)
 
     def _update_alliance(self) -> None:
-        """Change sides, and with them class, to `OwnUnit` or back: a neural parasite takes a unit over and lets go."""
+        """Change sides, and with them class, to `OwnUnit` or back, as when a neural parasite takes a unit over or
+        lets it go."""
         from sc2nachos.units._own_unit import OwnUnit
 
         self._own = not self._own
@@ -171,7 +173,7 @@ class Unit[K: UnitType.AnyType]:
         object.__setattr__(self, "__class__", OwnUnit if self._own else Unit)
 
     def _never_seen_error(self, what: str) -> NotReportedError:
-        """The error for reading `what` of a unit the game has never shown in sight."""
+        """The error for reading `what` from a unit the game has never shown in sight."""
         return NotReportedError(f"the game never showed {self!r} in sight, so it never reported its {what}")
 
     def __repr__(self) -> str:
@@ -184,61 +186,62 @@ class Unit[K: UnitType.AnyType]:
     def id(self) -> int:
         """NachOS's id for this unit, the same for the whole game.
 
-        Its first digit is the unit's alliance when first seen, `Alliance.OWN` being 1 and `Alliance.ENEMY` 4, and
-        the rest counts that alliance's units in the order they were first seen.
+        The first digit is the unit's alliance when first seen, `Alliance.OWN` being 1 and `Alliance.ENEMY` 4. The
+        rest counts that alliance's units in the order they were first seen.
         """
         return self._id
 
     @property
     def first_alliance(self) -> Alliance:
-        """Whose side it was on when first seen, which its `id` keeps: a unit of this player's under a neural parasite
-        reads `Alliance.ENEMY` for `alliance` and `Alliance.OWN` here, and takes this player's supply still."""
+        """Whose side the unit was on when first seen, as its `id` records. A unit of this player's under a neural
+        parasite reads `Alliance.ENEMY` for `alliance` and `Alliance.OWN` here, and still takes this player's
+        supply."""
         return _ALLIANCES[self._id // _IDS_PER_ALLIANCE]
 
     @property
     def tag(self) -> int:
-        """The game's current handle for this unit, which changes each time a structure goes out of sight."""
+        """The game's current tag for this unit. A structure's tag changes each time it goes out of sight."""
         return self._tag
 
     @property
     def type_id(self) -> UnitTypeId:
-        """What type of unit this is."""
+        """The unit's type."""
         return self._type_id
 
     @property
     def alliance(self) -> Alliance:
-        """Whose side it is on."""
+        """Whose side the unit is on."""
         return _ALLIANCES[self._latest_report.alliance]
 
     @property
     def owner_id(self) -> int:
-        """The id of the player it belongs to, which is 16 for the map's own units."""
+        """The id of the player the unit belongs to. 16 for the map's own units."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("owner")
         return report.owner
 
-    # Its place in the game's reports.
+    # Whether the game still reports it.
 
     @property
     def is_stale(self) -> bool:
-        """Whether the last observation left it out: it went out of sight, into a transport or a gas building, into a
-        structure it is becoming, as a drone does, or died."""
+        """Whether the last observation left the unit out: it went out of sight, into a transport or a gas building,
+        or into a structure it is becoming, as a drone does, or it died."""
         return self._stale
 
     @property
     def is_dead(self) -> bool:
-        """Whether it is dead: reported so, or a structure that cannot lift off or uproot missing from its spot.
+        """Whether the unit is dead: reported dead, or a structure that cannot lift off or uproot gone from its spot.
 
         The game reports only the deaths a player can see. A structure that dies out of sight is found dead when its
-        spot comes into sight again and it is not there. A unit of this player's that became a structure, as a drone
-        does, is dead once that structure finishes, or dies without the unit coming back from a cancel. A dead unit is
+        spot comes back into sight without it. A unit of this player's that became a structure, as a drone does, is
+        dead once that structure finishes, or once it dies without the unit coming back from a cancel. A dead unit is
         stale for good.
         """
         return self._dead
 
     @property
     def last_seen(self) -> int | None:
-        """The step of the last observation that showed it in sight, or `None` if none has."""
+        """The step of the last observation that showed the unit in sight, or `None` if none has."""
         if self._latest_report.display_type == _IN_VISION:
             return self._step
         return self._last_seen
@@ -247,29 +250,29 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def position(self) -> Point:
-        """Where it stands on the ground plane."""
+        """The unit's position on the ground plane."""
         return self._position
 
     @property
     def height(self) -> float:
-        """How high it is, on the scale of the map's terrain heights."""
+        """The unit's height, on the scale of the map's terrain heights."""
         return self._latest_report.pos.z
 
     @property
     def radius(self) -> float:
-        """The radius of the circle it takes up around its position."""
+        """The radius of the circle the unit takes up around its position."""
         return self._latest_report.radius
 
     @property
     def facing(self) -> float:
-        """The direction it faces, in radians from the positive x-axis."""
+        """The direction the unit faces, in radians from the positive x-axis."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("facing")
         return report.facing
 
     @property
     def velocity(self) -> Point | None:
-        """How fast it moved between its last two observations, in distance per second.
+        """The unit's velocity between its last two observations, in distance per second.
 
         `None` for a unit observed only once since it was first seen or since it came back.
         """
@@ -284,17 +287,17 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def visibility(self) -> Visibility:
-        """Whether it is in sight, a structure remembered out of sight, or in sight but undetected."""
+        """Whether the unit is in sight, a structure remembered out of sight, or in sight but undetected."""
         return _VISIBILITIES[self._latest_report.display_type]
 
     @property
     def cloak_state(self) -> CloakState:
-        """Whether it is cloaked, and whether that is seen through."""
+        """Whether the unit is cloaked, and whether this player sees through it."""
         return _CLOAKS[self._latest_report.cloak]
 
     @property
     def is_flying(self) -> bool:
-        """Whether it is in the air, a unit held up by a phoenix's graviton beam included."""
+        """Whether the unit is in the air, including one held up by a phoenix's graviton beam."""
         now = self._latest_report
         if now.display_type != _IN_FOG:
             return now.is_flying or _LIFTED in now.buff_ids
@@ -304,7 +307,7 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_burrowed(self) -> bool:
-        """Whether it is burrowed."""
+        """Whether the unit is burrowed."""
         now = self._latest_report
         if now.display_type != _IN_FOG:
             return now.is_burrowed
@@ -314,21 +317,22 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_hallucination(self) -> bool:
-        """Whether it is a hallucination: always told for this player's own, and for an enemy's only once detected."""
+        """Whether the unit is a hallucination. Always known for this player's own units; for an enemy's, only once
+        detected."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("hallucination")
         return report.is_hallucination
 
     @property
     def detect_range(self) -> float:
-        """How far it detects cloaked and burrowed units, and 0 for a unit that does not."""
+        """How far the unit detects cloaked and burrowed units. 0 for a unit that does not detect."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("detection range")
         return report.detect_range
 
     @property
     def radar_range(self) -> float:
-        """How far its radar shows units, and 0 for a unit without one."""
+        """How far the unit's radar shows units. 0 for a unit without one."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("radar range")
         return report.radar_range
@@ -337,63 +341,63 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def health(self) -> float:
-        """The health it has left."""
+        """The unit's current health."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         return report.health
 
     @property
     def health_max(self) -> float:
-        """The health it has when unhurt."""
+        """The unit's maximum health."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         return report.health_max
 
     @property
     def health_fraction(self) -> float:
-        """The health it has left, as a fraction of its most."""
+        """The unit's health as a fraction of its maximum."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         return report.health / report.health_max if report.health_max else 0.0
 
     @property
     def shield(self) -> float:
-        """The shield it has left."""
+        """The unit's current shield."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("shield")
         return report.shield
 
     @property
     def shield_max(self) -> float:
-        """The shield it has when full, and 0 for a unit without one."""
+        """The unit's maximum shield. 0 for a unit without one."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("shield")
         return report.shield_max
 
     @property
     def shield_fraction(self) -> float:
-        """The shield it has left, as a fraction of its most, and 0 for a unit without one."""
+        """The unit's shield as a fraction of its maximum. 0 for a unit without one."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("shield")
         return report.shield / report.shield_max if report.shield_max else 0.0
 
     @property
     def life(self) -> float:
-        """Its health and shield together."""
+        """The unit's health and shield together."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         return report.health + report.shield
 
     @property
     def life_max(self) -> float:
-        """Its health and shield together when unhurt and full."""
+        """The unit's maximum health and shield together."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         return report.health_max + report.shield_max
 
     @property
     def life_fraction(self) -> float:
-        """Its health and shield together, as a fraction of their most."""
+        """The unit's health and shield together, as a fraction of their combined maximum."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("health")
         most = report.health_max + report.shield_max
@@ -401,32 +405,32 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def energy(self) -> float:
-        """The energy it has."""
+        """The unit's current energy."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("energy")
         return report.energy
 
     @property
     def energy_max(self) -> float:
-        """The most energy it can hold, and 0 for a unit without energy."""
+        """The unit's maximum energy. 0 for a unit without energy."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("energy")
         return report.energy_max
 
     @property
     def energy_fraction(self) -> float:
-        """The energy it has, as a fraction of its most, and 0 for a unit without energy."""
+        """The unit's energy as a fraction of its maximum. 0 for a unit without energy."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("energy")
         return report.energy / report.energy_max if report.energy_max else 0.0
 
-    # Its state.
+    # State.
 
     @property
     def build_progress(self) -> float:
-        """How far a structure is through construction, or a unit through warping in, from 0 to 1.
+        """A structure's progress through construction, or a unit's through warping in, from 0 to 1.
 
-        Anything else reads 1: an egg or a cocoon morphing into a unit does too, and its progress is its order's.
+        Anything else reads 1, including an egg or a cocoon morphing into a unit, whose progress is its order's.
         """
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("build progress")
@@ -434,64 +438,66 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_complete(self) -> bool:
-        """Whether a structure has finished construction, or a unit warping in. Anything else is complete."""
+        """Whether a structure has finished construction, or a unit has finished warping in. Anything else is
+        complete."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("build progress")
         return report.build_progress == 1.0
 
     @property
     def is_powered(self: Unit[UnitType.ProtossStructure]) -> bool:
-        """Whether a Protoss structure stands in a pylon's power field, and False for one that needs no power, such
-        as a nexus, a pylon or an assimilator."""
+        """Whether a Protoss structure stands in a pylon's power field. False for one that needs no power, such as a
+        nexus, a pylon or an assimilator."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("power")
         return report.is_powered
 
     @property
     def is_active(self) -> bool:
-        """Whether it is busy: moving, attacking, gathering, training or researching, an enemy's included."""
+        """Whether the unit is busy: moving, attacking, gathering, training or researching. Reported for enemy units
+        too."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("activity")
         return report.is_active
 
     @property
     def attack_upgrade_level(self) -> int:
-        """The attack upgrades it has."""
+        """The unit's attack upgrade level."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("attack upgrades")
         return report.attack_upgrade_level
 
     @property
     def armor_upgrade_level(self) -> int:
-        """The armor its upgrades add, which is not a count of levels: Chitinous Plating adds 2 to an ultralisk's."""
+        """The armor the unit's upgrades add. Not a count of levels: Chitinous Plating adds 2 to an ultralisk's."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("armor upgrades")
         return report.armor_upgrade_level
 
     @property
     def shield_upgrade_level(self) -> int:
-        """The shield upgrades it has."""
+        """The unit's shield upgrade level."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("shield upgrades")
         return report.shield_upgrade_level
 
     @property
     def mineral_contents(self) -> int:
-        """The minerals left to mine from it, and 0 for anything but a mineral field."""
+        """The minerals left in a mineral field. 0 for anything else."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("minerals")
         return report.mineral_contents
 
     @property
     def vespene_contents(self) -> int:
-        """The vespene left to mine from it, and 0 for anything but a geyser or what stands on one."""
+        """The vespene left in a geyser, or in the gas building on it. 0 for anything else."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("vespene")
         return report.vespene_contents
 
     @property
     def buffs(self) -> frozenset[BuffId]:
-        """The buffs it wears."""
+        """The buffs on the unit."""
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("buffs")
         return frozenset(BuffId.read(buff) for buff in report.buff_ids)
@@ -500,36 +506,36 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def type_data(self) -> UnitTypeData:
-        """What the game's tables say about its type, before any upgrade."""
+        """The game's table entry for the unit's type, before any upgrade."""
         return self._tracker.game_data.units[self.type_id]
 
     @property
     def weapons(self) -> tuple[Weapon, ...]:
-        """Its type's weapons with the upgrades its owner has: this player's own for its units, `Api.enemy.upgrades`
-        for the enemy's, and none for anyone else's."""
+        """The unit type's weapons with its owner's upgrades applied: this player's upgrades for its own units,
+        `Api.enemy.upgrades` for the enemy's, and none for anyone else's."""
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
     def speed(self) -> float:
-        """How fast its type moves with the upgrades its owner has, as `weapons` counts them, and before creep or any
-        buff: in distance per second, as `velocity` is."""
+        """The unit type's speed with its owner's upgrades applied, as for `weapons`, before creep or any buff. In
+        distance per second, like `velocity`."""
         return self._tracker.upgrade_tracker.upgraded_type(self).speed
 
     @property
     def armor(self) -> float:
-        """Its base armor with the armor its upgrades add: what it reports for a unit in sight, and what its owner is
-        known to have for one out of it."""
+        """The unit's base armor plus the armor its upgrades add: as the unit reports it when in sight, and as its
+        owner is known to have when out of sight."""
         return self._tracker.upgrade_tracker.armor_of(self)
 
     @property
     def shield_armor(self) -> float:
-        """The armor its shields have, which is the shields levels its owner has, and 0 for a unit without shields.
+        """The armor of the unit's shields: the shield upgrade levels its owner has, and 0 for a unit without shields.
 
-        The game's tables hold none of this; `docs/curating-ids.md` has what a level was measured to take off a hit.
+        The game's tables do not hold this. `docs/curating-ids.md` has what a level was measured to take off a hit.
         """
         return self._tracker.upgrade_tracker.shield_armor_of(self)
 
     @property
     def is_structure(self) -> bool:
-        """Whether the game's tables give its type the structure attribute."""
+        """Whether the game's tables give the unit's type the structure attribute."""
         return Attribute.STRUCTURE in self.type_data.attributes

@@ -1,21 +1,22 @@
-"""Find how the game takes orders: what each ability does to the orders a unit has, what the queue flag does to
-training and research, what several orders to one unit in one request do, what the game reports it carried out, how
-precisely it keeps a point, what re-sending an order costs, which orders fail once the game has accepted them, and when
-a realtime game shows an order.
+"""Find how the game takes orders: what each ability does to a unit's orders, what the queue flag does to training and
+research, what several orders to one unit in one request do, what the game reports it carried out, how precisely it
+keeps a point, what re-sending an order costs, which orders fail after the game has accepted them, and when a realtime
+game shows an order.
 
-Needs StarCraft II installed. Each sweep plays a game of its own, against the easiest computer, under the cheats it
-names, and runs trials in turn::
+Needs StarCraft II installed. Each sweep plays its own game against the easiest computer, under the cheats it names,
+and runs its trials in turn::
 
     uv run python tools/sweep_orders.py
     uv run python tools/sweep_orders.py keeps-terran requests --out orders.json
 
-- `keeps-terran`, `keeps-protoss` and `keeps-zerg` give every unit type that moves each ability it is offered, bar
-  those that make, research, build, send it somewhere, gather, load or cancel, while it moves: unqueued, then queued.
+- `keeps-terran`, `keeps-protoss` and `keeps-zerg` give every mobile unit type each ability it is offered while it
+  moves, unqueued and then queued, except abilities that make, research, build, send it somewhere, gather, load or
+  cancel.
 - `production-terran`, `production-protoss` and `production-zerg` give structures that are making something more to
   make, research and morph, unqueued and queued, and other orders.
 - `requests` sends several orders to one unit in one request, orders to units that cannot take them, odd targets and
   odd points, a camera move, an autocast toggle, and 500 commands at once.
-- `repeats` re-sends what a unit is doing every step, or every few, and measures what it costs.
+- `repeats` re-sends what a unit is doing every step, or every few, and measures the cost.
 - `errors` plays without cheats, so that minerals and supply run short; `spell-errors` has orders fail for want of
   energy, and gives spells and builds to groups.
 - `realtime` plays a realtime game and watches for each order.
@@ -26,28 +27,33 @@ names, and runs trials in turn::
   another, in the same request and a step later.
 - `structure-abilities-terran`, `-protoss` and `-zerg` give each structure that makes something every ability it is
   offered that makes nothing, while it is making something.
-- `toggles-terran`, `-protoss` and `-zerg` turn each toggle on while its unit moves, then off, which a unit is
-  offered only once the first half has taken.
-- `supply` plays under a real supply cap, and gives structures more to make than the supply left.
+- `toggles-terran`, `-protoss` and `-zerg` turn each toggle on while its unit moves, then off; the off half is offered
+  only once the on half has taken.
+- `supply` plays under a real supply cap, and gives structures more to make than the supply left allows.
 - `slots-terran`, `-protoss` and `-zerg` give a structure with a reactor more than it makes at once, a research
   structure every research it has, a larva three morphs and a warp gate two warp-ins.
-- `cancels-offered` asks a morph, an add-on, a research, a train and a part-built structure what cancels them,
-  at real prices, so that what each gives back is recorded too.
+- `cancels-offered` asks a morph, an add-on, a research, a train and a part-built structure what cancels them, at real
+  prices, so that the refund is recorded too.
 - `producer-dies` kills what is making something, and reads what the observations after say.
+- `one-command-many-makers` plays without `free`, and gives one train, one research and one add-on to several
+  structures at once, to find whether each carries it out or only one.
+- `add-on-while-flying` plays without `free`, and tells a flying barracks to build a reactor with no point, at ground
+  with room beside it, and at ground whose add-on place a depot fills.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
-  third of five queued, which no raw ability can name.
+  third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
+  feature layer, to find whether the selection alone is what the game needs.
 
-What it finds is written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
-the orders of the units the trial read, with when, what the game reported it carried out, every action error, and
-what the trial measured. `docs/game-behavior.md` holds the findings. Measured in game while writing this:
+The findings are written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
+the orders of the units the trial read and when, what the game reported it carried out, every action error, and what
+the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in game while writing this:
 
 - A unit made out of sight is not found made, so a unit of this player's is made first where it would stand.
-- A vital set to 0 by debug command is set to its most, so a unit is drained to 1 energy.
+- A vital set to 0 by debug command is set to its maximum instead, so a unit is drained to 1 energy.
 - Under `tech_tree` a barracks without an add-on trains two marines at once, so the terran and zerg production sweeps
-  play without it and make what their orders need.
-- A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built before its move, so
-  a unit's move is read off its orders rather than assumed.
-- The `gas` cheat hands out no vespene, so `refunds` has an SCV and an orbital command paid for, not a research.
+  play without it and build what their orders need.
+- A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built ahead of its move,
+  so a unit's move is read from its orders rather than assumed.
+- The `gas` cheat hands out no vespene, so `refunds` pays for an SCV and an orbital command, not a research.
 """
 
 import argparse
@@ -73,9 +79,9 @@ from sc2nachos.protocol import ProtocolError
 
 _OWN = raw_pb2.Alliance.Self
 _SNAPSHOT = raw_pb2.DisplayType.Snapshot
-# Steps waited after each trial, so that a late report or action error is not taken for the next trial's.
+# Steps waited after each trial, so a late report or action error is not credited to the next trial.
 _SETTLE = 16
-# What each ability is aimed at, as the game's tables name it.
+# The target kinds of the game's ability table.
 _NOTHING, _POINT, _UNIT, _POINT_OR_UNIT, _POINT_OR_NOTHING = 1, 2, 3, 4, 5
 
 type Target = Point | raw_pb2.Unit | int | None
@@ -90,7 +96,7 @@ class Trial:
     verdicts: list[list[str]] = field(default_factory=list)
     """The game's answer to each request sent, one verdict per action in it."""
     reads: list[dict[str, object]] = field(default_factory=list)
-    """The units read, each read labeled, with the step it was made at."""
+    """Each labeled read of units, with its step."""
     reported: list[dict[str, object]] = field(default_factory=list)
     """What the game reported this player did, with the step it was carried out at and the step it was seen at."""
     errors: list[dict[str, object]] = field(default_factory=list)
@@ -195,12 +201,12 @@ class _Game:
         self.vespene = 0
         self.supply = (0, 0)
         self.running: Trial | None = None
-        # Every unit made by debug command, the enemy's among them, which a trial kills once done.
+        # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
-        # Ground the trial running has claimed, given back once it has killed what it made.
+        # Ground the running trial has claimed, given back once it has killed what it made.
         self._claimed: list[Point] = []
-        # What of the computer's can fight: everything with a weapon but its workers. It is killed as it comes, so
-        # that it never ends a long sweep's game.
+        # The computer's fighters: everything with a weapon except workers. They are killed as they come, so they never
+        # end a long sweep's game.
         workers = {UnitTypeId.SCV, UnitTypeId.PROBE, UnitTypeId.DRONE}
         self._fighters = frozenset(row.id for row in self.data.units.values() if row.weapons) - workers
         self._guarded_at = 0
@@ -213,7 +219,7 @@ class _Game:
     # --- Reading the game
 
     def observe(self, game_loop: int | None = None) -> None:
-        """Observe the game, at `game_loop` in a realtime game, recording what it reports into the trial running."""
+        """Observe the game, at `game_loop` in a realtime game, and record what it reports into the running trial."""
         response = self.client.observation(game_loop=game_loop)
         observation = response.observation
         self.step = observation.game_loop
@@ -247,7 +253,7 @@ class _Game:
                 self.sandbox.kill(fighters)
 
     def until(self, done: Callable[[], bool], *, steps: int = 1, limit: int = 3000) -> bool:
-        """Turn until `done`, for at most `limit` steps, and say whether it came to be."""
+        """Turn until `done`, for at most `limit` steps, and return whether it did."""
         end = self.step + limit
         while not done():
             if self.step >= end:
@@ -263,7 +269,7 @@ class _Game:
         return self.units.get(tag)
 
     def read(self, label: str, units: Iterable[raw_pb2.Unit | int]) -> list[dict[str, object]]:
-        """Record each unit's orders as they stand, under `label`, and answer them."""
+        """Record each unit's current orders under `label`, and return the entries."""
         found: list[dict[str, object]] = []
         for tag in (unit if isinstance(unit, int) else unit.tag for unit in units):
             if (unit := self.units.get(tag)) is None:
@@ -302,7 +308,7 @@ class _Game:
         return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
 
     def act(self, *actions: sc2api_pb2.Action) -> list[str]:
-        """Send `actions` in one request, and answer each verdict, recorded into the trial running."""
+        """Send `actions` in one request, record the verdicts into the running trial, and return them."""
         try:
             results = self.client.act(actions).result
         except ProtocolError as error:
@@ -316,7 +322,7 @@ class _Game:
     def order(
         self, ability: int, units: Iterable[raw_pb2.Unit | int], target: Target = None, *, queued: bool = False
     ) -> str:
-        """Order `ability` on `units` together, and answer the verdict."""
+        """Order `ability` on `units` together, and return the verdict."""
         verdicts = self.act(self.command(ability, units, target, queued=queued))
         return verdicts[0] if verdicts else "no verdict"
 
@@ -332,7 +338,7 @@ class _Game:
         command = self.sandbox.create(unit_type, owner or self.player, at)
         self.sandbox.debug(*([command] * count))
         made: list[raw_pb2.Unit] = []
-        # What is made can show up a few steps late, as vision catches up with it.
+        # A new unit can show up a few steps late, once vision catches up with it.
         for _ in range(4):
             self.turn(4)
             made = [unit for tag, unit in self.units.items() if tag not in before and unit.unit_type == unit_type]
@@ -351,10 +357,10 @@ class _Game:
         self.turn(2)
 
     def spot(self, near: Point, half: int) -> Point:
-        """The center of the free square `2 * half + 1` tiles across nearest to `near`, which is then taken.
+        """Take the free square `2 * half + 1` tiles across nearest to `near`, and return its center.
 
-        Ground claimed while a trial runs is given back once it has killed what it made, so a long sweep does not
-        push each trial further out than the last, until a structure has no room beside it for an add-on.
+        Ground claimed during a trial is given back once the trial has killed what it made, so a long sweep does not
+        push each trial further out than the last until a structure has no room beside it for an add-on.
         """
         at = self.ground.claim(near, half)
         if self.running is not None:
@@ -380,14 +386,14 @@ class _Game:
             trial.notes["failed"] = repr(error)
         finally:
             self.running = None
-        # Only what this player has and what the trial made: killing what the computer makes has it give up.
+        # Only this player's units and what the trial made: killing what the computer makes has it give up.
         new = [
             tag for tag, unit in self.units.items() if tag not in before and (unit.alliance == _OWN or tag in self.made)
         ]
         if clear and new:
             self.kill(new)
         if clear:
-            # Once nothing of the trial's stands there any more; a trial whose units stay keeps its ground too.
+            # Only once nothing of the trial's stands there; a trial whose units stay keeps its ground.
             for at in self._claimed:
                 self.ground.release(at)
         self._claimed = []
@@ -403,8 +409,8 @@ def _type_name(unit_type: int) -> str:
 # --- 1. What an ability does to the orders a unit has
 
 
-# What is not given to a moving unit: anything that makes, researches or builds, sends the unit somewhere, gathers,
-# loads, or cancels, halts or lands, each of which says what the unit does next by its nature.
+# Not given to a moving unit: anything that makes, researches or builds, sends the unit somewhere, gathers, loads,
+# cancels, halts or lands, each of which dictates what the unit does next.
 _NOT_TRIED = ("Train", "Research", "Build", "Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest")
 _NOT_TRIED += ("Load", "Unload", "Cancel", "Halt", "Land", "Lift")
 # Unit types never given an order of their own here: what the game makes and moves on its own, and what waits.
@@ -426,11 +432,11 @@ _NOT_PERFORMERS = frozenset(
         UnitTypeId.REAPER_GRENADE,
     }
 )
-# What a unit's ability is aimed at: enemies of every kind a spell can ask for, and units of this player's, biological
-# and mechanical, for what heals or repairs, all standing close enough that no caster has to walk.
+# Targets for a unit's ability: enemies of every kind a spell can ask for, and this player's units, biological and
+# mechanical, for what heals or repairs, all close enough that no caster has to walk.
 _ENEMY_AIMS = (UnitTypeId.MARAUDER, UnitTypeId.SIEGE_TANK, UnitTypeId.VIKING)
 _OWN_AIMS = (UnitTypeId.MARINE, UnitTypeId.SIEGE_TANK)
-# How far a unit is sent before its ability, and when its orders are read afterwards.
+# How far a unit is sent before its ability, and the steps at which its orders are read after.
 _MOVE_DISTANCE = 20
 _READS = (1, 6, 48)
 
@@ -479,7 +485,7 @@ def _cast(game: _Game, performer: UnitTypeId, ability: int, queued: bool, pad: P
         trial.notes["class"] = "not made"
         return
     game.set_energy(200, [caster])
-    # This player's units aimed at are hurt, so that what heals or repairs has something to do.
+    # This player's target units are hurt, so what heals or repairs has something to do.
     helped = [unit.tag for unit in made if unit.owner == game.player and unit.tag != caster.tag]
     game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Life, 20, helped)
     destination = _at(caster).towards(game.middle, _MOVE_DISTANCE)
@@ -497,7 +503,7 @@ def _cast(game: _Game, performer: UnitTypeId, ability: int, queued: bool, pad: P
     if wants_unit:
         aims += [unit.tag for unit in made if unit.tag != caster.tag]
     if aim_kind in (_POINT, _POINT_OR_UNIT, _POINT_OR_NOTHING):
-        # Off to the side of its way, so that a unit sent there is seen to leave it.
+        # Off to the side of its path, so a unit sent there is seen to leave it.
         aims.append(_at(game.units.get(caster.tag, caster)) + (0, 3))
     verdict = "no aim"
     for aim in aims:
@@ -890,7 +896,7 @@ def _requests(game: _Game) -> list[Trial]:
 
     def fogged(trial: Trial) -> None:
         site = game.toward(40)
-        # The pylon is made where a marine of this player's sees it, since only what is seen is found made.
+        # The pylon is made where a marine of this player's can see it, since only what is seen is found made.
         (scout,) = game.create(UnitTypeId.MARINE, site + (0, -4))
         (pylon,) = game.create(UnitTypeId.PYLON, site, owner=game.enemy)
         seen = game.unit(pylon.tag)
@@ -1082,14 +1088,13 @@ def _repeats(game: _Game) -> list[Trial]:
     sites = [game.spot(game.toward(14 + 6 * index), 1) for index, _ in enumerate(attack_cadences)]
 
     def attacks(trial: Trial) -> None:
-        # Each cadence stands at each site once, so that where a marine stands is told apart from how often its
-        # attack is re-sent.
+        # Each cadence stands at each site once, so a marine's position is told apart from its cadence.
         damage: dict[str, list[float]] = {label: [] for label, _ in attack_cadences}
         reports: dict[str, int] = dict.fromkeys(damage, 0)
         for turn in range(len(sites)):
             placed = [sites[(index + turn) % len(sites)] for index in range(len(attack_cadences))]
-            # Each marine is made first, so that it sees its pylon made, and the pylons are made in one request, so
-            # that every marine opens fire at the same step.
+            # Each marine is made first, so it sees its pylon made; the pylons are made in one request, so every marine
+            # opens fire in the same step.
             marines = [game.create(UnitTypeId.MARINE, site.towards(game.home, 4))[0] for site in placed]
             pylons = _made_together(game, UnitTypeId.PYLON, placed, owner=game.enemy)
             life = {pylon.tag: pylon.health + pylon.shield for pylon in pylons}
@@ -1187,13 +1192,13 @@ def _made_together(game: _Game, unit_type: UnitTypeId, sites: Sequence[Point], *
 
 
 def _summarize(trial: Trial) -> None:
-    """Keep a long trial's record short: the verdicts it had, and the first few reports."""
+    """Shorten a long trial's record to its distinct verdicts and its first few reports."""
     trial.verdicts = [sorted({verdict for verdicts in trial.verdicts for verdict in verdicts})]
     trial.reported = trial.reported[:6]
 
 
 def _depot_site(game: _Game, trial: Trial) -> Point:
-    """A site far off that the game says a depot could go up on now, so that nothing but the minerals is in question."""
+    """A far-off site the game says a depot can go up on now, so only the minerals are in question."""
     depot = AbilityId.SCV_BUILD_SUPPLY_DEPOT
     site = game.spot(game.toward(32), 1) + (0.5, 0.5)
     while not game.sandbox.placeable(depot, [site])[0]:
@@ -1203,8 +1208,8 @@ def _depot_site(game: _Game, trial: Trial) -> Point:
 
 
 def _watch_build(game: _Game, trial: Trial, builder: raw_pb2.Unit, site: Point, *, mining: bool) -> None:
-    """Record every 16 steps for 608 the minerals, how far `builder` is from `site`, its orders, and how far a depot
-    there has come. Unless `mining`, every other SCV that takes up work is stopped, so that no minerals come in."""
+    """Every 16 steps for 608, record the minerals, `builder`'s distance from `site`, its orders, and the progress of a
+    depot there. Unless `mining`, every other SCV that takes up work is stopped, so no minerals come in."""
     watched: list[tuple[int, int, float, list[str], float | None]] = []
     for _ in range(38):
         game.turn(16)
@@ -1276,7 +1281,7 @@ def _errors(game: _Game) -> list[Trial]:
                 game.order(train_scv, [center])
                 game.turn(1)
         trial.notes["minerals before the orders"] = game.minerals
-        # Behind the command center first, so that the builder is a while on its way to the site.
+        # Behind the command center first, so the builder takes a while to reach the site.
         waypoint = game.home.towards(game.middle, -10)
         game.act(
             game.command(AbilityId.GENERAL_MOVE, [builder], waypoint), game.command(depot, [builder], site, queued=True)
@@ -1304,7 +1309,7 @@ def _errors(game: _Game) -> list[Trial]:
     )
 
     def supply_short(trial: Trial) -> None:
-        # Every depot goes, so that the command center's 15 is the cap.
+        # Every depot is killed, so the command center's 15 is the cap.
         game.kill(game.own(UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED))
         game.until(lambda: game.minerals >= 300, steps=16, limit=6000)
         trial.notes["supply"] = list(game.supply)
@@ -1359,7 +1364,7 @@ def _spell_errors(game: _Game) -> list[Trial]:
         destination = start.towards(game.middle, 8)
         game.order(AbilityId.GENERAL_MOVE, [templar], destination)
         game.order(storm, [templar], destination.towards(game.middle, 4), queued=True)
-        # Not 0, which a debug command reads as its most.
+        # Not 0, which a debug command reads as the maximum.
         game.set_energy(1, [templar])
         game.turn(2)
         game.read("moving, a storm queued, its energy gone", [templar])
@@ -1680,7 +1685,7 @@ def _refunds(game: _Game) -> list[Trial]:
     (center,) = game.own(UnitTypeId.COMMAND_CENTER)[:1]
     # What an orbital command needs.
     game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
-    # Command centers whose SCVs take up what minerals are left over, so that a trial starts with as few as it asks.
+    # Command centers whose SCVs soak up leftover minerals, so a trial starts with as few as it asks for.
     sinks = [game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))[0] for _ in range(3)]
 
     def mine_until(amount: int) -> None:
@@ -1780,12 +1785,12 @@ def _refunds(game: _Game) -> list[Trial]:
 # --- 10. What a producer's other abilities do to what it is making
 
 
-# What a structure making something is not given here: what makes something, which the production sweeps measured,
-# a cancel, which takes away what it is making by design, and the right-click, which stands for what the game picks.
+# Not given to a structure making something: what makes something, which the production sweeps measured; a cancel,
+# which removes the work by design; and the right-click, which stands for whatever the game picks.
 _NOT_BESIDE = ("Smart", "Cancel")
-# What stands beside a structure put to work, so that nothing it is given has to walk or look far: a worker, a
-# caster for what only an energy-capable unit takes, and a structure of the race, which is what a supply drop or a
-# Chrono Boost is aimed at, and which powers a protoss one besides.
+# What stands beside a structure put to work, so nothing it is given has to walk or look far: a worker, a caster for
+# what only a unit with energy takes, and a structure of the race, the target of a supply drop or a Chrono Boost, which
+# also powers a protoss structure.
 _BESIDE_AIMS = {
     Race.TERRAN: (UnitTypeId.SCV, UnitTypeId.GHOST, UnitTypeId.SUPPLY_DEPOT),
     Race.PROTOSS: (UnitTypeId.PROBE, UnitTypeId.SENTRY, UnitTypeId.PYLON),
@@ -1794,10 +1799,10 @@ _BESIDE_AIMS = {
 
 
 def _puts_to_work(game: _Game, structure: UnitTypeId) -> AbilityId | None:
-    """The ability that has `structure` start making something, or `None` where it makes nothing of its own.
+    """The ability that sets `structure` making something, or `None` where it makes nothing.
 
-    The first by name, which is a ghost for a barracks and a mothership for a nexus, so the sweep plays under
-    `tech_tree`: without it the structure is offered neither and the trial records that it made nothing.
+    The first by name: a ghost for a barracks, a mothership for a nexus. The sweep plays under `tech_tree` for this;
+    without it the structure is offered neither and the trial records that it made nothing.
     """
     works = sorted(
         row.id.name
@@ -1809,7 +1814,7 @@ def _puts_to_work(game: _Game, structure: UnitTypeId) -> AbilityId | None:
 
 def _structure_abilities(game: _Game, race: Race) -> list[Trial]:
     """Give each structure of `race` that makes something every ability it is offered that makes nothing, while it is
-    making something. NachOS reads all of these as leaving a structure's orders alone, having seen only two."""
+    making something. NachOS treats all of these as leaving a structure's orders alone, having seen only two."""
     trials: list[Trial] = []
     structures = [
         row.id
@@ -1839,16 +1844,16 @@ def _structure_abilities(game: _Game, race: Race) -> list[Trial]:
 def _beside(
     game: _Game, structure: UnitTypeId, work: AbilityId, ability: int, pad: Point, trial: Trial, *, race: Race
 ) -> None:
-    """Put `structure` to work with `work`, give it `ability` beside that, and read what became of what it makes."""
+    """Set `structure` working with `work`, give it `ability` on top, and read what became of its work."""
     aim_kind = game.aims.get(ability, _NOTHING)
     wants_unit = aim_kind in (_UNIT, _POINT_OR_UNIT)
-    # Beside it whatever it is given: what an ability is aimed at, and what one that takes no target finds for
-    # itself, such as the units a command center loads.
+    # Beside it, whatever it may be given: targets for aimed abilities, and what an untargeted one finds for itself,
+    # such as the units a command center loads.
     requests = [(structure, game.player, pad)]
     requests += [(kind, game.player, pad + (3, -3 + 3 * index)) for index, kind in enumerate(_BESIDE_AIMS[race])]
     made = game.sandbox.spawn(requests)
     game.made.update(unit.tag for unit in made)
-    # A step for a pylon's power to reach the structure it stands by, which a gateway is offered nothing without.
+    # A step for the pylon's power to reach the structure; a gateway is offered nothing without it.
     game.turn(2)
     maker = next((unit for unit in made if unit.unit_type == structure), None)
     if maker is None:
@@ -1884,8 +1889,8 @@ def _beside(
 
 
 def _making(read: dict[str, object], work: str) -> tuple[int, float | None] | None:
-    """Where `work` stands in what a unit read is carrying out and how far along it is, or `None` where the unit is
-    not carrying it out at all. Progress is `None` where the order has not started, which the game leaves out."""
+    """The position of `work` in the read unit's orders and its progress, or `None` where the unit is not carrying it
+    out. Progress is `None` where the order has not started, which the game leaves out."""
     orders = read.get("orders")
     if not isinstance(orders, list):
         return None
@@ -1898,10 +1903,10 @@ def _making(read: dict[str, object], work: str) -> tuple[int, float | None] | No
 
 
 def _still_making(verdict: str, before: dict[str, object], after: Sequence[dict[str, object]]) -> str:
-    """What an ability left of what a structure was making, from the structure read before it and after.
+    """What an ability left of a structure's work, from the reads before and after it.
 
-    Every read is looked at, so an ability that goes in front of what a structure is making is told from one that
-    takes it away: the first says so and goes on to say whether the work survived behind it.
+    Every read is checked, so an ability that goes ahead of the work is told from one that removes it: the first says
+    so, and whether the work survived behind it.
     """
     if verdict != "Success":
         return f"refused: {verdict}"
@@ -1927,8 +1932,8 @@ def _still_making(verdict: str, before: dict[str, object], after: Sequence[dict[
 # --- 11. The half of a toggle that turns one off
 
 
-# Each toggle a unit that moves is offered: the half that turns it on, which #42 saw it keep moving through, and the
-# half that turns it off, which a unit is offered only once the first has taken.
+# Each toggle a mobile unit is offered: the on half, which #42 saw the unit keep moving through, and the off half,
+# offered only once the on half has taken.
 _TOGGLES = (
     (UnitTypeId.BANELING, AbilityId.BANELING_ATTACK_STRUCTURES_ON, AbilityId.BANELING_ATTACK_STRUCTURES_OFF),
     (UnitTypeId.BANSHEE, AbilityId.BANSHEE_CLOAK_ON, AbilityId.BANSHEE_CLOAK_OFF),
@@ -1954,8 +1959,8 @@ def _toggles_off(game: _Game, race: Race) -> list[Trial]:
 def _toggled(game: _Game, performer: UnitTypeId, on: AbilityId, off: AbilityId, pad: Point, trial: Trial) -> None:
     """Send `performer` off, turn `on` while it moves, then turn it `off`, and class what each half left of its move.
 
-    Both halves are classed, not only the off one: a unit is offered the on half of some toggles only under a name
-    the sweep of what an ability does to a moving unit passes over, such as the baneling's attack on structures.
+    Both halves are classed, not only the off one: some toggles' on half is offered under a name the `keeps` sweep
+    skips, such as the baneling's attack on structures.
     """
     made = game.create(performer, pad)
     if not made:
@@ -1972,7 +1977,7 @@ def _toggled(game: _Game, performer: UnitTypeId, on: AbilityId, off: AbilityId, 
     move = next((order for order in shown if "MOVE" in order.ability), None)
 
     def given(half: AbilityId, label: str) -> tuple[str, list[float | None]]:
-        """Give `half` and answer how it left the move, and how far the unit still has to go at each read."""
+        """Give `half` and return how it left the move, and the distance left at each read."""
         verdict = game.order(half, [mover])
         orders: list[list[_Shown] | None] = []
         distances: list[float | None] = []
@@ -2000,7 +2005,7 @@ def _supply(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
 
     def watched(tag: int, steps: int, *, every: int = 1) -> list[list[object]]:
-        """Each step, what the supply stands at and what the structure `tag` is making."""
+        """The supply and what the structure `tag` is making, at each read."""
         seen: list[list[object]] = []
         for _ in range(steps):
             unit = game.unit(tag)
@@ -2017,8 +2022,8 @@ def _supply(game: _Game) -> list[Trial]:
         trial.notes["supply filled to"] = list(game.supply)
 
     def queued(trial: Trial) -> None:
-        # The barracks stands before the supply is filled, so that what is left under the cap is read as it will be
-        # when the marines are ordered.
+        # The barracks stands before the supply is filled, so the supply left under the cap is what it will be when the
+        # marines are ordered.
         (each,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4))
         crowd(trial, leaving=2)
         used, cap = game.supply
@@ -2060,10 +2065,10 @@ def _supply(game: _Game) -> list[Trial]:
 
 
 def _terran_slots(game: _Game) -> list[Trial]:
-    """How many of what a structure with a reactor holds are made at once, and how deep a research structure goes."""
+    """How many of a reactored structure's queue are made at once, and how deep a research structure's queue goes."""
     trials: list[Trial] = []
-    # What a factory and a starport need, which is a structure rather than the tech tree waived, since waiving it
-    # has a barracks without an add-on train two at once.
+    # What a factory and a starport need, built rather than waived with `tech_tree`, which has a barracks without an
+    # add-on train two at once.
     game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
     game.create(UnitTypeId.FACTORY, game.spot(game.toward(8), 3))
 
@@ -2168,7 +2173,7 @@ def _zerg_slots(game: _Game) -> list[Trial]:
         game.turn(2)
         game.read("a drone to each larva, and two over", [*larvae, hatchery])
 
-    # Before the trial that spends one, since a hatchery grows its larvae back slowly.
+    # Before the trial that spends a larva, since a hatchery regrows them slowly.
     trials.append(game.trial("a drone ordered on every larva, and two more", spread, clear=False))
     trials.append(game.trial("one larva given three morphs in one request", larva, clear=False))
 
@@ -2242,11 +2247,11 @@ def _protoss_slots(game: _Game) -> list[Trial]:
 
 
 def _cancels_offered(game: _Game) -> list[Trial]:
-    """Ask what each thing part way through something is offered to cancel it with, and cancel it with that.
+    """Ask what each structure part way through something is offered to cancel it, and cancel with that.
 
-    It plays at real prices and records the purse each step besides, which shows what the cancel gave back.
-    What that comes to is the game's own rule -- three quarters of a morph, an add-on or a structure going
-    up, and all of a train or a research -- so the numbers are a check on it rather than the finding.
+    It plays at real prices and records the purse each step, which shows the refund. The refund is the game's own
+    rule -- three quarters of a morph, an add-on or a structure going up, and all of a train or a research -- so the
+    numbers are a check on it rather than the finding.
     """
     trials: list[Trial] = []
     # What an orbital command and a planetary fortress need.
@@ -2269,7 +2274,7 @@ def _cancels_offered(game: _Game) -> list[Trial]:
             game.turn(wait)
             spent.append(purse())
             game.read("part way through", [each])
-            # Which cancel a structure part way through something is offered, rather than the one it ought to be.
+            # The cancel the structure is offered, rather than the one it ought to be.
             offered = game.sandbox.offered([each.tag]).get(each.tag, [])
             cancels = [a for a in offered if "ancel" in _raw_name(a)]
             trial.notes["cancels offered"] = [_raw_name(a) for a in cancels]
@@ -2312,7 +2317,7 @@ def _cancels_offered(game: _Game) -> list[Trial]:
             40,
         ),
         ("a command center training an SCV", a(UnitTypeId.COMMAND_CENTER), _TRAIN_SCV, 40),
-        # The same morph left most of the way through, to find whether what comes back turns on how far it got.
+        # The same morph cancelled most of the way through, to find whether the refund depends on how far it got.
         ("a command center most of the way into an orbital", a(UnitTypeId.COMMAND_CENTER), _ORBITAL, 400),
         ("a command center most of the way through an SCV", a(UnitTypeId.COMMAND_CENTER), _TRAIN_SCV, 240),
     ):
@@ -2337,7 +2342,7 @@ def _part_built(game: _Game, purse: Callable[[], list[int]], threshold: float, t
         return
 
     def standing() -> raw_pb2.Unit | None:
-        """The depot going up, once it stands above `threshold` and is not finished."""
+        """The depot going up, once its progress is at least `threshold` and it is not finished."""
         return next(
             (
                 unit
@@ -2352,8 +2357,8 @@ def _part_built(game: _Game, purse: Callable[[], list[int]], threshold: float, t
 
     spent = [purse()]
     given: list[str] = []
-    # The game answers a placement it will not take `Success` and refuses it by action error a step later, so each
-    # spot is given until one is built on.
+    # The game answers `Success` to a placement it will not take and refuses it by action error a step later, so spots
+    # are tried until one is built on.
     for attempt in range(3):
         given.append(game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], game.spot(game.toward(12 + 4 * attempt), 3)))
         if attempt == 0:
@@ -2411,19 +2416,19 @@ def _producer_dies(game: _Game) -> list[Trial]:
 
     trials.append(game.trial("an SCV killed on its way to build", builder))
 
-    # How many steps the game took to give up on a build whose site was held; the next trial kills its builder that
-    # many steps in, to see whether the error and the death can land in one observation.
+    # Steps the game took to give up on a build whose site was held. The next trial kills its builder that many steps
+    # in, to see whether the error and the death can land in one observation.
     gave_up_after: list[int] = []
 
     def build_blocked(trial: Trial) -> None:
-        """When the game gives up on a build whose site a unit of this player's holds position on, which is the only
-        action error a builder has been seen to get (tool `sweep_orders`)."""
+        """When the game gives up on a build whose site one of this player's units holds position on: the only action
+        error a builder has been seen to get (tool `sweep_orders`)."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
         if scv is None:
             trial.notes["class"] = "no SCV"
             return
-        # Near enough that the builder is there well inside the watch: an SCV covers about 0.18 of the ground a
-        # step, so 24 away is 130 steps of walking on its own.
+        # Near enough that the builder arrives well inside the watch: an SCV covers about 0.18 a step, so 24 away is
+        # 130 steps of walking.
         at = game.spot(game.toward(10), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
         game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
@@ -2445,7 +2450,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
 
     def errored_and_killed(trial: Trial) -> None:
         """Whether the game reports an action error for an order whose unit is gone by the same observation, which
-        is what says whether such an order should read `FAILED` or `LOST`."""
+        decides whether such an order reads `FAILED` or `LOST`."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
         if scv is None or not gave_up_after:
             trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"
@@ -2474,9 +2479,9 @@ def _producer_dies(game: _Game) -> list[Trial]:
 # --- 16. Whether the item in the middle of a queue can be cancelled at all
 
 
-# What a game is joined with here. The raw interface NachOS plays on carries no way to name a queue slot, so the
-# production panel is asked instead; `raw_affects_selection` is what puts a structure ordered into the selection the
-# panel shows. The feature layer is asked for in one and left out of the other, to find which the game needs.
+# The interfaces joined with here. The raw interface NachOS plays on has no way to name a queue slot, so the production
+# panel is asked instead; `raw_affects_selection` puts an ordered structure into the selection the panel shows. One
+# asks for the feature layer and the other does not, to find which the game needs.
 _UI_INTERFACE = sc2api_pb2.InterfaceOptions(
     raw=True,
     score=True,
@@ -2488,7 +2493,7 @@ _UI_INTERFACE = sc2api_pb2.InterfaceOptions(
     ),
 )
 _SELECTING_INTERFACE = sc2api_pb2.InterfaceOptions(raw=True, score=True, raw_affects_selection=True)
-# The slot ids the game offers no structure, which a selection might be all they wanted.
+# The slot cancels the game offers no structure; a selection might be all they need.
 _SLOT_CANCELS = (
     RawAbilityId.Cancel_Slot,
     RawAbilityId.CancelSlot_Queue5,
@@ -2497,15 +2502,15 @@ _SLOT_CANCELS = (
 
 
 def _middle_item(game: _Game, *, panels: bool) -> list[Trial]:
-    """Ask the game's own production panel to drop the item in the middle of a queue, which no raw ability names.
+    """Ask the game's production panel to drop the item in the middle of a queue, which no raw ability names.
 
-    The panel itself is read only where the game was joined with `panels`, since a game joined without the feature
-    layer carries no `ui_data`; what a structure is making is read off the structure either way.
+    The panel is read only when joined with `panels`, since a game joined without the feature layer carries no
+    `ui_data`; what a structure is making is read from the structure either way.
     """
     trials: list[Trial] = []
 
     def panel() -> dict[str, object] | None:
-        """What the game's production panel shows for the selection, which only a UI interface carries."""
+        """What the production panel shows for the selection; only a UI interface carries it."""
         if not panels:
             return None
         ui = game.client.observation().observation.ui_data
@@ -2515,7 +2520,7 @@ def _middle_item(game: _Game, *, panels: bool) -> list[Trial]:
         }
 
     def fill(trial: Trial) -> raw_pb2.Unit:
-        """A barracks holding five, selected, which a rally does while leaving it making what it is making."""
+        """A barracks holding five, selected by a rally, which leaves its work untouched."""
         (each,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 3))
         pattern = (_MARINE, _REAPER, _MARINE, _REAPER, _MARINE)
         trial.notes["queued"] = [_name(ability) for ability in pattern]
@@ -2557,8 +2562,8 @@ _KEEPS_CHEATS = (*_BASE_CHEATS, "god", "cooldown", "tech_tree")
 
 @dataclass(frozen=True, slots=True)
 class _Sweep:
-    """One sweep: the race it plays, the trials it runs, the cheats it plays under, whether it plays in realtime,
-    and the interface it joins with, which is the raw one unless a sweep needs what only another carries."""
+    """One sweep: its race, trials, cheats, whether it plays in realtime, and the interface it joins with, raw unless
+    it needs what only another carries."""
 
     race: Race
     trials: Callable[[_Game], list[Trial]]
@@ -2568,8 +2573,8 @@ class _Sweep:
 
 
 def _add_on_while_flying(game: _Game) -> list[Trial]:
-    """Find what a barracks in the air does when told to build an add-on: with no point, at ground with room for the
-    add-on beside it, and at ground whose add-on place a supply depot fills."""
+    """What a flying barracks does when told to build an add-on: with no point, at ground with room beside it, and at
+    ground whose add-on place a supply depot fills."""
     trials: list[Trial] = []
 
     def flying_reactor(aimed: str) -> Callable[[Trial], None]:
@@ -2619,10 +2624,10 @@ def _add_on_while_flying(game: _Game) -> list[Trial]:
 
 
 def _one_command_many_makers(game: _Game) -> list[Trial]:
-    """Find whether one command naming several structures is carried out by each of them or by one.
+    """Whether one command naming several structures is carried out by each or by one.
 
-    A group move sends every unit, and a spell, a structure and a morph are carried out by one of the group
-    (docs/game-behavior.md); a train, a research and an add-on had not been tried.
+    A group move sends every unit; a spell, a structure and a morph are carried out by one of the group
+    (docs/game-behavior.md). A train, a research and an add-on had not been tried.
     """
     trials: list[Trial] = []
 
@@ -2650,8 +2655,8 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
     trials.append(game.trial("one research naming two engineering bays", researched))
 
     def one_reactor(barracks: int, blocked: int) -> Callable[[Trial], None]:
-        """A trial giving one reactor, aimed at nothing as a bot's add-on usually is, to `barracks` barracks, the
-        first `blocked` of them with a supply depot where the reactor would stand."""
+        """A trial giving one reactor, aimed at nothing as a bot's add-ons usually are, to `barracks` barracks, with a
+        supply depot where the reactor would stand for the first `blocked` of them."""
 
         def run(trial: Trial) -> None:
             made: list[raw_pb2.Unit] = []
@@ -2745,7 +2750,7 @@ def main() -> None:
             if not sweep.realtime:
                 sandbox.client.step(8)
             findings[name] = [asdict(trial) for trial in sweep.trials(_Game(sandbox, realtime=sweep.realtime))]
-        # Written after each sweep, so that a sweep that fails later loses nothing already found.
+        # Written after each sweep, so a later failure loses nothing already found.
         args.out.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote {}", args.out)
 

@@ -1,19 +1,19 @@
-"""Find what each unit type is offered, what each ability needs first, and which abilities use up the unit ordered.
+"""Find what each unit type is offered, what each ability requires, and which abilities use up the unit ordered.
 
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `free`, `fast_build`, `food`
-and `god` cheats but never `tech_tree`, which waives every requirement (`docs/curating-ids.md`)::
+and `god` cheats, never `tech_tree`, which waives every requirement (`docs/curating-ids.md`)::
 
     uv run python tools/sweep_tech_tree.py
     uv run python tools/sweep_tech_tree.py zerg --out tech-zerg.json
 
-What a unit is offered is what `RequestQueryAvailableAbilities` answers for it, and requirements are read off how that
+What a unit is offered is `RequestQueryAvailableAbilities`'s answer for it, and requirements are read from how that
 answer changes. Measured in game while writing this:
 
-- The answer leaves out what the unit lacks the tech for, and an add-on counts only on the structure it is attached to.
-  It ignores energy and cooldowns, and offers an unpowered structure nothing it needs power for.
-- A cancel is offered only to a structure making something or being put up, a cocoon while it changes, a unit while
-  it channels and a ghost academy while it arms a nuke, and a halt only to a worker putting a structure up and to what
-  it puts up. A ghost is offered its calldown only while a nuke is armed.
+- The answer leaves out what the unit lacks the tech for, and an add-on counts only for the structure it is attached
+  to. It ignores energy and cooldowns, and offers an unpowered structure nothing that needs power.
+- A cancel is offered only to a structure making something or being built, a cocoon while it changes, a unit while it
+  channels and a ghost academy while it arms a nuke; a halt only to a worker building a structure and to the structure.
+  A ghost is offered its calldown only while a nuke is armed.
 - A structure's requirement leaves the answer within 4 steps of the structure leaving the observation. A lifted barracks
   still counts as a barracks.
 - The other half of a toggle is offered once the unit has switched, up to 22 steps after the order.
@@ -23,14 +23,14 @@ answer changes. Measured in game while writing this:
   research. Larva die with their hatchery.
 
 Each game puts up every structure of the race and one of every other unit type, and reads what each is offered. It
-finds what each ability offered needs by killing every structure of one type at a time and seeing what goes, then
-researches one upgrade at a time and reads what each newly offers, finding what that needs the same way. It orders
+finds what each offered ability requires by killing every structure of one type at a time and seeing what disappears,
+then researches one upgrade at a time, reads what each newly offers, and finds its requirements the same way. It orders
 every ability that makes a unit type on a new unit of each type offered it, before the research and after, to see what
-it does to that unit and what the unit is offered on its way, as a cocoon is. It switches every toggle, loads every
+it does to that unit and what the unit is offered on the way, as a cocoon is. It switches every toggle, loads every
 transport, sets every structure making something and a worker building, arms every nuke, and orders every ability
-aimed at a unit or a point on a new unit of each type, to read what each is offered then.
+aimed at a unit or a point on a new unit of each type, reading what each is offered meanwhile.
 
-What it finds is written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
+The findings are written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
 """
 
 import argparse
@@ -57,12 +57,12 @@ from sc2nachos.protocol import GameEndedError
 
 OUT = Path(__file__).parents[1] / "data" / "tech_tree.json"
 
-# How long a killed structure takes to leave what is offered, once it has left the observation, and a toggle to switch.
+# Steps for a killed structure to leave what is offered once it has left the observation, and for a toggle to switch.
 _SETTLE_STEPS = 6
 _SWITCH_STEPS = 22
-# How long an order that makes something is watched for what it does, and research for finishing, under `fast_build`.
+# Steps an order that makes something is watched, and research waited for, under `fast_build`.
 _MAKE_STEPS = 600
-# How long a worker harvesting gas stays inside the structure, and then some.
+# Steps a worker harvesting gas stays inside the structure, with margin.
 _RETURN_STEPS = 120
 _RESEARCH_STEPS = 3000
 
@@ -72,9 +72,9 @@ _ADD_ONS = {
     UnitTypeId.STARPORT: (UnitTypeId.TECH_LAB_STARPORT, UnitTypeId.REACTOR_STARPORT),
 }
 _BUILD_ADD_ON = {"TechLab": AbilityId.GENERAL_BUILD_TECH_LAB, "Reactor": AbilityId.GENERAL_BUILD_REACTOR}
-# What a unit is ordered while its toggles are switched: anything that neither makes, researches, sends the unit
-# somewhere, stops it nor empties a transport, whose unload is read while it still carries something. Salvaging a
-# bunker and exploding a baneling are toggles of a kind too, and harmless here.
+# Not ordered while switching toggles: anything that makes, researches, sends the unit somewhere, stops it or empties
+# a transport, whose unload is read while it still carries something. Salvaging a bunker and exploding a baneling are
+# toggles of a kind too, and harmless here.
 _NOT_SWITCHES = ("Train", "Research", "Build", "Morph", "UpgradeTo", "Move", "Patrol", "Hold", "Stop", "stop_", "Rally")
 _NOT_SWITCHES += (
     "Smart",
@@ -90,29 +90,29 @@ _NOT_SWITCHES += (
     "Unload",
 )
 _WORKERS = {Race.TERRAN: UnitTypeId.SCV, Race.PROTOSS: UnitTypeId.PROBE, Race.ZERG: UnitTypeId.DRONE}
-# What a structure is set making while its cancel is read, arming a nuke among it.
+# The kinds of work a structure is set to while its cancel is read; arming a nuke is a `Build`.
 _MAKING = ("Train", "Research", "UpgradeTo", "Build")
-# Of those, the work a structure's one queue cancel takes back, which `GENERAL_CANCEL_LAST` stands for: each kind is
-# tried once per structure and paired with no cancel. Each morph and each add-on is tried and paired with the cancel
-# it was offered (tool `sweep_orders`).
+# Of those, the work a structure's single queue cancel takes back, which `GENERAL_CANCEL_LAST` stands for: each kind
+# is tried once per structure and paired with no cancel. Every morph and add-on is tried and paired with the cancel it
+# was offered (tool `sweep_orders`).
 _QUEUE_WORK = ("Train", "Research")
-# How far from a structure an add-on of its stands, and then some.
+# How far a structure's add-on stands from it, with margin.
 _ADD_ON_REACH = 4
-# How long a structure set working is read for, which is less than anything takes to make with `fast_build` off.
+# Steps a structure set working is read for: less than anything takes to make with `fast_build` off.
 _BUSY_STEPS = 24
 # What the game remaps every cancel onto, in the raw catalog's spelling.
 _CANCELS = ("Cancel", "Cancel_Last")
 _STRUCTURE_ROOM = 4
-# How far from a unit put up for a trial the computer's units are cleared, which is past any unit's sight.
+# How far around a trial's unit the computer's units are cleared: beyond any unit's sight.
 _ENEMIES_CLEARED_WITHIN = 16
-# What a new unit is not ordered at a target to see what it is offered while it carries the order out: anything that
-# sends it somewhere, gathers, loads or builds, none of which is a channel.
+# Not ordered at a target to read what the unit is offered meanwhile: anything that sends it somewhere, gathers, loads
+# or builds, none of which is a channel.
 _NOT_CASTS = ("Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest", "Load", "Unload", "Land", "Build")
 # What a cast is aimed at: enemies of every kind a spell can ask for, standing close enough that no caster has to walk.
 _CAST_TARGETS = (UnitTypeId.MARAUDER, UnitTypeId.SIEGE_TANK, UnitTypeId.VIKING)
-# How long after the order what the caster is offered is read: long enough for any channel to have begun.
+# Steps after the order before the caster is read: long enough for any channel to have begun.
 _CAST_STEPS = 6
-# Only one may stand at a time, and none is offered while one does, so it comes after what makes it has been read.
+# Only one may exist at a time, and none is offered while one does, so it is put up after its maker has been read.
 _ONE_AT_A_TIME = frozenset({UnitTypeId.MOTHERSHIP})
 
 type Pair = tuple[str, str]
@@ -203,8 +203,7 @@ class TechSweep:
             for entry in raw_data.upgrades
             if entry.ability_id
         }
-        # What makes each unit type: what the table names where that works, and the unnamed creation ability where it
-        # does not.
+        # What makes each unit type: the table's ability where that works, else the unnamed creation ability.
         table = {entry.unit_id: AbilityId.get(entry.ability_id) for entry in raw_data.units}
         unnamed = {unit_type: ability for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
         self._makers = {
@@ -212,8 +211,8 @@ class TechSweep:
             for row in self._data.units.values()
             if (ability := table.get(row.id) or unnamed.get(row.id))
         }
-        # `free` rather than `all_resources`, which runs dry once add-ons have been rebuilt a few hundred times.
-        # `god`, since the computer comes to attack at some point, which the sweep would take for a requirement lost.
+        # `free` rather than `all_resources`, which runs dry after a few hundred add-on rebuilds. `god`, since the
+        # computer attacks eventually, which the sweep would read as a requirement lost.
         game.cheat(*cheats)
         self._client.step(2)
         units = game.units()
@@ -234,7 +233,8 @@ class TechSweep:
         return [unit for unit in self._game.units() if unit.owner == self._player]
 
     def _read(self, tags: Iterable[int] | None = None) -> dict[int, tuple[int, set[int]]]:
-        """Every unit of this player, or those of `tags`, by tag: its type and what it is offered, recorded as found."""
+        """This player's units, or those of `tags`, by tag: each unit's type and what it is offered, which is also
+        recorded in the findings."""
         wanted = None if tags is None else set(tags)
         units = {unit.tag: unit.unit_type for unit in self._mine() if wanted is None or unit.tag in wanted}
         offered = self._game.offered(units)
@@ -247,7 +247,7 @@ class TechSweep:
         return {(_unit_name(unit_type), _ability_name(a)) for unit_type, abilities in read.values() for a in abilities}
 
     def _race_types(self) -> list[UnitTypeId]:
-        """Every curated unit type of the race, but the add-ons, which only a structure can build."""
+        """Every curated unit type of the race except the add-ons, which only a structure can build."""
         add_ons = {add_on for pair in _ADD_ONS.values() for add_on in pair} | {UnitTypeId.TECH_LAB, UnitTypeId.REACTOR}
         rows = sorted(self._data.units.values(), key=lambda row: row.id.name)
         return [row.id for row in rows if row.race is self._race and row.id not in add_ons]
@@ -255,8 +255,8 @@ class TechSweep:
     # --- Putting everything up
 
     def set_up(self) -> None:
-        """Every structure of the race standing, with its add-ons and power, and one of every other unit type."""
-        # The workers the game starts with go, since one carrying minerals is offered what one without is not.
+        """Put up every structure of the race, with add-ons and power, and one of every other unit type."""
+        # The starting workers are killed: one carrying minerals is offered what one without is not.
         worker = _WORKERS[self._race]
         self._game.kill(unit.tag for unit in self._mine() if unit.unit_type == worker)
         requests: list[tuple[UnitTypeId, int, Point]] = []
@@ -269,7 +269,7 @@ class TechSweep:
             if unit_type not in self._structure_types:
                 continue
             # Add-on builders three times: bare, with a tech lab and with a reactor, since an add-on counts only where
-            # it is attached.
+            # attached.
             for _ in range(3 if unit_type in _ADD_ONS else 1):
                 spot = self._ground.claim(self._sandbox, _STRUCTURE_ROOM)
                 requests.append((unit_type, self._player, spot - (1, 0)))
@@ -291,9 +291,9 @@ class TechSweep:
         logger.info("Put up {} units as {}", len(made), self._race)
 
     def _power_everything(self) -> None:
-        """Put a pylon beside every structure still unpowered, since the game does not make every pylon asked for.
+        """Put a pylon beside every structure still unpowered; the game does not make every pylon asked for.
 
-        A nexus, an assimilator and a pylon never read as powered, so each gets one it does not need.
+        A nexus, an assimilator and a pylon never read as powered, so each gets a pylon it does not need.
         """
         for _ in range(2):
             unpowered = [
@@ -328,20 +328,20 @@ class TechSweep:
                 self._game.order(build, unit.tag, Point((unit.pos.x, unit.pos.y)))
 
     def _charge(self) -> None:
-        """Fill every energy bar, so nothing reads as out of reach for want of energy."""
+        """Fill every energy bar, so nothing is withheld for want of energy."""
         self._game.set_value(debug_pb2.DebugSetUnitValue.Energy, 200, (unit.tag for unit in self._mine()))
 
     # --- Requirements
 
     def read_first_requirements(self) -> None:
-        """Find what everything offered before any research needs."""
+        """Find the requirements of everything offered before any research."""
         pairs = self._pairs(self._read())
         self._seen |= pairs
         self.read_requirements(pairs)
 
     def read_last_requirements(self) -> None:
-        """Find what everything offered only once switched, loaded or made last needs, as far as structures go: what
-        an upgrade unlocks was read as it was researched."""
+        """Find the structure requirements of everything offered only once switched, loaded or made. What an upgrade
+        unlocks was read as it was researched."""
         self.read_requirements(self._pairs(self._read()))
 
     def read_requirements(self, pairs: set[Pair]) -> None:
@@ -357,8 +357,8 @@ class TechSweep:
             if aliases:
                 gone -= self._lost(aliases, pairs)
             for pair in gone:
-                # A structure that needs power is offered nothing it needs it for once the pylons are gone, which is
-                # what `powered` says already, and no requirement.
+                # A structure that needs power is offered nothing once the pylons are gone. `powered` records that
+                # already; it is no requirement.
                 if structure is UnitTypeId.PYLON and pair[0] in self.findings.powered:
                     continue
                 self.findings.structures[pair].add(_unit_name(structure))
@@ -366,7 +366,8 @@ class TechSweep:
         self.findings.read |= pairs
 
     def _lost(self, unit_types: set[UnitTypeId], pairs: set[Pair]) -> set[Pair]:
-        """Which of `pairs` a unit stops being offered once every unit of `unit_types` is dead, all then put back."""
+        """Which of `pairs` a unit stops being offered once every unit of `unit_types` is dead. All are then put
+        back."""
         before = self._read()
         units = self._mine()
         victims = [unit for unit in units if unit.unit_type in unit_types]
@@ -382,7 +383,7 @@ class TechSweep:
         self._client.step(_SETTLE_STEPS)
         after = self._read()
         self._put_back(victims)
-        # Only what comes back once the victims are back was theirs to take away.
+        # Only what returns once the victims are back was theirs.
         again = self._read()
         return pairs & {
             (_unit_name(unit_type), _ability_name(ability))
@@ -392,7 +393,7 @@ class TechSweep:
         }
 
     def _put_back(self, victims: Sequence[raw_pb2.Unit]) -> None:
-        """Create again what `victims` were, with their add-ons, larva for a hatchery, and energy."""
+        """Recreate `victims`, with their add-ons, larva for a hatchery, and energy."""
         add_ons = {unit.tag: unit for unit in victims if _is_add_on(_unit_name(unit.unit_type))}
         hosts = [unit for unit in victims if unit.tag not in add_ons]
         requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
@@ -443,7 +444,7 @@ class TechSweep:
         for upgrades in self.research_each():
             new_upgrades = {RawUpgradeId(upgrade).name for upgrade in upgrades}
             new_pairs = self._pairs(self._read()) - self._seen
-            # What a unit is offered only for a moment, such as a worker's return with cargo, is not the upgrade's.
+            # What a unit is offered only briefly, such as a worker's return with cargo, is not the upgrade's doing.
             self._client.step(22)
             new_pairs &= self._pairs(self._read())
             logger.info("{} newly offers {}", sorted(new_upgrades), sorted(new_pairs))
@@ -523,8 +524,8 @@ class TechSweep:
         self.read_requirements(self._pairs(self._read()) - self._seen)
 
     def sweep_busy(self) -> None:
-        """Set every structure making something and every worker building, reading what each is offered meanwhile,
-        since a cancel and a halt are offered only then."""
+        """Set every structure making something and a worker building, and read what each is offered meanwhile: a
+        cancel and a halt are offered only then."""
         seen = self._pairs(self._read())
         busy: set[int] = set()
         for unit in sorted(self._mine(), key=lambda unit: unit.tag):
@@ -540,17 +541,17 @@ class TechSweep:
         self.read_requirements(found)
 
     def sweep_cancels(self) -> None:
-        """What each structure is offered while it is busy, in each way it can be busy.
+        """What each structure is offered while busy, in each way it can be busy.
 
-        A structure is offered one cancel, and which one turns on what it is making: a command center training is
-        offered `Cancel_QueueCancelToSelection`, one morphing to an orbital command `Cancel_MorphOrbital` and one
-        morphing to a planetary fortress `Cancel_MorphPlanetaryFortress`, and a barracks building an add-on
+        A structure is offered one cancel, and which depends on what it is making: a command center training is
+        offered `Cancel_QueueCancelToSelection`, one morphing to an orbital command `Cancel_MorphOrbital`, one morphing
+        to a planetary fortress `Cancel_MorphPlanetaryFortress`, and a barracks building an add-on
         `Cancel_BarracksAddOn` (tool `sweep_orders`). Each way is read on a structure put up for it, since a morph
-        leaves the structure another type and an add-on takes the ground beside it. The phase runs before
+        leaves the structure another type and an add-on takes the ground beside it. This phase runs before
         `research_everything`, which would leave a research structure nothing to research.
 
-        `fast_build` is off for the phase: under it a marine or an add-on can be done within the step its order
-        lands in, before the structure is first read, and a cancel is offered only while the work goes on.
+        `fast_build` is off for the phase: under it a marine or an add-on can finish within the step its order lands
+        in, before the structure is first read, and a cancel is offered only while the work goes on.
         """
         found: set[Pair] = set()
         self._game.cheat("fast_build")
@@ -569,8 +570,8 @@ class TechSweep:
         """What a tech lab of `unit_type` is offered while it researches, and whether `GENERAL_CANCEL_LAST` takes the
         research back, which is what `cancelled_by` names for it.
 
-        Only a structure puts a tech lab up, and one put up alone is offered no research, so the one standing on its
-        host since the start is used, and left idle again.
+        Only a structure builds a tech lab, and one created alone is offered no research, so the one on its host since
+        the start is used and left idle again.
         """
         standing = next((unit for unit in self._mine() if unit.unit_type == unit_type and not unit.orders), None)
         ways = [] if standing is None else self._worth_trying(self._ways_to_be_busy(standing.tag))
@@ -598,9 +599,9 @@ class TechSweep:
         return found
 
     def _ways_to_try(self, unit_type: UnitTypeId) -> list[int]:
-        """Every way a structure of `unit_type` can be set working that is worth a trial, read off one standing idle
-        or off one put up to be read."""
-        # One with an add-on already is offered none, so it would hide that way of being busy.
+        """Every way of setting a `unit_type` structure working that is worth a trial, read from one standing idle or
+        from one put up for the purpose."""
+        # One that already has an add-on is offered none, which would hide that way of being busy.
         standing = next(
             (unit for unit in self._mine() if unit.unit_type == unit_type and not unit.orders and not unit.add_on_tag),
             None,
@@ -615,8 +616,8 @@ class TechSweep:
         return ways
 
     def _read_while_busy(self, unit_type: UnitTypeId, raw: int) -> set[Pair]:
-        """What a structure put up for it is offered while `raw` has it working, read at every step, and everything
-        the trial put up cleared again however it ended."""
+        """What a structure put up for the trial is offered while `raw` has it working, read every step. Everything the
+        trial put up is cleared however it ends."""
         before = {unit.tag for unit in self._game.units()}
         try:
             unit = self._performer(unit_type, AbilityId.read(raw))
@@ -635,8 +636,8 @@ class TechSweep:
                 )
             cancels = sorted({ability for _, ability in found if self._is_cancel(ability)})
             if len(cancels) > 1:
-                # A structure is offered one cancel for what it is making, so more than one means the trial read
-                # something else as well, and which one belongs to this work cannot be told from here.
+                # A structure is offered one cancel for its work, so more than one means the trial read something else
+                # too, and which belongs to this work cannot be told.
                 logger.warning(
                     "A {} set to {} was offered {} cancels, so which is for it is not recorded: {}",
                     unit_type.name,
@@ -652,13 +653,12 @@ class TechSweep:
             self._clear({unit.tag for unit in self._mine() if unit.tag not in before})
 
     def _is_cancel(self, ability: str) -> bool:
-        """Whether `ability` takes back what a unit is doing, which the game says by remapping every one of them
-        onto one of its two general cancels."""
+        """Whether `ability` is a cancel: the game remaps every cancel onto one of its two general cancels."""
         return self.findings.remaps.get(ability) in _CANCELS or ability in _CANCELS
 
     def _read_until_idle(self, tag: int) -> tuple[set[Pair], bool]:
-        """What the unit `tag` is offered at each step until it is making nothing again, or is gone, and whether it
-        was ever seen busy."""
+        """What the unit `tag` is offered each step until it is idle again or gone, and whether it was ever seen
+        busy."""
         found: set[Pair] = set()
         busy = False
         for _ in range(_BUSY_STEPS):
@@ -674,8 +674,8 @@ class TechSweep:
         return found, busy
 
     def _ways_to_be_busy(self, tag: int) -> list[int]:
-        """Every ability the unit `tag` is offered that sets it making something, an add-on among them, sorted so
-        that a rerun of the sweep sets each structure making the same thing first."""
+        """Every ability the unit `tag` is offered that sets it making something, add-ons included, sorted so a rerun
+        sets each structure making the same thing first."""
         return sorted(
             ability
             for ability in self._game.offered([tag])[tag]
@@ -683,8 +683,8 @@ class TechSweep:
         )
 
     def _worth_trying(self, abilities: Sequence[int]) -> list[int]:
-        """Every way of being busy worth a trial of its own, leaving out what no curated id names: one train and one
-        research, and every morph and every add-on."""
+        """The ways of being busy worth a trial each, skipping what no curated id names: one train, one research, and
+        every morph and add-on."""
         once: set[str] = set()
         chosen: list[int] = []
         for ability in abilities:
@@ -699,13 +699,13 @@ class TechSweep:
         return chosen
 
     def _aim_for(self, ability: int, unit: raw_pb2.Unit) -> Point | None:
-        """Where an ability that sets `unit` making something is aimed: its own ground for an add-on, which the game
-        puts beside it, and nowhere for everything else."""
+        """Where an ability that sets `unit` working is aimed: at the unit's own position for an add-on, which the game
+        puts beside it, and nowhere otherwise."""
         return Point((unit.pos.x, unit.pos.y)) if self._targets.get(ability) == _POINT_OR_NOTHING else None
 
     def _with_add_on(self, tag: int) -> set[int]:
-        """The unit `tag` with the add-on it has and any going up beside it, which would otherwise be left standing
-        on ground the next trial wants."""
+        """The unit `tag` plus its add-on and any add-on going up beside it, which would otherwise be left on ground
+        the next trial wants."""
         unit = next((one for one in self._mine() if one.tag == tag), None)
         if unit is None:
             return {tag}
@@ -729,8 +729,8 @@ class TechSweep:
         self._game.order(gather, gatherer.tag, field.tag)
         try:
             for _ in range(_MAKE_STEPS // 4):
-                # Another worker at the field would keep this one waiting its turn, and the town hall may be training
-                # one, set busy a moment ago.
+                # Another worker at the field would make this one wait its turn, and the town hall, set busy a moment
+                # ago, may be training one.
                 self._game.kill(u.tag for u in self._mine() if u.unit_type == worker and u.tag != gatherer.tag)
                 self._client.step(4)
                 if any("Return" in _ability_name(a) for a in self._game.offered([gatherer.tag])[gatherer.tag]):
@@ -749,7 +749,7 @@ class TechSweep:
             self._clear({gatherer.tag})
 
     def _build_something(self) -> set[Pair]:
-        """What a worker and the structure it is putting up are offered while it is being put up."""
+        """What a worker and the structure it is building are offered while it goes up."""
         worker = _WORKERS[self._race]
         (builder,) = [
             u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
@@ -757,7 +757,7 @@ class TechSweep:
         makers = {ability: unit_type for unit_type, ability in self._makers.items()}
         offered = filter(None, (AbilityId.get(ability) for ability in self._game.offered([builder.tag])[builder.tag]))
         builds = [a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT]
-        # The first the game will let go up near home: a protoss structure needing power will not, without a pylon.
+        # The first the game will let go up near home: a protoss structure that needs power will not, without a pylon.
         build, site = next(((a, s) for a in builds if (s := self._site(a)) is not False), (None, None))
         if build is None or not isinstance(site, Point):
             logger.warning("No {} could put anything up", worker.name)
@@ -777,7 +777,7 @@ class TechSweep:
     # --- Casting
 
     def sweep_casts(self) -> None:
-        """Order every ability aimed at a unit or a point on a new unit of each type offered one, reading what the unit
+        """Order every ability aimed at a unit or a point on a new unit of each type offered it, and read what the unit
         is offered meanwhile: a channel's cancel is offered only while it lasts. Every nuke is armed first, since a
         ghost is offered its calldown only while one is."""
         arming = [
@@ -845,8 +845,8 @@ class TechSweep:
     def sweep_makers(self) -> None:
         """Order every ability that makes a unit type on each unit type offered it, once, and see what it does.
 
-        Run before the research, for what a gateway trains before it turns into a warp gate, and after it, for what
-        research unlocks.
+        Runs before the research, for what a gateway trains before it becomes a warp gate, and after, for what research
+        unlocks.
         """
         if self._pad == self._sandbox:
             self._pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
@@ -870,7 +870,8 @@ class TechSweep:
         self.read_requirements(self._on_the_way)
 
     def _make(self, product: UnitTypeId, performer: UnitTypeId, ability: AbilityId) -> str | None:
-        """What ordering `ability` on a new `performer` did, as `_watch` tells it, or `None` where nothing could."""
+        """What ordering `ability` on a new `performer` did, as `_watch` classes it, or `None` where no performer could
+        be made."""
         before = {unit.tag for unit in self._game.units()}
         try:
             unit = self._performer(performer, ability)
@@ -879,8 +880,8 @@ class TechSweep:
             self._clear({u.tag for u in self._mine() if u.tag not in before})
 
     def _clear(self, tags: set[int]) -> None:
-        """Kill the units `tags` and the pylons put up to power them, which would otherwise stand on ground the next
-        trial wants, and wait until they are gone and the ground they stood on is free again."""
+        """Kill the units `tags` and the pylons put up to power them, then wait until they are gone and their ground is
+        free again."""
         tags = tags | {pylon for tag in tags for pylon in self._powering.pop(tag, ())}
         self._game.kill(tags)
         for _ in range(50):
@@ -890,24 +891,24 @@ class TechSweep:
         self._client.step(22 * 2)
 
     def _performer(self, performer: UnitTypeId, ability: AbilityId) -> raw_pb2.Unit | None:
-        """A unit of `performer` offered `ability`: a larva of a hatchery's, or a new one on the pad kept for these,
-        powered, and with a tech lab where that is what it lacks."""
+        """A `performer` offered `ability`: a hatchery's larva, or a new unit on the pad kept for these, powered, with
+        a tech lab where that is what it lacks."""
         if performer is UnitTypeId.LARVA:
             # The trials use larva up faster than the hatcheries make them, so one is waited for.
             for _ in range(30):
                 larva = [u for u in self._mine() if u.unit_type == performer and not u.orders]
                 offered = self._game.offered(u.tag for u in larva)
                 if (one := next((u for u in larva if ability in offered.get(u.tag, ())), None)) is not None:
-                    # An order to one larva can be carried out by another of the same hatchery, which would leave the
-                    # one ordered a larva beside the egg; so it is left the only one.
+                    # An order to one larva can be carried out by another from the same hatchery, leaving the one
+                    # ordered a larva beside the egg, so the others are killed first.
                     self._game.kill(u.tag for u in self._mine() if u.unit_type == performer and u.tag != one.tag)
                     self._client.step(2)
                     return one
                 self._client.step(22)
             logger.warning("No larva is offered {}", _ability_name(ability))
             return None
-        # Room for an add-on to the right, as the structures put up at the start have. A worker starts near home, where
-        # what it builds goes, since the walk from the pad can take longer than the watch.
+        # Room for an add-on on the right, as the structures put up at the start have. A worker starts near home, where
+        # what it builds goes: the walk from the pad can outlast the watch.
         spot = self._pad - ((1, 0) if performer in _ADD_ONS else (0, 0))
         if performer not in self._structure_types and self._data.abilities[ability].needs_placement:
             spot = self._home + (0, -6)
@@ -942,13 +943,13 @@ class TechSweep:
         return unit
 
     def _clear_enemies_near(self, spot: Point) -> None:
-        """Kill the computer's units in sight of `spot`: a unit put up there would set off after them, and they can
-        stand where a structure or an add-on is to go.
+        """Kill the computer's units in sight of `spot`: a unit put up there would chase them, and they can stand where
+        a structure or an add-on is to go.
 
-        On one start of the map the pad lies beside the computer's natural, so a baneling put up there rolls at its
-        drones, is offered no burrow while it does, and blows up on reaching one. And under `god` the computer's army
-        walks into the base and stands about, a marine on an add-on's place leaving the host bare once the add-on is
-        killed to read a requirement. Both changed what a run read.
+        On one start position the pad lies beside the computer's natural: a baneling put up there rolls at its drones,
+        is offered no burrow meanwhile, and explodes on reaching one. Under `god` the computer's army walks into the
+        base and stands about, and a marine on an add-on's place leaves the host bare once the add-on is killed to read
+        a requirement. Both changed what a run read.
         """
         near = [
             unit.tag
@@ -973,7 +974,7 @@ class TechSweep:
         self._client.step(4)
 
     def _watch(self, product: UnitTypeId, unit: raw_pb2.Unit, ability: AbilityId) -> str | None:
-        """Order `ability` on `unit`, and tell what it did: `morph` where the unit became a `product` or was used up
+        """Order `ability` on `unit` and class what it did: `morph` where the unit became a `product` or was used up
         making one, `build` where it made one beside itself, `other` where it became something else, and `None` where
         the order was refused or nothing came of it.
         """
@@ -998,14 +999,14 @@ class TechSweep:
                 if form is not None and form.base_type is not None and form.base_type == unit.unit_type:
                     # It turned into a form of itself, as a zergling ordered to burrow as a drone does.
                     return "other"
-                # On its way, as a larva is an egg first, and offered meanwhile what it is offered at no other time.
+                # On the way, as a larva is an egg first, and offered meanwhile what it is offered at no other time.
                 if not on_the_way:
                     self._on_the_way |= self._pairs(self._read({unit.tag}))
                     on_the_way = True
                 continue
-            # A placeholder, with no tag, stands where a structure was ordered from the moment it is ordered. Only
-            # while the unit ordered is still what it was does a product beside it count, since an egg or a cocoon
-            # put up at the start can hatch one at any moment.
+            # A placeholder with no tag stands at a structure's site from the moment it is ordered. A product beside the
+            # unit counts only while the unit is still its original type, since an egg or a cocoon put up at the start
+            # can hatch one at any moment.
             if any(u.tag and u.tag not in before and u.unit_type == product and u.owner == self._player for u in units):
                 # A drone and the structure it becomes can both be in one observation, and a worker that has put up a
                 # gas structure goes inside to harvest from it for a moment; only one that never comes back is used up.
@@ -1020,8 +1021,8 @@ class TechSweep:
         return None
 
     def _target(self, ability: AbilityId, unit: raw_pb2.Unit, product: UnitTypeId) -> Point | int | None | bool:
-        """Something to aim `ability` at to make `product`, other than a new structure's site, or `False` where nothing
-        will do."""
+        """A target for `ability` to make `product`, other than a new structure's site, or `False` where none will
+        do."""
         row = self._data.abilities[ability]
         if row.target_type is TargetType.UNIT:
             return self._geyser(rich=product.name.endswith("_RICH"))
@@ -1035,9 +1036,9 @@ class TechSweep:
         return Point((unit.pos.x + 3, unit.pos.y))
 
     def _geyser(self, *, rich: bool) -> int | bool:
-        """The geyser nearest home with nothing on it, rich or not, which is the one unit anything is made on.
+        """The tag of the nearest free geyser to home, `rich` or not: the only unit anything is made on.
 
-        The map has no rich geyser, so one is created where it is wanted.
+        The map has no rich geyser, so one is created when wanted.
         """
         taken = {(round(u.pos.x), round(u.pos.y)) for u in self._mine()}
         geysers = [

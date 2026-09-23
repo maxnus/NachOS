@@ -1,4 +1,4 @@
-"""The tables a game is played by."""
+"""The game's data tables: unit types, abilities, upgrades and effects."""
 
 from sc2nachos.gamedata._ability_data import AbilityData, OrderBehavior, TargetType
 from sc2nachos.gamedata._cost import Cost

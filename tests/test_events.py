@@ -1,6 +1,6 @@
-"""Handing events to the handlers subscribed to them, driven by hand rather than by a game."""
+"""The event bus, driven by hand instead of by a game."""
 
-# Each `type: ignore` below marks a handler a type checker must refuse, so one that is not needed fails.
+# Each `type: ignore` below marks a handler the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
 import dataclasses
@@ -44,14 +44,14 @@ def _turns(bus: EventBus, *steps: int) -> None:
 
 @pytest.fixture
 def logged() -> Iterator[list[str]]:
-    """What is logged while the test runs."""
+    """The messages logged while the test runs."""
     messages: list[str] = []
     sink = logger.add(messages.append, format="{message}")
     yield messages
     logger.remove(sink)
 
 
-# Defined at module level, as a bot's would be, so that they are functions and a class of the module's own.
+# Defined at module level, as a bot's would be, so they are plain module functions and a module class.
 _MODULE_BUS = EventBus()
 _module_calls: list[int] = []
 
@@ -152,7 +152,7 @@ class TestSubscribing:
         assert bus._subscriptions.wants_every(TurnEvent)
 
     def test_a_coroutine_function_is_refused(self) -> None:
-        """NachOS calls its handlers synchronously, so one would only make a coroutine nobody awaits."""
+        """Handlers are called synchronously, so a coroutine function would only make a coroutine nobody awaits."""
 
         async def later(event: TurnEvent) -> None:
             pass
@@ -210,7 +210,7 @@ class TestCadence:
         return fired
 
     def test_every_steps_at_a_step_a_turn_fires_on_its_multiples(self) -> None:
-        """What `step % 4 == 0` picks, since the first turn is step 0."""
+        """The steps where `step % 4 == 0`, since the first turn is step 0."""
         assert self._fired(EventBus(), *range(13), every_steps=4) == [0, 4, 8, 12]
 
     def test_every_steps_never_fires_closer_together_than_asked(self) -> None:
@@ -245,7 +245,7 @@ class TestStopping:
         assert fired == [0, 1, 2]
 
     def test_any_other_return_value_is_ignored(self) -> None:
-        """A truthy value returned by accident must not stop a handler without a word."""
+        """A truthy value returned by accident does not silently stop a handler."""
         bus, fired = EventBus(), []
 
         @bus.on(TurnEvent)
@@ -346,7 +346,7 @@ class TestUnsubscribing:
 
 class TestInstances:
     def test_an_instance_is_held_until_it_is_unsubscribed(self) -> None:
-        """So its handlers run whether or not the bot kept it, and when they stop is the bot's to say."""
+        """Its handlers run whether or not the bot kept a reference, and only unsubscribing stops them."""
         bus, calls = EventBus(), []
 
         class Handlers:
@@ -408,7 +408,7 @@ class TestInstances:
         )
 
     def test_an_instance_without_a_marked_method_is_refused(self) -> None:
-        """Most likely its methods were marked with another api's `on`, or not at all."""
+        """Its methods were most likely marked with another api's `on`, or not at all."""
         with pytest.raises(ValueError, match="object has no method marked with `on`"):
             EventBus().subscribe(object())
 
@@ -618,14 +618,14 @@ class TestTimings:
 
 
 class _Scouted(Event):
-    """An event of a bot's own, as a bot would declare one."""
+    """A bot's own event, declared as a bot would."""
 
     place: str
     times: int = 1
 
 
 class _ScoutedAgain(_Scouted):
-    """One that derives from another."""
+    """A bot's event derived from another."""
 
     by: str = "overlord"
 

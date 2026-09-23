@@ -1,4 +1,4 @@
-"""What each observation reports has happened, handed on as events, driven by observations written here."""
+"""The events each observation produces, driven by observations written here."""
 
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing, contextmanager
@@ -75,7 +75,7 @@ from support import (
 )
 
 _ENEMY = Alliance.ENEMY
-# Every alert the protocol names, in the order it names them, and the two no `Alert` stands for.
+# Every alert the protocol names, in its order, and the two that no `Alert` stands for.
 _EVERY_ALERT = [value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values]
 _PASSED_OVER = frozenset({sc2api_pb2.Alert.AlertError, sc2api_pb2.Alert.TrainError})
 _STRUCTURE = [data_pb2.Attribute.Structure]
@@ -86,7 +86,7 @@ _TABLES = make_tables(
 
 
 class _Game:
-    """A game fed one observation after another, each taken in and reported as `Api.play` does each turn."""
+    """A game fed one observation at a time, each taken in and reported as `Api.play` does each turn."""
 
     def __init__(self, events: EventBus | None = None) -> None:
         self.events = events or EventBus()
@@ -97,7 +97,7 @@ class _Game:
         self._game: _game._Game | None = None
 
     def observe(self, step: int, *units: raw_pb2.Unit, **fields: Any) -> dict[int, Unit[Any]]:
-        """Take in `units` and the rest of an observation at `step`, report it, and answer the units by tag."""
+        """Take in an observation of `units` and `fields` at `step`, report it, and return the units by tag."""
         observation = make_observation(step, units=units, **fields)
         self._game = played(self._game, self._client, self.map, self.tracker, observation, self.events)
         self.state = self._game.state
@@ -109,7 +109,7 @@ def _depot(tag: int, **fields: Any) -> raw_pb2.Unit:
 
 
 def _everything(game: _Game) -> None:
-    """Two turns, the second reporting one of everything, the first the units the game starts with."""
+    """Two turns: the first with the starting units, the second reporting one event of every kind."""
     game.observe(
         0,
         make_unit(1, health=45.0, energy=50.0, build_progress=1.0, buff_ids=[BuffId.MARINE_STIMMED]),
@@ -270,7 +270,7 @@ def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Uni
 
 class TestEnergy:
     def _lost(self, *units: raw_pb2.Unit) -> list[float]:
-        """The energy reported lost as each of `units` is observed in turn."""
+        """The energy reported lost as `units` are observed one after another."""
         game = _Game()
         seen = record(game.events, EnemyUnitEnergyLostEvent)
         for step, unit in enumerate(units):
@@ -313,7 +313,7 @@ def _raven(energy: float, **fields: Any) -> raw_pb2.Unit:
 
 class TestDamage:
     def _damage(self, *units: raw_pb2.Unit) -> list[float]:
-        """The damage reported as each of `units` is observed in turn."""
+        """The damage reported as `units` are observed one after another."""
         game = _Game()
         seen = record(game.events, EnemyUnitDamagedEvent)
         for step, unit in enumerate(units):
@@ -376,7 +376,7 @@ class TestDamage:
 
 class TestCloak:
     def _changes(self, *units: raw_pb2.Unit | None) -> list[tuple[type[Event], CloakState]]:
-        """The cloak changes reported as each of `units` is observed in turn, `None` for an observation without it."""
+        """The cloak changes reported as `units` are observed one after another; `None` is an observation without it."""
         game = _Game()
         seen = record(game.events, OwnUnitCloakChangedEvent, EnemyUnitCloakChangedEvent)
         for step, unit in enumerate(units):
@@ -411,7 +411,7 @@ class TestCloak:
 
 class TestBuffs:
     def _changes(self, *units: raw_pb2.Unit) -> list[tuple[str, BuffId]]:
-        """The buffs reported gained and lost as each of `units` is observed in turn."""
+        """The buffs reported gained and lost as `units` are observed one after another."""
         game = _Game()
         buff_events = (OwnUnitGainedBuffEvent, OwnUnitLostBuffEvent, EnemyUnitGainedBuffEvent, EnemyUnitLostBuffEvent)
         seen = record(game.events, *buff_events)
@@ -461,7 +461,7 @@ def _observer(cloak: CloakState, **fields: Any) -> raw_pb2.Unit:
     return make_unit(1, fields.pop("unit_type", UnitTypeId.OBSERVER), alliance=_ENEMY, cloak=cloak, **fields)
 
 
-# One key of each type `only` narrows, among several `_everything` reports events of that type for, or one.
+# For each event type `only` narrows, one key out of the several `_everything` reports for that type, or the one.
 _ONE_KEY: list[EventFilter[Any]] = [
     OwnUnitCreatedEvent.only(UnitTypeId.BARRACKS),
     EnemyUnitFirstSeenEvent.only(UnitTypeId.ROACH),
@@ -546,8 +546,8 @@ _STORM_READY = EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitTypeId.HI
 
 class TestVitalReached:
     def _steps(self, *units: raw_pb2.Unit | None, of: EventFilter[Any] = _STORM_READY) -> list[int]:
-        """The steps an enemy unit is reported reaching what `of` selects, 75 energy of a high templar unless told
-        otherwise, as each of `units` is observed in turn, `None` for an observation without it."""
+        """The steps at which an enemy unit is reported reaching what `of` selects, by default 75 energy on a high
+        templar, as `units` are observed one after another; `None` is an observation without it."""
         game = _Game()
         seen = record(game.events, of)
         for step, unit in enumerate(units):
@@ -599,8 +599,8 @@ class TestVitalReached:
 
 class TestVitals:
     def _crossings(self, vital: VitalType, value: float, *units: raw_pb2.Unit) -> list[tuple[str, int]]:
-        """Each crossing of `value` of an enemy unit's `vital` reported, and its step, as each of `units` is observed in
-        turn."""
+        """Each reported crossing of `value` by an enemy unit's `vital`, with its step, as `units` are observed one
+        after another."""
         game = _Game()
         watched = (EnemyUnitVitalReachedEvent.of(vital, value), EnemyUnitVitalDroppedEvent.of(vital, value))
         seen = record(game.events, *watched)
@@ -665,8 +665,8 @@ class TestAreas:
     def _crossings(
         self, *positions: tuple[float, float] | None, area: Area = _AREA, **fields: Any
     ) -> list[tuple[str, int]]:
-        """Each crossing of the edge of `area` reported of an enemy marine, and its step, as it is observed at each of
-        `positions` in turn, `None` for an observation without it."""
+        """Each reported crossing of the edge of `area` by an enemy marine, with its step, as it is observed at each
+        of `positions` in turn; `None` is an observation without it."""
         game = _Game()
         seen = record(game.events, EnemyUnitEnteredAreaEvent.of(area), EnemyUnitLeftAreaEvent.of(area))
         for step, at in enumerate(positions):
@@ -823,8 +823,8 @@ class TestWatching:
 
 @contextmanager
 def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
-    """A game as `race` under `free` and `fast_build`, every event it hands out from its first observation on, and
-    the middle of the map."""
+    """A game as `race` under the `free` and `fast_build` cheats, the list of every event from its first observation
+    on, and the center of the map."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -839,7 +839,7 @@ def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
         game = RealGame(client, client.join_game(race), events)
         state = debug_pb2.DebugGameState
         game.debug(*(debug_pb2.DebugCommand(game_state=cheat) for cheat in (state.free, state.fast_build)))
-        # The cheats take a few steps to hold.
+        # The cheats take a few steps to take effect.
         game.turn(8)
         yield game, seen, game.map.playable_area.center
         client.leave_game()
@@ -876,7 +876,7 @@ _AREAS = (OwnUnitEnteredAreaEvent, OwnUnitLeftAreaEvent)
 
 @pytest.mark.integration
 class TestAgainstTheRealGame:
-    """Run with `pytest -m integration`. Each plays a few minutes of a game under cheats."""
+    """Run with `pytest -m integration`. Each test plays a few minutes of a game under cheats."""
 
     def test_zerg_units_hatch_morph_and_become_structures(self) -> None:
         with _played_as(Race.ZERG) as (game, seen, middle):
@@ -1155,7 +1155,7 @@ class TestAgainstTheRealGame:
             drained = (OwnUnitEnergyLostEvent, EnemyUnitEnergyLostEvent)
 
             def lost_after(since: int, *units: Unit[Any]) -> dict[Unit[Any], float]:
-                """The energy each of `units` is reported to lose from the `since`-th report on, once each has."""
+                """The energy each of `units` loses from the `since`-th report on, waiting until each has lost some."""
                 _until(game, lambda: {e.unit for e in _of(seen, *drained)[since:]} >= set(units), steps=1)
                 return {e.unit: e.energy_lost for e in _of(seen, *drained)[since:]}
 

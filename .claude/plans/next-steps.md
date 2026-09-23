@@ -1,9 +1,9 @@
 # Next steps for nachOS
 
 Written 2026-09-21 as a handover to the next agent, who will not have the previous agent's memory. It holds where
-the work stands, what the repo owner has already decided, and the next steps in order with what each rests on. The
-working agreements (how to pace, commit, push and review) are in `.claude/CLAUDE.md`, which Claude Code loads by
-itself.
+the work stands, what the repo owner has already decided, and the next steps in order, with what each depends on.
+The working agreements (how to pace, commit, push and review) are in `.claude/CLAUDE.md`, which Claude Code loads
+by itself.
 
 Keep this file current: when a step is done, say so here in the same pull request, and cut what no longer helps.
 
@@ -15,23 +15,22 @@ Keep this file current: when a step is done, say so here in the same pull reques
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`. User docs: `docs/orders.md`. What the game was seen to do: `docs/game-behavior.md`, section
   "Abilities and orders".
-- PRs #47 and #53 to #59 were housekeeping after a review of the code, mostly renames: `api.events`,
-  `api.orders`, `api.orders.issued_to`, `ActionFailure` / `api.action_failures` / `order.failure`,
-  `order.action_result`, `AbilityData.order_behavior`, `UpgradeData.upgrade_type`, `Unit.cloak_state`,
-  `Units.closest_n_to`, `launch.MapFile`, `PlaybackTransport`, `_from_proto`.
+- PRs #47 and #53 to #59 were housekeeping after a code review, mostly renames: `api.events`, `api.orders`,
+  `api.orders.issued_to`, `ActionFailure` / `api.action_failures` / `order.failure`, `order.action_result`,
+  `AbilityData.order_behavior`, `UpgradeData.upgrade_type`, `Unit.cloak_state`, `Units.closest_n_to`,
+  `launch.MapFile`, `PlaybackTransport`, `_from_proto`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
-  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR;
-  its `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
+  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR; its
+  `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
   AvocaDOS `51d0ed1`.
 
 ## Decided, so not to be proposed again
 
-- **NachOS checks nothing an order needs** (#46). Minerals, vespene, supply, room in a queue and tech are the game's
-  to judge and the bot's to budget; NachOS sends what it is given, and the order's state and `action_result` say
-  what became of it. No budget, no refusal of NachOS's own, no `can_afford`, no `api.orders.cancel`. A built
-  version with all of that was dropped as too complicated for what it bought, since an advanced bot ranks its own
-  spending anyway.
-- **NachOS has no order priority of its own.** A unit takes the last order it is given in a turn; handlers already
+- **NachOS checks nothing an order needs** (#46). Minerals, vespene, supply, queue room and tech are the game's to
+  judge and the bot's to budget. NachOS sends what it is given, and the order's state and `action_result` say what
+  became of it. No budget, no refusal by NachOS itself, no `can_afford`, no `api.orders.cancel`. A built version
+  with all of that was dropped as too complicated for what it bought: an advanced bot ranks its own spending anyway.
+- **NachOS has no order priority of its own.** A unit takes the last order it is given in a turn. Handlers already
   run priority first, and a bot that wants a rank puts it in the order's `data` and reads `api.orders.issued_to`.
 - **Production orders get no "replace".** A cancel frees no queue slot and no minerals in the same step, so a
   replace would leave a structure idle for a turn (#43).
@@ -40,8 +39,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **A general research id costs its first level** (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100): it runs
   the first level until that is done.
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
-  the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, now overturned by the
-  owner.
+  the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
+  overturned.
 
 ## 1. A queue per unit, kept in NachOS
 
@@ -59,17 +58,17 @@ with the owner (Claude Code's plan mode) before writing code.
 
 All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units coming, changing and going":
 
-- **A build is charged as it is ordered**, not when the builder arrives: a depot ordered 35 away took its 100
-  minerals by the next observation. A build queued behind a move is charged as it is given too, while the worker is
-  still on its first leg.
+- **A build is charged when ordered**, not when the builder arrives: a depot ordered 35 away took its 100 minerals
+  by the next observation. A build queued behind a move is charged when given too, while the worker is still on
+  its first leg.
 - **A flying barracks given an add-on** needs a point (where to land), queues `BARRACKS_LAND` and the build, and is
-  charged at once: the reactor's 50/50 was gone 430 steps before it landed. Given a point whose add-on place is
+  charged at once: the reactor's 50/50 was gone 430 steps before it landed. Given a point whose add-on spot is
   blocked, it answers `CantFindPlacementLocation`. A factory and a starport were not tried.
 - **A train or research queued behind what a structure is making** is paid from the step it is ordered. With the
-  supply cap full, a train is taken and charged, then left at no progress for as long as the cap stays full.
+  supply cap full, a train is taken and charged, then sits at no progress as long as the cap stays full.
 - **Refused now, allowed later**: a morph or add-on on a busy structure is `NotSupported`; a structure researching
   is offered no research at all; a warp gate and a larva keep no queue; a spell queued behind a move is dropped
-  silently if the energy went meanwhile.
+  silently if the energy is gone by then.
 
 ### Cases, as the previous agent grouped them for the owner
 
@@ -88,7 +87,7 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - **How it looks to a bot.** What `queued=True` means now (behind NachOS's queue, not the game's); how a bot adds,
   reads, reorders and withdraws items; what an `Order` in NachOS's queue reads as (a new state before `SENT`?); and
   the one exception, a structure with a reactor, where the game's own second slot is wanted.
-- **What an unqueued order does to the queue**: replace it, as the game does, presumably.
+- **What an unqueued order does to the queue**: presumably replaces it, as the game does.
 - **When an item goes out.** Conditions on position and on the unit's state ("close enough", "landed", "idle", "gate
   ready", "larva free") fit the rule that NachOS checks nothing an order needs. Waiting on minerals, supply or tech
   would bring those checks back; the previous agent recommended leaving them to the bot and sending the item
@@ -107,9 +106,9 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 
 - **"Close enough" for a build**: send the build at several distances and record the steps the worker loses. Too
   late and it stops and waits; too early and the minerals are spent while it walks.
-- Whether a drone and a probe are charged at the order the way an SCV is.
+- Whether a drone and a probe are charged at the order as an SCV is.
 - What happens to a build whose site is blocked before the worker arrives (expected: an error and no charge).
-- A factory's and a starport's add-on while flying, taken to behave as a barracks's.
+- A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
 
@@ -141,14 +140,14 @@ said "leave it for later".
 
 ## 4. After each nachOS pull request merges
 
-Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under "M4 status" saying
-what it settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS checkout; its tests
-(`uv run pytest`, `tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push
-only when the owner says so.
+Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under "M4 status" saying what it
+settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS checkout; its tests (`uv run pytest`,
+`tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push only when the owner
+says so.
 
 ## 5. Later, at M5 (AvocaDOS runs on NachOS)
 
-In AvocaDOS's plan, section "M5 — The swap". Things already known:
+In AvocaDOS's plan, section "M5 — The swap". Already known:
 
 - AvocaDOS's own `api.event` and `api.order` become NachOS's `api.events` and `api.orders`; its `OrderManager` keeps
   the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is `api.orders.issued_to(unit)`.

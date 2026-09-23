@@ -9,8 +9,8 @@ from sc2nachos._enum import ReadableIntEnum, UnknownValueError
 
 
 class UnknownActionResultError(UnknownValueError):
-    """The game answered with a result `ActionResult` leaves out, which a protocol release newer than the one it was
-    generated from would add. Regenerate it with `tools/generate_action_results.py`."""
+    """The game answered with a result `ActionResult` lacks, added by a protocol release newer than the one it was
+    generated from. Regenerate it with `tools/generate_action_results.py`."""
 
     def __init__(self, enum: type[ReadableIntEnum], value: int) -> None:
         super().__init__(enum, value)
@@ -21,10 +21,10 @@ class UnknownActionResultError(UnknownValueError):
 
 
 class ActionResult(ReadableIntEnum):
-    """What the game answered an action with, or gave up on it for.
+    """The game's answer to an action, or its reason for giving one up.
 
-    `SUCCESS` means the game took the action, not that it carried it out: an order it takes and then drops is
-    answered `SUCCESS` all the same (in game).
+    `SUCCESS` means the game accepted the action, not that it carried it out: an order it accepts and then drops is
+    still answered `SUCCESS` (in game).
     """
 
     @classmethod

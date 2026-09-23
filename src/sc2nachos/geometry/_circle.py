@@ -111,9 +111,9 @@ class Circle(Area):
         )
 
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
-        """The points where the two boundaries cross: two of them, one where the circles touch, none otherwise.
+        """The points where the two boundaries cross: two, one where the circles touch, none otherwise.
 
-        Concentric circles report none, including when they are the same circle.
+        Concentric circles, the same circle included, report none.
         """
         offset = other.center - self._center
         distance_squared = offset[0] ** 2 + offset[1] ** 2

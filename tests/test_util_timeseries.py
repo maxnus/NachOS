@@ -370,7 +370,7 @@ class TestConstruction:
         assert TimeSeries(numpy.zeros(4), 99, 0)._start is None
 
     def test_an_empty_buffer_is_rejected(self):
-        # It would build a series with no room to append, so no value could ever be recorded.
+        # It would make a series with no room to append, so nothing could ever be recorded.
         with pytest.raises(ValueError, match="must not be empty"):
             TimeSeries(numpy.zeros(0), None, 0)
 

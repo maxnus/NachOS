@@ -42,7 +42,7 @@ class TestStatus:
         assert client.status is Status.INIT_GAME
 
     def test_a_response_without_a_status_leaves_the_last_one_standing(self) -> None:
-        """An unset status field reads as `launched`, so reading it blind would walk the status backwards."""
+        """An unset status field reads as `launched`, so reading it blindly would move the status backwards."""
         client, _ = make_client(
             make_response(Status.IN_GAME, ping=sc2api_pb2.ResponsePing()),
             make_response(None, ping=sc2api_pb2.ResponsePing()),
@@ -122,10 +122,10 @@ class TestJoining:
 
 
 class TestGameAfterGame:
-    """One connection can play game after game, so nothing of one game may answer for the next."""
+    """One connection can play game after game, so nothing from one game may carry into the next."""
 
     def _won(self, *after: sc2api_pb2.Response) -> Client:
-        """A client whose game has ended in a victory, over a transport that will then answer `after`."""
+        """A client whose game ended in a victory, over a transport that then returns `after`."""
         client, _ = make_client(
             make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
             make_response(Status.ENDED, observation=make_observation(100, (1, Result.VICTORY))),
@@ -142,7 +142,7 @@ class TestGameAfterGame:
         assert (client.player_id, client.result, dict(client.results)) == (None, None, {})
 
     def test_creating_the_next_game_forgets_the_last(self) -> None:
-        """A game that has ended is ready for a new one without being left first."""
+        """A game that has ended need not be left before the next is created."""
         client = self._won(make_response(Status.INIT_GAME, create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("Next.SC2Map", [Participant(), Participant()])
         assert (client.player_id, client.result) == (None, None)
@@ -178,7 +178,7 @@ class TestObservation:
         assert client.results == {1: Result.VICTORY, 2: Result.DEFEAT}
 
     def test_a_game_that_ends_a_step_early_costs_one_more_request(self) -> None:
-        """The game reports itself ended a step before it will say who won."""
+        """The game reports itself ended a step before it says who won."""
         client, transport = make_client(
             make_response(Status.ENDED, observation=sc2api_pb2.ResponseObservation()),
             make_response(Status.ENDED, observation=make_observation(0, (1, Result.DEFEAT))),
@@ -292,7 +292,7 @@ class TestWebSocketTransport:
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
     def test_a_text_frame_is_not_a_response(self) -> None:
-        """The protocol is binary throughout, so text is the game or a proxy saying something went wrong."""
+        """The protocol is binary throughout, so a text frame is the game or a proxy reporting a failure."""
         websocket = FakeWebSocket("Bad Request")
         with pytest.raises(ProtocolError, match="text where the protocol is binary"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
@@ -348,7 +348,7 @@ class TestCreatingAGame:
         assert [setup.type for setup in request.player_setup] == [sc2api_pb2.Participant, sc2api_pb2.Computer]
 
     def test_a_participant_says_nothing_about_itself(self) -> None:
-        """The race and the name are settled at the join, and the game ignores them here."""
+        """The race and the name are settled at the join; the game ignores them here."""
         client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Participant()])
         setup = transport.requests[0].create_game.player_setup[0]
@@ -379,7 +379,7 @@ class TestCreatingAGame:
         assert request.random_seed == 7
 
     def test_no_seed_asked_for_leaves_the_game_to_pick_one(self) -> None:
-        """Zero is a seed like any other, so an unset field is the only way to say `any`."""
+        """Zero is a valid seed, so an unset field is the only way to say `any`."""
         client, transport = make_client(make_response(create_game=sc2api_pb2.ResponseCreateGame()))
         client.create_game("map", [Participant()])
         assert not transport.requests[0].create_game.HasField("random_seed")
@@ -393,7 +393,7 @@ class TestCreatingAGame:
             client.create_game("map", [Participant()])
 
     def test_a_creation_the_game_did_not_answer_raises(self) -> None:
-        """An unset create_game field would otherwise read as a refusal-free success."""
+        """An unset create_game field would otherwise read as a success."""
         client, _ = make_client(make_response(ping=sc2api_pb2.ResponsePing()))
         with pytest.raises(ProtocolError, match="asked for create_game and answered ping"):
             client.create_game("map", [Participant()])
@@ -410,7 +410,7 @@ class _BrokenTransport:
 
 
 def _recorder(path: Path, *responses: sc2api_pb2.Response) -> RecordingTransport:
-    """A recorder into `path`, over a game that will answer `responses`."""
+    """A recorder writing to `path`, over a transport that returns `responses`."""
     return RecordingTransport(FakeTransport(*responses), path)
 
 
@@ -435,7 +435,7 @@ class TestRecording:
         assert list(recorder.recording) == list(recorder.recording)
 
     def test_a_recording_is_far_smaller_than_the_game_it_holds(self, tmp_path: Path) -> None:
-        """Committing a corpus is only affordable because consecutive observations barely differ."""
+        """Committing a corpus is affordable only because consecutive observations barely differ."""
         path = tmp_path / "game.sc2rec"
         answers = _crowded_observations(200)
         recorder = _recorder(path, *answers)
@@ -496,7 +496,7 @@ class TestRecording:
             list(Recording(path))
 
     def test_a_recording_whose_run_died_gives_what_it_holds_then_says_so(self, tmp_path: Path) -> None:
-        """A run that dies never finishes the compressed stream, so it leaves a prefix of the file it would have."""
+        """A run that dies never closes the compressed stream, so it leaves a prefix of the file it would write."""
         path = tmp_path / "game.sc2rec"
         recorder = _recorder(path, *_crowded_observations(200))
         client = Client(recorder)
@@ -513,7 +513,7 @@ class TestRecording:
 
 
 def _crowded_observations(count: int) -> list[sc2api_pb2.Response]:
-    """Answers to `count` observations of the same 500 marines, a game loop apart."""
+    """Responses to `count` observation requests, each of the same 500 marines, a game loop apart."""
     crowd = [raw_pb2.Unit(tag=index, unit_type=48, health=45.0) for index in range(500)]
     return [
         make_response(
@@ -526,7 +526,7 @@ def _crowded_observations(count: int) -> list[sc2api_pb2.Response]:
 
 
 def _truncated(tmp_path: Path, *, cut: int) -> Path:
-    """A recording of one exchange missing its last `cut` bytes, in a stream still closed properly."""
+    """A recording of one exchange missing its last `cut` bytes, in a properly closed stream."""
     path = tmp_path / "game.sc2rec"
     recorder = _recorder(path, _VERSION)
     Client(recorder).ping()
@@ -537,7 +537,7 @@ def _truncated(tmp_path: Path, *, cut: int) -> Path:
 
 class TestReplay:
     def _recorded(self, tmp_path: Path) -> Recording:
-        """A game created, joined and observed once, as a recording."""
+        """A recording of a game created, joined and observed once."""
         recorder = _recorder(
             tmp_path / "game.sc2rec",
             make_response(create_game=sc2api_pb2.ResponseCreateGame()),
@@ -558,7 +558,7 @@ class TestReplay:
         assert client.observation().observation.game_loop == 48
 
     def test_the_details_of_a_request_need_not_match(self, tmp_path: Path) -> None:
-        """Only the question is replayed, so a caller may ask about a loop the recording did not."""
+        """Only the kind of request is matched, so a caller may ask for a loop the recording did not."""
         client = Client(PlaybackTransport(self._recorded(tmp_path)))
         client.create_game("other map", [Computer()])
         assert client.join_game(Race.ZERG, name="someone else") == 2

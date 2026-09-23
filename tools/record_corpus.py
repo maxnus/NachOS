@@ -25,7 +25,7 @@ _LETTERS = {Race.TERRAN: "T", Race.ZERG: "Z", Race.PROTOSS: "P", Race.RANDOM: "R
 
 @dataclass(frozen=True, slots=True)
 class CorpusGame:
-    """One game of the corpus: on which map, as which race, against which computer, from which seed."""
+    """One corpus game: its map, race, opponent and seed."""
 
     map: str
     race: Race
@@ -39,7 +39,7 @@ class CorpusGame:
 
     @property
     def path(self) -> Path:
-        """Where the recording is kept."""
+        """The recording's path."""
         return CORPUS / f"{self.name}.sc2rec"
 
 

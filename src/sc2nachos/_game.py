@@ -1,4 +1,4 @@
-"""One game as it is played, and what each of its observations reports has happened, handed on as events."""
+"""One game as it is played, and the events each observation reports."""
 
 import functools
 from collections.abc import Callable, Hashable, Mapping, Sequence
@@ -62,13 +62,13 @@ from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 
-# Each alert by the protocol's value.
+# Alerts by their protocol value.
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 
 
 @dataclass(slots=True)
 class _Game:
-    """One game as it is played: the client it is played on, and everything seen of it so far."""
+    """One game as it is played: its client, and everything seen of it so far."""
 
     client: Final[Client]
     game_map: Final[GameMap]
@@ -79,13 +79,13 @@ class _Game:
     orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
     state: _State
-    # Kept beside the observation, because reading it out of the protobuf costs over ten times as much.
+    # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
 
     @classmethod
     def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference) -> Self:
-        """Start on the game `client` has joined: ask once for its map and pre-upgrade tables, and observe it."""
+        """Start the game `client` has joined: fetch its map and pre-upgrade tables once, and observe it."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
         step = _step(observation)
@@ -114,7 +114,7 @@ class _Game:
         self._take_in(observation, _step(observation))
 
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
-        """Read `observation`: its units, what they show of the enemy's upgrades if told to, and all else it reports."""
+        """Read `observation`: its units, the enemy upgrades they show if inference is on, and the rest it reports."""
         self.observation = observation
         self.step = step
         self.tracker.update(observation.observation.raw_data, step)
@@ -127,9 +127,9 @@ class _Game:
             self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
     def report(self, events: EventBus) -> list[Event]:
-        """What the last observation reports has happened, as the events a handler of `events` still to run this game
-        wants, in the order they are handed out: every event of a type a handler takes whole, and those of the keys
-        handlers select through `only` or `of`."""
+        """The events the last observation reports, in the order they are handed out, limited to what a handler of
+        `events` not yet done wants: every event of a type a handler takes whole, and those of the keys handlers select
+        through `only` or `of`."""
         tracker, observation, subscriptions = self.tracker, self.observation, events._subscriptions
         changes = tracker.last_changes
         happened: list[Event] = []
@@ -186,15 +186,15 @@ class _Game:
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
-                # `AlertError` and `TrainError` have no member, and are passed over.
+                # `AlertError` and `TrainError` have no member and are skipped.
                 if (alert := _ALERTS.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
                     add(AlertEvent(alert, step=step))
         return happened
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
-        """Have the tracker compare each unit with the update before, as the damage, energy lost, cloak and buff events
-        a handler wants need: the buffs handlers select, or every one if a handler takes them all. Have it let go of
-        what it kept when no handler wants any. Say whether it compared."""
+        """Have the tracker compare each unit with the update before, for the damage, energy lost, cloak and buff
+        events handlers want: the buffs handlers select, or every buff if a handler takes them all. Stop it when no
+        handler wants any of these. Returns whether it compared."""
         comparer = self.tracker.unit_comparer
         wants = functools.partial(_wants_any, subscriptions)
         damage = wants(OwnUnitDamagedEvent) or wants(EnemyUnitDamagedEvent)
@@ -216,8 +216,8 @@ class _Game:
         return True
 
     def _watch(self, subscriptions: _EventSubscriptions) -> bool:
-        """Have the tracker watch each unit for the vitals and areas handlers select, or let go of what it kept when
-        none does. Say whether it watched."""
+        """Have the tracker watch each unit for the vitals and areas handlers select, or stop it when none does. Returns
+        whether it watched."""
         watcher = self.tracker.unit_watcher
         if not subscriptions.any_keyed:
             watcher.stop()
@@ -249,9 +249,9 @@ class _Game:
         *,
         tuples: bool = False,
     ) -> None:
-        """Add to `happened` an event of `event_type` made of each of `found` a handler wants, of a tuple's items if
-        `tuples`: all of them if a handler takes every event of the type, or else those whose key a handler selects.
-        A parameterized event is made only for the keys selected, a handler of a base of it taking those."""
+        """Add to `happened` an event of `event_type` for each item of `found` a handler wants, made of the item, or of
+        its items if `tuples`: every item if a handler takes every event of the type, else those whose key a handler
+        selects. A parameterized event is made only for selected keys, even for a handler of one of its bases."""
         if not found:
             return
         every = subscriptions.wants_every(event_type) and not issubclass(event_type, ParameterizedEvent)
@@ -273,7 +273,7 @@ class _Game:
         return row is not None and Attribute.STRUCTURE in row.attributes
 
     def outcome(self) -> Result | None:
-        """How the game ended as of the last observation, settled once it has, or `None` while it goes on."""
+        """How the game ended as of the last observation, or `None` while it goes on. Ending it settles the result."""
         if (result := self.client.result) is not None:
             return self.finish(result)
         if not self.client.in_game:
@@ -282,7 +282,7 @@ class _Game:
         return None
 
     def finish(self, result: Result) -> Result:
-        """Settle how the game ended, and say so."""
+        """Record `result` as how the game ended, and log it."""
         self.result = result
         seconds = steps_to_seconds(self.step)
         logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
@@ -291,7 +291,7 @@ class _Game:
 
 def _step(observation: sc2api_pb2.ResponseObservation) -> int:
     """The step `observation` was made at."""
-    # The protocol's game loop is what NachOS calls a step, and this is the one place the two meet.
+    # The protocol's game loop is NachOS's step; this is the one place the two meet.
     return observation.observation.game_loop
 
 
@@ -299,5 +299,5 @@ _NO_KEYS: frozenset[Hashable] = frozenset()
 
 
 def _wants_any(subscriptions: _EventSubscriptions, event_type: type[Event]) -> bool:
-    """Whether a handler of `subscriptions` wants an event of `event_type`: every one, or one of some keys."""
+    """Whether a handler in `subscriptions` wants events of `event_type`, whole or by key."""
     return subscriptions.wants_every(event_type) or bool(subscriptions.wanted_keys(event_type))

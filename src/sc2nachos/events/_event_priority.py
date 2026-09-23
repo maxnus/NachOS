@@ -1,11 +1,10 @@
-"""Where among the handlers of an event one runs."""
+"""The order the handlers of an event run in."""
 
 from sc2nachos._enum import ReadableIntEnum
 
 
 class EventPriority(ReadableIntEnum):
-    """Where among the handlers of an event one runs: every handler of a higher priority first, and those of one
-    priority in the order they subscribed."""
+    """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order."""
 
     LOWEST = 0
     VERY_LOW = 1

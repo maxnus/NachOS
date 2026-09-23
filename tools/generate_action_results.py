@@ -1,8 +1,8 @@
-"""Generate the curated `ActionResult` from the protocol's own enum.
+"""Generate `ActionResult` from the protocol's own enum.
 
-The game answers every action of a `RequestAction` with one of these, and names one in every action error, so the
-catalog is complete rather than curated: a bot must be able to read whatever comes back. Regenerate after a
-protocol release adds results::
+The game answers every action in a `RequestAction` with one of these and names one in every action error, so the
+catalog is complete rather than curated: a bot must be able to read whatever comes back. Regenerate after a protocol
+release adds results::
 
     uv run python tools/generate_action_results.py
 """
@@ -26,8 +26,8 @@ from sc2nachos._enum import ReadableIntEnum, UnknownValueError
 
 
 class UnknownActionResultError(UnknownValueError):
-    """The game answered with a result `ActionResult` leaves out, which a protocol release newer than the one it was
-    generated from would add. Regenerate it with `tools/generate_action_results.py`."""
+    """The game answered with a result `ActionResult` lacks, added by a protocol release newer than the one it was
+    generated from. Regenerate it with `tools/generate_action_results.py`."""
 
     def __init__(self, enum: type[ReadableIntEnum], value: int) -> None:
         super().__init__(enum, value)
@@ -38,10 +38,10 @@ class UnknownActionResultError(UnknownValueError):
 
 
 class ActionResult(ReadableIntEnum):
-    """What the game answered an action with, or gave up on it for.
+    """The game's answer to an action, or its reason for giving one up.
 
-    `SUCCESS` means the game took the action, not that it carried it out: an order it takes and then drops is
-    answered `SUCCESS` all the same (in game).
+    `SUCCESS` means the game accepted the action, not that it carried it out: an order it accepts and then drops is
+    still answered `SUCCESS` (in game).
     """
 
     @classmethod
@@ -52,7 +52,7 @@ class ActionResult(ReadableIntEnum):
 
 
 def member_name(name: str) -> str:
-    """The name Blizzard's `CamelCase` takes in this package's spelling."""
+    """Blizzard's `CamelCase` name in this package's `UPPER_SNAKE` spelling."""
     return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", name).upper()
 
 

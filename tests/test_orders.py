@@ -1,6 +1,6 @@
-"""The orders a bot gives: what goes out in a turn's request, and what the next observation makes of each."""
+"""The orders a bot gives: what goes out in a turn's request, and what the next observation says became of each."""
 
-# Each `type: ignore` below marks a call a type checker must refuse, so one that is not needed fails.
+# Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
 from contextlib import closing
@@ -35,7 +35,7 @@ _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.GENERAL_RALLY
 _MORPH_DRONE = AbilityId.LARVA_MORPH_DRONE
-# An unset `target` reads as the first value the enum declares, which is the one for an ability aimed at nothing.
+# An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 
 _TABLES = make_tables(
@@ -59,15 +59,15 @@ _TABLES = make_tables(
 
 
 def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
-    """A verdict as the protocol spells it."""
+    """An action result as the protocol spells it."""
     return error_pb2.ActionResult.ValueType(result)
 
 
 class _Game:
-    """An order book over a tracker fed one observation after another, as `Api.play` feeds it."""
+    """An order book over a tracker, fed one observation at a time as `Api.play` feeds it."""
 
     def __init__(self, *verdicts: list[ActionResult]) -> None:
-        """A game whose every flush is answered with the next of `verdicts`, one for each action sent."""
+        """A game that answers each flush with the next of `verdicts`, one result per action sent."""
         responses = [
             make_response(action=sc2api_pb2.ResponseAction(result=[_verdict(result) for result in verdict]))
             for verdict in verdicts
@@ -85,20 +85,20 @@ class _Game:
         errors: tuple[sc2api_pb2.ActionError, ...] = (),
         dead: tuple[int, ...] = (),
     ) -> None:
-        """Take in an observation of `units` at `step`, and settle the orders it answers for."""
+        """Take in an observation of `units` at `step` and resolve the orders it reports on."""
         observation = make_observation(step, units=units, actions=actions, action_errors=errors, dead=dead)
         self.tracker.update(observation.observation.raw_data, step)
         self.book._take_in(_State(observation, self.tracker, self.map), step)
 
     def flush(self) -> sc2api_pb2.RequestAction | None:
-        """Send the turn's orders, and answer the request that went out, or `None` where none did."""
+        """Send the turn's orders and return the request that went out, or `None` if none did."""
         before = len(self.transport.requests)
         self.book._send(self.client)
         sent = self.transport.requests[before:]
         return sent[0].action if sent else None
 
     def own(self, tag: int) -> OwnUnit[Any]:
-        """The unit the game reported under `tag`, which is this player's."""
+        """This player's unit reported under `tag`."""
         unit = self.tracker.unit_tracker.by_tag(tag)
         assert isinstance(unit, OwnUnit)
         return unit
@@ -110,7 +110,7 @@ def _marine(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (10.
 
 
 def _barracks(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
-    """One of this player's barracks, making what `orders` say."""
+    """One of this player's barracks, carrying out `orders`."""
     return make_unit(tag, UnitTypeId.BARRACKS, at=(12.0, 12.0), orders=orders)
 
 
@@ -120,7 +120,7 @@ def _training(progress: float = 0.5) -> raw_pb2.UnitOrder:
 
 
 def _moving(to: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.UnitOrder:
-    """The order a marine shows while it moves to `to`, under the exact id a move runs."""
+    """The order a marine shows while moving to `to`, under the exact id a move runs as."""
     return raw_pb2.UnitOrder(ability_id=_MOVE_EXACT, target_world_space_pos=common_pb2.Point(x=to[0], y=to[1]))
 
 
@@ -136,7 +136,7 @@ def _reported(
 def _failed(
     ability: AbilityId, tag: int, result: ActionResult = ActionResult.NOT_ENOUGH_FOOD
 ) -> sc2api_pb2.ActionError:
-    """An action error naming the order the game gave up on."""
+    """An action error for an order the game gave up on."""
     return sc2api_pb2.ActionError(unit_tag=tag, ability_id=ability, result=_verdict(result))
 
 
@@ -214,7 +214,7 @@ class TestGivingAnOrder:
         assert repr(both) == "Order(GENERAL_MOVE, 2 units, given)"
 
     def test_an_ability_aimed_at_what_it_cannot_take_is_a_mistake(self) -> None:
-        """The three the game was seen to answer `ERROR`, which NachOS now answers for itself."""
+        """The three cases the game was seen to answer `ERROR`, which NachOS now rejects itself."""
         game = _Game()
         game.observe(0, _marine(1))
         marine = game.own(1)
@@ -523,8 +523,8 @@ class TestWhatBecameOfAnOrder:
         assert order.failure is None
 
     def test_one_train_to_three_barracks_is_lost_with_the_one_that_took_it(self) -> None:
-        """One command naming several structures is carried out by one of them (in game), so the two left idle
-        say nothing about what became of it."""
+        """One command naming several structures is carried out by one of them (in game), so the two left idle say
+        nothing about what became of it."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1), _barracks(2), _barracks(3))
         order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
@@ -550,7 +550,7 @@ class TestWhatBecameOfAnOrder:
         assert order.state is OrderState.DONE
 
     def test_an_order_the_game_gave_up_on_fails_though_its_unit_then_died(self) -> None:
-        """With several steps a turn, an error and the unit's death can arrive in one observation, and the error
+        """With several steps a turn, the error and the unit's death can arrive in one observation, and the error
         came first."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
@@ -576,8 +576,8 @@ class TestWhatBecameOfAnOrder:
     def test_one_train_to_three_barracks_is_lost_with_the_one_reported_taking_it_before_it_was_seen_at_it(
         self,
     ) -> None:
-        """With several steps a turn, the barracks that took it can die before any observation shows it training;
-        the report still names it."""
+        """With several steps a turn, the barracks that took it can die before any observation shows it training,
+        but the report still names it."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1), _barracks(2), _barracks(3))
         order = game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
@@ -640,7 +640,7 @@ class TestWhatBecameOfAnOrder:
 
 
 class TestOrdersThatQueue:
-    """A train goes behind what a structure is making, so it is neither a duplicate nor a replacement (in game)."""
+    """A train queues behind what a structure is making, so it is neither a duplicate nor a replacement (in game)."""
 
     def test_a_train_is_sent_though_the_structure_is_already_making_one(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -708,7 +708,7 @@ class TestAnOrderTheGameDropped:
         dropped = game.book.issue(game.own(2), _MOVE, target=(30.0, 31.0))
         game.flush()
 
-        # The game carried out the first and dropped the second, which it does without a word (in game).
+        # The game carried out the first and silently dropped the second (in game).
         game.observe(16, _marine(1, _moving()), _marine(2), actions=(_reported(_MOVE_EXACT, 1, step=16),))
 
         assert reported.state is OrderState.RUNNING
@@ -738,7 +738,7 @@ class TestATargetOffTheGround:
 
 
 class TestWhatAStructureDoesBesidesMaking:
-    """A structure goes on making what it is making when given a rally or a cancel (in game)."""
+    """A structure keeps making what it is making when given a rally or a cancel (in game)."""
 
     def test_a_rally_does_not_take_the_turn_from_a_train(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
@@ -820,9 +820,9 @@ class TestWhatCannotBeCleared:
 
 class TestAPointAsTheGameReadsIt:
     def test_a_target_is_kept_as_the_protocol_carries_it(self) -> None:
-        """A coordinate goes out as a 32-bit float, so the point an order holds is the one the game reports."""
+        """A coordinate goes out as a 32-bit float, so the point an order holds is the one the game reports back."""
         game = _Game()
-        # Cut down to 1/4096 this reads a step lower than the 32-bit float the game is actually given.
+        # Rounded to 1/4096 this reads one step lower than the 32-bit float the game is given.
         crossing = 157.123288015625
         game.observe(0, _marine(1, _moving((crossing, 3.0))))
 
@@ -859,7 +859,7 @@ class TestWhatAnOrderStopsCountingFor:
 
 class TestTellingAStructureToMakeTwo:
     def test_a_second_train_is_sent_when_the_bot_asks_for_a_place_in_the_queue(self) -> None:
-        """Which is how a structure with a reactor is told to make two at once (in game)."""
+        """This is how a structure with a reactor is told to make two at once (in game)."""
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         first = game.book.issue(game.own(1), _TRAIN_MARINE)
@@ -872,7 +872,7 @@ class TestTellingAStructureToMakeTwo:
         assert (first.state, second.state) == (OrderState.SENT, OrderState.SENT)
 
     def test_a_second_unqueued_train_takes_the_structure_from_the_first(self) -> None:
-        """Deliberate: the game would queue it and pay for it from the step it was ordered."""
+        """The game would queue it and pay for it from the step it was ordered."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         first = game.book.issue(game.own(1), _TRAIN_MARINE)
@@ -941,7 +941,7 @@ class TestAnOrderSentToSomeOfItsUnits:
         game.observe(16, _marine(1, _moving()), _marine(2), actions=(_reported(_MOVE_EXACT, 1, step=16),))
         assert group.state is OrderState.RUNNING
 
-        # The group order went out for marine 1 alone, so marine 1 is all it takes to supersede it.
+        # The group order went out for marine 1 alone, so an order to marine 1 supersedes it.
         game.book.issue(game.own(1), _MOVE, target=(40.0, 41.0))
         game.flush()
 
@@ -950,7 +950,7 @@ class TestAnOrderSentToSomeOfItsUnits:
 
 class TestWhoTookAnOrder:
     def test_a_report_that_comes_after_the_unit_is_seen_doing_it_still_names_who_took_it(self) -> None:
-        """An order's effect can show up an observation before its report does (in game)."""
+        """An order's effect can show up an observation before its report (in game)."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
@@ -968,8 +968,8 @@ class TestWhoTookAnOrder:
 
 class TestAVerdictNachosCannotName:
     def test_it_says_which_result_the_game_answered_with(self) -> None:
-        """The enum is generated from the protocol package, so a game newer than it could answer with a result it
-        leaves out. The protocol itself refuses to carry one, so the reading is probed on its own."""
+        """The enum is generated from the protocol package, so a newer game could answer with a result it lacks. The
+        protocol package itself refuses to carry one, so the reading is tested on its own."""
         assert ActionResult.read(int(ActionResult.QUEUE_IS_FULL)) is ActionResult.QUEUE_IS_FULL
 
         with pytest.raises(UnknownActionResultError, match="no member for the result 250"):
@@ -977,7 +977,7 @@ class TestAVerdictNachosCannotName:
 
 
 class _OrderingBot:
-    """A bot that gives a few orders and holds on to each, to see what the real game makes of them."""
+    """A bot that gives a few orders and keeps each, to see what the real game makes of them."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -989,7 +989,7 @@ class _OrderingBot:
         self.killed: OwnUnit[Any] | None = None
 
     def turn(self, event: TurnEvent) -> None:
-        """Order what the game has not been asked yet, one thing at a time."""
+        """Give the next order not yet given, one per turn."""
         api = self.api
         marines = api.units.own.of_type(UnitTypeId.GHOST)
         middle = api.map.playable_area.center
@@ -1014,8 +1014,8 @@ class _OrderingBot:
 
 
 class _LosingBot:
-    """A bot that has a structure killed while it researches, and a larva hatch a drone, to see which of the two
-    orders the real game leaves lost and which done."""
+    """A bot that has a structure killed while it researches and a larva hatch a drone, to see which order the real
+    game reports lost and which done."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -1033,8 +1033,8 @@ class _LosingBot:
         if self.drone is None:
             larvae = api.units.own.of_type(UnitTypeId.LARVA)
             if len(larvae) > 1:
-                # One larva left, so the drone cannot be handed to another (in game). A kill lands as the game steps,
-                # so the drone waits for a turn that sees the rest gone.
+                # Leave one larva, so the drone cannot be handed to another (in game). A kill lands as the game
+                # steps, so the drone waits for a turn that sees the rest gone.
                 kill = debug_pb2.DebugKillUnit(tag=[larva.tag for larva in larvae[1:]])
                 api.client.debug([debug_pb2.DebugCommand(kill_unit=kill)])
             elif larvae:
@@ -1058,7 +1058,7 @@ class _LosingBot:
 
 
 def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> debug_pb2.DebugCommand:
-    """The command creating units of `unit_type` at `at`."""
+    """A debug command that creates `quantity` units of `unit_type` at `at`."""
     position = common_pb2.Point2D(x=at.x, y=at.y)
     unit = debug_pb2.DebugCreateUnit(unit_type=unit_type, owner=owner, pos=position, quantity=quantity)
     return debug_pb2.DebugCommand(create_unit=unit)
@@ -1066,7 +1066,7 @@ def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> d
 
 @pytest.mark.integration
 class TestAgainstTheRealGame:
-    """Run with `pytest -m integration`. Plays a minute of one game, ordering as a bot would."""
+    """Run with `pytest -m integration`. Plays a minute of a game, giving orders as a bot would."""
 
     def test_orders_go_out_each_turn_and_settle_from_what_the_game_reports(self) -> None:
         try:
@@ -1090,7 +1090,7 @@ class TestAgainstTheRealGame:
         assert bot.moved.data == "scouting"
         assert bot.moved.taken_by == bot.moved.units
 
-        # Holding fire and a move to one ghost are both carried out, and neither overrides the other.
+        # Hold fire and a move to the same ghost are both carried out; neither overrides the other.
         assert bot.stim is not None and bot.stimmed_move is not None
         assert bot.stim.action_result is ActionResult.SUCCESS
         assert bot.stimmed_move.action_result is ActionResult.SUCCESS
@@ -1117,13 +1117,13 @@ class TestAgainstTheRealGame:
             api.events.on(TurnEvent)(bot.turn)
             api.play(client, steps_per_turn=8, time_limit=60)
 
-        # The game reports the chamber dying and nothing more, so the research reads lost.
+        # The game reports the chamber's death and nothing more, so the research reads lost.
         assert bot.killed
         assert bot.research is not None
         assert bot.research.state is OrderState.LOST
         assert bot.research.failure is None
 
-        # The egg the larva became is reported dead as the drone hatches, which is the order done.
+        # The egg the larva became is reported dead as the drone hatches, which makes the order done.
         assert bot.drone is not None
         assert bot.drone_ran, f"the drone's order read {bot.drone.state.name}, never running"
         assert bot.drone.state is OrderState.DONE

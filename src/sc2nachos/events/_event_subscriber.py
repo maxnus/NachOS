@@ -1,4 +1,4 @@
-"""What `EventBus.on` answers: the decorator that subscribes a handler."""
+"""The decorator `EventBus.on` returns, which subscribes a handler."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ if TYPE_CHECKING:
 @final
 class _EventSubscriber:
     """A decorator that subscribes the function it decorates to the events it selects, or marks the method it decorates
-    for `EventBus.subscribe`, with how often to call it. `where` narrows what it selects."""
+    for `EventBus.subscribe`, with the options `on` was given. `where` narrows what it selects."""
 
     __slots__ = ("_bus", "_options", "_selects")
 
     def __init__(self, bus: EventBus, selects: EventFilter[Any], options: dict[str, Any]) -> None:
         self._bus = bus
         self._selects = selects
-        # What `on` was given beside what it selects: the priority, the cadence and whether to catch exceptions.
+        # The rest of what `on` was given: the priority, the cadence and whether to catch exceptions.
         self._options = options
 
     def __call__[F: Callable[..., object]](self, handler: F, /) -> F:
@@ -40,7 +40,7 @@ class _EventSubscriber:
         return handler
 
     def where(self, predicate: Callable[[Any], bool], /) -> _EventSubscriber:
-        """This decorator, handing on only the events `predicate` passes too."""
+        """This decorator, narrowed to the events `predicate` also passes."""
         selects = self._selects
         if (first := selects.predicate) is None:
             both = predicate

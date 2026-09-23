@@ -18,10 +18,10 @@ def test_protobuf_protocol_is_importable() -> None:
 
 
 def test_no_dependency_on_burnysc2() -> None:
-    """NachOS must never import the library it replaces.
+    """NachOS never imports the library it replaces.
 
-    AvocaDOS installs both during the migration, so an accidental import would otherwise go unnoticed until
-    burnysc2 is finally removed.
+    AvocaDOS installs both during the migration, so an accidental import would go unnoticed until burnysc2 is
+    removed.
     """
     import sys
 
@@ -29,8 +29,8 @@ def test_no_dependency_on_burnysc2() -> None:
 
 
 def test_what_starts_a_game_is_exported_from_the_top_level() -> None:
-    """The README's first example runs on `sc2nachos` alone: the api, the runner, the match vocabulary and the one
-    setting `Api` takes an enum for."""
+    """The README's first example needs only `sc2nachos`: the api, the runner, the match vocabulary and the one
+    `Api` setting that is an enum."""
     assert sc2nachos.Race is match.Race
     assert sc2nachos.Computer is match.Computer
     assert sc2nachos.Difficulty is match.Difficulty

@@ -6,7 +6,7 @@ from sc2nachos._enum import ReadableIntEnum
 
 
 class Status(ReadableIntEnum):
-    """The game client's own account of where it is between launching and quitting.
+    """The game client's own status, from launching to quitting.
 
     Every response carries one, so it is read rather than tracked.
     """

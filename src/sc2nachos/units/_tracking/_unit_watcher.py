@@ -1,4 +1,4 @@
-"""Each unit watched for crossing a value of its energy or its life, or the edge of an area."""
+"""Each unit watched for crossing a value of its energy or life, or the edge of an area."""
 
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ _ENEMY = raw_pb2.Alliance.Enemy
 
 @final
 class _UnitWatcher:
-    """Which units of this player's and the enemy's crossed the vitals and areas watched since each was last seen,
-    recorded among the tracker's last changes.
+    """Records into the tracker's last changes which of this player's and the enemy's units crossed a watched vital
+    value or area edge since each was last seen.
 
-    A unit crosses a value of a vital when it is seen in vision on one side of it, at or above it or below it, having
-    last been seen in vision on the other, and the edge of an area when it is seen in sight on the other side of it than
-    last, or first seen inside it. A watch reports nothing on the first update it runs on, and keeps what it found for
-    the next.
+    A unit crosses a vital value when it is seen in vision on one side of the value (at or above it, or below it)
+    after last being seen in vision on the other side. It crosses an area's edge when it is seen in sight on the
+    other side of the edge from last time, or is first seen inside the area. A watch reports nothing on the first
+    update it runs on, and keeps what it saw for the next.
     """
 
     __slots__ = ("_enemy", "_own", "_tracker")
@@ -51,10 +51,10 @@ class _UnitWatcher:
         own_areas: Collection[Area] = (),
         enemy_areas: Collection[Area] = (),
     ) -> None:
-        """Record in the tracker's last changes each unit that crossed a vital or area watched for its side: a value of
-        a vital of its type, reached from below or dropped below, or the edge of an area.
+        """Record into the tracker's last changes each unit that crossed a vital value or area edge watched for its
+        side: a value of a vital of its type, reached from below or dropped below, or the edge of an area.
 
-        Stop watching what is no longer asked for, and start watching what is asked for anew.
+        Stops watching what is no longer asked for, and starts watching what is newly asked for.
         """
         own, enemy = self._own, self._enemy
         own.watch(own_reached, own_dropped, own_areas)
@@ -73,7 +73,7 @@ class _UnitWatcher:
         enemy.end_update(dead)
 
     def stop(self) -> None:
-        """Let go of everything watched."""
+        """Drop everything watched."""
         if self._own.watching or self._enemy.watching:
             self._own = _Watches()
             self._enemy = _Watches()

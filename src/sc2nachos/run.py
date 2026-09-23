@@ -1,4 +1,4 @@
-"""Playing a game, on a client this library starts or one a ladder has already started."""
+"""Playing a game on a client this library starts, or on one a ladder started."""
 
 from contextlib import closing
 from dataclasses import dataclass
@@ -12,10 +12,7 @@ from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport,
 
 @dataclass(frozen=True, slots=True)
 class ApiBot:
-    """A player driven by an api of ours, as which race and under what name.
-
-    The other kind of player is a `Computer`, which the game drives itself and which needs no client.
-    """
+    """A player driven by an `Api`, with its race and name. The other kind of player is a `Computer`."""
 
     api: Api
     race: Race
@@ -35,16 +32,16 @@ def run_local(
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
 ) -> Result:
-    """Start a game client, create a match on `map_file`, a file or the name of one under the installation, for `bot`
-    against `opponent`, and play it out.
+    """Start a game client, create a match on `map_file` for `bot` against `opponent`, and play it out.
 
-    The bot takes the first slot, and without an `opponent` it plays the map alone. The client is stopped and
-    its temporary directory removed however the game ends.
+    `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
+    `opponent` it plays the map alone. However the game ends, the client is stopped and its temporary directory
+    removed.
     """
     if isinstance(map_file, str):
         installation = installation or Installation.find()
         map_file = MapFile.find(map_file, installation=installation)
-    # A participant tells the game that a client will fill the slot; who fills it is settled at the join.
+    # A participant tells the game a client will fill the slot; who fills it is settled at the join.
     players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
 
     with GameProcess.launch(installation, window=window) as game, closing(_connect(game.url, record_to)) as client:
@@ -67,11 +64,11 @@ def run_ladder(
     realtime: bool = False,
     record_to: Path | None = None,
 ) -> Result:
-    """Join the game a ladder has already set up, and play it out.
+    """Join the game a ladder has set up, and play it out.
 
-    The ladder starts the client and creates the match, then hands the bot its address and `start_port` on the
-    command line. A game against the built-in computer has no `start_port`, since nobody else is joining.
-    There is no time limit: the only way a bot can end a game early is to leave it, which concedes it.
+    The ladder starts the client, creates the match, and passes the bot the client's address and `start_port` on
+    the command line. A game against the built-in computer has no `start_port`. There is no time limit: a bot can
+    only end a game early by leaving it, which concedes.
     """
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
@@ -79,12 +76,12 @@ def run_ladder(
             client.join_game(bot.race, name=bot.name, ports=ports)
             return bot.api.play(client, steps_per_turn=steps_per_turn, realtime=realtime)
         finally:
-            # The ladder owns the client it started, so it is left running to be told what to do next.
+            # The client is the ladder's, so it is left running.
             client.leave_game()
 
 
 def _connect(url: str, record_to: Path | None) -> Client:
-    """A client talking to the game at `url`, writing the whole conversation down if asked to."""
+    """A client connected to the game at `url`, recording the whole conversation to `record_to` if given."""
     transport: Transport = WebSocketTransport.connect(url)
     if record_to is not None:
         transport = RecordingTransport(transport, record_to)

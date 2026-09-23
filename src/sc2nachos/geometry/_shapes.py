@@ -1,8 +1,4 @@
-"""The shapes a bot reasons about: tiles, rectangles and sets of tiles.
-
-They live in one module because they are mutually recursive -- every `Area` reports its `bounding_rectangle`
-and its `tiles`, so each shape depends on two others.
-"""
+"""The shapes a bot reasons about: tiles, rectangles and sets of tiles."""
 
 from __future__ import annotations
 
@@ -31,7 +27,7 @@ if TYPE_CHECKING:
 class Tile(tuple[int, int], Area):
     """One square of the map, addressed by the integer coordinates of its lower left corner.
 
-    The tuple holds the tile address. Used as a point it reads as its `center`.
+    The tuple is the address. Used as a point, a tile reads as its `center`.
     """
 
     __slots__ = ()
@@ -62,12 +58,12 @@ class Tile(tuple[int, int], Area):
 
     @property
     def center(self) -> Point:
-        """Where a unit standing on this tile sits."""
+        """The middle of the tile, where a unit on it stands."""
         return Point((self[0] + 0.5, self[1] + 0.5))
 
     @property
     def area(self) -> float:
-        """The ground covered, which is one square game unit."""
+        """The ground covered: one square game unit."""
         return 1.0
 
     def random_point(self) -> Point:
@@ -95,8 +91,7 @@ class Tile(tuple[int, int], Area):
     def __contains__(self, point: object) -> bool:
         """Whether a point falls on this tile, on the lower edges but not the upper ones.
 
-        Membership in the area, not in the coordinate pair: `3 in Tile(3, 4)` raises rather than answering
-        True.
+        Membership in the area, not in the coordinate pair: `3 in Tile(3, 4)` raises rather than returning True.
         """
         return Tile.containing(point) == self  # pyright: ignore[reportArgumentType]
 
@@ -121,7 +116,7 @@ class Tile(tuple[int, int], Area):
         return Rectangle(self[0], self[1], 1, 1)
 
     def tiles(self) -> TileSet:
-        """A set holding just this tile."""
+        """A set of this tile alone."""
         return TileSet([self])
 
     def __repr__(self) -> str:
@@ -143,7 +138,7 @@ class Rectangle(Area):
 
     def __post_init__(self) -> None:
         """Rejects a negative extent."""
-        # Negatives cancel in `area`, so such a rectangle reports a plausible size while covering nothing.
+        # Two negatives cancel in `area`, so such a rectangle would report a plausible size while covering nothing.
         if self.width < 0 or self.height < 0:
             raise ValueError(f"a rectangle cannot have a negative extent, got {self.width} x {self.height}")
 
@@ -155,7 +150,7 @@ class Rectangle(Area):
 
     @classmethod
     def _from_proto(cls, data: common_pb2.RectangleI) -> Rectangle:
-        """Build from a protobuf `RectangleI`, which stores opposite corners rather than a size."""
+        """Read a rectangle from the game's `RectangleI`, which holds opposite corners rather than a size."""
         return cls(data.p0.x, data.p0.y, data.p1.x - data.p0.x, data.p1.y - data.p0.y)
 
     @property
@@ -335,7 +330,7 @@ class TileSet(Area):
 
     @property
     def area(self) -> float:
-        """The ground covered, in square game units, which is one per tile."""
+        """The ground covered, in square game units: one per tile."""
         return float(len(self._tiles))
 
     def __len__(self) -> int:
@@ -344,8 +339,8 @@ class TileSet(Area):
     @cached_property
     def _ordered(self) -> tuple[Tile, ...]:
         """The covered tiles by ascending x then y, sorted on first use."""
-        # Keep the sort: a set reached by difference iterates differently from one built directly, which
-        # reaches random_point and makes a seeded game unreproducible.
+        # Keep the sort: a set built by difference iterates in a different order from one built directly, which
+        # reaches `random_point` and makes a seeded game unreproducible.
         return tuple(sorted(self._tiles))
 
     def __iter__(self) -> Iterator[Tile]:
@@ -357,7 +352,7 @@ class TileSet(Area):
 
     @cached_property
     def _spatial_index(self) -> tuple[KDTree, list[Tile]]:
-        """A KD-tree over the covered tiles and the tiles it indexes, built together on first use."""
+        """A KD-tree over the tile centers, with the tiles in the order it indexes them, built on first use."""
         tiles = list(self._ordered)
         return KDTree(numpy.array([tile.center for tile in tiles])), tiles
 

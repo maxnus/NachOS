@@ -1,4 +1,4 @@
-"""What a game's observations report beyond its units: the score, the supply, effects and this player's actions."""
+"""What an observation reports beyond its units: the score, the supply, effects and this player's actions."""
 
 from sc2nachos.state._action_result import ActionResult, UnknownActionResultError
 from sc2nachos.state._actions import Action, ActionFailure, AutocastToggle, CameraMove, UnitCommand

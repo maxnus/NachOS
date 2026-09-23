@@ -1,4 +1,4 @@
-"""The shared interface of the shapes a bot reasons about."""
+"""The interface every shape shares."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 class Area(ABC):
     """A patch of ground: somewhere to attack, to scout, or to filter positions by.
 
-    An area may cover nothing. `center`, `random_point`, `closest_point_to` and `bounding_rectangle` raise
-    `ValueError` on one that does; the rest answer normally.
+    An area may be empty. `center`, `random_point`, `closest_point_to` and `bounding_rectangle` raise `ValueError` on
+    an empty area; the rest work normally.
     """
 
     # Without this every subclass carries a __dict__, whatever slots it declares itself.
@@ -36,7 +36,7 @@ class Area(ABC):
 
     @abstractmethod
     def __contains__(self, point: PointLike) -> bool:
-        """Whether a point lies inside, written `point in area`. Raises `TypeError` on anything else."""
+        """Whether `point` lies inside. Raises `TypeError` on anything but a point."""
 
     @abstractmethod
     def translated(self, offset: PointLike) -> Self:

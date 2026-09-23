@@ -7,16 +7,16 @@ from typing import final
 @final
 @dataclass(slots=True)
 class HandlerTiming:
-    """How long one handler has taken in the game being played, or the one played last."""
+    """How long one handler has taken in the current game, or the last one played."""
 
     calls: int
-    """How many times it has been called."""
+    """The number of calls."""
     total_seconds: float
-    """How long it took over them all, in seconds of the clock rather than of the game."""
+    """Wall-clock seconds over all calls."""
     max_seconds: float
-    """How long the slowest call took."""
+    """Wall-clock seconds of the slowest call."""
 
     @property
     def seconds_per_call(self) -> float:
-        """How long a call took on average."""
+        """Wall-clock seconds per call, on average."""
         return self.total_seconds / self.calls

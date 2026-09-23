@@ -1,4 +1,4 @@
-"""The tables a game is played by, read from tables written here and from the recorded games."""
+"""The game data, from tables written here and from the recorded games."""
 
 import math
 import re
@@ -31,9 +31,9 @@ from sc2nachos.protocol import Recording
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
-# What the game takes as each of these is ordered, against what its type's row holds. A morph, an add-on and a
-# structure going up were each seen charged as the jump in the purse cancelling one gives back, three quarters
-# rounded up (tool `sweep_orders`, docs/game-behavior.md); the rest are what the game has always charged (stated).
+# What the game charges when each of these is ordered, as opposed to what its type's row holds. A morph, an add-on
+# and a structure were each measured from the refund a cancel gives back, three quarters of the charge rounded up
+# (tool `sweep_orders`, docs/game-behavior.md); the rest are the game's long-standing prices (stated).
 _CHARGED = {
     AbilityId.BARRACKS_BUILD_REACTOR: Cost(50, 50),
     AbilityId.BARRACKS_BUILD_TECH_LAB: Cost(50, 25),
@@ -59,7 +59,7 @@ _CHARGED = {
     AbilityId.ZERGLING_MORPH_BANELING: Cost(25, 25),
 }
 
-# What cancelling one gave back, at real prices, over the observation the cancel landed in (tool `sweep_orders`).
+# The refund a cancel gave back, at real prices, in the observation the cancel landed in (tool `sweep_orders`).
 _REFUNDED = {
     AbilityId.BARRACKS_BUILD_TECH_LAB: Resources(38, 19),
     AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Resources(113, 0),
@@ -68,9 +68,9 @@ _REFUNDED = {
 }
 
 
-# The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling,
-# which an armory is never offered and which does nothing when ordered, and which no curated id names.
-# `gamedata/_techtree/_overrides.py` names the `ArmoryResearch` spelling an armory offers and runs for each.
+# The upgrade table has dead ids too: it says these three are researched by the `ArmoryResearchSwarm` spelling. An
+# armory is never offered that spelling, ordering it does nothing, and no curated id names it.
+# `gamedata/_techtree/_overrides.py` names the `ArmoryResearch` spelling an armory offers and runs.
 _RESEARCHED_BY_A_DEAD_ID = frozenset(MISNAMED_RESEARCH_ABILITIES)
 
 # Rows naming a maker the game no longer honors: tested in game, none is ever offered and ordering one does nothing.
@@ -83,8 +83,8 @@ _DEAD_MAKERS = {
     UnitTypeId.LOCUST: RawAbilityId.SpawnInfestedTerran_LocustMP,
     UnitTypeId.PURIFICATION_NOVA: RawAbilityId.PurificationNovaMorph_PurificationNova,
 }
-# Rows naming a maker nothing can order: the game disguises a changeling, collapses a tower and takes a locust into
-# the air by itself, and a bare tech lab or reactor is a tech requirement no unit is ever built as.
+# Rows naming a maker nothing can order: the game itself disguises a changeling, collapses a tower and lifts a
+# locust, and a bare tech lab or reactor is a tech requirement no unit is ever built as.
 _NO_MAKER = {
     UnitTypeId.CHANGELING_MARINE: RawAbilityId.DisguiseAsMarineWithoutShield_Marine,
     UnitTypeId.CHANGELING_MARINE_SHIELD: RawAbilityId.DisguiseAsMarineWithShield_Marine,
@@ -108,11 +108,11 @@ _NO_MAKER = {
     UnitTypeId.TECH_LAB: RawAbilityId.TechLabMorph,
 }
 _DEAD_LURKER_MORPH = _DEAD_MAKERS[UnitTypeId.LURKER]
-# The tech alias both forms of a viking carry: a row with no cost, speed, sight or weapon, that nothing requires
-# and no unit is ever one of. Curated nowhere either.
+# The tech alias both forms of a viking carry: a row with no cost, speed, sight or weapon, which nothing requires
+# and no unit ever is. It is not curated either.
 _PHANTOM_VIKING = RawUnitTypeId.Viking
 
-# What the game says a marine is, cut down to the fields a test reads.
+# The game's row for a marine, cut down to the fields the tests read.
 _MARINE = data_pb2.UnitTypeData(
     unit_id=UnitTypeId.MARINE,
     race=common_pb2.Race.Terran,
@@ -162,7 +162,7 @@ class TestResources:
         assert not bank.covers(Resources(200, 0))
 
     def test_covering_is_not_an_ordering(self) -> None:
-        """Neither of these covers the other, which is why there is no `>=` to reach for."""
+        """Neither of these covers the other, so `covers` cannot be spelled `>=`."""
         assert not Resources(100, 0).covers(Resources(0, 100))
         assert not Resources(0, 100).covers(Resources(100, 0))
 
@@ -191,7 +191,7 @@ class TestCost:
 
 class TestReadingTheTables:
     def test_a_unit_type_is_read_under_the_curated_id_that_names_it(self) -> None:
-        """A row carries no name of its own: the id is the name, and the catalog spelling comes off that."""
+        """A row carries no name: the id is the name, and the catalog spelling follows from it."""
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         marine = data.units[UnitTypeId.MARINE]
         assert marine.id is UnitTypeId.MARINE
@@ -286,7 +286,7 @@ class TestReadingTheTables:
 
 
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
-    """What a recorded game said its tables were."""
+    """The `ResponseData` of a recorded game."""
     for exchange in Recording(path):
         if exchange.response.HasField("data"):
             return exchange.response.data
@@ -294,7 +294,7 @@ def _answer(path: Path) -> sc2api_pb2.ResponseData:
 
 
 def _tables(path: Path) -> GameData:
-    """The tables a recorded game was played by."""
+    """The game data of a recorded game."""
     return GameData(_answer(path))
 
 
@@ -338,10 +338,10 @@ class TestARecordedGamesTables:
         assert lost == _NO_MAKER
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
-        """Each was seen in game to leave a moving unit's orders as they were, so each must still be orderable.
+        """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
 
-        The half of a toggle that turns one off is offered to nobody in the tables, since a unit is offered it only
-        once the half that turns it on has taken (in game); it stands on that half being offered instead.
+        The off half of a toggle is offered to nobody in the tables, since a unit is offered it only once the on half
+        has taken effect (in game); it counts as offered when the on half is.
         """
         data = _tables(path)
         for ability in KEEPS_ORDERS_ABILITIES:
@@ -375,13 +375,13 @@ class TestARecordedGamesTables:
         )
         for ability in (half for pair in halves for half in pair):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
-        # A lurker is offered its hold fire only burrowed, and the game offers a burrowed lurker no move, so neither
-        # half was ever given to one moving.
+        # A lurker is offered hold fire only while burrowed, and a burrowed lurker is offered no move, so neither half
+        # was ever given to a moving one.
         assert data.abilities[AbilityId.LURKER_HOLD_FIRE_OFF].order_behavior is OrderBehavior.REPLACES
 
     def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
-        """Ordering one of these was seen in game to go behind what a structure was making, or to be refused while
-        it was making anything."""
+        """Ordering one of these was seen in game to queue behind what a structure was making, or to be refused
+        while it was making anything."""
         data = _tables(path)
         queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
         idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BARRACKS_BUILD_TECH_LAB)
@@ -398,13 +398,13 @@ class TestARecordedGamesTables:
         assert data.abilities[AbilityId.GENERAL_BUILD_REACTOR].order_behavior is OrderBehavior.NEEDS_IDLE
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
-        """Measured for a rally and a cancel, and read the same way for the rest (docs/game-behavior.md)."""
+        """Measured for a rally and a cancel, and taken to hold for the rest (docs/game-behavior.md)."""
         data = _tables(path)
         for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.GENERAL_CANCEL_QUEUE):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
-        """Its alias is an empty row no unit is ever one of; every other alias names a unit you can own."""
+        """Its alias is an empty row no unit ever is; every other alias names a unit a player can own."""
         answer = _answer(path)
         data = GameData(answer)
         aliased = {row.unit_id: list(row.tech_alias) for row in answer.units if row.tech_alias}
@@ -433,7 +433,7 @@ class TestARecordedGamesTables:
         assert all(key == row.id for key, row in data.abilities.items())
 
     def test_a_morph_costs_what_it_came_from_as_well(self, path: Path) -> None:
-        """The game charges only the difference, but its table names the whole of what has been spent."""
+        """The game charges only the difference, but its table holds the whole amount spent."""
         data = _tables(path)
         for before, after in (
             (UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND),
@@ -444,7 +444,7 @@ class TestARecordedGamesTables:
             grew, came_from = data.units[after].cost, data.units[before].cost
             assert grew.minerals >= came_from.minerals and grew.vespene >= came_from.vespene
             assert grew != came_from
-        # The build time is the morph alone, so it is shorter than building what it morphed from took.
+        # The build time is the morph alone, shorter than building what it morphed from.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
     def test_an_ability_is_charged_what_the_game_takes_as_it_is_ordered(self, path: Path) -> None:
@@ -454,8 +454,8 @@ class TestARecordedGamesTables:
         assert charged == _CHARGED
 
     def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
-        """What a cancel gives back does not turn on how far the work got, so a refund measured in game says what the
-        order was charged, which is what these costs are held to."""
+        """A refund does not depend on how far the work got, so a refund measured in game shows what the order was
+        charged, and these costs must match it."""
         data = _tables(path)
         for ability, refund in _REFUNDED.items():
             cost = data.abilities[ability].cost
@@ -463,13 +463,13 @@ class TestARecordedGamesTables:
             assert given_back == refund, f"{ability.name} is charged {cost}"
 
     def test_a_cost_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
-        """Once the game's own rows give a price away, the entry can go."""
+        """Once the game's own rows give the right price, the entry can go."""
         data = _tables(path)
         for ability, cost in COST_OVERRIDES.items():
             assert _derived(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
 
     def test_a_general_id_holds_the_price_what_it_stands_for_shares_or_the_first_level(self, path: Path) -> None:
-        """Any tech lab is 50/25, and a general research runs its first level until that is done."""
+        """Every tech lab is 50/25, and a general research means its first level until that is done."""
         data = _tables(path)
         assert data.abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cost == Cost(50, 25)
         levels = (
@@ -485,7 +485,7 @@ class TestARecordedGamesTables:
         assert data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS].cost == Cost(100, 100)
 
     def test_every_general_id_that_makes_something_has_a_price(self, path: Path) -> None:
-        """None is left at nothing because what it stands for differs."""
+        """None is left at zero because the abilities it stands for differ."""
         data = _tables(path)
         for exact, general in TECH_TREE.ability_remaps.items():
             if exact in data.abilities and data.abilities[exact].cost != Cost(0, 0):
@@ -498,8 +498,8 @@ class TestARecordedGamesTables:
             assert data.abilities[ability].cost == Cost(0, 0)
 
     def test_a_morph_and_an_add_on_name_the_cancel_the_game_offers_for_them(self, path: Path) -> None:
-        """A command center morphing is offered another cancel than one training, and another again by which morph
-        it is running, so which cancel to send turns on the work (tool `sweep_tech_tree`)."""
+        """A morphing command center is offered a different cancel from a training one, and a different one for each
+        morph, so the cancel to send depends on the work (tool `sweep_tech_tree`)."""
         data = _tables(path)
         for ability, cancel in (
             (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND),
@@ -519,9 +519,9 @@ class TestARecordedGamesTables:
     def test_a_train_or_a_research_is_cancelled_by_the_general_queue_cancel_where_there_is_a_queue(
         self, path: Path
     ) -> None:
-        """Every queue cancel stands for it, so it is right whatever the structure: an SCV is trained from a command
-        center and from a planetary fortress, which are offered different ones, and a tech lab researching took it
-        (tool `sweep_tech_tree`). A warp gate keeps no queue, so what it warps in has no cancel."""
+        """Every queue cancel remaps to it, so it is right for any structure: a command center and a planetary fortress
+        train an SCV with different cancels on offer, and a researching tech lab accepted it (tool `sweep_tech_tree`).
+        A warp gate keeps no queue, so a warp-in has no cancel."""
         data = _tables(path)
         for ability in (
             AbilityId.BARRACKS_TRAIN_MARINE,
@@ -536,7 +536,7 @@ class TestARecordedGamesTables:
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
 
     def test_a_general_id_holds_a_cancel_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
-        """A tech lab on a barracks, a factory and a starport is each taken back by its host's own cancel."""
+        """A tech lab on a barracks, a factory or a starport is cancelled by its host's own cancel."""
         assert _tables(path).abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cancelled_by is None
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
@@ -555,7 +555,7 @@ class TestARecordedGamesTables:
             assert AbilityId.get(named[upgrade]) is None, f"the table names a curated ability for {upgrade.name}"
             assert data.upgrades[upgrade].research_ability is ability
             assert data.abilities[ability].product is upgrade
-            # Without the product it would read as an ability that makes nothing, which competes with nothing.
+            # Without the product it would read as an ability that makes nothing, which keeps a unit's orders.
             assert data.abilities[ability].order_behavior is OrderBehavior.QUEUES
         assert _RESEARCHED_BY_A_DEAD_ID
 

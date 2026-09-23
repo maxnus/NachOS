@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 
 @final
 class _TrackerChanges:
-    """What one update of the unit tracker found changed, each in the order it was found.
+    """What one update of the unit tracker found changed, each list in the order it was found.
 
-    What the comparer and the watcher find is kept for each side in `own` and `enemy`.
+    What the comparer and the watcher find goes in `own` and `enemy`, by side.
     """
 
     __slots__ = (
@@ -37,37 +37,39 @@ class _TrackerChanges:
 
     def __init__(self, update: int) -> None:
         self.update = update
-        """The number of the update these are of, 1 for a game's first."""
+        """The number of this update, 1 for a game's first."""
         self.own_units_created: list[OwnUnit[Any]] = []
-        """This player's units first seen."""
+        """This player's units seen for the first time."""
         self.enemy_units_first_seen: list[Unit[Any]] = []
-        """The enemy's units first seen, in sight or in the fog."""
+        """The enemy's units seen for the first time, in sight or in the fog."""
         self.units_type_changed: list[tuple[Unit[Any], UnitTypeId]] = []
-        """The units whose type changed, each with the type it was."""
+        """The units whose type changed, each with its previous type."""
         self.units_alliance_changed: list[tuple[Unit[Any], Alliance]] = []
-        """The units that changed sides to or from this player's, each with the alliance it was."""
+        """The units that changed sides to or from this player's, each with its previous alliance."""
         self.own_units_finished: list[OwnUnit[Any]] = []
-        """This player's units first seen unfinished that have finished: structures, add-ons and warp-ins."""
+        """This player's units first seen unfinished that have now finished: structures, add-ons and warp-ins."""
         self.own_upgrades_finished: list[UpgradeId] = []
-        """This player's upgrades new to the observation, in the order of their ids."""
+        """This player's upgrades new to the observation, in order of id."""
         self.own: _ComparedChanges[OwnUnit[Any]] = _ComparedChanges()
         """What the comparer and the watcher found of this player's units."""
         self.enemy: _ComparedChanges[Unit[Any]] = _ComparedChanges()
         """What the comparer and the watcher found of the enemy's units."""
         self.enemy_units_entered_sight: list[Unit[Any]] = []
-        """The enemy's units in sight that were not in the observation before."""
+        """The enemy's units in sight now that were not in the previous observation."""
         self.enemy_units_left_sight: list[Unit[Any]] = []
-        """The enemy's units that were in sight in the observation before and are not now, the dead left out."""
+        """The enemy's units in sight in the previous observation and not now, the dead left out."""
         self.units_died: list[Unit[Any]] = []
         """The units the game reported dead."""
         self.units_found_dead: list[Unit[Any]] = []
-        """The units found dead that the game did not report: a structure in the fog gone from its spot, and a drone
-        that became a structure, should the game not report it by an update after the structure finishes or dies."""
+        """The units found dead without the game reporting it: a structure in the fog gone from its spot, and a drone
+        that became a structure, if the game has not reported it dead by the update after the structure finishes or
+        dies."""
 
 
 @final
 class _ComparedChanges[U: Unit[Any]]:
-    """What the comparer and the watcher found of one side's units in one update, each in the order it was found."""
+    """What the comparer and the watcher found of one side's units in one update, each list in the order it was
+    found."""
 
     __slots__ = (
         "damaged",
@@ -87,17 +89,16 @@ class _ComparedChanges[U: Unit[Any]]:
         self.energy_lost: list[tuple[U, float]] = []
         """The units that lost energy, each with how much."""
         self.vital_reached: list[tuple[U, VitalType, float]] = []
-        """The units that reached a value of a vital watched, each with the vital and the value."""
+        """The units that reached a watched value of a vital, each with the vital and the value."""
         self.vital_dropped: list[tuple[U, VitalType, float]] = []
-        """The units that dropped below a value of a vital watched, each with the vital and the value."""
+        """The units that dropped below a watched value of a vital, each with the vital and the value."""
         self.cloak_changed: list[tuple[U, CloakState]] = []
-        """The units whose cloak changed, each with the state it was."""
+        """The units whose cloak state changed, each with its previous state."""
         self.gained_buff: list[tuple[U, BuffId]] = []
-        """The units that wear a buff they did not, each with the buff, a unit's several in the order of their ids."""
+        """The units that gained a buff, each with the buff. A unit's several buffs are in order of id."""
         self.lost_buff: list[tuple[U, BuffId]] = []
-        """The units that no longer wear a buff they did, each with the buff, a unit's several in the order of their
-        ids."""
+        """The units that lost a buff, each with the buff. A unit's several buffs are in order of id."""
         self.entered_area: list[tuple[U, Area]] = []
-        """The units that came inside an area watched, each with the area."""
+        """The units that entered a watched area, each with the area."""
         self.left_area: list[tuple[U, Area]] = []
-        """The units that came outside an area watched, each with the area."""
+        """The units that left a watched area, each with the area."""

@@ -1,4 +1,4 @@
-"""The recorded games everything above the protocol is tested against, and what they have to hold."""
+"""The recorded games everything above the protocol is tested against, and what must hold in them."""
 
 import contextlib
 from collections.abc import Hashable
@@ -51,7 +51,7 @@ _CURATED: tuple[type[ReadableIntEnum], ...] = (UnitTypeId, AbilityId, UpgradeId,
 
 
 def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
-    """Every observation in `recording`, in the order the game made them."""
+    """Every observation in `recording`, in order."""
     return [exchange.response.observation for exchange in recording if exchange.response.HasField("observation")]
 
 
@@ -61,12 +61,12 @@ def test_there_is_a_corpus() -> None:
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> None:
-    """A change to what the library asks a game, or in what order, shows up here as a question unanswered."""
+    """A change to what the library asks a game, or in what order, shows up here as an unanswered request."""
     recording = Recording(path)
     last = _observations(recording)[-1]
     client = Client(PlaybackTransport(recording))
-    # A recording answers each kind of request in turn and never reads what was asked, so the setup is asked again
-    # without its details.
+    # A recording answers each kind of request in turn without reading it, so the setup can be repeated without its
+    # details.
     client.create_game("recorded", [Participant(), Computer()])
     player = client.join_game(Race.RANDOM)
 
@@ -81,7 +81,7 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_id_a_game_reported_is_curated(path: Path) -> None:
-    """A curated enum raises on an id it leaves out, so leaving out one a real game reports is a crash."""
+    """A curated enum raises on an id it lacks, so an id a real game reports must be in it."""
     reported: dict[type[ReadableIntEnum], set[int]] = {enum: set() for enum in _CURATED}
     for observation in _observations(Recording(path)):
         raw = observation.observation.raw_data
@@ -99,16 +99,16 @@ def test_every_id_a_game_reported_is_curated(path: Path) -> None:
 
 
 def _tables(recording: Recording) -> GameData:
-    """The tables `recording` was played by."""
+    """The game data `recording` was played with."""
     return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
 
 
-# Every read a unit has, which a unit in a real game answers or refuses as never shown in sight, and nothing else.
+# Every property of a unit. In a real game each one returns a value or raises `NotReportedError`, nothing else.
 _READS = {
     cls: sorted(name for base in cls.__mro__ for name, member in vars(base).items() if isinstance(member, property))
     for cls in (Unit, OwnUnit)
 }
-# The reads that name other units, whose tags must all be ones the game reported a unit under.
+# The properties that name other units; every tag they hold must be one the game reported a unit under.
 _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", "construction", "builder")
 
 
@@ -138,8 +138,8 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
-    """Every unit of this player's is created once and every enemy unit first seen once, the dead are dead, a unit
-    enters and leaves sight in turn, and damage is always some."""
+    """Each own unit is created once and each enemy unit first seen once, the dead are dead, a unit enters and
+    leaves sight alternately, and damage is never zero."""
     recording = Recording(path)
     client = Client(PlaybackTransport(recording))
     client.create_game("recorded", [Participant(), Computer()])
@@ -191,8 +191,8 @@ _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
-    """Each unit crossing a value of a vital is on the side of it it crossed to, each entering an area is inside it and
-    each leaving outside it, and each unit crosses each way in turn."""
+    """A unit that crosses a vital value is on the side it crossed to, a unit that enters an area is inside it and one
+    that leaves is outside, and each unit crosses alternately in each direction."""
     recording = Recording(path)
     game_map = GameMap(
         next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
@@ -225,8 +225,8 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
     for vital_type, value in _VALUES.items():
         for event_type in _REACHED + _DROPPED:
             api.events.on(event_type.of(vital_type, value))(vital)
-    # The units a game starts with stand around this player's main base, whose workers go to and fro across a circle
-    # around them.
+    # The starting units stand around this player's main base, and its workers cross a circle around them as they
+    # mine.
     starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]
     home = Point((sum(pos.x for pos in starting) / len(starting), sum(pos.y for pos in starting) / len(starting)))
     for watched in (
@@ -245,7 +245,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
     client.quit()
 
 
-# Every read of an observation beyond its units.
+# Every public property of the state beyond its units.
 _STATE_READS = sorted(
     name
     for name, member in vars(_State).items()

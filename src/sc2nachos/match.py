@@ -1,4 +1,4 @@
-"""The vocabulary of a match: who is playing, how the computer opponent behaves, and how it ended."""
+"""The players of a match, how the computer opponent plays, and how the match ended."""
 
 from dataclasses import dataclass
 
@@ -54,12 +54,12 @@ class AIBuild(ReadableIntEnum):
 
 @dataclass(frozen=True, slots=True)
 class Participant:
-    """A slot for a client to join and play. Its race and name are settled at the join, not here."""
+    """A slot for a client to join. Its race and name are set at the join."""
 
 
 @dataclass(frozen=True, slots=True)
 class Computer:
-    """The game's own opponent, which plays without a client of its own."""
+    """The built-in computer opponent. It needs no client."""
 
     race: Race = Race.RANDOM
     difficulty: Difficulty = Difficulty.VERY_HARD

@@ -1,4 +1,4 @@
-"""What an observation reports beyond its units: the score, the counters, the map as it stands, and what happened."""
+"""The state beyond the units: the score, the counters, the map's current state, and what happened."""
 
 from contextlib import closing
 from itertools import count
@@ -54,7 +54,7 @@ _ENEMY = Alliance.ENEMY
 
 
 class _Game:
-    """The units and the rest of a game's observations, taken in one at a time, on an eight by eight map."""
+    """A game on an eight by eight map, taking in observations one at a time."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None) -> None:
         self.tracker = _Tracker(_TABLES, Enemy())
@@ -88,7 +88,7 @@ class TestScore:
             Resources(details.collection_rate_minerals, details.collection_rate_vespene),
             Resources(details.spent_minerals, details.spent_vespene),
         )
-        # The single amounts are all read above or in the test below, and the APM is left out.
+        # The scalar fields are all read above or in the test below, except the APM.
         singles = {field.name for field in score_pb2.ScoreDetails.DESCRIPTOR.fields if field.message_type is None}
         assert len(singles) == 14
         for field in score_pb2.ScoreDetails.DESCRIPTOR.fields:
@@ -186,8 +186,8 @@ class TestTheMapAsItStands:
         assert state.upgrades == {UpgradeId.ZERG_MELEE_WEAPONS_1, UpgradeId.ZERG_GROUND_ARMOR_1}
 
     def test_an_uncurated_upgrade_raises_as_the_observation_is_taken_in(self) -> None:
-        """An upgrade this player holds belongs among the curated ids, so one missing is a mistake to fix rather than
-        to read around."""
+        """An upgrade this player holds belongs among the curated ids, so a missing one is a mistake to fix, not to
+        skip."""
         with pytest.raises(UncuratedIdError):
             _Game().observe(upgrades=[RawUpgradeId.CarrierLaunchSpeedUpgrade])
 
@@ -293,7 +293,7 @@ class TestThroughTheApi:
         assert api.supply.used == 13
 
     def test_nothing_is_read_out_of_an_observation_until_it_is_asked_for(self) -> None:
-        """An observation without map state plays, and the grid it holds nothing for raises only when read."""
+        """An observation without map state plays, and the grid it lacks raises only when read."""
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         with pytest.raises(ProtocolError):
@@ -302,7 +302,7 @@ class TestThroughTheApi:
 
 @pytest.mark.integration
 def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
-    """Run with `pytest -m integration`. Starts the game as zerg and plays half a minute of it."""
+    """Run with `pytest -m integration`. Plays half a minute of a game as zerg."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -319,7 +319,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         middle = game.map.playable_area.center
         out_there = home.towards(middle, 15)
 
-        # The map as it stands.
+        # The map's current state.
         assert game.state.creep[home] and game.state.vision[home] and game.state.explored[home]
         (opponent_start,) = game.map.opponent_start_locations
         assert not game.state.explored[opponent_start]

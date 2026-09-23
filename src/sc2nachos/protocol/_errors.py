@@ -1,10 +1,10 @@
-"""What can go wrong between the library and the game."""
+"""Errors between the library and the game."""
 
 from sc2nachos._errors import NachOSError
 
 
 class ProtocolError(NachOSError):
-    """The game refused a request, or answered one with something other than what it asked for."""
+    """The game refused a request, or answered with something other than what was asked for."""
 
 
 class GameEndedError(ProtocolError):
@@ -16,7 +16,7 @@ class GameNotStartedError(ProtocolError):
 
 
 class ConnectionClosedError(ProtocolError, ConnectionError):
-    """The connection to the game is gone, so the request cannot be answered."""
+    """The connection to the game is gone, so the request could not be answered."""
 
 
 class ConnectionTimeoutError(ProtocolError, TimeoutError):

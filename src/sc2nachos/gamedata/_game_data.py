@@ -1,4 +1,4 @@
-"""The tables a game is played by."""
+"""The game's data tables."""
 
 from __future__ import annotations
 
@@ -21,15 +21,15 @@ if TYPE_CHECKING:
 
 @final
 class GameData:
-    """What every unit type, ability, upgrade and effect in the game is, as they stand before any upgrade.
+    """The game's tables of unit types, abilities, upgrades and effects, as they stand before any upgrade.
 
-    A table holds only the rows the curated ids name, so most of what the game describes is not in one.
+    A table holds only the rows the curated ids name, which leaves out most of what the game describes.
     """
 
     __slots__ = ("_abilities", "_effects", "_units", "_upgrades")
 
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
-        """Read the tables out of the game's answer to `RequestData`."""
+        """Read the tables from the game's answer to `RequestData`."""
         self._units = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
         )
@@ -38,7 +38,7 @@ class GameData:
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
-        # What an ability charges is read off what it makes, so the other tables come first.
+        # An ability's cost is derived from its product, so the other tables come first.
         costs = ability_costs(self._units, self._upgrades, TECH_TREE)
         cancels = cancel_abilities(TECH_TREE, behaviors)
         self._abilities = _read_table(
@@ -50,35 +50,35 @@ class GameData:
 
     @property
     def units(self) -> Mapping[UnitTypeId, UnitTypeData]:
-        """What each type of unit is."""
+        """The unit types, by id."""
         return self._units
 
     @property
     def abilities(self) -> Mapping[AbilityId, AbilityData]:
-        """What each ability is."""
+        """The abilities, by id."""
         return self._abilities
 
     @property
     def upgrades(self) -> Mapping[UpgradeId, UpgradeData]:
-        """What each upgrade is."""
+        """The upgrades, by id."""
         return self._upgrades
 
     @property
     def effects(self) -> Mapping[EffectId, EffectData]:
-        """What each effect is."""
+        """The effects, by id."""
         return self._effects
 
 
 def _read_table[MessageT, IdT, RowT](
     entries: Iterable[MessageT], read: Callable[[MessageT], RowT], key: Callable[[RowT], IdT]
 ) -> Mapping[IdT, RowT]:
-    """Every entry the curated ids name, read into a row and filed under its own id."""
+    """The entries the curated ids name, read into rows keyed by id."""
     rows: dict[IdT, RowT] = {}
     for entry in entries:
         try:
             row = read(entry)
         except ValueError:
-            # An id the curation leaves out, which is most of them, or one newer than `data/stableid.json`.
+            # An uncurated id, which most are, or one newer than `data/stableid.json`.
             continue
         rows[key(row)] = row
     return MappingProxyType(rows)

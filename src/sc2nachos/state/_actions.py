@@ -1,4 +1,4 @@
-"""What this player did, as the game carried it out, and what it gave up on."""
+"""This player's actions as the game carried them out, and the orders it gave up on."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Action:
-    """Something this player did, as the game carried it out: a `UnitCommand`, an `AutocastToggle` or a
+    """An action of this player's, as the game carried it out: a `UnitCommand`, an `AutocastToggle` or a
     `CameraMove`."""
 
     step: int
@@ -29,16 +29,16 @@ class Action:
 @final
 @dataclass(frozen=True, slots=True)
 class UnitCommand(Action):
-    """Units of this player's given an order."""
+    """An order given to units of this player's."""
 
     ability: AbilityId
-    """What they were ordered, as the game runs it: a move is `GENERAL_MOVE_EXACT`, and a research names its level
+    """The ability ordered, as the game runs it: a move is `GENERAL_MOVE_EXACT`, and a research names its level
     (in game)."""
     units: tuple[Unit[Any], ...]
     target: Target | None
-    """Where they were sent, the unit they were sent at, or `None` for an order that needs neither."""
+    """The point or unit the order was aimed at, or `None` for an order that takes neither."""
     queued: bool
-    """Whether the order went behind the ones they had, rather than replacing them."""
+    """Whether the order was queued behind the units' current orders instead of replacing them."""
 
     @classmethod
     def _from_proto(
@@ -59,7 +59,7 @@ class UnitCommand(Action):
 @final
 @dataclass(frozen=True, slots=True)
 class AutocastToggle(Action):
-    """Units of this player's that started or stopped casting an ability by themselves."""
+    """Units of this player's that had an ability's autocast turned on or off."""
 
     ability: AbilityId
     units: tuple[Unit[Any], ...]
@@ -74,7 +74,7 @@ class AutocastToggle(Action):
 @final
 @dataclass(frozen=True, slots=True)
 class CameraMove(Action):
-    """This player's camera moved, as the game moves it once as a game starts."""
+    """A move of this player's camera. The game moves it once itself, as a game starts."""
 
     center: Point
     """Where the camera was centered."""
@@ -83,28 +83,28 @@ class CameraMove(Action):
 @final
 @dataclass(frozen=True, slots=True)
 class ActionFailure:
-    """An order the game took and then gave up on, in the observation it gave up in (in game).
+    """An order the game accepted and then gave up on, reported in the observation it gave up in (in game).
 
-    It is not an `Action`: an action is something this player did, and this is something the game undid. Nor is it
-    an exception: the game reports it, and nothing raises it.
+    Not an `Action`: an action is something this player did, and this is something the game undid. Not an
+    exception either: the game reports it, and nothing raises it.
     """
 
     step: int
     """The step the game gave up at."""
     unit: Unit[Any] | None
-    """The unit it gave the order up for, or `None` where it named none."""
+    """The unit whose order was given up, or `None` if the game named none."""
     ability: AbilityId | None
-    """The order it gave up, or `None` where it named none."""
+    """The ability given up, or `None` if the game named none."""
     action_result: ActionResult
-    """What it gave up for: `NOT_ENOUGH_FOOD` for a marine with no supply left, `CANT_BUILD_LOCATION_INVALID` for a
-    site taken meanwhile."""
+    """Why the game gave up: `NOT_ENOUGH_FOOD` for a marine with no supply left, `CANT_BUILD_LOCATION_INVALID` for
+    a site taken meanwhile."""
 
     @classmethod
     def _from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:
-        """Read an action error the observation at `step` reports, which is what the protocol calls it, naming a unit
+        """Read an action error (the protocol's name for it) from the observation at `step`, looking up its unit
         through `unit_by_tag`.
 
-        Raises `UncuratedIdError` where it names an ability the curated ids leave out.
+        Raises `UncuratedIdError` if it names an ability the curated ids leave out.
         """
         unit = unit_by_tag(error.unit_tag) if error.HasField("unit_tag") else None
         ability = AbilityId.read(error.ability_id) if error.HasField("ability_id") else None
@@ -112,8 +112,8 @@ class ActionFailure:
 
 
 def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any]]) -> Action | None:
-    """The action an observation reports, naming each unit through `unit_by_tag`, or `None` for one through an
-    interface other than the raw one.
+    """Read an action an observation reports, looking up its units through `unit_by_tag`. Returns `None` for an
+    action through an interface other than the raw one.
 
     Raises `UncuratedIdError` for an ability the curated ids leave out.
     """

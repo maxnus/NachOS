@@ -1,4 +1,4 @@
-"""One of the player's own units."""
+"""One of this player's own units."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
-    """One of this player's units, which also reads what the game reports only to the player a unit belongs to.
+    """One of this player's units. It also reads what the game reports only to a unit's owner.
 
     A unit changes between `Unit` and `OwnUnit` in place when it changes sides, as under a neural parasite.
     """
@@ -19,71 +19,71 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
-        """What it is doing, then what it has queued."""
+        """The unit's current order, then its queued orders."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(UnitOrder._from_proto(order, unit_by_tag) for order in self._latest_report.orders)
 
     @property
     def is_idle(self) -> bool:
-        """Whether it has no orders."""
+        """Whether the unit has no orders."""
         return not self._latest_report.orders
 
     @property
     def weapon_cooldown_steps(self) -> float:
-        """Steps until it can attack again, and 0 for a unit without a weapon."""
+        """The steps until the unit can attack again. 0 for a unit without a weapon."""
         return self._latest_report.weapon_cooldown
 
     @property
     def assigned_harvesters(self) -> int:
-        """The workers mining a town hall's minerals or a gas building's vespene, and 0 for anything else."""
+        """The workers mining a town hall's minerals or a gas building's vespene. 0 for anything else."""
         return self._latest_report.assigned_harvesters
 
     @property
     def ideal_harvesters(self) -> int:
-        """The workers a town hall or gas building takes before another mines nothing more: 2 a field, 3 a geyser."""
+        """The workers a town hall or gas building can use before another adds nothing: 2 per field, 3 per geyser."""
         return self._latest_report.ideal_harvesters
 
     @property
     def passengers(self) -> tuple[Passenger, ...]:
-        """The units inside it."""
+        """The units inside the unit."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(Passenger._from_proto(passenger, unit_by_tag) for passenger in self._latest_report.passengers)
 
     @property
     def cargo_used(self) -> int:
-        """The cargo slots its passengers fill."""
+        """The cargo slots the passengers fill."""
         return self._latest_report.cargo_space_taken
 
     @property
     def cargo_max(self) -> int:
-        """The cargo slots it has, and 0 for a unit that carries none."""
+        """The unit's cargo slots. 0 for a unit that carries nothing."""
         return self._latest_report.cargo_space_max
 
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
-        """Where it sends what it makes."""
+        """Where the structure sends what it makes."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:
-        """Its add-on, or `None` without one."""
+        """The structure's add-on, or `None`."""
         tag = self._latest_report.add_on_tag
         return self._tracker.unit_tracker.by_tag(tag) if tag else None
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
-        """The unit it is attacking, or `None`."""
+        """The unit this unit is attacking, or `None`."""
         tag = self._latest_report.engaged_target_tag
         return self._tracker.unit_tracker.by_tag(tag) if tag else None
 
     @property
     def construction(self) -> Unit[Any] | None:
-        """The unfinished structure it is building now, or the one a drone became until it finishes, or `None`."""
+        """The unfinished structure the unit is building, or the one a drone became until it finishes, or `None`."""
         return self._tracker.builder_tracker.structure_built_by(self)
 
     @property
     def builder(self) -> Unit[Any] | None:
-        """The SCV building this structure now, or the drone that became it, or `None` for a structure nobody is
-        building, such as one halted, one warped in, or one finished."""
+        """The SCV building this structure, or the drone that became it, or `None` for a structure nobody is building:
+        one halted, one warped in, or one finished."""
         return self._tracker.builder_tracker.builder_of(self)

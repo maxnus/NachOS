@@ -22,8 +22,8 @@ class AbilityId(IdEnum):
     ARMORY_RESEARCH_SHIP_WEAPONS_1 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel1
     ARMORY_RESEARCH_SHIP_WEAPONS_2 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel2
     ARMORY_RESEARCH_SHIP_WEAPONS_3 = RawAbilityId.ArmoryResearch_TerranShipWeaponsLevel3
-    # The upgrade table names the ArmoryResearchSwarm spelling of these, which an armory is never offered
-    # and which does nothing when ordered.
+    # The upgrade table names the ArmoryResearchSwarm ids for these, which an armory is never offered and which do
+    # nothing when ordered.
     ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR = RawAbilityId.Research_TerranVehicleAndShipPlating
     ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1 = RawAbilityId.ArmoryResearch_TerranVehicleAndShipPlatingLevel1
     ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2 = RawAbilityId.ArmoryResearch_TerranVehicleAndShipPlatingLevel2
@@ -187,10 +187,10 @@ class AbilityId(IdEnum):
     GENERAL_CANCEL = RawAbilityId.Cancel
     GENERAL_CANCEL_BUILDING = RawAbilityId.Cancel_BuildInProgress
     GENERAL_CANCEL_LAST = RawAbilityId.Cancel_Last
-    # What a structure cancels the last thing it queued with, by the kind of queue it keeps, each remapping to
-    # CANCEL_LAST; a tech lab keeps a queue of its own for its research. Which structures have which is in the
-    # tables' performers. A morph or an add-on takes none of them, answering CANCEL_LAST `Error`, and is cancelled by
-    # its own: COMMAND_CENTER_CANCEL_ORBITAL_COMMAND, COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR,
+    # The cancel for the last item of each kind of structure queue; each remaps to CANCEL_LAST. A tech lab keeps its
+    # own queue for its research. Which structures have which is in the tables' performers. A morph or an add-on
+    # takes none of them, answering CANCEL_LAST with `Error`, and is cancelled by its own ability:
+    # COMMAND_CENTER_CANCEL_ORBITAL_COMMAND, COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS, HATCHERY_CANCEL_LAIR,
     # LAIR_CANCEL_HIVE and SPIRE_CANCEL_GREATER_SPIRE for a morph, and BARRACKS_CANCEL_ADD_ON, FACTORY_CANCEL_ADD_ON
     # and STARPORT_CANCEL_ADD_ON for either add-on (in game).
     GENERAL_CANCEL_QUEUE = RawAbilityId.Cancel_Queue5
@@ -209,9 +209,9 @@ class AbilityId(IdEnum):
     GENERAL_LIFT = RawAbilityId.Lift
     GENERAL_LOAD = RawAbilityId.Load
     GENERAL_LOAD_ALL = RawAbilityId.LoadAll
-    # The order you give two templar together, high or dark, which walks them to each other and merges them into an
-    # archon; given one alone it is refused. Each reports MORPH_ARCHON_EXACT running, aimed at the other, which
-    # merges them too given both at one of them, and does nothing given one (in game).
+    # The order to give two templar, high or dark, selected together: they walk to each other and merge into an
+    # archon. Given to one alone it is refused. Each reports MORPH_ARCHON_EXACT running, aimed at the other; that
+    # order, given to both and aimed at one of them, merges them too, and given to one does nothing (in game).
     GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
     GENERAL_MORPH_ARCHON_EXACT = RawAbilityId.Archon_Warp_Target
     GENERAL_MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
@@ -287,7 +287,7 @@ class AbilityId(IdEnum):
     LARVA_MORPH_ULTRALISK = RawAbilityId.LarvaTrain_Ultralisk
     LARVA_MORPH_VIPER = RawAbilityId.LarvaTrain_Viper
     LARVA_MORPH_ZERGLING = RawAbilityId.LarvaTrain_Zergling
-    # Both orders you give, and the one a liberator reports running once it has taken either.
+    # The two orders you give, and the id a liberator reports running once it has taken either.
     LIBERATOR_SIEGE = RawAbilityId.Morph_LiberatorAGMode
     LIBERATOR_SIEGE_EXACT = RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode
     LIBERATOR_UNSIEGE = RawAbilityId.Morph_LiberatorAAMode
@@ -320,7 +320,7 @@ class AbilityId(IdEnum):
     NEXUS_RECALL = RawAbilityId.Effect_MassRecall_Nexus
     NEXUS_TRAIN_MOTHERSHIP = RawAbilityId.NexusTrainMothership_Mothership
     NEXUS_TRAIN_PROBE = RawAbilityId.NexusTrain_Probe
-    # Id zero, which is no ability at all, so it names no performer the way the rest do.
+    # Id zero, no ability at all, so unlike the rest it names no performer.
     NULL = RawAbilityId.Null_Null
     NYDUS_NETWORK_BUILD_NYDUS_WORM = RawAbilityId.Build_NydusWorm
     NYDUS_NETWORK_LOAD = RawAbilityId.Load_NydusNetwork

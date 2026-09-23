@@ -1,4 +1,4 @@
-"""A game's units, read from observations written here: ids, the fog, staleness, death, and what each read answers."""
+"""A game's units, from observations written here: ids, the fog, staleness, death, and every property."""
 
 import weakref
 from contextlib import closing
@@ -45,13 +45,13 @@ _INVISIBLE = Visibility.INVISIBLE
 
 
 class _Game:
-    """A tracker fed one observation after another, as `Api.play` feeds it."""
+    """A tracker fed one observation at a time, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
         self.tracker = _Tracker(_TABLES, Enemy())
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
-        """Observe `units` at `step`, and answer the unit each one listed was read into, in the order given."""
+        """Observe `units` at `step` and return the tracked unit for each, in the order given."""
         self.tracker.update(make_observation(step, units=units, dead=dead).observation.raw_data, step)
         by_tag = {unit.tag: unit for unit in self.tracker.unit_tracker.present}
         return [by_tag[unit.tag] for unit in units if unit.tag in by_tag]
@@ -63,7 +63,7 @@ def _one(proto: raw_pb2.Unit) -> Unit[Any]:
 
 
 def _depot(tag: int, *, visibility: Visibility = Visibility.IN_VISION, **fields: Any) -> raw_pb2.Unit:
-    """An enemy supply depot at one spot, as the game reports it in sight or remembered."""
+    """An enemy supply depot at a fixed spot, in sight or remembered."""
     return make_unit(tag, UnitTypeId.SUPPLY_DEPOT, at=(30.5, 40.5), alliance=_ENEMY, visibility=visibility, **fields)
 
 
@@ -136,7 +136,7 @@ class TestLifecycle:
         assert repr(marine) == "OwnUnit(MARINE, id=100001, at (10.00, 10.00), dead)"
 
     def test_the_dead_units_are_those_the_last_observation_reported_dead(self) -> None:
-        """The game also reports deaths under tags it never reported a unit under (corpus), which name no unit."""
+        """The game also reports deaths under tags it never reported a unit under (corpus); those name no unit."""
         game = _Game()
         (marine, _) = game.observe(0, make_unit(1), make_unit(2))
         game.observe(16, make_unit(2), dead=(1, 77))
@@ -241,7 +241,7 @@ class TestTheFog:
 
     def test_a_structure_missing_from_its_spot_is_dead(self) -> None:
         """Tested in game: a depot burned down or killed out of sight is never reported dead. Its remembered copy
-        goes once the spot is in sight again, with nothing in its place."""
+        disappears once the spot is in sight again, with nothing in its place."""
         game = _Game()
         (depot,) = game.observe(0, _depot(1))
         game.observe(16, _depot(900, visibility=_IN_FOG))
@@ -303,7 +303,7 @@ class TestTheFog:
 
 class TestWhatAUnitReads:
     def test_where_and_how_it_is_seen_read_now_and_the_rest_as_last_seen(self) -> None:
-        """A banshee seen, then cloaked out of detection, moves on while its health is what was last seen."""
+        """A banshee seen, then cloaked and undetected, keeps moving while its health stays as last seen."""
         game = _Game()
         (banshee,) = game.observe(0, make_unit(1, alliance=_ENEMY, at=(5.0, 5.0), health=140.0, owner=2))
         game.observe(16, make_unit(1, alliance=_ENEMY, at=(9.0, 5.0), visibility=_INVISIBLE, cloak=raw_pb2.Cloaked))
@@ -358,7 +358,7 @@ class TestWhatAUnitReads:
         assert unit.buffs == {BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST}
 
     def test_an_uncurated_type_raises_as_the_observation_is_taken_in_and_names_the_id(self) -> None:
-        """A type the game reports belongs among the curated ids, so one missing is a mistake to fix."""
+        """A type the game reports belongs among the curated ids, so a missing one is a mistake to fix."""
         with pytest.raises(UncuratedIdError, match=r"UnitTypeId has no member for id \d+ \(RawUnitTypeId.Viking\)"):
             _one(make_unit(1, RawUnitTypeId.Viking))
 
@@ -373,7 +373,7 @@ class TestWhatAUnitReads:
 
 
 def _drone_building(tag: int, ability: AbilityId, **target: Any) -> raw_pb2.Unit:
-    """This player's drone at one spot, carrying out `ability` aimed at `target`."""
+    """This player's drone at a fixed spot, carrying out `ability` aimed at `target`."""
     order = raw_pb2.UnitOrder(ability_id=ability, **target)
     return make_unit(tag, UnitTypeId.DRONE, at=(20.0, 20.0), orders=[order])
 
@@ -383,9 +383,9 @@ def _spine(tag: int, progress: float) -> raw_pb2.Unit:
 
 
 class TestUnitsThatBecomeStructures:
-    """Tested in game: a drone that morphs into a structure leaves the observation with no death reported, the
-    structure appearing under a new tag, is reported dead as the structure finishes or is killed, or a step later, and
-    comes back under its own tag when the structure is cancelled."""
+    """Tested in game: a drone that morphs into a structure leaves the observation with no death reported, and the
+    structure appears under a new tag. The drone is reported dead as the structure finishes or is killed, or a step
+    later, and comes back under its own tag when the structure is cancelled."""
 
     _AIMED: Any = {"target_world_space_pos": common_pb2.Point(x=24.0, y=20.0)}
 
@@ -469,18 +469,18 @@ class TestUnitsThatBecomeStructures:
 
 
 def _scv(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
-    """One of our SCVs beside the depot `_building_depot` builds."""
+    """One of this player's SCVs beside the depot `_building_depot` builds."""
     return make_unit(tag, UnitTypeId.SCV, at=(20.0, 20.0), orders=orders)
 
 
 def _building_depot(tag: int, progress: float) -> raw_pb2.Unit:
-    """One of our supply depots, `progress` of the way built."""
+    """One of this player's supply depots, `progress` of the way built."""
     return make_unit(tag, UnitTypeId.SUPPLY_DEPOT, at=(24.0, 20.0), build_progress=progress)
 
 
 class TestConstruction:
-    """Tested in game: an SCV's build order is aimed at the structure's snapped center once construction starts, at the
-    structure itself when another SCV resumes it, and the SCV has no orders once construction is halted."""
+    """Tested in game: an SCV's build order targets the structure's snapped center once construction starts, and the
+    structure itself when another SCV resumes it. A halted SCV has no orders."""
 
     _BUILD = raw_pb2.UnitOrder(
         ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target_world_space_pos=common_pb2.Point(x=24.3, y=19.8)
@@ -565,7 +565,7 @@ class TestOwnUnits:
             _ = marine.orders
 
     def test_a_rally_names_the_unit_it_is_onto_or_else_the_point(self) -> None:
-        """Seen in the corpus: a rally onto a mineral field that is mined out is left holding tag 2**32."""
+        """A rally onto a mineral field that is mined out is left holding tag 2**32 (corpus)."""
         rallies = [
             raw_pb2.RallyTarget(point=common_pb2.Point(x=1, y=2)),
             raw_pb2.RallyTarget(point=common_pb2.Point(x=3, y=4), tag=5),
@@ -580,7 +580,7 @@ class TestOwnUnits:
         )
 
     def test_passengers_an_add_on_and_a_target_are_the_units_themselves(self) -> None:
-        """A passenger has left the observation, so it is the stale unit that went in."""
+        """A passenger is no longer in the observation, so it is the stale unit that boarded."""
         passenger = raw_pb2.PassengerUnit(tag=3, unit_type=UnitTypeId.MARINE, health=45, health_max=45)
         game = _Game()
         marine, lab, enemy = game.observe(
@@ -635,7 +635,7 @@ class TestVelocity:
         assert marine.velocity == pytest.approx(Point((2.0, -1.0)) * (STEPS_PER_SECOND / 16))
 
     def test_velocity_divides_by_the_steps_that_really_passed(self) -> None:
-        """A realtime game skips steps, so a turn is not always as long as the last."""
+        """A realtime game skips steps, so turns are not all the same length."""
         game = _Game()
         (marine,) = game.observe(0, make_unit(1, at=(10.0, 10.0)))
         game.observe(16, make_unit(1, at=(11.0, 10.0)))
@@ -852,7 +852,7 @@ class TestThroughTheApi:
 
 @pytest.mark.integration
 def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_death() -> None:
-    """Run with `pytest -m integration`. Starts the game and plays a minute of it."""
+    """Run with `pytest -m integration`. Plays a minute of a game."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -869,9 +869,9 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         home = units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
         middle = game.map.playable_area.center
         out_there = home.towards(middle, 12)
-        # Not the `tech_tree` cheat, which grants campaign upgrades no curated id names, and an observation holding one
-        # raises (`docs/cheats.md`). What this needs researched, it researches.
-        # Not `fast_build` either: a structure going up is one of the things read below.
+        # Not the `tech_tree` cheat: it grants campaign upgrades no curated id names, and an observation holding one
+        # raises (`docs/cheats.md`). This test researches what it needs. Not `fast_build` either: a structure under
+        # construction is one of the things read below.
         game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free))
 
         # A morph keeps the object.
@@ -898,7 +898,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.turn(60)
         assert not marine.is_stale
         assert game.tracker.unit_tracker.present.get(marine.id) is marine
-        # Out of the way, since both would shoot the enemy units made below.
+        # Moved out of the way, since both would shoot the enemy units created below.
         game.debug(game.kill(tank, marine))
 
         # A mineral field remembered from the start keeps its id when first seen.
@@ -969,7 +969,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.turn(8)
         assert type(victim) is Unit
 
-        # A unit a phoenix holds up flies, though the game reports it as not flying.
+        # A unit lifted by a phoenix flies, though the game reports it as not flying.
         game.debug(
             game.create(UnitTypeId.PHOENIX, out_there + (0, -4)),
             game.create(UnitTypeId.QUEEN, out_there + (3, -4), owner=enemy),

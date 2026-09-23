@@ -20,10 +20,10 @@ if TYPE_CHECKING:
 
 @final
 class Units[U: Unit[Any]](Sequence[U]):
-    """Units in a fixed order, which a filter keeps.
+    """An immutable, ordered collection of units. Filters keep the order.
 
-    Never changes: every filter answers a new collection. A query that picks one unit, such as `closest_to`, raises
-    `ValueError` on an empty collection.
+    Every filter returns a new collection. A query that picks one unit, such as `closest_to`, raises `ValueError` on
+    an empty collection.
     """
 
     __slots__ = ("_by_id", "_units")
@@ -37,10 +37,10 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @classmethod
     def combined[V: Unit[Any]](cls, *collections: Iterable[V]) -> Units[V]:
-        """Every unit of `collections` in one collection, in the order they come, each kept where it first appears.
+        """Every unit of `collections` in one collection, in order, each unit at its first appearance.
 
-        A unit is the one with its id, so a unit in two of them is in the answer once, and the collections a bot
-        keeps of what it has seen combine whether or not they overlap.
+        Units are matched by id, so a unit in two collections appears once, and collections that overlap combine
+        cleanly.
         """
         index: dict[int, V] = {}
         for collection in collections:
@@ -77,7 +77,7 @@ class Units[U: Unit[Any]](Sequence[U]):
     # By id.
 
     def _index(self) -> dict[int, U]:
-        """Every unit filed under its id, built on first use."""
+        """The units by id, built on first use."""
         if self._by_id is None:
             self._by_id = {unit.id: unit for unit in self._units}
         return self._by_id
@@ -88,27 +88,27 @@ class Units[U: Unit[Any]](Sequence[U]):
         return frozenset(self._index())
 
     def by_id(self, unit_id: int) -> U:
-        """The unit with `unit_id`. Raises `KeyError` where there is none."""
+        """The unit with `unit_id`. Raises `KeyError` if there is none."""
         return self._index()[unit_id]
 
     def get(self, unit_id: int) -> U | None:
-        """The unit with `unit_id`, or `None` where there is none."""
+        """The unit with `unit_id`, or `None` if there is none."""
         return self._index().get(unit_id)
 
     def with_ids(self, unit_ids: Iterable[int]) -> Units[U]:
-        """The units whose id is one of `unit_ids`."""
+        """The units whose id is in `unit_ids`."""
         wanted = set(unit_ids)
         return Units(unit for unit in self._units if unit.id in wanted)
 
     def without_ids(self, unit_ids: Iterable[int]) -> Units[U]:
-        """The units whose id is none of `unit_ids`."""
+        """The units whose id is not in `unit_ids`."""
         unwanted = set(unit_ids)
         return Units(unit for unit in self._units if unit.id not in unwanted)
 
     # By what they are.
 
     def filter(self, predicate: Callable[[U], bool]) -> Units[U]:
-        """The units `predicate` is true of."""
+        """The units for which `predicate` is true."""
         return Units(unit for unit in self._units if predicate(unit))
 
     @overload
@@ -130,9 +130,9 @@ class Units[U: Unit[Any]](Sequence[U]):
         /,
         *unit_types: type[UnitType.AnyType],
     ) -> Units[Any]:
-        """The units of a `UnitType` or of several, each a type or a group, typed as those.
+        """The units of one or more `UnitType`s, each a type or a group, typed as those.
 
-        Also takes a `UnitTypeId` or several, for a type chosen as the bot runs, and then keeps the collection's type.
+        Also takes one or more `UnitTypeId`s, for a type chosen at run time. The collection then keeps its type.
         """
         if isinstance(types, UnitTypeId):
             return Units(unit for unit in self._units if unit.type_id is types)
@@ -151,7 +151,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         /,
         *unit_types: type[UnitType.AnyType],
     ) -> Units[U]:
-        """The units of neither a `UnitType` nor any of several, each a type or a group, or of no `UnitTypeId` given."""
+        """The units not of any of the given `UnitType`s, each a type or a group, or `UnitTypeId`s."""
         if isinstance(types, UnitTypeId):
             return Units(unit for unit in self._units if unit.type_id is not types)
         unwanted = _type_ids(types, unit_types)
@@ -172,7 +172,7 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def neutral(self) -> Units[U]:
-        """The units that belong to the map."""
+        """The map's own units."""
         return self._of_alliance(Alliance.NEUTRAL)
 
     @property
@@ -187,7 +187,7 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def complete(self) -> Units[U]:
-        """The units that have finished being built, or warping in. Raises `NotReportedError` for one never in sight."""
+        """The units that have finished building or warping in. Raises `NotReportedError` for a unit never in sight."""
         return Units(unit for unit in self._units if unit.is_complete)
 
     @property
@@ -195,16 +195,16 @@ class Units[U: Unit[Any]](Sequence[U]):
         """This player's units without orders."""
         return Units(unit for unit in self._units if unit.is_idle)
 
-    # By where they are. Written out as loops over each unit's position, which measured three times quicker than
-    # `min` with a key, and quicker than building an array of the positions, which a query would have to build anew
-    # each time since the units move.
+    # By where they are. Written as plain loops over each unit's position: measured three times faster than `min`
+    # with a key, and faster than building an array of positions, which would have to be rebuilt on every query
+    # since the units move.
 
     def in_area(self, area: Area) -> Units[U]:
         """The units standing in `area`."""
         return Units(unit for unit in self._units if unit._position in area)
 
     def sorted_by_distance_to(self, point: PointLike) -> Units[U]:
-        """The units from the nearest to `point` to the furthest, those at equal distance kept in their order."""
+        """The units from nearest to `point` to furthest. Units at equal distance keep their order."""
         x, y = _ground(point)
         distances = []
         for unit in self._units:
@@ -216,13 +216,13 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(self._units[index] for index in order)
 
     def closest_n_to(self, count: int, point: PointLike) -> Units[U]:
-        """The `count` units nearest to `point`, nearest first, or all of them where there are fewer."""
+        """The `count` units nearest to `point`, nearest first, or all of them if there are fewer."""
         if count < 0:
             raise ValueError(f"cannot pick {count} units")
         return self.sorted_by_distance_to(point)[:count]
 
     def closest_to(self, point: PointLike) -> U:
-        """The unit nearest to `point`, the first of them at equal distance."""
+        """The unit nearest to `point`. At equal distance, the first in the collection."""
         if not self._units:
             raise ValueError("no units to choose from")
         x, y = _ground(point)
@@ -270,7 +270,7 @@ class Units[U: Unit[Any]](Sequence[U]):
 def _type_ids(
     types: type[UnitType.AnyType] | Iterable[UnitTypeId], unit_types: tuple[type[UnitType.AnyType], ...]
 ) -> frozenset[UnitTypeId]:
-    """The types a `UnitType` and further ones name, or the types in an iterable of them."""
+    """The type ids the given `UnitType`s name, or the ids in an iterable of them."""
     if not isinstance(types, type):
         return frozenset(types)
     if not unit_types:

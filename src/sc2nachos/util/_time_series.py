@@ -1,4 +1,4 @@
-"""A growable series of values indexed by game step."""
+"""A growable series of values indexed by step."""
 
 from __future__ import annotations
 
@@ -19,10 +19,10 @@ INITIAL_BUFFER = 128
 
 
 class TimeSeries[T: float]:
-    """Values recorded against the game step they were observed at.
+    """Values recorded against the step they were observed at.
 
-    Indexing and slicing are in game steps, not buffer positions, so `series[step]` means the same thing for the
-    whole life of the series. Steps are contiguous: a gap between appends is filled by linear interpolation.
+    Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
+    of the series. Steps are contiguous: a gap between appends is filled by linear interpolation.
     """
 
     _buffer: ndarray
@@ -32,8 +32,8 @@ class TimeSeries[T: float]:
     def __init__(self, buffer: ndarray, start: int | None, size: int) -> None:
         """A series over `buffer`, holding the `size` values recorded from step `start` onward.
 
-        `buffer` may be longer than `size`, leaving room to append. An empty series has no start; the first
-        append sets it.
+        `buffer` may be longer than `size`, leaving room to append. An empty series has no start; the first append
+        sets it.
         """
         if not len(buffer):
             raise ValueError("buffer must not be empty; a series needs room to record at least one value")
@@ -53,7 +53,7 @@ class TimeSeries[T: float]:
         return cls(numpy.zeros(initial_size, dtype=dtype), None, 0)
 
     def _empty_like(self) -> Self:
-        """An empty series of this one's type, for an operation whose result holds no values."""
+        """An empty series of the same type, for an operation whose result holds no values."""
         return type(self)(numpy.zeros(INITIAL_BUFFER, dtype=self.dtype), None, 0)
 
     @property
@@ -121,7 +121,7 @@ class TimeSeries[T: float]:
         self._size += gap
 
     def at(self, step: int) -> T | None:
-        """The value at `step`; `None` if that step was never recorded."""
+        """The value at `step`, or `None` if that step was never recorded."""
         if self._start is None:
             return None
         index = step - self._start
@@ -186,17 +186,17 @@ class TimeSeries[T: float]:
         return self.values.sum().item()
 
     def mean(self) -> float:
-        """The mean of the recorded values, which is a float even for an integer series."""
+        """The mean of the recorded values. A float even for an integer series."""
         return self.values.mean().item()
 
     def std(self) -> float:
-        """The standard deviation of the recorded values, which is a float even for an integer series."""
+        """The standard deviation of the recorded values. A float even for an integer series."""
         return self.values.std().item()
 
     def derivative_at(self, step: int, *, window: int = 100) -> float | None:
-        """The rate of change per second across the `window` steps ending at `step`.
+        """The rate of change per second over the `window` steps ending at `step`.
 
-        `None` if the series does not cover that whole range.
+        `None` if the series does not cover the whole range.
         """
         if self._start is None:
             return None
@@ -228,7 +228,7 @@ class TimeSeries[T: float]:
         return type(self)(self.values.copy(), self._start, self._size)
 
     def _combine(self, other: TimeSeries[T] | T, op: Callable[[ndarray, ndarray | T], ndarray]) -> TimeSeries[T]:
-        """`op` applied against a scalar, or against another series over the steps both record."""
+        """`op` applied with a scalar, or with another series over the steps both record."""
         if not isinstance(other, TimeSeries):
             if self._start is None:
                 return self._empty_like()
@@ -272,7 +272,7 @@ class TimeSeries[T: float]:
         return f"{type(self).__name__}(steps {self._start}-{self.last_step}, dtype={self.dtype})"
 
 
-# The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every
-# call. They sit below the class because `TimeSeries` is one of them.
+# The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They
+# sit below the class because `TimeSeries` is one of them.
 SCALAR_TYPES = (int, float)
 OPERAND_TYPES = (TimeSeries, *SCALAR_TYPES)

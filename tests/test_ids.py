@@ -24,10 +24,9 @@ def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
 
 @pytest.mark.parametrize("enum", CURATED)
 def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> None:
-    """Curated modules define members from the raw catalog, never as hardcoded ids.
+    """Curated modules define members from the raw catalog, never as literal ids.
 
-    Guards the property that makes renaming and re-generation safe: no game id is written out as a number, so a
-    patch that renumbers something is a regeneration rather than a hand-edit.
+    No game id is written as a number, so a patch that renumbers something needs a regeneration, not a hand-edit.
     """
     import inspect
 
@@ -60,20 +59,19 @@ def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw:
 
 @pytest.mark.parametrize("enum", CURATED + RAW)
 def test_ids_are_unique(enum: type[ReadableIntEnum]) -> None:
-    """No two names share an id, so nothing is silently aliased away.
+    """No two names share an id.
 
-    An `IntEnum` folds a second name for an id into an alias of the first, which would leave two spellings of one
-    ability reading as the same member rather than failing.
+    An `IntEnum` makes a second name for an id an alias of the first, so two spellings of one ability would read as
+    the same member instead of failing.
     """
     assert len(enum.__members__) == len({int(member) for member in enum}), f"{enum.__name__} has aliased members"
 
 
 @pytest.mark.parametrize("enum", CURATED)
 def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
-    """An id outside the curated set raises rather than resolving to a fallback.
+    """An id outside the curated set raises instead of resolving to a fallback.
 
-    A deliberate choice: a missing id is a gap to fill and should be loud. If a permissive mode is ever wanted,
-    it goes in via `_missing_` without renumbering anything.
+    A missing id is a gap to fill, so it fails loudly. A permissive mode, if ever wanted, goes in `_missing_`.
     """
     unknown = max(int(member) for member in enum) + 10_000
     with pytest.raises(ValueError):
@@ -81,7 +79,7 @@ def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
 
 
 def test_known_ids_have_expected_values() -> None:
-    """A handful of ids pinned against the game's own numbering, as a canary for a bad regeneration."""
+    """A few ids pinned to the game's numbering, as a canary for a bad regeneration."""
     assert UnitTypeId.SCV == 45
     assert UnitTypeId.MARINE == 48
     assert UnitTypeId.COMMAND_CENTER == 18
@@ -89,16 +87,16 @@ def test_known_ids_have_expected_values() -> None:
 
 
 def test_renaming_preserves_identity() -> None:
-    """A curated name is free to differ from Blizzard's while still being the same id."""
+    """A curated name may differ from Blizzard's and still be the same id."""
     assert RawUnitTypeId.LurkerMP == UnitTypeId.LURKER
     assert RawUnitTypeId.Lurker != UnitTypeId.LURKER
 
 
 def test_a_buff_is_the_id_the_game_puts_on_units() -> None:
-    """Where the catalog has two spellings for one buff, the curated name is the one a game reports, tested in game.
+    """Where the catalog has two spellings for one buff, the curated name is the one the game reports (in game).
 
-    A marauder's concussive shells put `Slow` on their target, never `DutchMarauderSlow`, and an immortal's
-    Barrier is `TakenDamage`, never `ImmortalOverload`.
+    Concussive shells put `Slow` on their target, never `DutchMarauderSlow`, and an immortal's Barrier is
+    `TakenDamage`, never `ImmortalOverload`.
     """
     assert RawBuffId.Slow == BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW
     assert RawBuffId.TakenDamage == BuffId.IMMORTAL_BARRIER

@@ -1,4 +1,4 @@
-"""A transport over the websocket a running game client listens on."""
+"""A transport over the websocket of a running game client."""
 
 from typing import Self
 
@@ -20,15 +20,15 @@ class WebSocketTransport:
     """A `Transport` over the websocket of a game client that is already running."""
 
     def __init__(self, websocket: WebSocket) -> None:
-        """Wrap an open websocket, which is closed along with the transport."""
+        """Wrap an open websocket. Closing the transport closes the websocket."""
         self._websocket = websocket
 
     @classmethod
     def connect(cls, url: str, *, timeout: float | None = None) -> Self:
         """Open a websocket to the game client listening at `url`.
 
-        `timeout` bounds every wait on the socket. It defaults to none, because loading a map takes as long as
-        it takes and a bot has nothing to do in the meantime.
+        `timeout` bounds every wait on the socket. It defaults to none: loading a map takes as long as it takes,
+        and a bot has nothing to do in the meantime.
         """
         try:
             websocket = create_connection(url, timeout=timeout)
@@ -44,7 +44,7 @@ class WebSocketTransport:
         return cls(websocket)
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        """Send `request`, wait for the game to answer it, and return the answer."""
+        """Send `request`, wait for the game's answer, and return it."""
         try:
             self._websocket.send_binary(request.SerializeToString())
             payload = self._websocket.recv()
@@ -55,7 +55,7 @@ class WebSocketTransport:
         except WebSocketException as error:
             raise ProtocolError(f"the websocket failed: {error}") from error
         except ConnectionError as error:
-            # A game that dies resets the socket, which the websocket library lets through as a bare OSError.
+            # A game that dies resets the socket, which the websocket library passes through as a bare OSError.
             raise ConnectionClosedError(f"the connection to the game was lost: {error}") from error
         if not isinstance(payload, bytes):
             raise ProtocolError(f"the game sent text where the protocol is binary: {payload!r}")

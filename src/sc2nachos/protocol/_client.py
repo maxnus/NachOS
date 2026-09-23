@@ -1,4 +1,4 @@
-"""The conversation the library holds with one game client."""
+"""The library's requests to one game client, and the answers."""
 
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
@@ -14,21 +14,21 @@ from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
 from sc2nachos.protocol._transport import Transport
 
-# What the game says when it is asked for something only a running game can give, once the game is over.
+# What the game says when asked, after a game is over, for something only a running game can give.
 _GAME_OVER_ERRORS = frozenset({"Game has already ended", "Not supported if game has already ended"})
-# And what it says before one has started, which includes after the client has left the last one.
+# What it says before a game has started, including after the client has left the last one.
 _NOT_STARTED_ERRORS = frozenset({"A game has not been started yet"})
 
 
-# The answers this client knows how to read. Spelled out rather than taken as a `str` so that pyright checks
-# each name against the response the stubs declare, which a widened parameter would silently give up.
+# The answers this client reads. A `Literal` rather than `str`, so pyright checks each name against the response
+# fields the stubs declare.
 type _Answer = Literal[
     "action", "create_game", "data", "game_info", "join_game", "observation", "ping", "save_replay", "step"
 ]
 
 
 def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
-    """One slot in a game being created. A participant carries nothing: it says who it is when it joins."""
+    """One slot in a game being created. A participant's slot carries nothing: it says who it is when it joins."""
     match player:
         case Participant():
             return sc2api_pb2.PlayerSetup(type=sc2api_pb2.Participant)
@@ -44,14 +44,14 @@ def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
 class Client:
     """A game client, addressed over a transport.
 
-    Every method is one request, and blocks until the game answers it. The protocol carries one request at
-    a time with no way to match an answer to anything but the last question, so there is nothing to overlap.
+    Every method is one request and blocks until the game answers. The protocol carries one request at a time and
+    matches an answer only to the last question, so nothing can overlap.
 
-    One connection can play game after game. What the client keeps of a game, which is its own player and how
-    the game ended, lasts from the join until the game is left or the next one is set up.
+    One connection can play game after game. What the client keeps of a game, its own player id and how the game
+    ended, lasts from the join until the game is left or the next one is set up.
 
-    Nothing is interpreted here beyond what the protocol itself demands: the responses are the game's own
-    messages, and turning them into a data model belongs above.
+    Nothing is interpreted here beyond what the protocol demands: the responses are the game's own messages, and
+    turning them into a data model belongs above.
     """
 
     def __init__(self, transport: Transport) -> None:
@@ -63,12 +63,12 @@ class Client:
 
     @property
     def status(self) -> Status | None:
-        """What the game said it was doing when it last answered, or `None` before it has answered at all."""
+        """The status the game reported in its last answer, or `None` before it has answered at all."""
         return self._status
 
     @property
     def in_game(self) -> bool:
-        """Whether the game is running, as opposed to loading, ended or not yet started."""
+        """Whether a game is running, rather than loading, ended or not yet started."""
         return self._status in (Status.IN_GAME, Status.IN_REPLAY)
 
     @property
@@ -78,18 +78,18 @@ class Client:
 
     @property
     def result(self) -> Result | None:
-        """How the game ended for this client's own player, or `None` while it has not ended."""
+        """How the game ended for this client's own player, or `None` until it ends."""
         if self._player_id is None:
             return None
         return self._results.get(self._player_id)
 
     @property
     def results(self) -> Mapping[int, Result]:
-        """How the game ended, by player id. Empty until it does."""
+        """How the game ended, by player id. Empty until it ends."""
         return self._results
 
     def ping(self) -> sc2api_pb2.ResponsePing:
-        """Ask the game which version it is, which also proves the connection works."""
+        """Ask the game for its version. This also proves the connection works."""
         response = self._send(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()), "ping")
         return response.ping
 
@@ -102,10 +102,10 @@ class Client:
         disable_fog: bool = False,
         random_seed: int | None = None,
     ) -> None:
-        """Set up a match on `map_path` for `players`, which each participant then joins.
+        """Set up a match on `map_path` for `players`. Each participant then joins it.
 
         Only the client that creates the game sends this; on a ladder the game already exists. At least one player
-        must be a participant, and the game seats only as many as the map has slots, dropping the rest unrefused.
+        must be a participant. The game seats only as many players as the map has slots and silently drops the rest.
         """
         self._forget_game()
         request = sc2api_pb2.RequestCreateGame(
@@ -119,7 +119,7 @@ class Client:
 
         response = self._send(sc2api_pb2.Request(create_game=request), "create_game")
         created = response.create_game
-        # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+        # An unset error field reads as the first error the proto declares, so check that it is set first.
         if created.HasField("error"):
             reason = sc2api_pb2.ResponseCreateGame.Error.Name(created.error)
             detail = created.error_details or "no detail given"
@@ -134,9 +134,9 @@ class Client:
         ports: GamePorts | None = None,
         raw_affects_selection: bool = False,
     ) -> int:
-        """Join the waiting game as `race`, and return the player id the game assigns.
+        """Join the waiting game as `race` and return the player id the game assigns.
 
-        NachOS plays on the raw interface, so the rendered ones are never requested.
+        NachOS plays on the raw interface; the rendered interfaces are never requested.
         """
         self._forget_game()
         request = sc2api_pb2.RequestJoinGame(
@@ -161,7 +161,7 @@ class Client:
 
         response = self._send(sc2api_pb2.Request(join_game=request), "join_game")
         joined = response.join_game
-        # An unset error field reads as the first refusal the proto declares, so ask before reading it.
+        # An unset error field reads as the first error the proto declares, so check that it is set first.
         if joined.HasField("error"):
             reason = sc2api_pb2.ResponseJoinGame.Error.Name(joined.error)
             detail = joined.error_details or "no detail given"
@@ -171,7 +171,7 @@ class Client:
         return joined.player_id
 
     def game_info(self) -> sc2api_pb2.ResponseGameInfo:
-        """The map: its size, its terrain, its start locations and the players in it."""
+        """The map: its size, terrain, start locations and players."""
         response = self._send(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()), "game_info")
         return response.game_info
 
@@ -186,7 +186,7 @@ class Client:
     ) -> sc2api_pb2.ResponseData:
         """The tables behind the ids: costs, ranges, requirements and names.
 
-        Unit weapons, armor and movement speed include the upgrades this player holds when it asks.
+        Unit weapons, armor and movement speed include the upgrades this player holds at the time of asking.
         """
         request = sc2api_pb2.RequestData(
             ability_id=abilities,
@@ -201,13 +201,13 @@ class Client:
     def observation(self, *, game_loop: int | None = None) -> sc2api_pb2.ResponseObservation:
         """What this player can see now, or once the game reaches `game_loop`.
 
-        When the game is over, each player's result lands in `results`.
+        When the game is over, each player's result is stored in `results`.
         """
         observation = self._observe(game_loop)
         if self.in_game and not observation.player_result:
             return observation
         if not observation.player_result:
-            # The game reports itself ended a step before it will say who won, so ask once more.
+            # The game reports itself ended one step before it says who won, so ask once more.
             observation = self._observe(None)
         self._results = {entry.player_id: Result(entry.result) for entry in observation.player_result}
         if self._results:
@@ -220,15 +220,15 @@ class Client:
         return response.step
 
     def act(self, actions: Sequence[sc2api_pb2.Action]) -> sc2api_pb2.ResponseAction:
-        """Send `actions`, and get back the game's verdict on each one in the order they were given."""
+        """Send `actions` and return the game's result for each, in the order they were given."""
         response = self._send(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=actions)), "action")
         return response.action
 
     def debug(self, commands: Sequence[debug_pb2.DebugCommand]) -> None:
-        """Send debug `commands`, which only a game the client started itself accepts.
+        """Send debug `commands`. Only a game the client created itself accepts them.
 
-        The game answers nothing. A drawing lasts until the next debug request, so one that should stay on the
-        screen is sent again every turn.
+        The game answers nothing. A drawing lasts until the next debug request, so one that should stay on screen
+        must be sent again every turn.
         """
         self._send(sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug(debug=commands)))
 
@@ -238,16 +238,16 @@ class Client:
         return response.save_replay.data
 
     def leave_game(self) -> None:
-        """Leave the game, which concedes it if it has not already ended, and return the client to `launched`.
+        """Leave the game, conceding it if it has not already ended, and return the client to `launched`.
 
-        Leaving when there is no game to leave, or no connection left, is not an error.
+        Leaving when there is no game, or no connection left, is not an error.
         """
         with suppress(GameNotStartedError, GameEndedError, ConnectionClosedError):
             self._send(sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
         self._forget_game()
 
     def quit(self) -> None:
-        """Ask the game client to exit. A connection that has already gone is not an error here."""
+        """Ask the game client to exit. A connection already gone is not an error here."""
         with suppress(ConnectionClosedError):
             self._send(sc2api_pb2.Request(quit=sc2api_pb2.RequestQuit()))
 
@@ -256,7 +256,7 @@ class Client:
         self._transport.close()
 
     def _forget_game(self) -> None:
-        """Drop what the client kept of the last game, so none of it answers for the next."""
+        """Drop what the client kept of the last game, so none of it carries over to the next."""
         self._player_id = None
         self._results = {}
 
@@ -268,9 +268,10 @@ class Client:
         return response.observation
 
     def _send(self, request: sc2api_pb2.Request, answer: _Answer | None = None) -> sc2api_pb2.Response:
-        """Send `request`, and return the response once it proves to be an `answer` the game did not refuse."""
+        """Send `request` and return the response, checking that it holds `answer` and that the game did not refuse
+        it."""
         response = self._transport.request(request)
-        # An unset status field reads as `launched`, the first value the proto declares, so ask before reading it.
+        # An unset status field reads as `launched`, the first value the proto declares, so check that it is set.
         if response.HasField("status"):
             status = Status(response.status)
             if status is not self._status:

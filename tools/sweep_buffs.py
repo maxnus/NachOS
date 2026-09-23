@@ -1,17 +1,16 @@
-"""Find the buffs a melee game puts on units, by making everything that could put one there happen.
+"""Find the buffs a melee game puts on units, by triggering everything that could put one there.
 
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `all_resources` and
-`fast_build` cheats but never `tech_tree`, which waives what a player has to research first (`docs/curating-ids.md`).
-Each game researches every upgrade its race has, for real. It then creates each of the race's unit types in turn
-beside a set of targets, and orders every ability that unit is offered, one ability at a time, recording each
-buff that turns up on a unit nearby::
+`fast_build` cheats, never `tech_tree`, which waives the research a player needs first (`docs/curating-ids.md`).
+Each game researches every upgrade of its race for real, then creates each of the race's unit types in turn beside a
+set of targets and orders every ability the unit is offered, one at a time, recording each buff that appears on a
+unit nearby::
 
     uv run python tools/sweep_buffs.py
     uv run python tools/sweep_buffs.py zerg --out buffs-zerg.json
 
-What it finds is written as JSON: for each buff, in the raw catalog's spelling, every unit type and ability that
-brought it on and the unit that wore it, where an ability of `null` means the unit carried the buff from the
-moment it was created.
+The findings are written as JSON: for each buff, in the raw catalog's spelling, every unit type and ability that
+brought it on and the unit that wore it. An ability of `null` means the unit had the buff from creation.
 """
 
 import argparse
@@ -35,11 +34,11 @@ from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
 
-# A trial counts what lands within this reach of the middle of the sandbox, and watches that long for it.
+# A trial counts buffs within this reach of the sandbox center, checked this many times, this many steps apart.
 _REACH = 14.0
 _WATCHES = 16
 _STEPS_PER_WATCH = 8
-# Each trial runs this many times, since a unit that is in the way or dies early can leave a buff unseen once.
+# Each trial runs this many times: a unit in the way, or one that dies early, can hide a buff once.
 _REPEATS = 2
 # A few enemy units of every shape a spell can ask for: light and armored, bio and mech, shields and energy, air.
 _ENEMIES = (
@@ -70,8 +69,8 @@ _NOT_FOR_RESEARCH = frozenset(
     | {UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}
 )
 _ADD_ON_BUILDERS = frozenset({UnitTypeId.BARRACKS, UnitTypeId.FACTORY, UnitTypeId.STARPORT})
-# Abilities whose names say they make, research or send somewhere, none of which puts a buff on anything, and gathering,
-# since the sandbox has nothing to gather. Carrying a harvest is a buff all the same.
+# Skipped: abilities whose names say they make, research or send a unit somewhere, which put no buff on anything,
+# and gathering, since the sandbox has nothing to gather. Carrying a harvest is a buff all the same.
 _SKIPPED_ANYWHERE = ("Train", "Research", "UpgradeTo")
 _SKIPPED_PREFIXES = (
     "TerranBuild_",
@@ -124,7 +123,7 @@ class Findings:
 
 
 class Sweep:
-    """One game played as `race`, and what it is found to put on units."""
+    """One game played as `race`, and the buffs it is found to put on units."""
 
     def __init__(self, game: Sandbox, race: Race, findings: Findings) -> None:
         client, player = game.client, game.player
@@ -136,21 +135,21 @@ class Sweep:
         raw_data = client.game_data()
         self._data = GameData(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
-        # Lifted before anything is counted, since what the fog hides, such as the computer's base, would otherwise
-        # be taken for something the sweep put there and cleared away, which ends the game.
+        # The fog is lifted before anything is counted: otherwise what it hides, such as the computer's base, would be
+        # taken for something the sweep put there and cleared away, which ends the game.
         game.cheat("show_map", "all_resources", "fast_build")
         client.step(1)
         units = self._game.units()
         home = next(Point((u.pos.x, u.pos.y)) for u in units if u.owner == player and u.radius > 2)
         self._home = home
         self._ground = OpenGround(self._map, units)
-        # Claimed before the research structures take the ground near home: out of the mineral line, toward the
-        # middle of the map, where the easiest computer does not come this early.
+        # Claimed before the research structures take the ground near home: out of the mineral line, toward the map's
+        # center, where the easiest computer does not come this early.
         self._sandbox = self._ground.claim(home + (self._map.playable_area.center - home) * 0.3, 10)
-        # What was on the map before the sweep put anything there, and the structures it put up to research: never
-        # counted and never cleared away. The sandbox's own structures stay too, but what lands on them counts.
+        # Everything on the map before the sweep, plus the research structures it puts up: never counted and never
+        # cleared. The sandbox's own structures stay too, but buffs on them count.
         self._world: set[int] = {unit.tag for unit in units}
-        # The sandbox's structures, each by what put it there, since a trial can destroy one.
+        # The sandbox's structures by tag, with the request that made each, since a trial can destroy one.
         self._fixtures: dict[int, tuple[UnitTypeId, int, Point]] = {}
         self.findings = findings
 
@@ -158,8 +157,8 @@ class Sweep:
 
     def research_everything(self) -> None:
         """Put up every structure of the race, and research everything they offer until nothing is left."""
-        # Whatever a structure is offered to research, curated or not: the upgrade table names research the game no
-        # longer honors, and a research added in a patch can unlock an ability no curated id names yet.
+        # Whatever research a structure is offered, curated or not: the upgrade table names research the game no longer
+        # honors, and a research added in a patch can unlock an ability no curated id names yet.
         structures = self._put_up_structures()
         for _ in range(200):
             if not self._research_round(structures):
@@ -260,7 +259,7 @@ class Sweep:
         return 3 - self._player
 
     def _sweep_unit(self, unit_type: UnitTypeId, sandbox: Point) -> None:
-        """Try each ability a fresh `unit_type` is offered, on fresh targets, recording what each puts on anything."""
+        """Order each ability a fresh `unit_type` is offered, on fresh targets, and record every buff that appears."""
         caster = self._set_up_trial(unit_type, sandbox)
         if caster is None:
             return
@@ -304,7 +303,7 @@ class Sweep:
         return caster
 
     def _charge(self, made: Iterable[raw_pb2.Unit], caster: raw_pb2.Unit) -> None:
-        """Fill every energy bar, for the caster to spend and a spell to drain, and wound the friends to heal."""
+        """Fill every energy bar, so the caster can cast and a spell can drain, and wound the friends to be healed."""
         value = debug_pb2.DebugSetUnitValue
         commands = [value(unit_value=value.Energy, value=200, unit_tag=unit.tag) for unit in made]
         friends = [unit for unit in made if unit.owner == self._player and unit.tag != caster.tag]
@@ -353,7 +352,7 @@ class Sweep:
     def _record(
         self, unit_type: UnitTypeId, ability: int | None, before: dict[int, set[int]], units: Iterable[raw_pb2.Unit]
     ) -> None:
-        """Record each buff on `units` that the unit wearing it did not have `before`."""
+        """Record each buff on `units` that its wearer did not have `before`."""
         caster = unit_type.name
         ordered = None if ability is None else RawAbilityId(ability).name
         for unit in units:
@@ -362,12 +361,12 @@ class Sweep:
                 self.findings.buffs[RawBuffId(buff).name].add(Sighting(caster, ordered, wearer))
 
     def _relation(self, owner: int) -> str:
-        """Whose a unit is, from this player's side."""
+        """Whose the unit is, as seen from this player."""
         return "own" if owner == self._player else "enemy" if owner == self._enemy else "neutral"
 
 
 def _is_skipped(ability: int) -> bool:
-    """Whether `ability` makes, researches or only sends a unit somewhere, which puts no buff on anything."""
+    """Whether `ability` makes, researches or only sends a unit somewhere, none of which puts a buff on anything."""
     name = RawAbilityId(ability).name
     return name.startswith(_SKIPPED_PREFIXES) or any(fragment in name for fragment in _SKIPPED_ANYWHERE)
 
@@ -377,10 +376,10 @@ def _near(unit: raw_pb2.Unit, sandbox: Point) -> bool:
 
 
 def sweep(race: Race, installation: Installation) -> Findings:
-    """Research everything as `race`, order everything, and return what turned up.
+    """Research everything as `race`, order everything, and return the findings.
 
-    The computer concedes a game it sees as lost, which ends it, so the sweep goes on in a new game from the unit
-    type it had reached, for as long as each game gets further than the one before.
+    The computer concedes a game it sees as lost, which ends it. The sweep then goes on in a new game from the unit
+    type it had reached, as long as each game gets further than the last.
     """
     findings = Findings()
     while True:
@@ -396,7 +395,7 @@ def sweep(race: Race, installation: Installation) -> Findings:
 
 
 def _play(race: Race, installation: Installation, findings: Findings) -> None:
-    """Play one game as `race`, sweeping whatever `findings` has not swept yet into it."""
+    """Play one game as `race`, sweeping into `findings` whatever it has not swept yet."""
     with playing(race, installation) as game:
         run = Sweep(game, race, findings)
         run.research_everything()
@@ -404,7 +403,7 @@ def _play(race: Race, installation: Installation, findings: Findings) -> None:
 
 
 def main(argv: Sequence[str]) -> None:
-    """Sweep the races named, or all three, and write what turned up."""
+    """Sweep the races named, or all three, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("races", nargs="*", help="terran, protoss or zerg; all three when none are named")
     parser.add_argument("--out", type=Path, default=Path("buffs.json"), help="where to write the findings")

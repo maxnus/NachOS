@@ -1,4 +1,4 @@
-"""The player on the other side, what is known of it, and how much of that NachOS works out for itself."""
+"""The enemy player: what is known of it, and how much of that NachOS infers."""
 
 from __future__ import annotations
 
@@ -11,31 +11,28 @@ if TYPE_CHECKING:
 
 
 class UpgradeInference(ReadableIntEnum):
-    """How much of `Enemy.upgrades` NachOS works out for itself, each setting working out all the one before it does."""
+    """How much of `Enemy.upgrades` NachOS infers. Each level includes the ones below it."""
 
     NONE = 0
-    """Nothing: only a bot changes it."""
+    """Nothing. Only the bot changes the upgrades."""
     BASIC = 1
-    """The attack, armor and shield levels the enemy's units in sight report, which `UpgradeReader.read_basic_upgrades`
-    reads as the levels of each type's own lines."""
+    """The attack, armor and shield levels enemy units in sight report. `UpgradeReader.read_basic_upgrades` reads them
+    as levels of each unit type's own upgrade lines."""
     INTERMEDIATE = 2
-    """What only an upgrade can bring about, which `UpgradeReader.read_intermediate_upgrades` reads: Burrow, Warp Gate,
+    """Also what only an upgrade can cause, read by `UpgradeReader.read_intermediate_upgrades`: Burrow, Warp Gate,
     Stimpack, Combat Shield, Concussive Shells, Charge, Psionic Storm, Neural Parasite, Interference Matrix,
-    Nanomuscular Swell, Cloaking Field and Personal Cloaking. It reads the buffs every unit in sight wears, so a buff
-    the curated ids leave out raises `UncuratedIdError` where the settings below it never would."""
+    Nanomuscular Swell, Cloaking Field and Personal Cloaking. This reads the buffs on every unit in sight, so a buff
+    the curated ids leave out raises `UncuratedIdError`, which the lower levels never do."""
 
 
 @final
 class Enemy:
-    """The other player of a game, and what NachOS has learned or been told about it.
-
-    One game has one of these, made with the game and dropped with it.
-    """
+    """The other player, and what NachOS has learned or been told about it. Each game has its own."""
 
     __slots__ = ("_upgrades",)
 
     def __init__(self) -> None:
-        # Replaced whole on every change, since the units read it as part of a key many times a step.
+        # Replaced whole on every change, since units read it as part of a key many times a step.
         self._upgrades: frozenset[UpgradeId] = frozenset()
 
     def __repr__(self) -> str:
@@ -43,23 +40,23 @@ class Enemy:
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
-        """Every upgrade the enemy is known to have, and every one a bot has assumed it has.
+        """Every upgrade the enemy is known or assumed to have.
 
-        The game reports no enemy upgrade outright. It reports the attack, armor and shield levels on each unit in
-        sight, and what only an upgrade can bring about, such as a burrowed zergling or a stimmed marine, both of which
-        `UpgradeReader` reads and NachOS adds here as far as the `Api` was told to with `UpgradeInference`. Every unit
-        of the enemy's counts what is held here, those out of sight included. Anything else, such as Grooved Spines or
-        Metabolic Boost, a bot that works it out says with `assume_upgrades`.
+        The game never reports an enemy upgrade outright. It reports the attack, armor and shield levels of each unit
+        in sight, and what only an upgrade can cause, such as a burrowed zergling or a stimmed marine. `UpgradeReader`
+        reads both, and NachOS adds them here as far as the `Api` was told to with `UpgradeInference`. Every enemy
+        unit, in sight or not, counts what is held here. Anything else, such as Grooved Spines or Metabolic Boost, the
+        bot adds with `assume_upgrades` when it works it out.
         """
         return self._upgrades
 
     def assume_upgrades(self, *upgrades: UpgradeId) -> None:
-        """Take the enemy to have `upgrades` from now on."""
+        """Assume the enemy has `upgrades` from now on."""
         self._upgrades |= frozenset(upgrades)
 
     def forget_upgrades(self, *upgrades: UpgradeId) -> None:
-        """Take the enemy not to have `upgrades` from now on.
+        """Assume the enemy no longer has `upgrades`.
 
-        Where NachOS reads what the enemy's units show, a unit that shows one again puts it back.
+        If NachOS infers upgrades, an enemy unit that shows one again puts it back.
         """
         self._upgrades -= frozenset(upgrades)

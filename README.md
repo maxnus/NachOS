@@ -44,19 +44,19 @@ def manage_workers(event):
         ...
 ```
 
-[Events](docs/events.md) lists every event a game hands out, and how to select some of them.
-[Orders](docs/orders.md) says how a bot orders its units, and what it learns of each order.
+[Events](docs/events.md) lists every event a game hands out and how to subscribe to only some of them.
+[Orders](docs/orders.md) covers how a bot orders its units and what it learns about each order.
 
-NachOS itself never creates or exposes a singleton, and holds no module-level mutable state. The singleton is your
-choice, confined to one line of your own code, and one api plays any number of games in turn. Two bots playing
-each other run a process each, as they would on a ladder.
+NachOS itself never creates or exposes a singleton and holds no module-level mutable state. The singleton is your
+choice, confined to one line of your own code. One api can play game after game, and two bots playing each other
+run in a process each, as they would on a ladder.
 
 Your own helpers live in your own modules, as ordinary functions and objects. There is no mixin to inherit and no
-extension hook to register. If you find yourself wanting to subclass so you can hang a helper off `api`, that is a
-gap in NachOS rather than a pattern to follow — please open an issue.
+extension hook to register. If you want to subclass so you can hang a helper off `api`, that is a gap in NachOS,
+not a pattern to follow — please open an issue.
 
-`Api()` is cheap and needs no live connection, so you can construct it at import time and register event
-handlers as your modules load. Connecting happens later, in the runner:
+`Api()` is cheap and needs no live connection, so you can construct it at import time and register handlers as
+your modules load. Connecting happens later, in the runner:
 
 ```python
 from sc2nachos import ApiBot, Computer, Difficulty, Race, run_local

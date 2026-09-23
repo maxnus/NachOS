@@ -25,14 +25,14 @@ from sc2nachos.launch._game_process import launch_command
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, PlaybackTransport, RecordingTransport, Status, WebSocketTransport
 
-# A map from the current AIE ladder pool, which is what a test game should be played on.
+# A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
 
 
 def make_install(
     root: Path, *builds: int, maps: str = "Maps", map_files: Sequence[str] = (), system: str = "Windows"
 ) -> Installation:
-    """A directory tree shaped like an installation, holding `builds` and `map_files` and nothing real."""
+    """A directory tree shaped like an installation, with empty files for `builds` and `map_files`."""
     for build in builds:
         version = root / "Versions" / f"Base{build}"
         version.mkdir(parents=True)
@@ -71,9 +71,9 @@ class TestFinding:
     def test_the_launchers_own_record_is_read(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, system: str, location: str, separator: str
     ) -> None:
-        """A non-default install shows up in ExecuteInfo.txt, which the launcher rewrites as it runs.
+        """A non-default install is recorded in ExecuteInfo.txt, which the launcher rewrites as it runs.
 
-        Each platform writes its own separator, and the host running this need not share it.
+        Each platform writes its own path separator, which the host running this test need not share.
         """
         home, install = tmp_path / "home", tmp_path / "games" / "StarCraft II"
         install.mkdir(parents=True)
@@ -99,12 +99,12 @@ class TestFinding:
             Installation.find(system="Java")
 
     def test_an_unsupported_platform_is_refused_at_construction(self, tmp_path: Path) -> None:
-        """The platform decides the layout, so an installation cannot hold one nobody supports."""
+        """The platform decides the layout, so an installation cannot be on an unsupported one."""
         with pytest.raises(UnsupportedPlatformError, match="Plan9"):
             Installation(tmp_path, "Plan9")
 
     def test_an_empty_sc2path_is_not_a_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """`Path("")` is the working directory, which would otherwise pass for an installation."""
+        """`Path("")` is the working directory, which would otherwise pass as an installation."""
         monkeypatch.setenv("SC2PATH", "")
         monkeypatch.setenv("USERPROFILE", str(tmp_path))
         monkeypatch.setenv("HOME", str(tmp_path))
@@ -152,7 +152,7 @@ class TestVersions:
 
 class TestLayout:
     def test_either_capitalization_of_the_map_directory_is_found(self, tmp_path: Path) -> None:
-        """Blizzard's installers disagree about it, and only a case-sensitive filesystem cares."""
+        """Blizzard's installers disagree on the capitalization, and only a case-sensitive filesystem cares."""
         assert make_install(tmp_path / "upper", 95841, maps="Maps").maps.is_dir()
         assert make_install(tmp_path / "lower", 95841, maps="maps").maps.is_dir()
 
@@ -175,7 +175,7 @@ class TestMaps:
             assert MapFile.find(asked, installation=install).name == "PylonAIE"
 
     def test_the_shallowest_of_several_copies_wins(self, tmp_path: Path) -> None:
-        """Map packs install alongside the maps they replace, so one name really does match twice."""
+        """Map packs install alongside the maps they replace, so one name can match twice."""
         install = make_install(tmp_path, map_files=["AIE/TorchesAIE.SC2Map", "TorchesAIE.SC2Map"])
         assert MapFile.find("TorchesAIE", installation=install).path == install.maps / "TorchesAIE.SC2Map"
 
@@ -309,7 +309,7 @@ class TestAgainstTheRealGame:
 
             info = client.game_info()
             assert info.map_name
-            # Only the joining player's own race comes back, which is the one the join asked for.
+            # Only this player's race comes back, the one the join asked for.
             assert {player.player_id: player.race_actual for player in info.player_info}[1] == Race.TERRAN.value
 
             before = client.observation().observation.game_loop
@@ -322,7 +322,7 @@ class TestAgainstTheRealGame:
         assert not game.is_running
 
     def test_a_recorded_game_replays_exactly(self, tmp_path: Path) -> None:
-        """A recording is the corpus everything above the protocol is tested against, so it must be faithful."""
+        """Recordings are the corpus everything above the protocol is tested against, so they must be faithful."""
         try:
             game_map = MapFile.find(_LADDER_MAP)
         except MapNotFoundError as missing:
@@ -344,7 +344,7 @@ class TestAgainstTheRealGame:
             client.quit()
             client.close()
 
-        # Twenty observations weigh well over a megabyte on the wire, which is the whole reason for compressing.
+        # Twenty observations are well over a megabyte on the wire, which is why recordings are compressed.
         assert path.stat().st_size < 500_000
 
         replayed = Client(PlaybackTransport(recorder.recording))

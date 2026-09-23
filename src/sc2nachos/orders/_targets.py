@@ -1,4 +1,4 @@
-"""What an order is aimed at: reading it, checking it, and keeping it as the game will."""
+"""An order's target: reading it, checking it, and storing it as the game will."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from sc2nachos.ids import AbilityId
     from sc2nachos.units import OwnUnit, Target
 
-# What each target type takes, for the message an order aimed at the wrong thing is refused with.
+# What each target type takes, for the error message when an order is aimed at the wrong thing.
 _TARGETS_WANTED = {
     TargetType.NOTHING: "no target",
     TargetType.POINT: "a point",
@@ -31,11 +31,11 @@ _TARGETS_WANTED = {
 
 
 def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
-    """An order's target: the unit itself, or the ground point it is aimed at, as the game will read it.
+    """An order's target as the game will read it: the unit itself, or the ground point.
 
-    A height is left behind, since the game takes a target on the ground and reports a height of zero for every one.
-    What is left is cut to the 32 bits the protocol carries a coordinate in, so that the point an order holds is the
-    one the game is given, and the one it reports back.
+    Any height is dropped: the game takes a target on the ground and reports a height of zero for every one. The
+    coordinates are cut to the 32-bit floats the protocol carries, so the point an order holds is the one the game
+    is given and the one it reports back.
     """
     if target is None or isinstance(target, Unit):
         return target
@@ -44,16 +44,16 @@ def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
 
 
 def as_sent(coordinate: float) -> float:
-    """A coordinate as the protocol carries it, which is a 32-bit float.
+    """`coordinate` as the protocol carries it: a 32-bit float.
 
-    Everything the game reports is one already, widened to a Python float, so only a point going out is ever cut
-    this way: what comes back from a point sent unrounded is not the number that was sent.
+    Everything the game reports is already a 32-bit float widened to a Python float, so only outgoing points are
+    ever cut. A point sent unrounded does not come back as the number that was sent.
     """
     return float(numpy.float32(coordinate))
 
 
 def order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
-    """What an order a unit reports is aimed at, naming a unit through the tracker that holds `unit`."""
+    """The target of an order `unit` reports. A unit target is looked up in the tracker that holds `unit`."""
     match order.WhichOneof("target"):
         case "target_world_space_pos":
             point = order.target_world_space_pos
@@ -65,7 +65,7 @@ def order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
 
 
 def check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:
-    """Raise `TypeError` where `ability` cannot be aimed at `target`. An ability with no row is left to the game."""
+    """Raise `TypeError` if `ability` cannot be aimed at `target`. An ability with no row is left to the game."""
     if row is None:
         return
     wanted = row.target_type
@@ -82,5 +82,6 @@ def check_target(ability: AbilityId, target: Target | None, row: AbilityData | N
 
 
 def same_point(target: Point, x: float, y: float) -> bool:
-    """Whether a point the game reports is the one ordered, which it keeps to `POINT_PRECISION`, cut down."""
+    """Whether a point the game reports is the one ordered. The game keeps a point to `POINT_PRECISION`, rounded
+    down."""
     return target.rounded_down(step=POINT_PRECISION) == Point((x, y)).rounded_down(step=POINT_PRECISION)

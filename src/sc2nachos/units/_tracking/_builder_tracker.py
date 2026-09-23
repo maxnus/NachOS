@@ -11,26 +11,27 @@ if TYPE_CHECKING:
     from sc2nachos.units._tracking._unit_tracker import _UnitsByTag
     from sc2nachos.units._unit import Unit
 
-# How far from where a build order was aimed a structure may stand and still be the one it builds. The game snaps a
-# structure's center to the grid, at most half a tile along each axis from the point it was ordered at.
+# How far a structure may stand from where its build order was aimed and still be the one it builds. The game snaps a
+# structure's center to the grid, at most half a tile along each axis from the ordered point.
 _BUILDER_REACH = 1.0
 
 
 @final
 class _BuilderTracker:
-    """The builder of each of this player's structures being built: a unit in the observation carrying out the order
-    that builds it, or the unit that became it, as a drone does."""
+    """The builder of each of this player's structures under construction: a unit in the observation carrying out
+    the order that builds it, or the unit that became it, as a drone does."""
 
     __slots__ = ("_builders", "_builders_now", "_tracker", "_under_construction", "_used_up_builders")
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
-        # Each structure still being built by a unit that became it, as a drone does, and that unit.
+        # Each structure still being built by a unit that became it, as a drone does, mapped to that unit.
         self._builders: dict[Unit[Any], Unit[Any]] = {}
-        # The units whose structure finished or died in the last update, which the game has one more to report dead.
+        # The units whose structure finished or died in the last update. The game has one more update to report them
+        # dead.
         self._used_up_builders: list[Unit[Any]] = []
-        # Worked out from the last observation when first asked for: this player's unfinished structures, and each
-        # structure being built by a unit in the observation with that unit.
+        # Computed from the last observation when first asked for: this player's unfinished structures, and each
+        # structure being built by a unit in the observation, mapped to that unit.
         self._under_construction: list[Unit[Any]] | None = None
         self._builders_now: dict[Unit[Any], Unit[Any]] | None = None
 
@@ -58,7 +59,7 @@ class _BuilderTracker:
         return built
 
     def builder_of(self, structure: Unit[Any]) -> Unit[Any] | None:
-        """The unit building `structure` now: the drone that became it, or a unit in the observation building it."""
+        """The unit building `structure`: the drone that became it, or a unit in the observation building it."""
         if (drone := self._builders.get(structure)) is not None:
             return drone
         if self._builders_now is None:
@@ -69,11 +70,12 @@ class _BuilderTracker:
         return self._builders_now.get(structure)
 
     def link_builder(self, structure: Unit[Any], ordered: list[Unit[Any]]) -> None:
-        """Link `structure`, new to this observation, to the unit that became it, if one of `ordered` did, and take
-        that one out of `ordered`.
+        """Link `structure`, new to this observation, to the unit in `ordered` that became it, if any, and remove
+        that unit from `ordered`.
 
-        `ordered` holds this player's units that left this observation carrying out an order. A drone that becomes a
-        structure leaves the observation with no death reported, and the structure appears under a new tag (in game).
+        `ordered` holds this player's units that left this observation while carrying out an order. A drone that
+        becomes a structure leaves the observation with no death reported, and the structure appears under a new tag
+        (in game).
         """
         builder = None
         nearest = _BUILDER_REACH * _BUILDER_REACH
@@ -94,10 +96,11 @@ class _BuilderTracker:
 
     def update(self, present: _UnitsByTag) -> None:
         """Mark dead each unit that became a structure which finished or died an update ago, unless the game has
-        reported it dead since or it came back, and leave those whose structure finished or died now to the next update.
+        reported it dead since or it came back. Units whose structure finished or died in this update wait for the
+        next.
 
-        The game reports such a unit dead itself an observation after its structure finishes at the latest, and one
-        whose structure is cancelled comes back (in game), so this marks only one the game did not.
+        The game reports such a unit dead itself at the latest one observation after its structure finishes, and a
+        unit whose structure is cancelled comes back (in game), so this marks only the units the game did not.
         """
         if not self._builders and not self._used_up_builders:
             return
@@ -111,18 +114,18 @@ class _BuilderTracker:
                 self._used_up_builders.append(builder)
 
     def forget_observation(self) -> None:
-        """Forget what was worked out from the last observation, as a new one comes."""
+        """Forget what was computed from the last observation, as a new one arrives."""
         self._under_construction = None
         self._builders_now = None
 
     def end(self) -> None:
-        """Forget the builders the game has yet to report dead, since the game is over."""
+        """Forget the builders the game has yet to report dead. The game is over."""
         self._used_up_builders = []
         self.forget_observation()
 
     def _order_target_position(self, order: raw_pb2.UnitOrder) -> tuple[float, float] | None:
-        """Where `order` is aimed: its point, or where the unit it targets stands, such as the geyser a gas building
-        goes on or an unfinished structure construction resumes on."""
+        """Where `order` is aimed: its point, or the position of its target unit, such as the geyser a gas building
+        goes on or the unfinished structure construction resumes on."""
         if order.HasField("target_world_space_pos"):
             return order.target_world_space_pos.x, order.target_world_space_pos.y
         units = self._tracker.unit_tracker
@@ -132,12 +135,12 @@ class _BuilderTracker:
         return None
 
     def _order_makes_structure(self, order: raw_pb2.UnitOrder, structure: Unit[Any]) -> bool:
-        """Whether `order` is the ability that makes `structure`'s type."""
+        """Whether `order` runs the ability that creates `structure`'s type."""
         row = self._tracker.game_data.units.get(structure._type_id)
         return row is not None and row.creation_ability == order.ability_id
 
     def _structures_under_construction(self) -> list[Unit[Any]]:
-        """This player's unfinished units in the last observation."""
+        """This player's unfinished units in the last observation, computed on first use."""
         if self._under_construction is None:
             self._under_construction = [
                 unit

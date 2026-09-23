@@ -18,11 +18,11 @@ class WeaponUpgrade:
     """What an upgrade adds to one of a unit type's weapons."""
 
     damage: float = 0.0
-    """What it adds to the damage of a hit."""
+    """Added damage per hit."""
     damage_bonuses: Mapping[Attribute, float] = field(default_factory=lambda: MappingProxyType({}))
-    """What it adds to the bonus against each attribute, a bonus the weapon did not have included."""
+    """Added bonus damage against each attribute, including attributes the weapon had no bonus against."""
     range: float = 0.0
-    """What it adds to how far the weapon reaches."""
+    """Added range."""
 
 
 @final
@@ -31,9 +31,9 @@ class UnitTypeUpgrade:
     """What an upgrade adds to one type of unit."""
 
     armor: float = 0.0
-    """What it adds to the armor."""
+    """Added armor."""
     speed: float = 0.0
-    """What it adds to how fast the type moves, in distance per second of the game's Faster speed, 22.4 steps."""
+    """Added movement speed, in distance per second at the game's Faster speed (22.4 steps)."""
     weapons: tuple[WeaponUpgrade, ...] = ()
-    """What it adds to each weapon, in the order the type's weapons are, a `WeaponUpgrade()` for a weapon it leaves
-    alone. Empty where it changes no weapon."""
+    """The change to each weapon, in the type's weapon order, with a `WeaponUpgrade()` for a weapon left alone. Empty if
+    no weapon changes."""

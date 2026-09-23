@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 @final
 class TilePath(Sequence[Tile]):
-    """A walk from one tile to the next, in order.
+    """An ordered walk of tiles.
 
-    A path may cover nothing; an empty one is falsy, and `start` and `end` raise `ValueError` on it.
+    A path may be empty. An empty path is falsy, and `start` and `end` raise `ValueError` on it.
     """
 
     __slots__ = ("_distance", "_tiles")
@@ -36,7 +36,7 @@ class TilePath(Sequence[Tile]):
 
     @property
     def distance(self) -> float:
-        """The ground covered from the first tile to the last, center to center."""
+        """The length from the first tile to the last, center to center."""
         if self._distance is None:
             self._distance = math.fsum(
                 one.center.distance_to(following.center) for one, following in itertools.pairwise(self._tiles)
@@ -45,14 +45,14 @@ class TilePath(Sequence[Tile]):
 
     @property
     def start(self) -> Tile:
-        """The tile the path leaves from."""
+        """The first tile."""
         if not self._tiles:
             raise ValueError("an empty path has no start")
         return self._tiles[0]
 
     @property
     def end(self) -> Tile:
-        """The tile the path arrives at."""
+        """The last tile."""
         if not self._tiles:
             raise ValueError("an empty path has no end")
         return self._tiles[-1]
@@ -64,9 +64,9 @@ class TilePath(Sequence[Tile]):
     def __getitem__(self, index: slice) -> TilePath: ...
 
     def __getitem__(self, index: int | slice) -> Tile | TilePath:
-        """The tile at `index`, or the stretch of the walk a slice selects.
+        """The tile at `index`, or the stretch a slice selects.
 
-        The stretch is measured on its own, so it is priced as straight lines between the tiles it kept.
+        A stretch's distance is measured afresh, as straight lines between the tiles it keeps.
         """
         if isinstance(index, slice):
             return TilePath(self._tiles[index])
@@ -76,9 +76,9 @@ class TilePath(Sequence[Tile]):
         return len(self._tiles)
 
     def __contains__(self, point: object) -> bool:
-        """Whether the walk covers the tile holding `point`. Raises `TypeError` on anything but a position.
+        """Whether the path covers the tile holding `point`. Raises `TypeError` on anything but a point.
 
-        Scans the walk; build a `TileSet` from it to test many positions.
+        This scans the path; build a `TileSet` from it to test many points.
         """
         return Tile.containing(cast("PointLike | Tile", point)) in self._tiles
 

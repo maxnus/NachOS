@@ -1,4 +1,4 @@
-"""The relationship tables: what the sweep's findings generate, and what the tables of a recorded game then say."""
+"""The tech tree: what the sweep's findings generate, and what a recorded game's tables then say."""
 
 import importlib.util
 import json
@@ -25,17 +25,16 @@ _GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
-# What the unit types are offered that no curated ability names, none of which a player gives. A force field a sentry
-# makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered Shatter.
-# And once Burrow is researched every zerg unit that burrows is offered the infested terran's burrow, which burrows it
-# as itself, reporting its own burrow running.
-# A cyclone locked on is offered `Cancel_LockOn`, which is a cast to take back rather than anything a
-# structure is making, and no curated id names it.
+# The abilities unit types are offered that no curated ability names, none of which a player gives. A force field a
+# sentry makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered
+# Shatter. Once Burrow is researched, every zerg unit that burrows is offered the infested terran's burrow, which
+# burrows it as itself, reporting its own burrow running. A cyclone locked on is offered `Cancel_LockOn`, which takes
+# back a cast rather than anything a structure is making, and no curated id names it.
 _UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
 
 
 def _generator() -> ModuleType:
-    """`tools/generate_tech_tree.py`, which is no package to import from."""
+    """The `tools/generate_tech_tree.py` module, loaded by path since `tools` is not a package."""
     spec = importlib.util.spec_from_file_location("generate_tech_tree", _GENERATOR)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -44,9 +43,9 @@ def _generator() -> ModuleType:
 
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
-    """Findings as the sweep writes them, empty but for `parts`: every ability offered read as needing nothing where
-    `parts` holds no requirement for it, unless it is to be left `unread`, and every unnamed creation ability seen
-    making its unit type, unless it is to be left `unconfirmed`."""
+    """Findings as the sweep writes them, empty except for `parts`. Every offered ability with no requirement in
+    `parts` reads as needing nothing, unless `unread`, and every unnamed creation ability was seen making its unit
+    type, unless `unconfirmed`."""
     findings: dict[str, object] = {
         "base_build": 1,
         "offered": {},
@@ -84,7 +83,7 @@ def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: objec
 
 
 def _no_upgrades(*research: dict[str, object]) -> dict[str, object]:
-    """Upgrade findings as `tools/sweep_upgrades.py` writes them, holding only `research`."""
+    """Upgrade findings as `tools/sweep_upgrades.py` writes them, with only `research` filled."""
     return {"base_build": 1, "races": [], "research": list(research), "unexplained": []}
 
 
@@ -93,7 +92,7 @@ def _requirement(performer: str, ability: str, structures: list[str], upgrades: 
         "performer": performer,
         "ability": ability,
         "structures": structures,
-        # The sweep read every add-on it found required as counting only on the unit's own structure.
+        # The sweep recorded every required add-on as attached to the performer's own structure.
         "attached": any("TechLab" in structure or "Reactor" in structure for structure in structures),
         "upgrades": upgrades,
     }
@@ -122,7 +121,7 @@ class TestGeneratingTheTables:
         )
 
     def test_an_add_on_that_counts_on_another_structure_is_refused(self) -> None:
-        """An add-on only ever counts on its own structure, which is what `TechRequirements` takes for granted."""
+        """An add-on only ever counts on its own structure, which `TechRequirements` takes for granted."""
         marauder = _requirement("Barracks", "BarracksTrain_Marauder", ["BarracksTechLab"], []) | {"attached": False}
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marauder"]}, requirements=[marauder])
         with pytest.raises(ValueError, match="another structure's add-on"):
@@ -149,7 +148,7 @@ class TestGeneratingTheTables:
         assert tree.ability_requirements == {UnitTypeId.BARRACKS: {AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()}}
 
     def test_one_ability_can_need_different_things_of_different_unit_types(self) -> None:
-        """A burrowed roach moves only once Tunneling Claws is researched, and a marine needs nothing to."""
+        """A burrowed roach moves only once Tunneling Claws is researched; a marine needs nothing to move."""
         offered = {"RoachBurrowed": ["Move_Move"], "Marine": ["Move_Move"]}
         claws = _requirement("RoachBurrowed", "Move_Move", [], ["TunnelingClaws"])
         tree = _generator().read(_findings(offered=offered, requirements=[claws]), _no_upgrades())
@@ -158,7 +157,7 @@ class TestGeneratingTheTables:
         assert needs[UnitTypeId.MARINE][AbilityId.GENERAL_MOVE_EXACT] == TechRequirements()
 
     def test_an_ability_whose_requirements_were_never_read_is_refused(self) -> None:
-        """Rather than read as needing nothing."""
+        """It is refused rather than read as needing nothing."""
         findings = _findings(offered={"Ghost": ["Behavior_CloakOff_Ghost"]}, unread=True)
         with pytest.raises(ValueError, match="GHOST GHOST_CLOAK_OFF"):
             _generator().read(findings, _no_upgrades())
@@ -184,7 +183,7 @@ class TestGeneratingTheTables:
             generator.read(findings, _no_upgrades())
 
     def test_an_unnamed_creation_ability_the_sweep_did_not_see_make_its_unit_type_is_refused(self) -> None:
-        """A patch that breaks one stops the regeneration, rather than keep an ability that makes nothing any more."""
+        """A patch that breaks one stops the regeneration instead of keeping an ability that makes nothing now."""
         with pytest.raises(ValueError, match="BANELING by ZERGLING_MORPH_BANELING"):
             _generator().read(_findings(unconfirmed=True), _no_upgrades())
 
@@ -195,7 +194,7 @@ class TestGeneratingTheTables:
             _generator().read(findings, _no_upgrades())
 
     def test_an_ability_that_turns_a_unit_into_something_else_is_not_its_to_perform(self) -> None:
-        """Once Burrow is researched a zergling is offered a drone's burrow, and ordered it burrows as a zergling."""
+        """Once Burrow is researched a zergling is offered a drone's burrow, and given it burrows as a zergling."""
         offered = {"Drone": ["BurrowDown_Drone"], "Zergling": ["BurrowDown_Drone", "BurrowDown_Zergling"]}
         made = [
             _trial("Drone", "BurrowDown_Drone", "DroneBurrowed", "morph"),
@@ -273,13 +272,13 @@ def _upgrade_findings_file() -> dict[str, object]:
 
 
 def _sweep() -> TechTree:
-    """What the committed findings generate, as `tools/generate_tech_tree.py` reads them."""
+    """The tech tree `tools/generate_tech_tree.py` generates from the committed findings."""
     return _generator().read(_findings_file(), _upgrade_findings_file())
 
 
 @pytest.fixture(scope="module")
 def tables() -> GameData:
-    """The tables of the first corpus game, which every game on the current ladder shares."""
+    """The game data of the first corpus game, which every game on the current ladder shares."""
     recording = Recording(_CORPUS[0])
     return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
 
@@ -350,7 +349,7 @@ class TestWhatTheTablesSay:
         assert tables.units[UnitTypeId.LURKER].morphed_from is UnitTypeId.HYDRALISK
         assert tables.units[UnitTypeId.EXTRACTOR_RICH].morphed_from is UnitTypeId.DRONE
         assert tables.units[UnitTypeId.ASSIMILATOR_RICH].morphed_from is None
-        # The build a rich refinery shares with a refinery makes a refinery, as the table says.
+        # The build ability a rich refinery shares with a refinery makes a refinery, as the table says.
         assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].product is UnitTypeId.REFINERY
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
@@ -367,8 +366,8 @@ class TestWhatTheTablesSay:
         assert AbilityId.MARINE_STIM in tables.units[UnitTypeId.MARINE].abilities
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, tables: GameData) -> None:
-        """A gateway turns into a warp gate by itself once the research is done, and a liberator reports the exact
-        siege it was never offered. Every research ability has a performer."""
+        """A gateway becomes a warp gate by itself once the research is done, and a liberator reports the exact siege
+        it was never offered. Every research ability has a performer."""
         makers = [row.creation_ability for row in tables.units.values()]
         makers += [row.research_ability for row in tables.upgrades.values()]
         unperformed = {
@@ -383,7 +382,7 @@ class TestWhatTheTablesSay:
         assert tables.units[UnitTypeId.OVERSEER].morphed_from is UnitTypeId.OVERLORD
 
     def test_only_creep_tumors_the_game_will_not_create_are_left_unswept(self, tables: GameData) -> None:
-        """A debug command makes no creep tumor, so what one is offered is unknown rather than nothing."""
+        """A debug command cannot create a creep tumor, so what one is offered is unknown rather than nothing."""
         unswept = {
             row.id
             for row in tables.units.values()
@@ -400,13 +399,13 @@ class TestWhatTheTablesSay:
 class TestWhatTheSweepFound:
     def test_only_the_zerg_burrows_turn_a_unit_into_something_other_than_they_make(self) -> None:
         """Once Burrow is researched every zerg unit is offered every zerg unit's burrow, and burrows as itself. Any
-        other ability doing this would drop a unit type from what performs it without anyone noticing."""
+        other ability doing this would silently drop a unit type from its performers."""
         findings = json.loads(_FINDINGS.read_text(encoding="utf-8"))
         others = {record["ability"] for record in findings["made"] if record["result"] == "other"}
         assert others and all(ability.startswith("BurrowDown_") for ability in others)
 
     def test_what_is_offered_that_no_curated_id_names_is_known(self) -> None:
-        """Anything else a unit type is offered has to be curated, or the tables leave it out."""
+        """Anything else a unit type is offered must be curated, or the tables leave it out."""
         assert _generator().uncurated(_findings_file()) == _UNCURATED_OFFERED
 
 
@@ -420,8 +419,8 @@ def _offered(transport: WebSocketTransport, unit: Unit) -> set[int]:
 
 @pytest.mark.integration
 def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
-    """Run with `pytest -m integration`. Starts the game as terran, and rechecks a few of the tables' facts in it, so
-    that a patch moving the tech tree fails here before anywhere else."""
+    """Run with `pytest -m integration`. Plays a game as terran and rechecks a few of the tables' facts in it, so a
+    patch that moves the tech tree fails here first."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
