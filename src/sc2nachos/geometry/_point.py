@@ -240,7 +240,8 @@ class _PointND(tuple[float, ...]):
 class Point(_PointND, tuple[float, float]):
     """An immutable 2D point, constructed from an iterable: `Point((3, 4))`.
 
-    A tuple subclass, so it unpacks, hashes and compares like `(x, y)` and works as a dict key.
+    A tuple subclass, so it unpacks, hashes and compares like `(x, y)` and works as a dict key. A numpy array combines
+    with a point only through `numpy.asarray(point)`: `positions - point` raises `TypeError`.
     """
 
     __slots__ = ()

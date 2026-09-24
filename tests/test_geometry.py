@@ -281,6 +281,12 @@ class TestNumpyScalars:
         grid = numpy.full((4, 4), 2.0, dtype=numpy.float32)
         assert Point((3.0, 4.0)) * grid[1, 1] == (6, 8)
 
+    def test_an_array_combines_with_a_point_only_as_an_array(self) -> None:
+        positions, point = numpy.ones((3, 2)), Point((1.0, 2.0))
+        with pytest.raises(TypeError):
+            _ = positions - point
+        assert (positions - numpy.asarray(point)).tolist() == [[0.0, -1.0]] * 3
+
     def test_a_numpy_array_is_not_a_scalar(self) -> None:
         with pytest.raises(TypeError, match="expected a point"):
             _ = Point((3.0, 4.0)) * numpy.array([1.0, 2.0])
