@@ -1,5 +1,8 @@
 """Identifier enums: the curated public API and the raw catalog it is defined from."""
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
 from sc2nachos._enum import ReadableIntEnum
@@ -102,3 +105,13 @@ def test_a_buff_is_the_id_the_game_puts_on_units() -> None:
     assert RawBuffId.TakenDamage == BuffId.IMMORTAL_BARRIER
     assert RawBuffId.DutchMarauderSlow.value not in {int(member) for member in BuffId}
     assert RawBuffId.ImmortalOverload.value not in {int(member) for member in BuffId}
+
+
+def test_the_raw_catalog_is_as_generated_from_stableid() -> None:
+    path = Path(__file__).parents[1] / "tools" / "generate_ids.py"
+    spec = importlib.util.spec_from_file_location("generate_ids", path)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    for module, text in generator.render().items():
+        assert module.read_text(encoding="utf-8") == text, "run tools/generate_ids.py"

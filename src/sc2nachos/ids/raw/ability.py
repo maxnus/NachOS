@@ -7,7 +7,7 @@ from sc2nachos._enum import ReadableIntEnum
 
 
 class RawAbilityId(ReadableIntEnum):
-    """Every abilitie id the game defines, named as Blizzard names it."""
+    """Every ability id the game defines, named as Blizzard names it."""
 
     Null_Null = 0
     Smart = 1
