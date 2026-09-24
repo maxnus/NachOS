@@ -15,7 +15,7 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
-from sc2nachos.protocol import Client
+from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units
 
@@ -204,15 +204,17 @@ class Api:
 
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
-            # The turn's handlers have all returned, so their orders go out now as one request.
-            game.orders._send(client)
-
-            if realtime:
-                # A realtime game runs on its own, so each turn asks for the step it wants.
-                game.observe(game.step + steps_per_turn)
-            else:
-                client.step(steps_per_turn)
+            try:
+                # The turn's handlers have all returned, so their orders go out now as one request.
+                game.orders._send(client)
+                if not realtime:
+                    client.step(steps_per_turn)
+            except GameEndedError:
+                # The game ended while the handlers ran, as a realtime game can. Its last observation says how.
                 game.observe()
+            else:
+                # A realtime game runs on its own, so each turn asks for the step it wants.
+                game.observe(game.step + steps_per_turn if realtime else None)
             events._set_step(game.step)
         events.emit(GameEndEvent(result, step=game.step))
         events._set_step(None)

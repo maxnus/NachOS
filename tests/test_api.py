@@ -188,6 +188,33 @@ class TestPlaying:
         assert asked == [0, 4, 8]
         assert not any(request.HasField("step") for request in transport.requests)
 
+    @pytest.mark.parametrize("realtime", [True, False])
+    def test_a_game_that_ends_while_the_handlers_run_ends_in_its_result(self, realtime: bool) -> None:
+        """The orders reach a game that is over, which refuses them (#14): a realtime game runs on while the
+        handlers do."""
+        over = make_response(Status.ENDED, error=["Game has already ended"])
+        client, _ = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0)),
+            over,
+            make_response(Status.ENDED, observation=make_observation(4, (1, Result.VICTORY))),
+        )
+        api = Api()
+        ended: list[Result] = []
+
+        @api.events.on(TurnEvent)
+        def look(event: TurnEvent) -> None:
+            api.orders.camera((4, 4))
+
+        @api.events.on(GameEndEvent)
+        def end(event: GameEndEvent) -> None:
+            ended.append(event.result)
+
+        assert api.play(client, steps_per_turn=4, realtime=realtime) is Result.VICTORY
+        assert api.result is Result.VICTORY
+        assert ended == [Result.VICTORY]
+
     def test_a_step_that_says_the_game_is_over_is_followed_by_asking_how(self) -> None:
         """Only an observation carries the result, so the status on a step response does not end the game."""
         client, _ = _joined(
