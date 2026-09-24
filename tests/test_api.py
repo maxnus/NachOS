@@ -369,6 +369,19 @@ class TestEvents:
         assert api.step == 2
         assert api.result is None
 
+    def test_after_a_handler_raises_no_game_gives_an_event_its_step(self) -> None:
+        client, _ = _joined(*_game(0, 2, 4))
+        api = Api()
+
+        @api.events.on(TurnEvent, at_step=2)
+        def failing(event: TurnEvent) -> None:
+            raise RuntimeError("the handler failed")
+
+        with pytest.raises(RuntimeError, match="the handler failed"):
+            api.play(client, steps_per_turn=2)
+        with pytest.raises(ValueError, match="no game is being played"):
+            api.events.emit(TurnEvent())
+
 
 class TestRunningLocally:
     def test_the_bot_is_a_bare_slot_and_the_opponent_carries_how_it_plays(
