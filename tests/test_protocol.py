@@ -297,6 +297,12 @@ class TestWebSocketTransport:
         with pytest.raises(ProtocolError, match="text where the protocol is binary"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
+    def test_a_close_frame_is_a_closed_connection(self) -> None:
+        """The websocket library reads a close frame as an empty text message."""
+        websocket = FakeWebSocket("")
+        with pytest.raises(ConnectionClosedError, match="closed the connection"):
+            self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
     def test_bytes_that_do_not_parse_are_not_a_response(self) -> None:
         websocket = FakeWebSocket(b"\xff\xff\xff")
         with pytest.raises(ProtocolError, match="does not parse"):
@@ -325,6 +331,23 @@ class TestWebSocketTransport:
         self._refuse_to_open(monkeypatch, WebSocketTimeoutException("timed out"))
         with pytest.raises(ConnectionTimeoutError):
             WebSocketTransport.connect("ws://127.0.0.1:5000/sc2api")
+
+    @pytest.mark.parametrize(
+        ("failure", "raised"),
+        [
+            (ConnectionRefusedError(111, "Connection refused"), ConnectionClosedError),
+            (TimeoutError("timed out"), ConnectionTimeoutError),
+            (OSError(113, "No route to host"), ProtocolError),
+        ],
+    )
+    def test_a_socket_that_fails_to_open_raises_the_library_error_for_it(
+        self, monkeypatch: pytest.MonkeyPatch, failure: OSError, raised: type[ProtocolError]
+    ) -> None:
+        """The websocket library passes these through as they are."""
+        self._refuse_to_open(monkeypatch, failure)
+        with pytest.raises(raised) as caught:
+            WebSocketTransport.connect("ws://127.0.0.1:5000/sc2api")
+        assert caught.value.__cause__ is failure
 
     def test_any_other_failure_to_open_is_a_protocol_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._refuse_to_open(monkeypatch, WebSocketException("Invalid WebSocket Header"))

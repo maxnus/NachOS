@@ -71,7 +71,9 @@ class _Watches[U: Unit[Any]]:
         kept: dict[tuple[VitalType, float, bool], set[int]] = {}
         by_type: dict[int, list[_VitalWatch]] = {}
         for keys, reaching in ((reached, True), (dropped, False)):
-            for vital, value, unit_type in keys:
+            # Sorted, since a set of keys iterates in an order that differs from one process to the next, and this
+            # order is the order of one unit's crossings in a turn.
+            for vital, value, unit_type in sorted(keys, key=lambda key: (key[0].name, key[1], key[2])):
                 if (ids := kept.get((vital, value, reaching))) is None:
                     ids = kept[vital, value, reaching] = self._vital_ids.get((vital, value, reaching), set())
                 by_type.setdefault(int(unit_type), []).append((_VITAL_READERS[vital], vital, value, reaching, ids))

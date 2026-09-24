@@ -71,8 +71,8 @@ through `of` and is handed both directions of the crossing it asked for. A handl
 a handler of `UnitEvent` reads `event.unit`, and `event.unit.alliance` for the side.
 
 A handler of `Event` is handed every event, which makes NachOS produce every event type it otherwise would not,
-including comparing every unit with the previous observation. A handler of `Event` or `UnitEvent` is handed
-parameterized events only with the parameters other handlers asked for.
+including comparing every unit with the previous observation. A handler of `Event` is handed parameterized events
+only with the parameters other handlers asked for.
 
 ## Events of your own
 

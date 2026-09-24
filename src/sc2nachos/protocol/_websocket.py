@@ -40,6 +40,13 @@ class WebSocketTransport:
             raise ConnectionTimeoutError(f"the game at {url} did not answer in time") from error
         except WebSocketException as error:
             raise ProtocolError(f"the websocket to {url} failed to open: {error}") from error
+        # The websocket library passes the socket's own failures through as they are.
+        except TimeoutError as error:
+            raise ConnectionTimeoutError(f"the game at {url} did not answer in time") from error
+        except ConnectionError as error:
+            raise ConnectionClosedError(f"nothing at {url} took the connection: {error}") from error
+        except OSError as error:
+            raise ProtocolError(f"the websocket to {url} failed to open: {error}") from error
         logger.info("Connected to the game at {}", url)
         return cls(websocket)
 
@@ -57,6 +64,9 @@ class WebSocketTransport:
         except ConnectionError as error:
             # A game that dies resets the socket, which the websocket library passes through as a bare OSError.
             raise ConnectionClosedError(f"the connection to the game was lost: {error}") from error
+        if payload == "":
+            # What the websocket library returns for a close frame: the game or a proxy closed the connection.
+            raise ConnectionClosedError("the game closed the connection")
         if not isinstance(payload, bytes):
             raise ProtocolError(f"the game sent text where the protocol is binary: {payload!r}")
         response = sc2api_pb2.Response()

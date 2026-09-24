@@ -15,7 +15,7 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
-from sc2nachos.protocol import Client
+from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units
 
@@ -194,26 +194,35 @@ class Api:
         events = self._events
         events._start_game()
         events._set_step(game.step)
-        events.emit(GameStartEvent(step=game.step))
+        try:
+            events.emit(GameStartEvent(step=game.step))
+            result = self._play_turns(game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
+            events.emit(GameEndEvent(result, step=game.step))
+        finally:
+            # Ended, or ended by a handler that raised: no game is being played to give an event its step.
+            events._set_step(None)
+        return result
 
+    def _play_turns(self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: float | None) -> Result:
+        """Take the turns of `game` until it ends, and return how it ended."""
+        events, client = self._events, game.client
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
-                result = game.finish(Result.TIE)
-                break
+                return game.finish(Result.TIE)
 
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
-            # The turn's handlers have all returned, so their orders go out now as one request.
-            game.orders._send(client)
-
-            if realtime:
-                # A realtime game runs on its own, so each turn asks for the step it wants.
-                game.observe(game.step + steps_per_turn)
-            else:
-                client.step(steps_per_turn)
+            try:
+                # The turn's handlers have all returned, so their orders go out now as one request.
+                game.orders._send(client)
+                if not realtime:
+                    client.step(steps_per_turn)
+            except GameEndedError:
+                # The game ended while the handlers ran, as a realtime game can. Its last observation says how.
                 game.observe()
+            else:
+                # A realtime game runs on its own, so each turn asks for the step it wants.
+                game.observe(game.step + steps_per_turn if realtime else None)
             events._set_step(game.step)
-        events.emit(GameEndEvent(result, step=game.step))
-        events._set_step(None)
         return result

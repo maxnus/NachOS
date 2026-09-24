@@ -268,9 +268,24 @@ class TestNumpyScalars:
         assert Point((3.0, 4.0)) / getattr(numpy, dtype)(1) == (3, 4)
         assert Point3D((3.0, 4.0, 5.0)) * scalar == (6, 8, 10)
 
+    @pytest.mark.parametrize("dtype", ["float64", "float32", "int64"])
+    def test_numpy_scalars_on_the_left_give_a_point(self, dtype: str) -> None:
+        """numpy would otherwise read the point as an array before the point could answer."""
+        scalar = getattr(numpy, dtype)(2)
+        assert type(scalar * Point((3.0, 4.0))) is Point
+        assert scalar * Point((3.0, 4.0)) == (6, 8)
+        assert scalar + Point((3.0, 4.0)) == (5, 6)
+        assert type(scalar * Point3D((3.0, 4.0, 5.0))) is Point3D
+
     def test_value_read_from_an_array(self) -> None:
         grid = numpy.full((4, 4), 2.0, dtype=numpy.float32)
         assert Point((3.0, 4.0)) * grid[1, 1] == (6, 8)
+
+    def test_an_array_combines_with_a_point_only_as_an_array(self) -> None:
+        positions, point = numpy.ones((3, 2)), Point((1.0, 2.0))
+        with pytest.raises(TypeError):
+            _ = positions - point
+        assert (positions - numpy.asarray(point)).tolist() == [[0.0, -1.0]] * 3
 
     def test_a_numpy_array_is_not_a_scalar(self) -> None:
         with pytest.raises(TypeError, match="expected a point"):
@@ -438,6 +453,21 @@ class TestTile:
 
     def test_containing_drops_height(self) -> None:
         assert Tile.containing(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2)
+
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda tile: tile + (1, 0),
+            lambda tile: (1, 0) + tile,
+            lambda tile: tile + Point((1, 0)),
+            lambda tile: tile * 2,
+            lambda tile: 2 * tile,
+        ],
+    )
+    def test_arithmetic_is_refused(self, operation: Callable[[Tile], object]) -> None:
+        """As a tuple it would concatenate or repeat, and `grid[tile + (1, 0)]` read the tile it started from."""
+        with pytest.raises(TypeError, match="is an address"):
+            operation(Tile(3, 4))
 
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
