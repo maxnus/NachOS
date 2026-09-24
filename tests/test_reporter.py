@@ -649,6 +649,32 @@ class TestVitals:
         marines = (make_unit(1, alliance=_ENEMY, health=health, health_max=45.0) for health in (45, 10, 45))
         assert not self._crossings(vital, 0.5, *marines)
 
+    def test_one_units_crossings_in_a_turn_come_in_the_same_order_in_every_process(self) -> None:
+        """By vital, then value: the keys are a set, whose order changes with the process's hash seed."""
+        game = _Game()
+        watched = [
+            EnemyUnitVitalDroppedEvent.of(vital, value)
+            for vital, value in [
+                (VitalType.SHIELD, 20),
+                (VitalType.LIFE_FRACTION, 0.5),
+                (VitalType.HEALTH, 50),
+                (VitalType.LIFE, 100),
+                (VitalType.HEALTH_FRACTION, 0.9),
+                (VitalType.LIFE, 120),
+            ]
+        ]
+        seen = record(game.events, *watched)
+        game.observe(0, _zealot(100, 50))
+        game.observe(16, _zealot(10, 0))
+        assert [(event.vital, event.value) for event in seen] == [
+            (VitalType.HEALTH, 50),
+            (VitalType.HEALTH_FRACTION, 0.9),
+            (VitalType.LIFE, 100),
+            (VitalType.LIFE, 120),
+            (VitalType.LIFE_FRACTION, 0.5),
+            (VitalType.SHIELD, 20),
+        ]
+
     def test_a_unit_of_this_players_back_to_full(self) -> None:
         game = _Game()
         seen = record(game.events, OwnUnitVitalReachedEvent.of(VitalType.LIFE_FRACTION, 1.0))
