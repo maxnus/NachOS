@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numbers
 from typing import TYPE_CHECKING, Self, overload
 
 import numpy
@@ -24,6 +25,10 @@ class TimeSeries[T: float]:
     Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
     of the series. Steps are contiguous: a gap between appends is filled by linear interpolation.
     """
+
+    # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
+    # reading the series as an array of its (step, value) pairs.
+    __array_ufunc__ = None
 
     _buffer: ndarray
     _start: int | None
@@ -274,5 +279,6 @@ class TimeSeries[T: float]:
 
 # The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They
 # sit below the class because `TimeSeries` is one of them.
-SCALAR_TYPES = (int, float)
+# `numbers.Real` catches numpy scalars, which subclass neither `int` nor `float`; it comes last, being the slowest.
+SCALAR_TYPES = (int, float, numbers.Real)
 OPERAND_TYPES = (TimeSeries, *SCALAR_TYPES)

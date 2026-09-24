@@ -54,6 +54,9 @@ class _PointND(tuple[float, ...]):
     """
 
     __slots__ = ()
+    # Makes a numpy scalar on the left, `numpy.float64(2) * point`, hand over to the reflected operator instead of
+    # reading the point as an array.
+    __array_ufunc__ = None
 
     @property
     def x(self) -> float:

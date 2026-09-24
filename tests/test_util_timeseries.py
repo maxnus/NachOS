@@ -326,6 +326,16 @@ class TestCopyAndAdd:
         assert (2 * ramp)[4] == 8.0
         assert (10 - ramp)[4] == 6.0
 
+    @pytest.mark.parametrize("dtype", ["float64", "float32", "int64"])
+    def test_scalar_arithmetic_takes_numpy_scalars_either_side(self, ramp, dtype):
+        """A value read out of an array, such as `series.values.max()`, is a numpy scalar."""
+        scalar = getattr(numpy, dtype)(2)
+        for result in (ramp * scalar, scalar * ramp, ramp + scalar, scalar + ramp, ramp - scalar, scalar - ramp):
+            assert isinstance(result, TimeSeries)
+            assert (result.start, result.last_step) == (0, 9)
+        assert (scalar * ramp)[4] == 8.0
+        assert (scalar - ramp)[4] == -2.0
+
     def test_scalar_arithmetic_on_an_empty_series(self):
         assert (TimeSeries.empty(float) * 2).size == 0
 
