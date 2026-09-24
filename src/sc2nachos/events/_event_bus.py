@@ -57,16 +57,16 @@ class _EventDecorator(Protocol[_E_co]):
 class EventBus:
     """The event bus: the events the api hands out, and the handlers subscribed to them. `api.events` is one.
 
-    A function stays subscribed for the life of the api, and an instance until it is passed to `unsubscribe`. Both are
-    held strongly, so a handler runs whether or not anything else keeps it alive. What a handler has done counts for
-    one game and resets with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned
-    `Done`.
+    A function or an instance stays subscribed until it is passed to `unsubscribe`. Both are held strongly, so a
+    handler runs whether or not anything else keeps it alive. What a handler has done counts for one game and resets
+    with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned `Done`.
 
     An event is handed to the handlers of its class and of every base class, highest priority first, and within one
     priority in subscription order. So a handler of `Event` is handed every event, which makes NachOS produce every
-    type of event it otherwise would not, including comparing every unit with the observation before. A turn's events
-    go out priority first: every handler of one priority is handed each event of the turn it selects, in the turn's
-    order, before any handler of the next priority.
+    type of event it otherwise would not, including comparing every unit with the observation before; a
+    parameterized event comes only with the parameters other handlers asked for. A turn's events go out priority
+    first: every handler of one priority is handed each event of the turn it selects, in the turn's order, before any
+    handler of the next priority.
     """
 
     __slots__ = ("_marks", "_methods_of", "_step", "_subscriptions", "_timings")
