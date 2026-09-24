@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, NoReturn, Self, final
 
 import numpy
 from scipy.spatial import KDTree
@@ -121,6 +121,22 @@ class Tile(tuple[int, int], Area):
 
     def __repr__(self) -> str:
         return f"Tile({self[0]}, {self[1]})"
+
+    def __add__(self, other: object) -> NoReturn:
+        """Raises `TypeError`: a tile is an address. `translated` shifts it, and `center` is its point."""
+        raise TypeError(f"{self!r} is an address; shift it with `translated`, or add to its `center`")
+
+    def __radd__(self, other: object) -> NoReturn:
+        """Raises `TypeError`, as `+` does the other way round."""
+        raise TypeError(f"{self!r} is an address; shift it with `translated`, or add to its `center`")
+
+    def __mul__(self, other: object) -> NoReturn:
+        """Raises `TypeError`: a tile is an address, and scaling one is scaling its `center`."""
+        raise TypeError(f"{self!r} is an address; scale its `center` instead")
+
+    def __rmul__(self, other: object) -> NoReturn:
+        """Raises `TypeError`, as `*` does the other way round."""
+        raise TypeError(f"{self!r} is an address; scale its `center` instead")
 
 
 @final

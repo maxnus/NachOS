@@ -439,6 +439,21 @@ class TestTile:
     def test_containing_drops_height(self) -> None:
         assert Tile.containing(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2)
 
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda tile: tile + (1, 0),
+            lambda tile: (1, 0) + tile,
+            lambda tile: tile + Point((1, 0)),
+            lambda tile: tile * 2,
+            lambda tile: 2 * tile,
+        ],
+    )
+    def test_arithmetic_is_refused(self, operation: Callable[[Tile], object]) -> None:
+        """As a tuple it would concatenate or repeat, and `grid[tile + (1, 0)]` read the tile it started from."""
+        with pytest.raises(TypeError, match="is an address"):
+            operation(Tile(3, 4))
+
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
         assert Tile.containing(Tile(3, 4)) == Tile(3, 4)
