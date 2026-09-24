@@ -1,5 +1,7 @@
 """Grids of per-tile values."""
 
+import contextlib
+
 import numpy
 import pytest
 
@@ -474,6 +476,20 @@ class TestReadOnly:
     def test_filling_one_raises_too(self) -> None:
         with pytest.raises(TypeError, match="is read-only"):
             self.grid().fill(2.0)
+
+    @pytest.mark.parametrize("readonly", [True, False])
+    def test_what_is_read_over_an_area_cannot_write_back(self, readonly: bool) -> None:
+        """A rectangle reads a view, which once let `block &= False` reach back into the map's pathing grid."""
+        grid = Grid(numpy.ones((4, 4)), readonly=readonly)
+        for key in (Rectangle(0, 0, 2, 2), Circle(Point((2, 2)), 1.5), grid > 0):
+            block = grid[key]
+            with contextlib.suppress(ValueError):
+                block *= 0.0
+        assert grid.values.all()
+
+    def test_a_rectangle_reads_a_view_that_refuses_writes(self) -> None:
+        with pytest.raises(ValueError, match="read-only"):
+            Grid.zeros(4, 4)[Rectangle(0, 0, 2, 2)][0, 0] = 1.0
 
     def test_a_copy_can_be_written_to(self) -> None:
         copy = self.grid().copy()
