@@ -172,14 +172,15 @@ class Grid[T: float]:
 
     def __getitem__(self, key: PointLike | Area | Grid[bool]) -> T | ndarray:
         """The value at a point, the values over an area, or the values a mask selects. The values over a rectangle
-        are a read-only view; the others are a copy."""
+        are a view, read-only when the grid is; the others are a copy."""
         # Points first, checked as tuples: `Tile` is the only `Area` that is a tuple, and it addresses a single tile
         # like any other point. A miss here is cheap; a miss against an `Area` subclass is not.
         if isinstance(key, tuple):
             return self._value_at(key)
         if isinstance(key, Rectangle):
             view = self._data[self._slices(key)]
-            view.flags.writeable = False
+            if self._readonly:
+                view.flags.writeable = False
             return view
         if isinstance(key, Area):
             return self._data[self._scatter(key)]

@@ -477,10 +477,9 @@ class TestReadOnly:
         with pytest.raises(TypeError, match="is read-only"):
             self.grid().fill(2.0)
 
-    @pytest.mark.parametrize("readonly", [True, False])
-    def test_what_is_read_over_an_area_cannot_write_back(self, readonly: bool) -> None:
+    def test_what_is_read_over_an_area_cannot_write_back(self) -> None:
         """A rectangle reads a view, which once let `block &= False` reach back into the map's pathing grid."""
-        grid = Grid(numpy.ones((4, 4)), readonly=readonly)
+        grid = self.grid()
         for key in (Rectangle(0, 0, 2, 2), Circle(Point((2, 2)), 1.5), grid > 0):
             block = grid[key]
             with contextlib.suppress(ValueError):
@@ -489,7 +488,7 @@ class TestReadOnly:
 
     def test_a_rectangle_reads_a_view_that_refuses_writes(self) -> None:
         with pytest.raises(ValueError, match="read-only"):
-            Grid.zeros(4, 4)[Rectangle(0, 0, 2, 2)][0, 0] = 1.0
+            self.grid()[Rectangle(0, 0, 2, 2)][0, 0] = 1.0
 
     def test_a_copy_can_be_written_to(self) -> None:
         copy = self.grid().copy()
@@ -527,6 +526,15 @@ class TestMutation:
         grid[grid > 4] = 4.0
         assert grid.max() == 4.0
         assert grid.values.tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 4.0], [4.0, 4.0, 4.0]]
+
+    @pytest.mark.parametrize(
+        "key", [Rectangle(0, 0, 2, 2), Circle(Point((1, 1)), 1.0), Grid(numpy.eye(3, dtype=bool))], ids=type
+    )
+    def test_an_area_takes_an_augmented_assignment(self, key: Rectangle | Circle | Grid[bool]) -> None:
+        """`grid[key] += 10` reads, adds in place, then writes back, so what is read must take the addition."""
+        grid = Grid.zeros(3, 3)
+        grid[key] += 10.0
+        assert grid.values.sum() == 10.0 * grid[key].size
 
     def test_a_mask_reads_the_values_it_selects(self) -> None:
         grid = Grid(numpy.arange(9.0).reshape(3, 3))
