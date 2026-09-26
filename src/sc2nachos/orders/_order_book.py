@@ -284,9 +284,10 @@ class OrderBook:
                 self._last_sent[unit.id] = order
 
     def _unit_is_at(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
-        """Whether `unit`'s first order runs `general` at `target`."""
+        """Whether `unit`'s first order runs `general` at `target`. A unit the last observation left out, in a
+        transport for one, is at nothing."""
         orders = unit._latest_report.orders
-        if not orders:
+        if unit.is_stale or not orders:
             return False
         first = orders[0]
         if self._general_ability(_ability_of_unit_order(first)) is not general:

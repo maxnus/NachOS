@@ -17,8 +17,3 @@ class OrderState(Enum):
     """Never sent: a later order of the same turn took every unit this one was given to."""
     WITHDRAWN = "withdrawn"
     """Never sent: taken back by the bot."""
-
-    @property
-    def is_final(self) -> bool:
-        """Whether the order's state will not change again: every state but `GIVEN`."""
-        return self is not OrderState.GIVEN

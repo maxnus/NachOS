@@ -476,6 +476,18 @@ class TestARepeatedOrder:
 
         assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)) is not refused
 
+    def test_an_order_to_a_unit_the_observation_left_out_is_sent(self) -> None:
+        """A marine in a transport is left out of the observation, though it is not dead."""
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        first = _sent_and_carried_out(game, 1)
+        marine = game.own(1)
+        game.observe(32, _marine(2))
+
+        assert not marine.is_dead
+        assert game.book.issue(marine, _MOVE, target=(20.0, 21.0)) is not first
+        assert len(_commands(game.flush())) == 1
+
     def test_a_dead_units_last_order_is_forgotten(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
@@ -604,9 +616,6 @@ class TestWhatBecameOfAnOrder:
         order.withdraw()
 
         assert order.state is OrderState.SENT
-
-    def test_every_state_but_given_is_final(self) -> None:
-        assert {state for state in OrderState if not state.is_final} == {OrderState.GIVEN}
 
 
 class TestOrdersThatQueue:
