@@ -1,6 +1,7 @@
 """One game as it is played, and the events each observation reports."""
 
 import functools
+import itertools
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -119,7 +120,8 @@ class _Game:
         self.step = step
         self.tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.tracker, self.game_map)
-        self.orders._take_in(self.state, step)
+        changes = self.tracker.last_changes
+        self.orders._take_in(self.state, step, itertools.chain(changes.units_died, changes.units_found_dead))
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))

@@ -88,7 +88,10 @@ class _Game:
         """Take in an observation of `units` at `step` and resolve the orders it reports on."""
         observation = make_observation(step, units=units, actions=actions, action_errors=errors, dead=dead)
         self.tracker.update(observation.observation.raw_data, step)
-        self.book._take_in(_State(observation, self.tracker, self.map), step)
+        changes = self.tracker.last_changes
+        self.book._take_in(
+            _State(observation, self.tracker, self.map), step, [*changes.units_died, *changes.units_found_dead]
+        )
 
     def flush(self) -> sc2api_pb2.RequestAction | None:
         """Send the turn's orders and return the request that went out, or `None` if none did."""
@@ -397,6 +400,140 @@ class TestAnOrderAUnitAlreadyHas:
         (command,) = _commands(game.flush())
 
         assert list(command.unit_tags) == [2]
+
+
+def _sent_and_carried_out(game: _Game, *tags: int, to: tuple[float, float] = (20.0, 21.0)) -> Order[Any]:
+    """An order to move the marines under `tags` to `to`, sent, and each marine then seen moving there."""
+    order = game.book.issue([game.own(tag) for tag in tags], _MOVE, target=to, data="first")
+    game.flush()
+    game.observe(16, *(_marine(tag, _moving(to)) for tag in tags))
+    return order
+
+
+class TestARepeatedOrder:
+    def test_the_order_already_sent_is_handed_back_and_nothing_is_sent(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert again is first
+        assert game.flush() is None
+
+    def test_it_carries_the_data_of_the_latest_call(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), data="second")
+
+        assert first.data == "second"
+
+    def test_it_counts_as_given_to_its_units_and_is_not_pending(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert game.book.issued_to(game.own(1)) == (first,)
+        assert game.book.pending == ()
+
+    def test_it_is_given_where_it_was_last_given(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        attack = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert game.book.issued_to(game.own(1)) == (attack, first)
+
+    def test_it_overrides_the_turns_earlier_orders_to_its_units(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        _sent_and_carried_out(game, 1)
+
+        attack = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert game.flush() is None
+        assert attack.state is OrderState.OVERRIDDEN
+
+    def test_a_later_order_to_its_units_overrides_it_and_goes_out(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        attack = game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _ATTACK
+        assert attack.state is OrderState.SENT
+        assert first.state is OrderState.OVERRIDDEN
+
+    def test_a_point_the_game_cut_down_to_its_own_lattice_is_the_same_point(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1, to=(157.123291, 3.0))
+
+        assert game.book.issue(game.own(1), _MOVE, target=(157.123456, 3.0)) is first
+
+    def test_an_order_to_only_some_of_the_units_is_not_a_repeat(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        first = _sent_and_carried_out(game, 1, 2)
+
+        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)) is not first
+
+    def test_an_order_aimed_elsewhere_is_sent(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        assert game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0)) is not first
+        assert len(_commands(game.flush())) == 1
+
+    def test_a_queued_order_is_sent(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+
+        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), queued=True) is not first
+        assert len(_commands(game.flush())) == 1
+
+    def test_an_order_the_unit_has_finished_is_sent_again(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        first = _sent_and_carried_out(game, 1)
+        game.observe(32, _marine(1))
+
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert again is not first
+        assert len(_commands(game.flush())) == 1
+
+    def test_an_order_the_game_refused_is_not_repeated(self) -> None:
+        game = _Game([ActionResult.ERROR])
+        game.observe(0, _marine(1, _moving((20.0, 21.0))))
+        refused = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book._send(game.client)
+        game.observe(16, _marine(1, _moving((20.0, 21.0))))
+
+        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)) is not refused
+
+    def test_a_dead_units_last_order_is_forgotten(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        _sent_and_carried_out(game, 1)
+        unit = game.own(1)
+
+        game.observe(32, _marine(2), dead=(1,))
+
+        assert unit.id not in game.book._last_sent
 
 
 class TestClearingAQueue:

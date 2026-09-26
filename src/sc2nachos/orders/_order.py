@@ -140,6 +140,11 @@ class Order[T]:
         if not self._state.is_final:
             self._state = OrderState.WITHDRAWN
 
+    def _replace_data(self, data: T) -> None:
+        """Carry `data` in place of what the order carried. Only the order book calls this, when the order is
+        repeated."""
+        self._data = data
+
     def _settle(
         self,
         state: OrderState | None = None,
