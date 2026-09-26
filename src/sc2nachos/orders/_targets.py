@@ -85,3 +85,11 @@ def same_point(target: Point, x: float, y: float) -> bool:
     """Whether a point the game reports is the one ordered. The game keeps a point to `POINT_PRECISION`, rounded
     down."""
     return target.rounded_down(step=POINT_PRECISION) == Point((x, y)).rounded_down(step=POINT_PRECISION)
+
+
+def same_target(one: Target | None, other: Target | None) -> bool:
+    """Whether two orders are aimed at the same thing: the same unit, the same point as the game keeps it, or
+    nothing."""
+    if isinstance(one, Point) and isinstance(other, Point):
+        return same_point(one, other.x, other.y)
+    return one is other
