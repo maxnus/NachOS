@@ -13,13 +13,13 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
-from sc2nachos.orders._targets import aimed_at, as_sent, check_target, order_target, same_point, same_target
+from sc2nachos.orders._targets import aimed_at, as_sent, check_target, order_target, same_point
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionResult
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Collection, Iterable, Iterator, Sequence
 
     from sc2nachos.gamedata import AbilityData, GameData
     from sc2nachos.geometry import PointLike
@@ -36,24 +36,16 @@ class OrderBook:
     carries out at once.
     """
 
-    __slots__ = (
-        "_camera_location",
-        "_game_data",
-        "_given_by_unit",
-        "_given_orders",
-        "_last_sent",
-        "_step",
-    )
+    __slots__ = ("_camera_location", "_clearing", "_game_data", "_issued", "_issued_by_unit", "_step")
 
     def __init__(self, game_data: GameData) -> None:
         """A book for one game. `game_data` says what each ability does and what it must be aimed at."""
         self._game_data = game_data
-        # The turn's orders in the order they were given, and those of each unit by its id. A repeat handed back
-        # twice counts where it was last given.
-        self._given_orders: dict[Order[Any], None] = {}
-        self._given_by_unit: dict[int, dict[Order[Any], None]] = {}
-        # By unit id, the last unqueued order the game took that replaced the unit's orders.
-        self._last_sent: dict[int, Order[Any]] = {}
+        # The turn's orders in the order they were issued, and those of each unit by its id.
+        self._issued: list[Order[Any]] = []
+        self._issued_by_unit: dict[int, list[Order[Any]]] = {}
+        # The turn's orders from `clear_queue`, sent to a unit already carrying them out.
+        self._clearing: set[Order[Any]] = set()
         self._camera_location: Point | None = None
         self._step = 0
 
@@ -93,9 +85,9 @@ class OrderBook:
         `queued` puts the order behind each unit's current orders. `data` is the bot's own; NachOS carries it and
         never reads it. Nothing is sent until the turn's handlers have all run.
 
-        An unqueued order is a repeat when the last order sent to replace the orders of `units` was given to those
-        very units, with the same ability and target, and each of them is still carrying it out. A repeat hands back
-        that order, with `data` in place of what it carried, and sends nothing, so whatever is queued behind it stays.
+        An unqueued order that replaces a unit's orders is not sent to a unit whose first order is already this
+        ability at this target: sending it would only drop what the unit has queued behind it. An order left with no
+        unit to send to reads `REDUNDANT`.
 
         Raises `TypeError` for a target the ability cannot be aimed at.
         """
@@ -105,10 +97,6 @@ class OrderBook:
         row = self._game_data.abilities.get(ability)
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
-        if not queued and (repeated := self._repeated(given, ability, aimed, row)) is not None:
-            repeated._replace_data(data)
-            self._add(repeated)
-            return repeated
         order = Order(
             ability,
             given,
@@ -150,23 +138,24 @@ class OrderBook:
             step=self._step,
         )
         self._add(order)
+        self._clearing.add(order)
         return order
 
     def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
-        """The orders given to `unit` so far this turn, in the order they were given.
+        """The orders issued to `unit` so far this turn, in the order they were issued.
 
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
-        order a unit is given goes out. A repeat counts, though it is not sent again. Withdrawn orders are left out.
+        order a unit is given goes out. Withdrawn orders are left out.
         """
-        orders = self._given_by_unit.get(unit.id)
+        orders = self._issued_by_unit.get(unit.id)
         if not orders:
             return ()
-        return tuple(order for order in orders if order.state is not OrderState.WITHDRAWN)
+        return tuple(order for order in orders if order.state is OrderState.PENDING)
 
     @property
     def pending(self) -> tuple[Order[Any], ...]:
-        """Every order given this turn and still to be sent. Withdrawn orders and repeats are left out."""
-        return tuple(order for order in self._given_orders if order.state is OrderState.GIVEN)
+        """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
+        return tuple(order for order in self._issued if order.state is OrderState.PENDING)
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
@@ -175,11 +164,11 @@ class OrderBook:
 
     def _send(self, client: Client) -> None:
         """Send the turn's orders and record the game's answer on each. Sends nothing if there is nothing to send."""
-        given, self._given_orders = tuple(self._given_orders), {}
-        self._given_by_unit = {}
+        issued, clearing = self._issued, self._clearing
+        self._issued, self._issued_by_unit, self._clearing = [], {}, set()
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
-        for order, units in self._orders_to_send(given):
+        for order, units in self._orders_to_send(issued, clearing):
             actions.append(create_unit_command_action(order, units))
             sent.append((order, units))
         if self._camera_location is not None:
@@ -191,48 +180,44 @@ class OrderBook:
         if len(results) < len(sent):
             raise ProtocolError(f"the game answered {len(results)} of the {len(sent)} orders it was sent")
         # A camera move, if any, is answered last and belongs to no order.
-        for (order, units), result in zip(sent, results[: len(sent)], strict=True):
+        for (order, _), result in zip(sent, results[: len(sent)], strict=True):
             action_result = ActionResult.read(result)
             taken = action_result is ActionResult.SUCCESS
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
-            if taken and not order.queued:
-                self._remember_sent(order, units)
 
-    def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
-        """Take in the observation at `step`, which found `dead` dead."""
+    def _observe(self, step: int) -> None:
+        """Take in the observation at `step`."""
         self._step = step
-        for unit in dead:
-            self._last_sent.pop(unit.id, None)
 
-    def _orders_to_send(self, given: Sequence[Order[Any]]) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
+    def _orders_to_send(
+        self, issued: Sequence[Order[Any]], clearing: Collection[Order[Any]]
+    ) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
         """Each order of the turn that goes out, with the units it goes out to.
 
         An order that acts at once, or that is queued behind a unit's current orders, competes with nothing. Of the
-        rest, a unit keeps only the last it was given, and an order left with no unit is overridden. A repeat takes
-        its units like any other order, and is not sent again.
+        rest, a unit keeps only the last it was given, and an order left with no unit is overridden. An order is then
+        left out for the units already carrying it out, and one left with no unit is redundant. An order in `clearing`
+        goes out regardless.
         """
         holder: dict[int, Order[Any]] = {}
-        for order in given:
-            for unit in order.units:
-                if self._takes(order, unit):
-                    holder[unit.id] = order
-        for order in given:
-            if order.state is not OrderState.GIVEN:
+        for order in issued:
+            if order.state is OrderState.PENDING:
+                for unit in order.units:
+                    if self._competes_for(order, unit):
+                        holder[unit.id] = order
+        for order in issued:
+            if order.state is not OrderState.PENDING:
                 continue
             units = tuple(
                 unit for unit in order.units if holder.get(unit.id) is order or not self._competes_for(order, unit)
             )
-            if units:
-                yield order, units
-            else:
+            if not units:
                 order._settle(OrderState.OVERRIDDEN)
-
-    def _takes(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
-        """Whether `order` takes `unit` from the turn's earlier orders: an order to send that competes for it, or a
-        repeat."""
-        if order.state is OrderState.GIVEN:
-            return self._competes_for(order, unit)
-        return order.state is OrderState.SENT
+                continue
+            if order not in clearing and not (units := self._units_not_carrying_it_out(order, units)):
+                order._settle(OrderState.REDUNDANT)
+                continue
+            yield order, units
 
     def _competes_for(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
         """Whether `order` competes with the turn's other orders for `unit`.
@@ -251,37 +236,26 @@ class OrderBook:
         return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
 
     def _add(self, order: Order[Any]) -> None:
-        """Count `order` among the turn's, last. A repeat already given this turn moves to the end."""
-        self._given_orders.pop(order, None)
-        self._given_orders[order] = None
-        for unit in order.units:
-            orders = self._given_by_unit.setdefault(unit.id, {})
-            orders.pop(order, None)
-            orders[order] = None
+        """Count `order` among the turn's, last."""
+        self._issued.append(order)
+        for unit_id in {unit.id for unit in order.units}:
+            self._issued_by_unit.setdefault(unit_id, []).append(order)
 
-    def _repeated(
-        self, units: Sequence[OwnUnit[Any]], ability: AbilityId, target: Target | None, row: AbilityData | None
-    ) -> Order[Any] | None:
-        """The order already sent that an unqueued order of `ability` at `target` to `units` repeats, or `None`."""
-        last = self._last_sent.get(units[0].id)
-        if last is None or set(last.units) != set(units):
-            return None
-        general = self._general_ability(ability)
-        if self._general_ability(last.ability) is not general or not same_target(last.target, target):
-            return None
-        for unit in units:
-            if self._last_sent.get(unit.id) is not last or not self._unit_is_at(unit, general, target):
-                return None
-            if _behavior_for(row, unit) is not OrderBehavior.REPLACES:
-                return None
-        return last
-
-    def _remember_sent(self, order: Order[Any], units: Sequence[OwnUnit[Any]]) -> None:
-        """Record `order` as the last sent to each of `units` whose orders it replaced."""
+    def _units_not_carrying_it_out(
+        self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
+    ) -> tuple[OwnUnit[Any], ...]:
+        """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
+        those whose orders it replaces and whose first order it already is."""
+        if order.queued:
+            return units
         row = self._game_data.abilities.get(order.ability)
-        for unit in units:
-            if _behavior_for(row, unit) is OrderBehavior.REPLACES:
-                self._last_sent[unit.id] = order
+        general = self._general_ability(order.ability)
+        return tuple(
+            unit
+            for unit in units
+            if _behavior_for(row, unit) is not OrderBehavior.REPLACES
+            or not self._unit_is_at(unit, general, order.target)
+        )
 
     def _unit_is_at(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
         """Whether `unit`'s first order runs `general` at `target`. A unit the last observation left out, in a

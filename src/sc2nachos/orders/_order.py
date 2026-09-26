@@ -24,7 +24,7 @@ class Order[T]:
         "_ability",
         "_order_behavior",
         "_data",
-        "_given_step",
+        "_issued_step",
         "_queued",
         "_state",
         "_target",
@@ -43,15 +43,15 @@ class Order[T]:
         order_behavior: OrderBehavior,
         step: int,
     ) -> None:
-        """An order of `ability` to `units`, given at `step`. Made by `api.orders.issue`, never by a bot."""
+        """An order of `ability` to `units`, issued at `step`. Made by `api.orders.issue`, never by a bot."""
         self._ability = ability
         self._units = units
         self._target = target
         self._queued = queued
         self._data = data
         self._order_behavior = order_behavior
-        self._given_step = step
-        self._state = OrderState.GIVEN
+        self._issued_step = step
+        self._state = OrderState.PENDING
         self._action_result: ActionResult | None = None
 
     def __repr__(self) -> str:
@@ -100,21 +100,15 @@ class Order[T]:
         return self._action_result
 
     @property
-    def given_step(self) -> int:
-        """The step of the observation the order was given in. It is also the step it was sent at, since a turn's
-        orders go out before the game steps again. A repeat keeps the step it was first given at."""
-        return self._given_step
+    def issued_step(self) -> int:
+        """The step of the observation the order was issued in. It is also the step it was sent at, since a turn's
+        orders go out before the game steps again."""
+        return self._issued_step
 
     def withdraw(self) -> None:
-        """Take the order back, so it is never sent. An order already sent, a repeat included, is left as it is, and
-        so is one overridden."""
-        if self._state is OrderState.GIVEN:
+        """Take the order back, so it is never sent. An order no longer pending is left as it is."""
+        if self._state is OrderState.PENDING:
             self._state = OrderState.WITHDRAWN
-
-    def _replace_data(self, data: T) -> None:
-        """Carry `data` in place of what the order carried. Only the order book calls this, when the order is
-        repeated."""
-        self._data = data
 
     def _settle(self, state: OrderState, *, action_result: ActionResult | None = None) -> None:
         """Record the order's final state, and the game's answer if it was sent. Only the order book calls this."""
