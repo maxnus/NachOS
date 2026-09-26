@@ -13,10 +13,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   19 against a real game (run 2026-09-21).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
-  `OrderState.LOST`. User docs: `docs/orders.md`. What the game was seen to do: `docs/game-behavior.md`, section
-  "Abilities and orders".
+  `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
+  `docs/game-behavior.md`, section "Abilities and orders".
 - PRs #47 and #53 to #59 were housekeeping after a code review, mostly renames: `api.events`, `api.orders`,
-  `api.orders.issued_to`, `ActionFailure` / `api.action_failures` / `order.failure`, `order.action_result`,
+  `api.orders.issued_to`, `ActionFailure` / `api.action_failures`, `order.action_result`,
   `AbilityData.order_behavior`, `UpgradeData.upgrade_type`, `Unit.cloak_state`, `Units.closest_n_to`,
   `launch.MapFile`, `PlaybackTransport`, `_from_proto`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
@@ -38,6 +38,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
   from the state, never written into `api.data`.
 - **A general research id costs its first level** (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100): it runs
   the first level until that is done.
+- **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`GIVEN`,
+  `OVERRIDDEN`, `WITHDRAWN`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`, `LOST` and
+  `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
+  observations, and the code review of 2026-09-24 found each could be wrong. The owner asked: *"Why do we actually
+  need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
+  units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46.
+- **A repeated order hands back the order already sent** (#68), the owner's idea: *"If the user gives the exact same
+  order with the same target, can we not just hand them back `a` again and never construct `b` in the first
+  place?"* The new call's `data` replaces the old. Any other order is sent, even to a unit already carrying it out.
+- **A general ability does to each unit what the exact ability its type performs does** (#70), and a group of
+  several types is judged unit by unit. `KEEPS_ORDERS` is inferred only for types that hold no order of their own.
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -92,8 +103,10 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
   ready", "larva free") fit the rule that NachOS checks nothing an order needs. Waiting on minerals, supply or tech
   would bring those checks back; the previous agent recommended leaving them to the bot and sending the item
   anyway, letting the game refuse it. The owner has not ruled on this yet: ask.
-- **What ends a queue**: the unit dying (`LOST`), morphing, being taken over; an item refused or failed (does the
-  rest go on?); observation lag, since an order's effect can show up an observation late.
+- **What ends a queue**: the unit dying, morphing, being taken over; an item refused or failed (does the rest go
+  on?); observation lag, since an order's effect can show up an observation late. An order's state no longer says
+  whether a unit carried it out (decided 2026-09-26), so an item is released on the unit's condition, read from
+  the unit itself.
 - **What stays in the game's queue.** Speed mining needs the game's own queue so the next leg starts on the exact
   step; a queue held by the library advances only at a turn boundary. Micro re-decides every step on purpose, one
   order per unit. So the game's queue has to stay reachable for those.
@@ -111,6 +124,8 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
+- What `SIEGE_TANK_UNSIEGE`, `LIBERATOR_UNSIEGE`, `LURKER_UNBURROW` and `WIDOW_MINE_UNBURROW` do to a unit's attack.
+  NachOS takes them as `REPLACES` since #70, without a sweep behind it.
 
 ### Suggested first pull request
 

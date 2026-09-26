@@ -24,7 +24,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   Faster speed ([Units](#units)).
 - **The tables are keyed by id, and the relations between them were swept in game**, replacing python-sc2's
   hand-written dicts ([The tables](#the-tables)).
-- **Orders are buffered and sent once a turn** through `api.orders`, and each reports its own outcome
+- **Orders are buffered and sent once a turn** through `api.orders`, and each reports the game's answer
   ([Orders](#orders)). Debug commands are still protocol messages through `api.client.debug`.
 
 ## Running a game
@@ -120,7 +120,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 
 ## Orders
 
-[orders.md](orders.md) says how an order is given, what it competes with, and what becomes of it.
+[orders.md](orders.md) says how an order is given, what it competes with, and how to learn what the game did with
+it.
 
 | python-sc2 | NachOS |
 |---|---|
@@ -130,10 +131,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| nothing | `order.state`, `order.action_result`, `order.failure`, `order.data` |
+| nothing | `order.state`, `order.action_result`, `order.data` |
 
-- **An order is something you hold on to.** `issue` returns an `Order` that says what the game answered, whether
-  it was carried out, and whether it has finished. python-sc2 returns nothing.
+- **An order is something you hold on to.** `issue` returns an `Order` that says whether it was sent and what the
+  game answered; python-sc2 returns nothing. What a unit then did with it shows in its orders, in events and in
+  `api.action_failures`.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
@@ -141,13 +143,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
   the game's verdict says whether it was taken. A bot keeps its own budget within a turn
   ([orders](orders.md#what-an-order-needs)).
-- **An order whose unit died before it was done reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice;
-  NachOS says so, because the game reports a producer killed halfway through what it was making as dying and
-  nothing more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
-  queued behind it, so re-sending one is not free. NachOS holds it back and the order reads `RUNNING`; to drop a
-  queue on purpose, call `api.orders.clear_queue(unit)`.
+  queued behind it, so re-sending one is not free. NachOS hands back the order it last sent those very units, if
+  they are all still carrying it out, and sends nothing; any other order goes out
+  ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, call `api.orders.clear_queue(unit)`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
