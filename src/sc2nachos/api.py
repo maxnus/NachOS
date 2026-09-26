@@ -95,7 +95,7 @@ class Api:
 
     @property
     def orders(self) -> OrderBook:
-        """This player's orders: the ones given this turn, and what became of earlier ones.
+        """This player's orders for the turn.
 
         Orders are sent in one request after the turn's last handler returns. A turn that orders nothing sends nothing.
         """
