@@ -350,14 +350,18 @@ class TestARecordedGamesTables:
             assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
             assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
 
+    def test_every_row_can_be_kept_in_a_set(self, path: Path) -> None:
+        abilities = _tables(path).abilities
+        assert len(set(abilities.values())) == len(abilities)
+
     def test_a_general_ability_acts_at_once_where_every_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
         for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_CLOAK_OFF):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_general_ability_does_for_each_type_what_the_one_that_type_performs_does(self, path: Path) -> None:
-        """A ghost's hold fire keeps its orders (in game) and a lurker's does not; a queen's creep tumor replaces its
-        orders, and the tumor's own needs it idle."""
+        """A ghost's hold fire keeps its orders (in game), and a lurker's is taken to replace them, since a burrowed
+        lurker holds an attack; a queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
         data = _tables(path)
         for ability in (AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF):
             row = data.abilities[ability]

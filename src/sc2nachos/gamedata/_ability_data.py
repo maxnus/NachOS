@@ -268,7 +268,7 @@ class AbilityData:
     order_behavior: OrderBehavior
     """What ordering it does to the unit's current orders. For a general id, the behavior its exact ids share, or
     `REPLACES` where they differ; `order_behavior_for` gives each unit type's."""
-    _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False)
+    _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: for a general id, what the exact id
