@@ -30,21 +30,36 @@ _MOVE_EXACT = AbilityId.GENERAL_MOVE_EXACT
 _ATTACK = AbilityId.GENERAL_ATTACK
 _STIM = AbilityId.MARINE_STIM
 _HOLD_FIRE = AbilityId.GHOST_HOLD_FIRE_ON
+_HOLD_FIRE_GENERAL = AbilityId.GENERAL_HOLD_FIRE_ON
+_HOLD_FIRE_LURKER = AbilityId.LURKER_HOLD_FIRE_ON
+_CREEP_TUMOR = AbilityId.GENERAL_BUILD_CREEP_TUMOR
+_CREEP_TUMOR_QUEEN = AbilityId.QUEEN_BUILD_CREEP_TUMOR
+_CREEP_TUMOR_TUMOR = AbilityId.CREEP_TUMOR_BUILD_CREEP_TUMOR
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.GENERAL_RALLY
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
+_AT_A_POINT = data_pb2.AbilityData.Target.Point
 
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.GHOST, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER_BURROWED, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.QUEEN, attributes=[data_pb2.Attribute.Biological]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_BURROWED, attributes=[data_pb2.Attribute.Structure]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
         data_pb2.AbilityData(ability_id=_ATTACK, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_STIM),
-        data_pb2.AbilityData(ability_id=_HOLD_FIRE),
+        data_pb2.AbilityData(ability_id=_HOLD_FIRE, remaps_to_ability_id=_HOLD_FIRE_GENERAL),
+        data_pb2.AbilityData(ability_id=_HOLD_FIRE_GENERAL),
+        data_pb2.AbilityData(ability_id=_HOLD_FIRE_LURKER, remaps_to_ability_id=_HOLD_FIRE_GENERAL),
+        data_pb2.AbilityData(ability_id=_CREEP_TUMOR, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=_CREEP_TUMOR_QUEEN, target=_AT_A_POINT, remaps_to_ability_id=_CREEP_TUMOR),
+        data_pb2.AbilityData(ability_id=_CREEP_TUMOR_TUMOR, target=_AT_A_POINT, remaps_to_ability_id=_CREEP_TUMOR),
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
@@ -470,6 +485,58 @@ class TestARepeatedOrder:
         game.observe(32, _marine(2), dead=(1,))
 
         assert unit.id not in game.book._last_sent
+
+
+class TestAGroupOfSeveralTypes:
+    """Hold fire keeps a ghost's orders and replaces a burrowed lurker's (in game)."""
+
+    def test_it_leaves_a_unit_it_keeps_the_orders_of_the_order_it_was_given_before(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        hold = game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+
+        sent_move, sent_hold = _commands(game.flush())
+
+        assert hold.order_behavior is OrderBehavior.REPLACES
+        assert (move.state, hold.state) == (OrderState.SENT, OrderState.SENT)
+        assert list(sent_move.unit_tags) == [1]
+        assert list(sent_hold.unit_tags) == [1, 2]
+
+    def test_it_takes_a_unit_it_replaces_the_orders_of_from_the_order_it_was_given_before(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
+        attack = game.book.issue(game.own(2), _ATTACK, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+
+        (sent,) = _commands(game.flush())
+
+        assert sent.ability_id == _HOLD_FIRE_GENERAL
+        assert attack.state is OrderState.OVERRIDDEN
+
+    def test_a_later_order_takes_only_the_units_whose_orders_it_replaces(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
+        attack = game.book.issue([game.own(1), game.own(2)], _ATTACK, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+
+        sent_attack, sent_hold = _commands(game.flush())
+
+        assert attack.state is OrderState.SENT
+        assert list(sent_attack.unit_tags) == [1]
+        assert list(sent_hold.unit_tags) == [1, 2]
+
+    def test_a_queens_creep_tumor_replaces_her_orders_though_a_tumors_does_not(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.QUEEN))
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        tumor = game.book.issue(game.own(1), _CREEP_TUMOR, target=(30.0, 31.0))
+
+        (sent,) = _commands(game.flush())
+
+        assert sent.ability_id == _CREEP_TUMOR
+        assert tumor.order_behavior is OrderBehavior.REPLACES
+        assert move.state is OrderState.OVERRIDDEN
 
 
 class TestClearingAQueue:

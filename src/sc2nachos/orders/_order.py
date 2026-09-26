@@ -81,7 +81,7 @@ class Order[T]:
     @property
     def order_behavior(self) -> OrderBehavior:
         """What the ability does to the current orders of the units it was given to: the behavior their types share,
-        or `REPLACES` where they differ. This decides which orders it competes with."""
+        or `REPLACES` where they differ."""
         return self._order_behavior
 
     @property

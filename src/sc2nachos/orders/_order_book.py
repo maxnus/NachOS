@@ -137,7 +137,7 @@ class OrderBook:
         if len(orders) < 2:
             return None
         ability = self._general_ability(_ability_of_unit_order(orders[0]))
-        behavior = _order_behavior(self._game_data.abilities.get(ability), (unit,))
+        behavior = _behavior_for(self._game_data.abilities.get(ability), unit)
         if ability is AbilityId.NULL or behavior is not OrderBehavior.REPLACES:
             return None
         order: Order[None] = Order(
@@ -213,40 +213,42 @@ class OrderBook:
         """
         holder: dict[int, Order[Any]] = {}
         for order in given:
-            if self._holds_units(order):
-                for unit in order.units:
+            for unit in order.units:
+                if self._takes(order, unit):
                     holder[unit.id] = order
         for order in given:
             if order.state is not OrderState.GIVEN:
                 continue
-            if not self._competes(order):
-                yield order, order.units
-                continue
-            units = tuple(unit for unit in order.units if holder[unit.id] is order)
+            units = tuple(
+                unit for unit in order.units if holder.get(unit.id) is order or not self._competes_for(order, unit)
+            )
             if units:
                 yield order, units
             else:
                 order._settle(OrderState.OVERRIDDEN)
 
-    def _holds_units(self, order: Order[Any]) -> bool:
-        """Whether `order` takes its units from the turn's earlier orders: an order to send that competes for them,
-        or a repeat."""
+    def _takes(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
+        """Whether `order` takes `unit` from the turn's earlier orders: an order to send that competes for it, or a
+        repeat."""
         if order.state is OrderState.GIVEN:
-            return self._competes(order)
+            return self._competes_for(order, unit)
         return order.state is OrderState.SENT
 
-    def _competes(self, order: Order[Any]) -> bool:
-        """Whether `order` competes with the turn's other orders for its units.
+    def _competes_for(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
+        """Whether `order` competes with the turn's other orders for `unit`.
 
         Every unqueued order does, whatever it would do to the unit. A unit takes the last order it was given, and so
         does a structure: the game would queue a second train behind the first instead of replacing it, and pay for
         it from the step it was ordered, so NachOS sends only the last thing the turn asked a structure to make.
 
         A queued order competes with nothing, since the bot is asking for a place in the queue. This is how a
-        structure with a reactor is told to make two at once. An ability carried out at once competes with nothing
-        either: the unit does both (in game).
+        structure with a reactor is told to make two at once. An ability the unit's type carries out at once competes
+        with nothing either: the unit does both (in game). Each unit of a group is judged by its own type.
         """
-        return not order.queued and order.order_behavior is not OrderBehavior.KEEPS_ORDERS
+        if order.queued:
+            return False
+        row = self._game_data.abilities.get(order.ability)
+        return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
 
     def _add(self, order: Order[Any]) -> None:
         """Count `order` among the turn's, last. A repeat already given this turn moves to the end."""
@@ -270,7 +272,7 @@ class OrderBook:
         for unit in units:
             if self._last_sent.get(unit.id) is not last or not self._unit_is_at(unit, general, target):
                 return None
-            if _order_behavior(row, (unit,)) is not OrderBehavior.REPLACES:
+            if _behavior_for(row, unit) is not OrderBehavior.REPLACES:
                 return None
         return last
 
@@ -278,7 +280,7 @@ class OrderBook:
         """Record `order` as the last sent to each of `units` whose orders it replaced."""
         row = self._game_data.abilities.get(order.ability)
         for unit in units:
-            if _order_behavior(row, (unit,)) is OrderBehavior.REPLACES:
+            if _behavior_for(row, unit) is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = order
 
     def _unit_is_at(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
@@ -307,10 +309,14 @@ class OrderBook:
 
 def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> OrderBehavior:
     """What an ability does to the current orders of `units`: the behavior their types share, or `REPLACES`."""
-    if row is None:
-        return OrderBehavior.REPLACES
-    behaviors = {row.order_behavior_for(unit.type_id) for unit in units}
+    behaviors = {_behavior_for(row, unit) for unit in units}
     return behaviors.pop() if len(behaviors) == 1 else OrderBehavior.REPLACES
+
+
+def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:
+    """What an ability does to the current orders of `unit`, a unit of its type. An ability with no row replaces
+    them."""
+    return OrderBehavior.REPLACES if row is None else row.order_behavior_for(unit.type_id)
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
