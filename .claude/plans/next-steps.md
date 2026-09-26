@@ -38,17 +38,23 @@ Keep this file current: when a step is done, say so here in the same pull reques
   from the state, never written into `api.data`.
 - **A general research id costs its first level** (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100): it runs
   the first level until that is done.
-- **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`GIVEN`,
-  `OVERRIDDEN`, `WITHDRAWN`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`, `LOST` and
-  `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
+- **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`PENDING`,
+  `OVERRIDDEN`, `WITHDRAWN`, `REDUNDANT`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`,
+  `LOST` and `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
   observations, and the code review of 2026-09-24 found each could be wrong. The owner asked: *"Why do we actually
   need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
   units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46.
-- **A repeated order hands back the order already sent** (#68), the owner's idea: *"If the user gives the exact same
-  order with the same target, can we not just hand them back `a` again and never construct `b` in the first
-  place?"* The new call's `data` replaces the old. Any other order is sent, even to a unit already carrying it out.
+- **Every call to `issue` is an order of its own; one a unit is already carrying out is not sent to it** (#68).
+  With nothing followed across turns, a repeated order costs one small object a turn. The owner first had a repeat
+  hand back the order already sent, then reversed that in the review of #77, since the one object could describe
+  only its first turn: *"I'm confused why the repeat says sent. I thought repeats are never send?"* Returning `None`
+  was weighed and dropped, since `issued_to` and "the last order wins" could not see the call. An order left with no
+  unit reads `REDUNDANT`; `GIVEN` became `PENDING`, and `given_step` `issued_step`, since an order is not given
+  until it is sent.
 - **A general ability does to each unit what the exact ability its type performs does** (#70), and a group of
-  several types is judged unit by unit. `KEEPS_ORDERS` is inferred only for types that hold no order of their own.
+  several types is judged unit by unit. `KEEPS_ORDERS` is inferred only for types that hold no order of their own. An
+  exact id the tables offer to no type has no say in its general's own behavior, so a command center's and a
+  medivac's unload keep orders as a bunker's does (review of #77, reversing "a medivac falls back to `REPLACES`").
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -129,6 +135,11 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
   `LIBERATOR_UNSIEGE`, `LURKER_UNBURROW`, the lurker's hold fire (`LURKER_HOLD_FIRE_ON`, and `GENERAL_HOLD_FIRE_ON`
   given to a lurker), `OBSERVER_UNSIEGE`, `OVERSEER_UNSIEGE` and `WARP_PRISM_TRANSPORT_MODE`. `WIDOW_MINE_UNBURROW`
   still reads `KEEPS_ORDERS`: a burrowed widow mine is offered no attack, stop or hold.
+- What unload does to a command center's, a medivac's, a warp prism's and an overlord's orders. `GENERAL_UNLOAD`
+  reads `KEEPS_ORDERS` for each, taken from the bunker's and the nydus's, since the tables offer their own unloads to
+  nobody (review of #77).
+- What attack and stop do to a bunker's and a planetary fortress's orders. As structures they count as holding no
+  order of their own, so both read `KEEPS_ORDERS` (review of #77).
 
 ### Suggested first pull request
 

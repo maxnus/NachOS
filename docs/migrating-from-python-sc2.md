@@ -145,8 +145,8 @@ it.
   ([orders](orders.md#what-an-order-needs)).
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
-  queued behind it, so re-sending one is not free. NachOS hands back the order it last sent those very units, if
-  they are all still carrying it out, and sends nothing; any other order goes out
+  queued behind it, so re-sending one is not free. NachOS does the same when the turn is sent: an order a unit is
+  already carrying out first is left out for it, and one left with no unit reads `REDUNDANT`
   ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, call `api.orders.clear_queue(unit)`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.

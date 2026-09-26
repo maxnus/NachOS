@@ -83,14 +83,14 @@ def keep_the_rest_together(event: TurnEvent) -> None:
 
 A bot that wants its own ranking puts it in `data` and reads it back from the orders `issued_to` returns.
 
-**An order given again is handed back, not sent.** An unqueued order is a repeat when the last order sent to replace
-the orders of its units went to those very units, with the same ability and target, and each of them is still
-carrying it out. `issue` then returns that order, now carrying the new call's `data`, and nothing is sent: a bot that
-gives the same order every turn holds one `Order`. A repeat counts in `issued_to`, and competes with the turn's other
-orders, like any other. Anything else is sent, even to a unit already carrying it out: an order the game gave it,
-say, or one it was given along with other units. So a group that gains or loses a unit is sent the order again, every
-unit of it. In game such an order is answered `SUCCESS` and carries nothing out, but it drops the unit's queued
-orders; to drop them on purpose, use `clear_queue`.
+**An order a unit is already carrying out is not sent to it.** In game, an unqueued order equal to a unit's first
+is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is sent,
+an unqueued order that replaces a unit's orders leaves out each unit whose first order it already is, whoever gave
+that, and an order left with no unit reads `REDUNDANT`. A bot that gives the same order every turn gets a new `Order`
+each time: the first reads `SENT`, and the rest `REDUNDANT` for as long as the units carry it out. Until the turn is
+sent, a repeated order is pending like any other: it shows in `issued_to`, competes with the turn's other orders,
+and can be withdrawn. A group that gains a unit is sent the order for the newcomer alone. To drop a unit's queue on
+purpose, use `clear_queue`, whose order goes out regardless.
 
 ## What an order needs
 
@@ -120,16 +120,17 @@ neither a slot nor a mineral within the same step ([game behavior](game-behavior
 
 ## What became of it
 
-`order.state` says what became of the order in its turn. Every state but `GIVEN` is final: an order settles when the
-turn's request goes out, and NachOS does not follow it after.
+`order.state` says what became of the order in its turn. Every state but `PENDING` is final: an order settles when
+the turn's request goes out, and NachOS does not follow it after.
 
 | State | What it means |
 | --- | --- |
-| `GIVEN` | Given this turn, and nothing sent yet. |
-| `SENT` | Sent and answered `SUCCESS`. A repeat is handed back `SENT`. |
+| `PENDING` | Issued this turn, and nothing sent yet. |
+| `SENT` | Sent and answered `SUCCESS`. |
 | `REFUSED` | Sent and answered something else: `order.action_result` says what. |
 | `OVERRIDDEN` | Never sent: a later order of the same turn took every unit this one was given to. |
-| `WITHDRAWN` | Never sent: taken back with `order.withdraw()`. An order already sent is left as it is. |
+| `WITHDRAWN` | Never sent: taken back with `order.withdraw()` while pending. |
+| `REDUNDANT` | Never sent: every unit it held was already carrying out the same order, as its first. |
 
 ### Learning what the game did
 
