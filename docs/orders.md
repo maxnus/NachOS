@@ -43,16 +43,17 @@ A unit carries out only the last order it is given in a turn. Earlier ones becom
 same with two unqueued orders in one request, so NachOS sends only the one that would have stood.
 
 The exception is `OrderBehavior.KEEPS_ORDERS`: an ability that leaves the unit doing what it was doing. That is stim,
-the cloaks, Guardian Shield, both halves of every toggle, whatever else a sweep saw a moving unit carry out without
-breaking its move, and every ability except production that is offered only to types that hold no order of their own
-— a structure's own rally, load, cancel and energy casts. `GENERAL_CANCEL` is not one of them, since it is also
-offered to a channeling ghost or infestor, which it takes off what they are doing.
+the cloaks, Guardian Shield, both halves of every toggle a sweep could give a moving unit, whatever else a sweep saw a
+moving unit carry out without breaking its move, and every ability except production that is offered only to types
+that hold no order of their own — a structure's own rally, load, cancel and energy casts.
 
 Such an order neither overrides nor is overridden, because the unit does both — a marine stims and keeps moving.
 
-A general ability does to each unit what the exact ability its type performs does: `GENERAL_HOLD_FIRE_ON` keeps a
-ghost's orders and replaces a burrowed lurker's. A group of several types is judged unit by unit, so hold fire given
-to a ghost and a lurker leaves the ghost the move it was given earlier in the turn.
+A general ability does to each unit what the exact ability its type performs does: `GENERAL_CANCEL` leaves a
+structure making what it was making, and takes a channeling ghost or infestor off what it is doing. A group of
+several types is judged unit by unit. Hold fire keeps a ghost's orders (in game), and is taken to replace a burrowed
+lurker's, which could not be tried, since a burrowed lurker holds an attack and no move. Given to both, it leaves the
+ghost the move it was given earlier in the turn and takes the lurker from its attack.
 `api.data.abilities[ability].order_behavior_for(unit.type_id)` says what an ability does to a unit of that type, and
 `order.order_behavior` what it does to the order's units: the behavior their types share, or `REPLACES` where they
 differ.
@@ -87,8 +88,9 @@ the orders of its units went to those very units, with the same ability and targ
 carrying it out. `issue` then returns that order, now carrying the new call's `data`, and nothing is sent: a bot that
 gives the same order every turn holds one `Order`. A repeat counts in `issued_to`, and competes with the turn's other
 orders, like any other. Anything else is sent, even to a unit already carrying it out: an order the game gave it,
-say, or one it was given along with other units. In game such an order is answered `SUCCESS` and carries nothing
-out, but it drops the unit's queued orders; to drop them on purpose, use `clear_queue`.
+say, or one it was given along with other units. So a group that gains or loses a unit is sent the order again, every
+unit of it. In game such an order is answered `SUCCESS` and carries nothing out, but it drops the unit's queued
+orders; to drop them on purpose, use `clear_queue`.
 
 ## What an order needs
 

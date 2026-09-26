@@ -124,8 +124,11 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
-- What `SIEGE_TANK_UNSIEGE`, `LIBERATOR_UNSIEGE`, `LURKER_UNBURROW` and `WIDOW_MINE_UNBURROW` do to a unit's attack.
-  NachOS takes them as `REPLACES` since #70, without a sweep behind it.
+- What these do to a unit's orders. Each read `KEEPS_ORDERS` before #70 and reads `REPLACES` since, without a sweep
+  behind either: the unit holds an attack or a move, so nothing is inferred for it. `SIEGE_TANK_UNSIEGE`,
+  `LIBERATOR_UNSIEGE`, `LURKER_UNBURROW`, the lurker's hold fire (`LURKER_HOLD_FIRE_ON`, and `GENERAL_HOLD_FIRE_ON`
+  given to a lurker), `OBSERVER_UNSIEGE`, `OVERSEER_UNSIEGE` and `WARP_PRISM_TRANSPORT_MODE`. `WIDOW_MINE_UNBURROW`
+  still reads `KEEPS_ORDERS`: a burrowed widow mine is offered no attack, stop or hold.
 
 ### Suggested first pull request
 
