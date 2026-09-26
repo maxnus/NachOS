@@ -375,6 +375,16 @@ class TestARecordedGamesTables:
         assert attack.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
         assert attack.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
 
+    def test_an_ability_offered_to_nobody_has_no_say_in_its_general_ones(self, path: Path) -> None:
+        """The tables offer a command center's, a medivac's and a carrier's own id to nobody, since a unit is offered
+        unload only while it carries something; each takes the behavior the offered ids share."""
+        data = _tables(path)
+        unload = data.abilities[AbilityId.GENERAL_UNLOAD]
+        for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MEDIVAC):
+            assert unload.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        cancel = data.abilities[AbilityId.GENERAL_CANCEL_LAST]
+        assert cancel.order_behavior_for(UnitTypeId.CARRIER) is OrderBehavior.KEEPS_ORDERS
+
     def test_an_exact_ability_does_the_same_for_every_type(self, path: Path) -> None:
         stim = _tables(path).abilities[AbilityId.MARINE_STIM]
         assert stim.order_behavior_for(UnitTypeId.MARINE) is stim.order_behavior is OrderBehavior.KEEPS_ORDERS

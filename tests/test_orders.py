@@ -38,12 +38,15 @@ _CREEP_TUMOR_TUMOR = AbilityId.CREEP_TUMOR_BUILD_CREEP_TUMOR
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.GENERAL_RALLY
+_UNLOAD = AbilityId.GENERAL_UNLOAD
+_TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 _AT_A_POINT = data_pb2.AbilityData.Target.Point
 
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.COMMAND_CENTER, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE, attributes=[data_pb2.Attribute.Biological]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.GHOST, attributes=[data_pb2.Attribute.Biological]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER_BURROWED, attributes=[data_pb2.Attribute.Biological]),
@@ -63,6 +66,8 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
+        data_pb2.AbilityData(ability_id=_UNLOAD),
+        data_pb2.AbilityData(ability_id=_TRAIN_SCV),
     ],
 )
 
@@ -647,6 +652,19 @@ class TestATargetOffTheGround:
 
 class TestWhatAStructureDoesBesidesMaking:
     """A structure keeps making what it is making when given a rally or a cancel (in game)."""
+
+    def test_an_unload_does_not_take_the_turn_from_a_train(self) -> None:
+        """A command center is offered unload only while it carries something, so the tables offer its own unload to
+        nobody; it keeps orders as a bunker's does."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.COMMAND_CENTER, at=(12.0, 12.0)))
+        game.book.issue(game.own(1), _TRAIN_SCV)
+        unload = game.book.issue(game.own(1), _UNLOAD)
+
+        sent = [command.ability_id for command in _commands(game.flush())]
+
+        assert sent == [_TRAIN_SCV, _UNLOAD]
+        assert unload.order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_rally_does_not_take_the_turn_from_a_train(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])

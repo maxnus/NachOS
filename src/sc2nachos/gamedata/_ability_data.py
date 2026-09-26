@@ -92,11 +92,12 @@ def order_behaviors(
     by_performer: dict[AbilityId, Mapping[UnitTypeId, OrderBehavior]] = {}
     for general, exacts in exacts_of.items():
         # A general id does what the exact id a unit's type performs does. Its own behavior, for a type the tech tree
-        # names no exact id for, is the one its exact ids share, and otherwise replacing the unit's orders.
-        kinds = {behaviors.get(exact, OrderBehavior.REPLACES) for exact in exacts}
+        # names no exact id for, is the one the exact ids offered to some type share, and otherwise replacing the
+        # unit's orders. An exact id offered to nobody, such as a transport's unload, has no say.
+        kinds = {behaviors.get(exact, OrderBehavior.REPLACES) for exact in exacts if _performers_of(exact, tech_tree)}
         if len(kinds) > 1:
             behaviors.pop(general, None)
-        elif (kind := kinds.pop()) is not OrderBehavior.REPLACES:
+        elif kinds and (kind := kinds.pop()) is not OrderBehavior.REPLACES:
             behaviors[general] = kind
         own = behaviors.get(general, OrderBehavior.REPLACES)
         per_type: dict[UnitTypeId, OrderBehavior] = {}
@@ -266,8 +267,8 @@ class AbilityData:
     else, a warp-in and a build among them: a warp gate keeps no queue, and a structure under construction is
     cancelled on itself with `GENERAL_CANCEL_BUILDING`."""
     order_behavior: OrderBehavior
-    """What ordering it does to the unit's current orders. For a general id, the behavior its exact ids share, or
-    `REPLACES` where they differ; `order_behavior_for` gives each unit type's."""
+    """What ordering it does to the unit's current orders. For a general id, the behavior shared by its exact ids that
+    are offered to some type, or `REPLACES` where they differ; `order_behavior_for` gives each unit type's."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
