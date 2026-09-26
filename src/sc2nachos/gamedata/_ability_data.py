@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
@@ -45,16 +46,21 @@ class OrderBehavior(Enum):
     lift."""
     KEEPS_ORDERS = "keeps orders"
     """Runs without disturbing the unit's orders, so it competes with nothing: stim, both halves of a toggle and the
-    rest of `KEEPS_ORDERS_ABILITIES`, plus every ability that makes nothing and is offered only to types the game
-    offers no move — a structure's own rally, load, cancel and energy casts, and the way back out of a sieged form.
-    Ordered on a producer, each of those leaves what it is making at its current progress (in game). `GENERAL_CANCEL`
-    is not one of them: a ghost and an infestor are offered it too, and it takes them off what they are channeling."""
+    rest of `KEEPS_ORDERS_ABILITIES`, plus every ability that makes nothing and is offered only to types that hold no
+    order of their own — a structure's own rally, load, cancel and energy casts. Ordered on a producer, each of those
+    leaves what it is making at its current progress (in game). `GENERAL_CANCEL` is not one of them: a ghost and an
+    infestor are offered it too, and it takes them off what they are channeling."""
 
 
-def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> Mapping[AbilityId, OrderBehavior]:
-    """The order behavior of each ability that does not simply replace the unit's orders.
+def order_behaviors(
+    tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
+) -> tuple[Mapping[AbilityId, OrderBehavior], Mapping[AbilityId, Mapping[UnitTypeId, OrderBehavior]]]:
+    """The order behavior of each ability that does not simply replace the unit's orders, and, for a general id, the
+    behavior for each type whose exact id differs from the general's own: a general id does for a type what the exact
+    id that type performs does.
 
-    `structures` is the set of structure types; it tells a barracks training a marine from a larva morphing into one.
+    `structures` and `non_structures` are the types the tables say are and are not structures. They tell a barracks
+    training a marine from a larva morphing into one, and a sieged tank from a bunker.
     """
     behaviors: dict[AbilityId, OrderBehavior] = {}
     for ability, product in tech_tree.ability_products.items():
@@ -70,27 +76,51 @@ def order_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> M
             continue
         behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
     behaviors.update(dict.fromkeys(KEEPS_ORDERS_ABILITIES, OrderBehavior.KEEPS_ORDERS))
-    # A general id takes the behavior of the exact ids that remap to it, which all share one: a research level
-    # queues, an add-on needs an idle structure, a stim acts at once. A general id whose exact ids are unclassified
-    # is left to the pass below, which looks at every unit type it is offered to.
+    exacts_of: defaultdict[AbilityId, list[AbilityId]] = defaultdict(list)
     for exact, general in tech_tree.ability_remaps.items():
-        behavior = behaviors.get(exact)
-        if behavior is not None:
-            behaviors[general] = behavior
-    movers = _unit_types_offered_a_move(tech_tree)
+        exacts_of[general].append(exact)
+    holders = _unit_types_holding_orders(tech_tree, non_structures)
     for ability, performers in tech_tree.ability_performers.items():
-        if ability in behaviors or ability in tech_tree.ability_products or not performers:
+        if ability in behaviors or ability in exacts_of or ability in tech_tree.ability_products or not performers:
             continue
-        if not performers & movers:
-            # An ability that makes nothing, offered only to types the game offers no move: a structure, an egg, a
-            # cocoon. The only order they could be taken off is what they are making, and a rally and a cancel were
-            # both seen to leave that alone (docs/game-behavior.md).
+        if not performers & holders:
+            # An ability that makes nothing, offered only to types that hold no order of their own: a structure, an
+            # egg, a cocoon. The only order they could be taken off is what they are making, and a rally and a cancel
+            # were both seen to leave that alone (docs/game-behavior.md).
             behaviors[ability] = OrderBehavior.KEEPS_ORDERS
-    return behaviors
+    # The behavior of a general id for each type whose exact id differs from the general's own.
+    by_performer: dict[AbilityId, Mapping[UnitTypeId, OrderBehavior]] = {}
+    for general, exacts in exacts_of.items():
+        # A general id does what the exact id a unit's type performs does. Its own behavior, for a type the tech tree
+        # names no exact id for, is the one its exact ids share, and otherwise replacing the unit's orders.
+        kinds = {behaviors.get(exact, OrderBehavior.REPLACES) for exact in exacts}
+        if len(kinds) > 1:
+            behaviors.pop(general, None)
+        elif (kind := kinds.pop()) is not OrderBehavior.REPLACES:
+            behaviors[general] = kind
+        own = behaviors.get(general, OrderBehavior.REPLACES)
+        per_type: dict[UnitTypeId, OrderBehavior] = {}
+        for exact in sorted(exacts):
+            if (kind := behaviors.get(exact, OrderBehavior.REPLACES)) is not own:
+                per_type.update(dict.fromkeys(_performers_of(exact, tech_tree), kind))
+        if per_type:
+            by_performer[general] = MappingProxyType(per_type)
+    return behaviors, by_performer
+
+
+def _performers_of(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
+    """The unit types offered `ability`. The off half of a toggle is offered only once its on half has taken (in
+    game), so the tables offer it to nobody, and it takes its on half's."""
+    if (performers := tech_tree.ability_performers.get(ability)) or not ability.name.endswith("_OFF"):
+        return performers or frozenset()
+    on_half = AbilityId.__members__.get(f"{ability.name.removesuffix('_OFF')}_ON")
+    return tech_tree.ability_performers.get(on_half, frozenset()) if on_half is not None else frozenset()
 
 
 # The cost of an ability that makes nothing.
 _FREE = Cost(0, 0)
+# The behaviors by performer of an ability whose performers all share one.
+_NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
 
 
 def ability_costs(
@@ -180,19 +210,18 @@ def _derived_cost(
     return None if used is None else made.cost - used.cost
 
 
-def _unit_types_offered_a_move(tech_tree: TechTree) -> frozenset[UnitTypeId]:
-    """The unit types the game offers a move: the ones an order can take off their current orders.
-
-    A structure, an egg, a cocoon and a unit in a form it cannot move in (a sieged tank, a burrowed lurker, a lowered
-    depot, a warp gate) are offered none. A flying structure is offered one under its flying type.
-    """
-    move = AbilityId.GENERAL_MOVE
+def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[UnitTypeId]) -> frozenset[UnitTypeId]:
+    """The unit types that hold an order of their own, which an order can take them off: those the game offers a
+    move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
+    lurker. A structure, an egg and a cocoon hold none. A flying structure is offered a move under its flying type."""
+    held = (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_STOP, AbilityId.GENERAL_HOLD_POSITION)
     remaps = tech_tree.ability_remaps
-    return frozenset(
-        unit_type
-        for unit_type, abilities in tech_tree.ability_requirements.items()
-        if any(ability is move or remaps.get(ability) is move for ability in abilities)
-    )
+    holders: set[UnitTypeId] = set()
+    for unit_type, abilities in tech_tree.ability_requirements.items():
+        generals = {remaps.get(ability, ability) for ability in abilities}
+        if AbilityId.GENERAL_MOVE in generals or (unit_type in non_structures and not generals.isdisjoint(held)):
+            holders.add(unit_type)
+    return frozenset(holders)
 
 
 @final
@@ -237,7 +266,14 @@ class AbilityData:
     else, a warp-in and a build among them: a warp gate keeps no queue, and a structure under construction is
     cancelled on itself with `GENERAL_CANCEL_BUILDING`."""
     order_behavior: OrderBehavior
-    """What ordering it does to the unit's current orders."""
+    """What ordering it does to the unit's current orders. For a general id, the behavior its exact ids share, or
+    `REPLACES` where they differ; `order_behavior_for` gives each unit type's."""
+    _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False)
+
+    def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
+        """What ordering it does to the current orders of a unit of `unit_type`: for a general id, what the exact id
+        that type performs does."""
+        return self._behaviors_by_performer.get(unit_type, self.order_behavior)
 
     @classmethod
     def _from_proto(
@@ -245,11 +281,12 @@ class AbilityData:
         data: data_pb2.AbilityData,
         tech_tree: TechTree,
         behaviors: Mapping[AbilityId, OrderBehavior],
+        behaviors_by_performer: Mapping[AbilityId, Mapping[UnitTypeId, OrderBehavior]],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
-        """Read one ability from the game's table, with what `tech_tree`, `behaviors`, `costs` and `cancels` say
-        about it."""
+        """Read one ability from the game's table, with what `tech_tree`, `behaviors`, `behaviors_by_performer`,
+        `costs` and `cancels` say about it."""
         ability = AbilityId(data.ability_id)
         return cls(
             id=ability,
@@ -264,4 +301,5 @@ class AbilityData:
             cost=costs.get(ability, _FREE),
             cancelled_by=cancels.get(ability),
             order_behavior=behaviors.get(ability, OrderBehavior.REPLACES),
+            _behaviors_by_performer=behaviors_by_performer.get(ability, _NO_BEHAVIORS),
         )

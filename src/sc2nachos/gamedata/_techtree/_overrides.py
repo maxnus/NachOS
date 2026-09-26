@@ -64,9 +64,9 @@ is its creation ability; otherwise the ability makes this type as well as the on
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
 # This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
-# nothing and is offered only to types with no move as keeping orders, which covers a structure's own rally, load,
-# cancel and energy casts. The general ids these remap to are not measured; a general id keeps a unit's orders where an
-# exact id that remaps to it does.
+# nothing and is offered only to types that hold no order of their own as keeping orders, which covers a structure's
+# own rally, load, cancel and energy casts. The general ids these remap to are not measured; a general id keeps a
+# unit's orders where the exact id that unit's type performs does.
 #
 # A toggle is here in both halves: a unit is offered the off half only once the on half has taken, so each was given in
 # turn to a moving unit, and both left its move first in its orders. A lurker's hold fire is the one toggle neither half

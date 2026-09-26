@@ -21,7 +21,7 @@ from sc2nachos.units import Unit
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from sc2nachos.gamedata import GameData
+    from sc2nachos.gamedata import AbilityData, GameData
     from sc2nachos.geometry import PointLike
     from sc2nachos.protocol import Client
     from sc2nachos.state import ActionFailure
@@ -98,7 +98,7 @@ class OrderBook:
             aimed,
             queued=queued,
             data=data,
-            order_behavior=OrderBehavior.REPLACES if row is None else row.order_behavior,
+            order_behavior=_order_behavior(row, given),
             step=self._step,
         )
         self._given_orders.append(order)
@@ -120,7 +120,7 @@ class OrderBook:
         if len(orders) < 2:
             return None
         ability = self._general_ability(_ability_of_unit_order(orders[0]))
-        behavior = self._order_behavior_of_ability(ability)
+        behavior = _order_behavior(self._game_data.abilities.get(ability), (unit,))
         if ability is AbilityId.NULL or behavior is not OrderBehavior.REPLACES:
             return None
         order: Order[None] = Order(
@@ -377,10 +377,13 @@ class OrderBook:
         row = self._game_data.abilities.get(ability)
         return ability if row is None or row.remaps_to is None else row.remaps_to
 
-    def _order_behavior_of_ability(self, ability: AbilityId) -> OrderBehavior:
-        """What ordering `ability` does to a unit's current orders."""
-        row = self._game_data.abilities.get(ability)
-        return OrderBehavior.REPLACES if row is None else row.order_behavior
+
+def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> OrderBehavior:
+    """What an ability does to the current orders of `units`: the behavior their types share, or `REPLACES`."""
+    if row is None:
+        return OrderBehavior.REPLACES
+    behaviors = {row.order_behavior_for(unit.type_id) for unit in units}
+    return behaviors.pop() if len(behaviors) == 1 else OrderBehavior.REPLACES
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
