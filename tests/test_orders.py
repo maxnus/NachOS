@@ -814,11 +814,11 @@ class _OrderingBot:
             return
         if self.moved is None or self.stim is None:
             return
-        if self.killed is None and self.moved.units[0].is_idle:
+        if self.killed is None:
             self.killed = marines[-1]
             api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[self.killed.tag]))])
             return
-        if self.killed is not None and self.at_a_dead_tag is None and self.killed.is_dead:
+        if self.at_a_dead_tag is None and self.killed.is_dead:
             self.at_a_dead_tag = api.orders.issue(self.killed, _MOVE, target=middle)
 
 
