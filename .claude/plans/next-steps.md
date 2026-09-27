@@ -112,7 +112,10 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - **What ends a queue**: the unit dying, morphing, being taken over; an item refused or failed (does the rest go
   on?); observation lag, since an order's effect can show up an observation late. An order's state no longer says
   whether a unit carried it out (decided 2026-09-26), so an item is released on the unit's condition, read from
-  the unit itself.
+  the unit itself. The order book already keeps, per unit, the last order sent that replaced its orders and the
+  observation its turn read, and takes it for what the unit is doing while the next observation may not show it
+  (PR #77): that record is the queue's head, and that rule is how the queue tells an item not yet shown from one
+  finished or dropped.
 - **What stays in the game's queue.** Speed mining needs the game's own queue so the next leg starts on the exact
   step; a queue held by the library advances only at a turn boundary. Micro re-decides every step on purpose, one
   order per unit. So the game's queue has to stay reachable for those.

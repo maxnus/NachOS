@@ -85,12 +85,17 @@ A bot that wants its own ranking puts it in `data` and reads it back from the or
 
 **An order a unit is already carrying out is not sent to it.** In game, an unqueued order equal to a unit's first
 is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is sent,
-an unqueued order that replaces a unit's orders leaves out each unit whose first order it already is, whoever gave
-that, and an order left with no unit reads `REDUNDANT`. A bot that gives the same order every turn gets a new `Order`
-each time: the first reads `SENT`, and the rest `REDUNDANT` for as long as the units carry it out. Until the turn is
-sent, a repeated order is pending like any other: it shows in `issued_to`, competes with the turn's other orders,
-and can be withdrawn. A group that gains a unit is sent the order for the newcomer alone. To drop a unit's queue on
-purpose, use `clear_queue`, whose order goes out regardless.
+an unqueued order that replaces a unit's orders leaves out each unit already doing it, and an order left with no unit
+reads `REDUNDANT`. What a unit is doing is the last such order NachOS sent it, while the observation after that turn
+may not show it yet, as on the ladder; otherwise it is the unit's first reported order, whoever gave it. So an order
+sent last turn counts though the unit still shows its old one, and in a stepped game an order the unit finished, or
+the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
+
+A bot that gives the same order every turn gets a new `Order` each time: the first reads `SENT`, and the rest
+`REDUNDANT` for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
+it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
+sent the order for the newcomer alone. To drop a unit's queue on purpose, use `clear_queue`, whose order goes out
+regardless.
 
 ## What an order needs
 
