@@ -18,4 +18,5 @@ class OrderState(Enum):
     WITHDRAWN = "withdrawn"
     """Never sent: taken back by the bot."""
     REDUNDANT = "redundant"
-    """Never sent: every unit it held was already carrying out the same order, as its first."""
+    """Never sent: every unit it held was already doing the same order, by its first reported order or the order
+    just sent to it."""

@@ -91,11 +91,12 @@ class _Game:
         self.map = GameMap(make_game_info())
         self.book = OrderBook(_TABLES)
 
-    def observe(self, step: int, *units: raw_pb2.Unit) -> None:
-        """Take in an observation of `units` at `step`."""
-        observation = make_observation(step, units=units)
+    def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
+        """Take in an observation of `units` at `step`, in which the units under the tags `dead` died."""
+        observation = make_observation(step, units=units, dead=dead)
         self.tracker.update(observation.observation.raw_data, step)
-        self.book._observe(step)
+        changes = self.tracker.last_changes
+        self.book._observe(step, [*changes.units_died, *changes.units_found_dead])
 
     def flush(self) -> sc2api_pb2.RequestAction | None:
         """Send the turn's orders and return the request that went out, or `None` if none did."""
@@ -446,6 +447,84 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), queued=True)
 
         assert len(_commands(game.flush())) == 1
+
+    def test_the_order_sent_last_turn_stands_for_what_the_unit_is_doing_until_it_can_show(self) -> None:
+        """On the ladder the observation after an order can still show what the unit did before (in game)."""
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1, _moving((20.0, 21.0))))
+        game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0))))
+
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _MOVE
+        assert move.state is OrderState.SENT
+
+    def test_a_repeat_of_the_order_sent_last_turn_is_redundant_though_it_does_not_show_yet(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(1), _ATTACK, target=(30.0, 31.0), queued=True)
+        game.flush()
+        game.observe(16, _marine(1))
+
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert game.flush() is None
+        assert again.state is OrderState.REDUNDANT
+
+    def test_an_order_finished_within_a_turn_is_still_taken_for_what_the_unit_is_doing_on_the_next(self) -> None:
+        """In a stepped game the next observation already shows the unit idle, but on the ladder it might not."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, at=(20.0, 21.0)))
+
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert game.flush() is None
+        assert again.state is OrderState.REDUNDANT
+
+    def test_two_observations_on_the_unit_s_own_orders_decide(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0))))
+        game.observe(32, _marine(1, at=(20.0, 21.0)))
+
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        assert len(_commands(game.flush())) == 1
+        assert again.state is OrderState.SENT
+
+    def test_an_order_the_game_gave_decides_once_the_last_one_sent_could_show(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2, at=(30.0, 30.0)))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0))), _marine(2, at=(30.0, 30.0)))
+        attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
+        game.observe(32, _marine(1, attacking), _marine(2, at=(30.0, 30.0)))
+
+        order = game.book.issue(game.own(1), _ATTACK, target=game.own(2))
+
+        assert game.flush() is None
+        assert order.state is OrderState.REDUNDANT
+
+    def test_a_dead_unit_s_last_order_is_forgotten(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        unit = game.own(1)
+
+        game.observe(16, _marine(2), dead=(1,))
+
+        assert unit.id not in game.book._last_sent
 
     def test_an_order_to_a_unit_the_observation_left_out_is_sent(self) -> None:
         """A marine in a transport is left out of the observation, though it is not dead."""
