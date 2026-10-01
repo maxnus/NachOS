@@ -401,11 +401,12 @@ class TechSweep:
         requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
         larva = [unit for unit in hosts if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)]
         requests += [(UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3))) for unit in larva]
-        # The computer's army can walk onto the ground a victim stood on, and the game makes nothing where one stands. A
-        # victim that does not come back is named with what stands in its place: a hive lost so left what needs one
-        # unread.
+        # The game makes nothing where a unit stands, and the ground a victim stood on draws some: the computer's army
+        # walks in, and a zerg structure that dies may leave broodlings. A victim that does not come back is named with
+        # what stands in its place: a hive lost so left what needs one unread.
         for _, _, spot in requests:
             self._clear_enemies_near(spot)
+        self._clear_ground(hosts)
         made = self._game.spawn(requests) if requests else []
         for host in hosts:
             if not any(_near(unit, host, 1) for unit in made if unit.unit_type == host.unit_type):
@@ -1037,6 +1038,21 @@ class TechSweep:
         self._charge()
         self._client.step(_SWITCH_STEPS)
         return unit
+
+    def _clear_ground(self, victims: Sequence[raw_pb2.Unit]) -> None:
+        """Kill whatever is not a structure on the ground `victims` stood on, whoever it belongs to."""
+        standing = [
+            unit.tag
+            for unit in self._game.units()
+            if unit.owner != NEUTRAL_REPORTED
+            and unit.unit_type not in self._structure_types
+            and not unit.is_flying
+            and any(_near(unit, victim, victim.radius + 0.5) for victim in victims)
+        ]
+        if standing:
+            logger.debug("Killing {} units on the ground of the victims put back", len(standing))
+            self._game.kill(standing)
+            self._client.step(4)
 
     def _clear_enemies_near(self, spot: Point) -> None:
         """Kill the computer's units in sight of `spot`: a unit put up there would chase them, and they can stand where
