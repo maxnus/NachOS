@@ -60,6 +60,9 @@ OUT = Path(__file__).parents[1] / "data" / "tech_tree.json"
 # Steps for a killed structure to leave what is offered once it has left the observation, and for a toggle to switch.
 _SETTLE_STEPS = 6
 _SWITCH_STEPS = 22
+# Steps for a dead zerg structure's broodlings to come out, and tries at creating a killed structure where it stood.
+_BROODLING_STEPS = 22
+_RECREATE_ATTEMPTS = 4
 # Steps an order that makes something is watched, and research waited for, under `fast_build`.
 _MAKE_STEPS = 600
 # Reads of a structure going up, 4 steps apart, before it counts as offered no cancel.
@@ -398,27 +401,7 @@ class TechSweep:
         """Recreate `victims`, with their add-ons, larva for a hatchery, and energy."""
         add_ons = {unit.tag: unit for unit in victims if _is_add_on(_unit_name(unit.unit_type))}
         hosts = [unit for unit in victims if unit.tag not in add_ons]
-        requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
-        larva = [unit for unit in hosts if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)]
-        requests += [(UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3))) for unit in larva]
-        # The game makes nothing where a unit stands, and the ground a victim stood on draws some: the computer's army
-        # walks in, and a zerg structure that dies may leave broodlings. A victim that does not come back is named with
-        # what stands in its place: a hive lost so left what needs one unread.
-        for _, _, spot in requests:
-            self._clear_enemies_near(spot)
-        self._clear_ground(hosts)
-        made = self._game.spawn(requests) if requests else []
-        for host in hosts:
-            if not any(_near(unit, host, 1) for unit in made if unit.unit_type == host.unit_type):
-                in_place = sorted(
-                    _unit_name(unit.unit_type) for unit in self._game.units() if _near(unit, host, host.radius)
-                )
-                logger.warning(
-                    "No {} came back at {}, where stand {}",
-                    _unit_name(host.unit_type),
-                    (host.pos.x, host.pos.y),
-                    in_place,
-                )
+        made = self._recreate(hosts)
         # An add-on whose host stood is built again by it; one whose host died, by the host just made in its place.
         host_at = {(round(unit.pos.x), round(unit.pos.y)): unit.tag for unit in [*made, *self._mine()]}
         for add_on in add_ons.values():
@@ -442,6 +425,56 @@ class TechSweep:
                 logger.warning("{} not built again, so what needs one is misread from here", lost)
         self._charge()
         self._client.step(2)
+
+    def _recreate(self, hosts: Sequence[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """Create `hosts` again where they stood, with larva for a hatchery, and return what the game made.
+
+        The game puts a structure whose ground is taken at the nearest free place instead, and the ground a victim stood
+        on draws units: the computer's army walks in, and a zerg structure that dies leaves broodlings a moment later.
+        A structure put elsewhere would drift further at every requirement read, until the game finds no place for it
+        and a hive lost leaves what needs one unread. So what stands there is killed, and one put elsewhere is killed
+        and made again, broodlings and all; a gas building never takes its geyser back, so it is left where it went.
+        """
+        made: list[raw_pb2.Unit] = []
+        pending = list(hosts)
+        for _ in range(_RECREATE_ATTEMPTS):
+            requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in pending]
+            requests += [
+                (UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3)))
+                for unit in pending
+                if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)
+            ]
+            for _, _, spot in requests:
+                self._clear_enemies_near(spot)
+            if self._race is Race.ZERG:
+                self._client.step(_BROODLING_STEPS)
+            self._clear_ground(pending)
+            new = self._game.spawn(requests)
+            astray = {
+                unit.tag
+                for unit in new
+                if unit.unit_type != UnitTypeId.LARVA
+                and not _is_gas_building(_unit_name(unit.unit_type))
+                and not any(_near(unit, host, 1) for host in pending if host.unit_type == unit.unit_type)
+            }
+            made += [unit for unit in new if unit.tag not in astray]
+            pending = [
+                host
+                for host in pending
+                if not _is_gas_building(_unit_name(host.unit_type))
+                and not any(_near(unit, host, 1) for unit in made if unit.unit_type == host.unit_type)
+            ]
+            self._game.kill(astray)
+            if not pending:
+                return made
+        for host in pending:
+            in_place = sorted(
+                _unit_name(unit.unit_type) for unit in self._game.units() if _near(unit, host, host.radius)
+            )
+            logger.warning(
+                "No {} came back at {}, where stand {}", _unit_name(host.unit_type), (host.pos.x, host.pos.y), in_place
+            )
+        return made
 
     def _read_attached(self, pairs: set[Pair]) -> None:
         """Mark the pairs needing an add-on that a bare structure of the same type is not offered."""
@@ -1228,6 +1261,10 @@ def _kind_of_work(ability: int) -> str | None:
 
 def _near(unit: raw_pb2.Unit, other: raw_pb2.Unit, reach: float) -> bool:
     return abs(unit.pos.x - other.pos.x) < reach and abs(unit.pos.y - other.pos.y) < reach
+
+
+def _is_gas_building(unit_type: str) -> bool:
+    return any(kind in unit_type for kind in ("Assimilator", "Extractor", "Refinery"))
 
 
 def _is_add_on(unit_type: str) -> bool:
