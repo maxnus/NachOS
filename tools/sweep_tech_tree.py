@@ -454,7 +454,11 @@ class TechSweep:
             self.read_requirements(new_pairs)
 
     def research_each(self) -> Iterator[set[int]]:
-        """Research one upgrade at a time, whichever an idle unit is offered first, and yield what each finished."""
+        """Research one upgrade at a time, whichever an idle unit is offered first, and yield what each finished.
+
+        Units are taken by type name, and by tag only among units of one type, so every game researches in the same
+        order whatever tags it hands out.
+        """
         refused: set[tuple[int, int]] = set()
         for _ in range(300):
             read = self._read()
@@ -463,7 +467,7 @@ class TechSweep:
             choice = next(
                 (
                     (tag, ability)
-                    for tag, (_, abilities) in sorted(read.items())
+                    for tag, (_, abilities) in sorted(read.items(), key=lambda item: (_unit_name(item[1][0]), item[0]))
                     if tag not in busy
                     for ability in sorted(abilities)
                     if "Research" in _ability_name(ability) and (tag, ability) not in refused
