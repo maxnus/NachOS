@@ -1,44 +1,11 @@
 {
- "base_build": 95841,
+ "base_build": 75689,
  "races": [
   "protoss",
   "terran",
   "zerg"
  ],
  "research": [
-  {
-   "upgrades": [
-    "Stimpack"
-   ],
-   "changes": {},
-   "levels": {
-    "attack": [],
-    "armor": [],
-    "shield": []
-   }
-  },
-  {
-   "upgrades": [
-    "ShieldWall"
-   ],
-   "changes": {},
-   "levels": {
-    "attack": [],
-    "armor": [],
-    "shield": []
-   }
-  },
-  {
-   "upgrades": [
-    "PunisherGrenades"
-   ],
-   "changes": {},
-   "levels": {
-    "attack": [],
-    "armor": [],
-    "shield": []
-   }
-  },
   {
    "upgrades": [
     "HighCapacityBarrels"
@@ -131,6 +98,39 @@
   {
    "upgrades": [
     "InterferenceMatrix"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "Stimpack"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "ShieldWall"
+   ],
+   "changes": {},
+   "levels": {
+    "attack": [],
+    "armor": [],
+    "shield": []
+   }
+  },
+  {
+   "upgrades": [
+    "PunisherGrenades"
    ],
    "changes": {},
    "levels": {
