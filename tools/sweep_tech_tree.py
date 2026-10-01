@@ -27,8 +27,8 @@ finds what each offered ability requires by killing every structure of one type 
 then researches one upgrade at a time, reads what each newly offers, and finds its requirements the same way. It orders
 every ability that makes a unit type on a new unit of each type offered it, before the research and after, to see what
 it does to that unit and what the unit is offered on the way, as a cocoon is. It switches every toggle, loads every
-transport, sets every structure making something and a worker building, arms every nuke, and orders every ability
-aimed at a unit or a point on a new unit of each type, reading what each is offered meanwhile.
+transport, sets every structure making something and a worker building each structure it can, arms every nuke, and
+orders every ability aimed at a unit or a point on a new unit of each type, reading what each is offered meanwhile.
 
 The findings are written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
 """
@@ -528,8 +528,8 @@ class TechSweep:
         self.read_requirements(self._pairs(self._read()) - self._seen)
 
     def sweep_busy(self) -> None:
-        """Set every structure making something and a worker building, and read what each is offered meanwhile: a
-        cancel and a halt are offered only then."""
+        """Set every structure making something and a worker building each structure it can, and read what each is
+        offered meanwhile: a cancel and a halt are offered only then."""
         seen = self._pairs(self._read())
         busy: set[int] = set()
         for unit in sorted(self._mine(), key=lambda unit: unit.tag):
@@ -753,29 +753,56 @@ class TechSweep:
             self._clear({gatherer.tag})
 
     def _build_something(self) -> set[Pair]:
-        """What a worker and the structure it is building are offered while it goes up."""
+        """What a worker and each structure it puts up near home are offered while the structure goes up, one
+        structure at a time, for every structure the worker is offered on a point.
+
+        `fast_build` is off meanwhile: under it a structure can be finished when first read, and a structure is
+        offered its cancel only while it goes up. A structure the game will not let go up near home, such as a protoss
+        one that needs power where there is none, is left unread with a warning.
+        """
         worker = _WORKERS[self._race]
+        makers = {ability: unit_type for unit_type, ability in self._makers.items()}
+        found: set[Pair] = set()
+        self._game.cheat("fast_build")
+        try:
+            builds = self._builds(worker, makers)
+            for build in builds:
+                found |= self._read_going_up(worker, build, makers[build])
+        finally:
+            # A cheat is a toggle, so the same command turns it back on.
+            self._game.cheat("fast_build")
+        return found
+
+    def _builds(self, worker: UnitTypeId, makers: dict[AbilityId, UnitTypeId]) -> list[AbilityId]:
+        """The abilities a new `worker` is offered that put up a structure on a point, in id order."""
         (builder,) = [
             u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
         ]
-        makers = {ability: unit_type for unit_type, ability in self._makers.items()}
         offered = filter(None, (AbilityId.get(ability) for ability in self._game.offered([builder.tag])[builder.tag]))
-        builds = [a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT]
-        # The first the game will let go up near home: a protoss structure that needs power will not, without a pylon.
-        build, site = next(((a, s) for a in builds if (s := self._site(a)) is not False), (None, None))
-        if build is None or not isinstance(site, Point):
-            logger.warning("No {} could put anything up", worker.name)
+        builds = sorted(a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT)
+        self._clear({builder.tag})
+        return builds
+
+    def _read_going_up(self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId) -> set[Pair]:
+        """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up."""
+        site = self._site(build)
+        if not isinstance(site, Point):
+            logger.warning("No {} could go up near home", structure.name)
             return set()
+        (builder,) = [
+            u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
+        ]
         before = {unit.tag for unit in self._game.units()}
         self._game.order(build, builder.tag, site)
         for _ in range(_MAKE_STEPS // 4):
             self._client.step(4)
             # A placeholder, with no tag, stands at the site from the moment the order is given.
-            if any(u.tag and u.tag not in before and u.unit_type == makers[build] for u in self._mine()):
+            if any(u.tag and u.tag not in before and u.unit_type == structure for u in self._mine()):
                 found = self._pairs(self._read())
                 self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
                 return found
         logger.warning("Nothing was put up by {}", _ability_name(build))
+        self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
         return set()
 
     # --- Casting
