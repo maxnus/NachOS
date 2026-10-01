@@ -401,7 +401,23 @@ class TechSweep:
         requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
         larva = [unit for unit in hosts if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)]
         requests += [(UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3))) for unit in larva]
+        # The computer's army can walk onto the ground a victim stood on, and the game makes nothing where one stands. A
+        # victim that does not come back is named with what stands in its place: a hive lost so left what needs one
+        # unread.
+        for _, _, spot in requests:
+            self._clear_enemies_near(spot)
         made = self._game.spawn(requests) if requests else []
+        for host in hosts:
+            if not any(_near(unit, host, 1) for unit in made if unit.unit_type == host.unit_type):
+                in_place = sorted(
+                    _unit_name(unit.unit_type) for unit in self._game.units() if _near(unit, host, host.radius)
+                )
+                logger.warning(
+                    "No {} came back at {}, where stand {}",
+                    _unit_name(host.unit_type),
+                    (host.pos.x, host.pos.y),
+                    in_place,
+                )
         # An add-on whose host stood is built again by it; one whose host died, by the host just made in its place.
         host_at = {(round(unit.pos.x), round(unit.pos.y)): unit.tag for unit in [*made, *self._mine()]}
         for add_on in add_ons.values():
@@ -1192,6 +1208,10 @@ def _kind_of_work(ability: int) -> str | None:
     """Which of `_MAKING` an ability that sets a structure working is: a train, a research, a morph or an add-on."""
     name = _ability_name(ability)
     return next((verb for verb in _MAKING if verb in name), None)
+
+
+def _near(unit: raw_pb2.Unit, other: raw_pb2.Unit, reach: float) -> bool:
+    return abs(unit.pos.x - other.pos.x) < reach and abs(unit.pos.y - other.pos.y) < reach
 
 
 def _is_add_on(unit_type: str) -> bool:
