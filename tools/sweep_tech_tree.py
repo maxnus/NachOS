@@ -819,8 +819,13 @@ class TechSweep:
         if not isinstance(site, Point):
             logger.info("No site for a {}", structure.name)
             return None
-        made = self._game.spawn([(worker, self._player, site + (0, -4))])
-        (builder,) = [unit for unit in made if unit.unit_type == worker]
+        spot = site + (0, -4)
+        workers = [unit for unit in self._game.spawn([(worker, self._player, spot)]) if unit.unit_type == worker]
+        if not workers:
+            logger.info("No {} was put up beside a {}'s site", worker.name, structure.name)
+            return None
+        # The spawn can report another new worker too; the one asked for is nearest the spot.
+        builder = min(workers, key=lambda unit: (unit.pos.x - spot.x) ** 2 + (unit.pos.y - spot.y) ** 2)
         before = {unit.tag for unit in self._game.units()}
         try:
             answer = self._game.order(build, builder.tag, site)
@@ -835,7 +840,7 @@ class TechSweep:
             logger.info("Nothing was put up by {} at {}", _ability_name(build), site)
             return None
         finally:
-            self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
+            self._clear({u.tag for u in self._mine() if u.tag not in before} | {u.tag for u in workers})
 
     def _read_until_cancel(self, tag: int, structure: UnitTypeId) -> set[Pair]:
         """What this player's units are offered while the `structure` of `tag` goes up, read up to `_GOING_UP_READS`
