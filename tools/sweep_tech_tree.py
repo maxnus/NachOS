@@ -62,6 +62,8 @@ _SETTLE_STEPS = 6
 _SWITCH_STEPS = 22
 # Steps an order that makes something is watched, and research waited for, under `fast_build`.
 _MAKE_STEPS = 600
+# Reads of a structure going up, 4 steps apart, before it counts as offered no cancel.
+_GOING_UP_READS = 3
 # Steps a worker harvesting gas stays inside the structure, with margin.
 _RETURN_STEPS = 120
 _RESEARCH_STEPS = 3000
@@ -798,15 +800,29 @@ class TechSweep:
             self._client.step(4)
             # A placeholder, with no tag, stands at the site from the moment the order is given.
             if new := [u for u in self._mine() if u.tag and u.tag not in before and u.unit_type == structure]:
-                read = self._read()
-                found = self._pairs(read)
-                offered = sorted(_ability_name(a) for a in read.get(new[0].tag, (0, set()))[1])
-                logger.info("A {} going up was offered {}", structure.name, offered or "nothing")
+                found = self._read_until_cancel(new[0].tag, structure)
                 self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
                 return found
         logger.warning("Nothing was put up by {}", _ability_name(build))
         self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
         return set()
+
+    def _read_until_cancel(self, tag: int, structure: UnitTypeId) -> set[Pair]:
+        """What this player's units are offered while the `structure` of `tag` goes up, read up to `_GOING_UP_READS`
+        times a few steps apart until the structure is offered a cancel, with a warning where it never is."""
+        found: set[Pair] = set()
+        offered: list[str] = []
+        for attempt in range(_GOING_UP_READS):
+            read = self._read()
+            found |= self._pairs(read)
+            offered = sorted(_ability_name(a) for a in read.get(tag, (0, set()))[1])
+            if any(self._is_cancel(ability) for ability in offered):
+                logger.info("A {} going up was offered {}", structure.name, offered)
+                return found
+            if attempt < _GOING_UP_READS - 1:
+                self._client.step(4)
+        logger.warning("A {} going up was offered no cancel: {}", structure.name, offered or "nothing")
+        return found
 
     # --- Casting
 
