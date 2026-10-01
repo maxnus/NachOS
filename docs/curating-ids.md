@@ -143,9 +143,9 @@ The sweep reads everything off `RequestQueryAvailableAbilities`, which answers a
 - **A cancel and a halt are offered only in the state they undo**: a barracks is offered its cancel while it trains,
   an SCV a halt while it builds, and a structure going up both; a cocoon or a lurker egg its cancel while it
   morphs, a phoenix lifting, an infestor controlling and a ghost sniping theirs, likewise an adept whose shade is
-  out and a ghost academy arming a nuke. So the sweep sets every structure making something and a worker building,
-  reads a unit mid-morph, arms every nuke, and orders every ability aimed at a unit or a point on a fresh unit,
-  reading what it is offered 6 steps later.
+  out and a ghost academy arming a nuke. So the sweep sets every structure making something and a worker building
+  each structure it can, reads a unit mid-morph, arms every nuke, and orders every ability aimed at a unit or a point
+  on a fresh unit, reading what it is offered 6 steps later.
 - **An unpowered structure is offered nothing that needs power.** That is `needs_power`, not a requirement on a
   pylon: a probe is offered a gateway with a nexus standing and no pylon at all.
 - **A requirement drops out of the answer within 4 steps of its structure leaving the observation**, and a lifted
