@@ -786,26 +786,56 @@ class TechSweep:
         return builds
 
     def _read_going_up(self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId) -> set[Pair]:
-        """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up."""
-        site = self._site(build)
+        """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up.
+
+        The structure goes up near home where the game lets it, since a zerg structure needs the creep there, and
+        otherwise on ground claimed in the sandbox, with a pylon beside it where it needs power. The worker is put
+        beside the site. A structure that goes up at neither is named in a warning.
+        """
+        found = self._try_going_up(worker, build, structure, self._site(build))
+        if found is not None:
+            return found
+        pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
+        pylons: set[int] = set()
+        try:
+            if _unit_name(structure) in self.findings.powered:
+                made = self._game.spawn([(UnitTypeId.PYLON, self._player, pad + (0, 4))])
+                pylons = {unit.tag for unit in made if unit.unit_type == UnitTypeId.PYLON}
+                self._client.step(_SWITCH_STEPS)
+            found = self._try_going_up(worker, build, structure, self._site(build, pad, reach=3))
+        finally:
+            if pylons:
+                self._clear(pylons)
+            self._ground.release(pad)
+        if found is None:
+            logger.warning("No {} went up near home or in the sandbox", structure.name)
+        return found or set()
+
+    def _try_going_up(
+        self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId, site: Point | bool
+    ) -> set[Pair] | None:
+        """What a new `worker` beside `site` and the `structure` it puts up there with `build` are offered while the
+        structure goes up, or `None` where there is no site or nothing went up, with the reason logged."""
         if not isinstance(site, Point):
-            logger.warning("No {} could go up near home", structure.name)
-            return set()
-        (builder,) = [
-            u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
-        ]
+            logger.info("No site for a {}", structure.name)
+            return None
+        made = self._game.spawn([(worker, self._player, site + (0, -4))])
+        (builder,) = [unit for unit in made if unit.unit_type == worker]
         before = {unit.tag for unit in self._game.units()}
-        self._game.order(build, builder.tag, site)
-        for _ in range(_MAKE_STEPS // 4):
-            self._client.step(4)
-            # A placeholder, with no tag, stands at the site from the moment the order is given.
-            if new := [u for u in self._mine() if u.tag and u.tag not in before and u.unit_type == structure]:
-                found = self._read_until_cancel(new[0].tag, structure)
-                self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
-                return found
-        logger.warning("Nothing was put up by {}", _ability_name(build))
-        self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
-        return set()
+        try:
+            answer = self._game.order(build, builder.tag, site)
+            if answer != SUCCESS:
+                logger.info("{} at {} was refused: {}", _ability_name(build), site, error_pb2.ActionResult.Name(answer))
+                return None
+            for _ in range(_MAKE_STEPS // 4):
+                self._client.step(4)
+                # A placeholder, with no tag, stands at the site from the moment the order is given.
+                if new := [u for u in self._mine() if u.tag and u.tag not in before and u.unit_type == structure]:
+                    return self._read_until_cancel(new[0].tag, structure)
+            logger.info("Nothing was put up by {} at {}", _ability_name(build), site)
+            return None
+        finally:
+            self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
 
     def _read_until_cancel(self, tag: int, structure: UnitTypeId) -> set[Pair]:
         """What this player's units are offered while the `structure` of `tag` goes up, read up to `_GOING_UP_READS`
@@ -1106,11 +1136,18 @@ class TechSweep:
             return False
         return min(geysers, key=lambda u: (u.pos.x - self._home.x) ** 2 + (u.pos.y - self._home.y) ** 2).tag
 
-    def _site(self, ability: AbilityId) -> Point | bool:
-        """The nearest point to home where the game would put up what `ability` makes, or `False` where it would not."""
-        corner = Point((int(self._home.x), int(self._home.y)))
+    def _site(self, ability: AbilityId, near: Point | None = None, reach: int = 20) -> Point | bool:
+        """The nearest point to `near`, home by default, within `reach` tiles each way where the game would put up what
+        `ability` makes, or `False` where it would not."""
+        near = near or self._home
+        corner = Point((int(near.x), int(near.y)))
         offsets = sorted(
-            ((dx + half, dy + half) for dx in range(-20, 21) for dy in range(-20, 21) for half in (0.0, 0.5)),
+            (
+                (dx + half, dy + half)
+                for dx in range(-reach, reach + 1)
+                for dy in range(-reach, reach + 1)
+                for half in (0.0, 0.5)
+            ),
             key=lambda offset: offset[0] ** 2 + offset[1] ** 2,
         )
         for start in range(0, len(offsets), 400):
