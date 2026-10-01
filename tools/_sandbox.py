@@ -5,6 +5,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
+from enum import StrEnum
 
 import numpy
 from loguru import logger
@@ -31,6 +32,23 @@ SUCCESS = error_pb2.ActionResult.Success
 def reported(owner: int) -> int:
     """The owner the game reports for a unit created for `owner`."""
     return NEUTRAL_REPORTED if owner == NEUTRAL else owner
+
+
+class Cheat(StrEnum):
+    """A debug game state, by its name in `DebugGameState`."""
+
+    ALL_RESOURCES = "all_resources"
+    CONTROL_ENEMY = "control_enemy"
+    COOLDOWN = "cooldown"
+    FAST_BUILD = "fast_build"
+    FOOD = "food"
+    FREE = "free"
+    GAS = "gas"
+    GOD = "god"
+    MINERALS = "minerals"
+    SHOW_MAP = "show_map"
+    TECH_TREE = "tech_tree"
+    UPGRADE = "upgrade"
 
 
 class OpenGround:
@@ -88,10 +106,9 @@ class Sandbox:
     def debug(self, *commands: debug_pb2.DebugCommand) -> None:
         self.client.debug(commands)
 
-    def cheat(self, *names: str) -> None:
-        """Turn on the named debug game states, such as `all_resources`."""
-        state = debug_pb2.DebugGameState
-        self.debug(*(debug_pb2.DebugCommand(game_state=getattr(state, name)) for name in names))
+    def cheat(self, *cheats: Cheat) -> None:
+        """Switch each of `cheats`: the game turns a cheat off when it is sent again."""
+        self.debug(*(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.Value(cheat)) for cheat in cheats))
 
     def create(self, unit_type: UnitTypeId, owner: int, at: Point) -> debug_pb2.DebugCommand:
         """The command that creates one `unit_type` for `owner` at `at`."""
