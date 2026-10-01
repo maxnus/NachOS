@@ -431,9 +431,10 @@ class TechSweep:
 
         The game puts a structure whose ground is taken at the nearest free place instead, and the ground a victim stood
         on draws units: the computer's army walks in, and a zerg structure that dies leaves broodlings a moment later.
-        A structure put elsewhere would drift further at every requirement read, until the game finds no place for it
-        and a hive lost leaves what needs one unread. So what stands there is killed, and one put elsewhere is killed
-        and made again, broodlings and all; a gas building never takes its geyser back, so it is left where it went.
+        Read after read, the zerg structures drifted until a hive found no place at all, leaving what needs one unread.
+        So what stands there is killed, and a structure put elsewhere while units stood on its ground is killed and made
+        again, broodlings and all. One put elsewhere with nothing in its way, such as a gas building, whose geyser the
+        game never gives back, stays where it went: trying again would not change that, and it could lose the structure.
         """
         made: list[raw_pb2.Unit] = []
         pending = list(hosts)
@@ -450,29 +451,34 @@ class TechSweep:
                 self._client.step(_BROODLING_STEPS)
             self._clear_ground(pending)
             new = self._game.spawn(requests)
-            astray = {
-                unit.tag
-                for unit in new
-                if unit.unit_type != UnitTypeId.LARVA
-                and not _is_gas_building(_unit_name(unit.unit_type))
-                and not any(_near(unit, host, 1) for host in pending if host.unit_type == unit.unit_type)
-            }
-            made += [unit for unit in new if unit.tag not in astray]
-            pending = [
-                host
-                for host in pending
-                if not _is_gas_building(_unit_name(host.unit_type))
-                and not any(_near(unit, host, 1) for unit in made if unit.unit_type == host.unit_type)
+            units = self._game.units()
+            unsettled = [
+                host for host in pending if not any(_near(u, host, 1) for u in new if u.unit_type == host.unit_type)
             ]
+            blocked = [host for host in unsettled if self._standing([host], units)]
+            for host in unsettled:
+                if host not in blocked:
+                    logger.debug("{} came back elsewhere than {}", _unit_name(host.unit_type), (host.pos.x, host.pos.y))
+            # What went elsewhere for a blocked host is the one of its type nearest where it stood.
+            astray: set[int] = set()
+            for host in blocked:
+                elsewhere = [u for u in new if u.unit_type == host.unit_type and u.tag not in astray]
+                elsewhere = [u for u in elsewhere if not any(_near(u, other, 1) for other in pending)]
+                if elsewhere:
+                    astray.add(
+                        min(elsewhere, key=lambda u: (u.pos.x - host.pos.x) ** 2 + (u.pos.y - host.pos.y) ** 2).tag
+                    )
             self._game.kill(astray)
+            made += [unit for unit in new if unit.tag not in astray]
+            pending = blocked
             if not pending:
                 return made
         for host in pending:
-            in_place = sorted(
-                _unit_name(unit.unit_type) for unit in self._game.units() if _near(unit, host, host.radius)
-            )
             logger.warning(
-                "No {} came back at {}, where stand {}", _unit_name(host.unit_type), (host.pos.x, host.pos.y), in_place
+                "No {} came back at {}, where stand {}",
+                _unit_name(host.unit_type),
+                (host.pos.x, host.pos.y),
+                sorted(_unit_name(u.unit_type) for u in self._standing([host], self._game.units())),
             )
         return made
 
@@ -1072,17 +1078,20 @@ class TechSweep:
         self._client.step(_SWITCH_STEPS)
         return unit
 
-    def _clear_ground(self, victims: Sequence[raw_pb2.Unit]) -> None:
-        """Kill whatever is not a structure on the ground `victims` stood on, whoever it belongs to."""
-        standing = [
-            unit.tag
-            for unit in self._game.units()
+    def _standing(self, victims: Sequence[raw_pb2.Unit], units: Iterable[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """The `units` other than structures on the ground `victims` stood on, whoever they belong to."""
+        return [
+            unit
+            for unit in units
             if unit.owner != NEUTRAL_REPORTED
             and unit.unit_type not in self._structure_types
             and not unit.is_flying
             and any(_near(unit, victim, victim.radius + 0.5) for victim in victims)
         ]
-        if standing:
+
+    def _clear_ground(self, victims: Sequence[raw_pb2.Unit]) -> None:
+        """Kill whatever is not a structure on the ground `victims` stood on, whoever it belongs to."""
+        if standing := [unit.tag for unit in self._standing(victims, self._game.units())]:
             logger.debug("Killing {} units on the ground of the victims put back", len(standing))
             self._game.kill(standing)
             self._client.step(4)
@@ -1261,10 +1270,6 @@ def _kind_of_work(ability: int) -> str | None:
 
 def _near(unit: raw_pb2.Unit, other: raw_pb2.Unit, reach: float) -> bool:
     return abs(unit.pos.x - other.pos.x) < reach and abs(unit.pos.y - other.pos.y) < reach
-
-
-def _is_gas_building(unit_type: str) -> bool:
-    return any(kind in unit_type for kind in ("Assimilator", "Extractor", "Refinery"))
 
 
 def _is_add_on(unit_type: str) -> bool:
