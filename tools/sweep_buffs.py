@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from _sandbox import NEUTRAL, SUCCESS, OpenGround, Sandbox, playing, reported
+from _sandbox import NEUTRAL, SUCCESS, Cheat, OpenGround, Sandbox, playing, reported
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
@@ -137,7 +137,7 @@ class Sweep:
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
         # The fog is lifted before anything is counted: otherwise what it hides, such as the computer's base, would be
         # taken for something the sweep put there and cleared away, which ends the game.
-        game.cheat("show_map", "all_resources", "fast_build")
+        game.cheat(Cheat.SHOW_MAP, Cheat.ALL_RESOURCES, Cheat.FAST_BUILD)
         client.step(1)
         units = self._game.units()
         home = next(Point((u.pos.x, u.pos.y)) for u in units if u.owner == player and u.radius > 2)

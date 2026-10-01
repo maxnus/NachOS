@@ -64,7 +64,7 @@ from functools import partial
 from pathlib import Path
 from typing import Self
 
-from _sandbox import OpenGround, Sandbox, playing
+from _sandbox import Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
@@ -2556,8 +2556,8 @@ def _middle_item(game: _Game, *, panels: bool) -> list[Trial]:
     return trials
 
 
-_BASE_CHEATS = ("free", "food")
-_KEEPS_CHEATS = (*_BASE_CHEATS, "god", "cooldown", "tech_tree")
+_BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
+_KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2567,7 +2567,7 @@ class _Sweep:
 
     race: Race
     trials: Callable[[_Game], list[Trial]]
-    cheats: tuple[str, ...] = _BASE_CHEATS
+    cheats: tuple[Cheat, ...] = _BASE_CHEATS
     realtime: bool = False
     interface: sc2api_pb2.InterfaceOptions | None = None
 
@@ -2696,16 +2696,16 @@ _SWEEPS: dict[str, _Sweep] = {
     "keeps-zerg": _Sweep(Race.ZERG, lambda g: _keeps(g, Race.ZERG), _KEEPS_CHEATS),
     # Not `tech_tree` where it matters, which has a barracks without an add-on train two marines at once.
     "production-terran": _Sweep(Race.TERRAN, _terran_production),
-    "production-protoss": _Sweep(Race.PROTOSS, _protoss_production, (*_BASE_CHEATS, "tech_tree")),
+    "production-protoss": _Sweep(Race.PROTOSS, _protoss_production, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "production-zerg": _Sweep(Race.ZERG, _zerg_production),
-    "requests": _Sweep(Race.TERRAN, _requests, (*_BASE_CHEATS, "tech_tree")),
-    "repeats": _Sweep(Race.TERRAN, _repeats, ("food",)),
+    "requests": _Sweep(Race.TERRAN, _requests, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "repeats": _Sweep(Race.TERRAN, _repeats, (Cheat.FOOD,)),
     "errors": _Sweep(Race.TERRAN, _errors, ()),
-    "spell-errors": _Sweep(Race.PROTOSS, _spell_errors, (*_BASE_CHEATS, "tech_tree")),
+    "spell-errors": _Sweep(Race.PROTOSS, _spell_errors, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "realtime": _Sweep(Race.TERRAN, _realtime, realtime=True),
     "queues": _Sweep(Race.TERRAN, _queues),
     # Not `free`, so that a cancel's refund counts.
-    "refunds": _Sweep(Race.TERRAN, _refunds, ("food",)),
+    "refunds": _Sweep(Race.TERRAN, _refunds, (Cheat.FOOD,)),
     "structure-abilities-terran": _Sweep(Race.TERRAN, lambda g: _structure_abilities(g, Race.TERRAN), _KEEPS_CHEATS),
     "structure-abilities-protoss": _Sweep(Race.PROTOSS, lambda g: _structure_abilities(g, Race.PROTOSS), _KEEPS_CHEATS),
     "structure-abilities-zerg": _Sweep(Race.ZERG, lambda g: _structure_abilities(g, Race.ZERG), _KEEPS_CHEATS),
@@ -2713,18 +2713,18 @@ _SWEEPS: dict[str, _Sweep] = {
     "toggles-protoss": _Sweep(Race.PROTOSS, lambda g: _toggles_off(g, Race.PROTOSS), _KEEPS_CHEATS),
     "toggles-zerg": _Sweep(Race.ZERG, lambda g: _toggles_off(g, Race.ZERG), _KEEPS_CHEATS),
     # A real supply cap, and minerals enough that nothing is refused for want of them.
-    "supply": _Sweep(Race.TERRAN, _supply, ("minerals",)),
+    "supply": _Sweep(Race.TERRAN, _supply, (Cheat.MINERALS,)),
     # Not `tech_tree`, which has a structure without a reactor make two at once.
     "slots-terran": _Sweep(Race.TERRAN, _terran_slots),
     "slots-protoss": _Sweep(Race.PROTOSS, _protoss_slots),
     "slots-zerg": _Sweep(Race.ZERG, _zerg_slots),
     # Not `free`, so that what a cancel gives back counts.
-    "cancels-offered": _Sweep(Race.TERRAN, _cancels_offered, ("food", "all_resources")),
+    "cancels-offered": _Sweep(Race.TERRAN, _cancels_offered, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
     # Not `free`, so that what one command naming several structures charges counts.
-    "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, ("food", "all_resources")),
+    "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what a flying structure's add-on charges counts.
-    "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, ("food", "all_resources")),
+    "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

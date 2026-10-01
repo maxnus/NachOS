@@ -24,7 +24,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from _sandbox import OpenGround, Sandbox, playing, playing_rivals
+from _sandbox import Cheat, OpenGround, Sandbox, playing, playing_rivals
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
@@ -618,7 +618,7 @@ def _rival_trials(me: _Game, enemy: _Game) -> list[Trial]:
     sees and where it does not."""
     trials: list[Trial] = []
     # A debug cheat is a toggle for the whole game, so one side turns each on.
-    me.sandbox.cheat("free", "fast_build", "food")
+    me.sandbox.cheat(Cheat.FREE, Cheat.FAST_BUILD, Cheat.FOOD)
     me.turn(8)
     enemy.observe()
     factory = enemy.toward(12)
@@ -1009,15 +1009,15 @@ def _protoss(game: _Game) -> list[Trial]:
     return trials
 
 
-_CHEATS = ("free", "fast_build", "food", "show_map")
+_CHEATS = (Cheat.FREE, Cheat.FAST_BUILD, Cheat.FOOD, Cheat.SHOW_MAP)
 # The sweeps of one player against the computer: race, trials and cheats. The error sweeps play without the cheats
 # that would keep minerals and supply from running short.
-_SOLO: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[str, ...]]] = {
+_SOLO: dict[str, tuple[Race, Callable[[_Game], list[Trial]], tuple[Cheat, ...]]] = {
     "terran": (Race.TERRAN, _terran, _CHEATS),
     "zerg": (Race.ZERG, _zerg, _CHEATS),
     "protoss": (Race.PROTOSS, _protoss, _CHEATS),
-    "errors": (Race.TERRAN, _terran_errors, ("show_map",)),
-    "zerg-errors": (Race.ZERG, _zerg_errors, ("show_map",)),
+    "errors": (Race.TERRAN, _terran_errors, (Cheat.SHOW_MAP,)),
+    "zerg-errors": (Race.ZERG, _zerg_errors, (Cheat.SHOW_MAP,)),
     "attacks": (Race.TERRAN, _attack_trials, _CHEATS),
     "suppression": (Race.TERRAN, _suppression_trials, _CHEATS),
 }

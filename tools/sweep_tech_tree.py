@@ -41,7 +41,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
@@ -180,7 +180,7 @@ class TechSweep:
         race: Race,
         findings: Findings,
         *,
-        cheats: Sequence[str] = ("free", "fast_build", "food", "god"),
+        cheats: Sequence[Cheat] = (Cheat.FREE, Cheat.FAST_BUILD, Cheat.FOOD, Cheat.GOD),
     ) -> None:
         self._game = game
         self._client = game.client
@@ -560,7 +560,7 @@ class TechSweep:
         in, before the structure is first read, and a cancel is offered only while the work goes on.
         """
         found: set[Pair] = set()
-        self._game.cheat("fast_build")
+        self._game.cheat(Cheat.FAST_BUILD)
         try:
             for unit_type in sorted(set(self._race_types()) & self._structure_types, key=lambda one: one.name):
                 for raw in self._ways_to_try(unit_type):
@@ -569,7 +569,7 @@ class TechSweep:
                 found |= self._read_tech_lab_researching(_ADD_ONS[host][0])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
-            self._game.cheat("fast_build")
+            self._game.cheat(Cheat.FAST_BUILD)
         self.read_requirements(found)
 
     def _read_tech_lab_researching(self, unit_type: UnitTypeId) -> set[Pair]:
@@ -755,24 +755,19 @@ class TechSweep:
             self._clear({gatherer.tag})
 
     def _build_something(self) -> set[Pair]:
-        """What a worker and each structure it puts up near home are offered while the structure goes up, one
-        structure at a time, for every structure the worker is offered on a point.
-
-        `fast_build` is off meanwhile: under it a structure can be finished when first read, and a structure is
-        offered its cancel only while it goes up. A structure the game will not let go up near home, such as a protoss
-        one that needs power where there is none, is left unread with a warning.
-        """
+        """What a worker and each structure it can put up are offered while the structure goes up, one structure at a
+        time, with `fast_build` off: a structure is offered its cancel only until it is finished."""
         worker = _WORKERS[self._race]
         makers = {ability: unit_type for unit_type, ability in self._makers.items()}
         found: set[Pair] = set()
-        self._game.cheat("fast_build")
+        self._game.cheat(Cheat.FAST_BUILD)
         try:
             builds = self._builds(worker, makers)
             for build in builds:
                 found |= self._read_going_up(worker, build, makers[build])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
-            self._game.cheat("fast_build")
+            self._game.cheat(Cheat.FAST_BUILD)
         return found
 
     def _builds(self, worker: UnitTypeId, makers: dict[AbilityId, UnitTypeId]) -> list[AbilityId]:
@@ -788,9 +783,9 @@ class TechSweep:
     def _read_going_up(self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId) -> set[Pair]:
         """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up.
 
-        The structure goes up near home where the game lets it, since a zerg structure needs the creep there, and
-        otherwise on ground claimed in the sandbox, with a pylon beside it where it needs power. The worker is put
-        beside the site. A structure that goes up at neither is named in a warning.
+        The structure goes up at the site nearest home that the game accepts, where a zerg structure finds creep;
+        failing that, on ground claimed in the sandbox, beside a pylon where it needs power. One that goes up at
+        neither is named in a warning.
         """
         found = self._try_going_up(worker, build, structure, self._site(build))
         if found is not None:
