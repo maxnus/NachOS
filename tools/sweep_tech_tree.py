@@ -797,8 +797,11 @@ class TechSweep:
         for _ in range(_MAKE_STEPS // 4):
             self._client.step(4)
             # A placeholder, with no tag, stands at the site from the moment the order is given.
-            if any(u.tag and u.tag not in before and u.unit_type == structure for u in self._mine()):
-                found = self._pairs(self._read())
+            if new := [u for u in self._mine() if u.tag and u.tag not in before and u.unit_type == structure]:
+                read = self._read()
+                found = self._pairs(read)
+                offered = sorted(_ability_name(a) for a in read.get(new[0].tag, (0, set()))[1])
+                logger.info("A {} going up was offered {}", structure.name, offered or "nothing")
                 self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
                 return found
         logger.warning("Nothing was put up by {}", _ability_name(build))
