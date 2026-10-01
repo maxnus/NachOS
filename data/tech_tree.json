@@ -1,5 +1,5 @@
 {
- "base_build": 95841,
+ "base_build": 75689,
  "races": [
   "protoss",
   "terran",
@@ -512,7 +512,6 @@
    "Research_ZergFlyerAttackLevel3"
   ],
   "Hatchery": [
-   "Cancel_BuildInProgress",
    "Cancel_MorphLair",
    "Cancel_QueueCancelToSelection",
    "Rally_Hatchery_Units",
@@ -984,9 +983,7 @@
    "attack_Attack",
    "stop_Stop"
   ],
-  "Pylon": [
-   "Cancel_BuildInProgress"
-  ],
+  "Pylon": [],
   "Queen": [
    "Build_CreepTumor_Queen",
    "BurrowDown_Baneling",
@@ -1211,6 +1208,7 @@
    "stop_Stop"
   ],
   "SpawningPool": [
+   "Cancel_BuildInProgress",
    "Cancel_Queue5",
    "Research_ZerglingAdrenalGlands",
    "Research_ZerglingMetabolicBoost"
@@ -3154,13 +3152,6 @@
   },
   {
    "performer": "Cyclone",
-   "ability": "Cancel_LockOn",
-   "structures": [],
-   "attached": false,
-   "upgrades": []
-  },
-  {
-   "performer": "Cyclone",
    "ability": "HoldPosition_Hold",
    "structures": [],
    "attached": false,
@@ -4538,13 +4529,6 @@
    "upgrades": [
     "ZergFlyerWeaponsLevel2"
    ]
-  },
-  {
-   "performer": "Hatchery",
-   "ability": "Cancel_BuildInProgress",
-   "structures": [],
-   "attached": false,
-   "upgrades": []
   },
   {
    "performer": "Hatchery",
@@ -7304,13 +7288,6 @@
    "upgrades": []
   },
   {
-   "performer": "Pylon",
-   "ability": "Cancel_BuildInProgress",
-   "structures": [],
-   "attached": false,
-   "upgrades": []
-  },
-  {
    "performer": "Queen",
    "ability": "Build_CreepTumor_Queen",
    "structures": [],
@@ -8705,6 +8682,13 @@
   {
    "performer": "SiegeTankSieged",
    "ability": "stop_Stop",
+   "structures": [],
+   "attached": false,
+   "upgrades": []
+  },
+  {
+   "performer": "SpawningPool",
+   "ability": "Cancel_BuildInProgress",
    "structures": [],
    "attached": false,
    "upgrades": []
@@ -13164,7 +13148,6 @@
   "RedstoneLavaCritterInjured": "RedstoneLavaCritterInjuredUnburrow_BurrowUp",
   "RedstoneLavaCritterInjuredBurrowed": "RedstoneLavaCritterInjuredBurrow_BurrowDown",
   "Refinery": "TerranBuild_Refinery",
-  "RefineryRich": "TerranBuild_Refinery_325",
   "Roach": "LarvaTrain_Roach",
   "RoachBurrowed": "BurrowDown_Roach",
   "RoachWarren": "ZergBuild_RoachWarren",
