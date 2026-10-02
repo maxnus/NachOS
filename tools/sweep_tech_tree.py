@@ -429,12 +429,10 @@ class TechSweep:
     def _recreate(self, hosts: Sequence[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
         """Create `hosts` again where they stood, with larva for a hatchery, and return what the game made.
 
-        The game puts a structure whose ground is taken at the nearest free place instead, and the ground a victim stood
-        on draws units: the computer's army walks in, and a zerg structure that dies leaves broodlings a moment later.
-        Read after read, the zerg structures drifted until a hive found no place at all, leaving what needs one unread.
-        So what stands there is killed, and a structure put elsewhere while units stood on its ground is killed and made
-        again, broodlings and all. One put elsewhere with nothing in its way, such as a gas building, whose geyser the
-        game never gives back, stays where it went: trying again would not change that, and it could lose the structure.
+        Whatever other than a structure stands on a host's ground is killed first; in a zerg game, after waiting for a
+        dead structure's broodlings. A host the game puts elsewhere while units stand on its ground is killed and made
+        again, up to `_RECREATE_ATTEMPTS` times; one put elsewhere with nothing in its way stays there. A host that
+        never settles is named in a warning.
         """
         made: list[raw_pb2.Unit] = []
         pending = list(hosts)
