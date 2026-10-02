@@ -1,6 +1,6 @@
 """The tech tree, as swept in game, and the hand-written corrections to the game's tables."""
 
-from sc2nachos.gamedata._techtree._build_95841 import TECH_TREE
+from sc2nachos.gamedata._techtree._build_75689 import TECH_TREE
 from sc2nachos.gamedata._techtree._overrides import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
