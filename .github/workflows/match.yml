@@ -111,6 +111,8 @@ jobs:
           REF: ${{ inputs.ref || (inputs.repo == '' && github.sha) || 'HEAD' }}
           GAMES: ${{ inputs.games }}
           RACES: ${{ inputs.opponent-race }}
+          DIFFICULTY: ${{ inputs.opponent-difficulty }}
+          BUILD: ${{ inputs.opponent-build }}
           TIME_LIMIT: ${{ inputs.time-limit }}
         run: |
           [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::repo must be owner/name"; exit 1; }
@@ -132,6 +134,13 @@ jobs:
               fail(f"games must be 1 to 10 per race, got '{games}'")
           if int(games) * len(races) > 15:
               fail(f"{int(games) * len(races)} games in total; the limit is 15")
+          difficulties = ["VeryEasy", "Easy", "Medium", "MediumHard", "Hard", "Harder", "VeryHard",
+                          "CheatVision", "CheatMoney", "CheatInsane"]
+          if os.environ["DIFFICULTY"] not in difficulties:
+              fail(f"opponent-difficulty must be one of {', '.join(difficulties)}")
+          builds = ["RandomBuild", "Rush", "Timing", "Power", "Macro", "Air"]
+          if os.environ["BUILD"] not in builds:
+              fail(f"opponent-build must be one of {', '.join(builds)}")
           time_limit = os.environ["TIME_LIMIT"]
           try:
               assert time_limit == "" or float(time_limit) >= 0
