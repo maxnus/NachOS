@@ -2449,8 +2449,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
     trials.append(game.trial("an SCV whose site a marine of its own holds", build_blocked))
 
     def errored_and_killed(trial: Trial) -> None:
-        """Whether the game reports an action error for an order whose unit is gone by the same observation, which
-        decides whether such an order reads `FAILED` or `LOST`."""
+        """Whether the game reports an action error for an order whose unit is gone by the same observation."""
         scv = next((unit for unit in game.own(UnitTypeId.SCV)), None)
         if scv is None or not gave_up_after:
             trial.notes["class"] = "no SCV" if scv is None else "the game gave up on nothing to time this by"

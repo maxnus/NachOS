@@ -350,17 +350,54 @@ class TestARecordedGamesTables:
             assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
             assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
 
-    def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
+    def test_every_row_can_be_kept_in_a_set(self, path: Path) -> None:
+        abilities = _tables(path).abilities
+        assert len(set(abilities.values())) == len(abilities)
+
+    def test_a_general_ability_acts_at_once_where_every_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
-        generals = (
-            AbilityId.GENERAL_STIM,
-            AbilityId.GENERAL_CLOAK_ON,
-            AbilityId.GENERAL_CLOAK_OFF,
-            AbilityId.GENERAL_HOLD_FIRE_ON,
-            AbilityId.GENERAL_HOLD_FIRE_OFF,
-        )
-        for ability in generals:
+        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_CLOAK_OFF):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
+    def test_a_general_ability_does_for_each_type_what_the_one_that_type_performs_does(self, path: Path) -> None:
+        """A ghost's hold fire keeps its orders (in game), and a lurker's is taken to replace them, since a burrowed
+        lurker holds an attack; a queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
+        data = _tables(path)
+        for ability in (AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF):
+            row = data.abilities[ability]
+            assert row.order_behavior is OrderBehavior.REPLACES, ability.name
+            assert row.order_behavior_for(UnitTypeId.GHOST) is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert row.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES, ability.name
+        tumor = data.abilities[AbilityId.GENERAL_BUILD_CREEP_TUMOR]
+        assert tumor.order_behavior_for(UnitTypeId.QUEEN) is OrderBehavior.REPLACES
+        assert tumor.order_behavior_for(UnitTypeId.CREEP_TUMOR_BURROWED) is OrderBehavior.NEEDS_IDLE
+        attack = data.abilities[AbilityId.GENERAL_ATTACK]
+        assert attack.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
+        assert attack.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
+
+    def test_an_ability_offered_to_nobody_has_no_say_in_its_general_ones(self, path: Path) -> None:
+        """The tables offer a command center's, a medivac's and a carrier's own id to nobody, since a unit is offered
+        unload only while it carries something; each takes the behavior the offered ids share."""
+        data = _tables(path)
+        unload = data.abilities[AbilityId.GENERAL_UNLOAD]
+        for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MEDIVAC):
+            assert unload.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        cancel = data.abilities[AbilityId.GENERAL_CANCEL_LAST]
+        assert cancel.order_behavior_for(UnitTypeId.CARRIER) is OrderBehavior.KEEPS_ORDERS
+
+    def test_an_exact_ability_does_the_same_for_every_type(self, path: Path) -> None:
+        stim = _tables(path).abilities[AbilityId.MARINE_STIM]
+        assert stim.order_behavior_for(UnitTypeId.MARINE) is stim.order_behavior is OrderBehavior.KEEPS_ORDERS
+
+    def test_a_unit_that_cannot_move_still_holds_an_order_of_its_own(self, path: Path) -> None:
+        """A sieged tank and a burrowed lurker hold an attack, so leaving the form is not read as keeping it."""
+        data = _tables(path)
+        for ability in (AbilityId.SIEGE_TANK_UNSIEGE, AbilityId.LURKER_UNBURROW, AbilityId.LIBERATOR_UNSIEGE):
+            assert data.abilities[ability].order_behavior is OrderBehavior.REPLACES, ability.name
+
+    def test_a_structure_holds_no_order_of_its_own_even_with_a_weapon(self, path: Path) -> None:
+        """A bunker is offered an attack and a stop, yet loading it leaves alone what it is doing."""
+        assert _tables(path).abilities[AbilityId.BUNKER_LOAD].order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_both_halves_of_a_toggle_keep_a_unit_s_orders(self, path: Path) -> None:
         """Each half was given in turn to a moving unit, and its move stayed first in its orders (in game)."""

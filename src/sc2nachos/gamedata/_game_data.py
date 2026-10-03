@@ -34,7 +34,9 @@ class GameData:
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
         )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE, structures)
+        behaviors, behaviors_by_performer = order_behaviors(
+            TECH_TREE, structures, frozenset(self._units.keys() - structures)
+        )
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
@@ -43,7 +45,9 @@ class GameData:
         cancels = cancel_abilities(TECH_TREE, behaviors)
         self._abilities = _read_table(
             data.abilities,
-            lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
+            lambda ability: AbilityData._from_proto(
+                ability, TECH_TREE, behaviors, behaviors_by_performer, costs, cancels
+            ),
             lambda row: row.id,
         )
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
