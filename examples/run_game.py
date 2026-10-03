@@ -23,9 +23,10 @@ from sc2nachos.run import ApiBot, run_local
 
 def main() -> None:
     parser = ArgumentParser(description="Play one game against the built-in AI and write how it went.")
-    parser.add_argument("--opponent-race", default="Random")
-    parser.add_argument("--opponent-difficulty", default="VeryHard")
-    parser.add_argument("--opponent-build", default="RandomBuild")
+    races = [common_pb2.Race.Name(common_pb2.Race.ValueType(race)) for race in Race if race is not Race.NONE]
+    parser.add_argument("--opponent-race", choices=races, default="Random")
+    parser.add_argument("--opponent-difficulty", choices=sc2api_pb2.Difficulty.keys(), default="VeryHard")
+    parser.add_argument("--opponent-build", choices=sc2api_pb2.AIBuild.keys(), default="RandomBuild")
     parser.add_argument("--map", help="a map under the client's maps folder (default: one at random)")
     parser.add_argument("--time-limit", type=float, help="end the game as a tie after this many game seconds")
     parser.add_argument("--result-file", type=Path)
