@@ -56,7 +56,7 @@ filterwarnings = [
 ]
 
 [tool.pyright]
-include = ["src", "tests", "tools"]
+include = ["src", "tests", "tools", "examples"]
 pythonVersion = "3.12"
 # protobuf ships type stubs without inline source; nothing to fix on our side.
 reportMissingModuleSource = false

@@ -69,6 +69,11 @@ run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficult
 NachOS is not a drop-in replacement. [Migrating from python-sc2](docs/migrating-from-python-sc2.md) lists the
 places where the obvious translation goes wrong.
 
+## Playing games on GitHub Actions
+
+[Running StarCraft II on GitHub Actions](docs/github-actions.md) shows how a bot repository plays matches against the
+built-in AI in its own workflows, on GitHub's runners or on its own machines.
+
 ## Requirements
 
 Python 3.12+ and a StarCraft II installation.
