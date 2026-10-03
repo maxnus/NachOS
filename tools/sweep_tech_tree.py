@@ -928,27 +928,33 @@ class TechSweep:
         self._client.step(22 * 10)
         found = self._pairs(self._read())
         pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
-        for type_name, names in sorted(self.findings.offered.items()):
-            performer = UnitTypeId.get(RawUnitTypeId[type_name]) if type_name in _RAW_UNITS else None
-            if performer is None or performer in self._structure_types:
-                continue
-            if self._data.units[performer].race is not self._race:
-                continue
-            for name in sorted(names):
-                ability = int(RawAbilityId[name]) if name in _RAW_ABILITIES else None
-                if (
-                    ability is None
-                    or ability in self._creation_abilities
-                    or self._targets.get(ability) not in _AIMED
-                    or any(fragment in name for fragment in _NOT_CASTS)
-                ):
+        # A caster can cast at the targets by itself before it is ordered to, as a cyclone locks on.
+        self._game.cheat(Cheat.COOLDOWN)
+        try:
+            for type_name, names in sorted(self.findings.offered.items()):
+                performer = UnitTypeId.get(RawUnitTypeId[type_name]) if type_name in _RAW_UNITS else None
+                if performer is None or performer in self._structure_types:
                     continue
-                found |= self._cast(performer, ability, pad)
+                if self._data.units[performer].race is not self._race:
+                    continue
+                for name in sorted(names):
+                    ability = int(RawAbilityId[name]) if name in _RAW_ABILITIES else None
+                    if (
+                        ability is None
+                        or ability in self._creation_abilities
+                        or self._targets.get(ability) not in _AIMED
+                        or any(fragment in name for fragment in _NOT_CASTS)
+                    ):
+                        continue
+                    found |= self._cast(performer, ability, pad)
+        finally:
+            self._game.cheat(Cheat.COOLDOWN)
         self.read_requirements(found - self._seen)
         self._seen |= found
 
     def _cast(self, performer: UnitTypeId, ability: int, pad: Point) -> set[Pair]:
-        """What a new `performer` is offered once ordered `ability` at an enemy beside it, or at the ground there."""
+        """What a new `performer` is offered once ordered `ability` at an enemy beside it, or at the ground there, or
+        once refused it at all of them."""
         before = {u.tag for u in self._game.units()}
         try:
             enemy = 3 - self._player
@@ -980,7 +986,7 @@ class TechSweep:
                     refusals or "nothing to aim at",
                     sorted(_ability_name(a) for a in self._game.offered([caster.tag]).get(caster.tag, ())),
                 )
-                return set()
+                return self._pairs(self._read({caster.tag}))
             self._client.step(_CAST_STEPS)
             return self._pairs(self._read({caster.tag}))
         finally:
