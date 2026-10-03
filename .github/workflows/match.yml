@@ -172,7 +172,7 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runner) }}
     steps:
       - name: Cache the client
-        uses: maxnus/NachOS/.github/actions/setup-sc2@claude/reusable-match
+        uses: maxnus/NachOS/.github/actions/setup-sc2@main
         with:
           cache-only: true
 
@@ -241,7 +241,7 @@ jobs:
       # The Linux client resolves the map path python-sc2 sends against `<install>/maps`, lowercase, and python-sc2
       # prefers `maps` whenever it exists, so both sides look in the folder the action copies the maps to.
       - name: Set up StarCraft II
-        uses: maxnus/NachOS/.github/actions/setup-sc2@claude/reusable-match
+        uses: maxnus/NachOS/.github/actions/setup-sc2@main
         with:
           maps: ${{ needs.prepare.outputs.maps && format('bot/{0}', needs.prepare.outputs.maps) || '' }}
 
