@@ -1,7 +1,7 @@
 name: match check
 
-# Calls the match workflow in this repository the way a bot repository would, with tools/run_game.py as the bot:
-# one short game on a GitHub-hosted runner. Runs on pull requests that change the workflow, setup-sc2 or the script,
+# Calls the match workflow in this repository the way a bot repository would, with examples/run_game.py as the bot:
+# a one-second game on a GitHub-hosted runner. Runs on pull requests that change the workflow, setup-sc2 or the script,
 # and by hand.
 on:
   pull_request:
@@ -10,7 +10,7 @@ on:
       - .github/workflows/match-check.yml
       - .github/actions/setup-sc2/**
       - .github/sc2-games.yml
-      - tools/run_game.py
+      - examples/run_game.py
   workflow_dispatch:
 
 jobs:
@@ -22,4 +22,4 @@ jobs:
     with:
       opponent-race: Terran
       opponent-difficulty: VeryEasy
-      time-limit: '60'
+      time-limit: 1

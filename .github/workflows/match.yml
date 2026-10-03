@@ -14,7 +14,7 @@ name: match
 #     - repository: maxnus/nachOS
 #       path: nachOS
 #
-# The result file is JSON with `result` (Victory, Defeat or Tie) and `map`, and optionally `game_time` (seconds) and
+# The result file is JSON with `result` (Victory, Defeat or Tie) and `map`, and optionally `game_time` (game seconds) and
 # `opponent_actual_race` (the race a Random opponent turned out to be).
 #
 # The report is the run summary, and the `report` output for the caller to post where it likes. A game that wrote no
@@ -67,9 +67,9 @@ on:
         type: string
         default: ''
       time-limit:
-        description: End each game as a tie after this many game seconds (empty = play it out)
-        type: string
-        default: ''
+        description: End each game as a tie after this many game seconds (0 = play it out)
+        type: number
+        default: 0
     secrets:
       token:
         description: >-
@@ -261,7 +261,7 @@ jobs:
                 --result-file "$RESULT_FILE"
                 --replay-file "$REPLAY_FILE")
           [ -n "$MAP" ] && args+=(--map "$MAP")
-          [ -n "$TIME_LIMIT" ] && args+=(--time-limit "$TIME_LIMIT")
+          [ "$TIME_LIMIT" != 0 ] && args+=(--time-limit "$TIME_LIMIT")
           uv run python "$RUN" "${args[@]}"
 
       # A game that crashed writes no result; the report counts it from the missing file.
@@ -344,7 +344,7 @@ jobs:
               opponent = f"{race} → {actual}" if race == "Random" and actual and actual != "Random" else race
               by_race[actual if race == "Random" and actual else race].append(result)
               seconds = r.get("game_time")
-              length = f"{seconds // 60}:{seconds % 60:02d}" if isinstance(seconds, int) else ""
+              length = f"{int(seconds) // 60}:{int(seconds) % 60:02d}" if isinstance(seconds, (int, float)) else ""
               artifact = replays.get(f"replay-{n}")
               replay = f"[replay]({run_url}/artifacts/{artifact})" if artifact else ""
               rows.append(f"| {n} | {opponent} | {r.get('map', '')} | {result or 'no result'} | {length} | {replay} |")
@@ -358,7 +358,7 @@ jobs:
               state = "success"
 
           settings = f"{os.environ['DIFFICULTY']}, {os.environ['BUILD']}"
-          if os.environ["TIME_LIMIT"]:
+          if float(os.environ["TIME_LIMIT"]):
               settings += f", time limit {os.environ['TIME_LIMIT']}s"
           report = [
               "<!-- sc2-games:match -->",

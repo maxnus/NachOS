@@ -1,30 +1,24 @@
 """Play one game against the built-in AI and write how it went, as the match workflow runs a bot.
 
-    uv run python tools/run_game.py --opponent-race Zerg --opponent-difficulty VeryEasy --time-limit 120 \\
+    uv run python examples/run_game.py --opponent-race Zerg --opponent-difficulty VeryEasy --time-limit 120 \\
         --result-file result.json
 
-The arguments are the ones .github/workflows/match.yml passes, and the result file is the JSON it reads; see
-docs/github-actions.md. The bot here does nothing: a bot repository copies this script and plays its own `Api`.
+The arguments are the ones .github/workflows/match.yml passes, in the game's own spelling, which python-sc2 shares;
+the result file is the JSON the workflow reads. See docs/github-actions.md. The bot here does nothing: a bot
+repository copies this script and plays its own `Api`.
 """
 
 import json
 import random
-import re
 from argparse import ArgumentParser
 from pathlib import Path
 
+from s2clientprotocol import common_pb2, sc2api_pb2
+
 from sc2nachos import Api
 from sc2nachos.launch import Installation, MapFile
-from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result
+from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 from sc2nachos.run import ApiBot, run_local
-
-_RESULTS = {Result.VICTORY: "Victory", Result.DEFEAT: "Defeat", Result.TIE: "Tie"}
-
-
-def _member[E: (Race, Difficulty, AIBuild)](enum: type[E], name: str) -> E:
-    """The member the game's own spelling names: `VeryEasy` is `VERY_EASY`, and `RandomBuild` is `RANDOM`."""
-    key = re.sub(r"(?<!^)(?=[A-Z])", "_", name.removesuffix("Build") or name).upper()
-    return enum[key]
 
 
 def main() -> None:
@@ -42,20 +36,21 @@ def main() -> None:
     name = args.map or random.choice(sorted({path.stem for path in installation.maps.rglob("*.SC2Map")}))
     map_file = MapFile.find(name, installation=installation)
     opponent = Computer(
-        _member(Race, args.opponent_race),
-        _member(Difficulty, args.opponent_difficulty),
-        _member(AIBuild, args.opponent_build),
+        Race(common_pb2.Race.Value(args.opponent_race)),
+        Difficulty(sc2api_pb2.Difficulty.Value(args.opponent_difficulty)),
+        AIBuild(sc2api_pb2.AIBuild.Value(args.opponent_build)),
     )
 
     api = Api()
     result = run_local(map_file, ApiBot(api, Race.TERRAN, "NachOS"), opponent, time_limit=args.time_limit)
 
     if args.result_file is not None:
-        args.result_file.write_text(
-            json.dumps(
-                {"result": _RESULTS.get(result, result.name), "map": map_file.name, "game_time": round(api.time)}
-            )
-        )
+        outcome = {
+            "result": sc2api_pb2.Result.Name(sc2api_pb2.Result.ValueType(result)),
+            "map": map_file.name,
+            "game_time": round(api.time, 2),
+        }
+        args.result_file.write_text(json.dumps(outcome))
 
 
 if __name__ == "__main__":

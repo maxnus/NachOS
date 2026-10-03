@@ -28,14 +28,15 @@ The workflow runs `uv run python <script>` with these arguments, any of which ma
 The result file is JSON. `result` and `map` are required; the rest are optional:
 
 ```json
-{"result": "Victory", "map": "PylonAIE_v4", "game_time": 754, "opponent_actual_race": "Zerg"}
+{"result": "Victory", "map": "PylonAIE_v4", "game_time": 754.38, "opponent_actual_race": "Zerg"}
 ```
 
 `result` is `Victory`, `Defeat` or `Tie`, and `game_time` is in game seconds. `opponent_actual_race` is what a
 `Random` opponent turned out to be. A game that writes no result file counts as crashed.
 
-[`tools/run_game.py`](../tools/run_game.py) is such a script, playing a bot that does nothing. Copy it and replace its
-`Api()` with your bot's.
+[`examples/run_game.py`](../examples/run_game.py) is such a script, playing a bot that does nothing. Copy it and
+replace its `Api()` with your bot's. The arguments are in the game's own spelling, which python-sc2 shares, so a
+python-sc2 bot's script can take the same ones.
 
 ### 2. `.github/sc2-games.yml`
 
@@ -91,7 +92,7 @@ table per race and one per game, each game linking its replay.
 | `opponent-difficulty` | `VeryHard` | as the game script takes it |
 | `opponent-build` | `RandomBuild` | as the game script takes it |
 | `map` | empty | one map for every game; empty leaves it to the script |
-| `time-limit` | empty | game seconds before a game ends as a tie |
+| `time-limit` | `0` | game seconds before a game ends as a tie; 0 plays it out |
 | `runner` | `"ubuntu-latest"` | where games run, as JSON for `runs-on`; see below |
 | `max-parallel` | `15` | games at once |
 
@@ -169,11 +170,11 @@ runs its sweep tools this way.
 ## Costs and limits
 
 - **Minutes**: GitHub-hosted runners are free for public repositories and count against the plan's minutes for
-  private ones. A game job with a two-minute time limit took about two minutes, setup included.
-- **The client**: the first run downloads it from Blizzard, about 2.5 minutes, and keeps it in the repository's
-  Actions cache. Later runs restore it in about 30 seconds. It takes 4.1 GB of the 10 GB cache a repository gets. A
-  cache entry unused for 7 days is dropped, and the next run downloads it again. The match workflow downloads it once
-  before its games start, not once per game.
+  private ones.
+- **The client**: the first run downloads it from Blizzard and keeps it in the repository's Actions cache, which
+  later runs restore it from. It takes 4.1 GB of the 10 GB cache a repository gets. A cache entry unused for 7 days is
+  dropped, and the next run downloads it again. The match workflow downloads it once before its games start, not once
+  per game.
 - **Cache scope**: a cache saved on a pull request serves only that pull request. Every branch can use one saved on
   the default branch, so a run there fills it for all.
 - **Games**: at most 15 per run, each with an hour before it is cut off.
