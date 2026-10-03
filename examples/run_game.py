@@ -48,7 +48,7 @@ def main() -> None:
         outcome = {
             "result": sc2api_pb2.Result.Name(sc2api_pb2.Result.ValueType(result)),
             "map": map_file.name,
-            "game_time": round(api.time, 2),
+            "game_time": round(api.time, 3),
         }
         args.result_file.write_text(json.dumps(outcome))
 

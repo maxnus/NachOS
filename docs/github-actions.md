@@ -28,7 +28,7 @@ The workflow runs `uv run python <script>` with these arguments, any of which ma
 The result file is JSON. `result` and `map` are required; the rest are optional:
 
 ```json
-{"result": "Victory", "map": "PylonAIE_v4", "game_time": 754.38, "opponent_actual_race": "Zerg"}
+{"result": "Victory", "map": "PylonAIE_v4", "game_time": 754.384, "opponent_actual_race": "Zerg"}
 ```
 
 `result` is `Victory`, `Defeat` or `Tie`, and `game_time` is in game seconds. `opponent_actual_race` is what a
