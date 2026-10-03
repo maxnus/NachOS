@@ -165,9 +165,21 @@ jobs:
               f.write(f"checkouts={json.dumps(checkouts)}\n")
           PY
 
+  # Parallel games on hosted runners would each download the client when the cache has none, slowing one another, and
+  # only one of them could save it. This job makes sure it is cached first; a self-hosted runner has its own client.
+  client:
+    if: ${{ !contains(inputs.runner, 'self-hosted') }}
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    steps:
+      - name: Cache the client
+        uses: maxnus/NachOS/.github/actions/setup-sc2@claude/reusable-match
+        with:
+          cache-only: true
+
   game:
     name: game ${{ matrix.game.n }} vs ${{ matrix.game.race }}
-    needs: prepare
+    needs: [prepare, client]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.client.result != 'failure' }}
     runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 60
     strategy:
@@ -229,7 +241,7 @@ jobs:
       # The Linux client resolves the map path python-sc2 sends against `<install>/maps`, lowercase, and python-sc2
       # prefers `maps` whenever it exists, so both sides look in the folder the action copies the maps to.
       - name: Set up StarCraft II
-        uses: maxnus/NachOS/.github/actions/setup-sc2@main
+        uses: maxnus/NachOS/.github/actions/setup-sc2@claude/reusable-match
         with:
           maps: ${{ needs.prepare.outputs.maps && format('bot/{0}', needs.prepare.outputs.maps) || '' }}
 
