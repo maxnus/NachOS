@@ -961,13 +961,25 @@ class TechSweep:
             self._charge()
             self._client.step(2)
             target = self._targets[ability]
-            aims: list[Point | int] = []
+            aims: dict[str, Point | int] = {}
             if target != _POINT:
-                aims += [u.tag for u in made if u.owner == enemy]
+                standing = {u.tag for u in self._game.units()}
+                aims |= {_unit_name(u.unit_type): u.tag for u in made if u.owner == enemy and u.tag in standing}
             if target != _UNIT:
-                aims.append(pad + (3, 0))
-            if not any(self._game.order(ability, caster.tag, aim) == SUCCESS for aim in aims):
-                logger.warning("A {} could not be ordered {} at anything", performer.name, _ability_name(ability))
+                aims["the ground"] = pad + (3, 0)
+            refusals: dict[str, str] = {}
+            for name, aim in aims.items():
+                if (answer := self._game.order(ability, caster.tag, aim)) == SUCCESS:
+                    break
+                refusals[name] = error_pb2.ActionResult.Name(answer)
+            else:
+                logger.warning(
+                    "A {} could not be ordered {} at anything: {}; it is offered {}",
+                    performer.name,
+                    _ability_name(ability),
+                    refusals or "nothing to aim at",
+                    sorted(_ability_name(a) for a in self._game.offered([caster.tag]).get(caster.tag, ())),
+                )
                 return set()
             self._client.step(_CAST_STEPS)
             return self._pairs(self._read({caster.tag}))
