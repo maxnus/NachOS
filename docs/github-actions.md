@@ -92,7 +92,7 @@ table per race and one per game, each game linking its replay.
 | `opponent-difficulty` | `VeryHard` | as the game script takes it |
 | `opponent-build` | `RandomBuild` | as the game script takes it |
 | `map` | empty | one map for every game; empty leaves it to the script |
-| `time-limit` | `0` | game seconds before a game ends as a tie; 0 plays it out |
+| `time-limit` | empty | game seconds before a game ends as a tie, `0` at once; empty plays it out |
 | `runner` | `"ubuntu-latest"` | where games run, as JSON for `runs-on`; see below |
 | `max-parallel` | `15` | games at once |
 

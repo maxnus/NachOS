@@ -67,9 +67,9 @@ on:
         type: string
         default: ''
       time-limit:
-        description: End each game as a tie after this many game seconds (0 = play it out)
-        type: number
-        default: 0
+        description: End each game as a tie after this many game seconds, 0 at once (empty = play it out)
+        type: string
+        default: ''
     secrets:
       token:
         description: >-
@@ -111,6 +111,7 @@ jobs:
           REF: ${{ inputs.ref || (inputs.repo == '' && github.sha) || 'HEAD' }}
           GAMES: ${{ inputs.games }}
           RACES: ${{ inputs.opponent-race }}
+          TIME_LIMIT: ${{ inputs.time-limit }}
         run: |
           [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::repo must be owner/name"; exit 1; }
           sha=$(curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.sha" \
@@ -131,6 +132,11 @@ jobs:
               fail(f"games must be 1 to 10 per race, got '{games}'")
           if int(games) * len(races) > 15:
               fail(f"{int(games) * len(races)} games in total; the limit is 15")
+          time_limit = os.environ["TIME_LIMIT"]
+          try:
+              assert time_limit == "" or float(time_limit) >= 0
+          except (AssertionError, ValueError):
+              fail(f"time-limit must be empty or a number of game seconds, got '{time_limit}'")
           matrix = [{"n": i * len(races) + j + 1, "race": race}
                     for i in range(int(games)) for j, race in enumerate(races)]
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
@@ -261,7 +267,7 @@ jobs:
                 --result-file "$RESULT_FILE"
                 --replay-file "$REPLAY_FILE")
           [ -n "$MAP" ] && args+=(--map "$MAP")
-          [ "$TIME_LIMIT" != 0 ] && args+=(--time-limit "$TIME_LIMIT")
+          [ -n "$TIME_LIMIT" ] && args+=(--time-limit "$TIME_LIMIT")
           uv run python "$RUN" "${args[@]}"
 
       # A game that crashed writes no result; the report counts it from the missing file.
@@ -358,7 +364,7 @@ jobs:
               state = "success"
 
           settings = f"{os.environ['DIFFICULTY']}, {os.environ['BUILD']}"
-          if float(os.environ["TIME_LIMIT"]):
+          if os.environ["TIME_LIMIT"]:
               settings += f", time limit {os.environ['TIME_LIMIT']}s"
           report = [
               "<!-- sc2-games:match -->",
