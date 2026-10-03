@@ -2,7 +2,7 @@ name: Set up StarCraft II
 description: >-
   Provide the Linux StarCraft II 4.10 client, the one the ladder plays, and point SC2PATH at it: the client already
   installed on a self-hosted runner, or Blizzard's download on a hosted one, cached between runs. Optionally install
-  maps.
+  maps. A self-hosted runner without a client fails the step: it is never downloaded there.
 
 inputs:
   path:
@@ -37,12 +37,16 @@ runs:
       shell: bash
       env:
         WANTED: ${{ inputs.path }}
+        RUNNER_ENVIRONMENT: ${{ runner.environment }}
       run: |
         dir=${WANTED:-${SC2PATH:-$HOME/StarCraftII}}
         dir=${dir/#\~/$HOME}
         echo "path=$dir" >> "$GITHUB_OUTPUT"
         if [ -d "$dir/Versions" ]; then
           echo "installed=true" >> "$GITHUB_OUTPUT"
+        elif [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+          echo "::error::No StarCraft II client at $dir; a self-hosted runner needs one installed, or SC2PATH set to it"
+          exit 1
         else
           echo "installed=false" >> "$GITHUB_OUTPUT"
         fi
