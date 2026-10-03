@@ -1,0 +1,3 @@
+# How the match workflow plays NachOS's example game script, tools/run_game.py: see docs/github-actions.md.
+run: tools/run_game.py
+maps: sc2maps/AIE
