@@ -60,6 +60,9 @@ OUT = Path(__file__).parents[1] / "data" / "tech_tree.json"
 # Steps for a killed structure to leave what is offered once it has left the observation, and for a toggle to switch.
 _SETTLE_STEPS = 6
 _SWITCH_STEPS = 22
+# Steps for a dead zerg structure's broodlings to come out, and tries at creating a killed structure where it stood.
+_BROODLING_STEPS = 22
+_RECREATE_ATTEMPTS = 4
 # Steps an order that makes something is watched, and research waited for, under `fast_build`.
 _MAKE_STEPS = 600
 # Reads of a structure going up, 4 steps apart, before it counts as offered no cancel.
@@ -398,10 +401,7 @@ class TechSweep:
         """Recreate `victims`, with their add-ons, larva for a hatchery, and energy."""
         add_ons = {unit.tag: unit for unit in victims if _is_add_on(_unit_name(unit.unit_type))}
         hosts = [unit for unit in victims if unit.tag not in add_ons]
-        requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
-        larva = [unit for unit in hosts if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)]
-        requests += [(UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3))) for unit in larva]
-        made = self._game.spawn(requests) if requests else []
+        made = self._recreate(hosts)
         # An add-on whose host stood is built again by it; one whose host died, by the host just made in its place.
         host_at = {(round(unit.pos.x), round(unit.pos.y)): unit.tag for unit in [*made, *self._mine()]}
         for add_on in add_ons.values():
@@ -425,6 +425,60 @@ class TechSweep:
                 logger.warning("{} not built again, so what needs one is misread from here", lost)
         self._charge()
         self._client.step(2)
+
+    def _recreate(self, hosts: Sequence[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """Create `hosts` again where they stood, with larva for a hatchery, and return what the game made.
+
+        Whatever other than a structure stands on a host's ground is killed first; in a zerg game, after waiting for a
+        dead structure's broodlings. A host the game puts elsewhere while units stand on its ground is killed and made
+        again, up to `_RECREATE_ATTEMPTS` times; one put elsewhere with nothing in its way stays there. A host that
+        never settles is named in a warning.
+        """
+        made: list[raw_pb2.Unit] = []
+        pending = list(hosts)
+        for _ in range(_RECREATE_ATTEMPTS):
+            requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in pending]
+            requests += [
+                (UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3)))
+                for unit in pending
+                if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)
+            ]
+            for _, _, spot in requests:
+                self._clear_enemies_near(spot)
+            if self._race is Race.ZERG:
+                self._client.step(_BROODLING_STEPS)
+            self._clear_ground(pending)
+            new = self._game.spawn(requests)
+            units = self._game.units()
+            unsettled = [
+                host for host in pending if not any(_near(u, host, 1) for u in new if u.unit_type == host.unit_type)
+            ]
+            blocked = [host for host in unsettled if self._standing([host], units)]
+            for host in unsettled:
+                if host not in blocked:
+                    logger.debug("{} came back elsewhere than {}", _unit_name(host.unit_type), (host.pos.x, host.pos.y))
+            # What went elsewhere for a blocked host is the one of its type nearest where it stood.
+            astray: set[int] = set()
+            for host in blocked:
+                elsewhere = [u for u in new if u.unit_type == host.unit_type and u.tag not in astray]
+                elsewhere = [u for u in elsewhere if not any(_near(u, other, 1) for other in pending)]
+                if elsewhere:
+                    astray.add(
+                        min(elsewhere, key=lambda u: (u.pos.x - host.pos.x) ** 2 + (u.pos.y - host.pos.y) ** 2).tag
+                    )
+            self._game.kill(astray)
+            made += [unit for unit in new if unit.tag not in astray]
+            pending = blocked
+            if not pending:
+                return made
+        for host in pending:
+            logger.warning(
+                "No {} came back at {}, where stand {}",
+                _unit_name(host.unit_type),
+                (host.pos.x, host.pos.y),
+                sorted(_unit_name(u.unit_type) for u in self._standing([host], self._game.units())),
+            )
+        return made
 
     def _read_attached(self, pairs: set[Pair]) -> None:
         """Mark the pairs needing an add-on that a bare structure of the same type is not offered."""
@@ -1022,6 +1076,24 @@ class TechSweep:
         self._client.step(_SWITCH_STEPS)
         return unit
 
+    def _standing(self, victims: Sequence[raw_pb2.Unit], units: Iterable[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """The `units` other than structures on the ground `victims` stood on, whoever they belong to."""
+        return [
+            unit
+            for unit in units
+            if unit.owner != NEUTRAL_REPORTED
+            and unit.unit_type not in self._structure_types
+            and not unit.is_flying
+            and any(_near(unit, victim, victim.radius + 0.5) for victim in victims)
+        ]
+
+    def _clear_ground(self, victims: Sequence[raw_pb2.Unit]) -> None:
+        """Kill whatever is not a structure on the ground `victims` stood on, whoever it belongs to."""
+        if standing := [unit.tag for unit in self._standing(victims, self._game.units())]:
+            logger.debug("Killing {} units on the ground of the victims put back", len(standing))
+            self._game.kill(standing)
+            self._client.step(4)
+
     def _clear_enemies_near(self, spot: Point) -> None:
         """Kill the computer's units in sight of `spot`: a unit put up there would chase them, and they can stand where
         a structure or an add-on is to go.
@@ -1192,6 +1264,10 @@ def _kind_of_work(ability: int) -> str | None:
     """Which of `_MAKING` an ability that sets a structure working is: a train, a research, a morph or an add-on."""
     name = _ability_name(ability)
     return next((verb for verb in _MAKING if verb in name), None)
+
+
+def _near(unit: raw_pb2.Unit, other: raw_pb2.Unit, reach: float) -> bool:
+    return abs(unit.pos.x - other.pos.x) < reach and abs(unit.pos.y - other.pos.y) < reach
 
 
 def _is_add_on(unit_type: str) -> bool:
