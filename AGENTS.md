@@ -9,7 +9,8 @@
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/curating-ids.md` says how to decide which game ids are
 real and how to refresh them after a patch, `docs/game-behavior.md` what the game has been seen to do,
-`docs/events.md` every event a game hands out, and `docs/orders.md` how a bot orders its units.
+`docs/events.md` every event a game hands out, `docs/orders.md` how a bot orders its units, and
+`docs/github-actions.md` how a bot repository runs games with the `match.yml` workflow and the `setup-sc2` action.
 
 ## Keep this file small
 

@@ -27,8 +27,8 @@ finds what each offered ability requires by killing every structure of one type 
 then researches one upgrade at a time, reads what each newly offers, and finds its requirements the same way. It orders
 every ability that makes a unit type on a new unit of each type offered it, before the research and after, to see what
 it does to that unit and what the unit is offered on the way, as a cocoon is. It switches every toggle, loads every
-transport, sets every structure making something and a worker building, arms every nuke, and orders every ability
-aimed at a unit or a point on a new unit of each type, reading what each is offered meanwhile.
+transport, sets every structure making something and a worker building each structure it can, arms every nuke, and
+orders every ability aimed at a unit or a point on a new unit of each type, reading what each is offered meanwhile.
 
 The findings are written as JSON, in the raw catalog's spelling, for `tools/generate_tech_tree.py`.
 """
@@ -41,7 +41,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
@@ -60,8 +60,13 @@ OUT = Path(__file__).parents[1] / "data" / "tech_tree.json"
 # Steps for a killed structure to leave what is offered once it has left the observation, and for a toggle to switch.
 _SETTLE_STEPS = 6
 _SWITCH_STEPS = 22
+# Steps for a dead zerg structure's broodlings to come out, and tries at creating a killed structure where it stood.
+_BROODLING_STEPS = 22
+_RECREATE_ATTEMPTS = 4
 # Steps an order that makes something is watched, and research waited for, under `fast_build`.
 _MAKE_STEPS = 600
+# Reads of a structure going up, 4 steps apart, before it counts as offered no cancel.
+_GOING_UP_READS = 3
 # Steps a worker harvesting gas stays inside the structure, with margin.
 _RETURN_STEPS = 120
 _RESEARCH_STEPS = 3000
@@ -178,7 +183,7 @@ class TechSweep:
         race: Race,
         findings: Findings,
         *,
-        cheats: Sequence[str] = ("free", "fast_build", "food", "god"),
+        cheats: Sequence[Cheat] = (Cheat.FREE, Cheat.FAST_BUILD, Cheat.FOOD, Cheat.GOD),
     ) -> None:
         self._game = game
         self._client = game.client
@@ -396,10 +401,7 @@ class TechSweep:
         """Recreate `victims`, with their add-ons, larva for a hatchery, and energy."""
         add_ons = {unit.tag: unit for unit in victims if _is_add_on(_unit_name(unit.unit_type))}
         hosts = [unit for unit in victims if unit.tag not in add_ons]
-        requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in hosts]
-        larva = [unit for unit in hosts if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)]
-        requests += [(UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3))) for unit in larva]
-        made = self._game.spawn(requests) if requests else []
+        made = self._recreate(hosts)
         # An add-on whose host stood is built again by it; one whose host died, by the host just made in its place.
         host_at = {(round(unit.pos.x), round(unit.pos.y)): unit.tag for unit in [*made, *self._mine()]}
         for add_on in add_ons.values():
@@ -423,6 +425,60 @@ class TechSweep:
                 logger.warning("{} not built again, so what needs one is misread from here", lost)
         self._charge()
         self._client.step(2)
+
+    def _recreate(self, hosts: Sequence[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """Create `hosts` again where they stood, with larva for a hatchery, and return what the game made.
+
+        Whatever other than a structure stands on a host's ground is killed first; in a zerg game, after waiting for a
+        dead structure's broodlings. A host the game puts elsewhere while units stand on its ground is killed and made
+        again, up to `_RECREATE_ATTEMPTS` times; one put elsewhere with nothing in its way stays there. A host that
+        never settles is named in a warning.
+        """
+        made: list[raw_pb2.Unit] = []
+        pending = list(hosts)
+        for _ in range(_RECREATE_ATTEMPTS):
+            requests = [(UnitTypeId(unit.unit_type), self._player, Point((unit.pos.x, unit.pos.y))) for unit in pending]
+            requests += [
+                (UnitTypeId.LARVA, self._player, Point((unit.pos.x, unit.pos.y - 3)))
+                for unit in pending
+                if unit.unit_type in (UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE)
+            ]
+            for _, _, spot in requests:
+                self._clear_enemies_near(spot)
+            if self._race is Race.ZERG:
+                self._client.step(_BROODLING_STEPS)
+            self._clear_ground(pending)
+            new = self._game.spawn(requests)
+            units = self._game.units()
+            unsettled = [
+                host for host in pending if not any(_near(u, host, 1) for u in new if u.unit_type == host.unit_type)
+            ]
+            blocked = [host for host in unsettled if self._standing([host], units)]
+            for host in unsettled:
+                if host not in blocked:
+                    logger.debug("{} came back elsewhere than {}", _unit_name(host.unit_type), (host.pos.x, host.pos.y))
+            # What went elsewhere for a blocked host is the one of its type nearest where it stood.
+            astray: set[int] = set()
+            for host in blocked:
+                elsewhere = [u for u in new if u.unit_type == host.unit_type and u.tag not in astray]
+                elsewhere = [u for u in elsewhere if not any(_near(u, other, 1) for other in pending)]
+                if elsewhere:
+                    astray.add(
+                        min(elsewhere, key=lambda u: (u.pos.x - host.pos.x) ** 2 + (u.pos.y - host.pos.y) ** 2).tag
+                    )
+            self._game.kill(astray)
+            made += [unit for unit in new if unit.tag not in astray]
+            pending = blocked
+            if not pending:
+                return made
+        for host in pending:
+            logger.warning(
+                "No {} came back at {}, where stand {}",
+                _unit_name(host.unit_type),
+                (host.pos.x, host.pos.y),
+                sorted(_unit_name(u.unit_type) for u in self._standing([host], self._game.units())),
+            )
+        return made
 
     def _read_attached(self, pairs: set[Pair]) -> None:
         """Mark the pairs needing an add-on that a bare structure of the same type is not offered."""
@@ -454,7 +510,11 @@ class TechSweep:
             self.read_requirements(new_pairs)
 
     def research_each(self) -> Iterator[set[int]]:
-        """Research one upgrade at a time, whichever an idle unit is offered first, and yield what each finished."""
+        """Research one upgrade at a time, whichever an idle unit is offered first, and yield what each finished.
+
+        Units are taken by type name, and by tag only among units of one type, so every game researches in the same
+        order whatever tags it hands out.
+        """
         refused: set[tuple[int, int]] = set()
         for _ in range(300):
             read = self._read()
@@ -463,7 +523,7 @@ class TechSweep:
             choice = next(
                 (
                     (tag, ability)
-                    for tag, (_, abilities) in sorted(read.items())
+                    for tag, (_, abilities) in sorted(read.items(), key=lambda item: (_unit_name(item[1][0]), item[0]))
                     if tag not in busy
                     for ability in sorted(abilities)
                     if "Research" in _ability_name(ability) and (tag, ability) not in refused
@@ -524,8 +584,8 @@ class TechSweep:
         self.read_requirements(self._pairs(self._read()) - self._seen)
 
     def sweep_busy(self) -> None:
-        """Set every structure making something and a worker building, and read what each is offered meanwhile: a
-        cancel and a halt are offered only then."""
+        """Set every structure making something and a worker building each structure it can, and read what each is
+        offered meanwhile: a cancel and a halt are offered only then."""
         seen = self._pairs(self._read())
         busy: set[int] = set()
         for unit in sorted(self._mine(), key=lambda unit: unit.tag):
@@ -554,7 +614,7 @@ class TechSweep:
         in, before the structure is first read, and a cancel is offered only while the work goes on.
         """
         found: set[Pair] = set()
-        self._game.cheat("fast_build")
+        self._game.cheat(Cheat.FAST_BUILD)
         try:
             for unit_type in sorted(set(self._race_types()) & self._structure_types, key=lambda one: one.name):
                 for raw in self._ways_to_try(unit_type):
@@ -563,7 +623,7 @@ class TechSweep:
                 found |= self._read_tech_lab_researching(_ADD_ONS[host][0])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
-            self._game.cheat("fast_build")
+            self._game.cheat(Cheat.FAST_BUILD)
         self.read_requirements(found)
 
     def _read_tech_lab_researching(self, unit_type: UnitTypeId) -> set[Pair]:
@@ -749,30 +809,104 @@ class TechSweep:
             self._clear({gatherer.tag})
 
     def _build_something(self) -> set[Pair]:
-        """What a worker and the structure it is building are offered while it goes up."""
+        """What a worker and each structure it can put up are offered while the structure goes up, one structure at a
+        time, with `fast_build` off: a structure is offered its cancel only until it is finished."""
         worker = _WORKERS[self._race]
+        makers = {ability: unit_type for unit_type, ability in self._makers.items()}
+        found: set[Pair] = set()
+        self._game.cheat(Cheat.FAST_BUILD)
+        try:
+            builds = self._builds(worker, makers)
+            for build in builds:
+                found |= self._read_going_up(worker, build, makers[build])
+        finally:
+            # A cheat is a toggle, so the same command turns it back on.
+            self._game.cheat(Cheat.FAST_BUILD)
+        return found
+
+    def _builds(self, worker: UnitTypeId, makers: dict[AbilityId, UnitTypeId]) -> list[AbilityId]:
+        """The abilities a new `worker` is offered that put up a structure on a point, in id order."""
         (builder,) = [
             u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
         ]
-        makers = {ability: unit_type for unit_type, ability in self._makers.items()}
         offered = filter(None, (AbilityId.get(ability) for ability in self._game.offered([builder.tag])[builder.tag]))
-        builds = [a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT]
-        # The first the game will let go up near home: a protoss structure that needs power will not, without a pylon.
-        build, site = next(((a, s) for a in builds if (s := self._site(a)) is not False), (None, None))
-        if build is None or not isinstance(site, Point):
-            logger.warning("No {} could put anything up", worker.name)
-            return set()
+        builds = sorted(a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT)
+        self._clear({builder.tag})
+        return builds
+
+    def _read_going_up(self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId) -> set[Pair]:
+        """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up.
+
+        The structure goes up at the site nearest home that the game accepts, where a zerg structure finds creep;
+        failing that, on ground claimed in the sandbox, beside a pylon where it needs power. One that goes up at
+        neither is named in a warning.
+        """
+        found = self._try_going_up(worker, build, structure, self._site(build))
+        if found is not None:
+            return found
+        pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
+        pylons: set[int] = set()
+        try:
+            if _unit_name(structure) in self.findings.powered:
+                made = self._game.spawn([(UnitTypeId.PYLON, self._player, pad + (0, 4))])
+                pylons = {unit.tag for unit in made if unit.unit_type == UnitTypeId.PYLON}
+                self._client.step(_SWITCH_STEPS)
+            found = self._try_going_up(worker, build, structure, self._site(build, pad, reach=3))
+        finally:
+            if pylons:
+                self._clear(pylons)
+            self._ground.release(pad)
+        if found is None:
+            logger.warning("No {} went up near home or in the sandbox", structure.name)
+        return found or set()
+
+    def _try_going_up(
+        self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId, site: Point | bool
+    ) -> set[Pair] | None:
+        """What a new `worker` beside `site` and the `structure` it puts up there with `build` are offered while the
+        structure goes up, or `None` where there is no site or nothing went up, with the reason logged."""
+        if not isinstance(site, Point):
+            logger.info("No site for a {}", structure.name)
+            return None
+        spot = site + (0, -4)
+        workers = [unit for unit in self._game.spawn([(worker, self._player, spot)]) if unit.unit_type == worker]
+        if not workers:
+            logger.info("No {} was put up beside a {}'s site", worker.name, structure.name)
+            return None
+        # The spawn can report another new worker too; the one asked for is nearest the spot.
+        builder = min(workers, key=lambda unit: (unit.pos.x - spot.x) ** 2 + (unit.pos.y - spot.y) ** 2)
         before = {unit.tag for unit in self._game.units()}
-        self._game.order(build, builder.tag, site)
-        for _ in range(_MAKE_STEPS // 4):
-            self._client.step(4)
-            # A placeholder, with no tag, stands at the site from the moment the order is given.
-            if any(u.tag and u.tag not in before and u.unit_type == makers[build] for u in self._mine()):
-                found = self._pairs(self._read())
-                self._clear({u.tag for u in self._mine() if u.tag not in before} | {builder.tag})
+        try:
+            answer = self._game.order(build, builder.tag, site)
+            if answer != SUCCESS:
+                logger.info("{} at {} was refused: {}", _ability_name(build), site, error_pb2.ActionResult.Name(answer))
+                return None
+            for _ in range(_MAKE_STEPS // 4):
+                self._client.step(4)
+                # A placeholder, with no tag, stands at the site from the moment the order is given.
+                if new := [u for u in self._mine() if u.tag and u.tag not in before and u.unit_type == structure]:
+                    return self._read_until_cancel(new[0].tag, structure)
+            logger.info("Nothing was put up by {} at {}", _ability_name(build), site)
+            return None
+        finally:
+            self._clear({u.tag for u in self._mine() if u.tag not in before} | {u.tag for u in workers})
+
+    def _read_until_cancel(self, tag: int, structure: UnitTypeId) -> set[Pair]:
+        """What this player's units are offered while the `structure` of `tag` goes up, read up to `_GOING_UP_READS`
+        times a few steps apart until the structure is offered a cancel, with a warning where it never is."""
+        found: set[Pair] = set()
+        offered: list[str] = []
+        for attempt in range(_GOING_UP_READS):
+            read = self._read()
+            found |= self._pairs(read)
+            offered = sorted(_ability_name(a) for a in read.get(tag, (0, set()))[1])
+            if any(self._is_cancel(ability) for ability in offered):
+                logger.info("A {} going up was offered {}", structure.name, offered)
                 return found
-        logger.warning("Nothing was put up by {}", _ability_name(build))
-        return set()
+            if attempt < _GOING_UP_READS - 1:
+                self._client.step(4)
+        logger.warning("A {} going up was offered no cancel: {}", structure.name, offered or "nothing")
+        return found
 
     # --- Casting
 
@@ -794,27 +928,33 @@ class TechSweep:
         self._client.step(22 * 10)
         found = self._pairs(self._read())
         pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
-        for type_name, names in sorted(self.findings.offered.items()):
-            performer = UnitTypeId.get(RawUnitTypeId[type_name]) if type_name in _RAW_UNITS else None
-            if performer is None or performer in self._structure_types:
-                continue
-            if self._data.units[performer].race is not self._race:
-                continue
-            for name in sorted(names):
-                ability = int(RawAbilityId[name]) if name in _RAW_ABILITIES else None
-                if (
-                    ability is None
-                    or ability in self._creation_abilities
-                    or self._targets.get(ability) not in _AIMED
-                    or any(fragment in name for fragment in _NOT_CASTS)
-                ):
+        # A caster can cast at the targets by itself before it is ordered to, as a cyclone locks on.
+        self._game.cheat(Cheat.COOLDOWN)
+        try:
+            for type_name, names in sorted(self.findings.offered.items()):
+                performer = UnitTypeId.get(RawUnitTypeId[type_name]) if type_name in _RAW_UNITS else None
+                if performer is None or performer in self._structure_types:
                     continue
-                found |= self._cast(performer, ability, pad)
+                if self._data.units[performer].race is not self._race:
+                    continue
+                for name in sorted(names):
+                    ability = int(RawAbilityId[name]) if name in _RAW_ABILITIES else None
+                    if (
+                        ability is None
+                        or ability in self._creation_abilities
+                        or self._targets.get(ability) not in _AIMED
+                        or any(fragment in name for fragment in _NOT_CASTS)
+                    ):
+                        continue
+                    found |= self._cast(performer, ability, pad)
+        finally:
+            self._game.cheat(Cheat.COOLDOWN)
         self.read_requirements(found - self._seen)
         self._seen |= found
 
     def _cast(self, performer: UnitTypeId, ability: int, pad: Point) -> set[Pair]:
-        """What a new `performer` is offered once ordered `ability` at an enemy beside it, or at the ground there."""
+        """What a new `performer` is offered once ordered `ability` at an enemy beside it, or at the ground there, or
+        once refused it at all of them."""
         before = {u.tag for u in self._game.units()}
         try:
             enemy = 3 - self._player
@@ -827,14 +967,26 @@ class TechSweep:
             self._charge()
             self._client.step(2)
             target = self._targets[ability]
-            aims: list[Point | int] = []
+            aims: dict[str, Point | int] = {}
             if target != _POINT:
-                aims += [u.tag for u in made if u.owner == enemy]
+                standing = {u.tag for u in self._game.units()}
+                aims |= {_unit_name(u.unit_type): u.tag for u in made if u.owner == enemy and u.tag in standing}
             if target != _UNIT:
-                aims.append(pad + (3, 0))
-            if not any(self._game.order(ability, caster.tag, aim) == SUCCESS for aim in aims):
-                logger.warning("A {} could not be ordered {} at anything", performer.name, _ability_name(ability))
-                return set()
+                aims["the ground"] = pad + (3, 0)
+            refusals: dict[str, str] = {}
+            for name, aim in aims.items():
+                if (answer := self._game.order(ability, caster.tag, aim)) == SUCCESS:
+                    break
+                refusals[name] = error_pb2.ActionResult.Name(answer)
+            else:
+                logger.warning(
+                    "A {} could not be ordered {} at anything: {}; it is offered {}",
+                    performer.name,
+                    _ability_name(ability),
+                    refusals or "nothing to aim at",
+                    sorted(_ability_name(a) for a in self._game.offered([caster.tag]).get(caster.tag, ())),
+                )
+                return self._pairs(self._read({caster.tag}))
             self._client.step(_CAST_STEPS)
             return self._pairs(self._read({caster.tag}))
         finally:
@@ -941,6 +1093,24 @@ class TechSweep:
         self._charge()
         self._client.step(_SWITCH_STEPS)
         return unit
+
+    def _standing(self, victims: Sequence[raw_pb2.Unit], units: Iterable[raw_pb2.Unit]) -> list[raw_pb2.Unit]:
+        """The `units` other than structures on the ground `victims` stood on, whoever they belong to."""
+        return [
+            unit
+            for unit in units
+            if unit.owner != NEUTRAL_REPORTED
+            and unit.unit_type not in self._structure_types
+            and not unit.is_flying
+            and any(_near(unit, victim, victim.radius + 0.5) for victim in victims)
+        ]
+
+    def _clear_ground(self, victims: Sequence[raw_pb2.Unit]) -> None:
+        """Kill whatever is not a structure on the ground `victims` stood on, whoever it belongs to."""
+        if standing := [unit.tag for unit in self._standing(victims, self._game.units())]:
+            logger.debug("Killing {} units on the ground of the victims put back", len(standing))
+            self._game.kill(standing)
+            self._client.step(4)
 
     def _clear_enemies_near(self, spot: Point) -> None:
         """Kill the computer's units in sight of `spot`: a unit put up there would chase them, and they can stand where
@@ -1056,11 +1226,18 @@ class TechSweep:
             return False
         return min(geysers, key=lambda u: (u.pos.x - self._home.x) ** 2 + (u.pos.y - self._home.y) ** 2).tag
 
-    def _site(self, ability: AbilityId) -> Point | bool:
-        """The nearest point to home where the game would put up what `ability` makes, or `False` where it would not."""
-        corner = Point((int(self._home.x), int(self._home.y)))
+    def _site(self, ability: AbilityId, near: Point | None = None, reach: int = 20) -> Point | bool:
+        """The nearest point to `near`, home by default, within `reach` tiles each way where the game would put up what
+        `ability` makes, or `False` where it would not."""
+        near = near or self._home
+        corner = Point((int(near.x), int(near.y)))
         offsets = sorted(
-            ((dx + half, dy + half) for dx in range(-20, 21) for dy in range(-20, 21) for half in (0.0, 0.5)),
+            (
+                (dx + half, dy + half)
+                for dx in range(-reach, reach + 1)
+                for dy in range(-reach, reach + 1)
+                for half in (0.0, 0.5)
+            ),
             key=lambda offset: offset[0] ** 2 + offset[1] ** 2,
         )
         for start in range(0, len(offsets), 400):
@@ -1105,6 +1282,10 @@ def _kind_of_work(ability: int) -> str | None:
     """Which of `_MAKING` an ability that sets a structure working is: a train, a research, a morph or an add-on."""
     name = _ability_name(ability)
     return next((verb for verb in _MAKING if verb in name), None)
+
+
+def _near(unit: raw_pb2.Unit, other: raw_pb2.Unit, reach: float) -> bool:
+    return abs(unit.pos.x - other.pos.x) < reach and abs(unit.pos.y - other.pos.y) < reach
 
 
 def _is_add_on(unit_type: str) -> bool:

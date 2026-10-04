@@ -1,0 +1,82 @@
+name: sc2
+run-name: ${{ inputs.script || 'setup-sc2 check' }} ${{ inputs.args }}
+
+# Runs a script against StarCraft II on a GitHub-hosted runner, and keeps what it wrote as the `output` artifact.
+# For sweeps and other work that needs the game. Started by hand from the Actions tab.
+#
+# The client comes from the setup-sc2 action, which downloads Blizzard's Linux 4.10 build, the one the ladder plays,
+# and caches it; the maps are the AIE ones in sc2maps. A hosted runner is thrown away after the job, so this runs on
+# any branch: no self-hosted runner is involved.
+#
+# A pull request that changes the action or this workflow runs the Terran part of the tech tree sweep with it.
+on:
+  pull_request:
+    paths:
+      - .github/actions/setup-sc2/**
+      - .github/workflows/sc2.yml
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Python file to run, relative to the repository's root
+        required: true
+      args:
+        description: Arguments for the script (empty = none)
+        default: ''
+
+jobs:
+  script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up StarCraft II
+        id: sc2
+        uses: ./.github/actions/setup-sc2
+        with:
+          maps: sc2maps/AIE
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Run
+        env:
+          SCRIPT: ${{ inputs.script || 'tools/sweep_tech_tree.py' }}
+          ARGS: ${{ github.event_name == 'pull_request' && 'terran' || inputs.args }}
+        run: |
+          read -ra args <<< "$ARGS"
+          uv run python "$SCRIPT" "${args[@]}"
+
+      # Kept when the script fails too, for whatever it wrote before failing.
+      - name: Collect what the script wrote
+        if: always()
+        env:
+          BUILD: ${{ steps.sc2.outputs.build }}
+          SOURCE: ${{ steps.sc2.outputs.source }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/output"
+          { git diff --name-only -z --diff-filter=d; git ls-files --others --exclude-standard -z; } \
+            | xargs -0 -r cp --parents -t "$RUNNER_TEMP/output"
+          {
+            echo "### $(git rev-parse --short HEAD), StarCraft II $BUILD from $SOURCE"
+            echo
+            echo '```'
+            git status --short
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep it
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: output
+          path: ${{ runner.temp }}/output
+          if-no-files-found: warn
+          retention-days: 30

@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from _sandbox import Sandbox, playing
+from _sandbox import Cheat, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import data_pb2, raw_pb2, sc2api_pb2
 from sweep_tech_tree import Findings as TechFindings
@@ -84,7 +84,7 @@ class UpgradeSweep(TechSweep):
     def __init__(self, game: Sandbox, race: Race, findings: Findings) -> None:
         # The rows before any cheat, which every change found is summed against.
         self._first = _rows(game.client.game_data(abilities=False, upgrades=False, buffs=False, effects=False))
-        super().__init__(game, race, TechFindings(), cheats=("free", "fast_build", "food"))
+        super().__init__(game, race, TechFindings(), cheats=(Cheat.FREE, Cheat.FAST_BUILD, Cheat.FOOD))
         self.upgrade_findings = findings
         findings.base_build = self.findings.base_build
 

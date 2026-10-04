@@ -1,0 +1,110 @@
+name: Set up StarCraft II
+description: >-
+  Provide the Linux StarCraft II 4.10 client, the one the ladder plays, and point SC2PATH at it: the client already
+  installed on a self-hosted runner, or Blizzard's download on a hosted one, cached between runs. Optionally install
+  maps. A self-hosted runner without a client fails the step: it is never downloaded there.
+
+inputs:
+  path:
+    description: >-
+      Where the client is, or goes when there is none. Empty = SC2PATH when the job sets it, else ~/StarCraftII.
+    default: ''
+  maps:
+    description: >-
+      Folders of .SC2Map files to install, one per line, relative to the workspace. Each is copied to
+      maps/<folder name> in the client, where the map name alone finds it.
+    default: ''
+  cache:
+    description: Keep the downloaded client in the Actions cache, so later runs restore it rather than download it.
+    default: 'true'
+  cache-only:
+    description: >-
+      Only make sure the client is in the cache, downloading it when it is not, and set nothing up. For a job that
+      fills the cache before parallel jobs restore it, rather than each download it.
+    default: 'false'
+
+outputs:
+  path:
+    description: Where the client is; also exported as SC2PATH.
+    value: ${{ steps.locate.outputs.path }}
+  build:
+    description: The client's build, such as Base75689.
+    value: ${{ steps.finish.outputs.build }}
+  source:
+    description: Where the client came from this run, `installed`, `cache` or `download`; empty with `cache-only`.
+    value: ${{ steps.finish.outputs.source }}
+
+runs:
+  using: composite
+  steps:
+    - name: Look for an installed client
+      id: locate
+      shell: bash
+      env:
+        WANTED: ${{ inputs.path }}
+        RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      run: |
+        dir=${WANTED:-${SC2PATH:-$HOME/StarCraftII}}
+        dir=${dir/#\~/$HOME}
+        echo "path=$dir" >> "$GITHUB_OUTPUT"
+        if [ -d "$dir/Versions" ]; then
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        elif [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+          echo "::error::No StarCraft II client at $dir; a self-hosted runner needs one installed, or SC2PATH set to it"
+          exit 1
+        else
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Restore the client from the cache
+      id: restore
+      if: steps.locate.outputs.installed != 'true' && inputs.cache == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.locate.outputs.path }}
+        key: sc2-linux-4.10-${{ runner.os }}-${{ runner.arch }}
+        lookup-only: ${{ inputs.cache-only }}
+
+    # The password is how Blizzard's AI and Machine Learning license is accepted.
+    - name: Download the client from Blizzard
+      if: steps.locate.outputs.installed != 'true' && steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        DIR: ${{ steps.locate.outputs.path }}
+      run: |
+        zip="$RUNNER_TEMP/SC2.4.10.zip"
+        curl -fsSL --retry 3 -o "$zip" https://blzdistsc2-a.akamaihd.net/Linux/SC2.4.10.zip
+        unzip -q -P iagreetotheeula "$zip" -d "$RUNNER_TEMP/sc2"
+        rm "$zip"
+        mkdir -p "$(dirname "$DIR")"
+        mv "$RUNNER_TEMP/sc2/StarCraftII" "$DIR"
+        rm -rf "$RUNNER_TEMP/sc2"
+
+    - name: Keep the client in the cache
+      if: steps.locate.outputs.installed != 'true' && steps.restore.outputs.cache-hit != 'true' && inputs.cache == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.locate.outputs.path }}
+        key: sc2-linux-4.10-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Install the maps and point SC2PATH at the client
+      id: finish
+      if: inputs.cache-only != 'true'
+      shell: bash
+      env:
+        DIR: ${{ steps.locate.outputs.path }}
+        MAPS: ${{ inputs.maps }}
+        INSTALLED: ${{ steps.locate.outputs.installed }}
+        CACHED: ${{ steps.restore.outputs.cache-hit }}
+      run: |
+        while IFS= read -r folder; do
+          [ -n "$folder" ] || continue
+          ls "$folder"/*.SC2Map > /dev/null || { echo "::error::No .SC2Map files in $folder"; exit 1; }
+          mkdir -p "$DIR/maps/$(basename "$folder")"
+          cp "$folder"/*.SC2Map "$DIR/maps/$(basename "$folder")/"
+        done <<< "$MAPS"
+        build=$(basename "$(ls -d "$DIR"/Versions/Base* | sort -V | tail -n 1)")
+        if [ "$INSTALLED" = true ]; then source=installed; elif [ "$CACHED" = true ]; then source=cache; else source=download; fi
+        echo "SC2PATH=$DIR" >> "$GITHUB_ENV"
+        { echo "build=$build"; echo "source=$source"; } >> "$GITHUB_OUTPUT"
+        echo "StarCraft II $build at $DIR, from $source"

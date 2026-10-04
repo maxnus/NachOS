@@ -5,7 +5,7 @@ from sc2nachos._errors import NachOSError
 from sc2nachos.api import Api, NotPlayingError
 from sc2nachos.enemy import UpgradeInference
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result
-from sc2nachos.run import ApiBot, run_ladder, run_local
+from sc2nachos.run import ApiBot, run_from_command_line, run_ladder, run_local
 
 __all__ = [
     "AIBuild",
@@ -19,6 +19,7 @@ __all__ = [
     "Result",
     "UpgradeInference",
     "__version__",
+    "run_from_command_line",
     "run_ladder",
     "run_local",
 ]
