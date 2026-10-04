@@ -10,8 +10,18 @@ import sys
 from pathlib import Path
 
 RACES = ["Terran", "Zerg", "Protoss"]
-DIFFICULTIES = ["VeryEasy", "Easy", "Medium", "MediumHard", "Hard", "Harder", "VeryHard"]
-DIFFICULTIES += ["CheatVision", "CheatMoney", "CheatInsane"]
+DIFFICULTIES = [
+    "VeryEasy",
+    "Easy",
+    "Medium",
+    "MediumHard",
+    "Hard",
+    "Harder",
+    "VeryHard",
+    "CheatVision",
+    "CheatMoney",
+    "CheatInsane",
+]
 BUILDS = ["RandomBuild", "Rush", "Timing", "Power", "Macro", "Air"]
 CONFIG_KEYS = {"run", "install", "maps", "checkouts"}
 
@@ -28,8 +38,6 @@ def games(count: str, races: str) -> list[dict[str, object]]:
         fail("opponent-race must be all or a list of Random, Terran, Zerg, Protoss")
     if not count.isdigit() or not 1 <= int(count) <= 10:
         fail(f"games must be 1 to 10 per race, got '{count}'")
-    if int(count) * len(chosen) > 15:
-        fail(f"{int(count) * len(chosen)} games in total; the limit is 15")
     return [{"n": i * len(chosen) + j + 1, "race": race} for i in range(int(count)) for j, race in enumerate(chosen)]
 
 

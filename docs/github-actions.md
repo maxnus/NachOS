@@ -105,7 +105,7 @@ it was called at.
 | `repo` | the calling repository | the bot to play, `owner/name` |
 | `ref` | the commit the workflow runs on, or another `repo`'s default branch | branch, tag or commit to play |
 | `config` | `.github/sc2-games.yml` | where the config file is |
-| `games` | `1` | games per opponent race, 1 to 10, at most 15 in total |
+| `games` | `1` | games per opponent race, 1 to 10 |
 | `opponent-race` | `all` | `all`, or a comma-separated list of `Random`, `Terran`, `Zerg`, `Protoss` |
 | `opponent-difficulty` | `VeryHard` | as the game script takes it |
 | `opponent-build` | `RandomBuild` | as the game script takes it |
@@ -191,12 +191,12 @@ runs its sweep tools this way.
 - **Minutes**: GitHub-hosted runners are free for public repositories and count against the plan's minutes for
   private ones.
 - **The client**: the first run downloads it from Blizzard and keeps it in the repository's Actions cache, which
-  later runs restore it from. It takes 4.1 GB of the 10 GB cache a repository gets. A cache entry unused for 7 days is
-  dropped, and the next run downloads it again. The match workflow downloads it once before its games start, not once
+  later runs restore it from. It takes a large share of the 10 GB cache a repository gets. A cache entry unused for 7
+  days is dropped, and the next run downloads it again. The match workflow downloads it once before its games start, not once
   per game.
 - **Cache scope**: a cache saved on a pull request serves only that pull request. Every branch can use one saved on
   the default branch, so a run there fills it for all.
-- **Games**: at most 15 per run, each with an hour before it is cut off.
+- **Games**: at most 10 per opponent race, each with an hour before it is cut off.
 - **Licence**: the client's download is protected by a password that accepts Blizzard's AI and Machine Learning
   License, and setup-sc2 enters it for you; using the action is accepting the licence. Download the client from
   Blizzard as the action does, rather than publishing a copy of it.

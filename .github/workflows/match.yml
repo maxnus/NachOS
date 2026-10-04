@@ -47,7 +47,7 @@ on:
         type: number
         default: 15
       games:
-        description: Games per opponent race, 1 to 10 (15 in total)
+        description: Games per opponent race, 1 to 10
         type: number
         default: 1
       opponent-race:
