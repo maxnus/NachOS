@@ -360,8 +360,8 @@ class TestARecordedGamesTables:
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_general_ability_does_for_each_type_what_the_one_that_type_performs_does(self, path: Path) -> None:
-        """A ghost's hold fire keeps its orders (in game), and a lurker's is taken to replace them, since a burrowed
-        lurker holds an attack; a queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
+        """A ghost's hold fire keeps its orders, and a lurker's takes a burrowed lurker off its attack (in game); a
+        queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
         data = _tables(path)
         for ability in (AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF):
             row = data.abilities[ability]
@@ -390,10 +390,29 @@ class TestARecordedGamesTables:
         assert stim.order_behavior_for(UnitTypeId.MARINE) is stim.order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_unit_that_cannot_move_still_holds_an_order_of_its_own(self, path: Path) -> None:
-        """A sieged tank and a burrowed lurker hold an attack, so leaving the form is not read as keeping it."""
+        """A sieged tank and a burrowed lurker hold an attack, which leaving the form takes them off (in game)."""
         data = _tables(path)
         for ability in (AbilityId.SIEGE_TANK_UNSIEGE, AbilityId.LURKER_UNBURROW, AbilityId.LIBERATOR_UNSIEGE):
             assert data.abilities[ability].order_behavior is OrderBehavior.REPLACES, ability.name
+
+    def test_a_fortress_trains_on_through_an_attack_and_a_stop(self, path: Path) -> None:
+        """It attacks and stops with the ids every unit does, yet neither takes it off its training (in game)."""
+        data = _tables(path)
+        for ability in (
+            AbilityId.GENERAL_ATTACK,
+            AbilityId.GENERAL_ATTACK_EXACT,
+            AbilityId.GENERAL_STOP,
+            AbilityId.GENERAL_STOP_EXACT,
+        ):
+            row = data.abilities[ability]
+            assert row.order_behavior_for(UnitTypeId.PLANETARY_FORTRESS) is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert row.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES, ability.name
+
+    def test_a_command_center_trains_on_while_it_unloads(self, path: Path) -> None:
+        data = _tables(path)
+        for ability in (AbilityId.COMMAND_CENTER_UNLOAD, AbilityId.GENERAL_UNLOAD):
+            behavior = data.abilities[ability].order_behavior_for(UnitTypeId.COMMAND_CENTER)
+            assert behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_structure_holds_no_order_of_its_own_even_with_a_weapon(self, path: Path) -> None:
         """A bunker is offered an attack and a stop, yet loading it leaves alone what it is doing."""

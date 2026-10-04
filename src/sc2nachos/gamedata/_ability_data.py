@@ -12,7 +12,7 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._techtree._overrides import COST_OVERRIDES, KEEPS_ORDERS_ABILITIES
+from sc2nachos.gamedata._techtree._overrides import COST_OVERRIDES, KEEPS_ORDERS_ABILITIES, KEEPS_ORDERS_BY_TYPE
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
@@ -55,9 +55,9 @@ class OrderBehavior(Enum):
 def order_behaviors(
     tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
 ) -> tuple[Mapping[AbilityId, OrderBehavior], Mapping[AbilityId, Mapping[UnitTypeId, OrderBehavior]]]:
-    """The order behavior of each ability that does not simply replace the unit's orders, and, for a general id, the
-    behavior for each type whose exact id differs from the general's own: a general id does for a type what the exact
-    id that type performs does.
+    """The order behavior of each ability that does not simply replace the unit's orders, and the behavior for each
+    type that differs from an ability's own: a general id does for a type what the exact id that type performs does,
+    and `KEEPS_ORDERS_BY_TYPE` names what keeps the orders of some types alone.
 
     `structures` and `non_structures` are the types the tables say are and are not structures. They tell a barracks
     training a marine from a larva morphing into one, and a sieged tank from a bunker.
@@ -106,6 +106,9 @@ def order_behaviors(
                 per_type.update(dict.fromkeys(_performers_of(exact, tech_tree), kind))
         if per_type:
             by_performer[general] = MappingProxyType(per_type)
+    for ability, unit_types in KEEPS_ORDERS_BY_TYPE.items():
+        kept = dict.fromkeys(unit_types, OrderBehavior.KEEPS_ORDERS)
+        by_performer[ability] = MappingProxyType({**by_performer.get(ability, {}), **kept})
     return behaviors, by_performer
 
 
@@ -273,7 +276,7 @@ class AbilityData:
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: for a general id, what the exact id
-        that type performs does."""
+        that type performs does, and for a planetary fortress's attack and stop, keeping its orders (in game)."""
         return self._behaviors_by_performer.get(unit_type, self.order_behavior)
 
     @classmethod

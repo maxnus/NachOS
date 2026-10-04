@@ -504,6 +504,24 @@ Each entry ends with how it was seen:
   answered `Success`, leaves the move first in the unit's orders, and the unit keeps closing on its point. A lurker's
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
+- A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
+  a sieged tank `SIEGE_TANK_SIEGE`, a burrowed lurker `LURKER_BURROW`, a sieged liberator `LIBERATOR_SIEGE_EXACT`.
+  A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
+  the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
+  behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
+  widow mine hold no order to take them off: each answers attack, move, patrol and hold position `Error`. A sieged
+  liberator answered an attack on an ultralisk of its own in its zone `TargetIsOutOfRange` (tool `sweep_orders`,
+  `held-orders`).
+- A loaded command center training two SCVs goes on training while it unloads, by `COMMAND_CENTER_UNLOAD` (413,
+  `UnloadAll_CommandCenter`) or `GENERAL_UNLOAD`; its unload at a point is refused, `NotSupported` by its own id and
+  `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
+  point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
+  aimed at a point, it replaces the move and flies there first. `GENERAL_UNLOAD` is answered `Error` by each of the
+  three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`).
+- A planetary fortress training two SCVs, given an attack on a command center in range, shows the attack behind its
+  trains, fires, and goes on training. Given a stop, before or after the attack, it goes on training, and shows an
+  attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
+  through both at a command center in range (tool `sweep_orders`, `held-orders`).
 - One command to several units sends each moving unit to its own point around the one ordered, so they keep their
   spacing, but a spell, a structure, a morph, a train and a research are carried out by only one of them: a storm by
   a templar with the energy for it, a pylon by one of two probes, a morph as above, one marine from three barracks

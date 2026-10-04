@@ -96,6 +96,20 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     }
 )
 
+# Each of these, given to a unit of these types while it held an order, left that order alone (tool `sweep_orders`,
+# `held-orders`), where the tables alone read it as replacing them. A planetary fortress attacks and stops with the ids
+# every unit does, yet goes on training through both, the attack shown behind its trains. A command center goes on
+# training while it unloads, by an id the tables offer to nobody, since unload is offered only to a loaded transport.
+KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
+    {
+        AbilityId.COMMAND_CENTER_UNLOAD: frozenset({UnitTypeId.COMMAND_CENTER}),
+        AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_ATTACK_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_STOP: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_STOP_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+    }
+)
+
 
 COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {

@@ -133,16 +133,12 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
-- What these do to a unit's orders. Each read `KEEPS_ORDERS` before #70 and reads `REPLACES` since, without a sweep
-  behind either: the unit holds an attack or a move, so nothing is inferred for it. `SIEGE_TANK_UNSIEGE`,
-  `LIBERATOR_UNSIEGE`, `LURKER_UNBURROW`, the lurker's hold fire (`LURKER_HOLD_FIRE_ON`, and `GENERAL_HOLD_FIRE_ON`
-  given to a lurker), `OBSERVER_UNSIEGE`, `OVERSEER_UNSIEGE` and `WARP_PRISM_TRANSPORT_MODE`. `WIDOW_MINE_UNBURROW`
-  still reads `KEEPS_ORDERS`: a burrowed widow mine is offered no attack, stop or hold.
-- What unload does to a command center's, a medivac's, a warp prism's and an overlord's orders. `GENERAL_UNLOAD`
-  reads `KEEPS_ORDERS` for each, taken from the bunker's and the nydus's, since the tables offer their own unloads to
-  nobody (review of #77).
-- What attack and stop do to a bunker's and a planetary fortress's orders. As structures they count as holding no
-  order of their own, so both read `KEEPS_ORDERS` (review of #77).
+- What `LIBERATOR_UNSIEGE` does to a sieged liberator's orders. It reads `REPLACES`, unmeasured: the liberator
+  answered an attack on a unit in its zone `TargetIsOutOfRange`, so the `held-orders` sweep had no order to watch.
+  The rest of the forms the tables read as holding an order were measured there (docs/game-behavior.md).
+- An unload at a point aimed at the transport itself leaves a medivac's, a warp prism's and an overlord's move
+  going (in game), yet reads `REPLACES`, which is right only for one aimed at a point. An order's behavior is one per
+  ability and type, not per target, so a turn that moves a transport and unloads it in place sends only the last.
 
 ### Suggested first pull request
 

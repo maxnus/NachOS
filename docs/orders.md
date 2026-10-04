@@ -52,9 +52,10 @@ Such an order neither overrides nor is overridden, because the unit does both â€
 
 A general ability does to each unit what the exact ability its type performs does: `GENERAL_CANCEL` leaves a
 structure making what it was making, and takes a channeling ghost or infestor off what it is doing. A group of
-several types is judged unit by unit. Hold fire keeps a ghost's orders (in game), and is taken to replace a burrowed
-lurker's, which could not be tried, since a burrowed lurker holds an attack and no move. Given to both, it leaves the
-ghost the move it was given earlier in the turn and takes the lurker from its attack.
+several types is judged unit by unit. Hold fire keeps a ghost's orders and takes a burrowed lurker off its attack (in game).
+Given to both, it leaves the ghost the move it was given earlier in the turn and takes the lurker from its attack. A
+planetary fortress attacks and stops with the ids every unit does, yet trains on through both (in game), so for it
+those keep its orders.
 `api.data.abilities[ability].order_behavior_for(unit.type_id)` says what an ability does to a unit of that type, and
 `order.order_behavior` what it does to the order's units: the behavior their types share, or `REPLACES` where they
 differ.
