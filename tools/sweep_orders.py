@@ -2611,8 +2611,17 @@ def _held_orders(game: _Game) -> list[Trial]:
             label = f"{form.name} holding an order, given {ability.name}"
             trials.append(game.trial(label, partial(_on_a_form, game, base, morph, form, ability)))
     for transport, passenger, unload, unload_at in _TRANSPORTS:
-        for ability in (unload, unload_at, AbilityId.GENERAL_UNLOAD, AbilityId.GENERAL_UNLOAD_AT):
-            label = f"{transport.name} carrying a {passenger.name} and holding an order, given {ability.name}"
+        found = game.trial(
+            f"{transport.name} carrying a {passenger.name}: offered",
+            partial(_offered_unloads, game, transport, passenger),
+        )
+        trials.append(found)
+        offered = found.notes.get("unloads")
+        tried: list[int] = [unload, unload_at, AbilityId.GENERAL_UNLOAD, AbilityId.GENERAL_UNLOAD_AT]
+        if isinstance(offered, list):
+            tried += [ability for ability in offered if isinstance(ability, int) and ability not in tried]
+        for ability in tried:
+            label = f"{transport.name} carrying a {passenger.name} and holding an order, given {_name(ability)}"
             trials.append(game.trial(label, partial(_unloading, game, transport, passenger, ability)))
     for first, then in (
         (AbilityId.GENERAL_ATTACK, None),
@@ -2636,27 +2645,45 @@ def _aim(game: _Game, ability: int, unit: Target, point: Point) -> Target:
 
 
 def _held(game: _Game, tag: int, enemy: int, trial: Trial) -> _Shown | None:
-    """Give the unit `tag` each of `_HELD` until one shows in its orders, and return it as shown."""
+    """Give the unit `tag` each of `_HELD` until a new order shows in its orders, and return that order as shown. A
+    sieged or burrowed form shows the ability that made it as its first order throughout, so the new order is found
+    as the one that was not there before."""
     for ability in _HELD:
         unit = game.unit(tag)
         if unit is None:
             return None
+        before = {_Shown.of(order) for order in unit.orders}
         verdict = game.order(ability, [tag], _aim(game, ability, enemy, _at(unit) + (0, 6)))
         game.turn(2)
         read = game.unit(tag)
-        if verdict == "Success" and read is not None and read.orders:
+        new = [] if read is None else [_Shown.of(order) for order in read.orders if _Shown.of(order) not in before]
+        if verdict == "Success" and new:
             trial.notes["held"] = ability.name
             game.read("holding", [tag, enemy])
-            return _Shown.of(read.orders[0])
+            return new[0]
     trial.notes["held"] = "nothing shows"
     game.read("holding", [tag, enemy])
     return None
 
 
+def _kept(verdict: str, held: _Shown | None, orders: Sequence[list[_Shown] | None]) -> str:
+    """What an ability left of the `held` order, from the unit's orders read after it."""
+    if verdict != "Success":
+        return f"refused: {verdict}"
+    if held is None:
+        return "holds nothing shown"
+    if orders[0] is None:
+        return "gone"
+    if held in orders[0]:
+        return "keeps"
+    later = any(shown is not None and held in shown for shown in orders[1:])
+    return "replaces, then resumes" if later else "replaces"
+
+
 def _after(
     game: _Game, ability: int, tag: int, aim: Target, held: _Shown | None, watched: Sequence[int], trial: Trial
 ) -> None:
-    """Give `ability` to the unit `tag`, read it and `watched` at each of `_READS`, and class what it did to `held`."""
+    """Give `ability` to the unit `tag`, read it and `watched` at each of `_READS`, and say what it left of `held`."""
     verdict = game.order(ability, [tag], aim)
     trial.notes["verdict"] = verdict
     orders: list[list[_Shown] | None] = []
@@ -2667,17 +2694,20 @@ def _after(
         game.read(f"{at} after", [tag, *watched])
         unit = game.unit(tag)
         orders.append(None if unit is None else [_Shown.of(order) for order in unit.orders])
-    trial.notes["class"] = "holds nothing shown" if held is None else _class(verdict, held, orders)
+    trial.notes["class"] = _kept(verdict, held, orders)
 
 
 def _on_a_form(
     game: _Game, base: UnitTypeId, morph: AbilityId, form: UnitTypeId, ability: AbilityId, trial: Trial
 ) -> None:
-    pad = game.spot(game.toward(12), 6)
-    # A liberator fires only at ground units in its zone, so its target is a unit; the rest fire at a command center,
-    # which fires back at nothing.
-    target_type = UnitTypeId.ULTRALISK if form is UnitTypeId.LIBERATOR_SIEGED else UnitTypeId.COMMAND_CENTER
-    made = game.sandbox.spawn([(base, game.player, pad), (target_type, game.enemy, pad + (6, 0))])
+    pad = game.spot(game.toward(14), 8)
+    # A liberator fires only at ground units in its zone, so its target is a unit close enough to siege on where it
+    # stands; the rest fire at a command center, which fires back at nothing, beyond a sieged tank's least range.
+    if form is UnitTypeId.LIBERATOR_SIEGED:
+        target_type, offset = UnitTypeId.ULTRALISK, (4.5, 0)
+    else:
+        target_type, offset = UnitTypeId.COMMAND_CENTER, (7.5, 0)
+    made = game.sandbox.spawn([(base, game.player, pad - (3, 0)), (target_type, game.enemy, pad - (3, 0) + offset)])
     game.made.update(unit.tag for unit in made)
     game.observe()
     unit = next((unit for unit in made if unit.unit_type == base), None)
@@ -2700,7 +2730,8 @@ def _cargo(game: _Game, tag: int) -> int:
     return unit.cargo_space_taken if unit is not None else -1
 
 
-def _unloading(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, ability: AbilityId, trial: Trial) -> None:
+def _loaded(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, trial: Trial) -> tuple[int, int] | None:
+    """A `transport` of this player's carrying a `passenger`, by their tags, or `None` if it could not be loaded."""
     pad = game.spot(game.toward(12), 4)
     made = game.sandbox.spawn([(transport, game.player, pad), (passenger, game.player, pad + (0, -4))])
     game.made.update(unit.tag for unit in made)
@@ -2709,36 +2740,69 @@ def _unloading(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, abilit
     rider = next((unit for unit in made if unit.unit_type == passenger), None)
     if carrier is None or rider is None:
         trial.notes["class"] = "not made"
-        return
-    trial.notes["load"] = game.order(AbilityId.GENERAL_LOAD, [carrier], rider)
-    if not game.until(lambda: _cargo(game, carrier.tag) > 0, limit=400):
-        trial.notes["load by passenger"] = game.order(AbilityId.GENERAL_SMART, [rider], carrier)
-        if not game.until(lambda: _cargo(game, carrier.tag) > 0, limit=400):
-            trial.notes["class"] = "never loaded"
-            return
+        return None
+    # A command center loads the workers around it; the rest load the unit they are aimed at.
+    for ability, units, aim in (
+        (AbilityId.GENERAL_LOAD, [carrier], rider),
+        (AbilityId.COMMAND_CENTER_LOAD_ALL, [carrier], None),
+        (AbilityId.GENERAL_SMART, [rider], carrier),
+    ):
+        trial.notes[f"load by {ability.name}"] = game.order(ability, units, aim)
+        if game.until(lambda: _cargo(game, carrier.tag) > 0, limit=300):
+            return carrier.tag, rider.tag
+    trial.notes["class"] = "never loaded"
+    return None
+
+
+def _hold(game: _Game, transport: UnitTypeId, tag: int, trial: Trial) -> _Shown | None:
+    """Have the loaded transport `tag` train, if it is a command center, or move, and return that order as shown."""
     if transport is UnitTypeId.COMMAND_CENTER:
-        trial.notes["holds"] = game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [carrier])
-        game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [carrier], queued=True)
+        trial.notes["holds"] = game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [tag])
+        game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [tag], queued=True)
     else:
-        trial.notes["holds"] = game.order(AbilityId.GENERAL_MOVE, [carrier], pad.towards(game.middle, _MOVE_DISTANCE))
+        unit = game.units[tag]
+        trial.notes["holds"] = game.order(AbilityId.GENERAL_MOVE, [tag], _at(unit).towards(game.middle, _MOVE_DISTANCE))
     game.turn(2)
-    game.read("holding", [carrier.tag])
-    now = game.unit(carrier.tag)
-    held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
-    trial.notes["cargo before"] = _cargo(game, carrier.tag)
-    _after(game, ability, carrier.tag, _aim(game, ability, rider.tag, pad + (4, 0)), held, [], trial)
-    trial.notes["cargo after"] = _cargo(game, carrier.tag)
+    game.read("holding", [tag])
+    now = game.unit(tag)
+    return _Shown.of(now.orders[0]) if now is not None and now.orders else None
 
 
-def _armed(game: _Game, structure: UnitTypeId, trial: Trial) -> tuple[raw_pb2.Unit, raw_pb2.Unit] | None:
-    """`structure` of this player's, and an enemy command center in its range, which fires back at nothing."""
-    pad = game.spot(game.toward(14), 3)
-    target = game.spot(pad + (8, 0), 3)
-    made = game.sandbox.spawn([(structure, game.player, pad), (UnitTypeId.COMMAND_CENTER, game.enemy, target)])
+def _offered_unloads(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, trial: Trial) -> None:
+    if (loaded := _loaded(game, transport, passenger, trial)) is None:
+        return
+    carrier, _ = loaded
+    unloads: list[int] = []
+    for state in ("standing", "holding"):
+        if state == "holding":
+            _hold(game, transport, carrier, trial)
+        offered = game.sandbox.offered([carrier]).get(carrier, [])
+        trial.notes[f"offered {state}"] = [_raw_name(ability) for ability in offered]
+        unloads += [ability for ability in offered if "Unload" in _raw_name(ability) and ability not in unloads]
+    trial.notes["unloads"] = unloads
+
+
+def _unloading(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, ability: int, trial: Trial) -> None:
+    if (loaded := _loaded(game, transport, passenger, trial)) is None:
+        return
+    carrier, rider = loaded
+    held = _hold(game, transport, carrier, trial)
+    trial.notes["cargo before"] = _cargo(game, carrier)
+    beside = _at(game.units[carrier]) + (4, 0)
+    _after(game, ability, carrier, _aim(game, ability, rider, beside), held, [], trial)
+    trial.notes["cargo after"] = _cargo(game, carrier)
+
+
+def _armed(game: _Game, structure: UnitTypeId, apart: float, trial: Trial) -> tuple[raw_pb2.Unit, raw_pb2.Unit] | None:
+    """`structure` of this player's, and `apart` from it an enemy command center, which fires back at nothing."""
+    pad = game.spot(game.toward(14), 8)
+    own_at, enemy_at = pad - (apart / 2, 0), pad + (apart / 2, 0)
+    made = game.sandbox.spawn([(structure, game.player, own_at), (UnitTypeId.COMMAND_CENTER, game.enemy, enemy_at)])
     game.made.update(unit.tag for unit in made)
     game.observe()
-    own = next((unit for unit in made if unit.unit_type == structure), None)
+    own = next((unit for unit in made if unit.unit_type == structure and unit.owner == game.player), None)
     enemy = next((unit for unit in made if unit.owner == game.enemy), None)
+    trial.notes["made"] = [_type_name(unit.unit_type) for unit in made]
     if own is None or enemy is None:
         trial.notes["class"] = "not made"
         return None
@@ -2747,14 +2811,14 @@ def _armed(game: _Game, structure: UnitTypeId, trial: Trial) -> tuple[raw_pb2.Un
 
 
 def _bunker(game: _Game, first: AbilityId, then: AbilityId | None, trial: Trial) -> None:
-    if (armed := _armed(game, UnitTypeId.BUNKER, trial)) is None:
+    if (armed := _armed(game, UnitTypeId.BUNKER, 7.5, trial)) is None:
         return
     bunker, enemy = armed
-    (marine,) = game.create(UnitTypeId.MARINE, _at(bunker) + (-3, 0)) or (None,)
-    if marine is None:
+    marines = game.create(UnitTypeId.MARINE, _at(bunker) - (3, 0))
+    if not marines:
         trial.notes["class"] = "not made"
         return
-    trial.notes["load"] = game.order(AbilityId.BUNKER_LOAD, [bunker], marine)
+    trial.notes["load"] = game.order(AbilityId.BUNKER_LOAD, [bunker], marines[0])
     if not game.until(lambda: _cargo(game, bunker.tag) > 0, limit=400):
         trial.notes["class"] = "never loaded"
         return
@@ -2762,7 +2826,7 @@ def _bunker(game: _Game, first: AbilityId, then: AbilityId | None, trial: Trial)
 
 
 def _fortress(game: _Game, first: AbilityId, then: AbilityId | None, trial: Trial) -> None:
-    if (armed := _armed(game, UnitTypeId.PLANETARY_FORTRESS, trial)) is None:
+    if (armed := _armed(game, UnitTypeId.PLANETARY_FORTRESS, 8, trial)) is None:
         return
     fortress, enemy = armed
     trial.notes["trains"] = game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [fortress])
@@ -2777,9 +2841,7 @@ def _two_steps(game: _Game, tag: int, enemy: int, first: AbilityId, then: Abilit
     for label, ability in (("first", first), ("then", then)):
         if ability is None:
             continue
-        trial.notes[label] = game.order(
-            ability, [tag], _aim(game, ability, enemy, _at(game.units.get(enemy, game.units[tag])))
-        )
+        trial.notes[label] = game.order(ability, [tag], _aim(game, ability, enemy, _at(game.units[tag])))
         last = 0
         for at in _READS:
             game.turn(at - last)
