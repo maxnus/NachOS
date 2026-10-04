@@ -83,6 +83,7 @@ from sc2nachos.protocol import ProtocolError
 
 _OWN = raw_pb2.Alliance.Self
 _SNAPSHOT = raw_pb2.DisplayType.Snapshot
+_PLACEHOLDER = raw_pb2.DisplayType.Placeholder
 # Steps waited after each trial, so a late report or action error is not credited to the next trial.
 _SETTLE = 16
 # The target kinds of the game's ability table.
@@ -2713,10 +2714,16 @@ def _build_within(game: _Game, worker: UnitTypeId, build: AbilityId, within: flo
     trial.notes["verdict"] = game.order(build, [tag], site)
     product = UnitTypeId.SUPPLY_DEPOT if worker is UnitTypeId.SCV else UnitTypeId.PYLON
 
-    def up() -> bool:
-        return any(unit.unit_type == product and _at(unit).distance_to(site) < 1 for unit in game.units.values())
+    def at_site(display: int) -> bool:
+        return any(
+            unit.unit_type == product and unit.display_type == display and _at(unit).distance_to(site) < 1
+            for unit in game.units.values()
+        )
 
-    trial.notes["seen"] = game.until(up, limit=900)
+    # The game shows a placeholder where a build is ordered, the step after the order, until the builder starts it.
+    game.turn(1)
+    trial.notes["placeholder seen"] = at_site(_PLACEHOLDER)
+    trial.notes["seen"] = game.until(lambda: at_site(raw_pb2.DisplayType.Visible), limit=900)
     trial.notes["structure seen after"] = game.step - begun
 
 
