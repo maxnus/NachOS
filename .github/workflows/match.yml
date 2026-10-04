@@ -93,92 +93,54 @@ env:
   TOKEN: ${{ secrets.token || github.token }}
   REPO: ${{ inputs.repo || github.repository }}
 
+# Each job checks out this repository at the commit of this workflow file, for the scripts in .github/match and the
+# setup-sc2 action, so a caller always runs the version of them that matches the workflow it called.
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
-      games: ${{ steps.resolve.outputs.games }}
-      run: ${{ steps.config.outputs.run }}
-      install: ${{ steps.config.outputs.install }}
-      maps: ${{ steps.config.outputs.maps }}
-      checkouts: ${{ steps.config.outputs.checkouts }}
+      games: ${{ steps.check.outputs.games }}
+      run: ${{ steps.check.outputs.run }}
+      install: ${{ steps.check.outputs.install }}
+      maps: ${{ steps.check.outputs.maps }}
+      checkouts: ${{ steps.check.outputs.checkouts }}
     steps:
-      # The games alternate between the races, so a run cut short still has a spread of opponents.
-      - name: Resolve the commit and the games
+      - &nachos
+        name: Check out the match workflow's own files
+        uses: actions/checkout@v4
+        with:
+          repository: maxnus/NachOS
+          ref: ${{ github.job_workflow_sha }}
+          path: .nachos
+          sparse-checkout: .github
+          persist-credentials: false
+
+      - name: Resolve the commit and read the bot's config
         id: resolve
         env:
           REF: ${{ inputs.ref || (inputs.repo == '' && github.sha) || 'HEAD' }}
-          GAMES: ${{ inputs.games }}
-          RACES: ${{ inputs.opponent-race }}
-          DIFFICULTY: ${{ inputs.opponent-difficulty }}
-          BUILD: ${{ inputs.opponent-build }}
-          TIME_LIMIT: ${{ inputs.time-limit }}
+          CONFIG: ${{ inputs.config }}
         run: |
           [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::repo must be owner/name"; exit 1; }
           sha=$(curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.sha" \
             "https://api.github.com/repos/$REPO/commits/$REF") || { echo "::error::Cannot read $REF of $REPO"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          python3 - <<'PY'
-          import json, os, sys
-
-          def fail(message):
-              print(f"::error::{message}")
-              sys.exit(1)
-
-          games, races = os.environ["GAMES"], os.environ["RACES"]
-          races = ["Terran", "Zerg", "Protoss"] if races == "all" else races.split(",")
-          if not all(race in ("Random", "Terran", "Zerg", "Protoss") for race in races) or len(set(races)) != len(races):
-              fail("opponent-race must be all or a list of Random, Terran, Zerg, Protoss")
-          if not games.isdigit() or not 1 <= int(games) <= 10:
-              fail(f"games must be 1 to 10 per race, got '{games}'")
-          if int(games) * len(races) > 15:
-              fail(f"{int(games) * len(races)} games in total; the limit is 15")
-          difficulties = ["VeryEasy", "Easy", "Medium", "MediumHard", "Hard", "Harder", "VeryHard",
-                          "CheatVision", "CheatMoney", "CheatInsane"]
-          if os.environ["DIFFICULTY"] not in difficulties:
-              fail(f"opponent-difficulty must be one of {', '.join(difficulties)}")
-          builds = ["RandomBuild", "Rush", "Timing", "Power", "Macro", "Air"]
-          if os.environ["BUILD"] not in builds:
-              fail(f"opponent-build must be one of {', '.join(builds)}")
-          time_limit = os.environ["TIME_LIMIT"]
-          try:
-              assert time_limit == "" or float(time_limit) >= 0
-          except (AssertionError, ValueError):
-              fail(f"time-limit must be empty or a number of game seconds, got '{time_limit}'")
-          matrix = [{"n": i * len(races) + j + 1, "race": race}
-                    for i in range(int(games)) for j, race in enumerate(races)]
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"games={json.dumps(matrix)}\n")
-          PY
-
-      - name: Read the bot's config
-        id: config
-        env:
-          SHA: ${{ steps.resolve.outputs.sha }}
-          CONFIG: ${{ inputs.config }}
-        run: |
           curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.raw+json" \
-            "https://api.github.com/repos/$REPO/contents/$CONFIG?ref=$SHA" -o config.yml \
-            || { echo "::error::$REPO has no $CONFIG at $SHA"; exit 1; }
+            "https://api.github.com/repos/$REPO/contents/$CONFIG?ref=$sha" -o config.yml \
+            || { echo "::error::$REPO has no $CONFIG at $sha"; exit 1; }
           yq -o=json config.yml > config.json
-          python3 - <<'PY'
-          import json, os, re
 
-          config = json.load(open("config.json")) or {}
-          unknown = set(config) - {"run", "install", "maps", "checkouts"}
-          assert not unknown, f"unknown keys in {os.environ['CONFIG']}: {', '.join(sorted(unknown))}"
-          assert config.get("run"), f"{os.environ['CONFIG']} must name the game script in `run`"
-          checkouts = config.get("checkouts") or []
-          for checkout in checkouts:
-              assert re.fullmatch(r"[\w.-]+/[\w.-]+", checkout.get("repository", "")), f"bad checkout {checkout}"
-              assert re.fullmatch(r"[\w.-]+", checkout.get("path", "")), f"checkout path must be one folder: {checkout}"
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"run={config['run']}\n")
-              f.write(f"install={config.get('install') or 'uv sync'}\n")
-              f.write(f"maps={config.get('maps') or ''}\n")
-              f.write(f"checkouts={json.dumps(checkouts)}\n")
-          PY
+      - name: Check the inputs and plan the games
+        id: check
+        env:
+          GAMES: ${{ inputs.games }}
+          RACES: ${{ inputs.opponent-race }}
+          DIFFICULTY: ${{ inputs.opponent-difficulty }}
+          BUILD: ${{ inputs.opponent-build }}
+          TIME_LIMIT: ${{ inputs.time-limit }}
+          CONFIG: ${{ inputs.config }}
+        run: python3 .nachos/.github/match/prepare.py config.json
 
   # Parallel games on hosted runners would each download the client when the cache has none, slowing one another, and
   # only one of them could save it. This job makes sure it is cached first; a self-hosted runner has its own client.
@@ -186,8 +148,9 @@ jobs:
     if: ${{ !contains(inputs.runner, 'self-hosted') }}
     runs-on: ${{ fromJSON(inputs.runner) }}
     steps:
+      - *nachos
       - name: Cache the client
-        uses: maxnus/NachOS/.github/actions/setup-sc2@main
+        uses: ./.nachos/.github/actions/setup-sc2
         with:
           cache-only: true
 
@@ -212,6 +175,8 @@ jobs:
       - name: Clear the workspace
         run: find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
+      - *nachos
+
       # Burnysc2 and other public submodules are often recorded with SSH urls, and a runner has no key.
       - name: Reach submodules over https
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -226,21 +191,10 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      # The token goes in a header for the one command, so it is not written into the clones' .git/config.
       - name: Check out what the bot needs next to it
         env:
           CHECKOUTS: ${{ needs.prepare.outputs.checkouts }}
-        run: |
-          python3 - <<'PY'
-          import base64, json, os, subprocess
-
-          auth = base64.b64encode(f"x-access-token:{os.environ['TOKEN']}".encode()).decode()
-          for checkout in json.loads(os.environ["CHECKOUTS"]):
-              args = ["git", "-c", f"http.extraHeader=Authorization: Basic {auth}", "clone", "--depth", "1"]
-              if checkout.get("ref"):
-                  args += ["--branch", checkout["ref"]]
-              subprocess.run([*args, f"https://github.com/{checkout['repository']}", checkout["path"]], check=True)
-          PY
+        run: python3 .nachos/.github/match/checkouts.py
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -256,7 +210,7 @@ jobs:
       # The Linux client resolves the map path python-sc2 sends against `<install>/maps`, lowercase, and python-sc2
       # prefers `maps` whenever it exists, so both sides look in the folder the action copies the maps to.
       - name: Set up StarCraft II
-        uses: maxnus/NachOS/.github/actions/setup-sc2@main
+        uses: ./.nachos/.github/actions/setup-sc2
         with:
           maps: ${{ needs.prepare.outputs.maps && format('bot/{0}', needs.prepare.outputs.maps) || '' }}
 
@@ -303,12 +257,15 @@ jobs:
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       actions: read
     outputs:
       state: ${{ steps.write.outputs.state }}
       tally: ${{ steps.write.outputs.tally }}
       report: ${{ steps.write.outputs.report }}
     steps:
+      - *nachos
+
       - name: Collect the results
         uses: actions/download-artifact@v4
         with:
@@ -333,69 +290,4 @@ jobs:
           DIFFICULTY: ${{ inputs.opponent-difficulty }}
           BUILD: ${{ inputs.opponent-build }}
           TIME_LIMIT: ${{ inputs.time-limit }}
-        run: |
-          python3 - <<'PY'
-          import json, os, pathlib
-          from collections import Counter, defaultdict
-
-          server, repository, run_id = os.environ["GITHUB_SERVER_URL"], os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
-          run_url = f"{server}/{repository}/actions/runs/{run_id}"
-          replays = dict(line.split() for line in pathlib.Path("replays.txt").read_text().splitlines() if line)
-          letters = {"Victory": "W", "Defeat": "L", "Tie": "T"}
-
-          def tally(results):
-              counts = Counter(letters.get(r) for r in results)
-              crashed = f", {counts[None]} crashed" if counts[None] else ""
-              return f"{counts['W']}W {counts['L']}L {counts['T']}T{crashed}"
-
-          rows, results, by_race = [], [], defaultdict(list)
-          for game in json.loads(os.environ["GAMES"]):
-              n, race = game["n"], game["race"]
-              path = pathlib.Path("results") / f"result-{n}.json"
-              r = json.loads(path.read_text()) if path.exists() else {}
-              result = r.get("result")
-              results.append(result)
-              actual = r.get("opponent_actual_race")
-              opponent = f"{race} → {actual}" if race == "Random" and actual and actual != "Random" else race
-              by_race[actual if race == "Random" and actual else race].append(result)
-              seconds = r.get("game_time")
-              length = f"{int(seconds) // 60}:{int(seconds) % 60:02d}" if isinstance(seconds, (int, float)) else ""
-              artifact = replays.get(f"replay-{n}")
-              replay = f"[replay]({run_url}/artifacts/{artifact})" if artifact else ""
-              rows.append(f"| {n} | {opponent} | {r.get('map', '')} | {result or 'no result'} | {length} | {replay} |")
-
-          description = tally(results)
-          if os.environ["GAME_JOBS"] == "cancelled":
-              state, description = "error", f"Cancelled ({description})"
-          elif None in results:
-              state = "failure"
-          else:
-              state = "success"
-
-          settings = f"{os.environ['DIFFICULTY']}, {os.environ['BUILD']}"
-          if os.environ["TIME_LIMIT"]:
-              settings += f", time limit {os.environ['TIME_LIMIT']}s"
-          report = [
-              "<!-- sc2-games:match -->",
-              f"### sc2 match: {description}",
-              "",
-              f"`{os.environ['SHA'][:7]}` against {settings} · [run]({run_url})",
-              "",
-          ]
-          if len(by_race) > 1:
-              crashes = None in results
-              def race_row(name, rs):
-                  counts = Counter(letters.get(r) for r in rs)
-                  cells = [name, *(str(counts[k]) for k in "WLT")] + ([str(counts[None])] if crashes else [])
-                  return "| " + " | ".join(cells) + " |"
-              report += ["| Opponent | W | L | T |" + (" Crashed |" if crashes else ""),
-                         "|---|---|---|---|" + ("---|" if crashes else ""),
-                         *(race_row(race, rs) for race, rs in by_race.items()),
-                         race_row("**Total**", results), ""]
-          report += ["| # | Opponent | Map | Result | Length | Replay |", "|---|---|---|---|---|---|", *rows, ""]
-
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("\n".join(report[1:]))
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"state={state}\ntally={description}\nreport<<REPORT_END\n" + "\n".join(report) + "\nREPORT_END\n")
-          PY
+        run: python3 .nachos/.github/match/report.py
