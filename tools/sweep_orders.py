@@ -41,6 +41,8 @@ and runs its trials in turn::
   with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
 - `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
   fills before it arrives, and a flying command center and barracks land with a morph or a train queued behind.
+- `close-enough` walks an SCV and a probe 30 toward a site and orders the build once within each of a few distances,
+  or from the start, and records when the structure is first seen.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2679,6 +2681,45 @@ def _queue_cases(game: _Game) -> list[Trial]:
     return trials
 
 
+def _close_enough(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for worker, build in (
+        (UnitTypeId.SCV, AbilityId.SCV_BUILD_SUPPLY_DEPOT),
+        (UnitTypeId.PROBE, AbilityId.PROBE_BUILD_PYLON),
+    ):
+        for within in (None, 8.0, 4.0, 2.0, 1.0, 0.5):
+            when = "from the start" if within is None else f"once within {within} of its site"
+            label = f"a {worker.name} walking 30 to build, given {build.name} {when}"
+            trials.append(game.trial(label, partial(_build_within, game, worker, build, within)))
+    return trials
+
+
+def _build_within(game: _Game, worker: UnitTypeId, build: AbilityId, within: float | None, trial: Trial) -> None:
+    """Walk `worker` toward a site 30 away and order `build` there once within `within` of it, or from the start, and
+    record the step the order went out and the step the structure was first seen."""
+    start = game.spot(game.toward(8), 2)
+    site = game.spot(start.towards(game.middle, 30), 3)
+    made = game.create(worker, start)
+    if not made:
+        trial.notes["class"] = "not made"
+        return
+    tag = made[0].tag
+    begun = game.step
+    if within is not None:
+        game.order(AbilityId.GENERAL_MOVE, [tag], site)
+        game.until(lambda: (now := game.unit(tag)) is not None and _at(now).distance_to(site) <= within, limit=900)
+    trial.notes["ordered after"] = game.step - begun
+    trial.notes["distance left"] = round(_at(game.units[tag]).distance_to(site), 2)
+    trial.notes["verdict"] = game.order(build, [tag], site)
+    product = UnitTypeId.SUPPLY_DEPOT if worker is UnitTypeId.SCV else UnitTypeId.PYLON
+
+    def up() -> bool:
+        return any(unit.unit_type == product and _at(unit).distance_to(site) < 1 for unit in game.units.values())
+
+    trial.notes["seen"] = game.until(up, limit=900)
+    trial.notes["structure seen after"] = game.step - begun
+
+
 def _far_build(
     game: _Game, worker: UnitTypeId, build: AbilityId, near: UnitTypeId | None, blocked: bool, trial: Trial
 ) -> None:
@@ -2828,6 +2869,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what each order charges, and when, counts.
     "queue-cases": _Sweep(Race.TERRAN, _queue_cases, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    "close-enough": _Sweep(Race.TERRAN, _close_enough, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
