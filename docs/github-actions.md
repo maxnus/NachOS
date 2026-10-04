@@ -88,8 +88,15 @@ jobs:
 Each run plays the games, two per race here, all at once on GitHub-hosted runners. Its summary page shows the tally, a
 table per race and one per game, each game linking its replay.
 
-`@main` follows NachOS as it changes. To stay on a version you have checked, pin a commit instead:
-`match.yml@<sha>`.
+`@main` follows NachOS as it changes. To stay on a version you have checked, pin a commit instead, and pass the same
+commit as `nachos-ref`, which the workflow takes its own scripts from: GitHub does not tell a called workflow the ref
+it was called at.
+
+```yaml
+    uses: maxnus/NachOS/.github/workflows/match.yml@<sha>
+    with:
+      nachos-ref: <sha>
+```
 
 ### Inputs
 
@@ -106,6 +113,7 @@ table per race and one per game, each game linking its replay.
 | `time-limit` | empty | game seconds before a game ends as a tie, `0` at once; empty plays it out |
 | `runner` | `"ubuntu-latest"` | where games run, as JSON for `runs-on`; see below |
 | `max-parallel` | `15` | games at once |
+| `nachos-ref` | `main` | the NachOS ref the workflow's scripts come from; the one in `uses:` |
 
 The secret `token` is needed only when the bot repository or a `checkouts` repository is private and is not the
 calling repository. It needs Contents read on each.

@@ -70,6 +70,11 @@ on:
         description: End each game as a tie after this many game seconds, 0 at once (empty = play it out)
         type: string
         default: ''
+      nachos-ref:
+        description: >-
+          The NachOS ref to take this workflow's scripts and setup-sc2 from: the one in `uses:` when that is not main
+        type: string
+        default: main
     secrets:
       token:
         description: >-
@@ -93,8 +98,8 @@ env:
   TOKEN: ${{ secrets.token || github.token }}
   REPO: ${{ inputs.repo || github.repository }}
 
-# Each job checks out this repository at the commit of this workflow file, for the scripts in .github/match and the
-# setup-sc2 action, so a caller always runs the version of them that matches the workflow it called.
+# Each job checks out NachOS at `nachos-ref`, for the scripts in .github/match and the setup-sc2 action. A called
+# workflow is not told the ref it was called at, so a caller that pins `uses:` to anything but main passes it too.
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -111,7 +116,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: maxnus/NachOS
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ inputs.nachos-ref }}
           path: .nachos
           sparse-checkout: .github
           persist-credentials: false

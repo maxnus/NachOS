@@ -23,3 +23,4 @@ jobs:
       opponent-race: Terran
       opponent-difficulty: VeryEasy
       time-limit: 1
+      nachos-ref: ${{ github.sha }}
