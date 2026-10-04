@@ -46,7 +46,7 @@ and runs its trials in turn::
   while and long after, then unsieges.
 - `structure-orders` gives training structures a smart at a point, and a command center and a planetary fortress
   a load-all; has each structure with a weapon attack one enemy and then stop, attack another, or smart at it; and
-  gives burrowed units that hold an order unburrow.
+  gives burrowed units that hold an order unburrow. `producer-orders` is its first part alone.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2909,13 +2909,23 @@ def _liberator(game: _Game, target_type: UnitTypeId, own: bool, wait: int, trial
 
 
 # Structures that make something, what each trains, and whether it needs a pylon beside it.
+# Not a gateway: under `tech_tree` it turns itself into a warp gate at once.
 _PRODUCERS = (
     (UnitTypeId.BARRACKS, AbilityId.BARRACKS_TRAIN_MARINE, False),
+    (UnitTypeId.FACTORY, AbilityId.FACTORY_TRAIN_HELLION, False),
+    (UnitTypeId.STARPORT, AbilityId.STARPORT_TRAIN_MEDIVAC, False),
     (UnitTypeId.COMMAND_CENTER, AbilityId.COMMAND_CENTER_TRAIN_SCV, False),
+    (UnitTypeId.ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_TRAIN_SCV, False),
+    (UnitTypeId.PLANETARY_FORTRESS, AbilityId.COMMAND_CENTER_TRAIN_SCV, False),
     (UnitTypeId.NEXUS, AbilityId.NEXUS_TRAIN_PROBE, False),
-    (UnitTypeId.GATEWAY, AbilityId.GATEWAY_TRAIN_ZEALOT, True),
+    (UnitTypeId.ROBOTICS_FACILITY, AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER, True),
+    (UnitTypeId.STARGATE, AbilityId.STARGATE_TRAIN_PHOENIX, True),
     (UnitTypeId.HATCHERY, AbilityId.HATCHERY_TRAIN_QUEEN, False),
+    (UnitTypeId.LAIR, AbilityId.HATCHERY_TRAIN_QUEEN, False),
+    (UnitTypeId.HIVE, AbilityId.HATCHERY_TRAIN_QUEEN, False),
 )
+# The town halls, whose smart at a mineral field sends what they make to mine it.
+_TOWN_HALLS = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
 # Structures with a weapon, what they fire at, and whether they need a pylon beside them.
 _ARMED = (
     (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, False),
@@ -2934,16 +2944,29 @@ _BURROWED = (
 
 
 def _structure_orders(game: _Game) -> list[Trial]:
+    return _producer_orders(game) + _armed_orders(game)
+
+
+def _producer_orders(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
+    smart = AbilityId.GENERAL_SMART
     for structure, train, powered in _PRODUCERS:
         label = f"{structure.name} training, given GENERAL_SMART at a point"
-        trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, AbilityId.GENERAL_SMART)))
+        trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, smart)))
+        if structure in _TOWN_HALLS:
+            label = f"{structure.name} training, given GENERAL_SMART at a mineral field"
+            trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, smart, field=True)))
     for structure in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
         label = f"{structure.name} training, given COMMAND_CENTER_LOAD_ALL with an SCV beside it"
         load = AbilityId.COMMAND_CENTER_LOAD_ALL
         trials.append(
             game.trial(label, partial(_busy_given, game, structure, AbilityId.COMMAND_CENTER_TRAIN_SCV, False, load))
         )
+    return trials
+
+
+def _armed_orders(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
     for structure, target, powered in _ARMED:
         for then in (AbilityId.GENERAL_STOP, AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_SMART):
             label = f"{structure.name} attacking a {target.name}, given {then.name}"
@@ -2955,9 +2978,17 @@ def _structure_orders(game: _Game) -> list[Trial]:
 
 
 def _busy_given(
-    game: _Game, structure: UnitTypeId, train: AbilityId, powered: bool, ability: AbilityId, trial: Trial
+    game: _Game,
+    structure: UnitTypeId,
+    train: AbilityId,
+    powered: bool,
+    ability: AbilityId,
+    trial: Trial,
+    *,
+    field: bool = False,
 ) -> None:
-    """Have `structure` train two, give it `ability` unqueued, and read whether it trains on."""
+    """Have `structure` train two, give it `ability` unqueued, at the nearest mineral field if `field`, and read
+    whether it trains on."""
     pad = game.spot(game.toward(14), 6)
     requests = [(structure, game.player, pad)]
     if powered:
@@ -2977,12 +3008,12 @@ def _busy_given(
     now = game.unit(busy.tag)
     held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
     trial.notes["cargo before"] = _cargo(game, busy.tag)
-    aim = _aim(game, ability, None, pad + (6, 6))
+    aim = _aim(game, ability, _nearest_field(game) if field else None, pad + (6, 6))
     _after(game, ability, busy.tag, aim, held, [], trial)
     trial.notes["cargo after"] = _cargo(game, busy.tag)
     # The rally a smart sets, if any: what the structure is making rallies there.
     if (now := game.unit(busy.tag)) is not None:
-        trial.notes["rally"] = [_point(rally.point) for rally in now.rally_targets]
+        trial.notes["rally"] = [[*_point(rally.point), rally.tag] for rally in now.rally_targets]
 
 
 def _armed_given(
@@ -3206,6 +3237,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "held-orders": _Sweep(Race.TERRAN, _held_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "liberator-orders": _Sweep(Race.TERRAN, _liberator_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "structure-orders": _Sweep(Race.TERRAN, _structure_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "producer-orders": _Sweep(Race.TERRAN, _producer_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
