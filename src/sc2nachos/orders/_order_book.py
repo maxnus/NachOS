@@ -48,6 +48,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
+        "_queued_behind",
         "_step",
     )
 
@@ -62,6 +63,8 @@ class OrderBook:
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
+        # The ids of the units sent a queued order the game took after the last order in `_last_sent`.
+        self._queued_behind: set[int] = set()
         self._camera_location: Point | None = None
         self._observations = 0
         self._step = 0
@@ -137,20 +140,29 @@ class OrderBook:
 
         Returns `None` if the unit has nothing queued, if its current order is an ability NachOS cannot name, or if
         that ability is a train, a research or a morph: the game would queue a second of those behind the first
-        instead of dropping anything, so a structure's queue is cancelled from its end instead. Returns `None` too
-        while an order sent to the unit that replaced its orders may not show yet: that order left nothing queued.
+        instead of dropping anything, so a structure's queue is cancelled from its end instead.
+
+        While an order sent to the unit that replaced its orders may not show yet, that order is the one it is carrying
+        out: it is sent again if queued orders were sent behind it, and otherwise `None` is returned, since it left
+        nothing queued.
         """
-        orders = unit._latest_report.orders
-        if len(orders) < 2 or self._sent_and_not_shown(unit) is not None:
-            return None
-        ability = self._general_ability(_ability_of_unit_order(orders[0]))
+        target: Target | None
+        if (sent := self._sent_and_not_shown(unit)) is not None:
+            if unit.id not in self._queued_behind:
+                return None
+            ability, target = self._general_ability(sent.ability), sent.target
+        else:
+            orders = unit._latest_report.orders
+            if len(orders) < 2:
+                return None
+            ability, target = self._general_ability(_ability_of_unit_order(orders[0])), order_target(unit, orders[0])
         behavior = _behavior_for(self._game_data.abilities.get(ability), unit)
         if ability is AbilityId.NULL or behavior is not OrderBehavior.REPLACES:
             return None
         order: Order[None] = Order(
             ability,
             (unit,),
-            order_target(unit, orders[0]),
+            target,
             queued=False,
             data=None,
             order_behavior=behavior,
@@ -205,6 +217,8 @@ class OrderBook:
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
             if taken and not order.queued:
                 self._remember_sent(order, units)
+            elif taken:
+                self._queued_behind.update(unit.id for unit in units if unit.id in self._last_sent)
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -212,6 +226,7 @@ class OrderBook:
         self._observations += 1
         for unit in dead:
             self._last_sent.pop(unit.id, None)
+            self._queued_behind.discard(unit.id)
 
     def _orders_to_send(
         self, issued: Sequence[Order[Any]], clearing: Collection[Order[Any]]
@@ -271,6 +286,7 @@ class OrderBook:
         for unit in units:
             if _behavior_for(row, unit) is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = (order, self._observations)
+                self._queued_behind.discard(unit.id)
 
     def _units_not_carrying_it_out(
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]

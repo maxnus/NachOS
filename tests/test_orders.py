@@ -639,6 +639,26 @@ class TestClearingAQueue:
         assert game.book.clear_queue(game.own(1)) is None
         assert game.flush() is None
 
+    def test_a_queue_sent_behind_an_order_sent_last_turn_is_cleared_by_sending_that_order_again(self) -> None:
+        """The order sent last turn is what the unit is carrying out, whether the observation shows it yet or not."""
+        for shown in (
+            (_moving((40.0, 41.0)), _moving((50.0, 51.0))),
+            (_moving((20.0, 21.0)), _moving((30.0, 31.0))),
+        ):
+            game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
+            game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+            game.book.issue(game.own(1), _MOVE, target=(40.0, 41.0))
+            game.book.issue(game.own(1), _MOVE, target=(50.0, 51.0), queued=True)
+            game.flush()
+            game.observe(16, _marine(1, *shown))
+
+            order = game.book.clear_queue(game.own(1))
+
+            (command,) = _commands(game.flush())
+            assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (40.0, 41.0)
+            assert not command.queue_command
+            assert order is not None
+
     def test_a_queue_behind_an_order_sent_queued_is_cleared(self) -> None:
         game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
