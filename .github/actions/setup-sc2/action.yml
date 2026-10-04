@@ -17,6 +17,11 @@ inputs:
   cache:
     description: Keep the downloaded client in the Actions cache, so later runs restore it rather than download it.
     default: 'true'
+  cache-only:
+    description: >-
+      Only make sure the client is in the cache, downloading it when it is not, and set nothing up. For a job that
+      fills the cache before parallel jobs restore it, rather than each download it.
+    default: 'false'
 
 outputs:
   path:
@@ -26,7 +31,7 @@ outputs:
     description: The client's build, such as Base75689.
     value: ${{ steps.finish.outputs.build }}
   source:
-    description: Where the client came from this run, `installed`, `cache` or `download`.
+    description: Where the client came from this run, `installed`, `cache` or `download`; empty with `cache-only`.
     value: ${{ steps.finish.outputs.source }}
 
 runs:
@@ -58,6 +63,7 @@ runs:
       with:
         path: ${{ steps.locate.outputs.path }}
         key: sc2-linux-4.10-${{ runner.os }}-${{ runner.arch }}
+        lookup-only: ${{ inputs.cache-only }}
 
     # The password is how Blizzard's AI and Machine Learning license is accepted.
     - name: Download the client from Blizzard
@@ -83,6 +89,7 @@ runs:
 
     - name: Install the maps and point SC2PATH at the client
       id: finish
+      if: inputs.cache-only != 'true'
       shell: bash
       env:
         DIR: ${{ steps.locate.outputs.path }}

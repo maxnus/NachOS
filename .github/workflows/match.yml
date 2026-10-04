@@ -1,0 +1,300 @@
+name: match
+
+# Plays a bot against the built-in AI and reports how it went: a reusable workflow, called from another workflow with
+# `uses: maxnus/NachOS/.github/workflows/match.yml@<ref>`. The jobs run as the calling repository, on the runner it
+# names: a GitHub-hosted one by default, or one of its own.
+#
+# The bot repository describes itself in a config file, .github/sc2-games.yml unless `config` says otherwise:
+#
+#   run: scripts/run_game.py      # the game script; takes --opponent-race, --opponent-difficulty, --opponent-build
+#                                 # (NachOS's member names: ZERG, VERY_EASY, RANDOM), --map, --time-limit,
+#                                 # --result-file and --replay-file
+#   install: uv sync              # optional, the default
+#   maps: sc2maps/AIE             # optional, copied into the client's maps/<folder name>
+#   checkouts:                    # optional, repositories placed next to the bot's own checkout
+#     - repository: maxnus/nachOS
+#       path: nachOS
+#
+# The result file is JSON with `result` (VICTORY, DEFEAT or TIE, in any case) and `map`, and optionally `game_time` (game
+# seconds) and `opponent_actual_race` (the race a RANDOM opponent turned out to be).
+#
+# The report is the run summary, and the `report` output for the caller to post where it likes. A game that wrote no
+# result counts as crashed, and makes `state` failure; losses and ties do not.
+on:
+  workflow_call:
+    inputs:
+      repo:
+        description: Bot repository, owner/name (empty = the calling repository)
+        type: string
+        default: ''
+      ref:
+        description: >-
+          Branch, tag or commit to play. Empty = the commit the caller runs on, or the default branch of another
+          `repo`.
+        type: string
+        default: ''
+      config:
+        description: The bot's config file, in its repository
+        type: string
+        default: .github/sc2-games.yml
+      runner:
+        description: >-
+          Where the games run, as JSON for runs-on: "ubuntu-latest" by default, or a list of labels such as
+          ["self-hosted", "sc2"]. Setup and the report always run on ubuntu-latest.
+        type: string
+        default: '"ubuntu-latest"'
+      max-parallel:
+        description: Games played at once; 1 for a runner that plays one game at a time
+        type: number
+        default: 15
+      games:
+        description: Games per opponent race, 1 to 10
+        type: number
+        default: 1
+      opponent-race:
+        description: RANDOM, TERRAN, ZERG, PROTOSS, a comma-separated list of them, or all
+        type: string
+        default: all
+      opponent-difficulty:
+        description: >-
+          VERY_EASY, EASY, MEDIUM, MEDIUM_HARD, HARD, HARDER, VERY_HARD, CHEAT_VISION, CHEAT_MONEY or CHEAT_INSANE
+        type: string
+        default: VERY_HARD
+      opponent-build:
+        description: RANDOM, RUSH, TIMING, POWER, MACRO or AIR
+        type: string
+        default: RANDOM
+      map:
+        description: Map name (empty = the bot's choice, per game)
+        type: string
+        default: ''
+      time-limit:
+        description: End each game as a tie after this many game seconds, 0 at once (empty = play it out)
+        type: string
+        default: ''
+      nachos-ref:
+        description: >-
+          The NachOS ref to take this workflow's scripts and setup-sc2 from: the one in `uses:` when that is not main
+        type: string
+        default: main
+    secrets:
+      token:
+        description: >-
+          Reads the bot repository and its checkouts, when the workflow's own token cannot: Contents read on each.
+        required: false
+    outputs:
+      sha:
+        description: The commit played
+        value: ${{ jobs.prepare.outputs.sha }}
+      state:
+        description: success, failure (a game wrote no result) or error (the games were cancelled)
+        value: ${{ jobs.report.outputs.state }}
+      tally:
+        description: The tally, such as "5W 3L 1T"
+        value: ${{ jobs.report.outputs.tally }}
+      report:
+        description: The report in Markdown, its first line a `<!-- sc2-games:match -->` marker
+        value: ${{ jobs.report.outputs.report }}
+
+env:
+  TOKEN: ${{ secrets.token || github.token }}
+  REPO: ${{ inputs.repo || github.repository }}
+
+# Each job checks out NachOS at `nachos-ref`, for the scripts in .github/match and the setup-sc2 action. A called
+# workflow is not told the ref it was called at, so a caller that pins `uses:` to anything but main passes it too.
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      games: ${{ steps.check.outputs.games }}
+      run: ${{ steps.check.outputs.run }}
+      install: ${{ steps.check.outputs.install }}
+      maps: ${{ steps.check.outputs.maps }}
+      checkouts: ${{ steps.check.outputs.checkouts }}
+    steps:
+      - &nachos
+        name: Check out the match workflow's own files
+        uses: actions/checkout@v4
+        with:
+          repository: maxnus/NachOS
+          ref: ${{ inputs.nachos-ref }}
+          path: .nachos
+          sparse-checkout: .github
+          persist-credentials: false
+
+      - name: Resolve the commit and read the bot's config
+        id: resolve
+        env:
+          REF: ${{ inputs.ref || (inputs.repo == '' && github.sha) || 'HEAD' }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::repo must be owner/name"; exit 1; }
+          sha=$(curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.sha" \
+            "https://api.github.com/repos/$REPO/commits/$REF") || { echo "::error::Cannot read $REF of $REPO"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          curl -fsS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github.raw+json" \
+            "https://api.github.com/repos/$REPO/contents/$CONFIG?ref=$sha" -o config.yml \
+            || { echo "::error::$REPO has no $CONFIG at $sha"; exit 1; }
+          yq -o=json config.yml > config.json
+
+      - name: Check the inputs and plan the games
+        id: check
+        env:
+          GAMES: ${{ inputs.games }}
+          RACES: ${{ inputs.opponent-race }}
+          DIFFICULTY: ${{ inputs.opponent-difficulty }}
+          BUILD: ${{ inputs.opponent-build }}
+          TIME_LIMIT: ${{ inputs.time-limit }}
+          CONFIG: ${{ inputs.config }}
+        run: python3 .nachos/.github/match/prepare.py config.json
+
+  # Parallel games on hosted runners would each download the client when the cache has none, slowing one another, and
+  # only one of them could save it. This job makes sure it is cached first; a self-hosted runner has its own client.
+  client:
+    if: ${{ !contains(inputs.runner, 'self-hosted') }}
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    steps:
+      - *nachos
+      - name: Cache the client
+        uses: ./.nachos/.github/actions/setup-sc2
+        with:
+          cache-only: true
+
+  game:
+    name: game ${{ matrix.game.number }} vs ${{ matrix.game.race }}
+    needs: [prepare, client]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.client.result != 'failure' }}
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max-parallel }}
+      matrix:
+        game: ${{ fromJSON(needs.prepare.outputs.games) }}
+    env:
+      RESULT_FILE: ${{ github.workspace }}/result-${{ matrix.game.number }}.json
+      REPLAY_FILE: ${{ github.workspace }}/replay-${{ matrix.game.number }}.SC2Replay
+
+    steps:
+      # The workspace outlives the job on a self-hosted runner. Starting from empty keeps the last run's checkouts,
+      # results and replays out of this one.
+      - name: Clear the workspace
+        run: find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+      - *nachos
+
+      # Burnysc2 and other public submodules are often recorded with SSH urls, and a runner has no key.
+      - name: Reach submodules over https
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Check out the bot
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ env.TOKEN }}
+          path: bot
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check out what the bot needs next to it
+        env:
+          CHECKOUTS: ${{ needs.prepare.outputs.checkouts }}
+        run: python3 .nachos/.github/match/checkouts.py
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        working-directory: bot
+        env:
+          INSTALL: ${{ needs.prepare.outputs.install }}
+        run: bash -c "$INSTALL"
+
+      # The Linux client resolves the map path python-sc2 sends against `<install>/maps`, lowercase, and python-sc2
+      # prefers `maps` whenever it exists, so both sides look in the folder the action copies the maps to.
+      - name: Set up StarCraft II
+        uses: ./.nachos/.github/actions/setup-sc2
+        with:
+          maps: ${{ needs.prepare.outputs.maps && format('bot/{0}', needs.prepare.outputs.maps) || '' }}
+
+      - name: Play
+        working-directory: bot
+        env:
+          RUN: ${{ needs.prepare.outputs.run }}
+          RACE: ${{ matrix.game.race }}
+          MAP: ${{ inputs.map }}
+          TIME_LIMIT: ${{ inputs.time-limit }}
+          OPPONENT_DIFFICULTY: ${{ inputs.opponent-difficulty }}
+          OPPONENT_BUILD: ${{ inputs.opponent-build }}
+        run: |
+          args=(--opponent-race "$RACE"
+                --opponent-difficulty "$OPPONENT_DIFFICULTY"
+                --opponent-build "$OPPONENT_BUILD"
+                --result-file "$RESULT_FILE"
+                --replay-file "$REPLAY_FILE")
+          [ -n "$MAP" ] && args+=(--map "$MAP")
+          [ -n "$TIME_LIMIT" ] && args+=(--time-limit "$TIME_LIMIT")
+          uv run python "$RUN" "${args[@]}"
+
+      # A game that crashed writes no result; the report counts it from the missing file.
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ matrix.game.number }}
+          path: ${{ env.RESULT_FILE }}
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Keep the replay
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-${{ matrix.game.number }}
+          path: ${{ env.REPLAY_FILE }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    needs: [prepare, game]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      state: ${{ steps.write.outputs.state }}
+      tally: ${{ steps.write.outputs.tally }}
+      report: ${{ steps.write.outputs.report }}
+    steps:
+      - *nachos
+
+      - name: Collect the results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: results
+          merge-multiple: true
+
+      # For the replay links in the report.
+      - name: List the replays
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("replay-")) | "\(.name) \(.id)"' > replays.txt
+
+      - name: Write the report
+        id: write
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+          GAMES: ${{ needs.prepare.outputs.games }}
+          GAME_JOBS: ${{ needs.game.result }}
+          DIFFICULTY: ${{ inputs.opponent-difficulty }}
+          BUILD: ${{ inputs.opponent-build }}
+          TIME_LIMIT: ${{ inputs.time-limit }}
+        run: python3 .nachos/.github/match/report.py
