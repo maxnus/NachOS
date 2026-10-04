@@ -112,6 +112,7 @@ _PRODUCERS = frozenset(
         UnitTypeId.ORBITAL_COMMAND,
         UnitTypeId.PLANETARY_FORTRESS,
         UnitTypeId.NEXUS,
+        UnitTypeId.GATEWAY,
         UnitTypeId.ROBOTICS_FACILITY,
         UnitTypeId.STARGATE,
         UnitTypeId.HATCHERY,

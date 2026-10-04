@@ -421,7 +421,7 @@ class TestARecordedGamesTables:
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.GENERAL_SMART]
-        for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.HATCHERY):
+        for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY):
             assert smart.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
         assert smart.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
 

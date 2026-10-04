@@ -526,8 +526,8 @@ Each entry ends with how it was seen:
   attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
   through both at a command center in range (tool `sweep_orders`, `held-orders`).
 - A structure training two goes on training through a smart, which sets its rally: at a point for a barracks,
-  factory, starport, command center, orbital command, planetary fortress, nexus, robotics facility, stargate,
-  hatchery, lair and hive, and at a mineral field, which it then rallies to by tag, for a command center, nexus and
+  factory, starport, command center, orbital command, planetary fortress, nexus, gateway, robotics facility,
+  stargate, hatchery, lair and hive, and at a mineral field, which it then rallies to by tag, for a command center, nexus and
   hatchery. A command center and a planetary fortress go on training through a load-all that takes in an SCV beside
   them (tool `sweep_orders`, `structure-orders`).
 - A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
