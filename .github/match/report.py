@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-LETTERS = {"Victory": "W", "Defeat": "L", "Tie": "T"}
+LETTERS = {"VICTORY": "W", "DEFEAT": "L", "TIE": "T"}
 MARKER = "<!-- sc2-games:match -->"
 
 
@@ -24,14 +24,17 @@ class Game:
 
     @property
     def result(self) -> str | None:
+        """VICTORY, DEFEAT or TIE: a game script may write them in any case."""
         result = self.played.get("result")
-        return result if isinstance(result, str) else None
+        return result.upper() if isinstance(result, str) else None
 
     @property
     def actual_race(self) -> str:
-        """The race played against: the one a Random opponent turned out to be, where the result file says."""
+        """The race played against: the one a RANDOM opponent turned out to be, where the result file says."""
         actual = self.played.get("opponent_actual_race")
-        return actual if self.race == "Random" and isinstance(actual, str) and actual != "Random" else self.race
+        if self.race == "RANDOM" and isinstance(actual, str) and actual.upper() != "RANDOM":
+            return actual.upper()
+        return self.race
 
 
 def read_games(planned: list[dict[str, object]], results: Path) -> list[Game]:
@@ -66,7 +69,7 @@ def race_table(games: list[Game]) -> list[str]:
     return [
         "| Opponent | W | L | T |" + (" Crashed |" if crashes else ""),
         "|---|---|---|---|" + ("---|" if crashes else ""),
-        *(row(race, results) for race, results in by_race.items()),
+        *(row(race.title(), results) for race, results in by_race.items()),
         row("**Total**", [game.result for game in games]),
         "",
     ]
@@ -76,12 +79,14 @@ def game_table(games: list[Game], replays: dict[str, str], run_url: str) -> list
     """One row per game, with its map, result, length and replay link."""
     rows = ["| # | Opponent | Map | Result | Length | Replay |", "|---|---|---|---|---|---|"]
     for game in games:
-        opponent = f"{game.race} → {game.actual_race}" if game.actual_race != game.race else game.race
+        opponent = game.race.title()
+        if game.actual_race != game.race:
+            opponent += f" → {game.actual_race.title()}"
         seconds = game.played.get("game_time")
         length = f"{int(seconds) // 60}:{int(seconds) % 60:02d}" if isinstance(seconds, (int, float)) else ""
         artifact = replays.get(f"replay-{game.n}")
         replay = f"[replay]({run_url}/artifacts/{artifact})" if artifact else ""
-        result = game.result or "no result"
+        result = game.result.title() if game.result else "no result"
         rows.append(f"| {game.n} | {opponent} | {game.played.get('map', '')} | {result} | {length} | {replay} |")
     return [*rows, ""]
 

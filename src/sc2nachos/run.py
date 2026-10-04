@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
-from s2clientprotocol import common_pb2, sc2api_pb2
 
 from sc2nachos.api import Api
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
@@ -91,10 +90,10 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Res
     """Play one game against the built-in computer as the command line asks, and write how it went.
 
     This is the game script NachOS's match workflow runs, `.github/workflows/match.yml`: the arguments are the ones it
-    passes, `--opponent-race`, `--opponent-difficulty` and `--opponent-build` in the game's own spelling (`Zerg`,
-    `VeryEasy`, `RandomBuild`), `--map`, `--time-limit` in game seconds, and `--result-file`, which gets the JSON the
-    workflow reads. Without `--map`, a map is picked at random from the installation's. `argv` defaults to
-    `sys.argv[1:]`.
+    passes, `--opponent-race`, `--opponent-difficulty` and `--opponent-build` as member names of `Race`, `Difficulty`
+    and `AIBuild` (`ZERG`, `VERY_EASY`, `RANDOM`), `--map`, `--time-limit` in game seconds, and `--result-file`, which
+    gets the JSON the workflow reads. Without `--map`, a map is picked at random from the installation's. `argv`
+    defaults to `sys.argv[1:]`.
     """
     args = _command_line().parse_args(argv)
     if args.replay_file is not None:
@@ -107,15 +106,11 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Res
         if not names:
             raise MapNotFoundError(f"{installation.maps} holds no maps to pick from")
         map_file = MapFile.find(random.choice(names), installation=installation)
-    opponent = Computer(
-        Race(common_pb2.Race.Value(args.opponent_race)),
-        Difficulty(sc2api_pb2.Difficulty.Value(args.opponent_difficulty)),
-        AIBuild(sc2api_pb2.AIBuild.Value(args.opponent_build)),
-    )
+    opponent = Computer(Race[args.opponent_race], Difficulty[args.opponent_difficulty], AIBuild[args.opponent_build])
     result = run_local(map_file, bot, opponent, time_limit=args.time_limit, installation=installation)
     if args.result_file is not None:
         outcome = {
-            "result": sc2api_pb2.Result.Name(sc2api_pb2.Result.ValueType(result)),
+            "result": result.name,
             "map": map_file.name,
             "game_time": round(bot.api.time, 3),
         }
@@ -124,12 +119,14 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Res
 
 
 def _command_line() -> ArgumentParser:
-    """The arguments `run_from_command_line` reads, with the game's own names as the choices."""
-    races = [common_pb2.Race.Name(common_pb2.Race.ValueType(race)) for race in Race if race is not Race.NONE]
+    """The arguments `run_from_command_line` reads, with the enums' member names as the choices."""
+    races = [race.name for race in Race if race is not Race.NONE]
     parser = ArgumentParser(description="Play one game against the built-in computer and write how it went.")
-    parser.add_argument("--opponent-race", choices=races, default="Random")
-    parser.add_argument("--opponent-difficulty", choices=sc2api_pb2.Difficulty.keys(), default="VeryHard")
-    parser.add_argument("--opponent-build", choices=sc2api_pb2.AIBuild.keys(), default="RandomBuild")
+    parser.add_argument("--opponent-race", choices=races, default=Race.RANDOM.name)
+    parser.add_argument(
+        "--opponent-difficulty", choices=[d.name for d in Difficulty], default=Difficulty.VERY_HARD.name
+    )
+    parser.add_argument("--opponent-build", choices=[b.name for b in AIBuild], default=AIBuild.RANDOM.name)
     parser.add_argument("--map", help="a map under the installation's maps folder (default: one at random)")
     parser.add_argument("--time-limit", type=float, help="end the game as a tie after this many game seconds")
     parser.add_argument("--result-file", type=Path, help="where to write the result, as JSON")

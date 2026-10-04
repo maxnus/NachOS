@@ -20,7 +20,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/match.yml
     with:
-      opponent-race: Terran
-      opponent-difficulty: VeryEasy
+      opponent-race: TERRAN
+      opponent-difficulty: VERY_EASY
       time-limit: 1
       nachos-ref: ${{ github.sha }}

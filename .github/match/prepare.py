@@ -1,5 +1,8 @@
 """Check the match workflow's inputs and the bot's config, and write the games to play as step outputs.
 
+The opponent's race, difficulty and build are NachOS's member names of `Race`, `Difficulty` and `AIBuild`; this
+script runs without NachOS installed, so it lists them.
+
 Run by .github/workflows/match.yml with the inputs in the environment and the config, as JSON, at the path given.
 """
 
@@ -9,20 +12,20 @@ import re
 import sys
 from pathlib import Path
 
-RACES = ["Terran", "Zerg", "Protoss"]
+RACES = ["TERRAN", "ZERG", "PROTOSS"]
 DIFFICULTIES = [
-    "VeryEasy",
-    "Easy",
-    "Medium",
-    "MediumHard",
-    "Hard",
-    "Harder",
-    "VeryHard",
-    "CheatVision",
-    "CheatMoney",
-    "CheatInsane",
+    "VERY_EASY",
+    "EASY",
+    "MEDIUM",
+    "MEDIUM_HARD",
+    "HARD",
+    "HARDER",
+    "VERY_HARD",
+    "CHEAT_VISION",
+    "CHEAT_MONEY",
+    "CHEAT_INSANE",
 ]
-BUILDS = ["RandomBuild", "Rush", "Timing", "Power", "Macro", "Air"]
+BUILDS = ["RANDOM", "RUSH", "TIMING", "POWER", "MACRO", "AIR"]
 CONFIG_KEYS = {"run", "install", "maps", "checkouts"}
 
 
@@ -34,8 +37,8 @@ def fail(message: str) -> None:
 def games(count: str, races: str) -> list[dict[str, object]]:
     """The games, numbered from 1, cycling through the races so that a run cut short still has a spread of them."""
     chosen = RACES if races == "all" else races.split(",")
-    if not all(race in [*RACES, "Random"] for race in chosen) or len(set(chosen)) != len(chosen):
-        fail("opponent-race must be all or a list of Random, Terran, Zerg, Protoss")
+    if not all(race in [*RACES, "RANDOM"] for race in chosen) or len(set(chosen)) != len(chosen):
+        fail("opponent-race must be all or a list of RANDOM, TERRAN, ZERG, PROTOSS")
     if not count.isdigit() or not 1 <= int(count) <= 10:
         fail(f"games must be 1 to 10 per race, got '{count}'")
     return [{"n": i * len(chosen) + j + 1, "race": race} for i in range(int(count)) for j, race in enumerate(chosen)]

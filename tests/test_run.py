@@ -27,9 +27,9 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return calls
 
 
-def test_the_arguments_are_read_in_the_games_own_spelling(played: dict[str, Any]) -> None:
+def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
     bot = ApiBot(Api(), Race.TERRAN)
-    args = ["--opponent-race", "Zerg", "--opponent-difficulty", "VeryEasy", "--opponent-build", "RandomBuild"]
+    args = ["--opponent-race", "ZERG", "--opponent-difficulty", "VERY_EASY", "--opponent-build", "RANDOM"]
     result = run_from_command_line(bot, [*args, "--map", "torchesaie_v4", "--time-limit", "0"])
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RANDOM)
@@ -49,15 +49,15 @@ def test_the_result_file_is_what_the_match_workflow_reads(played: dict[str, Any]
     result_file = tmp_path / "result.json"
     run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--map", "PylonAIE_v4", "--result-file", str(result_file)])
     assert json.loads(result_file.read_text(encoding="utf-8")) == {
-        "result": "Victory",
+        "result": "VICTORY",
         "map": "PylonAIE_v4",
         "game_time": 754.384,
     }
 
 
-def test_a_name_outside_the_games_spelling_is_refused(played: dict[str, Any]) -> None:
+def test_a_name_that_is_no_member_is_refused(played: dict[str, Any]) -> None:
     with pytest.raises(SystemExit):
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--opponent-difficulty", "VERY_EASY"])
+        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--opponent-difficulty", "VeryEasy"])
     assert not played
 
 

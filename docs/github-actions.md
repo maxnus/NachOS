@@ -28,13 +28,14 @@ if __name__ == "__main__":
 [`examples/run_game.py`](../examples/run_game.py) is the same, with a bot that does nothing.
 
 What the workflow asks of the script, for a bot not built on NachOS or a script of your own: it runs
-`uv run python <script>` with these arguments, any of which may be left out, the values in the game's own spelling.
+`uv run python <script>` with these arguments, any of which may be left out, the values being NachOS's member names
+of `Race`, `Difficulty` and `AIBuild`.
 
 | Argument | Values |
 |---|---|
-| `--opponent-race` | `Random`, `Terran`, `Zerg`, `Protoss` |
-| `--opponent-difficulty` | `VeryEasy`, `Easy`, `Medium`, `MediumHard`, `Hard`, `Harder`, `VeryHard`, `CheatVision`, `CheatMoney`, `CheatInsane` |
-| `--opponent-build` | `RandomBuild`, `Rush`, `Timing`, `Power`, `Macro`, `Air` |
+| `--opponent-race` | `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
+| `--opponent-difficulty` | `VERY_EASY`, `EASY`, `MEDIUM`, `MEDIUM_HARD`, `HARD`, `HARDER`, `VERY_HARD`, `CHEAT_VISION`, `CHEAT_MONEY`, `CHEAT_INSANE` |
+| `--opponent-build` | `RANDOM`, `RUSH`, `TIMING`, `POWER`, `MACRO`, `AIR` |
 | `--map` | a map name; when absent, the script picks one |
 | `--time-limit` | game seconds after which the game ends as a tie |
 | `--result-file` | where to write the result |
@@ -43,11 +44,11 @@ What the workflow asks of the script, for a bot not built on NachOS or a script 
 The result file is JSON. `result` and `map` are required; the rest are optional:
 
 ```json
-{"result": "Victory", "map": "PylonAIE_v4", "game_time": 754.384, "opponent_actual_race": "Zerg"}
+{"result": "VICTORY", "map": "PylonAIE_v4", "game_time": 754.384, "opponent_actual_race": "ZERG"}
 ```
 
-`result` is `Victory`, `Defeat` or `Tie`, and `game_time` is in game seconds. `opponent_actual_race` is what a
-`Random` opponent turned out to be. A game that writes no result file counts as crashed.
+`result` is `VICTORY`, `DEFEAT` or `TIE`, in any case, and `game_time` is in game seconds. `opponent_actual_race` is
+what a `RANDOM` opponent turned out to be. A game that writes no result file counts as crashed.
 
 ### 2. `.github/sc2-games.yml`
 
@@ -82,7 +83,7 @@ jobs:
     with:
       games: 2                 # per opponent race
       opponent-race: all
-      opponent-difficulty: Hard
+      opponent-difficulty: HARD
 ```
 
 Each run plays the games, two per race here, all at once on GitHub-hosted runners. Its summary page shows the tally, a
@@ -106,9 +107,9 @@ it was called at.
 | `ref` | the commit the workflow runs on, or another `repo`'s default branch | branch, tag or commit to play |
 | `config` | `.github/sc2-games.yml` | where the config file is |
 | `games` | `1` | games per opponent race, 1 to 10 |
-| `opponent-race` | `all` | `all`, or a comma-separated list of `Random`, `Terran`, `Zerg`, `Protoss` |
-| `opponent-difficulty` | `VeryHard` | as the game script takes it |
-| `opponent-build` | `RandomBuild` | as the game script takes it |
+| `opponent-race` | `all` | `all`, or a comma-separated list of `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
+| `opponent-difficulty` | `VERY_HARD` | as the game script takes it |
+| `opponent-build` | `RANDOM` | as the game script takes it |
 | `map` | empty | one map for every game; empty leaves it to the script |
 | `time-limit` | empty | game seconds before a game ends as a tie, `0` at once; empty plays it out |
 | `runner` | `"ubuntu-latest"` | where games run, as JSON for `runs-on`; see below |

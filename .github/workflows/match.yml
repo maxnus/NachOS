@@ -6,16 +6,17 @@ name: match
 #
 # The bot repository describes itself in a config file, .github/sc2-games.yml unless `config` says otherwise:
 #
-#   run: scripts/run_local.py     # the game script; takes --opponent-race, --opponent-difficulty, --opponent-build,
-#                                 # --map, --time-limit, --result-file and --replay-file
+#   run: scripts/run_game.py      # the game script; takes --opponent-race, --opponent-difficulty, --opponent-build
+#                                 # (NachOS's member names: ZERG, VERY_EASY, RANDOM), --map, --time-limit,
+#                                 # --result-file and --replay-file
 #   install: uv sync              # optional, the default
 #   maps: sc2maps/AIE             # optional, copied into the client's maps/<folder name>
 #   checkouts:                    # optional, repositories placed next to the bot's own checkout
 #     - repository: maxnus/nachOS
 #       path: nachOS
 #
-# The result file is JSON with `result` (Victory, Defeat or Tie) and `map`, and optionally `game_time` (game seconds) and
-# `opponent_actual_race` (the race a Random opponent turned out to be).
+# The result file is JSON with `result` (VICTORY, DEFEAT or TIE, in any case) and `map`, and optionally `game_time` (game
+# seconds) and `opponent_actual_race` (the race a RANDOM opponent turned out to be).
 #
 # The report is the run summary, and the `report` output for the caller to post where it likes. A game that wrote no
 # result counts as crashed, and makes `state` failure; losses and ties do not.
@@ -51,17 +52,18 @@ on:
         type: number
         default: 1
       opponent-race:
-        description: Random, Terran, Zerg, Protoss, a comma-separated list of them, or all
+        description: RANDOM, TERRAN, ZERG, PROTOSS, a comma-separated list of them, or all
         type: string
         default: all
       opponent-difficulty:
-        description: VeryEasy, Easy, Medium, MediumHard, Hard, Harder, VeryHard, CheatVision, CheatMoney or CheatInsane
+        description: >-
+          VERY_EASY, EASY, MEDIUM, MEDIUM_HARD, HARD, HARDER, VERY_HARD, CHEAT_VISION, CHEAT_MONEY or CHEAT_INSANE
         type: string
-        default: VeryHard
+        default: VERY_HARD
       opponent-build:
-        description: RandomBuild, Rush, Timing, Power, Macro or Air
+        description: RANDOM, RUSH, TIMING, POWER, MACRO or AIR
         type: string
-        default: RandomBuild
+        default: RANDOM
       map:
         description: Map name (empty = the bot's choice, per game)
         type: string
