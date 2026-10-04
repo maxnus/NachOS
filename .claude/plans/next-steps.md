@@ -106,11 +106,11 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 
 - **"Close enough" for a build**: send the build at several distances and record the steps the worker loses. Too
   late and it stops and waits; too early and the minerals are spent while it walks.
-- Whether a drone and a probe are charged at the order as an SCV is.
-- What happens to a build whose site is blocked before the worker arrives (expected: an error and no charge).
-- A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
-- Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
-  then a train.
+
+Measured since (docs/game-behavior.md): a drone and a probe are charged at the order as an SCV is; a build whose
+site is taken before the worker arrives fails with `CouldntReachTarget` and is refunded then; a lifted factory and
+starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
+given, so the game holds none of those sequences and a queue in NachOS would have to.
 
 ### Suggested first pull request
 
