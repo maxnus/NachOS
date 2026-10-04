@@ -1,12 +1,19 @@
 """Playing a game on a client this library starts, or on one a ladder started."""
 
+import json
+import random
+from argparse import ArgumentParser
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from loguru import logger
+from s2clientprotocol import common_pb2, sc2api_pb2
+
 from sc2nachos.api import Api
-from sc2nachos.launch import GameProcess, Installation, MapFile
-from sc2nachos.match import Computer, Participant, Player, Race, Result
+from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
+from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Player, Race, Result
 from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport, WebSocketTransport
 
 
@@ -78,6 +85,56 @@ def run_ladder(
         finally:
             # The client is the ladder's, so it is left running.
             client.leave_game()
+
+
+def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Result:
+    """Play one game against the built-in computer as the command line asks, and write how it went.
+
+    This is the game script NachOS's match workflow runs, `.github/workflows/match.yml`: the arguments are the ones it
+    passes, `--opponent-race`, `--opponent-difficulty` and `--opponent-build` in the game's own spelling (`Zerg`,
+    `VeryEasy`, `RandomBuild`), `--map`, `--time-limit` in game seconds, and `--result-file`, which gets the JSON the
+    workflow reads. Without `--map`, a map is picked at random from the installation's. `argv` defaults to
+    `sys.argv[1:]`.
+    """
+    args = _command_line().parse_args(argv)
+    if args.replay_file is not None:
+        logger.warning("No replay is saved: --replay-file is accepted, not yet supported")
+    installation = Installation.find()
+    if args.map is not None:
+        map_file = MapFile.find(args.map, installation=installation)
+    else:
+        names = sorted({path.stem for path in installation.maps.rglob("*.SC2Map")})
+        if not names:
+            raise MapNotFoundError(f"{installation.maps} holds no maps to pick from")
+        map_file = MapFile.find(random.choice(names), installation=installation)
+    opponent = Computer(
+        Race(common_pb2.Race.Value(args.opponent_race)),
+        Difficulty(sc2api_pb2.Difficulty.Value(args.opponent_difficulty)),
+        AIBuild(sc2api_pb2.AIBuild.Value(args.opponent_build)),
+    )
+    result = run_local(map_file, bot, opponent, time_limit=args.time_limit, installation=installation)
+    if args.result_file is not None:
+        outcome = {
+            "result": sc2api_pb2.Result.Name(sc2api_pb2.Result.ValueType(result)),
+            "map": map_file.name,
+            "game_time": round(bot.api.time, 3),
+        }
+        args.result_file.write_text(json.dumps(outcome), encoding="utf-8")
+    return result
+
+
+def _command_line() -> ArgumentParser:
+    """The arguments `run_from_command_line` reads, with the game's own names as the choices."""
+    races = [common_pb2.Race.Name(common_pb2.Race.ValueType(race)) for race in Race if race is not Race.NONE]
+    parser = ArgumentParser(description="Play one game against the built-in computer and write how it went.")
+    parser.add_argument("--opponent-race", choices=races, default="Random")
+    parser.add_argument("--opponent-difficulty", choices=sc2api_pb2.Difficulty.keys(), default="VeryHard")
+    parser.add_argument("--opponent-build", choices=sc2api_pb2.AIBuild.keys(), default="RandomBuild")
+    parser.add_argument("--map", help="a map under the installation's maps folder (default: one at random)")
+    parser.add_argument("--time-limit", type=float, help="end the game as a tie after this many game seconds")
+    parser.add_argument("--result-file", type=Path, help="where to write the result, as JSON")
+    parser.add_argument("--replay-file", type=Path, help="accepted for the match workflow; no replay is saved yet")
+    return parser
 
 
 def _connect(url: str, record_to: Path | None) -> Client:

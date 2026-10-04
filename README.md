@@ -72,7 +72,7 @@ places where the obvious translation goes wrong.
 ## Playing games on GitHub Actions
 
 [Running StarCraft II on GitHub Actions](docs/github-actions.md) shows how a bot repository plays matches against the
-built-in AI in its own workflows, on GitHub's runners or on its own machines.
+built-in AI in its own workflows.
 
 ## Requirements
 

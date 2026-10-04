@@ -13,7 +13,22 @@ Three files in your bot repository.
 
 ### 1. A game script
 
-The workflow runs `uv run python <script>` with these arguments, any of which may be left out:
+For a NachOS bot, the script builds the bot and hands it to `run_from_command_line`, which does the rest:
+
+```python
+# scripts/run_game.py
+from sc2nachos import ApiBot, Race, run_from_command_line
+
+from my_bot.api import api
+
+if __name__ == "__main__":
+    run_from_command_line(ApiBot(api, Race.TERRAN, "MyBot"))
+```
+
+[`examples/run_game.py`](../examples/run_game.py) is the same, with a bot that does nothing.
+
+What the workflow asks of the script, for a bot not built on NachOS or a script of your own: it runs
+`uv run python <script>` with these arguments, any of which may be left out, the values in the game's own spelling.
 
 | Argument | Values |
 |---|---|
@@ -33,10 +48,6 @@ The result file is JSON. `result` and `map` are required; the rest are optional:
 
 `result` is `Victory`, `Defeat` or `Tie`, and `game_time` is in game seconds. `opponent_actual_race` is what a
 `Random` opponent turned out to be. A game that writes no result file counts as crashed.
-
-[`examples/run_game.py`](../examples/run_game.py) is such a script, playing a bot that does nothing. Copy it and
-replace its `Api()` with your bot's. The arguments are in the game's own spelling, which python-sc2 shares, so a
-python-sc2 bot's script can take the same ones.
 
 ### 2. `.github/sc2-games.yml`
 
