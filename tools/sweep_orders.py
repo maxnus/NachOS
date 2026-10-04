@@ -46,7 +46,8 @@ and runs its trials in turn::
   while and long after, then unsieges.
 - `structure-orders` gives training structures a smart at a point, and a command center and a planetary fortress
   a load-all; has each structure with a weapon attack one enemy and then stop, attack another, or smart at it; and
-  gives burrowed units that hold an order unburrow. `producer-orders` is its first part alone.
+  gives burrowed units that hold an order unburrow. `producer-orders` is its first part alone, and
+  `gateway-orders` the gateway's, without `tech_tree`.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2965,6 +2966,14 @@ def _producer_orders(game: _Game) -> list[Trial]:
     return trials
 
 
+def _gateway_orders(game: _Game) -> list[Trial]:
+    label = "GATEWAY training, given GENERAL_SMART at a point"
+    smart = AbilityId.GENERAL_SMART
+    return [
+        game.trial(label, partial(_busy_given, game, UnitTypeId.GATEWAY, AbilityId.GATEWAY_TRAIN_ZEALOT, True, smart))
+    ]
+
+
 def _armed_orders(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     for structure, target, powered in _ARMED:
@@ -3238,6 +3247,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "liberator-orders": _Sweep(Race.TERRAN, _liberator_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "structure-orders": _Sweep(Race.TERRAN, _structure_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "producer-orders": _Sweep(Race.TERRAN, _producer_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    # Not `tech_tree`, under which a gateway turns itself into a warp gate at once.
+    "gateway-orders": _Sweep(Race.TERRAN, _gateway_orders),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
