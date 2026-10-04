@@ -626,6 +626,40 @@ class TestClearingAQueue:
         assert cleared is not None
         assert cleared.state is OrderState.OVERRIDDEN
 
+    def test_a_queue_an_order_sent_last_turn_replaced_is_left_alone_though_it_still_shows(self) -> None:
+        """On the ladder the observation after an order can still show the orders it replaced (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+        game.book.issue(game.own(1), _ATTACK, target=(40.0, 41.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+
+        assert game.book.clear_queue(game.own(1)) is None
+        assert game.flush() is None
+
+    def test_a_queue_behind_an_order_sent_queued_is_cleared(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1, _moving((20.0, 21.0))))
+        game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0), queued=True)
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+
+        order = game.book.clear_queue(game.own(1))
+
+        (command,) = _commands(game.flush())
+        assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
+        assert order is not None
+
+    def test_a_queue_is_cleared_once_the_order_sent_had_two_observations_to_show(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.issue(game.own(1), _ATTACK, target=(40.0, 41.0))
+        game.flush()
+        game.observe(16, _marine(1))
+        game.observe(32, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+
+        assert game.book.clear_queue(game.own(1)) is not None
+
 
 class TestWhatBecameOfAnOrder:
     def test_an_order_the_game_refused_carries_its_verdict(self) -> None:

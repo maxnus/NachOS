@@ -137,10 +137,11 @@ class OrderBook:
 
         Returns `None` if the unit has nothing queued, if its current order is an ability NachOS cannot name, or if
         that ability is a train, a research or a morph: the game would queue a second of those behind the first
-        instead of dropping anything, so a structure's queue is cancelled from its end instead.
+        instead of dropping anything, so a structure's queue is cancelled from its end instead. Returns `None` too
+        while an order sent to the unit that replaced its orders may not show yet: that order left nothing queued.
         """
         orders = unit._latest_report.orders
-        if len(orders) < 2:
+        if len(orders) < 2 or self._sent_and_not_shown(unit) is not None:
             return None
         ability = self._general_ability(_ability_of_unit_order(orders[0]))
         behavior = _behavior_for(self._game_data.abilities.get(ability), unit)
@@ -289,11 +290,17 @@ class OrderBook:
     def _is_doing(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
         """Whether `unit` is doing `general` at `target`: the last order sent to it says, while it may not show yet,
         and otherwise its first reported order."""
-        last = self._last_sent.get(unit.id)
-        if last is not None and self._observations - last[1] < _SHOWN_WITHIN:
-            sent = last[0]
+        sent = self._sent_and_not_shown(unit)
+        if sent is not None:
             return self._general_ability(sent.ability) is general and same_target(sent.target, target)
         return self._unit_is_at(unit, general, target)
+
+    def _sent_and_not_shown(self, unit: OwnUnit[Any]) -> Order[Any] | None:
+        """The last order sent to `unit` that replaced its orders, while the observations may not show it yet."""
+        last = self._last_sent.get(unit.id)
+        if last is not None and self._observations - last[1] < _SHOWN_WITHIN:
+            return last[0]
+        return None
 
     def _unit_is_at(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
         """Whether `unit`'s first order runs `general` at `target`. A unit the last observation left out, in a

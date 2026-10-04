@@ -33,7 +33,8 @@ api.orders.camera(base)
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
 - **`api.orders.clear_queue(unit)`** drops a unit's queued orders and leaves it on its current one, by sending that
-  order again unqueued. It returns the order it sent, or `None` if there was nothing to drop. A structure making
+  order again unqueued. It returns the order it sent, or `None` if there was nothing to drop, as after an order sent
+  the turn before replaced the unit's orders, while the observation may still show them. A structure making
   something is not cleared this way, since the game would only queue another of the same behind it.
 - **`api.orders.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
 
