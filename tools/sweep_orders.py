@@ -42,6 +42,11 @@ and runs its trials in turn::
 - `held-orders` gives a unit that holds an order where it stands (a sieged tank, a burrowed lurker, a phasing warp
   prism) the ability that ends that form; a loaded transport, holding a train or a move, each unload; and a bunker
   and a training planetary fortress attack and stop, at an enemy command center in range.
+- `liberator-orders` sieges a liberator on a unit of its own and on an enemy's, and attacks it a few steps, a
+  while and long after, then unsieges.
+- `structure-orders` gives training structures a smart at a point, and a command center and a planetary fortress
+  a load-all; has each structure with a weapon attack one enemy and then stop, attack another, or smart at it; and
+  gives burrowed units that hold an order unburrow.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2854,6 +2859,181 @@ def _two_steps(game: _Game, tag: int, enemy: int, first: AbilityId, then: Abilit
             game.read(f"{at} after {ability.name}", [tag, enemy])
 
 
+# --- A sieged liberator's order, and what structures and burrowed units do with theirs
+
+
+def _liberator_orders(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for target, owner in ((UnitTypeId.ULTRALISK, "own"), (UnitTypeId.SIEGE_TANK_SIEGED, "enemy")):
+        for wait in (8, 64, 224):
+            label = f"LIBERATOR_SIEGED, {wait} steps after sieging, given an attack on an {owner} {target.name}"
+            trials.append(game.trial(label, partial(_liberator, game, target, owner == "own", wait)))
+    return trials
+
+
+def _liberator(game: _Game, target_type: UnitTypeId, own: bool, wait: int, trial: Trial) -> None:
+    """Siege a liberator on `target_type`, wait `wait` steps, attack it, then unsiege, reading the liberator, the
+    target and whatever else stands within 8 throughout."""
+    pad = game.spot(game.toward(14), 8)
+    made = game.sandbox.spawn(
+        [
+            (UnitTypeId.LIBERATOR, game.player, pad - (3, 0)),
+            (target_type, game.player if own else game.enemy, pad + (1, 0)),
+        ]
+    )
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    liberator = next((unit for unit in made if unit.unit_type == UnitTypeId.LIBERATOR), None)
+    target = next((unit for unit in made if unit.unit_type == target_type), None)
+    if liberator is None or target is None:
+        trial.notes["class"] = "not made"
+        return
+    trial.notes["siege"] = game.order(AbilityId.LIBERATOR_SIEGE, [liberator], _at(target))
+    if not game.until(
+        lambda: (now := game.unit(liberator.tag)) is not None and now.unit_type == UnitTypeId.LIBERATOR_SIEGED,
+        limit=600,
+    ):
+        trial.notes["class"] = "never sieged"
+        return
+    game.turn(wait)
+    near = [tag for tag, unit in game.units.items() if _at(unit).distance_to(pad) < 8 and tag != liberator.tag]
+    game.read("sieged", [liberator.tag, *near])
+    trial.notes["near"] = [_type_name(game.units[tag].unit_type) for tag in near]
+    trial.notes["attack"] = game.order(AbilityId.GENERAL_ATTACK, [liberator], target)
+    game.turn(2)
+    unit = game.unit(liberator.tag)
+    before = [] if unit is None else [_Shown.of(order) for order in unit.orders]
+    game.read("attacking", [liberator.tag, target.tag])
+    held = next((order for order in before if "ATTACK" in order.ability), None)
+    _after(game, AbilityId.LIBERATOR_UNSIEGE, liberator.tag, None, held, [target.tag], trial)
+
+
+# Structures that make something, what each trains, and whether it needs a pylon beside it.
+_PRODUCERS = (
+    (UnitTypeId.BARRACKS, AbilityId.BARRACKS_TRAIN_MARINE, False),
+    (UnitTypeId.COMMAND_CENTER, AbilityId.COMMAND_CENTER_TRAIN_SCV, False),
+    (UnitTypeId.NEXUS, AbilityId.NEXUS_TRAIN_PROBE, False),
+    (UnitTypeId.GATEWAY, AbilityId.GATEWAY_TRAIN_ZEALOT, True),
+    (UnitTypeId.HATCHERY, AbilityId.HATCHERY_TRAIN_QUEEN, False),
+)
+# Structures with a weapon, what they fire at, and whether they need a pylon beside them.
+_ARMED = (
+    (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, False),
+    (UnitTypeId.SPORE_CRAWLER, UnitTypeId.OVERLORD, False),
+    (UnitTypeId.PHOTON_CANNON, UnitTypeId.COMMAND_CENTER, True),
+    (UnitTypeId.SPINE_CRAWLER, UnitTypeId.COMMAND_CENTER, False),
+    (UnitTypeId.AUTO_TURRET, UnitTypeId.COMMAND_CENTER, False),
+    (UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.COMMAND_CENTER, False),
+)
+_BURROWED = (
+    UnitTypeId.ZERGLING_BURROWED,
+    UnitTypeId.ROACH_BURROWED,
+    UnitTypeId.INFESTOR_BURROWED,
+    UnitTypeId.SWARM_HOST_BURROWED,
+)
+
+
+def _structure_orders(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for structure, train, powered in _PRODUCERS:
+        label = f"{structure.name} training, given GENERAL_SMART at a point"
+        trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, AbilityId.GENERAL_SMART)))
+    for structure in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
+        label = f"{structure.name} training, given COMMAND_CENTER_LOAD_ALL with an SCV beside it"
+        load = AbilityId.COMMAND_CENTER_LOAD_ALL
+        trials.append(
+            game.trial(label, partial(_busy_given, game, structure, AbilityId.COMMAND_CENTER_TRAIN_SCV, False, load))
+        )
+    for structure, target, powered in _ARMED:
+        for then in (AbilityId.GENERAL_STOP, AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_SMART):
+            label = f"{structure.name} attacking a {target.name}, given {then.name}"
+            trials.append(game.trial(label, partial(_armed_given, game, structure, target, powered, then)))
+    for burrowed in _BURROWED:
+        label = f"{burrowed.name} holding an order, given GENERAL_UNBURROW"
+        trials.append(game.trial(label, partial(_burrowed_given, game, burrowed)))
+    return trials
+
+
+def _busy_given(
+    game: _Game, structure: UnitTypeId, train: AbilityId, powered: bool, ability: AbilityId, trial: Trial
+) -> None:
+    """Have `structure` train two, give it `ability` unqueued, and read whether it trains on."""
+    pad = game.spot(game.toward(14), 6)
+    requests = [(structure, game.player, pad)]
+    if powered:
+        requests.append((UnitTypeId.PYLON, game.player, pad + (0, -4)))
+    if ability is AbilityId.COMMAND_CENTER_LOAD_ALL:
+        requests.append((UnitTypeId.SCV, game.player, pad + (0, 4)))
+    made = game.sandbox.spawn(requests)
+    game.made.update(unit.tag for unit in made)
+    game.turn(8)
+    busy = next((unit for unit in made if unit.unit_type == structure), None)
+    if busy is None:
+        trial.notes["class"] = "not made"
+        return
+    trial.notes["trains"] = [game.order(train, [busy]), game.order(train, [busy], queued=True)]
+    game.turn(2)
+    game.read("training", [busy.tag])
+    now = game.unit(busy.tag)
+    held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
+    trial.notes["cargo before"] = _cargo(game, busy.tag)
+    aim = _aim(game, ability, None, pad + (6, 6))
+    _after(game, ability, busy.tag, aim, held, [], trial)
+    trial.notes["cargo after"] = _cargo(game, busy.tag)
+    # The rally a smart sets, if any: what the structure is making rallies there.
+    if (now := game.unit(busy.tag)) is not None:
+        trial.notes["rally"] = [_point(rally.point) for rally in now.rally_targets]
+
+
+def _armed_given(
+    game: _Game, structure: UnitTypeId, target: UnitTypeId, powered: bool, then: AbilityId, trial: Trial
+) -> None:
+    """Have `structure` attack one enemy `target`, then give it `then`, at a second one if it takes a unit."""
+    pad = game.spot(game.toward(14), 8)
+    own_at = pad - (4, 0)
+    requests = [
+        (structure, game.player, own_at),
+        (target, game.enemy, own_at + (7, 2)),
+        (target, game.enemy, own_at + (7, -4)),
+    ]
+    if powered:
+        requests.append((UnitTypeId.PYLON, game.player, own_at + (-3, 0)))
+    made = game.sandbox.spawn(requests)
+    game.made.update(unit.tag for unit in made)
+    game.turn(8)
+    armed = next((unit for unit in made if unit.unit_type == structure and unit.owner == game.player), None)
+    enemies = [unit.tag for unit in made if unit.owner == game.enemy and unit.unit_type == target]
+    if armed is None or len(enemies) < 2:
+        trial.notes["class"] = "not made"
+        return
+    trial.notes["attack"] = game.order(AbilityId.GENERAL_ATTACK, [armed], enemies[0])
+    game.turn(2)
+    game.read("attacking", [armed.tag, *enemies])
+    now = game.unit(armed.tag)
+    held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
+    if now is not None and held is not None and held.ability.startswith("COMMAND_CENTER_TRAIN"):
+        # A fortress shows its attack behind its trains.
+        held = next((_Shown.of(order) for order in now.orders if "ATTACK" in _name(order.ability_id)), None)
+    _after(game, then, armed.tag, _aim(game, then, enemies[1], own_at + (0, 6)), held, enemies, trial)
+
+
+def _burrowed_given(game: _Game, burrowed: UnitTypeId, trial: Trial) -> None:
+    pad = game.spot(game.toward(14), 8)
+    made = game.sandbox.spawn(
+        [(burrowed, game.player, pad - (3, 0)), (UnitTypeId.COMMAND_CENTER, game.enemy, pad + (4.5, 0))]
+    )
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    unit = next((unit for unit in made if unit.owner == game.player), None)
+    enemy = next((unit for unit in made if unit.owner == game.enemy), None)
+    trial.notes["made"] = [_type_name(unit.unit_type) for unit in made]
+    if unit is None or enemy is None:
+        trial.notes["class"] = "not made"
+        return
+    held = _held(game, unit.tag, enemy.tag, trial)
+    _after(game, AbilityId.GENERAL_UNBURROW, unit.tag, None, held, [], trial)
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
@@ -3024,6 +3204,8 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `free`, so that what a flying structure's add-on charges counts.
     "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "held-orders": _Sweep(Race.TERRAN, _held_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "liberator-orders": _Sweep(Race.TERRAN, _liberator_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "structure-orders": _Sweep(Race.TERRAN, _structure_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
