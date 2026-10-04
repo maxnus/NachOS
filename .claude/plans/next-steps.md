@@ -104,8 +104,9 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 
 ### Measurements it needs (`tools/sweep_orders.py`, findings into `docs/game-behavior.md`)
 
-- **"Close enough" for a build**: send the build at several distances and record the steps the worker loses. Too
-  late and it stops and waits; too early and the minerals are spent while it walks.
+- **"Close enough" for a build**: measured, and anything up to the site itself will do. A worker moved to its site
+  and sent the build within 8 down to 0.5 of it put the structure up 4 to 7 steps sooner than one sent the build from
+  30 away; none stopped and waited (docs/game-behavior.md).
 
 Measured since (docs/game-behavior.md): a drone and a probe are charged at the order as an SCV is; a build whose
 site is taken before the worker arrives fails with `CouldntReachTarget` and is refunded then; a lifted factory and
