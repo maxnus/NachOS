@@ -276,7 +276,8 @@ class AbilityData:
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: for a general id, what the exact id
-        that type performs does, and for a planetary fortress's attack and stop, keeping its orders (in game)."""
+        that type performs does, and keeping the orders of the types `KEEPS_ORDERS_BY_TYPE` names for it, such as a
+        barracks given a smart (in game)."""
         return self._behaviors_by_performer.get(unit_type, self.order_behavior)
 
     @classmethod

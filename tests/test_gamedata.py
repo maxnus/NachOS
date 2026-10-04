@@ -408,11 +408,22 @@ class TestARecordedGamesTables:
             assert row.order_behavior_for(UnitTypeId.PLANETARY_FORTRESS) is OrderBehavior.KEEPS_ORDERS, ability.name
             assert row.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES, ability.name
 
-    def test_a_command_center_trains_on_while_it_unloads(self, path: Path) -> None:
+    def test_a_command_center_trains_on_while_it_unloads_and_loads(self, path: Path) -> None:
         data = _tables(path)
-        for ability in (AbilityId.COMMAND_CENTER_UNLOAD, AbilityId.GENERAL_UNLOAD):
+        for ability in (
+            AbilityId.COMMAND_CENTER_UNLOAD,
+            AbilityId.GENERAL_UNLOAD,
+            AbilityId.COMMAND_CENTER_LOAD_ALL,
+            AbilityId.GENERAL_LOAD_ALL,
+        ):
             behavior = data.abilities[ability].order_behavior_for(UnitTypeId.COMMAND_CENTER)
             assert behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
+    def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
+        smart = _tables(path).abilities[AbilityId.GENERAL_SMART]
+        for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.HATCHERY):
+            assert smart.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        assert smart.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
 
     def test_a_structure_holds_no_order_of_its_own_even_with_a_weapon(self, path: Path) -> None:
         """A bunker is offered an attack and a stop, yet loading it leaves alone what it is doing."""

@@ -97,11 +97,34 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
 )
 
 # Each of these, given to a unit of these types while it held an order, left that order alone (tool `sweep_orders`,
-# `held-orders`), where the tables alone read it as replacing them. A planetary fortress attacks and stops with the ids
-# every unit does, yet goes on training through both, the attack shown behind its trains. A command center goes on
-# training while it unloads, by an id the tables offer to nobody, since unload is offered only to a loaded transport.
+# `held-orders` and `structure-orders`), where the tables alone read it as replacing them. A planetary fortress attacks
+# and stops with the ids every unit does, yet goes on training through both, the attack shown behind its trains. A
+# command center goes on training while it unloads, by an id the tables offer to nobody, since unload is offered only
+# to a loaded transport, and while it loads. Every structure that trains goes on training through a smart, at a point
+# or a mineral field, which sets its rally. The ids are offered to units too, which they take off their orders, and
+# load-all to a flying command center, which was not tried.
+_PRODUCERS = frozenset(
+    {
+        UnitTypeId.BARRACKS,
+        UnitTypeId.FACTORY,
+        UnitTypeId.STARPORT,
+        UnitTypeId.COMMAND_CENTER,
+        UnitTypeId.ORBITAL_COMMAND,
+        UnitTypeId.PLANETARY_FORTRESS,
+        UnitTypeId.NEXUS,
+        UnitTypeId.ROBOTICS_FACILITY,
+        UnitTypeId.STARGATE,
+        UnitTypeId.HATCHERY,
+        UnitTypeId.LAIR,
+        UnitTypeId.HIVE,
+    }
+)
+_LOADING = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS})
 KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
+        AbilityId.COMMAND_CENTER_LOAD_ALL: _LOADING,
+        AbilityId.GENERAL_LOAD_ALL: _LOADING,
+        AbilityId.GENERAL_SMART: _PRODUCERS,
         AbilityId.COMMAND_CENTER_UNLOAD: frozenset({UnitTypeId.COMMAND_CENTER}),
         AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
         AbilityId.GENERAL_ATTACK_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),

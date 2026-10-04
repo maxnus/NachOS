@@ -133,9 +133,8 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
-- What `LIBERATOR_UNSIEGE` does to a sieged liberator's orders. It reads `REPLACES`, unmeasured: the liberator
-  answered an attack on a unit in its zone `TargetIsOutOfRange`, so the `held-orders` sweep had no order to watch.
-  The rest of the forms the tables read as holding an order were measured there (docs/game-behavior.md).
+- What a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
+  planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 - An unload at a point aimed at the transport itself leaves a medivac's, a warp prism's and an overlord's move
   going (in game), yet reads `REPLACES`, which is right only for one aimed at a point. An order's behavior is one per
   ability and type, not per target, so a turn that moves a transport and unloads it in place sends only the last.

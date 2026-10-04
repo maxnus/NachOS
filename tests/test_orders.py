@@ -38,6 +38,7 @@ _CREEP_TUMOR_TUMOR = AbilityId.CREEP_TUMOR_BUILD_CREEP_TUMOR
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.GENERAL_RALLY
+_SMART = AbilityId.GENERAL_SMART
 _UNLOAD = AbilityId.GENERAL_UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
@@ -66,6 +67,7 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
+        data_pb2.AbilityData(ability_id=_SMART, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_UNLOAD),
         data_pb2.AbilityData(ability_id=_TRAIN_SCV),
     ],
@@ -746,6 +748,18 @@ class TestWhatAStructureDoesBesidesMaking:
 
         assert sent == [_TRAIN_MARINE, _RALLY]
         assert (train.state, rally.state) == (OrderState.SENT, OrderState.SENT)
+
+    def test_a_smart_does_not_take_the_turn_from_a_train(self) -> None:
+        """A structure goes on training through a smart, which sets its rally (in game)."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        train = game.book.issue(game.own(1), _TRAIN_MARINE)
+        smart = game.book.issue(game.own(1), _SMART, target=(20.0, 21.0))
+
+        sent = [command.ability_id for command in _commands(game.flush())]
+
+        assert sent == [_TRAIN_MARINE, _SMART]
+        assert (train.state, smart.state) == (OrderState.SENT, OrderState.SENT)
 
 
 class TestAQueuedOrder:

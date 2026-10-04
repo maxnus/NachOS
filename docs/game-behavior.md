@@ -510,8 +510,11 @@ Each entry ends with how it was seen:
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
   widow mine hold no order to take them off: each answers attack, move, patrol and hold position `Error`. A sieged
-  liberator answered an attack on an ultralisk of its own in its zone `TargetIsOutOfRange` (tool `sweep_orders`,
-  `held-orders`).
+  liberator answers an attack on a unit in its zone `TargetIsOutOfRange` for at least 64 steps after it shows as
+  sieged, while its zone forms, and takes it 224 steps after; unsiege then takes it off the attack. A burrowed roach
+  and infestor given an attack show `GENERAL_SCAN_MOVE` at the target, and unburrow takes them off it; a burrowed
+  zergling and swarm host answer attack, move, patrol and hold position `Error` (tool `sweep_orders`, `held-orders`,
+  `liberator-orders` and `structure-orders`).
 - A loaded command center training two SCVs goes on training while it unloads, by `COMMAND_CENTER_UNLOAD` (413,
   `UnloadAll_CommandCenter`) or `GENERAL_UNLOAD`; its unload at a point is refused, `NotSupported` by its own id and
   `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
@@ -522,6 +525,15 @@ Each entry ends with how it was seen:
   trains, fires, and goes on training. Given a stop, before or after the attack, it goes on training, and shows an
   attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
   through both at a command center in range (tool `sweep_orders`, `held-orders`).
+- A structure training two goes on training through a smart, which sets its rally: at a point for a barracks,
+  factory, starport, command center, orbital command, planetary fortress, nexus, robotics facility, stargate,
+  hatchery, lair and hive, and at a mineral field, which it then rallies to by tag, for a command center, nexus and
+  hatchery. A command center and a planetary fortress go on training through a load-all that takes in an SCV beside
+  them (tool `sweep_orders`, `structure-orders`).
+- A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
+  enemy switch to a second when given an attack or a smart at it. Given a stop, each shows the same attack again by
+  the next observation and fires on, so whether stop took it off and it took the target up again on its own cannot
+  be told from its orders (tool `sweep_orders`, `structure-orders`).
 - One command to several units sends each moving unit to its own point around the one ordered, so they keep their
   spacing, but a spell, a structure, a morph, a train and a research are carried out by only one of them: a storm by
   a templar with the energy for it, a pylon by one of two probes, a morph as above, one marine from three barracks
