@@ -2621,8 +2621,11 @@ def _held_orders(game: _Game) -> list[Trial]:
         if isinstance(offered, list):
             tried += [ability for ability in offered if isinstance(ability, int) and ability not in tried]
         for ability in tried:
-            label = f"{transport.name} carrying a {passenger.name} and holding an order, given {_name(ability)}"
-            trials.append(game.trial(label, partial(_unloading, game, transport, passenger, ability)))
+            # An unload at a unit is aimed at the transport itself, which unloads where it is, and else at a point.
+            for aim in ("itself", "a point") if game.aims.get(ability) == _POINT_OR_UNIT else ("",):
+                label = f"{transport.name} carrying a {passenger.name} and holding an order, given {_name(ability)}"
+                label += f" at {aim}" if aim else ""
+                trials.append(game.trial(label, partial(_unloading, game, transport, passenger, ability, aim)))
     for first, then in (
         (AbilityId.GENERAL_ATTACK, None),
         (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_STOP),
@@ -2701,13 +2704,14 @@ def _on_a_form(
     game: _Game, base: UnitTypeId, morph: AbilityId, form: UnitTypeId, ability: AbilityId, trial: Trial
 ) -> None:
     pad = game.spot(game.toward(14), 8)
-    # A liberator fires only at ground units in its zone, so its target is a unit close enough to siege on where it
-    # stands; the rest fire at a command center, which fires back at nothing, beyond a sieged tank's least range.
+    # A liberator fires only at ground units in its zone, so its target is an ultralisk of this player's, which
+    # stays where it is put, close enough to siege on where the liberator stands; the rest fire at an enemy command
+    # center, which fires back at nothing, beyond a sieged tank's least range.
     if form is UnitTypeId.LIBERATOR_SIEGED:
-        target_type, offset = UnitTypeId.ULTRALISK, (4.5, 0)
+        target_type, owner, offset = UnitTypeId.ULTRALISK, game.player, (4.5, 0)
     else:
-        target_type, offset = UnitTypeId.COMMAND_CENTER, (7.5, 0)
-    made = game.sandbox.spawn([(base, game.player, pad - (3, 0)), (target_type, game.enemy, pad - (3, 0) + offset)])
+        target_type, owner, offset = UnitTypeId.COMMAND_CENTER, game.enemy, (7.5, 0)
+    made = game.sandbox.spawn([(base, game.player, pad - (3, 0)), (target_type, owner, pad - (3, 0) + offset)])
     game.made.update(unit.tag for unit in made)
     game.observe()
     unit = next((unit for unit in made if unit.unit_type == base), None)
@@ -2782,14 +2786,15 @@ def _offered_unloads(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, 
     trial.notes["unloads"] = unloads
 
 
-def _unloading(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, ability: int, trial: Trial) -> None:
+def _unloading(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, ability: int, aim: str, trial: Trial) -> None:
     if (loaded := _loaded(game, transport, passenger, trial)) is None:
         return
     carrier, rider = loaded
     held = _hold(game, transport, carrier, trial)
     trial.notes["cargo before"] = _cargo(game, carrier)
     beside = _at(game.units[carrier]) + (4, 0)
-    _after(game, ability, carrier, _aim(game, ability, rider, beside), held, [], trial)
+    target = carrier if aim == "itself" else None if aim == "a point" else rider
+    _after(game, ability, carrier, _aim(game, ability, target, beside), held, [], trial)
     trial.notes["cargo after"] = _cargo(game, carrier)
 
 
