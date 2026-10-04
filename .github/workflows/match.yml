@@ -162,7 +162,7 @@ jobs:
           cache-only: true
 
   game:
-    name: game ${{ matrix.game.n }} vs ${{ matrix.game.race }}
+    name: game ${{ matrix.game.number }} vs ${{ matrix.game.race }}
     needs: [prepare, client]
     if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.client.result != 'failure' }}
     runs-on: ${{ fromJSON(inputs.runner) }}
@@ -173,8 +173,8 @@ jobs:
       matrix:
         game: ${{ fromJSON(needs.prepare.outputs.games) }}
     env:
-      RESULT_FILE: ${{ github.workspace }}/result-${{ matrix.game.n }}.json
-      REPLAY_FILE: ${{ github.workspace }}/replay-${{ matrix.game.n }}.SC2Replay
+      RESULT_FILE: ${{ github.workspace }}/result-${{ matrix.game.number }}.json
+      REPLAY_FILE: ${{ github.workspace }}/replay-${{ matrix.game.number }}.SC2Replay
 
     steps:
       # The workspace outlives the job on a self-hosted runner. Starting from empty keeps the last run's checkouts,
@@ -245,7 +245,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: result-${{ matrix.game.n }}
+          name: result-${{ matrix.game.number }}
           path: ${{ env.RESULT_FILE }}
           if-no-files-found: ignore
           retention-days: 7
@@ -254,7 +254,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: replay-${{ matrix.game.n }}
+          name: replay-${{ matrix.game.number }}
           path: ${{ env.REPLAY_FILE }}
           if-no-files-found: ignore
           retention-days: 14

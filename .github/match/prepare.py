@@ -41,7 +41,11 @@ def games(count: str, races: str) -> list[dict[str, object]]:
         fail("opponent-race must be all or a list of RANDOM, TERRAN, ZERG, PROTOSS")
     if not count.isdigit() or not 1 <= int(count) <= 10:
         fail(f"games must be 1 to 10 per race, got '{count}'")
-    return [{"n": i * len(chosen) + j + 1, "race": race} for i in range(int(count)) for j, race in enumerate(chosen)]
+    return [
+        {"number": cycle * len(chosen) + index + 1, "race": race}
+        for cycle in range(int(count))
+        for index, race in enumerate(chosen)
+    ]
 
 
 def check_settings(difficulty: str, build: str, time_limit: str) -> None:

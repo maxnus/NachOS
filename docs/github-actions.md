@@ -187,13 +187,11 @@ It sets `SC2PATH`, which NachOS's `Installation.find` and python-sc2 both read. 
 `Base75689`) and `source` (`installed`, `cache` or `download`). NachOS's own [`sc2.yml`](../.github/workflows/sc2.yml)
 runs its sweep tools this way.
 
-## Costs and limits
+## Limits
 
-- **Minutes**: GitHub-hosted runners are free for public repositories and count against the plan's minutes for
-  private ones.
 - **The client**: the first run downloads it from Blizzard and keeps it in the repository's Actions cache, which
-  later runs restore it from. It takes a large share of the 10 GB cache a repository gets. A cache entry unused for 7
-  days is dropped, and the next run downloads it again. The match workflow downloads it once before its games start, not once
+  later runs restore it from. It takes 4.1 GB of the 10 GB cache a repository gets. A cache entry unused for 7 days is
+  dropped, and the next run downloads it again. The match workflow downloads it once before its games start, not once
   per game.
 - **Cache scope**: a cache saved on a pull request serves only that pull request. Every branch can use one saved on
   the default branch, so a run there fills it for all.

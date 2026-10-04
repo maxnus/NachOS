@@ -16,9 +16,9 @@ MARKER = "<!-- sc2-games:match -->"
 
 @dataclass(frozen=True, slots=True)
 class Game:
-    """One game the run planned, and what its result file says, if it wrote one."""
+    """One game the run planned, by its number in the run, and what its result file says, if it wrote one."""
 
-    n: int
+    number: int
     race: str
     played: dict[str, object]
 
@@ -37,12 +37,42 @@ class Game:
         return self.race
 
 
+@dataclass(frozen=True, slots=True)
+class Run:
+    """The run being reported on, as the workflow passes it in the environment."""
+
+    url: str
+    sha: str
+    planned: list[dict[str, object]]
+    game_jobs: str
+    difficulty: str
+    build: str
+    time_limit: str
+    summary: Path
+    output: Path
+
+    @classmethod
+    def from_environment(cls) -> "Run":
+        env = os.environ
+        return cls(
+            url=f"{env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}",
+            sha=env["SHA"],
+            planned=json.loads(env["GAMES"]),
+            game_jobs=env["GAME_JOBS"],
+            difficulty=env["DIFFICULTY"],
+            build=env["BUILD"],
+            time_limit=env["TIME_LIMIT"],
+            summary=Path(env["GITHUB_STEP_SUMMARY"]),
+            output=Path(env["GITHUB_OUTPUT"]),
+        )
+
+
 def read_games(planned: list[dict[str, object]], results: Path) -> list[Game]:
     games = []
     for game in planned:
-        path = results / f"result-{game['n']}.json"
+        path = results / f"result-{game['number']}.json"
         played = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        games.append(Game(int(str(game["n"])), str(game["race"]), played))
+        games.append(Game(int(str(game["number"])), str(game["race"]), played))
     return games
 
 
@@ -84,36 +114,33 @@ def game_table(games: list[Game], replays: dict[str, str], run_url: str) -> list
             opponent += f" → {game.actual_race.title()}"
         seconds = game.played.get("game_time")
         length = f"{int(seconds) // 60}:{int(seconds) % 60:02d}" if isinstance(seconds, (int, float)) else ""
-        artifact = replays.get(f"replay-{game.n}")
+        artifact = replays.get(f"replay-{game.number}")
         replay = f"[replay]({run_url}/artifacts/{artifact})" if artifact else ""
         result = game.result.title() if game.result else "no result"
-        rows.append(f"| {game.n} | {opponent} | {game.played.get('map', '')} | {result} | {length} | {replay} |")
+        rows.append(f"| {game.number} | {opponent} | {game.played.get('map', '')} | {result} | {length} | {replay} |")
     return [*rows, ""]
 
 
 def main() -> None:
-    env = os.environ
-    run_url = f"{env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}"
+    run = Run.from_environment()
     lines = Path("replays.txt").read_text(encoding="utf-8").splitlines()
     replays = dict(line.split() for line in lines if line)
-    games = read_games(json.loads(env["GAMES"]), Path("results"))
+    games = read_games(run.planned, Path("results"))
 
     results = [game.result for game in games]
     description = tally(results)
-    if env["GAME_JOBS"] == "cancelled":
+    if run.game_jobs == "cancelled":
         state, description = "error", f"Cancelled ({description})"
     else:
         state = "failure" if None in results else "success"
 
-    settings = f"{env['DIFFICULTY']}, {env['BUILD']}"
-    if env["TIME_LIMIT"]:
-        settings += f", time limit {env['TIME_LIMIT']}s"
-    heading = [f"### sc2 match: {description}", "", f"`{env['SHA'][:7]}` against {settings} · [run]({run_url})", ""]
-    report = [MARKER, *heading, *race_table(games), *game_table(games, replays, run_url)]
+    settings = f"{run.difficulty}, {run.build}" + (f", time limit {run.time_limit}s" if run.time_limit else "")
+    heading = [f"### sc2 match: {description}", "", f"`{run.sha[:7]}` against {settings} · [run]({run.url})", ""]
+    report = [MARKER, *heading, *race_table(games), *game_table(games, replays, run.url)]
 
-    with open(env["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as file:
+    with run.summary.open("a", encoding="utf-8") as file:
         file.write("\n".join(report[1:]))
-    with open(env["GITHUB_OUTPUT"], "a", encoding="utf-8") as file:
+    with run.output.open("a", encoding="utf-8") as file:
         file.write(f"state={state}\ntally={description}\nreport<<REPORT_END\n" + "\n".join(report) + "\nREPORT_END\n")
 
 
