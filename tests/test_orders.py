@@ -594,93 +594,65 @@ class TestAGroupOfSeveralTypes:
         assert move.state is OrderState.OVERRIDDEN
 
 
-class TestClearingAQueue:
-    def test_the_order_a_unit_is_at_is_sent_back_unqueued(self) -> None:
+class TestForcingAnOrder:
+    """`force` sends an order to a unit already carrying it out, which drops what it has queued (in game)."""
+
+    def test_an_order_the_unit_is_already_carrying_out_is_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
-        order = game.book.clear_queue(game.own(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), force=True)
 
         (command,) = _commands(game.flush())
-        assert command.ability_id == _MOVE
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
         assert not command.queue_command
-        assert order is not None
         assert order.state is OrderState.SENT
 
-    def test_a_unit_with_nothing_queued_has_nothing_to_clear(self) -> None:
-        game = _Game()
+    def test_the_order_sent_last_turn_is_sent_again_though_it_does_not_show_yet(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0), queued=True)
+        game.flush()
+        game.observe(16, _marine(1))
+
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), force=True)
+
+        assert len(_commands(game.flush())) == 1
+        assert order.state is OrderState.SENT
+
+    def test_every_unit_of_a_group_is_sent_it(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))), _marine(2))
 
-        assert game.book.clear_queue(game.own(1)) is None
-        assert game.book.clear_queue(game.own(2)) is None
-        assert game.flush() is None
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0), force=True)
 
-    def test_an_order_given_to_the_unit_after_it_overrides_it(self) -> None:
+        (command,) = _commands(game.flush())
+        assert list(command.unit_tags) == [1, 2]
+
+    def test_a_later_order_still_overrides_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
-        cleared = game.book.clear_queue(game.own(1))
+        forced = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), force=True)
         game.book.issue(game.own(1), _ATTACK, target=(40.0, 41.0))
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _ATTACK
-        assert cleared is not None
-        assert cleared.state is OrderState.OVERRIDDEN
+        assert forced.state is OrderState.OVERRIDDEN
 
-    def test_a_queue_an_order_sent_last_turn_replaced_is_left_alone_though_it_still_shows(self) -> None:
-        """On the ladder the observation after an order can still show the orders it replaced (in game)."""
+    def test_it_is_sent_once_for_its_turn_only(self) -> None:
         game = _Game([ActionResult.SUCCESS])
-        game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
-        game.book.issue(game.own(1), _ATTACK, target=(40.0, 41.0))
-        game.flush()
-        game.observe(16, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
-
-        assert game.book.clear_queue(game.own(1)) is None
-        assert game.flush() is None
-
-    def test_a_queue_sent_behind_an_order_sent_last_turn_is_cleared_by_sending_that_order_again(self) -> None:
-        """The order sent last turn is what the unit is carrying out, whether the observation shows it yet or not."""
-        for shown in (
-            (_moving((40.0, 41.0)), _moving((50.0, 51.0))),
-            (_moving((20.0, 21.0)), _moving((30.0, 31.0))),
-        ):
-            game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
-            game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
-            game.book.issue(game.own(1), _MOVE, target=(40.0, 41.0))
-            game.book.issue(game.own(1), _MOVE, target=(50.0, 51.0), queued=True)
-            game.flush()
-            game.observe(16, _marine(1, *shown))
-
-            order = game.book.clear_queue(game.own(1))
-
-            (command,) = _commands(game.flush())
-            assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (40.0, 41.0)
-            assert not command.queue_command
-            assert order is not None
-
-    def test_a_queue_behind_an_order_sent_queued_is_cleared(self) -> None:
-        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
-        game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0), queued=True)
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), force=True)
         game.flush()
-        game.observe(16, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+        game.observe(16, _marine(1, _moving((20.0, 21.0))))
+        game.observe(32, _marine(1, _moving((20.0, 21.0))))
 
-        order = game.book.clear_queue(game.own(1))
+        again = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        (command,) = _commands(game.flush())
-        assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
-        assert order is not None
-
-    def test_a_queue_is_cleared_once_the_order_sent_had_two_observations_to_show(self) -> None:
-        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _marine(1))
-        game.book.issue(game.own(1), _ATTACK, target=(40.0, 41.0))
-        game.flush()
-        game.observe(16, _marine(1))
-        game.observe(32, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
-
-        assert game.book.clear_queue(game.own(1)) is not None
+        assert game.flush() is None
+        assert again.state is OrderState.REDUNDANT
 
 
 class TestWhatBecameOfAnOrder:
@@ -803,35 +775,6 @@ class TestAQueuedOrder:
 
         assert len(_commands(game.flush())) == 2
         assert (behind.state, move.state) == (OrderState.SENT, OrderState.SENT)
-
-
-class TestWhatCannotBeCleared:
-    def test_a_structure_making_something_is_not_cleared(self) -> None:
-        game = _Game()
-        game.observe(0, _barracks(1, _training(), _training(0.0)))
-
-        assert game.book.clear_queue(game.own(1)) is None
-        assert game.flush() is None
-
-    def test_an_ability_nachos_cannot_name_is_not_cleared(self) -> None:
-        game = _Game()
-        uncurated = raw_pb2.UnitOrder(ability_id=99991)
-        game.observe(0, _marine(1, uncurated, _moving()))
-
-        assert game.book.clear_queue(game.own(1)) is None
-        assert game.flush() is None
-
-    def test_the_order_it_sends_keeps_the_unit_it_was_aimed_at(self) -> None:
-        game = _Game([ActionResult.SUCCESS])
-        attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
-        game.observe(0, _marine(1, attacking, _moving()), _marine(2, at=(30.0, 30.0)))
-
-        order = game.book.clear_queue(game.own(1))
-
-        (command,) = _commands(game.flush())
-        assert command.target_unit_tag == 2
-        assert order is not None
-        assert order.target is game.own(2)
 
 
 class TestAPointAsTheGameReadsIt:

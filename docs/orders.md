@@ -19,7 +19,7 @@ order = api.orders.issue(marine, AbilityId.MARINE_STIM)
 api.orders.issue(squad, AbilityId.GENERAL_MOVE, target=ramp)
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=drone, data=Defending(base))
-api.orders.clear_queue(scv)
+api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 api.orders.camera(base)
 ```
 
@@ -30,13 +30,12 @@ api.orders.camera(base)
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
   is the point the game was given, not quite the one passed in. `camera` stores its point the same way.
 - **`queued`** puts the order behind each unit's current orders instead of replacing them.
+- **`force`** sends the order even to units already carrying it out, so it never reads `REDUNDANT`
+  ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
+  queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
+  turn's other orders.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
-- **`api.orders.clear_queue(unit)`** drops a unit's queued orders and leaves it on its current one, by sending that
-  order again unqueued. It returns the order it sent, or `None` if there was nothing to drop. While an order sent the
-  turn before may not show yet, that order counts as the current one: `None` if nothing was queued behind it, and
-  otherwise it is sent again. A structure making
-  something is not cleared this way, since the game would only queue another of the same behind it.
 - **`api.orders.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
 
 ## One order a unit a turn
@@ -97,8 +96,8 @@ the game dropped, within one turn still counts on the next: repeating it then go
 A bot that gives the same order every turn gets a new `Order` each time: the first reads `SENT`, and the rest
 `REDUNDANT` for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
-sent the order for the newcomer alone. To drop a unit's queue on purpose, use `clear_queue`, whose order goes out
-regardless.
+sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
+which goes out regardless.
 
 ## What an order needs
 

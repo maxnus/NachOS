@@ -13,7 +13,7 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
-from sc2nachos.orders._targets import aimed_at, as_sent, check_target, order_target, same_point, same_target
+from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionResult
 from sc2nachos.units import Unit
@@ -42,13 +42,12 @@ class OrderBook:
 
     __slots__ = (
         "_camera_location",
-        "_clearing",
+        "_forced",
         "_game_data",
         "_issued",
         "_issued_by_unit",
         "_last_sent",
         "_observations",
-        "_queued_behind",
         "_step",
     )
 
@@ -58,13 +57,11 @@ class OrderBook:
         # The turn's orders in the order they were issued, and those of each unit by its id.
         self._issued: list[Order[Any]] = []
         self._issued_by_unit: dict[int, list[Order[Any]]] = {}
-        # The turn's orders from `clear_queue`, sent to a unit already carrying them out.
-        self._clearing: set[Order[Any]] = set()
+        # The turn's orders issued with `force`, sent even to units already carrying them out.
+        self._forced: set[Order[Any]] = set()
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
-        # The ids of the units sent a queued order the game took after the last order in `_last_sent`.
-        self._queued_behind: set[int] = set()
         self._camera_location: Point | None = None
         self._observations = 0
         self._step = 0
@@ -77,6 +74,7 @@ class OrderBook:
         *,
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
+        force: bool = False,
     ) -> Order[None]: ...
 
     @overload
@@ -87,6 +85,7 @@ class OrderBook:
         *,
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
+        force: bool = False,
         data: T,
     ) -> Order[T]: ...
 
@@ -97,6 +96,7 @@ class OrderBook:
         *,
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
+        force: bool = False,
         data: Any = None,
     ) -> Order[Any]:
         """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Order`.
@@ -108,7 +108,9 @@ class OrderBook:
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
         observation after its turn may not show it yet, and otherwise its first reported order. An order left with no
-        unit to send to reads `REDUNDANT`.
+        unit to send to reads `REDUNDANT`. `force` sends it to those units too, so it is never `REDUNDANT`: that is
+        how a unit is made to drop its queue and go on with its current order. It still competes with the turn's other
+        orders like any other.
 
         Raises `TypeError` for a target the ability cannot be aimed at.
         """
@@ -128,48 +130,8 @@ class OrderBook:
             step=self._step,
         )
         self._add(order)
-        return order
-
-    def clear_queue(self, unit: OwnUnit[Any]) -> Order[None] | None:
-        """Drop `unit`'s queued orders, leaving the one it is carrying out, or return `None` if there is nothing to
-        drop.
-
-        The unit's current order is sent again, unqueued. The game answers `SUCCESS`, carries nothing out for it, and
-        drops everything queued behind it (in game). An order given to the unit this turn overrides it, like any
-        other.
-
-        Returns `None` if the unit has nothing queued, if its current order is an ability NachOS cannot name, or if
-        that ability is a train, a research or a morph: the game would queue a second of those behind the first
-        instead of dropping anything, so a structure's queue is cancelled from its end instead.
-
-        While an order sent to the unit that replaced its orders may not show yet, that order is the one it is carrying
-        out: it is sent again if queued orders were sent behind it, and otherwise `None` is returned, since it left
-        nothing queued.
-        """
-        target: Target | None
-        if (sent := self._sent_and_not_shown(unit)) is not None:
-            if unit.id not in self._queued_behind:
-                return None
-            ability, target = self._general_ability(sent.ability), sent.target
-        else:
-            orders = unit._latest_report.orders
-            if len(orders) < 2:
-                return None
-            ability, target = self._general_ability(_ability_of_unit_order(orders[0])), order_target(unit, orders[0])
-        behavior = _behavior_for(self._game_data.abilities.get(ability), unit)
-        if ability is AbilityId.NULL or behavior is not OrderBehavior.REPLACES:
-            return None
-        order: Order[None] = Order(
-            ability,
-            (unit,),
-            target,
-            queued=False,
-            data=None,
-            order_behavior=behavior,
-            step=self._step,
-        )
-        self._add(order)
-        self._clearing.add(order)
+        if force:
+            self._forced.add(order)
         return order
 
     def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
@@ -195,11 +157,11 @@ class OrderBook:
 
     def _send(self, client: Client) -> None:
         """Send the turn's orders and record the game's answer on each. Sends nothing if there is nothing to send."""
-        issued, clearing = self._issued, self._clearing
-        self._issued, self._issued_by_unit, self._clearing = [], {}, set()
+        issued, forced = self._issued, self._forced
+        self._issued, self._issued_by_unit, self._forced = [], {}, set()
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
-        for order, units in self._orders_to_send(issued, clearing):
+        for order, units in self._orders_to_send(issued, forced):
             actions.append(create_unit_command_action(order, units))
             sent.append((order, units))
         if self._camera_location is not None:
@@ -217,8 +179,6 @@ class OrderBook:
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
             if taken and not order.queued:
                 self._remember_sent(order, units)
-            elif taken:
-                self._queued_behind.update(unit.id for unit in units if unit.id in self._last_sent)
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -226,16 +186,15 @@ class OrderBook:
         self._observations += 1
         for unit in dead:
             self._last_sent.pop(unit.id, None)
-            self._queued_behind.discard(unit.id)
 
     def _orders_to_send(
-        self, issued: Sequence[Order[Any]], clearing: Collection[Order[Any]]
+        self, issued: Sequence[Order[Any]], forced: Collection[Order[Any]]
     ) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
         """Each order of the turn that goes out, with the units it goes out to.
 
         An order that acts at once, or that is queued behind a unit's current orders, competes with nothing. Of the
         rest, a unit keeps only the last it was given, and an order left with no unit is overridden. An order is then
-        left out for the units already carrying it out, and one left with no unit is redundant. An order in `clearing`
+        left out for the units already carrying it out, and one left with no unit is redundant. An order in `forced`
         goes out regardless.
         """
         holder: dict[int, Order[Any]] = {}
@@ -253,7 +212,7 @@ class OrderBook:
             if not units:
                 order._settle(OrderState.OVERRIDDEN)
                 continue
-            if order not in clearing and not (units := self._units_not_carrying_it_out(order, units)):
+            if order not in forced and not (units := self._units_not_carrying_it_out(order, units)):
                 order._settle(OrderState.REDUNDANT)
                 continue
             yield order, units
@@ -286,7 +245,6 @@ class OrderBook:
         for unit in units:
             if _behavior_for(row, unit) is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = (order, self._observations)
-                self._queued_behind.discard(unit.id)
 
     def _units_not_carrying_it_out(
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]

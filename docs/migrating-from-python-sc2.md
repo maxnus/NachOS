@@ -127,7 +127,7 @@ it.
 |---|---|
 | `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
 | `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.orders.clear_queue(unit)`, `api.orders.issued_to(unit)` |
+| nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
@@ -147,7 +147,8 @@ it.
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free. NachOS does the same when the turn is sent: an order a unit is
   already carrying out first is left out for it, and one left with no unit reads `REDUNDANT`
-  ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, call `api.orders.clear_queue(unit)`.
+  ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
+  `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
