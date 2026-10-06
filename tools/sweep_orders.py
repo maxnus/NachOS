@@ -47,7 +47,8 @@ and runs its trials in turn::
 - `structure-orders` gives training structures a smart at a point, and a command center and a planetary fortress
   a load-all; has each structure with a weapon attack one enemy and then stop, attack another, or smart at it; and
   gives burrowed units that hold an order unburrow. `producer-orders` is its first part alone, and
-  `gateway-orders` the gateway's, without `tech_tree`.
+  `gateway-orders` the gateway's, without `tech_tree`. `fortress-unload` gives a loaded, training planetary
+  fortress each unload, and `roach-claws` researches Tunneling Claws and then gives a burrowed roach unburrow.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -80,7 +81,7 @@ from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_p
 from sc2nachos.gamedata import Attribute, GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
@@ -2765,8 +2766,9 @@ def _loaded(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, trial: Tr
 
 
 def _hold(game: _Game, transport: UnitTypeId, tag: int, trial: Trial) -> _Shown | None:
-    """Have the loaded transport `tag` train, if it is a command center, or move, and return that order as shown."""
-    if transport is UnitTypeId.COMMAND_CENTER:
+    """Have the loaded transport `tag` train, if it is a command center or fortress, or move, and return that order as
+    shown."""
+    if transport in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
         trial.notes["holds"] = game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [tag])
         game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [tag], queued=True)
     else:
@@ -2972,6 +2974,47 @@ def _gateway_orders(game: _Game) -> list[Trial]:
     return [
         game.trial(label, partial(_busy_given, game, UnitTypeId.GATEWAY, AbilityId.GATEWAY_TRAIN_ZEALOT, True, smart))
     ]
+
+
+def _fortress_unload(game: _Game) -> list[Trial]:
+    fortress, scv = UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV
+    trials = [game.trial("PLANETARY_FORTRESS carrying a SCV: offered", partial(_offered_unloads, game, fortress, scv))]
+    for ability in (AbilityId.COMMAND_CENTER_UNLOAD, AbilityId.GENERAL_UNLOAD):
+        label = f"PLANETARY_FORTRESS carrying a SCV and training, given {ability.name}"
+        trials.append(game.trial(label, partial(_unloading, game, fortress, scv, ability, "")))
+    return trials
+
+
+def _roach_with_claws(game: _Game) -> list[Trial]:
+    """Research Tunneling Claws, then give a burrowed roach an attack and unburrow, as `structure-orders` does
+    without it."""
+    trials = [game.trial("researching Tunneling Claws", partial(_research_claws, game))]
+    trials.append(
+        game.trial(
+            "ROACH_BURROWED with Tunneling Claws holding an order, given GENERAL_UNBURROW",
+            partial(_burrowed_given, game, UnitTypeId.ROACH_BURROWED),
+        )
+    )
+    return trials
+
+
+def _research_claws(game: _Game, trial: Trial) -> None:
+    pad = game.spot(game.toward(14), 8)
+    made = game.sandbox.spawn(
+        [(UnitTypeId.HATCHERY, game.player, pad - (3, 0)), (UnitTypeId.ROACH_WARREN, game.player, pad + (4, 0))]
+    )
+    game.made.update(unit.tag for unit in made)
+    game.turn(8)
+    warren = next((unit for unit in made if unit.unit_type == UnitTypeId.ROACH_WARREN), None)
+    if warren is None:
+        trial.notes["class"] = "not made"
+        return
+    trial.notes["research"] = game.order(AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS, [warren])
+    game.turn(2)
+    game.read("researching", [warren])
+    game.until(lambda: (now := game.unit(warren.tag)) is not None and not now.orders, steps=8, limit=3000)
+    upgrades = game.client.observation().observation.raw_data.player.upgrade_ids
+    trial.notes["researched"] = UpgradeId.TUNNELING_CLAWS in upgrades
 
 
 def _armed_orders(game: _Game) -> list[Trial]:
@@ -3249,6 +3292,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "producer-orders": _Sweep(Race.TERRAN, _producer_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     # Not `tech_tree`, under which a gateway turns itself into a warp gate at once.
     "gateway-orders": _Sweep(Race.TERRAN, _gateway_orders),
+    "fortress-unload": _Sweep(Race.TERRAN, _fortress_unload, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "roach-claws": _Sweep(Race.TERRAN, _roach_with_claws, (*_BASE_CHEATS, Cheat.TECH_TREE, Cheat.FAST_BUILD)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
