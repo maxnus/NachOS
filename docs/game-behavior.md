@@ -522,7 +522,14 @@ Each entry ends with how it was seen:
   center's unload at a point is refused, `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
   point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
   aimed at a point, it replaces the move and flies there first. `GENERAL_UNLOAD` is answered `Error` by each of the
-  three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`).
+  three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`). Two medivacs given a move
+  and `GENERAL_UNLOAD_AT` aimed at each itself, in one request, put their marines down where they stood and flew on;
+  from the next observation each showed only its move (`tests/test_orders.py`, run on GitHub Actions).
+- Nothing else swept does something different to a unit's orders by what it is aimed at. A moving medivac, warp
+  prism and transport overlord given a load at a passenger 1 or 8 away drop their move for it; a moving raven given
+  its anti-armor missile or interference matrix, and a battlecruiser its Yamato, at an enemy siege tank in reach or 16
+  away, drop theirs. A planetary fortress's attack aimed at a point is refused `MustTargetUnit` (tool
+  `sweep_orders`, `target-dependent`).
 - A planetary fortress training two SCVs, given an attack on a command center in range, shows the attack behind its
   trains, fires, and goes on training. Given a stop, before or after the attack, it goes on training, and shows an
   attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
