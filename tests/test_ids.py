@@ -14,6 +14,11 @@ RAW = (RawUnitTypeId, RawAbilityId, RawUpgradeId, RawBuffId, RawEffectId)
 PAIRS = tuple(zip(CURATED, RAW, strict=True))
 
 
+def _game_ids(enum: type[ReadableIntEnum]) -> list[ReadableIntEnum]:
+    """The members of `enum` the game has, leaving out NachOS's own abilities."""
+    return [member for member in enum if not (isinstance(member, AbilityId) and member.is_nachos_only)]
+
+
 @pytest.mark.parametrize("enum", CURATED + RAW)
 def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
     """Every id enum is an int enum that prints as its name."""
@@ -27,7 +32,8 @@ def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
 
 @pytest.mark.parametrize("enum", CURATED)
 def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> None:
-    """Curated modules define members from the raw catalog, never as literal ids.
+    """Curated modules define members from the raw catalog, never as literal ids, and NachOS's own ids from the first
+    value above the game's.
 
     No game id is written as a number, so a patch that renumbers something needs a regeneration, not a hand-edit.
     """
@@ -41,13 +47,14 @@ def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> N
     ]
     assert assignments, f"{enum.__name__} has no members"
     for assignment in assignments:
-        assert assignment.startswith("Raw"), f"{enum.__name__} member assigned a literal: {assignment}"
+        literal = f"{enum.__name__} member assigned a literal: {assignment}"
+        assert assignment.startswith(("Raw", "_NACHOS_IDS_FROM")), literal
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
 def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
     """A curated member equals its raw counterpart and interchanges with it as a mapping key."""
-    for member in curated:
+    for member in _game_ids(curated):
         counterpart = raw(int(member))
         assert member == counterpart
         assert {counterpart: "value"}[member] == "value"
@@ -55,9 +62,16 @@ def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: ty
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
 def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
-    """Every curated id exists in the generated catalog — curation filters, it never invents."""
+    """Every curated id the game has exists in the generated catalog — curation filters, and invents only NachOS's own
+    abilities."""
     catalog = {int(member) for member in raw}
-    assert {int(member) for member in curated} <= catalog
+    assert {int(member) for member in _game_ids(curated)} <= catalog
+
+
+def test_nachos_own_abilities_lie_above_every_game_id() -> None:
+    own = [member for member in AbilityId if member.is_nachos_only]
+    assert own, "NachOS has abilities of its own"
+    assert min(own) > max(int(member) for member in RawAbilityId)
 
 
 @pytest.mark.parametrize("enum", CURATED + RAW)

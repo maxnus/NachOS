@@ -10,7 +10,7 @@ from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
-from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
+from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_actions
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
 from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
@@ -48,6 +48,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
+        "_own_ids",
         "_step",
     )
 
@@ -62,6 +63,8 @@ class OrderBook:
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
+        # The game's abilities NachOS has its own id for when aimed at the unit itself, with that id.
+        self._own_ids = {row.sent_as: row.id for row in game_data.abilities.values() if row.sent_as is not None}
         self._camera_location: Point | None = None
         self._observations = 0
         self._step = 0
@@ -112,7 +115,8 @@ class OrderBook:
         how a unit is made to drop its queue and go on with its current order. It still competes with the turn's other
         orders like any other.
 
-        Raises `TypeError` for a target the ability cannot be aimed at.
+        Raises `TypeError` for a target the ability cannot be aimed at, and for a transport's unload at a point aimed at
+        one of `units` itself, which is its `_UNLOAD_HERE`.
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
@@ -120,6 +124,7 @@ class OrderBook:
         row = self._game_data.abilities.get(ability)
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
+        self._check_not_aimed_at_itself(ability, aimed, given)
         order = Order(
             ability,
             given,
@@ -133,6 +138,14 @@ class OrderBook:
         if force:
             self._forced.add(order)
         return order
+
+    def _check_not_aimed_at_itself(
+        self, ability: AbilityId, target: Target | None, units: Sequence[OwnUnit[Any]]
+    ) -> None:
+        """Raise `TypeError` if `ability` is aimed at one of `units` and NachOS has its own id for that."""
+        own = self._own_ids.get(ability)
+        if own is not None and isinstance(target, Unit) and any(unit.tag == target.tag for unit in units):
+            raise TypeError(f"{ability.name} aimed at the unit itself is {own.name}")
 
     def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued.
@@ -160,25 +173,34 @@ class OrderBook:
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         actions: list[sc2api_pb2.Action] = []
-        sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
+        sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...], int]] = []
         for order, units in self._orders_to_send(issued, forced):
-            actions.append(create_unit_command_action(order, units))
-            sent.append((order, units))
+            commands = create_unit_command_actions(order, units, self._sent_as(order))
+            actions += commands
+            sent.append((order, units, len(commands)))
         if self._camera_location is not None:
             actions.append(create_camera_move_action(self._camera_location))
             self._camera_location = None
         if not actions:
             return
         results = client.act(actions).result
-        if len(results) < len(sent):
-            raise ProtocolError(f"the game answered {len(results)} of the {len(sent)} orders it was sent")
+        commands = sum(count for _, _, count in sent)
+        if len(results) < commands:
+            raise ProtocolError(f"the game answered {len(results)} of the {commands} commands it was sent")
         # A camera move, if any, is answered last and belongs to no order.
-        for (order, units), result in zip(sent, results[: len(sent)], strict=True):
-            action_result = ActionResult.read(result)
+        answered = 0
+        for order, units, count in sent:
+            action_result = _first_failure(results[answered : answered + count])
+            answered += count
             taken = action_result is ActionResult.SUCCESS
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
             if taken and not order.queued:
                 self._remember_sent(order, units)
+
+    def _sent_as(self, order: Order[Any]) -> AbilityId | None:
+        """The game's ability `order` goes out as, aimed at each unit itself, if it is one of NachOS's own."""
+        row = self._game_data.abilities.get(order.ability)
+        return None if row is None else row.sent_as
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -317,3 +339,11 @@ def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
     """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
     ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
+
+
+def _first_failure(results: Iterable[int]) -> ActionResult:
+    """The game's answer to an order sent as several commands: the first that is not `SUCCESS`, or `SUCCESS`."""
+    for result in results:
+        if (action_result := ActionResult.read(result)) is not ActionResult.SUCCESS:
+            return action_result
+    return ActionResult.SUCCESS

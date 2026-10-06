@@ -420,6 +420,25 @@ class TestARecordedGamesTables:
                 behavior = data.abilities[ability].order_behavior_for(unit_type)
                 assert behavior is OrderBehavior.KEEPS_ORDERS, (ability.name, unit_type.name)
 
+    def test_an_unload_here_keeps_a_transport_s_orders_and_goes_out_as_its_unload_at(self, path: Path) -> None:
+        data = _tables(path)
+        transports = {
+            AbilityId.MEDIVAC_UNLOAD_HERE: AbilityId.MEDIVAC_UNLOAD_AT,
+            AbilityId.WARP_PRISM_UNLOAD_HERE: AbilityId.WARP_PRISM_UNLOAD_AT,
+            AbilityId.OVERLORD_TRANSPORT_UNLOAD_HERE: AbilityId.OVERLORD_TRANSPORT_UNLOAD_AT,
+            AbilityId.GENERAL_UNLOAD_HERE: AbilityId.GENERAL_UNLOAD_AT,
+        }
+        for here, at in transports.items():
+            row = data.abilities[here]
+            assert row.sent_as is at
+            assert row.target_type is TargetType.NOTHING
+            assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
+            assert row.performers == data.abilities[at].performers
+            assert data.abilities[at].sent_as is None
+        assert data.abilities[AbilityId.MEDIVAC_UNLOAD_HERE].remaps_to is AbilityId.GENERAL_UNLOAD_HERE
+        assert data.abilities[AbilityId.GENERAL_UNLOAD_HERE].remaps_to is None
+        assert data.abilities[AbilityId.MEDIVAC_UNLOAD_AT].order_behavior is OrderBehavior.REPLACES
+
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.GENERAL_SMART]
         for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY):
