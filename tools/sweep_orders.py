@@ -48,8 +48,8 @@ and runs its trials in turn::
   a load-all; has each structure with a weapon attack one enemy and then stop, attack another, or smart at it; and
   gives burrowed units that hold an order unburrow. `producer-orders` is its first part alone, and
   `gateway-orders` the gateway's, without `tech_tree`. `fortress-unload` gives a loaded, training planetary
-  fortress each unload, and `burrowed-roach` gives a burrowed roach an attack it must move for, then unburrow;
-  `burrowed-roach-tech-tree` does the same under `tech_tree`, which grants Tunneling Claws.
+  fortress each unload, and `burrowed-movers` gives a burrowed roach and infestor an attack they must move for,
+  then unburrow; `burrowed-movers-tech-tree` does the same under `tech_tree`, which grants Tunneling Claws.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2986,36 +2986,36 @@ def _fortress_unload(game: _Game) -> list[Trial]:
     return trials
 
 
-def _burrowed_roach(game: _Game) -> list[Trial]:
-    label = "ROACH_BURROWED given an attack, a while later, then GENERAL_UNBURROW"
-    return [game.trial(label, partial(_burrowed_roach_attacks, game))]
+def _burrowed_movers(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for burrowed in (UnitTypeId.ROACH_BURROWED, UnitTypeId.INFESTOR_BURROWED):
+        label = f"{burrowed.name} given an attack, a while later, then GENERAL_UNBURROW"
+        trials.append(game.trial(label, partial(_burrowed_attacks, game, burrowed)))
+    return trials
 
 
-def _burrowed_roach_attacks(game: _Game, trial: Trial) -> None:
-    """Give a burrowed roach an attack on a command center beyond its range, watch whether it moves, then unburrow
+def _burrowed_attacks(game: _Game, burrowed: UnitTypeId, trial: Trial) -> None:
+    """Give a burrowed unit an attack on a command center beyond its range, watch whether it moves, then unburrow
     it. Whether Tunneling Claws is researched is recorded: the `tech_tree` cheat grants it."""
     upgrades = game.client.observation().observation.raw_data.player.upgrade_ids
     trial.notes["tunneling claws"] = UpgradeId.TUNNELING_CLAWS in upgrades
     pad = game.spot(game.toward(14), 8)
     made = game.sandbox.spawn(
-        [
-            (UnitTypeId.ROACH_BURROWED, game.player, pad - (3, 0)),
-            (UnitTypeId.COMMAND_CENTER, game.enemy, pad + (4.5, 0)),
-        ]
+        [(burrowed, game.player, pad - (3, 0)), (UnitTypeId.COMMAND_CENTER, game.enemy, pad + (4.5, 0))]
     )
     game.made.update(unit.tag for unit in made)
     game.observe()
-    roach = next((unit for unit in made if unit.owner == game.player), None)
+    unit = next((unit for unit in made if unit.owner == game.player), None)
     enemy = next((unit for unit in made if unit.owner == game.enemy), None)
-    if roach is None or enemy is None:
+    if unit is None or enemy is None:
         trial.notes["class"] = "not made"
         return
-    held = _held(game, roach.tag, enemy.tag, trial)
+    held = _held(game, unit.tag, enemy.tag, trial)
     game.turn(46)
-    game.read("48 steps on", [roach.tag])
-    now = game.unit(roach.tag)
-    trial.notes["moved"] = None if now is None else round(_at(now).distance_to(_at(roach)), 2)
-    _after(game, AbilityId.GENERAL_UNBURROW, roach.tag, None, held, [], trial)
+    game.read("48 steps on", [unit.tag])
+    now = game.unit(unit.tag)
+    trial.notes["moved"] = None if now is None else round(_at(now).distance_to(_at(unit)), 2)
+    _after(game, AbilityId.GENERAL_UNBURROW, unit.tag, None, held, [], trial)
 
 
 def _armed_orders(game: _Game) -> list[Trial]:
@@ -3294,8 +3294,8 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a gateway turns itself into a warp gate at once.
     "gateway-orders": _Sweep(Race.TERRAN, _gateway_orders),
     "fortress-unload": _Sweep(Race.TERRAN, _fortress_unload, (*_BASE_CHEATS, Cheat.TECH_TREE)),
-    "burrowed-roach": _Sweep(Race.TERRAN, _burrowed_roach),
-    "burrowed-roach-tech-tree": _Sweep(Race.TERRAN, _burrowed_roach, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "burrowed-movers": _Sweep(Race.TERRAN, _burrowed_movers),
+    "burrowed-movers-tech-tree": _Sweep(Race.TERRAN, _burrowed_movers, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
