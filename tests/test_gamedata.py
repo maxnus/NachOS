@@ -408,7 +408,7 @@ class TestARecordedGamesTables:
             assert row.order_behavior_for(UnitTypeId.PLANETARY_FORTRESS) is OrderBehavior.KEEPS_ORDERS, ability.name
             assert row.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES, ability.name
 
-    def test_a_command_center_trains_on_while_it_unloads_and_loads(self, path: Path) -> None:
+    def test_a_command_center_and_a_fortress_train_on_while_they_unload_and_load(self, path: Path) -> None:
         data = _tables(path)
         for ability in (
             AbilityId.COMMAND_CENTER_UNLOAD,
@@ -416,8 +416,9 @@ class TestARecordedGamesTables:
             AbilityId.COMMAND_CENTER_LOAD_ALL,
             AbilityId.GENERAL_LOAD_ALL,
         ):
-            behavior = data.abilities[ability].order_behavior_for(UnitTypeId.COMMAND_CENTER)
-            assert behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+            for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
+                behavior = data.abilities[ability].order_behavior_for(unit_type)
+                assert behavior is OrderBehavior.KEEPS_ORDERS, (ability.name, unit_type.name)
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.GENERAL_SMART]

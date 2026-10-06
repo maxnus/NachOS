@@ -511,13 +511,15 @@ Each entry ends with how it was seen:
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
   widow mine hold no order to take them off: each answers attack, move, patrol and hold position `Error`. A sieged
   liberator answers an attack on a unit in its zone `TargetIsOutOfRange` for at least 64 steps after it shows as
-  sieged, while its zone forms, and takes it 224 steps after; unsiege then takes it off the attack. A burrowed roach
-  and infestor given an attack show `GENERAL_SCAN_MOVE` at the target, and unburrow takes them off it; a burrowed
-  zergling and swarm host answer attack, move, patrol and hold position `Error` (tool `sweep_orders`, `held-orders`,
-  `liberator-orders` and `structure-orders`).
-- A loaded command center training two SCVs goes on training while it unloads, by `COMMAND_CENTER_UNLOAD` (413,
-  `UnloadAll_CommandCenter`) or `GENERAL_UNLOAD`; its unload at a point is refused, `NotSupported` by its own id and
-  `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
+  sieged, while its zone forms, and takes it 224 steps after; unsiege then takes it off the attack. A burrowed
+  infestor given an attack on a command center out of range shows `GENERAL_SCAN_MOVE` at it and moves toward it, 4.9
+  in 46 steps, and unburrow takes it off the attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46
+  steps); without it, it answers attack, move, patrol and hold position `Error`, as a burrowed zergling and swarm host
+  do. The `tech_tree` cheat grants Tunneling Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`,
+  `structure-orders` and `burrowed-movers`).
+- A loaded command center or planetary fortress training two SCVs goes on training while it unloads, by
+  `COMMAND_CENTER_UNLOAD` (413, `UnloadAll_CommandCenter`, which both are offered) or `GENERAL_UNLOAD`. A command
+  center's unload at a point is refused, `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
   point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
   aimed at a point, it replaces the move and flies there first. `GENERAL_UNLOAD` is answered `Error` by each of the
   three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`).

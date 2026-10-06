@@ -16,7 +16,7 @@ from sc2nachos.gamedata._techtree._overrides import COST_OVERRIDES, KEEPS_ORDERS
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_data import UnitTypeData
@@ -52,16 +52,51 @@ class OrderBehavior(Enum):
     infestor are offered it too, and it takes them off what they are channeling."""
 
 
+# The behaviors by type of an ability whose performers all share one.
+_NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBehaviors:
+    """What ordering one ability does to a unit's current orders: its own behavior, and each unit type's where that
+    differs."""
+
+    own: OrderBehavior = OrderBehavior.REPLACES
+    by_type: Mapping[UnitTypeId, OrderBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
+
+
 def order_behaviors(
     tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
-) -> tuple[Mapping[AbilityId, OrderBehavior], Mapping[AbilityId, Mapping[UnitTypeId, OrderBehavior]]]:
-    """The order behavior of each ability that does not simply replace the unit's orders, and the behavior for each
-    type that differs from an ability's own: a general id does for a type what the exact id that type performs does,
-    and `KEEPS_ORDERS_BY_TYPE` names what keeps the orders of some types alone.
+) -> Mapping[AbilityId, OrderBehaviors]:
+    """The order behaviors of each ability that does not simply replace every unit's orders. A general id does for a
+    type what the exact id that type performs does, and `KEEPS_ORDERS_BY_TYPE` names what keeps the orders of some
+    types alone.
 
     `structures` and `non_structures` are the types the tables say are and are not structures. They tell a barracks
     training a marine from a larva morphing into one, and a sieged tank from a bunker.
     """
+    own = _making_behaviors(tech_tree, structures)
+    own.update(dict.fromkeys(KEEPS_ORDERS_ABILITIES, OrderBehavior.KEEPS_ORDERS))
+    exacts_of: defaultdict[AbilityId, list[AbilityId]] = defaultdict(list)
+    for exact, general in tech_tree.ability_remaps.items():
+        exacts_of[general].append(exact)
+    own.update(_kept_by_types_holding_no_order(tech_tree, own, exacts_of.keys(), non_structures))
+    by_type: dict[AbilityId, dict[UnitTypeId, OrderBehavior]] = {}
+    for general, exacts in exacts_of.items():
+        own[general], per_type = _general_behaviors(general, exacts, own, tech_tree)
+        if per_type:
+            by_type[general] = per_type
+    for ability, unit_types in KEEPS_ORDERS_BY_TYPE.items():
+        by_type.setdefault(ability, {}).update(dict.fromkeys(unit_types, OrderBehavior.KEEPS_ORDERS))
+    return {
+        ability: OrderBehaviors(own.get(ability, OrderBehavior.REPLACES), MappingProxyType(by_type.get(ability, {})))
+        for ability in own.keys() | by_type.keys()
+    }
+
+
+def _making_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) -> dict[AbilityId, OrderBehavior]:
+    """The behavior of each ability that makes something and is performed only by structures: a train or a research
+    queues, and a morph or an add-on, which makes a structure, needs the structure idle."""
     behaviors: dict[AbilityId, OrderBehavior] = {}
     for ability, product in tech_tree.ability_products.items():
         performers = tech_tree.ability_performers.get(ability, frozenset())
@@ -75,41 +110,55 @@ def order_behaviors(
             # structure is kept: a gateway is offered no warp gate morph either, yet turns itself into one.
             continue
         behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
-    behaviors.update(dict.fromkeys(KEEPS_ORDERS_ABILITIES, OrderBehavior.KEEPS_ORDERS))
-    exacts_of: defaultdict[AbilityId, list[AbilityId]] = defaultdict(list)
-    for exact, general in tech_tree.ability_remaps.items():
-        exacts_of[general].append(exact)
+    return behaviors
+
+
+def _kept_by_types_holding_no_order(
+    tech_tree: TechTree,
+    known: Mapping[AbilityId, OrderBehavior],
+    generals: Collection[AbilityId],
+    non_structures: frozenset[UnitTypeId],
+) -> dict[AbilityId, OrderBehavior]:
+    """`KEEPS_ORDERS` for each exact ability that makes nothing and is offered only to types that hold no order of
+    their own, among those `known` has no behavior for: a structure, an egg, a cocoon. The only order they could be
+    taken off is what they are making, and a rally and a cancel were both seen to leave that alone
+    (docs/game-behavior.md)."""
     holders = _unit_types_holding_orders(tech_tree, non_structures)
-    for ability, performers in tech_tree.ability_performers.items():
-        if ability in behaviors or ability in exacts_of or ability in tech_tree.ability_products or not performers:
-            continue
-        if not performers & holders:
-            # An ability that makes nothing, offered only to types that hold no order of their own: a structure, an
-            # egg, a cocoon. The only order they could be taken off is what they are making, and a rally and a cancel
-            # were both seen to leave that alone (docs/game-behavior.md).
-            behaviors[ability] = OrderBehavior.KEEPS_ORDERS
-    # The behavior of a general id for each type whose exact id differs from the general's own.
-    by_performer: dict[AbilityId, Mapping[UnitTypeId, OrderBehavior]] = {}
-    for general, exacts in exacts_of.items():
-        # A general id does what the exact id a unit's type performs does. Its own behavior, for a type the tech tree
-        # names no exact id for, is the one the exact ids offered to some type share, and otherwise replacing the
-        # unit's orders. An exact id offered to nobody, such as a transport's unload, has no say.
-        kinds = {behaviors.get(exact, OrderBehavior.REPLACES) for exact in exacts if _performers_of(exact, tech_tree)}
-        if len(kinds) > 1:
-            behaviors.pop(general, None)
-        elif kinds and (kind := kinds.pop()) is not OrderBehavior.REPLACES:
-            behaviors[general] = kind
-        own = behaviors.get(general, OrderBehavior.REPLACES)
-        per_type: dict[UnitTypeId, OrderBehavior] = {}
-        for exact in sorted(exacts):
-            if (kind := behaviors.get(exact, OrderBehavior.REPLACES)) is not own:
-                per_type.update(dict.fromkeys(_performers_of(exact, tech_tree), kind))
-        if per_type:
-            by_performer[general] = MappingProxyType(per_type)
-    for ability, unit_types in KEEPS_ORDERS_BY_TYPE.items():
-        kept = dict.fromkeys(unit_types, OrderBehavior.KEEPS_ORDERS)
-        by_performer[ability] = MappingProxyType({**by_performer.get(ability, {}), **kept})
-    return behaviors, by_performer
+    return {
+        ability: OrderBehavior.KEEPS_ORDERS
+        for ability, performers in tech_tree.ability_performers.items()
+        if ability not in known
+        and ability not in generals
+        and ability not in tech_tree.ability_products
+        and performers
+        and not performers & holders
+    }
+
+
+def _general_behaviors(
+    general: AbilityId, exacts: Iterable[AbilityId], known: Mapping[AbilityId, OrderBehavior], tech_tree: TechTree
+) -> tuple[OrderBehavior, dict[UnitTypeId, OrderBehavior]]:
+    """A general id's own behavior, and each type's that differs from it: what the exact id that type performs does.
+
+    Its own is the one the exact ids offered to some type share, for a type the tech tree names no exact id for, and
+    otherwise replacing the unit's orders. An exact id offered to nobody, such as a transport's unload, has no say.
+    """
+    kinds = {known.get(exact, OrderBehavior.REPLACES) for exact in exacts if _performers_of(exact, tech_tree)}
+    if len(kinds) > 1:
+        own = OrderBehavior.REPLACES
+    elif kinds and (kind := next(iter(kinds))) is not OrderBehavior.REPLACES:
+        own = kind
+    else:
+        own = known.get(general, OrderBehavior.REPLACES)
+    per_type: dict[UnitTypeId, OrderBehavior] = {}
+    for exact in sorted(exacts):
+        if (kind := known.get(exact, OrderBehavior.REPLACES)) is not own:
+            per_type.update(dict.fromkeys(_performers_of(exact, tech_tree), kind))
+    return own, per_type
+
+
+# The behaviors of an ability that replaces every unit's orders.
+_REPLACES = OrderBehaviors()
 
 
 def _performers_of(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
@@ -123,8 +172,6 @@ def _performers_of(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTyp
 
 # The cost of an ability that makes nothing.
 _FREE = Cost(0, 0)
-# The behaviors by performer of an ability whose performers all share one.
-_NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
 
 
 def ability_costs(
@@ -163,7 +210,7 @@ def ability_costs(
 
 
 def cancel_abilities(
-    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehavior]
+    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehaviors]
 ) -> Mapping[AbilityId, AbilityId]:
     """The ability that cancels each ability on a structure carrying it out, for those that have one.
 
@@ -180,7 +227,7 @@ def cancel_abilities(
     cancels = dict(tech_tree.ability_cancels)
     for ability, behavior in behaviors.items():
         performers = tech_tree.ability_performers.get(ability, frozenset())
-        if behavior is OrderBehavior.QUEUES and performers and performers <= keeps_a_queue:
+        if behavior.own is OrderBehavior.QUEUES and performers and performers <= keeps_a_queue:
             cancels[ability] = AbilityId.GENERAL_CANCEL_LAST
     cancels_of: defaultdict[AbilityId, set[AbilityId | None]] = defaultdict(set)
     for exact, general in tech_tree.ability_remaps.items():
@@ -285,14 +332,14 @@ class AbilityData:
         cls,
         data: data_pb2.AbilityData,
         tech_tree: TechTree,
-        behaviors: Mapping[AbilityId, OrderBehavior],
-        behaviors_by_performer: Mapping[AbilityId, Mapping[UnitTypeId, OrderBehavior]],
+        behaviors: Mapping[AbilityId, OrderBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
-        """Read one ability from the game's table, with what `tech_tree`, `behaviors`, `behaviors_by_performer`,
-        `costs` and `cancels` say about it."""
+        """Read one ability from the game's table, with what `tech_tree`, `behaviors`, `costs` and `cancels` say about
+        it."""
         ability = AbilityId(data.ability_id)
+        behavior = behaviors.get(ability, _REPLACES)
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -305,6 +352,6 @@ class AbilityData:
             product=tech_tree.ability_products.get(ability),
             cost=costs.get(ability, _FREE),
             cancelled_by=cancels.get(ability),
-            order_behavior=behaviors.get(ability, OrderBehavior.REPLACES),
-            _behaviors_by_performer=behaviors_by_performer.get(ability, _NO_BEHAVIORS),
+            order_behavior=behavior.own,
+            _behaviors_by_performer=behavior.by_type,
         )
