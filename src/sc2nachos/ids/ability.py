@@ -1,20 +1,24 @@
 """Ability identifiers.
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
-catalog member, never a literal id, except NachOS's own: an id the game has no ability for, which goes out as a game
-ability aimed at the unit itself (`AbilityData.sent_as`). Its value lies above every game id, and the game never
-reports it. Unknown ids raise.
+catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as a game
+ability aimed at the unit itself (`AbilityData.sent_as`). Custom ids are drawn from a counter that starts above every
+game id, and the game never reports one. Unknown ids raise.
 
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
 LARVA_MORPH_ZERGLING -- and GENERAL where several units can. Where the game remaps a family onto one id, that
 one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its three leveled siblings.
 """
 
+from itertools import count
+
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId
 
-# The first value of NachOS's own ids, above every id the game has.
-_NACHOS_IDS_FROM = 1_000_000
+# The first custom id, above every id the game has.
+_CUSTOM_IDS_FROM = 1_000_000
+# Where each custom id is drawn from.
+_custom_ids = count(_CUSTOM_IDS_FROM)
 
 
 class AbilityId(IdEnum):
@@ -240,7 +244,7 @@ class AbilityId(IdEnum):
     GENERAL_UNBURROW = RawAbilityId.BurrowUp
     GENERAL_UNLOAD = RawAbilityId.UnloadAll
     GENERAL_UNLOAD_AT = RawAbilityId.UnloadAllAt
-    GENERAL_UNLOAD_HERE = _NACHOS_IDS_FROM + 3
+    GENERAL_UNLOAD_IN_PLACE = next(_custom_ids)
     GENERAL_UPROOT = RawAbilityId.Morph_Uproot
     GHOST_ACADEMY_BUILD_NUKE = RawAbilityId.Build_Nuke
     GHOST_ACADEMY_RESEARCH_GHOST_CLOAK = RawAbilityId.Research_PersonalCloaking
@@ -313,7 +317,6 @@ class AbilityId(IdEnum):
     MEDIVAC_LOAD = RawAbilityId.Load_Medivac
     MEDIVAC_UNLOAD = RawAbilityId.Unload_Medivac
     MEDIVAC_UNLOAD_AT = RawAbilityId.UnloadAllAt_Medivac
-    MEDIVAC_UNLOAD_HERE = _NACHOS_IDS_FROM
     MOTHERSHIP_CLOAK_FIELD = RawAbilityId.MothershipCloak_OracleCloakField
     MOTHERSHIP_RECALL = RawAbilityId.Effect_MassRecall_StrategicRecall
     MOTHERSHIP_TIME_WARP = RawAbilityId.Effect_TimeWarp
@@ -356,7 +359,6 @@ class AbilityId(IdEnum):
     OVERLORD_TRANSPORT_COCOON_CANCEL = RawAbilityId.Cancel_MorphOverlordTransport
     OVERLORD_TRANSPORT_UNLOAD = RawAbilityId.OverlordTransport
     OVERLORD_TRANSPORT_UNLOAD_AT = RawAbilityId.UnloadAllAt_Overlord
-    OVERLORD_TRANSPORT_UNLOAD_HERE = _NACHOS_IDS_FROM + 2
     OVERSEER_CONTAMINATE = RawAbilityId.Contaminate_Contaminate
     OVERSEER_SIEGE = RawAbilityId.Morph_OversightMode  # "Oversight Mode" in game
     OVERSEER_SPAWN_CHANGELING = RawAbilityId.SpawnChangeling_SpawnChangeling
@@ -515,7 +517,6 @@ class AbilityId(IdEnum):
     WARP_PRISM_TRANSPORT_MODE = RawAbilityId.Morph_WarpPrismTransportMode
     WARP_PRISM_UNLOAD = RawAbilityId.UnloadAll_WarpPrism
     WARP_PRISM_UNLOAD_AT = RawAbilityId.UnloadAllAt_WarpPrism
-    WARP_PRISM_UNLOAD_HERE = _NACHOS_IDS_FROM + 1
     WIDOW_MINE_ATTACK = RawAbilityId.WidowMineAttack_WidowMineAttack
     WIDOW_MINE_BURROW = RawAbilityId.BurrowDown_WidowMine
     WIDOW_MINE_UNBURROW = RawAbilityId.BurrowUp_WidowMine
@@ -526,6 +527,6 @@ class AbilityId(IdEnum):
     ZERGLING_UNBURROW = RawAbilityId.BurrowUp_Zergling
 
     @property
-    def is_nachos_only(self) -> bool:
-        """Whether the game has no ability of this id, which NachOS sends as one of the game's."""
-        return self >= _NACHOS_IDS_FROM
+    def is_custom(self) -> bool:
+        """Whether this is a custom id: the game has no ability of it, and NachOS sends it as one of the game's."""
+        return self >= _CUSTOM_IDS_FROM

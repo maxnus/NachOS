@@ -138,18 +138,13 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 )
 
 
-NACHOS_ABILITIES: Final[Mapping[AbilityId, AbilityId]] = MappingProxyType(
-    {
-        AbilityId.GENERAL_UNLOAD_HERE: AbilityId.GENERAL_UNLOAD_AT,
-        AbilityId.MEDIVAC_UNLOAD_HERE: AbilityId.MEDIVAC_UNLOAD_AT,
-        AbilityId.OVERLORD_TRANSPORT_UNLOAD_HERE: AbilityId.OVERLORD_TRANSPORT_UNLOAD_AT,
-        AbilityId.WARP_PRISM_UNLOAD_HERE: AbilityId.WARP_PRISM_UNLOAD_AT,
-    }
+CUSTOM_ABILITIES: Final[Mapping[AbilityId, AbilityId]] = MappingProxyType(
+    {AbilityId.GENERAL_UNLOAD_IN_PLACE: AbilityId.GENERAL_UNLOAD_AT}
 )
-"""The game's ability each of NachOS's own ids is sent as, aimed at the unit itself. A medivac, a warp prism and a
-transport overlord given their unload at a point aimed at themselves unload where they are and leave a move going;
-aimed at a point, they fly there first (tool `sweep_orders`, `held-orders`). An unload here therefore keeps the
-transport's orders, and an unload at a point replaces them."""
+"""The game's ability each custom id is sent as, aimed at the unit itself. A medivac, a warp prism and a transport
+overlord given their unload at a point aimed at themselves unload where they are and leave a move going; aimed at a
+point, they fly there first (tool `sweep_orders`, `held-orders`). An unload in place therefore keeps the transport's
+orders, and an unload at a point replaces them."""
 
 COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {

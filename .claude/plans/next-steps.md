@@ -59,11 +59,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   needed at all, with a queue in NachOS coming that leaves the game's queue little to do, and had it removed on
   condition that an order can still be sent though a unit is carrying it out. A forced order is never `REDUNDANT`,
   and re-sending a unit's current order that way drops its queue as `clear_queue` did.
-- **An ability whose behavior depends on its target is split into NachOS ids, one per behavior** (review of #77,
-  2026-10-06), so that a behavior stays one per ability and type. The owner's idea. Done for the unload on branch
-  `claude/unload-here`: `MEDIVAC_UNLOAD_HERE`, `WARP_PRISM_UNLOAD_HERE`, `OVERLORD_TRANSPORT_UNLOAD_HERE` and
-  `GENERAL_UNLOAD_HERE`, in `AbilityId` from 1,000,000 up, and an unload at a point aimed at the transport itself
-  raises `TypeError` (the owner's choices, 2026-10-06). A load, three spells and a fortress's attack were swept and
+- **An ability whose behavior depends on its target is split into custom ids, one per behavior** (review of #77,
+  2026-10-06), so that a behavior stays one per ability and type. The owner's idea. Done for the unload in #101: one
+  `GENERAL_UNLOAD_IN_PLACE` for every transport, drawn from a counter in `AbilityId` that starts at 1,000,000, and an
+  unload at a point aimed at the transport itself raises `TypeError` (the owner's choices, 2026-10-06, in review:
+  one id rather than one per transport, "custom ids" rather than "NachOS ids"). A load, three spells and a fortress's attack were swept and
   need no split (docs/game-behavior.md).
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has

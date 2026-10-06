@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
-from sc2nachos.gamedata._techtree import NACHOS_ABILITIES, TECH_TREE
+from sc2nachos.gamedata._techtree import CUSTOM_ABILITIES, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
 
@@ -41,7 +41,7 @@ class GameData:
         # An ability's cost is derived from its product, so the other tables come first.
         costs = ability_costs(self._units, self._upgrades, TECH_TREE)
         cancels = cancel_abilities(TECH_TREE, behaviors)
-        self._abilities = _with_nachos_abilities(
+        self._abilities = _with_custom_abilities(
             _read_table(
                 data.abilities,
                 lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
@@ -57,7 +57,7 @@ class GameData:
 
     @property
     def abilities(self) -> Mapping[AbilityId, AbilityData]:
-        """The abilities, by id, NachOS's own included."""
+        """The abilities, by id, the custom ones included."""
         return self._abilities
 
     @property
@@ -86,12 +86,10 @@ def _read_table[MessageT, IdT, RowT](
     return MappingProxyType(rows)
 
 
-def _with_nachos_abilities(rows: Mapping[AbilityId, AbilityData]) -> Mapping[AbilityId, AbilityData]:
-    """`rows` and a row for each of NachOS's own abilities whose game ability has one."""
-    own_of = {game: own for own, game in NACHOS_ABILITIES.items()}
+def _with_custom_abilities(rows: Mapping[AbilityId, AbilityData]) -> Mapping[AbilityId, AbilityData]:
+    """`rows` and a row for each custom ability whose game ability has one."""
     added = dict(rows)
-    for own, game in NACHOS_ABILITIES.items():
+    for custom, game in CUSTOM_ABILITIES.items():
         if (row := rows.get(game)) is not None:
-            remaps_to = None if row.remaps_to is None else own_of.get(row.remaps_to)
-            added[own] = AbilityData._sent_as_itself(own, row, remaps_to)
+            added[custom] = AbilityData._sent_as_itself(custom, row)
     return MappingProxyType(added)

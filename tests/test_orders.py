@@ -606,21 +606,21 @@ def _medivac(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.MEDIVAC, at=(14.0, 14.0), orders=orders)
 
 
-class TestUnloadingHere:
-    """A transport's unload aimed at itself unloads where it is and keeps its move (in game), so NachOS gives it an id
-    of its own, sent as the unload at a point aimed at the transport itself."""
+class TestUnloadingInPlace:
+    """A transport's unload aimed at itself unloads where it is and keeps its move (in game), so it has a custom id,
+    sent as the unload at a point aimed at the transport itself."""
 
-    def test_it_goes_out_as_the_unload_at_aimed_at_the_transport_itself(self) -> None:
+    def test_it_goes_out_as_the_general_unload_at_aimed_at_the_transport_itself(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _medivac(1))
 
-        order = game.book.issue(game.own(1), AbilityId.MEDIVAC_UNLOAD_HERE)
+        order = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
         (command,) = _commands(game.flush())
-        assert command.ability_id == _MEDIVAC_UNLOAD_AT
+        assert command.ability_id == _UNLOAD_AT
         assert command.target_unit_tag == 1
         assert list(command.unit_tags) == [1]
-        assert order.ability is AbilityId.MEDIVAC_UNLOAD_HERE
+        assert order.ability is AbilityId.GENERAL_UNLOAD_IN_PLACE
         assert order.target is None
         assert order.state is OrderState.SENT
 
@@ -629,16 +629,16 @@ class TestUnloadingHere:
         game.observe(0, _medivac(1))
 
         move = game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0))
-        unload = game.book.issue(game.own(1), AbilityId.MEDIVAC_UNLOAD_HERE)
+        unload = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
-        assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _MEDIVAC_UNLOAD_AT]
+        assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _UNLOAD_AT]
         assert (move.state, unload.state) == (OrderState.SENT, OrderState.SENT)
 
     def test_a_group_is_sent_one_command_a_transport_and_answered_by_the_first_refusal(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.ERROR, ActionResult.SUCCESS])
         game.observe(0, _medivac(1), _medivac(2), _medivac(3))
 
-        order = game.book.issue([game.own(1), game.own(2), game.own(3)], AbilityId.GENERAL_UNLOAD_HERE)
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
         commands = _commands(game.flush())
         assert [(command.ability_id, list(command.unit_tags), command.target_unit_tag) for command in commands] == [
@@ -653,7 +653,7 @@ class TestUnloadingHere:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED])
         game.observe(0, _medivac(1), _medivac(2), _marine(3))
 
-        game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_HERE)
+        game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
         stim = game.book.issue(game.own(3), _STIM)
 
         assert len(_commands(game.flush())) == 3
@@ -664,7 +664,7 @@ class TestUnloadingHere:
         game = _Game()
         game.observe(0, _medivac(1), _medivac(2))
 
-        with pytest.raises(TypeError, match="UNLOAD_HERE"):
+        with pytest.raises(TypeError, match="GENERAL_UNLOAD_IN_PLACE"):
             game.book.issue([game.own(1), game.own(2)], ability, target=game.own(2))
 
     def test_an_unload_at_a_point_still_replaces_a_move(self) -> None:
@@ -1022,7 +1022,7 @@ class _UnloadingBot:
         if all(medivac.cargo_used > 0 for medivac in medivacs):
             self.unloaded_at = {medivac.tag: medivac.position for medivac in medivacs}
             self.move = api.orders.issue(medivacs, _MOVE, target=middle + (12.0, 0.0))
-            self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_HERE)
+            self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
 
 def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> debug_pb2.DebugCommand:

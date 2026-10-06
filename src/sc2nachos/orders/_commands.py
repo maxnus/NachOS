@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 def create_unit_command_actions(
     order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: AbilityId | None
 ) -> list[sc2api_pb2.Action]:
-    """The raw commands giving `order` to `units`: one, or, for one of NachOS's own abilities, one per unit giving it
-    `sent_as` aimed at itself."""
+    """The raw commands giving `order` to `units`: one, or, for a custom ability, one per unit giving it `sent_as`
+    aimed at itself."""
     if sent_as is None:
         return [_unit_command_action(order.ability, [unit.tag for unit in units], order.target, queued=order.queued)]
     return [_unit_command_action(sent_as, [unit.tag], unit, queued=order.queued) for unit in units]

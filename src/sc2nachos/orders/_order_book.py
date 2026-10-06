@@ -48,7 +48,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
-        "_own_ids",
+        "_custom_ids",
         "_step",
     )
 
@@ -63,8 +63,8 @@ class OrderBook:
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
-        # The game's abilities NachOS has its own id for when aimed at the unit itself, with that id.
-        self._own_ids = {row.sent_as: row.id for row in game_data.abilities.values() if row.sent_as is not None}
+        # The game's general abilities that have a custom id for when aimed at the unit itself, with that id.
+        self._custom_ids = {row.sent_as: row.id for row in game_data.abilities.values() if row.sent_as is not None}
         self._camera_location: Point | None = None
         self._observations = 0
         self._step = 0
@@ -116,7 +116,7 @@ class OrderBook:
         orders like any other.
 
         Raises `TypeError` for a target the ability cannot be aimed at, and for a transport's unload at a point aimed at
-        one of `units` itself, which is its `_UNLOAD_HERE`.
+        one of `units` itself, which is `GENERAL_UNLOAD_IN_PLACE`.
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
@@ -142,10 +142,10 @@ class OrderBook:
     def _check_not_aimed_at_itself(
         self, ability: AbilityId, target: Target | None, units: Sequence[OwnUnit[Any]]
     ) -> None:
-        """Raise `TypeError` if `ability` is aimed at one of `units` and NachOS has its own id for that."""
-        own = self._own_ids.get(ability)
-        if own is not None and isinstance(target, Unit) and any(unit.tag == target.tag for unit in units):
-            raise TypeError(f"{ability.name} aimed at the unit itself is {own.name}")
+        """Raise `TypeError` if `ability` is aimed at one of `units` and there is a custom id for that."""
+        custom = self._custom_ids.get(self._general_ability(ability))
+        if custom is not None and isinstance(target, Unit) and any(unit.tag == target.tag for unit in units):
+            raise TypeError(f"{ability.name} aimed at the unit itself is {custom.name}")
 
     def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued.
@@ -198,7 +198,7 @@ class OrderBook:
                 self._remember_sent(order, units)
 
     def _sent_as(self, order: Order[Any]) -> AbilityId | None:
-        """The game's ability `order` goes out as, aimed at each unit itself, if it is one of NachOS's own."""
+        """The game's ability `order` goes out as, aimed at each unit itself, if it is a custom one."""
         row = self._game_data.abilities.get(order.ability)
         return None if row is None else row.sent_as
 
