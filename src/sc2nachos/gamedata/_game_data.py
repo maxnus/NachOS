@@ -34,7 +34,7 @@ class GameData:
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
         )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE, structures)
+        behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )

@@ -13,12 +13,10 @@ from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
-    from s2clientprotocol import raw_pb2
-
     from sc2nachos.gamedata import AbilityData
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import AbilityId
-    from sc2nachos.units import OwnUnit, Target
+    from sc2nachos.units import Target
 
 # What each target type takes, for the error message when an order is aimed at the wrong thing.
 _TARGETS_WANTED = {
@@ -52,18 +50,6 @@ def as_sent(coordinate: float) -> float:
     return float(numpy.float32(coordinate))
 
 
-def order_target(unit: OwnUnit[Any], order: raw_pb2.UnitOrder) -> Target | None:
-    """The target of an order `unit` reports. A unit target is looked up in the tracker that holds `unit`."""
-    match order.WhichOneof("target"):
-        case "target_world_space_pos":
-            point = order.target_world_space_pos
-            return Point((point.x, point.y))
-        case "target_unit_tag":
-            return unit._tracker.unit_tracker.by_tag(order.target_unit_tag)
-        case _:
-            return None
-
-
 def check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:
     """Raise `TypeError` if `ability` cannot be aimed at `target`. An ability with no row is left to the game."""
     if row is None:
@@ -85,3 +71,11 @@ def same_point(target: Point, x: float, y: float) -> bool:
     """Whether a point the game reports is the one ordered. The game keeps a point to `POINT_PRECISION`, rounded
     down."""
     return target.rounded_down(step=POINT_PRECISION) == Point((x, y)).rounded_down(step=POINT_PRECISION)
+
+
+def same_target(one: Target | None, other: Target | None) -> bool:
+    """Whether two orders are aimed at the same thing: the same unit, the same point as the game keeps it, or
+    nothing."""
+    if isinstance(one, Point) and isinstance(other, Point):
+        return same_point(one, other.x, other.y)
+    return one is other

@@ -64,9 +64,9 @@ is its creation ability; otherwise the ability makes this type as well as the on
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
 # This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
-# nothing and is offered only to types with no move as keeping orders, which covers a structure's own rally, load,
-# cancel and energy casts. The general ids these remap to are not measured; a general id keeps a unit's orders where an
-# exact id that remaps to it does.
+# nothing and is offered only to types that hold no order of their own as keeping orders, which covers a structure's
+# own rally, load, cancel and energy casts. The general ids these remap to are not measured; a general id keeps a
+# unit's orders where the exact id that unit's type performs does.
 #
 # A toggle is here in both halves: a unit is offered the off half only once the on half has taken, so each was given in
 # turn to a moving unit, and both left its move first in its orders. A lurker's hold fire is the one toggle neither half
@@ -93,6 +93,47 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.OVERLORD_CREEP_ON,
         AbilityId.SENTRY_GUARDIAN_SHIELD,
         AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
+    }
+)
+
+# Each of these, given to a unit of these types while it held an order, left that order alone (tool `sweep_orders`,
+# `held-orders` and `structure-orders`), where the tables alone read it as replacing them. A planetary fortress attacks
+# and stops with the ids every unit does, yet goes on training through both, the attack shown behind its trains. A
+# command center and a planetary fortress go on training while they unload, by an id the tables offer to nobody, since
+# unload is offered only to a loaded transport, and while they load. Every structure that trains goes on training
+# through a smart, at a point or a mineral field, which sets its rally. The ids are offered to units too, which they
+# take off their orders, and load-all to a flying command center, which was not tried.
+#
+# A bunker is in neither set: its own load and unload are offered only to it, a type that holds no order of its own,
+# so `gamedata/_ability_data.py` already reads them as keeping its orders, and it is offered no load-all.
+_PRODUCTION_STRUCTURES = frozenset(
+    {
+        UnitTypeId.BARRACKS,
+        UnitTypeId.FACTORY,
+        UnitTypeId.STARPORT,
+        UnitTypeId.COMMAND_CENTER,
+        UnitTypeId.ORBITAL_COMMAND,
+        UnitTypeId.PLANETARY_FORTRESS,
+        UnitTypeId.NEXUS,
+        UnitTypeId.GATEWAY,
+        UnitTypeId.ROBOTICS_FACILITY,
+        UnitTypeId.STARGATE,
+        UnitTypeId.HATCHERY,
+        UnitTypeId.LAIR,
+        UnitTypeId.HIVE,
+    }
+)
+_LOAD_ALL_STRUCTURES = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS})
+KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
+    {
+        AbilityId.COMMAND_CENTER_LOAD_ALL: _LOAD_ALL_STRUCTURES,
+        AbilityId.GENERAL_LOAD_ALL: _LOAD_ALL_STRUCTURES,
+        AbilityId.GENERAL_SMART: _PRODUCTION_STRUCTURES,
+        AbilityId.COMMAND_CENTER_UNLOAD: _LOAD_ALL_STRUCTURES,
+        AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_ATTACK_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_STOP: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_STOP_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
     }
 )
 

@@ -13,10 +13,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   19 against a real game (run 2026-09-21).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
-  `OrderState.LOST`. User docs: `docs/orders.md`. What the game was seen to do: `docs/game-behavior.md`, section
-  "Abilities and orders".
+  `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
+  `docs/game-behavior.md`, section "Abilities and orders".
 - PRs #47 and #53 to #59 were housekeeping after a code review, mostly renames: `api.events`, `api.orders`,
-  `api.orders.issued_to`, `ActionFailure` / `api.action_failures` / `order.failure`, `order.action_result`,
+  `api.orders.issued_to`, `ActionFailure` / `api.action_failures`, `order.action_result`,
   `AbilityData.order_behavior`, `UpgradeData.upgrade_type`, `Unit.cloak_state`, `Units.closest_n_to`,
   `launch.MapFile`, `PlaybackTransport`, `_from_proto`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
@@ -38,6 +38,30 @@ Keep this file current: when a step is done, say so here in the same pull reques
   from the state, never written into `api.data`.
 - **A general research id costs its first level** (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100): it runs
   the first level until that is done.
+- **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`PENDING`,
+  `OVERRIDDEN`, `WITHDRAWN`, `REDUNDANT`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`,
+  `LOST` and `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
+  observations, and the code review of 2026-09-24 found each could be wrong. The owner asked: *"Why do we actually
+  need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
+  units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46.
+- **Every call to `issue` is an order of its own; one a unit is already carrying out is not sent to it** (#68).
+  With nothing followed across turns, a repeated order costs one small object a turn. The owner first had a repeat
+  hand back the order already sent, then reversed that in the review of #77, since the one object could describe
+  only its first turn: *"I'm confused why the repeat says sent. I thought repeats are never send?"* Returning `None`
+  was weighed and dropped, since `issued_to` and "the last order wins" could not see the call. An order left with no
+  unit reads `REDUNDANT`; `GIVEN` became `PENDING`, and `given_step` `issued_step`, since an order is not given
+  until it is sent.
+- **A general ability does to each unit what the exact ability its type performs does** (#70), and a group of
+  several types is judged unit by unit. `KEEPS_ORDERS` is inferred only for types that hold no order of their own. An
+  exact id the tables offer to no type has no say in its general's own behavior, so a command center's and a
+  medivac's unload keep orders as a bunker's does (review of #77, reversing "a medivac falls back to `REPLACES`").
+- **No `clear_queue`; `issue(..., force=True)` instead** (review of #77, 2026-10-06). The owner asked why it was
+  needed at all, with a queue in NachOS coming that leaves the game's queue little to do, and had it removed on
+  condition that an order can still be sent though a unit is carrying it out. A forced order is never `REDUNDANT`,
+  and re-sending a unit's current order that way drops its queue as `clear_queue` did.
+- **An ability whose behavior depends on its target is split into NachOS ids, one per behavior** (review of #77,
+  2026-10-06), so that a behavior stays one per ability and type. The owner's idea, for the unload below; a pull
+  request after #77.
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -92,8 +116,13 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
   ready", "larva free") fit the rule that NachOS checks nothing an order needs. Waiting on minerals, supply or tech
   would bring those checks back; the previous agent recommended leaving them to the bot and sending the item
   anyway, letting the game refuse it. The owner has not ruled on this yet: ask.
-- **What ends a queue**: the unit dying (`LOST`), morphing, being taken over; an item refused or failed (does the
-  rest go on?); observation lag, since an order's effect can show up an observation late.
+- **What ends a queue**: the unit dying, morphing, being taken over; an item refused or failed (does the rest go
+  on?); observation lag, since an order's effect can show up an observation late. An order's state no longer says
+  whether a unit carried it out (decided 2026-09-26), so an item is released on the unit's condition, read from
+  the unit itself. The order book already keeps, per unit, the last order sent that replaced its orders and the
+  observation its turn read, and takes it for what the unit is doing while the next observation may not show it
+  (PR #77): that record is the queue's head, and that rule is how the queue tells an item not yet shown from one
+  finished or dropped.
 - **What stays in the game's queue.** Speed mining needs the game's own queue so the next leg starts on the exact
   step; a queue held by the library advances only at a turn boundary. Micro re-decides every step on purpose, one
   order per unit. So the game's queue has to stay reachable for those.
@@ -111,6 +140,13 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 - A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
 - Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
   then a train.
+- What a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
+  planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
+- An unload at a point aimed at the transport itself leaves a medivac's, a warp prism's and an overlord's move
+  going (in game), yet reads `REPLACES`, which is right only for one aimed at a point, so a turn that moves a
+  transport and unloads it in place sends only the last. Decided: a NachOS-only "unload here" id per transport, with
+  `KEEPS_ORDERS`, sent to the game as the transport's unload at a point aimed at itself (see "Decided"). Its pull
+  request also looks for other abilities whose behavior depends on their target.
 
 ### Suggested first pull request
 
