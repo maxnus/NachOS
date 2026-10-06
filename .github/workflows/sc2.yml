@@ -2,7 +2,8 @@ name: sc2
 run-name: ${{ inputs.script || 'setup-sc2 check' }} ${{ inputs.args }}
 
 # Runs a script against StarCraft II on a GitHub-hosted runner, and keeps what it wrote as the `output` artifact.
-# For sweeps and other work that needs the game. Started by hand from the Actions tab.
+# For sweeps and other work that needs the game. Started by hand from the Actions tab. The `dev` extra is installed,
+# so `-m` with `pytest -m integration ...` as the arguments runs the tests that play a game.
 #
 # The client comes from the setup-sc2 action, which downloads Blizzard's Linux 4.10 build, the one the ladder plays,
 # and caches it; the maps are the AIE ones in sc2maps. A hosted runner is thrown away after the job, so this runs on
@@ -44,7 +45,7 @@ jobs:
           enable-cache: true
 
       - name: Install
-        run: uv sync --frozen
+        run: uv sync --frozen --extra dev
 
       - name: Run
         env:

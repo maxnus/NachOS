@@ -151,6 +151,10 @@ it.
   `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
+- **Unloading in place is `MEDIVAC_UNLOAD_HERE`, not an unload at the medivac.** python-sc2 bots write
+  `medivac(AbilityId.UNLOADALLAT_MEDIVAC, medivac)`, which keeps the medivac's move in game but shares its id with the
+  unload at a point, which replaces it. NachOS raises `TypeError` for the first and sends its own id the same way
+  ([orders](orders.md#one-order-a-unit-a-turn)); a warp prism and a transport overlord have theirs.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
   item in the middle of a queue through the UI action `ActionProductionPanelRemoveFromQueue`, which names a slot and
   needs the structure selected and a game joined with a feature layer. A raw unit command carries no slot, and the
