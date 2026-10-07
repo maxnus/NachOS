@@ -15,7 +15,7 @@ def on_turn(event: TurnEvent) -> None:
 ## Giving one
 
 ```python
-order = api.orders.issue(marine, AbilityId.MARINE_STIM)
+order = api.orders.issue(marine, AbilityId.GENERAL_STIM)
 api.orders.issue(squad, AbilityId.GENERAL_MOVE, target=ramp)
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=drone, data=Defending(base))
@@ -50,7 +50,7 @@ that hold no order of their own — a structure's own rally, load, cancel and en
 
 Such an order neither overrides nor is overridden, because the unit does both — a marine stims and keeps moving.
 
-A general ability does to each unit what the exact ability its type performs does: `GENERAL_CANCEL` leaves a
+An action several types perform does to each unit what that type's own does: `GENERAL_CANCEL` leaves a
 structure making what it was making, and takes a channeling ghost or infestor off what it is doing. A group of
 several types is judged unit by unit. Hold fire keeps a ghost's orders and takes a burrowed lurker off its attack (in game).
 Given to both, it leaves the ghost the move it was given earlier in the turn and takes the lurker from its attack. A
@@ -171,7 +171,8 @@ next observation.
 ## Reading a unit's orders
 
 An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
-current order and one for each queued. The two need not agree: the game reports the exact ability it runs, snaps a
-build to its site, and drops what it cannot carry out. Where the game reports an id nothing links to the one ordered,
-NachOS reads it as the one ordered: a sieging liberator shows `LIBERATOR_SIEGE`, and each templar of a merge
-`GENERAL_MORPH_ARCHON` aimed at the other.
+current order and one for each queued. The two need not agree: the game snaps a build to its site, and drops what it
+cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
+reads it as the action's, so a moving marine shows `GENERAL_MOVE` and a gathering SCV `GENERAL_GATHER`. Where the game
+reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
+`LIBERATOR_SIEGE`, and each templar of a merge `GENERAL_MORPH_ARCHON` aimed at the other.

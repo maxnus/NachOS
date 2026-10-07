@@ -200,7 +200,7 @@ Each entry ends with how it was seen:
   add-on spot a supply depot fills is answered `Success`, and nothing is charged or started, then or 24 steps later
   (tool `sweep_orders`).
 - A lifted barracks needs a point to build an add-on: where it is to land. Given a point with room beside it, it
-  shows `BARRACKS_LAND` and then `BARRACKS_BUILD_REACTOR`, both targeting the point, flies there, lands and builds
+  shows `Land_Barracks` and then `Build_Reactor_Barracks`, both targeting the point, flies there, lands and builds
   the add-on, and is charged at once: the reactor's 50/50 was gone by the next observation, with 22 still to fly and
   430 steps before it landed. Given no point it is answered `Success`, and nothing is charged or started; given a
   point whose add-on spot a supply depot fills, `CantFindPlacementLocation`, and nothing is charged. A factory and a
@@ -343,9 +343,10 @@ Each entry ends with how it was seen:
 
 ## Abilities and orders
 
-- A unit reports the exact ability it runs. A general id is never offered but is accepted as an order, and the game
-  runs the exact one: `GENERAL_MOVE` shows as `GENERAL_MOVE_EXACT`, Attack 3674 runs as 23, `GENERAL_BURROW` burrows
-  any unit, and a general research id researches the next level (#23, #28; tested).
+- A unit is offered and reports its type's own id of an action several types perform. The action's id is never
+  offered but is accepted as an order, and the game runs each unit's own: Move (3794) shows as `Move_Move` (16),
+  Attack (3674) runs as `attack_Attack` (23), `BurrowDown` burrows any unit, and a general research id researches the
+  next level (#23, #28; tested). NachOS reads each unit's own id as the action's (`AbilityId._REMAPPED_IDS`).
 - A liberator ordered to siege (2558) reports 2554 running, and unsieging works the same way, though `remaps_to`
   links neither pair (#23). Ordered at a point, it is a sieged liberator by the next observation, and reports 2554
   aimed at itself, not at the point, while its zone forms: 64 steps, after which it reports no order. Ordered the
@@ -355,20 +356,20 @@ Each entry ends with how it was seen:
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
   is refused. 1767 given to both, targeting one of them, merges them too; given to one it does nothing, though it
   answers `Success` (#37; tested).
-- `GENERAL_ATTACK` at a point runs `GENERAL_ATTACK_EXACT` (23) for a high templar, a lurker, an oracle and an adept's
-  shade, which are offered `GENERAL_SCAN_MOVE` (19) too, as it does for a marine. At an enemy drone it is refused
+- `GENERAL_ATTACK` at a point runs `attack_Attack` (23) for a high templar, a lurker, an oracle and an adept's
+  shade, which are offered `Scan_Move` (19) too, as it does for a marine. At an enemy drone it is refused
   `NotSupported` by the lurker, the oracle without its beam, and the shade, and taken by the templar and the marine.
-  `GENERAL_SCAN_MOVE` ordered by its own id shows as itself for the lurker, the oracle and the shade (tool
+  `Scan_Move` ordered by its own id shows as itself for the lurker, the oracle and the shade (tool
   `sweep_orders`, `attack-or-scan`; run 37610767491). A burrowed infestor or roach runs `GENERAL_ATTACK` as
-  `GENERAL_SCAN_MOVE` (below).
-- A unit offered `GENERAL_SCAN_MOVE` and not `GENERAL_ATTACK_EXACT` (24 types, among them the medivac, raven,
-  observer, overlords, warp prism, MULE, infestor, viper and widow mine) runs `GENERAL_ATTACK` as the scan move. A
-  medivac, a raven, an observer, a MULE, an infestor and a widow mine given it at a point or at an enemy drone all
-  showed `GENERAL_SCAN_MOVE`, and each refused `GENERAL_ATTACK_EXACT` `NotSupported`. The widow mine showed its own
+  `Scan_Move` (below). NachOS reads both as `GENERAL_ATTACK`.
+- A unit offered `Scan_Move` and not `attack_Attack` (24 types, among them the medivac, raven, observer, overlords,
+  warp prism, MULE, infestor, viper and widow mine) runs `GENERAL_ATTACK` as the scan move. A medivac, a raven, an
+  observer, a MULE, an infestor and a widow mine given it at a point or at an enemy drone all showed `Scan_Move`,
+  and each refused `attack_Attack` `NotSupported`. The widow mine showed its own
   `WIDOW_MINE_ATTACK` ahead of the scan move once the drone was near (tool `sweep_orders`, `scan-only`; run
   37611898076).
 - An unburrow's autocast is the type's, not the id's. With an enemy drone beside it, a burrowed roach whose
-  `ROACH_UNBURROW` or `DRONE_UNBURROW` was switched to autocast came up within 50 steps; one whose
+  `BurrowUp_Roach` or `BurrowUp_Drone` was switched to autocast came up within 50 steps; one whose
   `GENERAL_UNBURROW` was switched stayed down, and a burrowed drone stayed down with either switched. Every switch
   was answered `Success`. The tables allow autocast on the roach's unburrow and not on the drone's (tool
   `sweep_orders`, `unburrow-autocast`; run 37610767491).
@@ -393,7 +394,7 @@ Each entry ends with how it was seen:
   locked-on cyclone gets none. Unload is offered only while a transport carries something, and a ghost its nuke only
   while one is armed (#29, #33).
 - Once Burrow is researched, every burrowing zerg unit is offered every zerg burrow ability, the infested terran's
-  included, and burrows as itself: a zergling given the infested terran's reports `ZERGLING_BURROW` (#29, #33). A
+  included, and burrows as itself: a zergling given the infested terran's reports `BurrowDown_Zergling` (#29, #33). A
   baneling rolling at an enemy it has seen is offered none of them, its own included, and an order to burrow is
   answered `NotSupported` until it stops (tool `sweep_tech_tree`).
 - A roach is offered the ravager morph once a roach warren stands; a warp gate warps in all six gateway units;
@@ -536,7 +537,7 @@ Each entry ends with how it was seen:
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
 - A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
-  a sieged tank `SIEGE_TANK_SIEGE` and a burrowed lurker `LURKER_BURROW`. A sieged liberator shows `LIBERATOR_SIEGE`
+  a sieged tank `SIEGE_TANK_SIEGE` and a burrowed lurker `BurrowDown_Lurker`. A sieged liberator shows `LIBERATOR_SIEGE`
   (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
   A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
@@ -544,13 +545,13 @@ Each entry ends with how it was seen:
   widow mine hold no order to take them off: each answers attack, move, patrol and hold position `Error`. A sieged
   liberator answers an attack on a unit in its zone `TargetIsOutOfRange` for at least 64 steps after it shows as
   sieged, while its zone forms, and takes it 224 steps after; unsiege then takes it off the attack. A burrowed
-  infestor given an attack on a command center out of range shows `GENERAL_SCAN_MOVE` at it and moves toward it, 4.9
+  infestor given an attack on a command center out of range shows `Scan_Move` at it and moves toward it, 4.9
   in 46 steps, and unburrow takes it off the attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46
   steps); without it, it answers attack, move, patrol and hold position `Error`, as a burrowed zergling and swarm host
   do. The `tech_tree` cheat grants Tunneling Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`,
   `structure-orders` and `burrowed-movers`).
 - A loaded command center or planetary fortress training two SCVs goes on training while it unloads, by
-  `COMMAND_CENTER_UNLOAD` (413, `UnloadAll_CommandCenter`, which both are offered) or `GENERAL_UNLOAD`. A command
+  `UnloadAll_CommandCenter` (413, which both are offered) or `GENERAL_UNLOAD`. A command
   center's unload at a point is refused, `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
   point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
   aimed at a point, it replaces the move and flies there first. `GENERAL_UNLOAD` is answered `Error` by each of the
@@ -670,8 +671,8 @@ Each entry ends with how it was seen:
 
 - This player's own chat message comes back once, in the next observation, under its own player id; every player's
   chat is delivered (#28; tested).
-- An action names the ability as it runs: a move as `GENERAL_MOVE_EXACT` (16), a research ordered by its general id
-  as its level (1186) (#28; tested).
+- An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `GENERAL_MOVE`, a
+  research ordered by its general id as its level (1186) (#28; tested).
 - The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
   out at: one action per command, naming the units that took it, the ability as it runs, the target as sent and
   whether it was queued. A camera move and an autocast toggle are reported too. An order refused, one answered

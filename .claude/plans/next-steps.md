@@ -36,8 +36,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replace would leave a structure idle for a turn (#43).
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
-- **Reversed on 2026-10-07, to land with step 2: the general research ids go.** Until then a general research id
-  costs its first level (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100), since it runs the first level until
+- **Reversed on 2026-10-07, done in step 2's PR 2: the general research ids are gone.** Before, a general research id
+  cost its first level (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` was 100/100), since it runs the first level until
   that is done. The owner asked whether they are needed at all; a bot researches by level or by `UpgradeId`.
 - **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`PENDING`,
   `OVERRIDDEN`, `WITHDRAWN`, `REDUNDANT`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`,
@@ -282,16 +282,23 @@ and for whether an ability makes a structure, and both come out the same within 
   cancel. The owner chose to collapse the family whole into `CANCEL` (2026-10-07).
 - **`allows_autocast` on the unburrows.** Done (run 37610767491): an unburrow's autocast is the performer's. A burrowed
   roach comes up by autocast and a burrowed drone does not, whichever per-unit id is switched; switching
-  `GENERAL_UNBURROW` does nothing. So `allows_autocast` becomes a mapping from performer, as the owner chose for the
-  other fields that vary, and once NachOS sends autocast switches (it reads them only, as `AutocastToggle`), a family
-  id must go out as a performer's own id.
+  `GENERAL_UNBURROW` does nothing. The plan was to make `allows_autocast` a mapping from performer; PR 2 left it a
+  bool, "for some type that carries it out", with the roach and the drone named in its docstring. The game's rows
+  say which unburrow id allows it, but nothing links a burrowed type to its own unburrow among the ten it is offered,
+  so a mapping would need a rule written by hand. It matters once NachOS sends autocast switches (it reads them only,
+  as `AutocastToggle`): a family id must then go out as a performer's own id, and that needs the same link. Raised
+  with the owner in PR 2; not decided.
 
 ### Pull requests
 
 1. **The three oddities.** #103: `AbilityId._REMAPPED_IDS`, read by `AbilityId.read` and `get`, with just
    the liberator and archon pairs. The next PR extends it.
-2. **The families.** Extend the map, remove the per-unit ids, the cancels and the general research ids from
-   `AbilityId`, re-key the tables, turn the varying fields into mappings, and update the docs.
+2. **The families.** PR 2 (branch `claude/one-id-per-action-families`): the map extended to 146 ids, the per-unit
+   ids, the cancels and the general research ids gone from `AbilityId`, the generator folding at the end, products
+   by performer, order behaviors judged per type, and the docs. Where it departs from the plan: `allows_autocast`
+   stays a bool (above), and a type that holds no order of its own keeps it for every ability that makes nothing, so
+   a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
+   game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
 3. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the second one's diff stays
    readable.
 
