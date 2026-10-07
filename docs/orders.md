@@ -134,7 +134,7 @@ can start it, and sends it then:
 | Order | Goes out once |
 | --- | --- |
 | A worker's build | the worker is within `build_reach` of the site, or of its edge for a geyser. NachOS sends the worker to the site meanwhile. `Api(build_reach=...)` sets the reach; it is 2.5 by default. |
-| A train or a research | the structure has a slot free: it runs one at a time, two with a finished reactor. |
+| A train or a research | the structure has a slot free: it runs one at a time, two with a finished reactor, and none while lifted, so a train given to a lifted barracks waits for it to land. A warp gate keeps no queue, and its warp-ins go out as given. |
 | An add-on or a structure's morph | the structure is idle, and on the ground. A lifted barracks, factory or starport given an add-on at a point is sent to land there, and given the add-on once it has; given no point, it raises `TypeError`. |
 
 What costs nothing, a move, an attack, a gather, goes to the game as before, queued or not, so a worker's mining and
@@ -170,7 +170,7 @@ picks that one when the order is issued, and `order.units` names it: the structu
 soonest, counting what it runs and what is held for it, or the worker that walks to the site soonest, one already
 busy only if all are, the lowest id among equals. The pick counts the turn's earlier orders, so two trains given to
 the same three barracks go to two of them, and the order goes behind what the unit picked already has. A larva's
-train and a unit's own morph are not held, and go to every unit named, as the game takes them.
+train, a warp-in and a unit's own morph are not held, and go to every unit named, as the game takes them.
 
 A queued order to several units, some of which have orders held, goes out at once to the others, in one command, and
 to each of those once its held orders have gone out.

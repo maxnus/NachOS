@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #115. `uv run pytest` passes 1653 tests on PR B's branch; `uv run pytest -m
+- nachOS `main` has every PR to #115. `uv run pytest` passes 1656 tests on PR B's branch; `uv run pytest -m
   integration` passes 25 against a real game (run 2026-10-07).
 - **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state,
   is #115; PR B, the queue, is on branch `claude/per-unit-queue`. Step 2, one id per action, is done (#103 to #107).
@@ -234,8 +234,9 @@ planetary fortress's, which keep their training, were measured (docs/game-behavi
    or research behind production), the pick, and an add-on or morph on a busy structure. Branch
    `claude/per-unit-queue`. Where it settles what the design left open: a refused lead-in is listed in
    `api.action_failures` under `MOVE` or `LAND`, the ability that went out; an order whose picked unit is busy reads
-   `queued`; and each order released goes out as a command of its own, so a split group order's later parts keep no
-   spacing. Left for later: warp-ins, larva, a spell on arrival, tech still going up, and a flying command center that
+   `queued`; each order released goes out as a command of its own, so a split group order's later parts keep no
+   spacing; and a train or a research is held only for a structure offered `CANCEL_LAST`, or its lifted form, so a
+   warp-in is not held (review of #116). Left for later: warp-ins, larva, a spell on arrival, tech still going up, and a flying command center that
    lands and morphs.
 
 ## 2. One id per action: the families and the `_EXACT` ids

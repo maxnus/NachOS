@@ -1063,6 +1063,7 @@ _LAND = AbilityId.LAND
 _ORBITAL = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
 _WEAPONS_1 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
 _WEAPONS_2 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
+_WARP_IN_ADEPT = AbilityId.WARP_GATE_WARP_IN_ADEPT
 _SITE = (30.0, 30.0)
 
 
@@ -1093,6 +1094,8 @@ _HOLDING_TABLES = make_tables(
     _row(UnitTypeId.SCV, minerals=50, steps=272.0, speed=2.8125),
     _row(UnitTypeId.MARINE, minerals=50, steps=403.0),
     _row(UnitTypeId.REAPER, minerals=50, vespene=50, steps=716.0),
+    _row(UnitTypeId.ADEPT, minerals=100, vespene=25, steps=448.0),
+    _row(UnitTypeId.WARP_GATE, structure=True, minerals=150),
     _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, steps=470.0),
     _row(UnitTypeId.REFINERY, structure=True, minerals=75, steps=470.0),
     _row(UnitTypeId.BARRACKS, structure=True, minerals=150, steps=1030.0),
@@ -1119,6 +1122,7 @@ _HOLDING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_ORBITAL),
         data_pb2.AbilityData(ability_id=_WEAPONS_1),
         data_pb2.AbilityData(ability_id=_WEAPONS_2),
+        data_pb2.AbilityData(ability_id=_WARP_IN_ADEPT, target=_AT_A_POINT),
     ],
     upgrades=[
         data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
@@ -1300,6 +1304,14 @@ class TestHoldingABuild:
         assert game.flush() is None
         assert game.book.issued_to(game.own(1)) == ()
 
+    def test_a_forced_build_is_sent_though_its_worker_is_carrying_it_out(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1, _building(), _moving((5.0, 5.0)), at=(29.0, 29.0)))
+
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE, force=True)
+
+        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
+
 
 class TestHoldingAnAddOnOrAMorph:
     """A lifted barracks given an add-on lands at the point and is charged at once, and a structure making something
@@ -1459,6 +1471,28 @@ class TestHoldingProduction:
         game.observe(16, make_unit(1, UnitTypeId.ENGINEERING_BAY, at=(12.0, 12.0)))
 
         assert _sent(game.flush()) == [(_WEAPONS_2, [1], None, False)]
+
+    def test_a_train_to_a_lifted_barracks_waits_until_it_lands(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _flying_barracks(1))
+        train = game.book.issue(game.own(1), _TRAIN_MARINE)
+
+        assert game.flush() is None
+        assert game.book.issued_to(game.own(1)) == (train,)
+
+        game.observe(16, make_unit(1, UnitTypeId.BARRACKS, at=_SITE))
+
+        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
+
+    def test_a_warp_in_is_not_held_since_a_warp_gate_keeps_no_queue(self) -> None:
+        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.WARP_GATE, at=(12.0, 12.0)))
+
+        game.book.issue(game.own(1), _WARP_IN_ADEPT, target=(20.0, 20.0))
+        game.book.issue(game.own(1), _WARP_IN_ADEPT, target=(21.0, 20.0))
+
+        assert len(_sent(game.flush())) == 2
+        assert game.book.issued_to(game.own(1)) == ()
 
     def test_what_costs_nothing_is_never_held(self) -> None:
         game = _holding([ActionResult.SUCCESS])

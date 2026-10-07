@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.gamedata._sent_as import Aim
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
@@ -51,6 +51,14 @@ _SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 _MAKING = frozenset({OrderBehavior.QUEUES, OrderBehavior.NEEDS_IDLE})
 # What an unqueued order does that drops what is held for a unit.
 _DROPPING_HELD = frozenset({OrderBehavior.REPLACES, OrderBehavior.NEEDS_IDLE})
+# The structures that keep a queue of trains and researches, those offered `CANCEL_LAST`, and their lifted forms, which
+# keep one once they land. A warp gate keeps none (in game).
+_QUEUE_KEEPERS = TECH_TREE.ability_performers.get(AbilityId.CANCEL_LAST, frozenset())
+_KEEPS_A_QUEUE = _QUEUE_KEEPERS | frozenset(
+    lifted
+    for lifted, ability in TECH_TREE.creation_abilities.items()
+    if ability is AbilityId.LIFT and TECH_TREE.morph_sources.get(lifted) in _QUEUE_KEEPERS
+)
 
 
 class _Outgoing(NamedTuple):
@@ -147,8 +155,9 @@ class OrderBook:
         `queued` puts the order behind each unit's current orders, those held for it included. `data` is the bot's
         own; NachOS carries it and never reads it. Nothing is sent until the turn's handlers have all run.
 
-        A worker's build, and a structure's train, research, add-on or morph, that costs is held until its unit can
-        start it, and so is whatever is queued behind a held order. A worker is sent to the site and given the build
+        A worker's build, a structure's add-on or morph, and a train or a research of a structure that keeps a queue,
+        which a warp gate does not, is held until its unit can start it if it costs, and so is whatever is queued
+        behind a held order. A worker is sent to the site and given the build
         once within the api's `build_reach`; a structure is given a train or a research once it has a slot free, and
         an add-on or a morph once it is idle on the ground, a flying one given a point being sent to land there. Given
         to several units, such an order is given to the one that can start it soonest, and goes behind what that one
@@ -236,7 +245,7 @@ class OrderBook:
         self._refusals = ()
         outgoing = list(self._turns_orders(issued, forced))
         for queue in self._held.values():
-            outgoing += self._release(queue)
+            outgoing += self._release(queue, forced)
         commands = [(out, *command) for out in outgoing for command in _commands(out)]
         actions = [action for _, action, _ in commands]
         if self._camera_location is not None:
@@ -349,11 +358,11 @@ class OrderBook:
         queue.orders.append(order)
         return True
 
-    def _release(self, queue: HeldQueue) -> list[_Outgoing]:
+    def _release(self, queue: HeldQueue, forced: Collection[Order[Any]]) -> list[_Outgoing]:
         """What goes out of `queue` this turn: each order from its head that its unit can start, then the lead-in the
         next one needs, a move to its site or a landing. An order the unit is already carrying out leaves the queue
-        unsent. A queue whose lead-in failed is let go of. Nothing goes to a unit the last observation left out, as
-        one in a transport or a gas building."""
+        unsent, unless it is in `forced`. A queue whose lead-in failed is let go of. Nothing goes to a unit the last
+        observation left out, as one in a transport or a gas building."""
         if queue.unit.is_stale:
             return []
         queue.forget_withdrawn()
@@ -362,7 +371,7 @@ class OrderBook:
             order = queue.orders[0]
             if self._can_start(queue, order):
                 released = self._released(queue)
-                if not self._is_carrying_out(released):
+                if released.order in forced or not self._is_carrying_out(released):
                     outgoing.append(released)
             elif self._lead_in_failed(queue, order):
                 queue.drop()
@@ -578,12 +587,19 @@ def _commands(out: _Outgoing) -> list[tuple[sc2api_pb2.Action, tuple[OwnUnit[Any
 
 
 def _is_held_kind(row: AbilityData | None, unit: OwnUnit[Any]) -> bool:
-    """Whether an order of `row`'s ability is held for `unit` until the unit can start it: one that costs, and that a
-    structure makes, or that a worker places."""
+    """Whether an order of `row`'s ability is held for `unit` until the unit can start it: one that costs, and that is
+    an add-on or a morph, a train or a research for a structure that keeps a queue, or a worker's build."""
     if row is None or not (row.cost.minerals or row.cost.vespene):
         return False
-    behavior = row.order_behavior_for(unit.type_id)
-    return behavior in _MAKING or (behavior is OrderBehavior.REPLACES and row.needs_placement)
+    match row.order_behavior_for(unit.type_id):
+        case OrderBehavior.NEEDS_IDLE:
+            return True
+        case OrderBehavior.QUEUES:
+            return unit.type_id in _KEEPS_A_QUEUE
+        case OrderBehavior.REPLACES:
+            return row.needs_placement
+        case _:
+            return False
 
 
 def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> OrderBehavior:
