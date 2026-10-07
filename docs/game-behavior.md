@@ -550,7 +550,9 @@ Each entry ends with how it was seen:
   given one (100/100), one reactor from two barracks given one, and the one with room beside it takes it if the
   other's spot is blocked. Units that cannot take the order are left out, and the verdict is still `Success`: a
   supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
-  `sweep_orders`).
+  `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a loaded and an empty
+  medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty medivacs, one or
+  two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it
