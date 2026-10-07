@@ -12,17 +12,21 @@ from sc2nachos.geometry import Point
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from sc2nachos.ids import UnitTypeId
-    from sc2nachos.orders._order import Order
+    from sc2nachos.ids import AbilityId, UnitTypeId
     from sc2nachos.units import OwnUnit, Target
 
 
 def create_unit_command_actions(
-    order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: Mapping[UnitTypeId, SentAs]
+    ability: AbilityId,
+    units: Sequence[OwnUnit[Any]],
+    target: Target | None,
+    sent_as: Mapping[UnitTypeId, SentAs],
+    *,
+    queued: bool,
 ) -> list[tuple[sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]]:
-    """The raw commands giving `order` to `units`, each with the units it names: one naming the units that take the
-    order's own ability, then, for each ability `sent_as` sends their types instead, one naming its units, or one per
-    unit where it is aimed at the unit itself."""
+    """The raw commands giving `ability` at `target` to `units`, each with the units it names: one naming the units
+    that take `ability` itself, then, for each ability `sent_as` sends their types instead, one naming its units, or
+    one per unit where it is aimed at the unit itself."""
     own: list[OwnUnit[Any]] = []
     sent: dict[SentAs, list[OwnUnit[Any]]] = {}
     for unit in units:
@@ -30,15 +34,15 @@ def create_unit_command_actions(
             own.append(unit)
         else:
             sent.setdefault(sending, []).append(unit)
-    commands = [_naming(order.ability, own, order.target, queued=order.queued)] if own else []
+    commands = [_naming(ability, own, target, queued=queued)] if own else []
     for sending, group in sent.items():
         match sending.aim:
             case Aim.ITSELF:
-                commands += [_naming(sending.ability, [unit], unit, queued=order.queued) for unit in group]
+                commands += [_naming(sending.ability, [unit], unit, queued=queued) for unit in group]
             case Aim.TARGET:
-                commands.append(_naming(sending.ability, group, order.target, queued=order.queued))
+                commands.append(_naming(sending.ability, group, target, queued=queued))
             case Aim.NOTHING:
-                commands.append(_naming(sending.ability, group, None, queued=order.queued))
+                commands.append(_naming(sending.ability, group, None, queued=queued))
     return commands
 
 

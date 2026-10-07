@@ -9,10 +9,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #113. `uv run pytest` passes 1604 tests on #115's branch; `uv run pytest -m
-  integration` passes 23 against a real game (run 2026-10-07).
-- **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state
-  (#115), then PR B, the queue. Step 2, one id per action, is done (#103 to #107).
+- nachOS `main` has every PR to #115. `uv run pytest` passes 1653 tests on PR B's branch; `uv run pytest -m
+  integration` passes 25 against a real game (run 2026-10-07).
+- **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state,
+  is #115; PR B, the queue, is on branch `claude/per-unit-queue`. Step 2, one id per action, is done (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -100,7 +100,8 @@ location) and as soon as the worker is close enough, they will start the build. 
 build add-on."*
 
 **Status: planned with the owner on 2026-10-07, in two PRs.** PR A, an order without state (#115, "Decided"
-above), lands first; PR B, the queue, is built on it. The decisions and the design follow the cases below.
+above), is merged; PR B, the queue, holds the money cases and an add-on or a morph on a busy structure. The decisions
+and the design follow the cases below; what is left is under "Pull requests".
 
 ### Why: what the game does with an order it cannot carry out yet
 
@@ -220,10 +221,10 @@ longer goes, by the game's pick, to one with room beside it.
 Measured since (docs/game-behavior.md): a drone and a probe are charged at the order as an SCV is; a build whose
 site is taken before the worker arrives fails with `CouldntReachTarget` and is refunded then; a lifted factory and
 starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
-given, so the game holds none of those sequences and a queue in NachOS would have to.
+given, so the game holds none of those sequences and a queue in NachOS would have to. And PR B's integration test:
+an SCV sent toward a geyser's center comes within 1.2 of its edge while walking and takes the refinery there.
 
-Still to measure: whether a worker moved to a geyser ends within 2.5 of its edge (PR B's integration test), and what
-a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
+Still to measure: what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
 planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 
 ### Pull requests
@@ -231,8 +232,11 @@ planetary fortress's, which keep their training, were measured (docs/game-behavi
 1. **PR A, an order without state**: #115, branch `claude/order-without-state`.
 2. **PR B, the queue**: the money cases (a worker's build, alone or behind moves; a flying structure's add-on; a train
    or research behind production), the pick, and an add-on or morph on a busy structure. Branch
-   `claude/per-unit-queue`, off `origin/main` once #115 is in. Left for later: warp-ins, larva, a spell on arrival,
-   tech still going up, and a flying command center that lands and morphs.
+   `claude/per-unit-queue`. Where it settles what the design left open: a refused lead-in is listed in
+   `api.action_failures` under `MOVE` or `LAND`, the ability that went out; an order whose picked unit is busy reads
+   `queued`; and each order released goes out as a command of its own, so a split group order's later parts keep no
+   spacing. Left for later: warp-ins, larva, a spell on arrival, tech still going up, and a flying command center that
+   lands and morphs.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 

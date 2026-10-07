@@ -1,7 +1,9 @@
 # Orders
 
 A bot orders its units through `api.orders` from its handlers. Orders are sent in one request after the turn's last
-handler returns, so a turn that orders nothing sends nothing.
+handler returns, so a turn that orders nothing sends nothing. A worker's build, and a structure's train, research,
+add-on or morph, waits in NachOS until its unit can start it, so nothing is paid early
+([orders NachOS holds](#orders-nachos-holds)).
 
 ```python
 @api.events.on(TurnEvent)
@@ -25,12 +27,14 @@ api.orders.camera(base)
 ```
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a
-  group around the target point; ordering each separately stacks them on the point instead.
+  group around the target point; ordering each separately stacks them on the point instead. An order NachOS holds,
+  given to several, goes to one of them, which NachOS picks ([one unit for several](#one-unit-for-several)).
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
   is the point the game was given, not quite the one passed in. `camera` stores its point the same way.
-- **`queued`** puts the order behind each unit's current orders instead of replacing them.
+- **`queued`** puts the order behind each unit's current orders, those NachOS holds for it included, instead of
+  replacing them. A train or a research goes behind them either way.
 - **`force`** sends the order even to units already carrying it out, which are otherwise left out
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
   queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
@@ -82,17 +86,17 @@ An order goes out as one command for each ability it is sent as, or one per unit
 itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
 ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming `UNLOAD`.
 
-**A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
-second train behind the first and charge for it from the step it was ordered, money spent before the structure can
-start on it, so NachOS sends only the last. To fill a queue on purpose — a reactor's second slot, say, which the
-structure starts at once — pass `queued=True`:
+**A train or a research competes with nothing.** It goes behind what the structure is making, queued or not (in
+game), so two trains given in one turn are two items. NachOS holds them and gives the structure only what it runs at
+once ([orders NachOS holds](#orders-nachos-holds)):
 
 ```python
-api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
-api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
+for _ in range(3):
+    api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-Both go out, and a barracks with a reactor makes both marines at once.
+A barracks with a finished reactor is given two marines now and the third once one is done; one without is given
+one now and the next each time one is done.
 
 Orders have no priority of their own. Handlers already run highest priority first, and a later handler checks
 `api.orders.issued_to(unit)` to leave alone a unit an earlier one has ordered:
@@ -121,6 +125,60 @@ it shows in `issued_to`, competes with the turn's other orders, and can be withd
 sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
 which goes out regardless.
 
+## Orders NachOS holds
+
+The game charges a build when it is ordered, not when the worker arrives, and a train or a research queued behind
+what a structure is making from the step it is ordered (in game). So NachOS holds an order that costs until its unit
+can start it, and sends it then:
+
+| Order | Goes out once |
+| --- | --- |
+| A worker's build | the worker is within `build_reach` of the site, or of its edge for a geyser. NachOS sends the worker to the site meanwhile. `Api(build_reach=...)` sets the reach; it is 2.5 by default. |
+| A train or a research | the structure has a slot free: it runs one at a time, two with a finished reactor. |
+| An add-on or a structure's morph | the structure is idle, and on the ground. A lifted barracks, factory or starport given an add-on at a point is sent to land there, and given the add-on once it has; given no point, it raises `TypeError`. |
+
+What costs nothing, a move, an attack, a gather, goes to the game as before, queued or not, so a worker's mining and
+a unit's micro are unchanged. Whatever is queued behind a held order waits with it, and goes out right behind it, in
+the same request.
+
+A held order shows in `issued_to(unit)`, ahead of the turn's orders to the unit, so a handler that leaves alone a
+unit already ordered leaves alone a worker on its way to build and a structure with a train waiting. `withdraw()`
+takes it back; the move or the landing already sent stays. Nothing is checked as it goes out: what the bank or the
+supply cap lacks then, the game refuses or stalls, as it would have when the order was given.
+
+What an order does to what is held for a unit follows what its ability does to the unit's orders:
+
+- An unqueued move, attack or build replaces what is held, as it replaces the game's queue. Queued, it goes behind.
+- A train or a research goes behind what is held, queued or not.
+- An unqueued add-on or morph replaces what is held and waits for the structure to be idle: an orbital command as
+  soon as the SCV being trained is done. Queued, it goes behind.
+- An ability the unit carries out at once, a stim, a rally, a cast, touches nothing.
+
+Nothing NachOS holds is redundant: a build repeated every turn replaces the one held, and the worker, already on its
+way, is not sent again. What goes out is judged as any order is: a build the worker is already carrying out is not
+sent to it a second time.
+
+NachOS lets go of everything held for a unit when one of its orders is refused as it goes out, when the unit dies or
+changes hands, and when a move or a landing it sent ends with the unit idle where it cannot start the order: a worker
+short of its site, a barracks still in the air. The orders just leave `issued_to`; a refusal is in
+`api.action_failures`, under the ability ordered, or `MOVE` or `LAND` for what NachOS sent ahead of it.
+
+### One unit for several
+
+One command naming several units has only one of them carry out a build, a train or a research (in game). NachOS
+picks that one when the order is issued, and `order.units` names it: the structure that will have a slot free
+soonest, counting what it runs and what is held for it, or the worker that walks to the site soonest, one already
+busy only if all are, the lowest id among equals. The pick counts the turn's earlier orders, so two trains given to
+the same three barracks go to two of them, and the order goes behind what the unit picked already has. A larva's
+train and a unit's own morph are not held, and go to every unit named, as the game takes them.
+
+A queued order to several units, some of which have orders held, goes out at once to the others, in one command, and
+to each of those once its held orders have gone out.
+
+Three things work differently from the game's own queue: a structure's held trains have no cap, where the game held
+5, or 8 with a reactor; a slot that frees within an observation of an order going out waits up to a turn; and an
+add-on given to several barracks goes to the one NachOS picks, not, as the game would, to one with room beside it.
+
 ## What an order needs
 
 The game handles an order it cannot pay for in one of three ways: it refuses it, which `api.action_failures` lists
@@ -141,7 +199,8 @@ giving several orders in one turn keeps its own tally. `cost` is what the game c
 the difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the
 ability takes of the cap as it starts.
 
-A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
+To take back an order NachOS still holds, withdraw it: only what the game already has needs a cancel. A cancel is
+an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
 structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
 tech lab included, and a morph's or an add-on's own cancel, since those answer `CANCEL_LAST` with `ERROR`. A
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
@@ -150,8 +209,9 @@ neither a slot nor a mineral within the same step ([game behavior](game-behavior
 ## What the game did
 
 An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
-to its units, or every unit it was given already carrying it out. Until then it shows in `issued_to` and `pending`.
-NachOS does not follow it after.
+to its units, or every unit it was given already carrying it out. An order NachOS holds goes out in the turn its unit
+can start it. Until it goes out it shows in `issued_to`, and through its own turn in `pending`. NachOS does not follow
+it after.
 
 The game answers each command as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
 once for each unit the command named, with the ability ordered and the game's verdict. One it takes need not be

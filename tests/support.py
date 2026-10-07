@@ -239,9 +239,13 @@ def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> li
     return seen
 
 
-def make_tables(*units: data_pb2.UnitTypeData, abilities: Iterable[data_pb2.AbilityData] = ()) -> GameData:
-    """Game data with a row for each of `units` and each of `abilities`."""
-    return GameData(sc2api_pb2.ResponseData(units=units, abilities=abilities))
+def make_tables(
+    *units: data_pb2.UnitTypeData,
+    abilities: Iterable[data_pb2.AbilityData] = (),
+    upgrades: Iterable[data_pb2.UpgradeData] = (),
+) -> GameData:
+    """Game data with a row for each of `units`, each of `abilities` and each of `upgrades`."""
+    return GameData(sc2api_pb2.ResponseData(units=units, abilities=abilities, upgrades=upgrades))
 
 
 def played(
@@ -259,7 +263,7 @@ def played(
     step = observation.observation.game_loop
     if game is None:
         state = _State(observation, tracker, game_map)
-        orders = OrderBook(tracker.game_data)
+        orders = OrderBook(tracker.game_data, build_reach=2.5)
         game = _Game(
             client, game_map, tracker.game_data, tracker.enemy, infer, tracker, orders, observation, state, step
         )

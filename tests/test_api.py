@@ -132,6 +132,11 @@ class TestBeforeAGame:
     def test_the_events_answer_so_handlers_can_subscribe_at_import(self) -> None:
         assert isinstance(Api().events, EventBus)
 
+    @pytest.mark.parametrize("reach", [0.0, -1.0, float("nan")])
+    def test_a_build_reach_must_be_positive(self, reach: float) -> None:
+        with pytest.raises(ValueError, match="build_reach must be positive"):
+            Api(build_reach=reach)
+
 
 class TestPlaying:
     def test_a_game_is_played_to_the_result_the_game_gives(self) -> None:
