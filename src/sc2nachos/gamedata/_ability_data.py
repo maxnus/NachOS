@@ -53,7 +53,7 @@ class OrderBehavior(Enum):
     """Runs without disturbing the unit's orders, so it competes with nothing: stim, both halves of a toggle and the
     rest of `KEEPS_ORDERS_ABILITIES`, plus every ability that makes nothing and is offered only to types that hold no
     order of their own — a structure's own rally, load, cancel and energy casts. Ordered on a producer, each of those
-    leaves what it is making at its current progress (in game). `GENERAL_CANCEL` is not one of them: a ghost and an
+    leaves what it is making at its current progress (in game). `CANCEL` is not one of them: a ghost and an
     infestor are offered it too, and it takes them off what they are channeling."""
 
 
@@ -172,16 +172,16 @@ def cancel_abilities(
 ) -> Mapping[AbilityId, AbilityId]:
     """The ability that cancels each ability on a structure carrying it out, for those that have one.
 
-    A train or a research is cancelled by `GENERAL_CANCEL_LAST`, provided every type offered the ability keeps a queue,
+    A train or a research is cancelled by `CANCEL_LAST`, provided every type offered the ability keeps a queue,
     which is to say is offered that cancel: a warp gate keeps none (in game). A morph, an add-on and arming a nuke take
-    the cancel they were seen offered (tool `sweep_tech_tree`), `GENERAL_CANCEL` for every one of them.
+    the cancel they were seen offered (tool `sweep_tech_tree`), `CANCEL` for every one of them.
     """
-    keeps_a_queue = tech_tree.ability_performers.get(AbilityId.GENERAL_CANCEL_LAST, frozenset())
+    keeps_a_queue = tech_tree.ability_performers.get(AbilityId.CANCEL_LAST, frozenset())
     cancels = dict(tech_tree.ability_cancels)
     for ability, behavior in behaviors.items():
         performers = tech_tree.ability_performers.get(ability, frozenset())
         if behavior.own is OrderBehavior.QUEUES and performers and performers <= keeps_a_queue:
-            cancels[ability] = AbilityId.GENERAL_CANCEL_LAST
+            cancels[ability] = AbilityId.CANCEL_LAST
     return cancels
 
 
@@ -206,12 +206,10 @@ def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[Un
     """The unit types that hold an order of their own, which an order can take them off: those the game offers a
     move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
     lurker. A structure, an egg and a cocoon hold none. A flying structure is offered a move under its flying type."""
-    held = (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_STOP, AbilityId.GENERAL_HOLD_POSITION)
+    held = (AbilityId.ATTACK, AbilityId.STOP, AbilityId.HOLD_POSITION)
     holders: set[UnitTypeId] = set()
     for unit_type, abilities in tech_tree.ability_requirements.items():
-        if AbilityId.GENERAL_MOVE in abilities or (
-            unit_type in non_structures and not abilities.keys().isdisjoint(held)
-        ):
+        if AbilityId.MOVE in abilities or (unit_type in non_structures and not abilities.keys().isdisjoint(held)):
             holders.add(unit_type)
     return frozenset(holders)
 
@@ -234,13 +232,13 @@ class AbilityData:
     """Whether ordering it places a structure."""
     allows_autocast: bool
     """Whether it can be set to autocast, for some type that carries it out. An unburrow can for a roach and not for a
-    drone (in game), and the switch takes effect only under each type's own game id, not `GENERAL_UNBURROW`'s."""
+    drone (in game), and the switch takes effect only under each type's own game id, not `UNBURROW`'s."""
     performers: frozenset[UnitTypeId]
     """The unit types offered it. An action several types perform is offered to each under its one id, though the
     game offers each type its own. Empty for `GATEWAY_MORPH_WARP_GATE`, which a gateway carries out by itself once the
     research is done."""
     products: Mapping[UnitTypeId, UnitTypeId | UpgradeId] = field(hash=False)
-    """The unit type it makes, or the upgrade it researches, by the unit type that carries it out: `GENERAL_LIFT`
+    """The unit type it makes, or the upgrade it researches, by the unit type that carries it out: `LIFT`
     makes a flying barracks of a barracks and a flying starport of a starport. Empty for an ability that makes
     nothing."""
     cost: Cost
@@ -250,17 +248,17 @@ class AbilityData:
     costs the same for each. An ability that makes nothing costs nothing."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
-    `GENERAL_CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
-    game). For a morph, an add-on and arming a nuke it is `GENERAL_CANCEL`, since those answer `GENERAL_CANCEL_LAST`
+    `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
+    game). For a morph, an add-on and arming a nuke it is `CANCEL`, since those answer `CANCEL_LAST`
     with `ERROR` (tool `sweep_tech_tree`). `None` for everything else, a warp-in and a build among them: a warp gate
-    keeps no queue, and a structure under construction is cancelled on itself with `GENERAL_CANCEL`."""
+    keeps no queue, and a structure under construction is cancelled on itself with `CANCEL`."""
     order_behavior: OrderBehavior
     """What ordering it does to the unit's current orders: the behavior the types carrying it out share, or `REPLACES`
     where they differ; `order_behavior_for` gives each unit type's."""
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
-    the ability itself. `GENERAL_UNLOAD` goes out to a medivac as its unload at a point aimed at the medivac, and a
-    custom id names every type it can be given to: `GENERAL_SIEGE` a tank's siege mode and a liberator's defender
+    the ability itself. `UNLOAD` goes out to a medivac as its unload at a point aimed at the medivac, and a
+    custom id names every type it can be given to: `SIEGE` a tank's siege mode and a liberator's defender
     mode, aimed at the order's point. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
 
@@ -338,7 +336,7 @@ _SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 def _performers(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types offered `ability`, and those offered the ability it goes out to them as: a medivac is offered
-    the unload at a point that `GENERAL_UNLOAD` goes out to it as."""
+    the unload at a point that `UNLOAD` goes out to it as."""
     performers = tech_tree.ability_performers
     offered = performers.get(ability, frozenset())
     sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)

@@ -27,7 +27,7 @@ _ENEMY = raw_pb2.Alliance.Enemy
 # The structures that can leave the spot they are remembered at: those offered a lift or an uproot.
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
     unit_type
-    for ability in (AbilityId.GENERAL_LIFT, AbilityId.GENERAL_UPROOT)
+    for ability in (AbilityId.LIFT, AbilityId.UPROOT)
     for unit_type in TECH_TREE.ability_performers.get(ability, ())
 )
 

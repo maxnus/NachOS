@@ -727,7 +727,7 @@ def _until(game: RealGame, done: Callable[[], bool], *, steps: int = 2, turns: i
 def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, at: Point) -> Unit[Any]:
     """The tech lab a new `unit_type` builds, both within the five by five square around `at`."""
     structure = _made(game, unit_type, at - (1, 0))
-    game.order(AbilityId.GENERAL_BUILD_TECH_LAB, structure)
+    game.order(AbilityId.BUILD_TECH_LAB, structure)
     _until(game, lambda: bool(game.tracker.unit_tracker.present.own.of_type(tech_lab)), steps=22)
     return game.newest(tech_lab)
 
@@ -759,19 +759,19 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         )
         game.turn(22)
         assert (marine.health_max, reader._of_owner(marine)) == (55.0, {UpgradeId.COMBAT_SHIELD})
-        game.order(AbilityId.GENERAL_STIM, marine)
+        game.order(AbilityId.STIM, marine)
         game.turn(4)
         assert reader._of_owner(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
 
         marauder = _made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
-        game.order(AbilityId.GENERAL_STIM, marauder)
+        game.order(AbilityId.STIM, marauder)
         game.turn(4)
         assert reader._of_owner(marauder) == {UpgradeId.STIMPACK}
 
         banshee = _made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
         ghost = _made(game, UnitTypeId.GHOST, toward + (-6, 6))
-        game.order(AbilityId.GENERAL_CLOAK_ON, banshee)
-        game.order(AbilityId.GENERAL_CLOAK_ON, ghost)
+        game.order(AbilityId.CLOAK_ON, banshee)
+        game.order(AbilityId.CLOAK_ON, ghost)
         game.turn(8)
         assert (reader._of_owner(banshee), reader._of_owner(ghost)) == (
             {UpgradeId.BANSHEE_CLOAK},
@@ -779,7 +779,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         )
 
         roach = _made(game, UnitTypeId.ROACH, toward + (-1, 2), owner=enemy)
-        game.order(AbilityId.GENERAL_ATTACK, marauder, target=roach)
+        game.order(AbilityId.ATTACK, marauder, target=roach)
         _until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
         assert reader._of_opponent(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
         # Killed, or the marauder would slow the tank too.
@@ -818,7 +818,7 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
 
         zealot = _made(game, UnitTypeId.ZEALOT, toward + (-8, 0))
         roach = _made(game, UnitTypeId.ROACH, toward + (-14, 0), owner=enemy)
-        game.order(AbilityId.GENERAL_ATTACK, zealot, target=roach)
+        game.order(AbilityId.ATTACK, zealot, target=roach)
         _until(game, lambda: BuffId.ZEALOT_CHARGING in zealot.buffs, turns=60)
         assert reader._of_owner(zealot) == {UpgradeId.CHARGE}
 
@@ -850,7 +850,7 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
         )
         zergling = _made(game, UnitTypeId.ZERGLING, near + (-4, 0))
         assert reader._of_owner(zergling) == frozenset()
-        game.order(AbilityId.GENERAL_BURROW, zergling)
+        game.order(AbilityId.BURROW, zergling)
         _until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
         assert reader._of_owner(zergling) == {UpgradeId.BURROW}
 

@@ -110,11 +110,11 @@ def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
 @pytest.mark.parametrize(
     ("reported", "ordered"),
     [
-        (RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, AbilityId.GENERAL_SIEGE),
-        (RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode, AbilityId.GENERAL_UNSIEGE),
-        (RawAbilityId.SiegeMode_SiegeMode, AbilityId.GENERAL_SIEGE),
-        (RawAbilityId.Morph_ObserverMode, AbilityId.GENERAL_UNSIEGE),
-        (RawAbilityId.Archon_Warp_Target, AbilityId.GENERAL_MORPH_ARCHON),
+        (RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, AbilityId.SIEGE),
+        (RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode, AbilityId.UNSIEGE),
+        (RawAbilityId.SiegeMode_SiegeMode, AbilityId.SIEGE),
+        (RawAbilityId.Morph_ObserverMode, AbilityId.UNSIEGE),
+        (RawAbilityId.Archon_Warp_Target, AbilityId.MORPH_ARCHON),
     ],
 )
 def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: RawAbilityId, ordered: AbilityId) -> None:
@@ -138,7 +138,7 @@ def test_known_ids_have_expected_values() -> None:
     assert UnitTypeId.SCV == 45
     assert UnitTypeId.MARINE == 48
     assert UnitTypeId.COMMAND_CENTER == 18
-    assert AbilityId.GENERAL_SMART == 1
+    assert AbilityId.SMART == 1
 
 
 def test_renaming_preserves_identity() -> None:

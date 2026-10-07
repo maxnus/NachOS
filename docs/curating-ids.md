@@ -58,16 +58,16 @@ let the field that names the dead one stay empty.
 
 **An action several unit types perform has one id, and each type's own is not curated.** The game offers a barracks
 `Lift_Barracks` and a starport `Lift_Starport`, each reports its own while it runs it, and either takes `Lift` as an
-order and runs its own (in game). NachOS curates `Lift` as `GENERAL_LIFT` and reads each type's own as it, from
+order and runs its own (in game). NachOS curates `Lift` as `LIFT` and reads each type's own as it, from
 `AbilityId._REMAPPED_IDS`. Where the game's table gives a `remaps_to`, it says which; collapse a family only where its
 members do one thing for different performers. A leveled research keeps one id per level, since each makes its own
 upgrade, and its general id is not curated: nothing is offered it. The generic cancel's members are one action too:
 a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
 
 **A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but
-read as the one ordered, from the same table: a liberator ordered `GENERAL_SIEGE` reports
+read as the one ordered, from the same table: a liberator ordered `SIEGE` reports
 `LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when ordered, and reads
-`GENERAL_SIEGE`. The only way to find such a pair is to order the ability in game and read the performer's
+`SIEGE`. The only way to find such a pair is to order the ability in game and read the performer's
 orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each of the
 raven's and viper's spells show in the caster's orders under the id ordered.
 
@@ -111,9 +111,8 @@ which is why an extractor is priced at 75 where a pylon is 100.
 Otherwise the verb is the game's own `friendly_name`, unless a player would say it differently -- a larva is
 consumed, so `LARVA_MORPH_ZERGLING` rather than the game's "Train Zergling". Where a player has no verb for
 a form change, the game's mode name serves: `THOR_HIGH_IMPACT_MODE`, `WARP_PRISM_PHASING_MODE`. An ability
-several units can perform has `GENERAL` in the performer's place: `GENERAL_BUILD_TECH_LAB`, `GENERAL_BURROW`,
-`GENERAL_ATTACK`. Every member reads as who does it and what it does, except `NULL`, which is id zero and no
-ability.
+several units can perform is named by what it does alone: `BUILD_TECH_LAB`, `BURROW`, `ATTACK`. Every member reads
+as what it does, and who does it where one unit type does, except `NULL`, which is id zero and no ability.
 
 ## Refreshing `data/tech_tree.json`
 

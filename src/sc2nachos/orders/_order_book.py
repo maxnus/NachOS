@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 # and the one after that on the ladder or in realtime (docs/game-behavior.md).
 _SHOWN_WITHIN = 2
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
-# `GENERAL_UNLOAD`.
+# `UNLOAD`.
 _IS_AIMED_AT_ITSELF = MappingProxyType(
     {
         sending.ability: ability
@@ -135,7 +135,7 @@ class OrderBook:
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an order without one to a type that goes
         out aimed at it, as a liberator's siege does, and for a transport's unload at a point aimed at one of `units`
-        itself, which is `GENERAL_UNLOAD` for that one: a group given an unload at one of its own transports is two
+        itself, which is `UNLOAD` for that one: a group given an unload at one of its own transports is two
         orders. Raises `ValueError` for a custom ability given to a type it has nothing to be sent as for, or which this
         game's tables lack an ability it is sent as for.
         """

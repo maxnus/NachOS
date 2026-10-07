@@ -87,9 +87,9 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.ADEPT_SHADE,
         AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
         AbilityId.BANELING_ATTACK_STRUCTURES_ON,
-        AbilityId.GENERAL_CLOAK_OFF,
-        AbilityId.GENERAL_CLOAK_ON,
-        AbilityId.GENERAL_STIM,
+        AbilityId.CLOAK_OFF,
+        AbilityId.CLOAK_ON,
+        AbilityId.STIM,
         AbilityId.HYDRALISK_LUNGE,
         AbilityId.MEDIVAC_BOOST,
         AbilityId.MOTHERSHIP_CLOAK_FIELD,
@@ -133,13 +133,13 @@ _PRODUCTION_STRUCTURES = frozenset(
 _LOAD_ALL_STRUCTURES = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS})
 KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
-        AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
-        AbilityId.GENERAL_HOLD_FIRE_OFF: frozenset({UnitTypeId.GHOST}),
-        AbilityId.GENERAL_HOLD_FIRE_ON: frozenset({UnitTypeId.GHOST}),
-        AbilityId.GENERAL_LOAD_ALL: _LOAD_ALL_STRUCTURES,
-        AbilityId.GENERAL_SMART: _PRODUCTION_STRUCTURES,
-        AbilityId.GENERAL_STOP: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
-        AbilityId.GENERAL_UNLOAD: _LOAD_ALL_STRUCTURES,
+        AbilityId.ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.HOLD_FIRE_OFF: frozenset({UnitTypeId.GHOST}),
+        AbilityId.HOLD_FIRE_ON: frozenset({UnitTypeId.GHOST}),
+        AbilityId.LOAD_ALL: _LOAD_ALL_STRUCTURES,
+        AbilityId.SMART: _PRODUCTION_STRUCTURES,
+        AbilityId.STOP: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.UNLOAD: _LOAD_ALL_STRUCTURES,
     }
 )
 
@@ -147,15 +147,15 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 # A medivac, a warp prism and a transport overlord given their unload at a point aimed at themselves unload where they
 # are and leave a move going; aimed at a point, they fly there first. Each answers UnloadAll `Error`, which a bunker, a
 # command center, a planetary fortress and a nydus take (tool `sweep_orders`, `held-orders`).
-_UNLOADS_IN_PLACE = SentAs(AbilityId.GENERAL_UNLOAD_AT, Aim.ITSELF)
+_UNLOADS_IN_PLACE = SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
 _TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.OVERLORD_TRANSPORT)
 
 ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
     {
-        AbilityId.GENERAL_UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
+        AbilityId.UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
         # A liberator's siege is aimed at the zone it guards; the others' at nothing. A form given its own siege again
         # is sent it too, and the game answers as it does: a sieged liberator `NotSupported` (in game).
-        AbilityId.GENERAL_SIEGE: MappingProxyType(
+        AbilityId.SIEGE: MappingProxyType(
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED),
@@ -175,7 +175,7 @@ ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]
                 ),
             }
         ),
-        AbilityId.GENERAL_UNSIEGE: MappingProxyType(
+        AbilityId.UNSIEGE: MappingProxyType(
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),

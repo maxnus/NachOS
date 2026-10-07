@@ -2,20 +2,20 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as each unit
-type's own game ability (`AbilityData.sent_as`): GENERAL_SIEGE as a tank's siege mode and a liberator's defender mode.
+type's own game ability (`AbilityData.sent_as`): SIEGE as a tank's siege mode and a liberator's defender mode.
 A custom id is assigned `auto()`, which numbers it above every game id; what the game reports for it reads as it.
 Unknown ids raise.
 
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
-LARVA_MORPH_ZERGLING -- and GENERAL where several units can. An action several units perform has one id, whichever
-unit performs it: GENERAL_LIFT for a barracks and a starport, GENERAL_GATHER for every worker, GENERAL_CANCEL for
-whatever a unit is offered a cancel for. It is the id to order, the id a unit is offered and the id it reports; the
+LARVA_MORPH_ZERGLING -- and by what it does alone where several units can. An action several units perform has one
+id, whichever unit performs it: LIFT for a barracks and a starport, GATHER for every worker, CANCEL for whatever a
+unit is offered a cancel for. It is the id to order, the id a unit is offered and the id it reports; the
 game's own id for each unit reads as it (`_REMAPPED_IDS`). A leveled research has an id per level and none for the
 next level, as the upgrade it makes does.
 
 Where a unit reports running another id than the one it was ordered, and the game links neither to the other, that id
-reads as the one ordered too: a liberator ordered GENERAL_SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which
-reads as GENERAL_SIEGE.
+reads as the one ordered too: a liberator ordered SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which
+reads as SIEGE.
 """
 
 from enum import auto, nonmember
@@ -40,6 +40,8 @@ class AbilityId(IdEnum):
     ARMORY_RESEARCH_VEHICLE_WEAPONS_1 = RawAbilityId.ArmoryResearch_TerranVehicleWeaponsLevel1
     ARMORY_RESEARCH_VEHICLE_WEAPONS_2 = RawAbilityId.ArmoryResearch_TerranVehicleWeaponsLevel2
     ARMORY_RESEARCH_VEHICLE_WEAPONS_3 = RawAbilityId.ArmoryResearch_TerranVehicleWeaponsLevel3
+    # A unit that can fire runs it as an attack, one that cannot as a scan move (in game).
+    ATTACK = RawAbilityId.Attack
     BANELING_ATTACK_STRUCTURES_OFF = RawAbilityId.Behavior_BuildingAttackOff
     BANELING_ATTACK_STRUCTURES_ON = RawAbilityId.Behavior_BuildingAttackOn
     BANELING_EXPLODE = RawAbilityId.Explode_Explode
@@ -53,7 +55,20 @@ class AbilityId(IdEnum):
     BARRACKS_TRAIN_REAPER = RawAbilityId.BarracksTrain_Reaper
     BATTLECRUISER_TACTICAL_JUMP = RawAbilityId.Effect_TacticalJump
     BATTLECRUISER_YAMATO = RawAbilityId.Yamato_YamatoGun
+    BLINK = RawAbilityId.Effect_Blink
+    BUILD_CREEP_TUMOR = RawAbilityId.Build_CreepTumor
+    BUILD_REACTOR = RawAbilityId.Build_Reactor
+    BUILD_TECH_LAB = RawAbilityId.Build_TechLab
+    BURROW = RawAbilityId.BurrowDown
+    # Cancels whatever a unit is offered a cancel for, beyond a queue: a morph, an add-on, a structure going up, a
+    # cocoon or egg, a channel, a shade, a nuke. A unit is offered one at a time (in game).
+    CANCEL = RawAbilityId.Cancel
+    # Takes the last item off a structure's queue, of units or of research. A structure training answers
+    # CANCEL with `Error`; a morph and an add-on answer this one so (in game).
+    CANCEL_LAST = RawAbilityId.Cancel_Last
     CARRIER_BUILD_INTERCEPTORS = RawAbilityId.Build_Interceptors
+    CLOAK_OFF = RawAbilityId.Behavior_CloakOff
+    CLOAK_ON = RawAbilityId.Behavior_CloakOn
     COMMAND_CENTER_MORPH_ORBITAL_COMMAND = RawAbilityId.UpgradeToOrbital_OrbitalCommand
     COMMAND_CENTER_MORPH_PLANETARY_FORTRESS = RawAbilityId.UpgradeToPlanetaryFortress_PlanetaryFortress
     COMMAND_CENTER_TRAIN_SCV = RawAbilityId.CommandCenterTrain_SCV
@@ -132,68 +147,22 @@ class AbilityId(IdEnum):
     GATEWAY_TRAIN_SENTRY = RawAbilityId.GatewayTrain_Sentry
     GATEWAY_TRAIN_STALKER = RawAbilityId.GatewayTrain_Stalker
     GATEWAY_TRAIN_ZEALOT = RawAbilityId.GatewayTrain_Zealot
-    # A unit that can fire runs it as an attack, one that cannot as a scan move (in game).
-    GENERAL_ATTACK = RawAbilityId.Attack
-    GENERAL_BLINK = RawAbilityId.Effect_Blink
-    GENERAL_BUILD_CREEP_TUMOR = RawAbilityId.Build_CreepTumor
-    GENERAL_BUILD_REACTOR = RawAbilityId.Build_Reactor
-    GENERAL_BUILD_TECH_LAB = RawAbilityId.Build_TechLab
-    GENERAL_BURROW = RawAbilityId.BurrowDown
-    # Cancels whatever a unit is offered a cancel for, beyond a queue: a morph, an add-on, a structure going up, a
-    # cocoon or egg, a channel, a shade, a nuke. A unit is offered one at a time (in game).
-    GENERAL_CANCEL = RawAbilityId.Cancel
-    # Takes the last item off a structure's queue, of units or of research. A structure training answers
-    # GENERAL_CANCEL with `Error`; a morph and an add-on answer this one so (in game).
-    GENERAL_CANCEL_LAST = RawAbilityId.Cancel_Last
-    GENERAL_CLOAK_OFF = RawAbilityId.Behavior_CloakOff
-    GENERAL_CLOAK_ON = RawAbilityId.Behavior_CloakOn
-    GENERAL_GATHER = RawAbilityId.Harvest_Gather
-    GENERAL_HALT = RawAbilityId.Halt
-    GENERAL_HOLD_FIRE_OFF = RawAbilityId.Behavior_HoldFireOff
-    GENERAL_HOLD_FIRE_ON = RawAbilityId.Behavior_HoldFireOn
-    GENERAL_HOLD_POSITION = RawAbilityId.HoldPosition
-    GENERAL_LAND = RawAbilityId.Land
-    GENERAL_LIFT = RawAbilityId.Lift
-    GENERAL_LOAD = RawAbilityId.Load
-    GENERAL_LOAD_ALL = RawAbilityId.LoadAll
-    # The order to give two templar, high or dark, selected together: they walk to each other and merge into an
-    # archon. Given to one alone it is refused. Each reports MORPH_ARCHON running, aimed at the other (in game).
-    GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
-    GENERAL_MOVE = RawAbilityId.Move
-    GENERAL_PATROL = RawAbilityId.Patrol
-    GENERAL_RALLY_UNITS = RawAbilityId.Rally_Units
-    GENERAL_RALLY_WORKERS = RawAbilityId.Rally_Workers
-    GENERAL_RECALL = RawAbilityId.Effect_MassRecall
-    GENERAL_REPAIR = RawAbilityId.Effect_Repair
-    GENERAL_RETURN = RawAbilityId.Harvest_Return
-    GENERAL_ROOT = RawAbilityId.Morph_Root
-    GENERAL_SALVAGE = RawAbilityId.SalvageEffect_Salvage
-    # A tank's siege mode, a liberator's defender mode aimed at its zone, an observer's surveillance mode and an
-    # overseer's oversight mode, and leaving each. The game has no id for either across the four.
-    GENERAL_SIEGE = auto()
-    GENERAL_SMART = RawAbilityId.Smart  # the right-click order
-    GENERAL_SPRAY = RawAbilityId.Effect_Spray
-    GENERAL_STIM = RawAbilityId.Effect_Stim
-    GENERAL_STOP = RawAbilityId.Stop
-    GENERAL_UNBURROW = RawAbilityId.BurrowUp
-    # Puts every passenger down where the transport is: UnloadAll for a bunker, command center, planetary fortress or
-    # nydus, and the unload at a point aimed at the transport itself for a medivac, warp prism or transport overlord,
-    # which answer UnloadAll `Error` (in game).
-    GENERAL_UNLOAD = RawAbilityId.UnloadAll
-    GENERAL_UNLOAD_AT = RawAbilityId.UnloadAllAt
-    GENERAL_UNSIEGE = auto()
-    GENERAL_UPROOT = RawAbilityId.Morph_Uproot
+    GATHER = RawAbilityId.Harvest_Gather
     GHOST_ACADEMY_BUILD_NUKE = RawAbilityId.Build_Nuke
     GHOST_ACADEMY_RESEARCH_GHOST_CLOAK = RawAbilityId.Research_PersonalCloaking
     GHOST_EMP = RawAbilityId.EMP_EMP
     GHOST_SNIPE = RawAbilityId.Effect_GhostSnipe
     GHOST_TACTICAL_NUKE = RawAbilityId.TacNukeStrike_NukeCalldown
+    HALT = RawAbilityId.Halt
     HATCHERY_MORPH_LAIR = RawAbilityId.UpgradeToLair_Lair
     HATCHERY_TRAIN_QUEEN = RawAbilityId.TrainQueen_Queen
     HELLBAT_MORPH_HELLION = RawAbilityId.Morph_Hellion
     HELLION_MORPH_HELLBAT = RawAbilityId.Morph_Hellbat
     HIGH_TEMPLAR_FEEDBACK = RawAbilityId.Feedback_Feedback
     HIGH_TEMPLAR_STORM = RawAbilityId.PsiStorm_PsiStorm
+    HOLD_FIRE_OFF = RawAbilityId.Behavior_HoldFireOff
+    HOLD_FIRE_ON = RawAbilityId.Behavior_HoldFireOn
+    HOLD_POSITION = RawAbilityId.HoldPosition
     HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE = RawAbilityId.HydraliskDenResearch_ResearchFrenzy
     HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE = RawAbilityId.Research_GroovedSpines
     HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED = RawAbilityId.Research_MuscularAugments
@@ -208,6 +177,7 @@ class AbilityId(IdEnum):
     LAIR_MORPH_HIVE = RawAbilityId.UpgradeToHive_Hive
     LAIR_RESEARCH_BURROW = RawAbilityId.Research_Burrow
     LAIR_RESEARCH_OVERLORD_SPEED = RawAbilityId.Research_PneumatizedCarapace
+    LAND = RawAbilityId.Land
     LARVA_MORPH_CORRUPTOR = RawAbilityId.LarvaTrain_Corruptor
     LARVA_MORPH_DRONE = RawAbilityId.LarvaTrain_Drone
     LARVA_MORPH_HYDRALISK = RawAbilityId.LarvaTrain_Hydralisk
@@ -219,13 +189,20 @@ class AbilityId(IdEnum):
     LARVA_MORPH_ULTRALISK = RawAbilityId.LarvaTrain_Ultralisk
     LARVA_MORPH_VIPER = RawAbilityId.LarvaTrain_Viper
     LARVA_MORPH_ZERGLING = RawAbilityId.LarvaTrain_Zergling
+    LIFT = RawAbilityId.Lift
+    LOAD = RawAbilityId.Load
+    LOAD_ALL = RawAbilityId.LoadAll
     LOCUST_SWOOP = RawAbilityId.Effect_LocustSwoop
     LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED = RawAbilityId.Research_AdaptiveTalons
     LURKER_DEN_RESEARCH_LURKER_RANGE = RawAbilityId.LurkerDenResearch_ResearchLurkerRange
     MEDIVAC_BOOST = RawAbilityId.Effect_MedivacIgniteAfterburners
     MEDIVAC_HEAL = RawAbilityId.MedivacHeal_Heal
+    # The order to give two templar, high or dark, selected together: they walk to each other and merge into an
+    # archon. Given to one alone it is refused. Each reports MORPH_ARCHON running, aimed at the other (in game).
+    MORPH_ARCHON = RawAbilityId.Morph_Archon
     MOTHERSHIP_CLOAK_FIELD = RawAbilityId.MothershipCloak_OracleCloakField
     MOTHERSHIP_TIME_WARP = RawAbilityId.Effect_TimeWarp
+    MOVE = RawAbilityId.Move
     NEXUS_CHRONO_BOOST = RawAbilityId.Effect_ChronoBoostEnergyCost
     NEXUS_ENERGY_RECHARGE = RawAbilityId.EnergyRecharge_EnergyRecharge
     NEXUS_TRAIN_MOTHERSHIP = RawAbilityId.NexusTrainMothership_Mothership
@@ -246,6 +223,7 @@ class AbilityId(IdEnum):
     OVERLORD_MORPH_OVERSEER = RawAbilityId.Morph_Overseer
     OVERSEER_CONTAMINATE = RawAbilityId.Contaminate_Contaminate
     OVERSEER_SPAWN_CHANGELING = RawAbilityId.SpawnChangeling_SpawnChangeling
+    PATROL = RawAbilityId.Patrol
     PHOENIX_GRAVITON_BEAM = RawAbilityId.GravitonBeam_GravitonBeam
     PROBE_BUILD_ASSIMILATOR = RawAbilityId.ProtossBuild_Assimilator
     PROBE_BUILD_CYBERNETICS_CORE = RawAbilityId.ProtossBuild_CyberneticsCore
@@ -264,11 +242,16 @@ class AbilityId(IdEnum):
     PROBE_BUILD_TWILIGHT_COUNCIL = RawAbilityId.ProtossBuild_TwilightCouncil
     QUEEN_INJECT = RawAbilityId.Effect_InjectLarva
     QUEEN_TRANSFUSE = RawAbilityId.Transfusion_Transfusion
+    RALLY_UNITS = RawAbilityId.Rally_Units
+    RALLY_WORKERS = RawAbilityId.Rally_Workers
     RAVAGER_CORROSIVE_BILE = RawAbilityId.Effect_CorrosiveBile
     RAVEN_ANTI_ARMOR_MISSILE = RawAbilityId.Effect_AntiArmorMissile
     RAVEN_INTERFERENCE_MATRIX = RawAbilityId.Effect_InterferenceMatrix
     RAVEN_SPAWN_AUTO_TURRET = RawAbilityId.BuildAutoTurret_AutoTurret
     REAPER_GRENADE = RawAbilityId.KD8Charge_KD8Charge
+    RECALL = RawAbilityId.Effect_MassRecall
+    REPAIR = RawAbilityId.Effect_Repair
+    RETURN = RawAbilityId.Harvest_Return
     ROACH_MORPH_RAVAGER = RawAbilityId.MorphToRavager_Ravager
     ROACH_WARREN_RESEARCH_ROACH_SPEED = RawAbilityId.Research_GlialRegeneration
     ROACH_WARREN_RESEARCH_TUNNELING_CLAWS = RawAbilityId.Research_TunnelingClaws
@@ -280,6 +263,8 @@ class AbilityId(IdEnum):
     ROBOTICS_FACILITY_TRAIN_IMMORTAL = RawAbilityId.RoboticsFacilityTrain_Immortal
     ROBOTICS_FACILITY_TRAIN_OBSERVER = RawAbilityId.RoboticsFacilityTrain_Observer
     ROBOTICS_FACILITY_TRAIN_WARP_PRISM = RawAbilityId.RoboticsFacilityTrain_WarpPrism
+    ROOT = RawAbilityId.Morph_Root
+    SALVAGE = RawAbilityId.SalvageEffect_Salvage
     SCV_BUILD_ARMORY = RawAbilityId.TerranBuild_Armory
     SCV_BUILD_BARRACKS = RawAbilityId.TerranBuild_Barracks
     SCV_BUILD_BUNKER = RawAbilityId.TerranBuild_Bunker
@@ -309,6 +294,10 @@ class AbilityId(IdEnum):
     SENTRY_HALLUCINATE_WARP_PRISM = RawAbilityId.Hallucination_WarpPrism
     SENTRY_HALLUCINATE_ZEALOT = RawAbilityId.Hallucination_Zealot
     SHIELD_BATTERY_RECHARGE = RawAbilityId.ShieldBatteryRechargeEx5_ShieldBatteryRecharge
+    # A tank's siege mode, a liberator's defender mode aimed at its zone, an observer's surveillance mode and an
+    # overseer's oversight mode, and leaving each. The game has no id for either across the four.
+    SIEGE = auto()
+    SMART = RawAbilityId.Smart  # the right-click order
     SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS = RawAbilityId.Research_ZerglingAdrenalGlands
     SPAWNING_POOL_RESEARCH_ZERGLING_SPEED = RawAbilityId.Research_ZerglingMetabolicBoost
     SPIRE_MORPH_GREATER_SPIRE = RawAbilityId.UpgradeToGreaterSpire_GreaterSpire
@@ -318,6 +307,7 @@ class AbilityId(IdEnum):
     SPIRE_RESEARCH_AIR_WEAPONS_1 = RawAbilityId.Research_ZergFlyerAttackLevel1
     SPIRE_RESEARCH_AIR_WEAPONS_2 = RawAbilityId.Research_ZergFlyerAttackLevel2
     SPIRE_RESEARCH_AIR_WEAPONS_3 = RawAbilityId.Research_ZergFlyerAttackLevel3
+    SPRAY = RawAbilityId.Effect_Spray
     STARGATE_TRAIN_CARRIER = RawAbilityId.StargateTrain_Carrier
     STARGATE_TRAIN_ORACLE = RawAbilityId.StargateTrain_Oracle
     STARGATE_TRAIN_PHOENIX = RawAbilityId.StargateTrain_Phoenix
@@ -332,6 +322,8 @@ class AbilityId(IdEnum):
     STARPORT_TRAIN_MEDIVAC = RawAbilityId.StarportTrain_Medivac
     STARPORT_TRAIN_RAVEN = RawAbilityId.StarportTrain_Raven
     STARPORT_TRAIN_VIKING = RawAbilityId.StarportTrain_VikingFighter
+    STIM = RawAbilityId.Effect_Stim
+    STOP = RawAbilityId.Stop
     SUPPLY_DEPOT_LOWER = RawAbilityId.Morph_SupplyDepot_Lower
     SUPPLY_DEPOT_RAISE = RawAbilityId.Morph_SupplyDepot_Raise
     SWARM_HOST_SPAWN_LOCUST = RawAbilityId.Effect_SpawnLocusts
@@ -343,6 +335,14 @@ class AbilityId(IdEnum):
     TWILIGHT_COUNCIL_RESEARCH_GLAIVES = RawAbilityId.Research_AdeptResonatingGlaives
     ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR = RawAbilityId.Research_ChitinousPlating
     ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED = RawAbilityId.Research_AnabolicSynthesis
+    UNBURROW = RawAbilityId.BurrowUp
+    # Puts every passenger down where the transport is: UnloadAll for a bunker, command center, planetary fortress or
+    # nydus, and the unload at a point aimed at the transport itself for a medivac, warp prism or transport overlord,
+    # which answer UnloadAll `Error` (in game).
+    UNLOAD = RawAbilityId.UnloadAll
+    UNLOAD_AT = RawAbilityId.UnloadAllAt
+    UNSIEGE = auto()
+    UPROOT = RawAbilityId.Morph_Uproot
     VIKING_LAND = RawAbilityId.Morph_VikingAssaultMode  # "Assault Mode" in game
     VIKING_LIFT = RawAbilityId.Morph_VikingFighterMode
     VIPER_ABDUCT = RawAbilityId.Effect_Abduct
@@ -373,160 +373,160 @@ class AbilityId(IdEnum):
     _REMAPPED_IDS = nonmember(
         MappingProxyType(
             {
-                RawAbilityId.Attack_Battlecruiser: GENERAL_ATTACK,
-                RawAbilityId.Attack_Redirect: GENERAL_ATTACK,
-                RawAbilityId.Scan_Move: GENERAL_ATTACK,
-                RawAbilityId.attack_Attack: GENERAL_ATTACK,
-                RawAbilityId.Effect_Blink_Stalker: GENERAL_BLINK,
-                RawAbilityId.Effect_ShadowStride: GENERAL_BLINK,
-                RawAbilityId.Build_CreepTumor_Queen: GENERAL_BUILD_CREEP_TUMOR,
-                RawAbilityId.Build_CreepTumor_Tumor: GENERAL_BUILD_CREEP_TUMOR,
-                RawAbilityId.Build_Reactor_Barracks: GENERAL_BUILD_REACTOR,
-                RawAbilityId.Build_Reactor_Factory: GENERAL_BUILD_REACTOR,
-                RawAbilityId.Build_Reactor_Starport: GENERAL_BUILD_REACTOR,
-                RawAbilityId.Build_TechLab_Barracks: GENERAL_BUILD_TECH_LAB,
-                RawAbilityId.Build_TechLab_Factory: GENERAL_BUILD_TECH_LAB,
-                RawAbilityId.Build_TechLab_Starport: GENERAL_BUILD_TECH_LAB,
-                RawAbilityId.BurrowDown_Baneling: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Drone: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Hydralisk: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Infestor: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Lurker: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Queen: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Ravager: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Roach: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_SwarmHost: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Ultralisk: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_WidowMine: GENERAL_BURROW,
-                RawAbilityId.BurrowDown_Zergling: GENERAL_BURROW,
-                RawAbilityId.Cancel_AdeptPhaseShift: GENERAL_CANCEL,
-                RawAbilityId.Cancel_AdeptShadePhaseShift: GENERAL_CANCEL,
-                RawAbilityId.Cancel_BarracksAddOn: GENERAL_CANCEL,
-                RawAbilityId.Cancel_BuildInProgress: GENERAL_CANCEL,
-                RawAbilityId.Cancel_FactoryAddOn: GENERAL_CANCEL,
-                RawAbilityId.Cancel_GravitonBeam: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphBroodlord: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphGreaterSpire: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphHive: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphLair: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphLurker: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphOrbital: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphOverlordTransport: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphOverseer: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphPlanetaryFortress: GENERAL_CANCEL,
-                RawAbilityId.Cancel_MorphRavager: GENERAL_CANCEL,
-                RawAbilityId.Cancel_NeuralParasite: GENERAL_CANCEL,
-                RawAbilityId.Cancel_Nuke: GENERAL_CANCEL,
-                RawAbilityId.Cancel_StarportAddOn: GENERAL_CANCEL,
-                RawAbilityId.Cancel_VoidRayPrismaticAlignment: GENERAL_CANCEL,
-                RawAbilityId.ChannelSnipe_Cancel: GENERAL_CANCEL,
-                RawAbilityId.MorphToBaneling_Cancel: GENERAL_CANCEL,
-                RawAbilityId.Cancel_HangarQueue5: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_Queue1: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_Queue5: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_QueueAddOn: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_QueueCancelToSelection: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_QueuePasive: GENERAL_CANCEL_LAST,
-                RawAbilityId.Cancel_QueuePassiveCancelToSelection: GENERAL_CANCEL_LAST,
-                RawAbilityId.Behavior_CloakOff_Banshee: GENERAL_CLOAK_OFF,
-                RawAbilityId.Behavior_CloakOff_Ghost: GENERAL_CLOAK_OFF,
-                RawAbilityId.Behavior_CloakOn_Banshee: GENERAL_CLOAK_ON,
-                RawAbilityId.Behavior_CloakOn_Ghost: GENERAL_CLOAK_ON,
-                RawAbilityId.Harvest_Gather_Drone: GENERAL_GATHER,
-                RawAbilityId.Harvest_Gather_Mule: GENERAL_GATHER,
-                RawAbilityId.Harvest_Gather_Probe: GENERAL_GATHER,
-                RawAbilityId.Harvest_Gather_SCV: GENERAL_GATHER,
-                RawAbilityId.Halt_Building: GENERAL_HALT,
-                RawAbilityId.Halt_TerranBuild: GENERAL_HALT,
-                RawAbilityId.Behavior_HoldFireOff_Ghost: GENERAL_HOLD_FIRE_OFF,
-                RawAbilityId.Behavior_HoldFireOff_Lurker: GENERAL_HOLD_FIRE_OFF,
-                RawAbilityId.Behavior_HoldFireOn_Ghost: GENERAL_HOLD_FIRE_ON,
-                RawAbilityId.Behavior_HoldFireOn_Lurker: GENERAL_HOLD_FIRE_ON,
-                RawAbilityId.HoldPosition_Battlecruiser: GENERAL_HOLD_POSITION,
-                RawAbilityId.HoldPosition_Hold: GENERAL_HOLD_POSITION,
-                RawAbilityId.Land_Barracks: GENERAL_LAND,
-                RawAbilityId.Land_CommandCenter: GENERAL_LAND,
-                RawAbilityId.Land_Factory: GENERAL_LAND,
-                RawAbilityId.Land_OrbitalCommand: GENERAL_LAND,
-                RawAbilityId.Land_Starport: GENERAL_LAND,
-                RawAbilityId.Lift_Barracks: GENERAL_LIFT,
-                RawAbilityId.Lift_CommandCenter: GENERAL_LIFT,
-                RawAbilityId.Lift_Factory: GENERAL_LIFT,
-                RawAbilityId.Lift_OrbitalCommand: GENERAL_LIFT,
-                RawAbilityId.Lift_Starport: GENERAL_LIFT,
-                RawAbilityId.Load_Bunker: GENERAL_LOAD,
-                RawAbilityId.Load_Medivac: GENERAL_LOAD,
-                RawAbilityId.Load_NydusNetwork: GENERAL_LOAD,
-                RawAbilityId.Load_NydusWorm: GENERAL_LOAD,
-                RawAbilityId.Load_Overlord: GENERAL_LOAD,
-                RawAbilityId.Load_WarpPrism: GENERAL_LOAD,
-                RawAbilityId.LoadAll_CommandCenter: GENERAL_LOAD_ALL,
-                RawAbilityId.Move_Battlecruiser: GENERAL_MOVE,
-                RawAbilityId.Move_Move: GENERAL_MOVE,
-                RawAbilityId.Patrol_Battlecruiser: GENERAL_PATROL,
-                RawAbilityId.Patrol_Patrol: GENERAL_PATROL,
-                RawAbilityId.Rally_Building: GENERAL_RALLY_UNITS,
-                RawAbilityId.Rally_Hatchery_Units: GENERAL_RALLY_UNITS,
-                RawAbilityId.Rally_CommandCenter: GENERAL_RALLY_WORKERS,
-                RawAbilityId.Rally_Hatchery_Workers: GENERAL_RALLY_WORKERS,
-                RawAbilityId.Rally_Nexus: GENERAL_RALLY_WORKERS,
-                RawAbilityId.Effect_MassRecall_Nexus: GENERAL_RECALL,
-                RawAbilityId.Effect_MassRecall_StrategicRecall: GENERAL_RECALL,
-                RawAbilityId.Effect_Repair_Mule: GENERAL_REPAIR,
-                RawAbilityId.Effect_Repair_SCV: GENERAL_REPAIR,
-                RawAbilityId.Harvest_Return_Drone: GENERAL_RETURN,
-                RawAbilityId.Harvest_Return_Mule: GENERAL_RETURN,
-                RawAbilityId.Harvest_Return_Probe: GENERAL_RETURN,
-                RawAbilityId.Harvest_Return_SCV: GENERAL_RETURN,
-                RawAbilityId.SpineCrawlerRoot_SpineCrawlerRoot: GENERAL_ROOT,
-                RawAbilityId.SporeCrawlerRoot_SporeCrawlerRoot: GENERAL_ROOT,
-                RawAbilityId.Effect_Spray_Protoss: GENERAL_SPRAY,
-                RawAbilityId.Effect_Spray_Terran: GENERAL_SPRAY,
-                RawAbilityId.Effect_Spray_Zerg: GENERAL_SPRAY,
-                RawAbilityId.Effect_Stim_Marauder: GENERAL_STIM,
-                RawAbilityId.Effect_Stim_Marine: GENERAL_STIM,
-                RawAbilityId.Stop_Battlecruiser: GENERAL_STOP,
-                RawAbilityId.Stop_Redirect: GENERAL_STOP,
-                RawAbilityId.stop_Stop: GENERAL_STOP,
-                RawAbilityId.BurrowUp_Baneling: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Drone: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Hydralisk: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Infestor: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Lurker: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Queen: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Ravager: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Roach: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_SwarmHost: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Ultralisk: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_WidowMine: GENERAL_UNBURROW,
-                RawAbilityId.BurrowUp_Zergling: GENERAL_UNBURROW,
-                RawAbilityId.OverlordTransport: GENERAL_UNLOAD,
-                RawAbilityId.UnloadAll_Bunker: GENERAL_UNLOAD,
-                RawAbilityId.UnloadAll_CommandCenter: GENERAL_UNLOAD,
-                RawAbilityId.UnloadAll_NydasNetwork: GENERAL_UNLOAD,
-                RawAbilityId.UnloadAll_NydusWorm: GENERAL_UNLOAD,
-                RawAbilityId.UnloadAll_WarpPrism: GENERAL_UNLOAD,
-                RawAbilityId.Unload_Medivac: GENERAL_UNLOAD,
-                RawAbilityId.BunkerTransport: GENERAL_UNLOAD_AT,
-                RawAbilityId.CommandCenterTransport_414: GENERAL_UNLOAD_AT,
-                RawAbilityId.NydusCanalTransport: GENERAL_UNLOAD_AT,
-                RawAbilityId.NydusWormTransport: GENERAL_UNLOAD_AT,
-                RawAbilityId.UnloadAllAt_Medivac: GENERAL_UNLOAD_AT,
-                RawAbilityId.UnloadAllAt_Overlord: GENERAL_UNLOAD_AT,
-                RawAbilityId.UnloadAllAt_WarpPrism: GENERAL_UNLOAD_AT,
-                RawAbilityId.SpineCrawlerUproot_SpineCrawlerUproot: GENERAL_UPROOT,
-                RawAbilityId.SporeCrawlerUproot_SporeCrawlerUproot: GENERAL_UPROOT,
-                RawAbilityId.Morph_LiberatorAGMode: GENERAL_SIEGE,
-                RawAbilityId.Morph_OversightMode: GENERAL_SIEGE,
-                RawAbilityId.Morph_SurveillanceMode: GENERAL_SIEGE,
-                RawAbilityId.SiegeMode_SiegeMode: GENERAL_SIEGE,
-                RawAbilityId.Morph_LiberatorAAMode: GENERAL_UNSIEGE,
-                RawAbilityId.Morph_ObserverMode: GENERAL_UNSIEGE,
-                RawAbilityId.Morph_OverseerMode: GENERAL_UNSIEGE,
-                RawAbilityId.Unsiege_Unsiege: GENERAL_UNSIEGE,
-                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: GENERAL_SIEGE,
-                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: GENERAL_UNSIEGE,
-                RawAbilityId.Archon_Warp_Target: GENERAL_MORPH_ARCHON,
+                RawAbilityId.Attack_Battlecruiser: ATTACK,
+                RawAbilityId.Attack_Redirect: ATTACK,
+                RawAbilityId.Scan_Move: ATTACK,
+                RawAbilityId.attack_Attack: ATTACK,
+                RawAbilityId.Effect_Blink_Stalker: BLINK,
+                RawAbilityId.Effect_ShadowStride: BLINK,
+                RawAbilityId.Build_CreepTumor_Queen: BUILD_CREEP_TUMOR,
+                RawAbilityId.Build_CreepTumor_Tumor: BUILD_CREEP_TUMOR,
+                RawAbilityId.Build_Reactor_Barracks: BUILD_REACTOR,
+                RawAbilityId.Build_Reactor_Factory: BUILD_REACTOR,
+                RawAbilityId.Build_Reactor_Starport: BUILD_REACTOR,
+                RawAbilityId.Build_TechLab_Barracks: BUILD_TECH_LAB,
+                RawAbilityId.Build_TechLab_Factory: BUILD_TECH_LAB,
+                RawAbilityId.Build_TechLab_Starport: BUILD_TECH_LAB,
+                RawAbilityId.BurrowDown_Baneling: BURROW,
+                RawAbilityId.BurrowDown_Drone: BURROW,
+                RawAbilityId.BurrowDown_Hydralisk: BURROW,
+                RawAbilityId.BurrowDown_Infestor: BURROW,
+                RawAbilityId.BurrowDown_Lurker: BURROW,
+                RawAbilityId.BurrowDown_Queen: BURROW,
+                RawAbilityId.BurrowDown_Ravager: BURROW,
+                RawAbilityId.BurrowDown_Roach: BURROW,
+                RawAbilityId.BurrowDown_SwarmHost: BURROW,
+                RawAbilityId.BurrowDown_Ultralisk: BURROW,
+                RawAbilityId.BurrowDown_WidowMine: BURROW,
+                RawAbilityId.BurrowDown_Zergling: BURROW,
+                RawAbilityId.Cancel_AdeptPhaseShift: CANCEL,
+                RawAbilityId.Cancel_AdeptShadePhaseShift: CANCEL,
+                RawAbilityId.Cancel_BarracksAddOn: CANCEL,
+                RawAbilityId.Cancel_BuildInProgress: CANCEL,
+                RawAbilityId.Cancel_FactoryAddOn: CANCEL,
+                RawAbilityId.Cancel_GravitonBeam: CANCEL,
+                RawAbilityId.Cancel_MorphBroodlord: CANCEL,
+                RawAbilityId.Cancel_MorphGreaterSpire: CANCEL,
+                RawAbilityId.Cancel_MorphHive: CANCEL,
+                RawAbilityId.Cancel_MorphLair: CANCEL,
+                RawAbilityId.Cancel_MorphLurker: CANCEL,
+                RawAbilityId.Cancel_MorphOrbital: CANCEL,
+                RawAbilityId.Cancel_MorphOverlordTransport: CANCEL,
+                RawAbilityId.Cancel_MorphOverseer: CANCEL,
+                RawAbilityId.Cancel_MorphPlanetaryFortress: CANCEL,
+                RawAbilityId.Cancel_MorphRavager: CANCEL,
+                RawAbilityId.Cancel_NeuralParasite: CANCEL,
+                RawAbilityId.Cancel_Nuke: CANCEL,
+                RawAbilityId.Cancel_StarportAddOn: CANCEL,
+                RawAbilityId.Cancel_VoidRayPrismaticAlignment: CANCEL,
+                RawAbilityId.ChannelSnipe_Cancel: CANCEL,
+                RawAbilityId.MorphToBaneling_Cancel: CANCEL,
+                RawAbilityId.Cancel_HangarQueue5: CANCEL_LAST,
+                RawAbilityId.Cancel_Queue1: CANCEL_LAST,
+                RawAbilityId.Cancel_Queue5: CANCEL_LAST,
+                RawAbilityId.Cancel_QueueAddOn: CANCEL_LAST,
+                RawAbilityId.Cancel_QueueCancelToSelection: CANCEL_LAST,
+                RawAbilityId.Cancel_QueuePasive: CANCEL_LAST,
+                RawAbilityId.Cancel_QueuePassiveCancelToSelection: CANCEL_LAST,
+                RawAbilityId.Behavior_CloakOff_Banshee: CLOAK_OFF,
+                RawAbilityId.Behavior_CloakOff_Ghost: CLOAK_OFF,
+                RawAbilityId.Behavior_CloakOn_Banshee: CLOAK_ON,
+                RawAbilityId.Behavior_CloakOn_Ghost: CLOAK_ON,
+                RawAbilityId.Harvest_Gather_Drone: GATHER,
+                RawAbilityId.Harvest_Gather_Mule: GATHER,
+                RawAbilityId.Harvest_Gather_Probe: GATHER,
+                RawAbilityId.Harvest_Gather_SCV: GATHER,
+                RawAbilityId.Halt_Building: HALT,
+                RawAbilityId.Halt_TerranBuild: HALT,
+                RawAbilityId.Behavior_HoldFireOff_Ghost: HOLD_FIRE_OFF,
+                RawAbilityId.Behavior_HoldFireOff_Lurker: HOLD_FIRE_OFF,
+                RawAbilityId.Behavior_HoldFireOn_Ghost: HOLD_FIRE_ON,
+                RawAbilityId.Behavior_HoldFireOn_Lurker: HOLD_FIRE_ON,
+                RawAbilityId.HoldPosition_Battlecruiser: HOLD_POSITION,
+                RawAbilityId.HoldPosition_Hold: HOLD_POSITION,
+                RawAbilityId.Land_Barracks: LAND,
+                RawAbilityId.Land_CommandCenter: LAND,
+                RawAbilityId.Land_Factory: LAND,
+                RawAbilityId.Land_OrbitalCommand: LAND,
+                RawAbilityId.Land_Starport: LAND,
+                RawAbilityId.Lift_Barracks: LIFT,
+                RawAbilityId.Lift_CommandCenter: LIFT,
+                RawAbilityId.Lift_Factory: LIFT,
+                RawAbilityId.Lift_OrbitalCommand: LIFT,
+                RawAbilityId.Lift_Starport: LIFT,
+                RawAbilityId.Load_Bunker: LOAD,
+                RawAbilityId.Load_Medivac: LOAD,
+                RawAbilityId.Load_NydusNetwork: LOAD,
+                RawAbilityId.Load_NydusWorm: LOAD,
+                RawAbilityId.Load_Overlord: LOAD,
+                RawAbilityId.Load_WarpPrism: LOAD,
+                RawAbilityId.LoadAll_CommandCenter: LOAD_ALL,
+                RawAbilityId.Move_Battlecruiser: MOVE,
+                RawAbilityId.Move_Move: MOVE,
+                RawAbilityId.Patrol_Battlecruiser: PATROL,
+                RawAbilityId.Patrol_Patrol: PATROL,
+                RawAbilityId.Rally_Building: RALLY_UNITS,
+                RawAbilityId.Rally_Hatchery_Units: RALLY_UNITS,
+                RawAbilityId.Rally_CommandCenter: RALLY_WORKERS,
+                RawAbilityId.Rally_Hatchery_Workers: RALLY_WORKERS,
+                RawAbilityId.Rally_Nexus: RALLY_WORKERS,
+                RawAbilityId.Effect_MassRecall_Nexus: RECALL,
+                RawAbilityId.Effect_MassRecall_StrategicRecall: RECALL,
+                RawAbilityId.Effect_Repair_Mule: REPAIR,
+                RawAbilityId.Effect_Repair_SCV: REPAIR,
+                RawAbilityId.Harvest_Return_Drone: RETURN,
+                RawAbilityId.Harvest_Return_Mule: RETURN,
+                RawAbilityId.Harvest_Return_Probe: RETURN,
+                RawAbilityId.Harvest_Return_SCV: RETURN,
+                RawAbilityId.SpineCrawlerRoot_SpineCrawlerRoot: ROOT,
+                RawAbilityId.SporeCrawlerRoot_SporeCrawlerRoot: ROOT,
+                RawAbilityId.Effect_Spray_Protoss: SPRAY,
+                RawAbilityId.Effect_Spray_Terran: SPRAY,
+                RawAbilityId.Effect_Spray_Zerg: SPRAY,
+                RawAbilityId.Effect_Stim_Marauder: STIM,
+                RawAbilityId.Effect_Stim_Marine: STIM,
+                RawAbilityId.Stop_Battlecruiser: STOP,
+                RawAbilityId.Stop_Redirect: STOP,
+                RawAbilityId.stop_Stop: STOP,
+                RawAbilityId.BurrowUp_Baneling: UNBURROW,
+                RawAbilityId.BurrowUp_Drone: UNBURROW,
+                RawAbilityId.BurrowUp_Hydralisk: UNBURROW,
+                RawAbilityId.BurrowUp_Infestor: UNBURROW,
+                RawAbilityId.BurrowUp_Lurker: UNBURROW,
+                RawAbilityId.BurrowUp_Queen: UNBURROW,
+                RawAbilityId.BurrowUp_Ravager: UNBURROW,
+                RawAbilityId.BurrowUp_Roach: UNBURROW,
+                RawAbilityId.BurrowUp_SwarmHost: UNBURROW,
+                RawAbilityId.BurrowUp_Ultralisk: UNBURROW,
+                RawAbilityId.BurrowUp_WidowMine: UNBURROW,
+                RawAbilityId.BurrowUp_Zergling: UNBURROW,
+                RawAbilityId.OverlordTransport: UNLOAD,
+                RawAbilityId.UnloadAll_Bunker: UNLOAD,
+                RawAbilityId.UnloadAll_CommandCenter: UNLOAD,
+                RawAbilityId.UnloadAll_NydasNetwork: UNLOAD,
+                RawAbilityId.UnloadAll_NydusWorm: UNLOAD,
+                RawAbilityId.UnloadAll_WarpPrism: UNLOAD,
+                RawAbilityId.Unload_Medivac: UNLOAD,
+                RawAbilityId.BunkerTransport: UNLOAD_AT,
+                RawAbilityId.CommandCenterTransport_414: UNLOAD_AT,
+                RawAbilityId.NydusCanalTransport: UNLOAD_AT,
+                RawAbilityId.NydusWormTransport: UNLOAD_AT,
+                RawAbilityId.UnloadAllAt_Medivac: UNLOAD_AT,
+                RawAbilityId.UnloadAllAt_Overlord: UNLOAD_AT,
+                RawAbilityId.UnloadAllAt_WarpPrism: UNLOAD_AT,
+                RawAbilityId.SpineCrawlerUproot_SpineCrawlerUproot: UPROOT,
+                RawAbilityId.SporeCrawlerUproot_SporeCrawlerUproot: UPROOT,
+                RawAbilityId.Morph_LiberatorAGMode: SIEGE,
+                RawAbilityId.Morph_OversightMode: SIEGE,
+                RawAbilityId.Morph_SurveillanceMode: SIEGE,
+                RawAbilityId.SiegeMode_SiegeMode: SIEGE,
+                RawAbilityId.Morph_LiberatorAAMode: UNSIEGE,
+                RawAbilityId.Morph_ObserverMode: UNSIEGE,
+                RawAbilityId.Morph_OverseerMode: UNSIEGE,
+                RawAbilityId.Unsiege_Unsiege: UNSIEGE,
+                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: SIEGE,
+                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: UNSIEGE,
+                RawAbilityId.Archon_Warp_Target: MORPH_ARCHON,
             }
         )
     )

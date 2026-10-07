@@ -7,7 +7,7 @@ handler returns, so a turn that orders nothing sends nothing.
 @api.events.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=enemy_base)
+        api.orders.issue(marine, AbilityId.ATTACK, target=enemy_base)
 ```
 
 `issue` returns an `Order`, which says whether it was sent and what the game answered.
@@ -15,10 +15,10 @@ def on_turn(event: TurnEvent) -> None:
 ## Giving one
 
 ```python
-order = api.orders.issue(marine, AbilityId.GENERAL_STIM)
-api.orders.issue(squad, AbilityId.GENERAL_MOVE, target=ramp)
+order = api.orders.issue(marine, AbilityId.STIM)
+api.orders.issue(squad, AbilityId.MOVE, target=ramp)
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
-api.orders.issue(marine, AbilityId.GENERAL_ATTACK, target=drone, data=Defending(base))
+api.orders.issue(marine, AbilityId.ATTACK, target=drone, data=Defending(base))
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 api.orders.camera(base)
 ```
@@ -50,7 +50,7 @@ that hold no order of their own — a structure's own rally, load, cancel and en
 
 Such an order neither overrides nor is overridden, because the unit does both — a marine stims and keeps moving.
 
-An action several types perform does to each unit what that type's own does: `GENERAL_CANCEL` leaves a
+An action several types perform does to each unit what that type's own does: `CANCEL` leaves a
 structure making what it was making, and takes a channeling ghost or infestor off what it is doing. A group of
 several types is judged unit by unit. Hold fire keeps a ghost's orders and takes a burrowed lurker off its attack (in game).
 Given to both, it leaves the ghost the move it was given earlier in the turn and takes the lurker from its attack. A
@@ -61,18 +61,18 @@ that trains does so through a smart, which sets its rally (in game), so for thos
 differ.
 
 **Some ids go out as another of the game's abilities for some unit types.** `api.data.abilities[ability].sent_as`
-says which, and what each is aimed at. `GENERAL_UNLOAD` puts everyone down where the transport is: a bunker, a command
+says which, and what each is aimed at. `UNLOAD` puts everyone down where the transport is: a bunker, a command
 center, a planetary fortress and a nydus take it as it is, and a medivac, a warp prism and a transport overlord, which
 answer it `Error`, are sent their unload at a point aimed at themselves, which unloads where they are and keeps their
 move; aimed at a point, they fly there and unload (in game). So an unload keeps a transport's orders, and an unload at
 a point replaces them:
 
 ```python
-api.orders.issue(medivac, AbilityId.GENERAL_MOVE, target=retreat)
-api.orders.issue([bunker, medivac], AbilityId.GENERAL_UNLOAD)  # all three commands go out
+api.orders.issue(medivac, AbilityId.MOVE, target=retreat)
+api.orders.issue([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
 ```
 
-`GENERAL_SIEGE` and `GENERAL_UNSIEGE` are custom ids, which the game has no ability for: each goes out as the tank's,
+`SIEGE` and `UNSIEGE` are custom ids, which the game has no ability for: each goes out as the tank's,
 the liberator's, the observer's or the overseer's own. The siege takes a point, which only the liberator's is aimed at,
 for its zone, so an order naming a liberator needs one and the rest ignore it. A custom id given a type it has nothing
 to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the game's.
@@ -80,7 +80,7 @@ to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the 
 An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
 itself, and is answered as the game answers one command naming several units: `SUCCESS` if any took it, and otherwise
 the first refusal (in game). An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
-`GENERAL_UNLOAD`.
+`UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -102,7 +102,7 @@ Orders have no priority of their own. Handlers already run highest priority firs
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         if not api.orders.issued_to(marine):
-            api.orders.issue(marine, AbilityId.GENERAL_MOVE, target=rally)
+            api.orders.issue(marine, AbilityId.MOVE, target=rally)
 ```
 
 A bot that wants its own ranking puts it in `data` and reads it back from the orders `issued_to` returns.
@@ -142,8 +142,8 @@ the difference for a morph, 150 for an orbital command rather than its type's 55
 ability takes of the cap as it starts.
 
 A cancel is an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
-structure carrying out `ability`: `GENERAL_CANCEL_LAST` for a train or a research on any structure with a queue, a
-tech lab included, and a morph's or an add-on's own cancel, since those answer `GENERAL_CANCEL_LAST` with `ERROR`. A
+structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
+tech lab included, and a morph's or an add-on's own cancel, since those answer `CANCEL_LAST` with `ERROR`. A
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
 neither a slot nor a mineral within the same step ([game behavior](game-behavior.md#abilities-and-orders)).
 
@@ -179,6 +179,6 @@ next observation.
 An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
 current order and one for each queued. The two need not agree: the game snaps a build to its site, and drops what it
 cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
-reads it as the action's, so a moving marine shows `GENERAL_MOVE` and a gathering SCV `GENERAL_GATHER`. Where the game
+reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
-`GENERAL_SIEGE`, and each templar of a merge `GENERAL_MORPH_ARCHON` aimed at the other.
+`SIEGE`, and each templar of a merge `MORPH_ARCHON` aimed at the other.

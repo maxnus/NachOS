@@ -39,7 +39,7 @@ def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
     rng = random.Random(seed)
     protos = []
     for tag in range(1, count + 1):
-        orders = [raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_MOVE)] if rng.random() < 0.5 else []
+        orders = [raw_pb2.UnitOrder(ability_id=AbilityId.MOVE)] if rng.random() < 0.5 else []
         protos.append(
             make_unit(
                 tag,
