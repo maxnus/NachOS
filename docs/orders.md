@@ -172,4 +172,6 @@ next observation.
 
 An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
 current order and one for each queued. The two need not agree: the game reports the exact ability it runs, snaps a
-build to its site, and drops what it cannot carry out.
+build to its site, and drops what it cannot carry out. Where the game reports an id nothing links to the one ordered,
+NachOS reads it as the one ordered: a sieging liberator shows `LIBERATOR_SIEGE`, and each templar of a merge
+`GENERAL_MORPH_ARCHON` aimed at the other.

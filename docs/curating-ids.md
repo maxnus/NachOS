@@ -56,12 +56,13 @@ vehicle-and-ship plating levels are researched by `ArmoryResearchSwarm`, which a
 which does nothing when ordered; `ArmoryResearch` is what it offers and runs. Curate what the game offers, and
 let the field that names the dead one stay empty.
 
-**An `_EXACT` suffix marks the id a unit reports, as opposed to the one you order.** Order `LIBERATOR_SIEGE` and
-the liberator's `orders` name `LIBERATOR_SIEGE_EXACT`; the exact id is never offered, and ordering it does
-nothing. `remaps_to` links some such pairs and not others -- all four liberator rows leave it empty -- so the only
-way to find one is to order the ability in game and read the performer's orders. A spell has no such twin:
-ordered at a target out of reach, a storm, a neural parasite and each of the raven's and viper's spells show in
-the caster's orders under the id ordered.
+**An `_EXACT` suffix marks the id a unit reports, as opposed to the one you order**, where `remaps_to` links the
+two: order `GENERAL_MOVE` and the unit's `orders` name `GENERAL_MOVE_EXACT`. Where it links neither, the reported id
+is not curated but read as the one ordered, from `_REPORTED_IDS` in `ids/ability.py`: a liberator ordered
+`LIBERATOR_SIEGE` reports `LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when
+ordered, and reads `LIBERATOR_SIEGE`. The only way to find such a pair is to order the ability in game and read the
+performer's orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each
+of the raven's and viper's spells show in the caster's orders under the id ordered.
 
 **The upgrade table also keeps upgrades the game has removed.** `MicrobialShroud` still carries its 150/150
 price and its `EvolveAmorphousArmorcloud` research id, but 4.12.0 made the infestor's shroud free: an

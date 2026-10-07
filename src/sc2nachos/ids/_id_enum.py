@@ -1,7 +1,9 @@
 """The base of every curated id enum, which names the raw catalog member of an id it leaves out."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from enum import nonmember
+from types import MappingProxyType
+from typing import Self, cast
 
 from sc2nachos._enum import ReadableIntEnum, UnknownValueError
 from sc2nachos.ids import raw
@@ -26,6 +28,9 @@ class IdEnum(ReadableIntEnum):
     Calling the enum on an id it leaves out raises `ValueError`, as with any enum; `read` raises `UncuratedIdError`,
     which names the raw catalog member.
 
+    `read` and `get` also take an id the game reports for an order given by a member, and return that member
+    (`_reported_ids`). Calling the enum takes only a member's own id, as reading the game's tables needs.
+
     A member assigned `auto()` is a custom id, one the game does not have: the next from `CUSTOM_IDS_FROM` up after
     the custom ids defined before it. Its value depends on its place among them, so a custom id is never written down
     by value.
@@ -45,5 +50,31 @@ class IdEnum(ReadableIntEnum):
         return self >= self.CUSTOM_IDS_FROM
 
     @classmethod
+    def read(cls, value: int) -> Self:
+        """The member for `value`, or the member the game reports as `value`. Raises `UncuratedIdError` if there is
+        none."""
+        # The enum's own value-to-member map: under half the time of calling the enum.
+        if (member := cls._value2member_map_.get(value)) is None and (member := cls._reported_ids().get(value)) is None:
+            raise cls._unknown(value)
+        return cast("Self", member)
+
+    @classmethod
+    def get(cls, value: int) -> Self | None:
+        """The member for `value`, or the member the game reports as `value`; `None` if `value` is zero or there is
+        none."""
+        if not value:
+            return None
+        return cast("Self | None", cls._value2member_map_.get(value) or cls._reported_ids().get(value))
+
+    @classmethod
+    def _reported_ids(cls) -> Mapping[int, Self]:
+        """The ids the game reports for an order given by a member, other than the member's own, each with the member.
+        An enum overrides it where the game has such ids."""
+        return cast("Mapping[int, Self]", _NONE_REPORTED)
+
+    @classmethod
     def _unknown(cls, value: int) -> UnknownValueError:
         return UncuratedIdError(cls, value)
+
+
+_NONE_REPORTED: Mapping[int, IdEnum] = MappingProxyType({})

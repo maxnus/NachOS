@@ -1113,7 +1113,8 @@ class TestAgainstTheRealGame:
             (damaged,) = _of(seen, OwnUnitDamagedEvent)
             assert damaged.unit is zealot and damaged.damage == pytest.approx(zealot.shield_max - 10, abs=1)
 
-            # Two templar ordered to merge walk to each other, each reporting the order it runs, and become an archon.
+            # Two templar ordered to merge walk to each other, each reporting the merge aimed at the other, and become
+            # an archon.
             at = home.towards(middle, 5)
             game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, at), game.create(UnitTypeId.HIGH_TEMPLAR, at + (6.0, 0.0)))
             _until(game, lambda: len(game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HIGH_TEMPLAR)) == 2)
@@ -1127,7 +1128,8 @@ class TestAgainstTheRealGame:
             )
             game.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=merge))])
             _until(game, lambda: all(unit.orders for unit in templar), steps=1)
-            assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON_EXACT] * 2
+            assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON] * 2
+            assert [unit.orders[0].target for unit in templar] == templar[::-1]
             _until(game, lambda: _alerts(seen, Alert.MERGE_COMPLETE))
             assert game.tracker.unit_tracker.present.own.of_type(UnitTypeId.ARCHON)
 

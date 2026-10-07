@@ -519,7 +519,7 @@ it.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
   zerg unit that burrows is offered every zerg unit's burrow, and ordered any of them burrows as itself, so a
   zergling's `abilities` hold only `ZERGLING_BURROW`. A general ability is never offered, so its `performers` are
-  those of the abilities that remap to it, and an id a unit only reports, such as `LIBERATOR_SIEGE_EXACT`, has none.
+  those of the abilities that remap to it.
   A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
   to cancel, halt or unload. What a gateway warps in is not curated yet, so a warp gate trains nothing in the tables.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is

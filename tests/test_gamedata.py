@@ -207,6 +207,21 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE, ursadon, unheard_of]))
         assert set(data.units) == {UnitTypeId.MARINE}
 
+    @pytest.mark.parametrize("reported_first", [True, False], ids=["reported first", "ordered first"])
+    def test_the_row_of_an_id_a_unit_reports_for_another_does_not_take_the_ordered_ones_place(
+        self, reported_first: bool
+    ) -> None:
+        """A templar reports `Archon_Warp_Target`, aimed at the other, for the merge it was ordered; the row is the
+        merge's own, which takes no target."""
+        merge = data_pb2.AbilityData(ability_id=AbilityId.GENERAL_MORPH_ARCHON)
+        reported = data_pb2.AbilityData(
+            ability_id=RawAbilityId.Archon_Warp_Target, target=data_pb2.AbilityData.Target.Unit
+        )
+        rows = [reported, merge] if reported_first else [merge, reported]
+        data = GameData(sc2api_pb2.ResponseData(abilities=rows))
+        assert set(data.abilities) == {AbilityId.GENERAL_MORPH_ARCHON}
+        assert data.abilities[AbilityId.GENERAL_MORPH_ARCHON].target_type is TargetType.NOTHING
+
     def test_what_makes_a_unit_type_is_what_the_tech_tree_found_and_not_what_the_message_names(self) -> None:
         """The game names an ability for a lurker that no longer works; the tech tree names the one that does."""
         lurker = data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER, ability_id=_DEAD_LURKER_MORPH)

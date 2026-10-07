@@ -105,10 +105,6 @@ def _making_behaviors(tech_tree: TechTree, structures: frozenset[UnitTypeId]) ->
             # unit's own morph.
             continue
         makes_structure = isinstance(product, UnitTypeId) and product in structures
-        if not performers and not makes_structure:
-            # An id a unit only reports and is never offered, such as `LIBERATOR_SIEGE_EXACT`. One that makes a
-            # structure is kept: a gateway is offered no warp gate morph either, yet turns itself into one.
-            continue
         behaviors[ability] = OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
     return behaviors
 
@@ -297,8 +293,8 @@ class AbilityData:
     """The general ability this exact one remaps to. A unit reports the exact id; either can be ordered."""
     performers: frozenset[UnitTypeId]
     """The unit types offered it. A general ability such as `GENERAL_BURROW` is offered to no unit directly, so its
-    performers are the types offered an exact ability that remaps to it, such as `ZERGLING_BURROW`. Empty for an id a
-    unit only reports, such as `LIBERATOR_SIEGE_EXACT`."""
+    performers are the types offered an exact ability that remaps to it, such as `ZERGLING_BURROW`. Empty for
+    `GATEWAY_MORPH_WARP_GATE`, which a gateway carries out by itself once the research is done."""
     product: UnitTypeId | UpgradeId | None
     """The unit type it makes, or the upgrade it researches."""
     cost: Cost

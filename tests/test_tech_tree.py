@@ -366,14 +366,14 @@ class TestWhatTheTablesSay:
         assert AbilityId.MARINE_STIM in tables.units[UnitTypeId.MARINE].abilities
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, tables: GameData) -> None:
-        """A gateway becomes a warp gate by itself once the research is done, and a liberator reports the exact siege
-        it was never offered. Every research ability has a performer."""
+        """A gateway becomes a warp gate by itself once the research is done. Every research ability has a
+        performer."""
         makers = [row.creation_ability for row in tables.units.values()]
         makers += [row.research_ability for row in tables.upgrades.values()]
         unperformed = {
             ability for ability in makers if ability is not None and not tables.abilities[ability].performers
         }
-        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE, AbilityId.LIBERATOR_SIEGE_EXACT}
+        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE}
 
     def test_a_morph_several_types_perform_is_made_out_of_the_one_the_others_come_from(self, tables: GameData) -> None:
         """An overlord and the overlord transport it becomes can both become an overseer."""
