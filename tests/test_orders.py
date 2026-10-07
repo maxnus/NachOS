@@ -27,23 +27,19 @@ from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
 
 _MOVE = AbilityId.GENERAL_MOVE
-_MOVE_EXACT = AbilityId.GENERAL_MOVE_EXACT
+# The id a unit reports a move under, which reads as the move.
+_MOVE_RUNS_AS = RawAbilityId.Move_Move
 _ATTACK = AbilityId.GENERAL_ATTACK
-_STIM = AbilityId.MARINE_STIM
-_HOLD_FIRE = AbilityId.GHOST_HOLD_FIRE_ON
-_HOLD_FIRE_GENERAL = AbilityId.GENERAL_HOLD_FIRE_ON
-_HOLD_FIRE_LURKER = AbilityId.LURKER_HOLD_FIRE_ON
+_STIM = AbilityId.GENERAL_STIM
+_HOLD_FIRE = AbilityId.GENERAL_HOLD_FIRE_ON
 _CREEP_TUMOR = AbilityId.GENERAL_BUILD_CREEP_TUMOR
-_CREEP_TUMOR_QUEEN = AbilityId.QUEEN_BUILD_CREEP_TUMOR
-_CREEP_TUMOR_TUMOR = AbilityId.CREEP_TUMOR_BUILD_CREEP_TUMOR
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
-_RALLY = AbilityId.GENERAL_RALLY
+_RALLY = AbilityId.GENERAL_RALLY_UNITS
 _SMART = AbilityId.GENERAL_SMART
 _UNLOAD = AbilityId.GENERAL_UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _UNLOAD_AT = AbilityId.GENERAL_UNLOAD_AT
-_MEDIVAC_UNLOAD_AT = AbilityId.MEDIVAC_UNLOAD_AT
 _SIEGE = AbilityId.LIBERATOR_SIEGE
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
@@ -62,15 +58,10 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LIBERATOR_SIEGED, attributes=[data_pb2.Attribute.Mechanical]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
-        data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
         data_pb2.AbilityData(ability_id=_ATTACK, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_STIM),
-        data_pb2.AbilityData(ability_id=_HOLD_FIRE, remaps_to_ability_id=_HOLD_FIRE_GENERAL),
-        data_pb2.AbilityData(ability_id=_HOLD_FIRE_GENERAL),
-        data_pb2.AbilityData(ability_id=_HOLD_FIRE_LURKER, remaps_to_ability_id=_HOLD_FIRE_GENERAL),
+        data_pb2.AbilityData(ability_id=_HOLD_FIRE),
         data_pb2.AbilityData(ability_id=_CREEP_TUMOR, target=_AT_A_POINT),
-        data_pb2.AbilityData(ability_id=_CREEP_TUMOR_QUEEN, target=_AT_A_POINT, remaps_to_ability_id=_CREEP_TUMOR),
-        data_pb2.AbilityData(ability_id=_CREEP_TUMOR_TUMOR, target=_AT_A_POINT, remaps_to_ability_id=_CREEP_TUMOR),
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
@@ -78,9 +69,6 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_UNLOAD),
         data_pb2.AbilityData(ability_id=_TRAIN_SCV),
         data_pb2.AbilityData(ability_id=_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT),
-        data_pb2.AbilityData(
-            ability_id=_MEDIVAC_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_UNLOAD_AT
-        ),
         data_pb2.AbilityData(ability_id=_SIEGE, target=_AT_A_POINT),
     ],
 )
@@ -143,7 +131,7 @@ def _training(progress: float = 0.5) -> raw_pb2.UnitOrder:
 
 def _moving(to: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.UnitOrder:
     """The order a marine shows while moving to `to`, under the exact id a move runs as."""
-    return raw_pb2.UnitOrder(ability_id=_MOVE_EXACT, target_world_space_pos=common_pb2.Point(x=to[0], y=to[1]))
+    return raw_pb2.UnitOrder(ability_id=_MOVE_RUNS_AS, target_world_space_pos=common_pb2.Point(x=to[0], y=to[1]))
 
 
 def _commands(request: sc2api_pb2.RequestAction | None) -> list[raw_pb2.ActionRawUnitCommand]:
@@ -225,7 +213,7 @@ class TestGivingAnOrder:
         game.observe(0, _marine(1))
         marine = game.own(1)
 
-        with pytest.raises(TypeError, match="MARINE_STIM takes no target"):
+        with pytest.raises(TypeError, match="GENERAL_STIM takes no target"):
             game.book.issue(marine, _STIM, target=(20.0, 21.0))
         with pytest.raises(TypeError, match="GENERAL_MOVE takes a point or a unit"):
             game.book.issue(marine, _MOVE)
@@ -592,7 +580,7 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        hold = game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+        hold = game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
 
         sent_move, sent_hold = _commands(game.flush())
 
@@ -605,18 +593,18 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         attack = game.book.issue(game.own(2), _ATTACK, target=(20.0, 21.0))
-        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
 
         (sent,) = _commands(game.flush())
 
-        assert sent.ability_id == _HOLD_FIRE_GENERAL
+        assert sent.ability_id == _HOLD_FIRE
         assert attack.state is OrderState.OVERRIDDEN
 
     def test_a_later_order_takes_only_the_units_whose_orders_it_replaces(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         attack = game.book.issue([game.own(1), game.own(2)], _ATTACK, target=(20.0, 21.0))
-        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE_GENERAL)
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
 
         sent_attack, sent_hold = _commands(game.flush())
 
@@ -725,23 +713,22 @@ class TestUnloadingInPlace:
         assert len(_commands(game.flush())) == 3
         assert stim.action_result is ActionResult.NOT_SUPPORTED
 
-    @pytest.mark.parametrize("ability", [_MEDIVAC_UNLOAD_AT, _UNLOAD_AT])
-    def test_an_unload_at_aimed_at_the_transport_itself_is_refused_at_the_call(self, ability: AbilityId) -> None:
+    def test_an_unload_at_aimed_at_the_transport_itself_is_refused_at_the_call(self) -> None:
         game = _Game()
         game.observe(0, _medivac(1), _medivac(2))
 
         with pytest.raises(TypeError, match="GENERAL_UNLOAD_IN_PLACE"):
-            game.book.issue([game.own(1), game.own(2)], ability, target=game.own(2))
+            game.book.issue([game.own(1), game.own(2)], _UNLOAD_AT, target=game.own(2))
 
     def test_an_unload_at_a_point_still_replaces_a_move(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _medivac(1))
 
         move = game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0))
-        game.book.issue(game.own(1), _MEDIVAC_UNLOAD_AT, target=(20.0, 21.0))
+        game.book.issue(game.own(1), _UNLOAD_AT, target=(20.0, 21.0))
 
         (command,) = _commands(game.flush())
-        assert command.ability_id == _MEDIVAC_UNLOAD_AT
+        assert command.ability_id == _UNLOAD_AT
         assert move.state is OrderState.OVERRIDDEN
 
 
@@ -1084,7 +1071,7 @@ class _UnloadingBot:
         if not self.loads:
             if len(marines) >= 2:
                 self.loads = [
-                    api.orders.issue(medivac, AbilityId.MEDIVAC_LOAD, target=marine)
+                    api.orders.issue(medivac, AbilityId.GENERAL_LOAD, target=marine)
                     for medivac, marine in zip(medivacs, marines, strict=False)
                 ]
             return

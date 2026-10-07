@@ -14,7 +14,7 @@ from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
-from sc2nachos.ids.raw import RawEffectId, RawUpgradeId
+from sc2nachos.ids.raw import RawAbilityId, RawEffectId, RawUpgradeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, ProtocolError, Status, WebSocketTransport
@@ -221,13 +221,14 @@ class TestWhatHappened:
         present = game.tracker.unit_tracker.present
         marine, other, enemy = present.by_id(100001), present.by_id(100002), present.by_id(400001)
         actions = [
-            _command(AbilityId.GENERAL_MOVE_EXACT, 1, 2, target_world_space_pos=common_pb2.Point2D(x=5.0, y=6.0)),
+            # The id a move runs as, which reads as the move.
+            _command(RawAbilityId.Move_Move, 1, 2, target_world_space_pos=common_pb2.Point2D(x=5.0, y=6.0)),
             _command(AbilityId.GENERAL_ATTACK, 1, target_unit_tag=9),
             _command(AbilityId.GENERAL_STOP, 2, queued=True),
         ]
         state = game.observe(16, units=[make_unit(1), make_unit(2)], dead=(9,), actions=actions)
         assert state.actions == (
-            UnitCommand(15, AbilityId.GENERAL_MOVE_EXACT, (marine, other), Point((5.0, 6.0)), queued=False),
+            UnitCommand(15, AbilityId.GENERAL_MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
             UnitCommand(15, AbilityId.GENERAL_ATTACK, (marine,), enemy, queued=False),
             UnitCommand(15, AbilityId.GENERAL_STOP, (other,), None, queued=True),
         )
@@ -337,7 +338,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         game.turn(1)
         (command,) = game.state.actions
         assert isinstance(command, UnitCommand)
-        assert (command.ability, command.units) == (AbilityId.GENERAL_MOVE_EXACT, (drone,))
+        assert (command.ability, command.units) == (AbilityId.GENERAL_MOVE, (drone,))
         # The game sends points in single precision.
         assert command.target == pytest.approx(out_there, abs=1e-3)
 
@@ -365,7 +366,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         )
         game.turn(4)
         chamber = game.newest(UnitTypeId.EVOLUTION_CHAMBER)
-        game.order(AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS, chamber)
+        game.order(AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1, chamber)
         game.turn(1)
         (research,) = game.state.actions
         assert isinstance(research, UnitCommand)

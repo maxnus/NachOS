@@ -158,15 +158,17 @@ class UpgradeReader:
         return frozenset() if upgrade is None else frozenset({upgrade})
 
     def _of_type(self, unit_type: UnitTypeId) -> frozenset[UpgradeId]:
-        """The upgrades a unit of `unit_type` cannot exist without: those every performer of its creation ability
-        needs for it, as a burrowed zergling needs Burrow, plus those in `_UNIT_TYPE_EVIDENCE`."""
+        """The upgrades a unit of `unit_type` cannot exist without: those every type that makes it by its creation
+        ability needs for that, as a zergling needs Burrow to burrow, plus those in `_UNIT_TYPE_EVIDENCE`."""
         if (upgrades := self._types.get(unit_type)) is None:
             upgrades = frozenset()
             if (ability := self._game_data.units[unit_type].creation_ability) is not None:
+                products = self._game_data.abilities[ability].products
                 needs = [
                     requirements.upgrades
-                    for performer in self._game_data.abilities[ability].performers
-                    if (requirements := self._game_data.units[performer].ability_requirements.get(ability)) is not None
+                    for maker, product in products.items()
+                    if product is unit_type
+                    and (requirements := self._game_data.units[maker].ability_requirements.get(ability)) is not None
                 ]
                 upgrades = frozenset.intersection(*needs) if needs else frozenset()
             if (only := self._UNIT_TYPE_EVIDENCE.get(unit_type)) is not None:

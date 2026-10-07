@@ -272,7 +272,6 @@ class TestTheFog:
             UnitTypeId.SPINE_CRAWLER,
             UnitTypeId.SPORE_CRAWLER,
             UnitTypeId.STARPORT,
-            UnitTypeId.VIKING,
         }
 
     def test_a_unit_that_died_is_not_the_one_a_copy_at_its_position_is(self) -> None:
@@ -889,12 +888,12 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         )
         game.turn(2)
         marine, medivac = game.newest(UnitTypeId.MARINE), game.newest(UnitTypeId.MEDIVAC)
-        game.order(AbilityId.MEDIVAC_LOAD, medivac, target=marine)
+        game.order(AbilityId.GENERAL_LOAD, medivac, target=marine)
         game.turn(40)
         assert marine.is_stale
         assert isinstance(medivac, OwnUnit)
         assert marine in {passenger.unit for passenger in medivac.passengers}
-        game.order(AbilityId.MEDIVAC_UNLOAD_AT, medivac, target=medivac.position)
+        game.order(AbilityId.GENERAL_UNLOAD_AT, medivac, target=medivac.position)
         game.turn(60)
         assert not marine.is_stale
         assert game.tracker.unit_tracker.present.get(marine.id) is marine

@@ -59,32 +59,36 @@ UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxy
 """The unit type each ability makes, each seen in game. Where the table names no working ability for the type, this
 is its creation ability; otherwise the ability makes this type as well as the one the table names."""
 
+SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
+    {
+        # A gateway turns itself into a warp gate once the research is done, and is offered nothing to order it.
+        AbilityId.GATEWAY_MORPH_WARP_GATE: UnitTypeId.GATEWAY,
+    }
+)
+"""The unit type that carries out each ability it is never offered, turning itself into the ability's product."""
+
 # Each of these, ordered unqueued while a unit moved, was carried out while the move went on; every other ability a
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
 # This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
 # nothing and is offered only to types that hold no order of their own as keeping orders, which covers a structure's
-# own rally, load, cancel and energy casts. The general ids these remap to are not measured; a general id keeps a
-# unit's orders where the exact id that unit's type performs does.
+# own rally, load, cancel and energy casts. An action several types perform is here where it keeps every type's orders;
+# where it keeps only some types', those are in `KEEPS_ORDERS_BY_TYPE`.
 #
 # A toggle is here in both halves: a unit is offered the off half only once the on half has taken, so each was given in
-# turn to a moving unit, and both left its move first in its orders. A lurker's hold fire is the one toggle neither half
-# of which could be given: it is offered only burrowed, and the game offers a burrowed lurker no move.
+# turn to a moving unit, and both left its move first in its orders. Hold fire keeps a ghost's orders and takes a
+# burrowed lurker off its attack, so it is in `KEEPS_ORDERS_BY_TYPE`; the lurker's could not be given while it moved,
+# since the game offers a burrowed lurker no move.
 KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
         AbilityId.ADEPT_SHADE,
         AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
         AbilityId.BANELING_ATTACK_STRUCTURES_ON,
-        AbilityId.BANSHEE_CLOAK_OFF,
-        AbilityId.BANSHEE_CLOAK_ON,
-        AbilityId.GHOST_CLOAK_OFF,
-        AbilityId.GHOST_CLOAK_ON,
-        AbilityId.GHOST_HOLD_FIRE_OFF,
-        AbilityId.GHOST_HOLD_FIRE_ON,
+        AbilityId.GENERAL_CLOAK_OFF,
+        AbilityId.GENERAL_CLOAK_ON,
+        AbilityId.GENERAL_STIM,
         AbilityId.HYDRALISK_LUNGE,
-        AbilityId.MARAUDER_STIM,
-        AbilityId.MARINE_STIM,
         AbilityId.MEDIVAC_BOOST,
         AbilityId.MOTHERSHIP_CLOAK_FIELD,
         AbilityId.ORACLE_PULSAR_BEAM_OFF,
@@ -97,7 +101,8 @@ KEEPS_ORDERS_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
 )
 
 # Each of these, given to a unit of these types while it held an order, left that order alone (tool `sweep_orders`,
-# `held-orders` and `structure-orders`), where the tables alone read it as replacing them. A planetary fortress attacks
+# `keeps-terran`, `held-orders` and `structure-orders`), where the tables alone read it as replacing them. A ghost's
+# hold fire, both halves, keeps a moving ghost's move first in its orders. A planetary fortress attacks
 # and stops with the ids every unit does, yet goes on training through both, the attack shown behind its trains. A
 # command center and a planetary fortress go on training while they unload, by an id the tables offer to nobody, since
 # unload is offered only to a loaded transport, and while they load. Every structure that trains goes on training
@@ -126,14 +131,13 @@ _PRODUCTION_STRUCTURES = frozenset(
 _LOAD_ALL_STRUCTURES = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS})
 KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
-        AbilityId.COMMAND_CENTER_LOAD_ALL: _LOAD_ALL_STRUCTURES,
+        AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_HOLD_FIRE_OFF: frozenset({UnitTypeId.GHOST}),
+        AbilityId.GENERAL_HOLD_FIRE_ON: frozenset({UnitTypeId.GHOST}),
         AbilityId.GENERAL_LOAD_ALL: _LOAD_ALL_STRUCTURES,
         AbilityId.GENERAL_SMART: _PRODUCTION_STRUCTURES,
-        AbilityId.COMMAND_CENTER_UNLOAD: _LOAD_ALL_STRUCTURES,
-        AbilityId.GENERAL_ATTACK: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
-        AbilityId.GENERAL_ATTACK_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
         AbilityId.GENERAL_STOP: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
-        AbilityId.GENERAL_STOP_EXACT: frozenset({UnitTypeId.PLANETARY_FORTRESS}),
+        AbilityId.GENERAL_UNLOAD: _LOAD_ALL_STRUCTURES,
     }
 )
 

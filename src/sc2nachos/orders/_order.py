@@ -60,7 +60,7 @@ class Order[T]:
 
     @property
     def ability(self) -> AbilityId:
-        """The ability ordered, as it was ordered. A unit carrying it out reports the exact id it runs."""
+        """The ability ordered, as it was ordered. A unit carrying it out reads as running the same one."""
         return self._ability
 
     @property

@@ -1005,7 +1005,7 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.SCV_BUILD_ENGINEERING_BAY, scv, target=spot)
             _until(game, lambda: len(_of(seen, OwnConstructionStartedEvent)) == 3, steps=2)
             bay = _of(seen, OwnConstructionStartedEvent)[-1].unit
-            game.order(AbilityId.GENERAL_CANCEL_BUILDING, bay)
+            game.order(AbilityId.GENERAL_CANCEL, bay)
             _until(game, lambda: bay.is_dead)
             assert UnitDiedEvent(bay, step=game.step) in seen
 
@@ -1045,9 +1045,9 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, _own(game, UnitTypeId.GHOST_ACADEMY))
             _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrade_tracker.own)
             ghost = _own(game, UnitTypeId.GHOST)
-            game.order(AbilityId.GHOST_CLOAK_ON, ghost)
+            game.order(AbilityId.GENERAL_CLOAK_ON, ghost)
             _until(game, lambda: _of(seen, OwnUnitCloakChangedEvent), steps=1)
-            game.order(AbilityId.GHOST_CLOAK_OFF, ghost)
+            game.order(AbilityId.GENERAL_CLOAK_OFF, ghost)
             _until(game, lambda: len(_of(seen, OwnUnitCloakChangedEvent)) == 2, steps=1)
             assert [(event.unit, event.previous_cloak_state) for event in _of(seen, OwnUnitCloakChangedEvent)] == [
                 (ghost, CloakState.NOT_CLOAKED),
