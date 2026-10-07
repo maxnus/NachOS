@@ -286,7 +286,7 @@ and for whether an ability makes a structure, and both come out the same within 
 
 ### Pull requests
 
-1. **The three oddities.** #103: `_REPORTED_IDS` in `ids/ability.py`, read by `AbilityId.read` and `get`, with just
+1. **The three oddities.** #103: `AbilityId._REMAPPED_IDS`, read by `AbilityId.read` and `get`, with just
    the liberator and archon pairs. The next PR extends it.
 2. **The families.** Extend the map, remove the per-unit ids and the general research ids from `AbilityId`, add
    `CANCEL_ADD_ON`, re-key the tables, turn the varying fields into mappings, and update the docs.

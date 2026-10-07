@@ -123,6 +123,14 @@ def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: Raw
         AbilityId(reported)
 
 
+@pytest.mark.parametrize("enum", CURATED)
+def test_a_remapped_id_is_no_members_own_and_reads_as_a_member(enum: type[IdEnum]) -> None:
+    """Calling the enum must not answer a remapped id, since the game's tables hold a row of its own under it."""
+    for remapped, own in enum._REMAPPED_IDS.items():
+        assert remapped not in enum._value2member_map_
+        assert own in enum._value2member_map_
+
+
 def test_known_ids_have_expected_values() -> None:
     """A few ids pinned to the game's numbering, as a canary for a bad regeneration."""
     assert UnitTypeId.SCV == 45

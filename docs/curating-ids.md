@@ -58,7 +58,7 @@ let the field that names the dead one stay empty.
 
 **An `_EXACT` suffix marks the id a unit reports, as opposed to the one you order**, where `remaps_to` links the
 two: order `GENERAL_MOVE` and the unit's `orders` name `GENERAL_MOVE_EXACT`. Where it links neither, the reported id
-is not curated but read as the one ordered, from `_REPORTED_IDS` in `ids/ability.py`: a liberator ordered
+is not curated but read as the one ordered, from `AbilityId._REMAPPED_IDS`: a liberator ordered
 `LIBERATOR_SIEGE` reports `LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when
 ordered, and reads `LIBERATOR_SIEGE`. The only way to find such a pair is to order the ability in game and read the
 performer's orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each

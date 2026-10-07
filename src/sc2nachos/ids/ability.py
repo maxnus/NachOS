@@ -11,11 +11,10 @@ one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its th
 
 Where a unit reports running another id than the one it was ordered, and the game links neither to the other, that id
 reads as the one ordered: a liberator ordered LIBERATOR_SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which reads
-as LIBERATOR_SIEGE (`_REPORTED_IDS`).
+as LIBERATOR_SIEGE (`_REMAPPED_IDS`).
 """
 
-from collections.abc import Mapping
-from enum import auto
+from enum import auto, nonmember
 from types import MappingProxyType
 
 from sc2nachos.ids._id_enum import IdEnum
@@ -522,18 +521,15 @@ class AbilityId(IdEnum):
     ZERGLING_MORPH_BANELING = RawAbilityId.MorphToBaneling_Baneling
     ZERGLING_UNBURROW = RawAbilityId.BurrowUp_Zergling
 
-    @classmethod
-    def _reported_ids(cls) -> "Mapping[int, AbilityId]":
-        return _REPORTED_IDS
-
-
-# The id a unit reports running for an order given by another, where `remaps_to` links neither to the other, with
-# the id ordered. Ordering a reported id does nothing, except that the archon's, given to both templar and aimed at
-# one of them, merges them too (in game).
-_REPORTED_IDS: Mapping[int, AbilityId] = MappingProxyType(
-    {
-        RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: AbilityId.LIBERATOR_SIEGE,
-        RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: AbilityId.LIBERATOR_UNSIEGE,
-        RawAbilityId.Archon_Warp_Target: AbilityId.GENERAL_MORPH_ARCHON,
-    }
-)
+    # The id a unit reports running for an order given by another, where `remaps_to` links neither to the other, with
+    # the id ordered. Ordering a reported id does nothing, except that the archon's, given to both templar and aimed at
+    # one of them, merges them too (in game).
+    _REMAPPED_IDS = nonmember(
+        MappingProxyType(
+            {
+                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: LIBERATOR_SIEGE,
+                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: LIBERATOR_UNSIEGE,
+                RawAbilityId.Archon_Warp_Target: GENERAL_MORPH_ARCHON,
+            }
+        )
+    )
