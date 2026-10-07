@@ -102,7 +102,8 @@ class UnitOrder:
     target: Target | None
     """The point or unit the order is aimed at, or `None` for an order that takes neither."""
     progress: float
-    """The order's progress from 0 to 1 for a train or a research, and 0 otherwise."""
+    """The order's progress from 0 to 1 for a train, a research or a larva's morph, and 0 otherwise: any other morph
+    and an add-on read 0 until they are done (in game)."""
 
     @classmethod
     def _from_proto(cls, order: raw_pb2.UnitOrder, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
