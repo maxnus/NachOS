@@ -38,6 +38,7 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SPINE_CRAWLER, ability_id=AbilityId.DRONE_MORPH_SPINE_CRAWLER),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -484,6 +485,17 @@ class TestConstruction:
     _BUILD = raw_pb2.UnitOrder(
         ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target_world_space_pos=common_pb2.Point(x=24.3, y=19.8)
     )
+
+    def test_a_queen_planting_a_tumor_is_its_builder_by_her_own_id_of_the_build(self) -> None:
+        """She reports the queen's own id of the creep tumor build, which reads as the action's, the tumor's creation
+        ability."""
+        plant = raw_pb2.UnitOrder(
+            ability_id=RawAbilityId.Build_CreepTumor_Queen, target_world_space_pos=common_pb2.Point(x=24.0, y=20.0)
+        )
+        tumor_at = make_unit(2, UnitTypeId.CREEP_TUMOR_QUEEN, at=(24.0, 20.0), build_progress=0.2)
+        queen, tumor = _Game().observe(0, make_unit(1, UnitTypeId.QUEEN, at=(22.0, 20.0), orders=(plant,)), tumor_at)
+        assert isinstance(queen, OwnUnit) and isinstance(tumor, OwnUnit)
+        assert (queen.construction, tumor.builder) == (tumor, queen)
 
     def test_an_scv_building_a_structure_is_its_builder_until_it_finishes(self) -> None:
         game = _Game()
