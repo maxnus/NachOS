@@ -1,5 +1,6 @@
 """The maps an installation can play on."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
@@ -32,7 +33,7 @@ class MapFile:
 
     @classmethod
     def find(cls, name: str, *, installation: Installation | None = None) -> Self:
-        """The map called `name`, anywhere under the installation's map directory.
+        """The map called `name`, anywhere under the installation's map directory, linked directories included.
 
         The extension is optional and the match ignores case. Map packs install alongside the maps they replace, so
         a name can match more than once: the shallowest match wins, ties alphabetically.
@@ -40,7 +41,7 @@ class MapFile:
         installation = installation or Installation.find()
         wanted = name[: -len(_SUFFIX)] if name.lower().endswith(_SUFFIX.lower()) else name
         matches = sorted(
-            (path for path in installation.maps.rglob(f"*{_SUFFIX}") if path.stem.lower() == wanted.lower()),
+            (path for path in cls._paths(installation) if path.stem.lower() == wanted.lower()),
             key=lambda path: (len(path.parts), path),
         )
         if not matches:
@@ -53,4 +54,13 @@ class MapFile:
 
     @staticmethod
     def _names(installation: Installation) -> list[str]:
-        return sorted({path.stem for path in installation.maps.rglob(f"*{_SUFFIX}")})
+        return sorted({path.stem for path in MapFile._paths(installation)})
+
+    @staticmethod
+    def _paths(installation: Installation) -> Iterator[Path]:
+        maps = installation.maps
+        for directory, subdirectories, files in maps.walk(follow_symlinks=True):
+            # A linked directory that leads back into one the walk is inside would be walked forever.
+            inside = {path.resolve() for path in (directory, *directory.parents) if path.is_relative_to(maps)}
+            subdirectories[:] = [name for name in subdirectories if (directory / name).resolve() not in inside]
+            yield from (directory / name for name in files if name.lower().endswith(_SUFFIX.lower()))
