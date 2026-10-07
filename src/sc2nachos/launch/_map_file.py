@@ -60,7 +60,8 @@ class MapFile:
     def _paths(installation: Installation) -> Iterator[Path]:
         maps = installation.maps
         for directory, subdirectories, files in maps.walk(follow_symlinks=True):
-            # A linked directory that leads back into one the walk is inside would be walked forever.
+            # A linked directory that leads back into one the walk is inside is not entered, or the walk would go
+            # round it.
             inside = {path.resolve() for path in (directory, *directory.parents) if path.is_relative_to(maps)}
             subdirectories[:] = [name for name in subdirectories if (directory / name).resolve() not in inside]
             yield from (directory / name for name in files if name.lower().endswith(_SUFFIX.lower()))
