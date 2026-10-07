@@ -308,8 +308,8 @@ and for whether an ability makes a structure, and both come out the same within 
    `claude/one-id-per-type`, #105): `AbilityData.sent_as`, from the `ABILITIES_SENT_AS_ANOTHER` override (so named
    in #106), replaces `CUSTOM_ABILITIES`; a custom row's target type and cast range are worked out from the abilities
    it is sent as, and the sieged forms are listed too, so a repeated siege is still refused by the game rather than
-   by NachOS. A custom id whose `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as
-   #101 answers a group. With it:
+   by NachOS. A custom id whose `sent_as` names a game ability per unit type, a group order going out as one
+   command per type and answered as #101 answers a group. With it:
    - `GENERAL_UNLOAD` and `GENERAL_UNLOAD_IN_PLACE` become one id, `GENERAL_UNLOAD`, "put everyone down here": sent as
      UnloadAll to a bunker, command center, planetary fortress or nydus, and as UnloadAllAt aimed at itself to a
      medivac, warp prism or transport overlord, which answer UnloadAll `Error` (`held-orders`). `GENERAL_UNLOAD_AT`

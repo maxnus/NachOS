@@ -639,10 +639,10 @@ Each entry ends with how it was seen:
   after the worker set out, and ordered once a move toward the site had brought the worker within 8, 4, 2, 1 or 0.5
   of it, after 274 to 277. From the step after a build is ordered until the builder starts it, the observation shows
   a unit of the structure's type at the site with `display_type` `Placeholder` (tool `sweep_orders`,
-  `close-enough`). A build queued behind a move takes its cost when given too: with 100 minerals, an SCV ordered to move and
-  then a queued depot had 0 left while still on its way to the first point. With 65, the queued depot is refused
-  `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A storm
-  queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit and the
+  `close-enough`). A build queued behind a move takes its cost when given too: with 100 minerals, an SCV ordered to
+  move and then a queued depot had 0 left while still on its way to the first point. With 65, the queued depot is
+  refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
+  storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit and the
   ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
 
 ## Alerts and the camera
