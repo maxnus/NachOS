@@ -46,6 +46,14 @@ def make_install(
     return Installation(root, system)
 
 
+def link_directory(link: Path, target: Path) -> None:
+    """Make `link` a symbolic link to the directory `target`, or skip the test where this account may not."""
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError as error:  # Windows, without developer mode or administrator rights
+        pytest.skip(f"cannot make a symbolic link here: {error}")
+
+
 @pytest.fixture
 def sleeper() -> Iterator["subprocess.Popen[bytes]"]:
     """A process that outlives the test unless something stops it."""
@@ -187,6 +195,20 @@ class TestMaps:
         install = make_install(tmp_path, map_files=["AIE/PylonAIE.SC2Map", "Custom/plain64.SC2Map"])
         with pytest.raises(MapNotFoundError, match=r"no map called Acropolis.*plain64"):
             MapFile.find("Acropolis", installation=install)
+
+    def test_a_linked_map_directory_is_searched(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path / "install")
+        (tmp_path / "pack").mkdir()
+        (tmp_path / "pack" / "PylonAIE_v4.SC2Map").write_bytes(b"")
+        link_directory(install.maps / "AIE", tmp_path / "pack")
+        assert MapFile.find("PylonAIE_v4", installation=install).path == install.maps / "AIE" / "PylonAIE_v4.SC2Map"
+        with pytest.raises(MapNotFoundError, match=r"no map called Acropolis.*PylonAIE_v4"):
+            MapFile.find("Acropolis", installation=install)
+
+    def test_a_link_back_up_the_tree_is_not_followed(self, tmp_path: Path) -> None:
+        install = make_install(tmp_path, map_files=["AIE/PylonAIE_v4.SC2Map"])
+        link_directory(install.maps / "AIE" / "up", install.maps)
+        assert list(MapFile._paths(install)) == [install.maps / "AIE" / "PylonAIE_v4.SC2Map"]
 
     def test_a_map_outside_the_installation_needs_no_lookup(self, tmp_path: Path) -> None:
         assert MapFile(tmp_path / "elsewhere" / "Handmade.SC2Map").name == "Handmade"

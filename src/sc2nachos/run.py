@@ -102,7 +102,7 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Res
     if args.map is not None:
         map_file = MapFile.find(args.map, installation=installation)
     else:
-        names = sorted({path.stem for path in installation.maps.rglob("*.SC2Map")})
+        names = MapFile._names(installation)
         if not names:
             raise MapNotFoundError(f"{installation.maps} holds no maps to pick from")
         map_file = MapFile.find(random.choice(names), installation=installation)
