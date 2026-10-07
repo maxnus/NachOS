@@ -9,8 +9,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` is at `c0bceb2` (PR #59). `uv run pytest` passes 1477 tests; `uv run pytest -m integration` passes
-  19 against a real game (run 2026-09-21).
+- nachOS `main` has every PR to #108. `uv run pytest` passes 1598 tests; `uv run pytest -m integration` passes 23
+  against a real game (run 2026-10-07).
+- **Next: step 1, a queue per unit.** Step 2, one id per action, is done (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -146,15 +147,17 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 
 ### Measurements it needs (`tools/sweep_orders.py`, findings into `docs/game-behavior.md`)
 
-- **"Close enough" for a build**: send the build at several distances and record the steps the worker loses. Too
-  late and it stops and waits; too early and the minerals are spent while it walks.
-- Whether a drone and a probe are charged at the order as an SCV is.
-- What happens to a build whose site is blocked before the worker arrives (expected: an error and no charge).
-- A factory's and a starport's add-on while flying, assumed to behave as a barracks's.
-- Whether a flying command center can be given land and then a morph, and what a lifted barracks does with land and
-  then a train.
-- What a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
-  planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
+- **"Close enough" for a build**: measured, and anything up to the site itself will do. A worker moved to its site
+  and sent the build within 8 down to 0.5 of it put the structure up 4 to 7 steps sooner than one sent the build from
+  30 away; none stopped and waited (docs/game-behavior.md).
+
+Measured since (docs/game-behavior.md): a drone and a probe are charged at the order as an SCV is; a build whose
+site is taken before the worker arrives fails with `CouldntReachTarget` and is refunded then; a lifted factory and
+starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
+given, so the game holds none of those sequences and a queue in NachOS would have to.
+
+Still to measure: what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command
+center's and the planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 
 ### Suggested first pull request
 
@@ -164,7 +167,8 @@ scope with the owner.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 
-Settled with the owner on 2026-10-07 (see "Decided" above); not started. The owner's words: *"why is there a
+Settled with the owner on 2026-10-07 (see "Decided" above); done in #103, #104, #105 (named in #106) and #107,
+listed under "Pull requests" below. The owner's words: *"why is there a
 `LIBERATOR_SIEGE` and a `LIBERATOR_SIEGE_EXACT` - could we do with one? [...] is it really necessary to have a
 separate `BARRACKS_LIFT` and `STARPORT_LIFT`?"* `OwnUnit` methods such as `barracks.lift()` (step 3, slice 7) would
 not make this unnecessary: ids also show in `unit.orders`, `unit.abilities` and `api.orders.issue`, and fewer of
@@ -294,18 +298,18 @@ and for whether an ability makes a structure, and both come out the same within 
 
 1. **The three oddities.** #103: `AbilityId._REMAPPED_IDS`, read by `AbilityId.read` and `get`, with just
    the liberator and archon pairs. The next PR extends it.
-2. **The families.** PR 2 (branch `claude/one-id-per-action-families`): the map extended to 146 ids, the per-unit
+2. **The families.** #104 (branch `claude/one-id-per-action-families`): the map extended to 146 ids, the per-unit
    ids, the cancels and the general research ids gone from `AbilityId`, the generator folding at the end, products
    by performer, order behaviors judged per type, and the docs. Where it departs from the plan: `allows_autocast`
    stays a bool (above), and a type that holds no order of its own keeps it for every ability that makes nothing, so
    a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
    game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
 3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). PR 3 (branch
-   `claude/one-id-per-type`): `AbilityData.sent_as`, from the `ABILITIES_SENT_AS_ANOTHER` override, replaces `CUSTOM_ABILITIES`; a
-   custom row's target type and cast range are worked out from the abilities it is sent as, and the sieged forms are
-   listed too, so a repeated siege is still refused by the game rather than by NachOS. A custom id whose
-   `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as
-   #101 answers a group. With it:
+   `claude/one-id-per-type`, #105): `AbilityData.sent_as`, from the `ABILITIES_SENT_AS_ANOTHER` override (so named
+   in #106), replaces `CUSTOM_ABILITIES`; a custom row's target type and cast range are worked out from the abilities
+   it is sent as, and the sieged forms are listed too, so a repeated siege is still refused by the game rather than
+   by NachOS. A custom id whose `sent_as` names a game ability per unit type, a group order going out as one
+   command per type and answered as #101 answers a group. With it:
    - `GENERAL_UNLOAD` and `GENERAL_UNLOAD_IN_PLACE` become one id, `GENERAL_UNLOAD`, "put everyone down here": sent as
      UnloadAll to a bunker, command center, planetary fortress or nydus, and as UnloadAllAt aimed at itself to a
      medivac, warp prism or transport overlord, which answer UnloadAll `Error` (`held-orders`). `GENERAL_UNLOAD_AT`
@@ -314,7 +318,7 @@ and for whether an ability makes a structure, and both come out the same within 
      choice of all four. The game has no shared id for either. The siege takes a point, which only the liberator's
      part uses, for its zone; the unsiege takes nothing. Each type's own game id reads as the custom one.
 4. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the earlier diffs stay readable.
-   PR 4 (branch `claude/drop-general-prefix`): 39 ids renamed, `AbilityId` re-sorted by name (the two custom ids keep
+   #107 (branch `claude/drop-general-prefix`): 39 ids renamed, `AbilityId` re-sorted by name (the two custom ids keep
    their order, so their values), the tech tree regenerated (reordered only) and the naming rule in the docs reworded.
    Earlier entries in this plan keep the names of their day.
 

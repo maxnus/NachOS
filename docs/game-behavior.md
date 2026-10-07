@@ -203,8 +203,11 @@ Each entry ends with how it was seen:
   shows `Land_Barracks` and then `Build_Reactor_Barracks`, both targeting the point, flies there, lands and builds
   the add-on, and is charged at once: the reactor's 50/50 was gone by the next observation, with 22 still to fly and
   430 steps before it landed. Given no point it is answered `Success`, and nothing is charged or started; given a
-  point whose add-on spot a supply depot fills, `CantFindPlacementLocation`, and nothing is charged. A factory and a
-  starport were not tried and are assumed to behave the same (tool `sweep_orders`).
+  point whose add-on spot a supply depot fills, `CantFindPlacementLocation`, and nothing is charged. A lifted factory
+  and starport do the same, each charged the reactor's 50/50 by the next observation (tool `sweep_orders`).
+- A flying command center or barracks given land and then, queued, a morph or a train answers the second
+  `NotSupported` as it is given: the orbital morph, an SCV, a marine. The barracks lands and stands idle (tool
+  `sweep_orders`, `queue-cases`).
 - A warp-in is first seen unfinished and finishes some steps later (#37; tested). A gateway becomes a warp gate by
   itself once Warp Gate is researched, and nothing else makes one (#29; tested).
 - The starting townhall is never seen unfinished. An auto-turret has the structure attribute but is first seen
@@ -629,11 +632,18 @@ Each entry ends with how it was seen:
   and drops its order. A build order takes its structure's cost when given, not when the builder arrives: a depot
   ordered 35 away took 100 of 120 minerals by the next observation, an SCV ordered with the 20 left was answered
   `Success` and never made, and the depot went up once the builder arrived. So a builder never finds its minerals
-  spent. A build queued behind a move takes its cost when given too: with 100 minerals, an SCV ordered to move and
-  then a queued depot had 0 left while still on its way to the first point. With 65, the queued depot is refused
-  `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A storm
-  queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit and the
-  ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
+  spent. A probe's pylon and a drone's spawning pool ordered 33 away take theirs by the next observation too. A
+  depot whose site a depot of this player's took while the builder walked there gets a `CouldntReachTarget` action
+  error once it arrives, and the 100 comes back in that observation (tool `sweep_orders`, `queue-cases`). A build
+  sent late loses nothing: an SCV's depot and a probe's pylon ordered from 30 away were first seen built 281 steps
+  after the worker set out, and ordered once a move toward the site had brought the worker within 8, 4, 2, 1 or 0.5
+  of it, after 274 to 277. From the step after a build is ordered until the builder starts it, the observation shows
+  a unit of the structure's type at the site with `display_type` `Placeholder` (tool `sweep_orders`,
+  `close-enough`). A build queued behind a move takes its cost when given too: with 100 minerals, an SCV ordered to
+  move and then a queued depot had 0 left while still on its way to the first point. With 65, the queued depot is
+  refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
+  storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
+  and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
 
 ## Alerts and the camera
 

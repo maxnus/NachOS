@@ -37,8 +37,12 @@ and runs its trials in turn::
 - `producer-dies` kills what is making something, and reads what the observations after say.
 - `one-command-many-makers` plays without `free`, and gives one train, one research and one add-on to several
   structures at once, to find whether each carries it out or only one.
-- `add-on-while-flying` plays without `free`, and tells a flying barracks to build a reactor with no point, at ground
-  with room beside it, and at ground whose add-on place a depot fills.
+- `add-on-while-flying` plays without `free`, and tells a flying barracks, factory and starport to build a reactor
+  with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
+- `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
+  fills before it arrives, and a flying command center and barracks land with a morph or a train queued behind.
+- `close-enough` walks an SCV and a probe 30 toward a site and orders the build once within each of a few distances,
+  or from the start, and records when the structure is first seen.
 - `held-orders` gives a unit that holds an order where it stands (a sieged tank, a burrowed lurker, a phasing warp
   prism) the ability that ends that form; a loaded transport, holding a train or a move, each unload; and a bunker
   and a training planetary fortress attack and stop, at an enemy command center in range.
@@ -105,6 +109,7 @@ from sc2nachos.protocol import ProtocolError
 
 _OWN = raw_pb2.Alliance.Self
 _SNAPSHOT = raw_pb2.DisplayType.Snapshot
+_PLACEHOLDER = raw_pb2.DisplayType.Placeholder
 # Steps waited after each trial, so a late report or action error is not credited to the next trial.
 _SETTLE = 16
 # The target kinds of the game's ability table.
@@ -3591,14 +3596,21 @@ class _Sweep:
     interface: sc2api_pb2.InterfaceOptions | None = None
 
 
+_FLYING_REACTORS = (
+    ("barracks", UnitTypeId.BARRACKS_FLYING, RawAbilityId.Build_Reactor_Barracks),
+    ("factory", UnitTypeId.FACTORY_FLYING, RawAbilityId.Build_Reactor_Factory),
+    ("starport", UnitTypeId.STARPORT_FLYING, RawAbilityId.Build_Reactor_Starport),
+)
+
+
 def _add_on_while_flying(game: _Game) -> list[Trial]:
-    """What a flying barracks does when told to build an add-on: with no point, at ground with room beside it, and at
-    ground whose add-on place a supply depot fills."""
+    """What a flying barracks, factory and starport do when told to build an add-on: with no point, at ground with
+    room beside it, and at ground whose add-on place a supply depot fills."""
     trials: list[Trial] = []
 
-    def flying_reactor(aimed: str) -> Callable[[Trial], None]:
+    def flying_reactor(flying: UnitTypeId, reactor: int, aimed: str) -> Callable[[Trial], None]:
         def run(trial: Trial) -> None:
-            made = game.create(UnitTypeId.BARRACKS_FLYING, game.spot(game.toward(12), 4))
+            made = game.create(flying, game.spot(game.toward(12), 4))
             if not made:
                 trial.notes["class"] = "no barracks"
                 return
@@ -3612,7 +3624,7 @@ def _add_on_while_flying(game: _Game) -> list[Trial]:
             trial.notes["barracks from"] = [barracks.pos.x, barracks.pos.y]
             trial.notes["aimed at"] = None if target is None else [target.x, target.y]
             before = [game.minerals, game.vespene]
-            trial.notes["verdict"] = game.order(RawAbilityId.Build_Reactor_Barracks, [barracks], target)
+            trial.notes["verdict"] = game.order(reactor, [barracks], target)
             seen: list[object] = []
             for _ in range(60):
                 game.turn(8)
@@ -3633,13 +3645,150 @@ def _add_on_while_flying(game: _Game) -> list[Trial]:
 
         return run
 
-    for aimed, name in (
-        ("nothing", "a flying barracks given a reactor with no point"),
-        ("free", "a flying barracks given a reactor at ground with room beside it"),
-        ("blocked", "a flying barracks given a reactor at ground whose add-on place a depot fills"),
-    ):
-        trials.append(game.trial(name, flying_reactor(aimed)))
+    for structure, flying, reactor in _FLYING_REACTORS:
+        for aimed, name in (
+            ("nothing", f"a flying {structure} given a reactor with no point"),
+            ("free", f"a flying {structure} given a reactor at ground with room beside it"),
+            ("blocked", f"a flying {structure} given a reactor at ground whose add-on place a depot fills"),
+        ):
+            trials.append(game.trial(name, flying_reactor(flying, reactor, aimed)))
     return trials
+
+
+# --- What the game does with an order it cannot carry out yet
+
+
+def _watch(game: _Game, tag: int, trial: Trial, *, steps: int, done: Callable[[raw_pb2.Unit], bool]) -> None:
+    """Record the unit `tag`'s type, place, orders and the purse every 8 steps, for at most `steps` or until `done`."""
+    seen: list[object] = []
+    for _ in range(steps // 8):
+        game.turn(8)
+        now = game.unit(tag)
+        if now is None:
+            seen.append([game.step, "gone"])
+            break
+        at = [round(now.pos.x, 1), round(now.pos.y, 1)]
+        seen.append([game.step, _type_name(now.unit_type), at, [_order(order) for order in now.orders], game.minerals])
+        if done(now):
+            break
+    trial.notes["step, type, at, orders, minerals"] = seen
+
+
+def _queue_cases(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for worker, build, near in (
+        (UnitTypeId.SCV, AbilityId.SCV_BUILD_SUPPLY_DEPOT, None),
+        (UnitTypeId.PROBE, AbilityId.PROBE_BUILD_PYLON, None),
+        (UnitTypeId.DRONE, AbilityId.DRONE_MORPH_SPAWNING_POOL, UnitTypeId.HATCHERY),
+    ):
+        label = f"a {worker.name} given {build.name} 30 away"
+        trials.append(game.trial(label, partial(_far_build, game, worker, build, near, False)))
+    label = "an SCV given SCV_BUILD_SUPPLY_DEPOT 30 away, whose site a depot fills before it arrives"
+    trials.append(
+        game.trial(label, partial(_far_build, game, UnitTypeId.SCV, AbilityId.SCV_BUILD_SUPPLY_DEPOT, None, True))
+    )
+    for flying, land, then in (
+        (
+            UnitTypeId.COMMAND_CENTER_FLYING,
+            RawAbilityId.Land_CommandCenter,
+            AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
+        ),
+        (UnitTypeId.COMMAND_CENTER_FLYING, RawAbilityId.Land_CommandCenter, AbilityId.COMMAND_CENTER_TRAIN_SCV),
+        (UnitTypeId.BARRACKS_FLYING, RawAbilityId.Land_Barracks, AbilityId.BARRACKS_TRAIN_MARINE),
+    ):
+        label = f"a {flying.name} given {land.name} 15 away, then {then.name} queued"
+        trials.append(game.trial(label, partial(_land_then, game, flying, land, then)))
+    return trials
+
+
+def _close_enough(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for worker, build in (
+        (UnitTypeId.SCV, AbilityId.SCV_BUILD_SUPPLY_DEPOT),
+        (UnitTypeId.PROBE, AbilityId.PROBE_BUILD_PYLON),
+    ):
+        for within in (None, 8.0, 4.0, 2.0, 1.0, 0.5):
+            when = "from the start" if within is None else f"once within {within} of its site"
+            label = f"a {worker.name} walking 30 to build, given {build.name} {when}"
+            trials.append(game.trial(label, partial(_build_within, game, worker, build, within)))
+    return trials
+
+
+def _build_within(game: _Game, worker: UnitTypeId, build: AbilityId, within: float | None, trial: Trial) -> None:
+    """Walk `worker` toward a site 30 away and order `build` there once within `within` of it, or from the start, and
+    record the step the order went out and the step the structure was first seen."""
+    start = game.spot(game.toward(8), 2)
+    site = game.spot(start.towards(game.middle, 30), 3)
+    made = game.create(worker, start)
+    if not made:
+        trial.notes["class"] = "not made"
+        return
+    tag = made[0].tag
+    begun = game.step
+    if within is not None:
+        game.order(AbilityId.MOVE, [tag], site)
+        game.until(lambda: (now := game.unit(tag)) is not None and _at(now).distance_to(site) <= within, limit=900)
+    trial.notes["ordered after"] = game.step - begun
+    trial.notes["distance left"] = round(_at(game.units[tag]).distance_to(site), 2)
+    trial.notes["verdict"] = game.order(build, [tag], site)
+    product = UnitTypeId.SUPPLY_DEPOT if worker is UnitTypeId.SCV else UnitTypeId.PYLON
+
+    def at_site(display: int) -> bool:
+        return any(
+            unit.unit_type == product and unit.display_type == display and _at(unit).distance_to(site) < 1
+            for unit in game.units.values()
+        )
+
+    # The game shows a placeholder where a build is ordered, the step after the order, until the builder starts it.
+    game.turn(1)
+    trial.notes["placeholder seen"] = at_site(_PLACEHOLDER)
+    trial.notes["seen"] = game.until(lambda: at_site(raw_pb2.DisplayType.Visible), limit=900)
+    trial.notes["structure seen after"] = game.step - begun
+
+
+def _far_build(
+    game: _Game, worker: UnitTypeId, build: AbilityId, near: UnitTypeId | None, blocked: bool, trial: Trial
+) -> None:
+    """Order `worker` to build 30 away, beside a `near` of this player's if given, and watch it and the purse."""
+    start = game.spot(game.toward(8), 2)
+    site_area = game.spot(start.towards(game.middle, 30), 6)
+    if near is not None:
+        # A spawning pool goes on creep, which a hatchery spreads around itself.
+        game.create(near, site_area + (3, 0))
+        game.turn(32)
+    site = site_area - (3, 0)
+    made = game.create(worker, start)
+    if not made:
+        trial.notes["class"] = "not made"
+        return
+    tag = made[0].tag
+    game.turn(4)
+    trial.notes["minerals before"] = game.minerals
+    trial.notes["verdict"] = game.order(build, [tag], site)
+    trial.notes["distance"] = round(_at(game.units[tag]).distance_to(site), 1)
+    if blocked:
+        game.turn(16)
+        trial.notes["blocked by"] = [_type_name(unit.unit_type) for unit in game.create(UnitTypeId.SUPPLY_DEPOT, site)]
+    _watch(game, tag, trial, steps=640, done=lambda now: not now.orders)
+    trial.notes["minerals after"] = game.minerals
+    trial.notes["at the site"] = [
+        _type_name(unit.unit_type) for unit in game.units.values() if _at(unit).distance_to(site) < 1.5
+    ]
+
+
+def _land_then(game: _Game, flying: UnitTypeId, land: int, then: AbilityId, trial: Trial) -> None:
+    """Order a flying structure to land 15 away, then `then` queued behind it, and watch what it becomes."""
+    made = game.create(flying, game.spot(game.toward(10), 4))
+    if not made:
+        trial.notes["class"] = "not made"
+        return
+    tag = made[0].tag
+    site = game.spot(_at(made[0]).towards(game.middle, 15), 5)
+    trial.notes["minerals before"] = game.minerals
+    trial.notes["land"] = game.order(land, [tag], site)
+    trial.notes["then"] = game.order(then, [tag], queued=True)
+    _watch(game, tag, trial, steps=1200, done=lambda now: not now.orders)
+    trial.notes["minerals after"] = game.minerals
 
 
 def _one_command_many_makers(game: _Game) -> list[Trial]:
@@ -3744,6 +3893,9 @@ _SWEEPS: dict[str, _Sweep] = {
     "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what a flying structure's add-on charges counts.
     "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    # Not `free`, so that what each order charges, and when, counts.
+    "queue-cases": _Sweep(Race.TERRAN, _queue_cases, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    "close-enough": _Sweep(Race.TERRAN, _close_enough, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "held-orders": _Sweep(Race.TERRAN, _held_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "liberator-orders": _Sweep(Race.TERRAN, _liberator_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "structure-orders": _Sweep(Race.TERRAN, _structure_orders, (*_BASE_CHEATS, Cheat.TECH_TREE)),
