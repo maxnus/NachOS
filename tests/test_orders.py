@@ -1105,7 +1105,7 @@ class _SiegingBot:
         self.player = player
         self.zone: Point | None = None
         self.sieges: list[Order[None]] = []
-        self.reported: list[tuple[int, str, list[str]]] = []
+        self.reported: list[tuple[int, UnitTypeId, list[tuple[AbilityId, bool]]]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1115,8 +1115,8 @@ class _SiegingBot:
                 api.client.debug([_create(UnitTypeId.LIBERATOR, api.map.playable_area.center, self.player, quantity=1)])
             return
         liberator = liberators[0]
-        orders = [f"{order.ability.name} at {order.target}" for order in liberator.orders]
-        self.reported.append((event.step, liberator.type_id.name, orders))
+        orders = [(order.ability, order.target is liberator) for order in liberator.orders]
+        self.reported.append((event.step, liberator.type_id, orders))
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
         if self._siege_due(event.step):
@@ -1184,8 +1184,9 @@ class TestAgainstTheRealGame:
         print("sieges:", [(order.issued_step, order.state.name, order.action_result) for order in bot.sieges])
         assert [order.state for order in bot.sieges] == [OrderState.SENT, OrderState.REFUSED, OrderState.REFUSED]
         assert [order.action_result for order in bot.sieges[1:]] == [ActionResult.NOT_SUPPORTED] * 2
-        (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type == "LIBERATOR_SIEGED")
-        assert first and first[0].startswith("LIBERATOR_SIEGE at OwnUnit(LIBERATOR_SIEGED")
+        # Each order as its ability and whether it is aimed at the liberator itself.
+        (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
+        assert first == [(_SIEGE, True)]
 
 
 def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot)](make_bot: type[BotT]) -> BotT:

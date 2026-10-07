@@ -259,7 +259,7 @@ and for whether an ability makes a structure, and both come out the same within 
   `LIFT` makes five flying types.
 - **The generator and `data/tech_tree.json`.** The sweep records what the game offers, which is per-unit ids, and
   keeps doing so. The fold onto family ids happens where the file is loaded, so the file stays a record of the game.
-- **The order book gets shorter**: `_general_ability` goes, and the liberator gap closes.
+- **The order book gets shorter**: `_general_ability` goes.
 - **Docs.** The conventions in `docs/curating-ids.md` (performer first, `GENERAL`, `_EXACT`, the general research's
   name), `docs/migrating-from-python-sc2.md` (`remaps_to`, `exact_id`), and the examples in `docs/orders.md` and
   `docs/game-behavior.md`.
