@@ -1211,6 +1211,7 @@ class _GroupUnloadingBot:
         self.player = player
         self.loads: list[Order[None]] = []
         self.unload: Order[None] | None = None
+        self.created = False
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1218,7 +1219,9 @@ class _GroupUnloadingBot:
         marines = api.units.own.of_type(UnitTypeId.MARINE)
         middle = api.map.playable_area.center
         if len(transports) < 2:
-            if event.step < 64:
+            # Created once: units made by debug show up a turn or two later, and a second batch would double them.
+            if not self.created:
+                self.created = True
                 api.client.debug(
                     [
                         _create(UnitTypeId.BUNKER, middle, self.player, quantity=1),
