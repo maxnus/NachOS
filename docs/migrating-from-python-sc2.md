@@ -140,11 +140,14 @@ it.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
 - **A worker's build, and a structure's train, research, add-on and morph, wait in NachOS until the unit can start
-  them**, so nothing is charged before ([orders](orders.md#orders-nachos-holds)). python-sc2 sends each at once, and the game charges a
-  build as it is ordered. A worker is sent to the site and given the build once within `Api(build_reach=2.5)` of it.
-  A structure is given only what it runs at once, so a reactor's second marine needs no `queue=True`, and a train is
-  never overridden by another: two given in a turn are two. Given to several units, such an order goes to the one
-  NachOS picks, where python-sc2 leaves the choice to the game.
+  them**, so nothing is charged before ([orders](orders.md#orders-nachos-holds)). python-sc2 sends each at once, and
+  the game charges a build as it is ordered. A worker is sent to the site and given the build once within
+  `Api(build_reach=2.5)` of it. A structure is given only what it runs at once, so a reactor's second marine needs no
+  `queue=True`, and a train is never overridden by another: two given in a turn are two. Given to several units, such
+  an order goes to the one NachOS picks, where python-sc2 leaves the choice to the game.
+- **A drone is given to a hatchery, not found a larva for.** python-sc2's `train` picks a larva itself; in NachOS a
+  larva's morph given to a hatchery, a lair or a hive waits there until one of its larvae is free and goes to that
+  larva ([orders](orders.md#orders-nachos-holds)). Given to a larva, it goes out as given, as in python-sc2.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and

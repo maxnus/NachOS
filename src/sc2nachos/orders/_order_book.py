@@ -12,15 +12,23 @@ from sc2nachos.gamedata._sent_as import Aim
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_actions
 from sc2nachos.orders._held_queue import HeldQueue
 from sc2nachos.orders._order import Order
-from sc2nachos.orders._starting import product_steps, site_of, slots, steps_until_free, travel_steps, within_reach
+from sc2nachos.orders._starting import (
+    larva_spot,
+    product_steps,
+    site_of,
+    slots,
+    steps_until_free,
+    travel_steps,
+    within_reach,
+)
 from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
-from sc2nachos.units import Unit
+from sc2nachos.units import OwnUnit, Unit, Units
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
@@ -28,9 +36,8 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata import AbilityData, GameData
     from sc2nachos.gamedata._sent_as import SentAs
     from sc2nachos.geometry import PointLike
-    from sc2nachos.ids import UnitTypeId
     from sc2nachos.protocol import Client
-    from sc2nachos.units import OwnUnit, Target
+    from sc2nachos.units import Target
 
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
 # and the one after that on the ladder or in realtime (docs/game-behavior.md).
@@ -51,6 +58,9 @@ _SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 _MAKING = frozenset({OrderBehavior.QUEUES, OrderBehavior.NEEDS_IDLE})
 # What an unqueued order does that drops what is held for a unit.
 _DROPPING_HELD = frozenset({OrderBehavior.REPLACES, OrderBehavior.NEEDS_IDLE})
+# What a larva morph is offered to, and the structures that grow larvae.
+_LARVA = frozenset({UnitTypeId.LARVA})
+_LARVA_MAKERS = frozenset({UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE})
 # The structures that keep a queue of trains and researches, those offered `CANCEL_LAST`, and their lifted forms, which
 # keep one once they land. A warp gate keeps none (in game).
 _QUEUE_KEEPERS = TECH_TREE.ability_performers.get(AbilityId.CANCEL_LAST, frozenset())
@@ -89,8 +99,10 @@ class OrderBook:
         "_held",
         "_issued",
         "_issued_by_unit",
+        "_larvae_given",
         "_last_sent",
         "_observations",
+        "_present",
         "_refusals",
         "_step",
     )
@@ -113,6 +125,9 @@ class OrderBook:
         self._camera_location: Point | None = None
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
+        # Every unit the last observation found, and the larvae given a morph this turn.
+        self._present: Units[Unit[Any]] = Units(())
+        self._larvae_given: set[int] = set()
         self._observations = 0
         self._step = 0
 
@@ -155,15 +170,17 @@ class OrderBook:
         `queued` puts the order behind each unit's current orders, those held for it included. `data` is the bot's
         own; NachOS carries it and never reads it. Nothing is sent until the turn's handlers have all run.
 
-        A worker's build, a structure's add-on or morph, and a train or a research of a structure that keeps a queue,
-        which a warp gate does not, is held until its unit can start it if it costs, and so is whatever is queued
-        behind a held order. A worker is sent to the site and given the build
-        once within the api's `build_reach`; a structure is given a train or a research once it has a slot free, and
-        an add-on or a morph once it is idle on the ground, a flying one given a point being sent to land there. Given
-        to several units, such an order is given to the one that can start it soonest, and goes behind what that one
-        already has: a structure by the steps until it has a slot free, a worker by the steps it walks to the site,
-        one already busy only if all are, the lowest id among equals. An unqueued order that replaces a unit's orders
-        or needs it idle drops what is held for it; a train or a research goes behind what is held, queued or not.
+        A worker's build, a structure's add-on or morph, a train or a research of a structure that keeps a queue,
+        which a warp gate does not, and a larva's morph given to a hatchery, a lair or a hive, is held until its unit
+        can start it if it costs, and so is whatever is queued behind a held order. A worker is sent to the site and
+        given the build once within the api's `build_reach`; a structure is given a train or a research once it has a
+        slot free, and an add-on or a morph once it is idle on the ground, a flying one given a point being sent to
+        land there; a larva's morph goes to a free larva of the hatchery, one nearest its larva spot. Given to several
+        units, such an order is given to the one that can start it soonest, and goes behind what that one already has:
+        a structure by the steps until it has a slot free, a hatchery by its free larvae, a worker by the steps it
+        walks to the site, one already busy only if all are, the lowest id among equals. An unqueued order that
+        replaces a unit's orders or needs it idle drops what is held for it; a train, a research or a larva's morph
+        goes behind what is held, queued or not.
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
@@ -243,6 +260,7 @@ class OrderBook:
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         self._refusals = ()
+        self._larvae_given = set()
         outgoing = list(self._turns_orders(issued, forced))
         for queue in self._held.values():
             outgoing += self._release(queue, forced)
@@ -268,10 +286,11 @@ class OrderBook:
                 self._remember_sent(out.order, units)
         self._refusals = tuple(refusals)
 
-    def _observe(self, step: int, lost: Iterable[Unit[Any]]) -> None:
-        """Take in the observation at `step`, which found `lost` dead or no longer this player's. What was held for
-        them goes."""
+    def _observe(self, step: int, lost: Iterable[Unit[Any]], present: Units[Unit[Any]]) -> None:
+        """Take in the observation at `step`, which found `lost` dead or no longer this player's, and `present` the
+        units it found. What was held for the lost goes."""
         self._step = step
+        self._present = present
         self._observations += 1
         for unit in lost:
             self._last_sent.pop(unit.id, None)
@@ -382,9 +401,14 @@ class OrderBook:
         return outgoing
 
     def _released(self, queue: HeldQueue) -> _Outgoing:
-        """The head of `queue`, taken out to go now: in place of its lead-in, and with no point once it has landed."""
+        """The head of `queue`, taken out to go now: in place of its lead-in, with no point once it has landed, and to
+        a free larva of a hatchery given a larva's morph."""
         lead_in = queue.lead_in_for(queue.orders[0])
         order = queue.release(self._observations)
+        if _grows_from_larvae(self._game_data.abilities.get(order.ability), queue.unit):
+            larva = self._free_larvae(queue.unit)[0]
+            self._larvae_given.add(larva.id)
+            return _Outgoing(order, (larva,), order.target, False, queue)
         if lead_in is None:
             return _Outgoing(order, (queue.unit,), order.target, order.queued, queue)
         target = None if lead_in[0] is AbilityId.LAND else order.target
@@ -400,10 +424,13 @@ class OrderBook:
 
     def _can_start(self, queue: HeldQueue, order: Order[Any]) -> bool:
         """Whether `queue`'s unit can start `order` now: a train or a research once the structure has a slot free, an
-        add-on or a morph once it is idle and on the ground, and a build once the worker is within reach. Anything
-        else queued behind those can start once it is at the head."""
+        add-on or a morph once it is idle and on the ground, a build once the worker is within reach, and a larva's
+        morph given to a hatchery once one of its larvae is free. Anything else queued behind those can start once it
+        is at the head."""
         unit, target = queue.unit, order.target
         row = self._game_data.abilities.get(order.ability)
+        if _grows_from_larvae(row, unit):
+            return bool(self._free_larvae(unit))
         match _behavior_for(row, unit):
             case OrderBehavior.QUEUES:
                 return self._free_slots(queue) > 0
@@ -424,13 +451,17 @@ class OrderBook:
 
     def _free_slots(self, queue: HeldQueue) -> int:
         """The slots `queue`'s structure has free: those it runs at once, less the trains and researches it shows or
-        was just sent, and none while it shows or was just sent an add-on or a morph."""
+        was just sent, and none while it shows or was just sent an add-on or a morph. A larva's morph sent from a
+        hatchery takes no slot of it."""
         unit = queue.unit
         abilities = [_ability_of_unit_order(order) for order in unit._latest_report.orders]
         abilities += [order.ability for order in self._in_flight(queue)]
         taken = 0
         for ability in abilities:
-            match _behavior_for(self._game_data.abilities.get(ability), unit):
+            row = self._game_data.abilities.get(ability)
+            if row is not None and row.performers == _LARVA:
+                continue
+            match _behavior_for(row, unit):
                 case OrderBehavior.NEEDS_IDLE:
                     return 0
                 case OrderBehavior.QUEUES:
@@ -486,10 +517,30 @@ class OrderBook:
     def _start_key(self, row: AbilityData, target: Target | None, unit: OwnUnit[Any]) -> tuple[bool, float]:
         """How soon `unit` could start an order of `row`'s ability at `target`: a worker, or a flying structure, by
         whether it is busy and then by the steps it goes to the site; a structure by the steps until it has a slot
-        free, or is idle for an add-on or a morph."""
+        free, or is idle for an add-on or a morph; a hatchery given a larva's morph by its free larvae, less what it
+        holds."""
+        if _grows_from_larvae(row, unit):
+            return False, float(len(self._waiting(unit)) - len(self._free_larvae(unit)))
         if target is not None and (unit.is_flying or _behavior_for(row, unit) is OrderBehavior.REPLACES):
             return self._is_busy(unit), travel_steps(unit, target)
         return False, self._steps_until_free(row, unit)
+
+    def _free_larvae(self, maker: OwnUnit[Any]) -> list[OwnUnit[Any]]:
+        """The larvae of `maker`, a hatchery, a lair or a hive, free to take a morph, lowest id first: those nearer its
+        larva spot than any other of this player's, that show no order, and that were given none this turn or so lately
+        that it may not show."""
+        makers = [unit for unit in self._present.of_type(_LARVA_MAKERS) if isinstance(unit, OwnUnit)]
+        spots = [(each, larva_spot(each)) for each in makers]
+        free: list[OwnUnit[Any]] = []
+        for larva in self._present.of_type(UnitTypeId.LARVA):
+            if not isinstance(larva, OwnUnit) or larva.is_stale or larva.id in self._larvae_given:
+                continue
+            if larva._latest_report.orders or self._sent_and_not_shown(larva) is not None:
+                continue
+            at = larva.position
+            if min(spots, key=lambda each: at.distance_to(each[1]))[0] is maker:
+                free.append(larva)
+        return sorted(free, key=lambda larva: larva.id)
 
     def _steps_until_free(self, row: AbilityData, unit: OwnUnit[Any]) -> float:
         """The steps until structure `unit` has a slot free for an order of `row`'s ability, or is idle for one that
@@ -588,10 +639,11 @@ def _commands(out: _Outgoing) -> list[tuple[sc2api_pb2.Action, tuple[OwnUnit[Any
 
 def _is_held_kind(row: AbilityData | None, unit: OwnUnit[Any]) -> bool:
     """Whether an order of `row`'s ability is held for `unit` until the unit can start it: one that costs, and that is
-    an add-on or a morph, a train or a research for a structure that keeps a queue, or a worker's build."""
+    an add-on or a morph, a train or a research for a structure that keeps a queue, a larva's morph given to a
+    hatchery, or a worker's build."""
     if row is None or not (row.cost.minerals or row.cost.vespene):
         return False
-    match row.order_behavior_for(unit.type_id):
+    match _behavior_for(row, unit):
         case OrderBehavior.NEEDS_IDLE:
             return True
         case OrderBehavior.QUEUES:
@@ -610,8 +662,17 @@ def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> O
 
 def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:
     """What an ability does to the current orders of `unit`, a unit of its type. An ability with no row replaces
-    them."""
-    return OrderBehavior.REPLACES if row is None else row.order_behavior_for(unit.type_id)
+    them, and a larva's morph given to a hatchery, a lair or a hive goes behind what it holds."""
+    if row is None:
+        return OrderBehavior.REPLACES
+    if _grows_from_larvae(row, unit):
+        return OrderBehavior.QUEUES
+    return row.order_behavior_for(unit.type_id)
+
+
+def _grows_from_larvae(row: AbilityData | None, unit: OwnUnit[Any]) -> bool:
+    """Whether `row`'s ability is a larva's morph given to `unit`, a hatchery, a lair or a hive."""
+    return row is not None and unit.type_id in _LARVA_MAKERS and row.performers == _LARVA
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:

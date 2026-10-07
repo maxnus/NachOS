@@ -18,6 +18,15 @@ if TYPE_CHECKING:
     from sc2nachos.units import OwnUnit, Target
 
 
+# Where a hatchery's larvae gather, from its center: they stood within 2.3 of it (tool `sweep_orders`, `larvae`).
+_LARVA_SPOT = (0.0, -2.85)
+
+
+def larva_spot(hatchery: Unit[Any]) -> Point:
+    """Where the larvae of `hatchery`, a lair or a hive gather: south of its center."""
+    return hatchery.position + _LARVA_SPOT
+
+
 def site_of(target: Target) -> Point:
     """Where an order aimed at `target` is carried out: the point, or where the unit stands."""
     return target.position if isinstance(target, Unit) else target

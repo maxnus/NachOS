@@ -123,7 +123,8 @@ class _Game:
         self.state = _State(observation, self.tracker, self.game_map)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
-        self.orders._observe(step, itertools.chain(changes.units_died, changes.units_found_dead, changed_hands))
+        lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
+        self.orders._observe(step, lost, self.tracker.unit_tracker.present)
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
