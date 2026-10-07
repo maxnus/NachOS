@@ -361,6 +361,12 @@ Each entry ends with how it was seen:
   `GENERAL_SCAN_MOVE` ordered by its own id shows as itself for the lurker, the oracle and the shade (tool
   `sweep_orders`, `attack-or-scan`; run 37610767491). A burrowed infestor or roach runs `GENERAL_ATTACK` as
   `GENERAL_SCAN_MOVE` (below).
+- A unit offered `GENERAL_SCAN_MOVE` and not `GENERAL_ATTACK_EXACT` (24 types, among them the medivac, raven,
+  observer, overlords, warp prism, MULE, infestor, viper and widow mine) runs `GENERAL_ATTACK` as the scan move. A
+  medivac, a raven, an observer, a MULE, an infestor and a widow mine given it at a point or at an enemy drone all
+  showed `GENERAL_SCAN_MOVE`, and each refused `GENERAL_ATTACK_EXACT` `NotSupported`. The widow mine showed its own
+  `WIDOW_MINE_ATTACK` ahead of the scan move once the drone was near (tool `sweep_orders`, `scan-only`; run
+  37611898076).
 - An unburrow's autocast is the type's, not the id's. With an enemy drone beside it, a burrowed roach whose
   `ROACH_UNBURROW` or `DRONE_UNBURROW` was switched to autocast came up within 50 steps; one whose
   `GENERAL_UNBURROW` was switched stayed down, and a burrowed drone stayed down with either switched. Every switch
