@@ -1101,6 +1101,7 @@ _HOLDING_TABLES = make_tables(
     _row(UnitTypeId.BARRACKS, structure=True, minerals=150, steps=1030.0),
     _row(UnitTypeId.BARRACKS_FLYING, structure=True, minerals=150, speed=0.9375),
     _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400, steps=1590.0),
+    _row(UnitTypeId.COMMAND_CENTER_FLYING, structure=True, minerals=400, speed=0.9375),
     _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550, steps=560.0),
     _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125, steps=560.0),
     *(
@@ -1165,6 +1166,13 @@ def _with_reactor(tag: int, reactor: int, *orders: raw_pb2.UnitOrder, progress: 
 def _command_center(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
     """One of this player's command centers, carrying out `orders`."""
     return make_unit(tag, UnitTypeId.COMMAND_CENTER, at=(40.0, 40.0), orders=orders)
+
+
+def _flying_command_center(
+    tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (40.0, 40.0)
+) -> raw_pb2.Unit:
+    """One of this player's command centers, lifted, carrying out `orders`."""
+    return make_unit(tag, UnitTypeId.COMMAND_CENTER_FLYING, at=at, is_flying=True, orders=orders)
 
 
 def _making(ability: AbilityId, progress: float = 0.5) -> raw_pb2.UnitOrder:
@@ -1374,6 +1382,34 @@ class TestHoldingAnAddOnOrAMorph:
         queued = game.book.issue(game.own(1), _ORBITAL, queued=True)
 
         assert game.book.issued_to(game.own(1)) == (orbital, train, queued)
+
+    def test_a_lifted_command_center_given_a_landing_and_an_orbital_lands_first(self) -> None:
+        """The game refuses a morph queued behind a landing `NotSupported` as it is given (in game)."""
+        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _flying_command_center(1))
+        game.book.issue(game.own(1), _LAND, target=_SITE)
+        orbital = game.book.issue(game.own(1), _ORBITAL, queued=True)
+
+        assert _sent(game.flush()) == [(_LAND, [1], _SITE, False)]
+        assert game.book.issued_to(game.own(1)) == (orbital,)
+
+        game.observe(16, _flying_command_center(1, _landing(), at=(35.0, 35.0)))
+        assert game.flush() is None
+        game.observe(32, make_unit(1, UnitTypeId.COMMAND_CENTER, at=_SITE))
+
+        assert _sent(game.flush()) == [(_ORBITAL, [1], None, True)]
+
+    def test_a_lifted_command_center_holds_an_orbital_until_it_lands(self) -> None:
+        game = _holding()
+        game.observe(0, _flying_command_center(1))
+        orbital = game.book.issue(game.own(1), _ORBITAL)
+
+        assert game.flush() is None
+        game.observe(16, _flying_command_center(1))
+        game.observe(32, _flying_command_center(1))
+
+        assert game.flush() is None
+        assert game.book.issued_to(game.own(1)) == (orbital,)
 
     def test_the_add_on_order_a_structure_still_shows_fills_every_slot(self) -> None:
         """A barracks stays busy one step longer than its add-on takes (in game)."""

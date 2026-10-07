@@ -400,15 +400,15 @@ class OrderBook:
 
     def _can_start(self, queue: HeldQueue, order: Order[Any]) -> bool:
         """Whether `queue`'s unit can start `order` now: a train or a research once the structure has a slot free, an
-        add-on or a morph once it is idle and, given a point, on the ground, and a build once the worker is within
-        reach. Anything else queued behind those can start once it is at the head."""
+        add-on or a morph once it is idle and on the ground, and a build once the worker is within reach. Anything
+        else queued behind those can start once it is at the head."""
         unit, target = queue.unit, order.target
         row = self._game_data.abilities.get(order.ability)
         match _behavior_for(row, unit):
             case OrderBehavior.QUEUES:
                 return self._free_slots(queue) > 0
             case OrderBehavior.NEEDS_IDLE:
-                return self._is_idle(queue) and not (unit.is_flying and target is not None)
+                return self._is_idle(queue) and not unit.is_flying
             case OrderBehavior.REPLACES if target is not None and _is_held_kind(row, unit):
                 reached = within_reach(unit, target, self._build_reach)
                 return reached and (not order.queued or self._may_start_queued(queue, order, target))

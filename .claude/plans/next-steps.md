@@ -9,10 +9,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #115. `uv run pytest` passes 1656 tests on PR B's branch; `uv run pytest -m
-  integration` passes 25 against a real game (run 2026-10-07).
-- **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state,
-  is #115; PR B, the queue, is on branch `claude/per-unit-queue`. Step 2, one id per action, is done (#103 to #107).
+- nachOS `main` has every PR to #116. `uv run pytest` passes 1658 tests on the branch of the #116 fix; `uv run pytest
+  -m integration` passes 25 against a real game (run 2026-10-07).
+- **Now: step 1's timing cases**, planned with the owner on 2026-10-07 (below): a fix to #116 first, then a sweep,
+  then a decision on what it found and a PR. The money cases are done: #115, an order without state, and #116, the
+  queue. Step 2, one id per action, is done (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -99,9 +100,9 @@ sent to the game to avoid paying upfront. The intention to build is known to nac
 location) and as soon as the worker is close enough, they will start the build. Similar for the flying barracks +
 build add-on."*
 
-**Status: planned with the owner on 2026-10-07, in two PRs.** PR A, an order without state (#115, "Decided"
-above), is merged; PR B, the queue, holds the money cases and an add-on or a morph on a busy structure. The decisions
-and the design follow the cases below; what is left is under "Pull requests".
+**Status: the money cases are done** (#115, an order without state, and #116, the queue). **The timing cases are
+planned** (2026-10-07, "The timing cases" below). The decisions and the design follow the cases below; what is left is
+under "Pull requests".
 
 ### Why: what the game does with an order it cannot carry out yet
 
@@ -227,17 +228,41 @@ an SCV sent toward a geyser's center comes within 1.2 of its edge while walking 
 Still to measure: what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
 planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 
+### The timing cases (the owner, 2026-10-07)
+
+Orders the game refuses now and would take later, settled one question at a time after #116:
+
+1. **A bug in #116, fixed first on its own.** A lifted command center given `LAND` and a queued orbital in one turn
+   had the orbital released in the same request, refused `NotSupported` (`queue-cases`), since "on the ground" was
+   checked only for an add-on with a point. An add-on or a morph now waits until the structure is on the ground,
+   whatever its target; a lifted command center given a morph holds it until the bot lands it.
+2. **Tech stays out**, as Q1 decided: an order never waits on a requirement. +2 behind +1 on one bay is held by the
+   bay's own state. To measure: how soon the game takes +2 after +1 finishes; the queue changes only if the bay's
+   first idle observation is too early.
+3. **Warp-ins: measure first, decide after**: the game's answer to a warp-in during the cooldown and whether anything
+   is charged, the cooldown per unit type, and whether `is_active`, a buff or the available-abilities query shows a
+   gate ready. A warp-in goes out as given until then.
+4. **A larva morph given to a hatchery is held there until one of its larvae is free**: `issue(hatchery,
+   LARVA_TRAIN_DRONE)` goes to a larva of the hatchery showing no order and given none this turn. To measure first:
+   how far a hatchery's larvae stand from it, and what the game answers to a larva morph given to the hatchery.
+5. **Spells stay with the game**: the game walks a caster into reach itself, no money is at stake, and a hold would
+   cost micro up to a turn.
+
 ### Pull requests
 
 1. **PR A, an order without state**: #115, branch `claude/order-without-state`.
-2. **PR B, the queue**: the money cases (a worker's build, alone or behind moves; a flying structure's add-on; a train
-   or research behind production), the pick, and an add-on or morph on a busy structure. Branch
-   `claude/per-unit-queue`. Where it settles what the design left open: a refused lead-in is listed in
-   `api.action_failures` under `MOVE` or `LAND`, the ability that went out; an order whose picked unit is busy reads
-   `queued`; each order released goes out as a command of its own, so a split group order's later parts keep no
-   spacing; and a train or a research is held only for a structure offered `CANCEL_LAST`, or its lifted form, so a
-   warp-in is not held (review of #116). Left for later: warp-ins, larva, a spell on arrival, tech still going up, and a flying command center that
-   lands and morphs.
+2. **PR B, the queue**: #116, branch `claude/per-unit-queue`. The money cases (a worker's build, alone or behind
+   moves; a flying structure's add-on; a train or research behind production), the pick, and an add-on or morph on a
+   busy structure. Where it settles what the design left open: a refused lead-in is listed in `api.action_failures`
+   under `MOVE` or `LAND`, the ability that went out; an order whose picked unit is busy reads `queued`; each order
+   released goes out as a command of its own, so a split group order's later parts keep no spacing; and a train or a
+   research is held only for a structure offered `CANCEL_LAST`, or its lifted form, so a warp-in is not held (review
+   of #116).
+3. **The #116 fix** (timing case 1): branch `claude/held-morph-on-the-ground`.
+4. **The timing sweeps**: `research-after`, `warp-gate-cooldown` and `larvae` in `tools/sweep_orders.py`, findings into
+   `docs/game-behavior.md`. Branch `claude/timing-sweeps`.
+5. **The timing cases built**, once the owner has decided on what the sweeps found: the larva hold, warp-ins if
+   anything shows a gate ready, and the +2 lag if it needs a change.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 
