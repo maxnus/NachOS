@@ -1211,7 +1211,7 @@ class _GroupUnloadingBot:
         self.player = player
         self.loads: list[Order[None]] = []
         self.unload: Order[None] | None = None
-        self.created = False
+        self.marines_left_out = 0
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1219,9 +1219,7 @@ class _GroupUnloadingBot:
         marines = api.units.own.of_type(UnitTypeId.MARINE)
         middle = api.map.playable_area.center
         if len(transports) < 2:
-            # Created once: units made by debug show up a turn or two later, and a second batch would double them.
-            if not self.created:
-                self.created = True
+            if event.step < 64:
                 api.client.debug(
                     [
                         _create(UnitTypeId.BUNKER, middle, self.player, quantity=1),
@@ -1238,6 +1236,8 @@ class _GroupUnloadingBot:
                 ]
             return
         if self.unload is None and all(transport.cargo_used > 0 for transport in transports):
+            # Units made by debug show up a turn or two later, so there may be more marines than were loaded.
+            self.marines_left_out = len(marines)
             self.unload = api.orders.issue(transports, _UNLOAD)
 
 
@@ -1319,7 +1319,7 @@ class TestAgainstTheRealGame:
         assert bot.unload.state is OrderState.SENT
         transports = bot.api.units.own.of_type([UnitTypeId.BUNKER, UnitTypeId.MEDIVAC])
         assert [transport.cargo_used for transport in transports] == [0, 0]
-        assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == 2
+        assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == bot.marines_left_out + 2
 
 
 def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot, _GroupSiegingBot, _GroupUnloadingBot)](
