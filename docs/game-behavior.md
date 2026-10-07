@@ -652,6 +652,10 @@ Each entry ends with how it was seen:
   refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
   storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
   and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
+- A worker can be sent to a geyser by a move to the geyser's center and given the refinery on the way. An SCV 2.5 from
+  a geyser's edge, sent to its center, was 1.2 from the edge 8 steps later and still walking; a refinery ordered then
+  went up, and its 75 minerals were taken by the next observation. A depot ordered once its SCV was 1.7 from the site,
+  walking there, went up too (`tests/test_orders.py`, the held build test; local game, Linux build 75689).
 
 ## Alerts and the camera
 

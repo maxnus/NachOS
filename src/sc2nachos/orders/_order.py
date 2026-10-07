@@ -22,10 +22,10 @@ class Order[T]:
         "_order_behavior",
         "_data",
         "_issued_step",
-        "_pending",
         "_queued",
         "_target",
         "_units",
+        "_withdrawn",
     )
 
     def __init__(
@@ -39,7 +39,7 @@ class Order[T]:
         order_behavior: OrderBehavior,
         step: int,
     ) -> None:
-        """An order of `ability` to `units`, issued at `step`. Made by `api.orders.issue`, never by a bot."""
+        """An order of `ability` to `units`, issued at `step`. Made by the order book, never by a bot."""
         self._ability = ability
         self._units = units
         self._target = target
@@ -47,8 +47,7 @@ class Order[T]:
         self._data = data
         self._order_behavior = order_behavior
         self._issued_step = step
-        # Until the turn is sent or the bot withdraws it.
-        self._pending = True
+        self._withdrawn = False
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
@@ -61,7 +60,8 @@ class Order[T]:
 
     @property
     def units(self) -> tuple[OwnUnit[Any], ...]:
-        """The units the order was given to."""
+        """The units the order was given to. An order NachOS holds until its unit can start it, given to several, is
+        given to the one NachOS picked: the one that can start it soonest."""
         return self._units
 
     @property
@@ -71,7 +71,8 @@ class Order[T]:
 
     @property
     def queued(self) -> bool:
-        """Whether the order was queued behind each unit's current orders instead of replacing them."""
+        """Whether the order goes behind each unit's current orders, those NachOS holds included, instead of replacing
+        them. An order NachOS picked a unit for reads `True` where that unit had something to do already."""
         return self._queued
 
     @property
@@ -87,10 +88,10 @@ class Order[T]:
 
     @property
     def issued_step(self) -> int:
-        """The step of the observation the order was issued in. It is also the step it was sent at, since a turn's
-        orders go out before the game steps again."""
+        """The step of the observation the order was issued in."""
         return self._issued_step
 
     def withdraw(self) -> None:
-        """Take the order back, so it is never sent. An order whose turn has been sent is left as it is."""
-        self._pending = False
+        """Take back whatever of the order has not gone out: all of it while its turn's handlers run, and what NachOS
+        still holds of it after."""
+        self._withdrawn = True

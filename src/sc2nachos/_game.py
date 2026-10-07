@@ -85,8 +85,9 @@ class _Game:
     result: Result | None = None
 
     @classmethod
-    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference) -> Self:
-        """Start the game `client` has joined: fetch its map and pre-upgrade tables once, and observe it."""
+    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference, build_reach: float) -> Self:
+        """Start the game `client` has joined: fetch its map and pre-upgrade tables once, and observe it. A held build
+        goes out once its worker is within `build_reach` of the site."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
         step = _step(observation)
@@ -101,7 +102,7 @@ class _Game:
             enemy,
             enemy_upgrade_inference,
             tracker,
-            OrderBook(game_data),
+            OrderBook(game_data, build_reach=build_reach),
             observation,
             _State(observation, tracker, game_map),
             step,
@@ -121,7 +122,8 @@ class _Game:
         self.tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.tracker, self.game_map)
         changes = self.tracker.last_changes
-        self.orders._observe(step, itertools.chain(changes.units_died, changes.units_found_dead))
+        changed_hands = (unit for unit, _ in changes.units_alliance_changed)
+        self.orders._observe(step, itertools.chain(changes.units_died, changes.units_found_dead, changed_hands))
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
