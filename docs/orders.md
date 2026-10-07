@@ -135,7 +135,7 @@ can start it, and sends it then:
 | --- | --- |
 | A worker's build | the worker is within `build_reach` of the site, or of its edge for a geyser. NachOS sends the worker to the site meanwhile. `Api(build_reach=...)` sets the reach; it is 2.5 by default. |
 | A train or a research | the structure has a slot free: it runs one at a time, two with a finished reactor, and none while lifted, so a train given to a lifted barracks waits for it to land. A warp gate keeps no queue, and its warp-ins go out as given. |
-| An add-on or a structure's morph | the structure is idle, and on the ground. A lifted barracks, factory or starport given an add-on at a point is sent to land there, and given the add-on once it has; given no point, it raises `TypeError`. |
+| An add-on or a structure's morph | the structure is idle, and on the ground. A lifted barracks, factory or starport given an add-on at a point is sent to land there, and given the add-on once it has; given no point, it raises `TypeError`. A lifted command center given a morph holds it until the bot lands it: a morph names no point to land at. |
 
 What costs nothing, a move, an attack, a gather, goes to the game as before, queued or not, so a worker's mining and
 a unit's micro are unchanged. Whatever is queued behind a held order waits with it, and goes out right behind it, in
