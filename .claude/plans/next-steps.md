@@ -36,8 +36,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replace would leave a structure idle for a turn (#43).
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
-- **A general research id costs its first level** (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100): it runs
-  the first level until that is done.
+- **Reversed on 2026-10-07, to land with step 2: the general research ids go.** Until then a general research id
+  costs its first level (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100), since it runs the first level until
+  that is done. The owner asked whether they are needed at all; a bot researches by level or by `UpgradeId`.
 - **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`PENDING`,
   `OVERRIDDEN`, `WITHDRAWN`, `REDUNDANT`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`,
   `LOST` and `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
@@ -65,6 +66,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   unload at a point aimed at the transport itself raises `TypeError` (the owner's choices, 2026-10-06, in review:
   one id rather than one per transport, "custom ids" rather than "NachOS ids"). A load, three spells and a fortress's attack were swept and
   need no split (docs/game-behavior.md).
+- **One public id per action** (2026-10-07, step 2). A family whose members do one thing for different performers
+  collapses to one id, which is issued, offered and read back; its per-unit ids stay only in `RawAbilityId`. The
+  leveled researches keep one id per level. `GENERAL_CANCEL` keeps its members, except that the three add-on
+  cancels become one custom `CANCEL_ADD_ON`. The liberator's and the archon's `_EXACT` ids are read as the id
+  ordered; a repeated `MORPH_ARCHON` is sent again rather than special-cased. A field that varies by performer is a
+  mapping from unit type on every row (`row.products[unit_type]`). `GENERAL_` goes from every name. The owner's
+  choices, in conversation, after asking *"why is there a `LIBERATOR_SIEGE` and a `LIBERATOR_SIEGE_EXACT`"*.
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -152,7 +160,140 @@ The three money cases whose state is plain to observe: the worker build (with it
 add-on, and the queued train or research. The timing cases follow the same pattern and can come after. Confirm the
 scope with the owner.
 
-## 2. The rest of M4
+## 2. One id per action: the families and the `_EXACT` ids
+
+Settled with the owner on 2026-10-07 (see "Decided" above); not started. The owner's words: *"why is there a
+`LIBERATOR_SIEGE` and a `LIBERATOR_SIEGE_EXACT` - could we do with one? [...] is it really necessary to have a
+separate `BARRACKS_LIFT` and `STARPORT_LIFT`?"* `OwnUnit` methods such as `barracks.lift()` (step 3, slice 7) would
+not make this unnecessary: ids also show in `unit.orders`, `unit.abilities` and `api.orders.issue`, and fewer of
+them also shorten NachOS's own code.
+
+### What there is now
+
+485 ability ids. 188 of them are per-unit ids that the game remaps onto one of 49 general ids. A unit is offered and
+reports its own per-unit id. The game accepts the general id as an order and runs each unit's per-unit id (#70). So
+`GENERAL_LIFT` can be issued to a barracks and a starport together, but a bot cannot read it back: to ask whether a
+worker is gathering, it tests `SCV_GATHER`, `PROBE_GATHER`, `DRONE_GATHER` and `MULE_GATHER`. Inside the order book,
+`_general_ability` already compares every order by its general id. python-sc2 did half of this: its
+`AbilityData.id` returns the general id.
+
+The `_EXACT` names are two different things:
+
+- `GENERAL_MOVE_EXACT`, `GENERAL_ATTACK_EXACT`, `GENERAL_STOP_EXACT`, `GENERAL_HOLD_POSITION_EXACT` and
+  `GENERAL_PATROL_EXACT` are ordinary family members. They are the per-unit id of every ordinary unit at once, so
+  there was no unit to name them after.
+- `LIBERATOR_SIEGE_EXACT`, `LIBERATOR_UNSIEGE_EXACT` and `GENERAL_MORPH_ARCHON_EXACT` were the oddities: the id
+  ordered differs from the id reported, and `remaps_to` links neither. Done in #103, which reads each as the id
+  ordered. The agent had expected a repeated siege to be sent instead of reading `REDUNDANT` because of them; in game
+  the repeat is never the same order anyway, since the liberator's report is aimed at itself and not at the point
+  ordered, and the game refuses it `NotSupported`.
+
+### What changes
+
+One public id per action. It is the id issued, the one offered in `unit.abilities`, and the one read back in
+`unit.orders`.
+
+- **A family whose members do one thing for different performers collapses to one id.** The per-unit ids leave
+  `AbilityId` and stay only in `RawAbilityId`, for translating what the game sends. That is every family below.
+- **The leveled researches keep one id per level, and their general ids go** (13 ids). A structure is offered and
+  reports the level, and `api.data.upgrades[upgrade].research_ability` names it. AvocaDOS researches by `UpgradeId`
+  and never uses a general research id. With them go the first-level cost of a general research
+  (`_ability_data.py`, the `first_level` code), the naming rule and test that tie a general research to its levels,
+  the deferred `api.next_level`, and `_general_ability` in the order book, whose last use they were.
+- **`GENERAL_CANCEL` keeps its members** (22 ids), except the three add-on cancels:
+  - `BARRACKS_CANCEL_ADD_ON`, `FACTORY_CANCEL_ADD_ON` and `STARPORT_CANCEL_ADD_ON` become one `CANCEL_ADD_ON`. The game
+    has no id for it, so it is a custom id. The measurement below decides what it is sent as.
+  - With that, a building add-on is cancelled by `CANCEL_ADD_ON` on every structure, so `cancelled_by` stays one
+    value.
+- **The three oddities are read as the id ordered.** The liberator's two `_EXACT` ids go. `Archon_Warp_Target`
+  (1767) is read as `MORPH_ARCHON`: a walking templar then shows `MORPH_ARCHON` aimed at its partner. Issued again
+  while they walk, the order has no target where the reported one has, so the repeat is not recognised and is sent.
+  The owner accepted that rather than a special rule in the repeat check.
+- **Translation happens on the wire.** When reading (`UnitOrder._from_proto`, the order book, the builder tracker,
+  `unit.abilities`), a per-unit id becomes its family's id. When sending, the family's id goes out as it is, since
+  the game takes it.
+- **A field that varies by performer becomes a mapping from unit type, on every row**: `row.products[unit_type]`,
+  with one entry for an ability one type performs. That is the owner's choice of the three shapes offered. The
+  others were `row.product_for(unit_type)`, as `order_behavior_for` is, and `row.by_performer[unit_type].product`.
+  Required tech already lives per unit type, in `TECH_TREE.ability_requirements[unit_type][ability]`.
+- **`GENERAL_` goes from every name**: `LIFT`, `BURROW`, `STIM`, `GATHER`, `SMART`, `SALVAGE`, `UNLOAD_IN_PLACE`,
+  `MORPH_ARCHON`, `CANCEL`, and so on. `VIKING_LIFT` (`Morph_VikingFighterMode`) is not in the lift family and keeps
+  its name, beside `LIFT`.
+
+About 145 fewer ids: 127 per-unit ids, the 3 oddities, the 13 general researches, and 3 add-on cancels for 1 custom
+id.
+
+The families that collapse, with what their members differ in (from `api.data` and `TECH_TREE` on main,
+2026-10-07):
+
+| Family | Ids | Differs per performer |
+|---|---|---|
+| `GENERAL_ATTACK` | 4 | order behavior (bunker, battlecruiser); requirement (`GENERAL_SCAN_MOVE` needs tunneling claws when burrowed) |
+| `GENERAL_BLINK` | 2 | requirement (blink or shadow stride research) |
+| `GENERAL_BUILD_CREEP_TUMOR` | 2 | product (`CREEP_TUMOR` or `CREEP_TUMOR_QUEEN`) |
+| `GENERAL_BUILD_REACTOR`, `GENERAL_BUILD_TECH_LAB` | 3 + 3 | product, and `cancelled_by` (each structure's own add-on cancel, until `CANCEL_ADD_ON`) |
+| `GENERAL_BURROW` | 12 | product (the burrowed type); requirement (none for lurker and widow mine) |
+| `GENERAL_UNBURROW` | 12 | `allows_autocast`. Every burrowed zerg type is offered 10 of the 12, so they are interchangeable |
+| `GENERAL_CANCEL_LAST` | 7 | nothing; no type is offered two |
+| `GENERAL_CLOAK_ON` / `_OFF` | 2 + 2 | requirement (banshee or ghost cloak) |
+| `GENERAL_GATHER`, `GENERAL_RETURN`, `GENERAL_REPAIR`, `GENERAL_SPRAY` | 4, 4, 2, 3 | nothing |
+| `GENERAL_HALT` | 2 | nothing |
+| `GENERAL_HOLD_FIRE_ON` / `_OFF` | 2 + 2 | nothing |
+| `GENERAL_HOLD_POSITION`, `GENERAL_MOVE`, `GENERAL_PATROL` | 2 each | requirement (tunneling claws when burrowed) |
+| `GENERAL_STOP` | 3 | order behavior |
+| `GENERAL_LAND` | 5 | nothing |
+| `GENERAL_LIFT` | 5 | product (the flying type) |
+| `GENERAL_LOAD`, `GENERAL_LOAD_ALL` | 6, 1 | nothing |
+| `GENERAL_UNLOAD`, `GENERAL_UNLOAD_AT` | 7, 7 | order behavior (unload) |
+| `GENERAL_RALLY_UNITS`, `GENERAL_RALLY_WORKERS` | 2, 3 | nothing |
+| `GENERAL_RECALL`, `GENERAL_STIM` | 2, 2 | nothing |
+| `GENERAL_ROOT`, `GENERAL_UPROOT` | 2, 2 | product (uproot) |
+
+Only `product`, `cancelled_by` and `allows_autocast` vary on `AbilityData`. `product` is read for the derived cost
+and for whether an ability makes a structure, and both come out the same within each family.
+
+### What it costs
+
+- **The data.** `AbilityData` and `TechTree` are keyed by per-unit id: `ability_requirements`, `ability_products`,
+  `creation_abilities`, `ability_cancels` and `ability_remaps`. `ability_products` stops being a function, since
+  `LIFT` makes five flying types.
+- **The generator and `data/tech_tree.json`.** The sweep records what the game offers, which is per-unit ids, and
+  keeps doing so. The fold onto family ids happens where the file is loaded, so the file stays a record of the game.
+- **The order book gets shorter**: `_general_ability` goes.
+- **Docs.** The conventions in `docs/curating-ids.md` (performer first, `GENERAL`, `_EXACT`, the general research's
+  name), `docs/migrating-from-python-sc2.md` (`remaps_to`, `exact_id`), and the examples in `docs/orders.md` and
+  `docs/game-behavior.md`.
+- **AvocaDOS.** `tests/test_nachos_id_parity.py` still holds, since every remaining id but the custom ones is a game
+  id. The bot is ported once at M5, so this should land before then.
+
+### Measurements it needs (`tools/sweep_orders.py`)
+
+- **The liberator repeat.** Done in #103 (runs 37605755080 and 37606192575): a liberator is sieged by the next
+  observation, reports its siege aimed at itself for the 64 steps its zone takes to form, and refuses the siege
+  again `NotSupported`.
+- **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** An adept shade, a high templar, a lurker and an oracle are offered
+  both. Find which one `GENERAL_ATTACK` runs for each, and whether a bot loses anything by not being able to order
+  `Scan_Move` by name.
+- **What `GENERAL_CANCEL` does to a structure building an add-on.** If it cancels the add-on, `CANCEL_ADD_ON` is sent
+  as `GENERAL_CANCEL`; otherwise, as each structure's own cancel. That would need `sent_as` per performer, which
+  `AbilityData.sent_as` cannot hold today.
+- **Whether `GENERAL_CANCEL` should collapse whole.** The "offered two members" test above counted every state a
+  type can be in. A command center is offered both morph cancels and `GENERAL_CANCEL_BUILDING`, but never more than
+  one at a time, since it cannot morph twice or morph while under construction. The same holds for a ghost's two
+  cancels. If no unit is ever offered two cancels at once, `CANCEL` alone does every cancel, the 22 members go, and
+  `cancelled_by` is always `CANCEL`. Raised with the owner on 2026-10-07; not decided.
+- **`allows_autocast` on the unburrows.** If no unburrow can be autocast, the field stays a plain bool.
+
+### Pull requests
+
+1. **The three oddities.** #103: `AbilityId._REMAPPED_IDS`, read by `AbilityId.read` and `get`, with just
+   the liberator and archon pairs. The next PR extends it.
+2. **The families.** Extend the map, remove the per-unit ids and the general research ids from `AbilityId`, add
+   `CANCEL_ADD_ON`, re-key the tables, turn the varying fields into mappings, and update the docs.
+3. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the second one's diff stays
+   readable.
+
+## 3. The rest of M4
 
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
@@ -163,14 +304,6 @@ when each starts.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
    against `Computer` using only NachOS, and doubles as the library's example for other developers.
-
-## 3. Deferred: the exact level a general research runs now
-
-`api.data.abilities[general].cost` is the first level's. For the second and third, a state-aware lookup, for
-example `api.next_level(general) -> AbilityId | None`: the lowest level whose upgrade is not in `api.upgrades`,
-from `TECH_TREE.upgrade_levels` and `ability_remaps` (about 15 lines and tests). Never by mutating `api.data`. Not
-measured: what the game does with a general id while a level is still researching (expected: refused). The owner
-said "leave it for later".
 
 ## 4. After each nachOS pull request merges
 

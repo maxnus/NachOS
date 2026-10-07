@@ -16,6 +16,7 @@ from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook, OrderState
@@ -43,6 +44,7 @@ _UNLOAD = AbilityId.GENERAL_UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _UNLOAD_AT = AbilityId.GENERAL_UNLOAD_AT
 _MEDIVAC_UNLOAD_AT = AbilityId.MEDIVAC_UNLOAD_AT
+_SIEGE = AbilityId.LIBERATOR_SIEGE
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 _AT_A_POINT = data_pb2.AbilityData.Target.Point
@@ -56,6 +58,8 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.QUEEN, attributes=[data_pb2.Attribute.Biological]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_BURROWED, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC, attributes=[data_pb2.Attribute.Mechanical]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.LIBERATOR, attributes=[data_pb2.Attribute.Mechanical]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.LIBERATOR_SIEGED, attributes=[data_pb2.Attribute.Mechanical]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
@@ -77,6 +81,7 @@ _TABLES = make_tables(
         data_pb2.AbilityData(
             ability_id=_MEDIVAC_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_UNLOAD_AT
         ),
+        data_pb2.AbilityData(ability_id=_SIEGE, target=_AT_A_POINT),
     ],
 )
 
@@ -547,6 +552,37 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         assert len(_commands(game.flush())) == 1
         assert not marine.is_dead
         assert order.state is OrderState.SENT
+
+
+class TestALiberatorSieging:
+    """A liberator ordered `LIBERATOR_SIEGE` at a point is a sieged liberator by the next observation, and reports
+    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered the siege again, it is refused
+    `NotSupported` (in game)."""
+
+    def test_it_reads_as_carrying_out_the_siege_it_was_ordered(self) -> None:
+        game = _Game()
+        game.observe(0, _sieged_liberator(1))
+
+        (order,) = game.own(1).orders
+
+        assert order.ability is _SIEGE
+        assert order.target is game.own(1)
+
+    def test_the_siege_again_is_sent_since_it_was_aimed_at_a_point_and_shows_aimed_at_the_liberator(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED])
+        game.observe(0, _sieged_liberator(1))
+
+        order = game.book.issue(game.own(1), _SIEGE, target=(20.0, 21.0))
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _SIEGE
+        assert order.state is OrderState.REFUSED
+
+
+def _sieged_liberator(tag: int) -> raw_pb2.Unit:
+    """One of this player's liberators, sieged, showing the order it reports while its zone forms."""
+    siege = raw_pb2.UnitOrder(ability_id=RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, target_unit_tag=tag)
+    return make_unit(tag, UnitTypeId.LIBERATOR_SIEGED, at=(18.0, 21.0), orders=(siege,))
 
 
 class TestAGroupOfSeveralTypes:
@@ -1061,6 +1097,37 @@ class _UnloadingBot:
                 self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
 
+class _SiegingBot:
+    """A bot that sieges a liberator, then orders the same siege again on two turns from 32 steps later."""
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.zone: Point | None = None
+        self.sieges: list[Order[None]] = []
+        self.reported: list[tuple[int, UnitTypeId, list[tuple[AbilityId, bool]]]] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        liberators = api.units.own.of_type([UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED])
+        if not liberators:
+            if event.step < 64:
+                api.client.debug([_create(UnitTypeId.LIBERATOR, api.map.playable_area.center, self.player, quantity=1)])
+            return
+        liberator = liberators[0]
+        orders = [(order.ability, order.target is liberator) for order in liberator.orders]
+        self.reported.append((event.step, liberator.type_id, orders))
+        if self.zone is None:
+            self.zone = liberator.position + (4.0, 0.0)
+        if self._siege_due(event.step):
+            self.sieges.append(api.orders.issue(liberator, _SIEGE, target=self.zone))
+
+    def _siege_due(self, step: int) -> bool:
+        """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
+        shows the first."""
+        return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].issued_step + 32)
+
+
 class _UnloadingBotUnloadingFirst(_UnloadingBot):
     unload_first = True
 
@@ -1110,8 +1177,19 @@ class TestAgainstTheRealGame:
             assert medivac.cargo_used == 0
             assert medivac.position.distance_to(bot.unloaded_at[medivac.tag]) > 6.0
 
+    def test_a_liberator_sieged_at_once_shows_the_siege_aimed_at_itself_and_refuses_it_again(self) -> None:
+        bot = _play_a_minute(_SiegingBot)
 
-def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot)](make_bot: type[BotT]) -> BotT:
+        print("the liberator, turn by turn:", bot.reported[:12])
+        print("sieges:", [(order.issued_step, order.state.name, order.action_result) for order in bot.sieges])
+        assert [order.state for order in bot.sieges] == [OrderState.SENT, OrderState.REFUSED, OrderState.REFUSED]
+        assert [order.action_result for order in bot.sieges[1:]] == [ActionResult.NOT_SUPPORTED] * 2
+        # Each order as its ability and whether it is aimed at the liberator itself.
+        (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
+        assert first == [(_SIEGE, True)]
+
+
+def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot)](make_bot: type[BotT]) -> BotT:
     """Play a minute of a game against a very easy computer with the bot `make_bot` makes, and return the bot."""
     try:
         game_map = MapFile.find("PylonAIE_v4")

@@ -8,9 +8,14 @@ every game id, and the game never reports one. Unknown ids raise.
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
 LARVA_MORPH_ZERGLING -- and GENERAL where several units can. Where the game remaps a family onto one id, that
 one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its three leveled siblings.
+
+Where a unit reports running another id than the one it was ordered, and the game links neither to the other, that id
+reads as the one ordered: a liberator ordered LIBERATOR_SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which reads
+as LIBERATOR_SIEGE (`_REMAPPED_IDS`).
 """
 
-from enum import auto
+from enum import auto, nonmember
+from types import MappingProxyType
 
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId
@@ -214,10 +219,8 @@ class AbilityId(IdEnum):
     GENERAL_LOAD = RawAbilityId.Load
     GENERAL_LOAD_ALL = RawAbilityId.LoadAll
     # The order to give two templar, high or dark, selected together: they walk to each other and merge into an
-    # archon. Given to one alone it is refused. Each reports MORPH_ARCHON_EXACT running, aimed at the other; that
-    # order, given to both and aimed at one of them, merges them too, and given to one does nothing (in game).
+    # archon. Given to one alone it is refused. Each reports MORPH_ARCHON running, aimed at the other (in game).
     GENERAL_MORPH_ARCHON = RawAbilityId.Morph_Archon
-    GENERAL_MORPH_ARCHON_EXACT = RawAbilityId.Archon_Warp_Target
     GENERAL_MOVE = RawAbilityId.Move  # the order you give; a unit reports MOVE_EXACT
     GENERAL_MOVE_EXACT = RawAbilityId.Move_Move  # the order a unit reports running; you give MOVE
     GENERAL_PATROL = RawAbilityId.Patrol
@@ -292,11 +295,8 @@ class AbilityId(IdEnum):
     LARVA_MORPH_ULTRALISK = RawAbilityId.LarvaTrain_Ultralisk
     LARVA_MORPH_VIPER = RawAbilityId.LarvaTrain_Viper
     LARVA_MORPH_ZERGLING = RawAbilityId.LarvaTrain_Zergling
-    # The two orders you give, and the id a liberator reports running once it has taken either.
     LIBERATOR_SIEGE = RawAbilityId.Morph_LiberatorAGMode
-    LIBERATOR_SIEGE_EXACT = RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode
     LIBERATOR_UNSIEGE = RawAbilityId.Morph_LiberatorAAMode
-    LIBERATOR_UNSIEGE_EXACT = RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode
     LOCUST_SWOOP = RawAbilityId.Effect_LocustSwoop
     LURKER_BURROW = RawAbilityId.BurrowDown_Lurker
     LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED = RawAbilityId.Research_AdaptiveTalons
@@ -520,3 +520,16 @@ class AbilityId(IdEnum):
     # The catalog also holds MorphZerglingToBaneling, which a zergling is never offered and which does nothing.
     ZERGLING_MORPH_BANELING = RawAbilityId.MorphToBaneling_Baneling
     ZERGLING_UNBURROW = RawAbilityId.BurrowUp_Zergling
+
+    # The id a unit reports running for an order given by another, where `remaps_to` links neither to the other, with
+    # the id ordered. Ordering a reported id does nothing, except that the archon's, given to both templar and aimed at
+    # one of them, merges them too (in game).
+    _REMAPPED_IDS = nonmember(
+        MappingProxyType(
+            {
+                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: LIBERATOR_SIEGE,
+                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: LIBERATOR_UNSIEGE,
+                RawAbilityId.Archon_Warp_Target: GENERAL_MORPH_ARCHON,
+            }
+        )
+    )
