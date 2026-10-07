@@ -17,7 +17,7 @@ from sc2nachos.events import (
     TurnStartEvent,
     UnitDiedEvent,
 )
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -30,6 +30,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import ActionResult
+from sc2nachos.units import UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 # A map from the current AIE ladder pool, for the test games.
@@ -276,6 +277,30 @@ class TestPlaying:
                 (2, 1, AbilityId.ATTACK, ActionResult.NOT_ENOUGH_FOOD),
             ],
         ]
+
+    def test_what_is_in_production_is_counted_by_a_type_a_group_an_id_or_several(self) -> None:
+        warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
+        client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
+        api = Api()
+        counted: list[tuple[int, int, int, int, int, float | None]] = []
+
+        @api.events.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            stalkers = (UnitTypeId.ZEALOT, UnitTypeId.STALKER)
+            counted.append(
+                (
+                    api.in_production(UnitType.Zealot),
+                    api.in_production(UnitTypeId.ZEALOT),
+                    api.in_production(stalkers),
+                    api.in_production(UnitType.Protoss),
+                    api.in_production(UnitType.Stalker, UnitType.Adept),
+                    api.research_progress(UpgradeId.WARP_GATE),
+                )
+            )
+
+        api.play(client)
+
+        assert counted == [(1, 1, 1, 1, 0, None)]
 
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""

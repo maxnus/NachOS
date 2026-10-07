@@ -94,7 +94,7 @@ class _Game:
         game_data = GameData(data)
         enemy = Enemy()
         tracker = _Tracker(game_data, enemy)
-        game_map = GameMap(info)
+        game_map = GameMap._of_game(info, observation)
         game = cls(
             client,
             game_map,

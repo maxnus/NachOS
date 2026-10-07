@@ -23,7 +23,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
-from sc2nachos.units import Alliance, OwnUnit, Unit
+from sc2nachos.units import Alliance, OwnUnit, Unit, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
 
@@ -105,7 +105,7 @@ class _Game:
         ]
         self.client, self.transport = make_client(*responses)
         self.tracker = _Tracker(tables, Enemy())
-        self.map = GameMap(make_game_info())
+        self.map = GameMap(make_game_info(), start_location=(0.5, 0.5))
         self.book = OrderBook(tables, build_reach=build_reach)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
@@ -2137,6 +2137,45 @@ class _HeldRefineryBot(_HeldBuildBot):
     refinery = True
 
 
+class _ProductionBot:
+    """A terran bot that raises a barracks and an engineering bay by debug command under cheats for supply and
+    resources, gives the barracks two marines and the bay infantry weapons 1, and records each turn after what is in
+    production: the marines made and held, and the research's progress."""
+
+    race = Race.TERRAN
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.made = False
+        self.ordered = False
+        self.reads: list[tuple[int, int, float | None]] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        barracks = api.units.own.of_type(UnitType.Barracks).complete
+        bays = api.units.own.of_type(UnitType.EngineeringBay).complete
+        if not self.made:
+            cheats = (debug_pb2.DebugGameState.Value(name) for name in ("food", "all_resources"))
+            middle = api.map.playable_area.center
+            site = api.map.start_location.towards(middle, 12.0)
+            creates = [
+                _create(UnitTypeId.BARRACKS, site, self.player, quantity=1),
+                _create(UnitTypeId.ENGINEERING_BAY, site + (0.0, 6.0), self.player, quantity=1),
+            ]
+            api.client.debug([*(debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats), *creates])
+            self.made = True
+        elif not self.ordered and barracks and bays:
+            for _ in range(2):
+                api.orders.issue(barracks[0], _TRAIN_MARINE)
+            api.orders.issue(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
+            self.ordered = True
+        elif self.ordered:
+            held = len(api.orders.issued_to(barracks[0]))
+            progress = api.research_progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+            self.reads.append((api.in_production(UnitType.Marine), held, progress))
+
+
 class _LarvaBot:
     """A zerg bot that gives its hatchery five drones at once, more than it has larvae, under cheats for supply and
     resources, and records each turn after how many are still held."""
@@ -2260,6 +2299,19 @@ class TestAgainstTheRealGame:
         assert [transport.cargo_used for transport in transports] == [0, 0]
         assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == bot.marines_left_out + 2
 
+    def test_what_is_in_production_is_what_the_game_makes_and_not_what_is_held(self) -> None:
+        bot, failures = _play_a_minute(_ProductionBot)
+
+        print("(marines in production, held, research progress), turn by turn:", bot.reads)
+        print("refused or given up:", failures)
+        assert bot.reads
+        assert (1, 1) in {(count, held) for count, held, _ in bot.reads}
+        assert (1, 0) in {(count, held) for count, held, _ in bot.reads}
+        assert all(count <= 1 for count, _, _ in bot.reads)
+        progress = [each for _, _, each in bot.reads if each is not None]
+        assert progress == sorted(progress)
+        assert 0.0 < progress[-1] < 1.0
+
     def test_drones_given_to_a_hatchery_wait_for_larvae(self) -> None:
         bot, failures = _play_a_minute(_LarvaBot)
 
@@ -2294,7 +2346,16 @@ class TestAgainstTheRealGame:
 
 
 def _play_a_minute[
-    BotT: (_OrderingBot, _UnloadingBot, _SiegingBot, _GroupSiegingBot, _GroupUnloadingBot, _HeldBuildBot, _LarvaBot)
+    BotT: (
+        _OrderingBot,
+        _UnloadingBot,
+        _SiegingBot,
+        _GroupSiegingBot,
+        _GroupUnloadingBot,
+        _HeldBuildBot,
+        _LarvaBot,
+        _ProductionBot,
+    )
 ](
     make_bot: type[BotT],
 ) -> tuple[BotT, list[ActionFailure]]:

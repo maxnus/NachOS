@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from s2clientprotocol import sc2api_pb2
+from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
@@ -189,14 +189,23 @@ _ENTERED = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent)
 _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 
 
+_OWN = raw_pb2.Alliance.Self
+# The townhall types a game can start a player with.
+_TOWNHALLS = {UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY}
+
+
+def _map(recording: Recording) -> GameMap:
+    """The map of a recorded game, read as a game reads it from its answers."""
+    info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
+    return GameMap._of_game(info, next(iter(_observations(recording))))
+
+
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
     """A unit that crosses a vital value is on the side it crossed to, a unit that enters an area is inside it and one
     that leaves is outside, and each unit crosses alternately in each direction."""
     recording = Recording(path)
-    game_map = GameMap(
-        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    )
+    game_map = _map(recording)
     client = Client(PlaybackTransport(recording))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
@@ -254,12 +263,20 @@ _STATE_READS = sorted(
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_a_game_starts_this_player_at_its_own_townhall_and_not_an_opponents_start(path: Path) -> None:
+    recording = Recording(path)
+    first = next(iter(_observations(recording)))
+    own = [unit for unit in first.observation.raw_data.units if unit.alliance == _OWN and unit.unit_type in _TOWNHALLS]
+    game_map = _map(recording)
+    assert [Point((unit.pos.x, unit.pos.y)) for unit in own] == [game_map.start_location]
+    assert game_map.start_location not in game_map.opponent_start_locations
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
     tracker = _Tracker(_tables(recording), Enemy())
-    game_map = GameMap(
-        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    )
+    game_map = _map(recording)
     for observation in _observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)

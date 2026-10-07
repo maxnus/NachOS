@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from sc2nachos import Api, NotPlayingError
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import ChatEvent
-from sc2nachos.gamedata import Resources
+from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -56,14 +56,133 @@ _ENEMY = Alliance.ENEMY
 class _Game:
     """A game on an eight by eight map, taking in observations one at a time."""
 
-    def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None) -> None:
-        self.tracker = _Tracker(_TABLES, Enemy())
-        self.map = GameMap(game_info or make_game_info())
+    def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None, tables: GameData = _TABLES) -> None:
+        self.tracker = _Tracker(tables, Enemy())
+        self.map = GameMap(game_info or make_game_info(), start_location=(0.5, 0.5))
 
     def observe(self, step: int = 0, **fields: Any) -> _State:
         observation = make_observation(step, **fields)
         self.tracker.update(observation.observation.raw_data, step)
         return _State(observation, self.tracker, self.map)
+
+
+def _row(unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0) -> data_pb2.UnitTypeData:
+    """A unit type's row, a structure or not, at its price in minerals."""
+    attribute = data_pb2.Attribute.Structure if structure else data_pb2.Attribute.Biological
+    return data_pb2.UnitTypeData(unit_id=unit_type, attributes=[attribute], mineral_cost=minerals)
+
+
+_MAKING_TABLES = make_tables(
+    _row(UnitTypeId.MARINE, minerals=50),
+    _row(UnitTypeId.BARRACKS, structure=True, minerals=150),
+    *(
+        _row(reactor, structure=True, minerals=50)
+        for reactor in (UnitTypeId.REACTOR_BARRACKS, UnitTypeId.REACTOR_FACTORY, UnitTypeId.REACTOR_STARPORT)
+    ),
+    _row(UnitTypeId.SCV, minerals=50),
+    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100),
+    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400),
+    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550),
+    _row(UnitTypeId.LARVA),
+    _row(UnitTypeId.EGG),
+    _row(UnitTypeId.DRONE, minerals=50),
+    _row(UnitTypeId.ZEALOT, minerals=100),
+    _row(UnitTypeId.SIEGE_TANK, minerals=150),
+    _row(UnitTypeId.SIEGE_TANK_SIEGED, minerals=150),
+    _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125),
+    abilities=[
+        data_pb2.AbilityData(ability_id=AbilityId.BARRACKS_TRAIN_MARINE),
+        data_pb2.AbilityData(ability_id=AbilityId.BUILD_REACTOR, is_building=True),
+        data_pb2.AbilityData(
+            ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=data_pb2.AbilityData.Target.Point, is_building=True
+        ),
+        data_pb2.AbilityData(ability_id=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND),
+        data_pb2.AbilityData(ability_id=AbilityId.LARVA_MORPH_DRONE),
+        data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
+        data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
+    ],
+    upgrades=[data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100)],
+)
+
+
+def _done(tag: int, unit_type: UnitTypeId, *orders: raw_pb2.UnitOrder, **fields: Any) -> raw_pb2.Unit:
+    """One of this player's finished units of `unit_type`, carrying out `orders`."""
+    return make_unit(tag, unit_type, orders=orders, build_progress=1.0, **fields)
+
+
+def _making(ability: int, progress: float = 0.0, at: tuple[float, float] | None = None) -> raw_pb2.UnitOrder:
+    """An order a unit shows, `progress` along, aimed at the point `at` if given."""
+    order = raw_pb2.UnitOrder(ability_id=ability, progress=progress)
+    if at is not None:
+        order.target_world_space_pos.x, order.target_world_space_pos.y = at
+    return order
+
+
+class TestProduction:
+    def test_each_train_a_structure_shows_counts_once(self) -> None:
+        train = AbilityId.BARRACKS_TRAIN_MARINE
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[
+                _done(1, UnitTypeId.BARRACKS, _making(train, 0.5), _making(train, 0.2), add_on_tag=2),
+                _done(2, UnitTypeId.REACTOR_BARRACKS),
+            ]
+        )
+        assert state.production.count([UnitTypeId.MARINE]) == 2
+
+    def test_an_egg_counts_for_what_it_becomes(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[_done(1, UnitTypeId.EGG, _making(AbilityId.LARVA_MORPH_DRONE, 0.4))]
+        )
+        assert state.production.count([UnitTypeId.DRONE]) == 1
+        assert state.production.count([UnitTypeId.EGG]) == 0
+
+    def test_a_worker_on_its_way_to_build_counts_until_the_structure_stands_which_then_counts(self) -> None:
+        build = _making(AbilityId.SCV_BUILD_SUPPLY_DEPOT, at=(20.0, 20.0))
+        game = _Game(tables=_MAKING_TABLES)
+        walking = game.observe(units=[_done(1, UnitTypeId.SCV, build, at=(10.0, 10.0))])
+        assert walking.production.count([UnitTypeId.SUPPLY_DEPOT]) == 1
+        depot = make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(20.0, 20.0), build_progress=0.3)
+        building = game.observe(16, units=[_done(1, UnitTypeId.SCV, build, at=(19.0, 20.0)), depot])
+        assert building.production.count([UnitTypeId.SUPPLY_DEPOT]) == 1
+
+    def test_an_add_on_counts_by_its_order_until_it_stands_which_then_counts(self) -> None:
+        game = _Game(tables=_MAKING_TABLES)
+        ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR))])
+        assert ordered.production.count([UnitTypeId.REACTOR_BARRACKS]) == 1
+        going_up = game.observe(
+            16,
+            units=[
+                _done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR), add_on_tag=2),
+                make_unit(2, UnitTypeId.REACTOR_BARRACKS, build_progress=0.1),
+            ],
+        )
+        assert going_up.production.count([UnitTypeId.REACTOR_BARRACKS]) == 1
+
+    def test_a_structure_morphing_counts_for_what_it_becomes(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[_done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND))]
+        )
+        assert state.production.count([UnitTypeId.ORBITAL_COMMAND]) == 1
+
+    def test_a_unit_warping_in_counts(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
+        assert state.production.count([UnitTypeId.ZEALOT]) == 1
+
+    def test_a_free_order_that_makes_a_form_never_counts(self) -> None:
+        siege = _making(RawAbilityId.SiegeMode_SiegeMode)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.SIEGE_TANK_SIEGED, siege)])
+        assert state.production.count([UnitTypeId.SIEGE_TANK_SIEGED]) == 0
+
+    def test_an_enemys_production_is_not_counted(self) -> None:
+        enemy = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5, alliance=_ENEMY)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[enemy])
+        assert state.production.count([UnitTypeId.ZEALOT]) == 0
+
+    def test_a_research_reads_its_progress_and_nothing_else_does(self) -> None:
+        research = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.ENGINEERING_BAY, research)])
+        assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1) == 0.25
+        assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_2) is None
 
 
 class TestScore:

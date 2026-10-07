@@ -191,7 +191,7 @@ class TechSweep:
         self._race = race
         self.findings = findings
         findings.base_build = self._client.ping().base_build
-        self._map = GameMap(self._client.game_info())
+        self._map = GameMap._of_game(self._client.game_info(), self._client.observation())
         raw_data = self._client.game_data()
         self._data = GameData(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}

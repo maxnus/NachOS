@@ -11,6 +11,7 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.state._actions import Action, ActionFailure, read_action
 from sc2nachos.state._effect import Effect
+from sc2nachos.state._production import _Production
 from sc2nachos.state._score import Score
 from sc2nachos.state._supply import Supply
 from sc2nachos.state._ui_unit_counts import UiUnitCounts
@@ -70,6 +71,11 @@ class _State:
                 taken += row.cost.supply % 1
         # The fraction left after the whole supplies, which the game does count: two zerglings leave nothing.
         return taken % 1
+
+    @cached_property
+    def production(self) -> _Production:
+        """What this player's units are making."""
+        return _Production(self._tracker.unit_tracker.present, self._tracker.game_data)
 
     @cached_property
     def ui_unit_counts(self) -> UiUnitCounts:

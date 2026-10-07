@@ -9,11 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #118. `uv run pytest` passes 1667 tests on the larva hold's branch; `uv run pytest -m
-  integration` passes 26 against a real game (run 2026-10-07).
-- **Step 1, a queue per unit, is done once the larva hold is in** (branch `claude/larva-hold`): the money cases (#115,
-  #116), the lifted command center (#117), the timing sweeps (#118), and the larva hold. Warp-ins are not held, and
-  spells stay with the game. Step 2, one id per action, is done (#103 to #107). Next is step 3, the rest of M4.
+- nachOS `main` has every PR to #120. `uv run pytest` passes 1689 tests on the derived reads' branch; `uv run pytest
+  -m integration` passes 27 against a real game (run 2026-10-07).
+- **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
+  sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
+  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is on branch
+  `claude/derived-reads`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -272,7 +273,7 @@ Orders the game refuses now and would take later, settled one question at a time
      charged nothing, and the gate reads no different.
    - **A larva stands within 3.6 of its own hatchery's center**, an inject's too, and a morph given to a hatchery is
      refused `NotSupported`.
-5. **The larva hold**: branch `claude/larva-hold`. The `larvae` sweep measures where larvae stand from each of
+5. **The larva hold**: #120, branch `claude/larva-hold`. The `larvae` sweep measures where larvae stand from each of
    four hatcheries in two games; a larva's morph given to a hatchery, a lair or a hive is held as a train is and goes
    to a free larva by its larva spot.
 
@@ -438,8 +439,17 @@ and for whether an ability makes a structure, and both come out the same within 
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
 
-5. **The derived reads**: workers, townhalls, mineral fields, geysers, this player's start location, counts in
-   production, and `api.enemy.units` against `api.units.enemy`.
+5. **The derived reads**: branch `claude/derived-reads`. Decided by the owner, 2026-10-07:
+   - **The unit sets are `UnitType` groups only**, read through `of_type`, with no second spelling on `Units` or
+     `Api`: `Worker` (no MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and
+     `GasBuilding`. The last three are what the tables say holds minerals or vespene; `MineralField` and
+     `VespeneGeyser` already name the plain types, hence `Any`.
+   - **`api.map.start_location`**, beside `opponent_start_locations`, read once off the first observation's own
+     townhall.
+   - **`api.in_production(types)`** counts what the game has started or charged for, per item, and not what NachOS
+     holds, which is in `issued_to`; **`api.research_progress(upgrade)`** is from 0 to 1, or `None`.
+   - **No `api.enemy.units`**: the enemy's units stay `api.units.enemy`, and the migration guide maps python-sc2's
+     `enemy_units` and `enemy_structures` onto it.
 6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game

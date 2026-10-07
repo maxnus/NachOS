@@ -72,7 +72,7 @@ class _Game:
         self._guarded = guarded
         self.player = sandbox.player
         self.enemy = 3 - sandbox.player
-        self.map = GameMap(self.client.game_info())
+        self.map = GameMap._of_game(self.client.game_info(), self.client.observation())
         tables = GameData(self.client.game_data()).units
         # The computer's units that can hurt anything: everything with a weapon except workers, plus banelings. The
         # rest are left alone, since the computer gives up once it has nothing left.
