@@ -58,7 +58,8 @@ and runs its trials in turn::
 - `cancels-whole` puts each unit that can be offered a cancel of the generic cancel's family into the state it is
   offered one in -- a structure morphing, building an add-on or going up, a unit in its cocoon or egg, a caster
   channeling or keeping up a spell, an adept and its shade -- reads every cancel it is offered then, and gives it the
-  generic cancel, to find whether that one id does every such cancel.
+  generic cancel, to find whether that one id does every such cancel. `nuke-cancels` is its nuke alone, given the
+  generic cancel and the ghost's own.
 - `attack-or-scan` gives a high templar, a lurker, an oracle and an adept's shade, each offered both the attack and
   the scan move, and a marine, an attack at a point and at an enemy drone, then each of the two at the point.
 - `unburrow-autocast` sets a burrowed roach's and a burrowed drone's unburrow to autocast, with an enemy drone beside.
@@ -3309,13 +3310,22 @@ def _cancels_whole(game: _Game) -> list[Trial]:
     for shade in (False, True):
         label = f"an ADEPT given ADEPT_SHADE, then {'its shade' if shade else 'the adept'} given GENERAL_CANCEL"
         trials.append(game.trial(label, partial(_cancelling, game, partial(_shading, game, shade))))
-    label = "a GHOST given GHOST_TACTICAL_NUKE, then GENERAL_CANCEL"
-    trials.append(game.trial(label, partial(_cancelling, game, partial(_nuking, game))))
+    return [*trials, *_nuke_cancels(game)]
+
+
+def _nuke_cancels(game: _Game) -> list[Trial]:
+    """A ghost's nuke given the generic cancel, and given its own, to read the two against each other."""
+    trials: list[Trial] = []
+    for cancel in (AbilityId.GENERAL_CANCEL, AbilityId.GHOST_CANCEL_TACTICAL_NUKE):
+        label = f"a GHOST given GHOST_TACTICAL_NUKE, then {cancel.name}"
+        trials.append(game.trial(label, partial(_cancelling, game, partial(_nuking, game), cancel=cancel)))
     return trials
 
 
-def _cancelling(game: _Game, start: Callable[[Trial], int | None], trial: Trial) -> None:
-    """Start what `start` starts, then read the cancels the unit it returns is offered and give it `GENERAL_CANCEL`."""
+def _cancelling(
+    game: _Game, start: Callable[[Trial], int | None], trial: Trial, *, cancel: AbilityId = AbilityId.GENERAL_CANCEL
+) -> None:
+    """Start what `start` starts, then read the cancels the unit it returns is offered and give it `cancel`."""
     tag = start(trial)
     if tag is None or (unit := game.unit(tag)) is None:
         trial.notes.setdefault("class", "not started")
@@ -3324,9 +3334,11 @@ def _cancelling(game: _Game, start: Callable[[Trial], int | None], trial: Trial)
     offered = game.sandbox.offered([tag]).get(tag, [])
     trial.notes["type before"] = _type_name(unit.unit_type)
     trial.notes["cancels offered"] = [_raw_name(ability) for ability in offered if "ancel" in _raw_name(ability)]
-    trial.notes["verdict"] = game.order(AbilityId.GENERAL_CANCEL, [tag])
+    trial.notes["verdict"] = game.order(cancel, [tag])
     game.turn(6)
     game.read("after the cancel", [tag])
+    game.turn(42)
+    game.read("48 steps after the cancel", [tag])
     now = game.unit(tag)
     trial.notes["type after"] = "gone" if now is None else _type_name(now.unit_type)
     trial.notes["orders after"] = [] if now is None else [_name(order.ability_id) for order in now.orders]
@@ -3700,6 +3712,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "group-verdicts": _Sweep(Race.TERRAN, _group_verdicts),
     "target-dependent": _Sweep(Race.TERRAN, _target_dependent, (*_BASE_CHEATS, Cheat.COOLDOWN, Cheat.TECH_TREE)),
     "cancels-whole": _Sweep(Race.TERRAN, _cancels_whole, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "nuke-cancels": _Sweep(Race.TERRAN, _nuke_cancels, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "attack-or-scan": _Sweep(Race.TERRAN, _attack_or_scan, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "unburrow-autocast": _Sweep(Race.TERRAN, _unburrow_autocast, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
