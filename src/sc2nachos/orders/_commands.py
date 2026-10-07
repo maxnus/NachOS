@@ -6,29 +6,48 @@ from typing import TYPE_CHECKING, Any
 
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
+from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.geometry import Point
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
-    from sc2nachos.ids import AbilityId
+    from sc2nachos.ids import UnitTypeId
     from sc2nachos.orders._order import Order
     from sc2nachos.units import OwnUnit, Target
 
 
 def create_unit_command_actions(
-    order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: AbilityId | None
+    order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: Mapping[UnitTypeId, SentAs]
 ) -> list[sc2api_pb2.Action]:
-    """The raw commands giving `order` to `units`: one, or, for a custom ability, one per unit giving it `sent_as`
-    aimed at itself."""
-    if sent_as is None:
-        return [_unit_command_action(order.ability, [unit.tag for unit in units], order.target, queued=order.queued)]
-    return [_unit_command_action(sent_as, [unit.tag], unit, queued=order.queued) for unit in units]
+    """The raw commands giving `order` to `units`: one naming the units that take the order's own ability, then, for
+    each ability `sent_as` sends their types instead, one naming its units, or one per unit where it is aimed at the
+    unit itself."""
+    own: list[int] = []
+    sent: dict[SentAs, list[OwnUnit[Any]]] = {}
+    for unit in units:
+        if (sending := sent_as.get(unit.type_id)) is None:
+            own.append(unit.tag)
+        else:
+            sent.setdefault(sending, []).append(unit)
+    actions = [_unit_command_action(order.ability, own, order.target, queued=order.queued)] if own else []
+    for sending, group in sent.items():
+        match sending.aim:
+            case Aim.ITSELF:
+                actions += [
+                    _unit_command_action(sending.ability, [unit.tag], unit, queued=order.queued) for unit in group
+                ]
+            case Aim.TARGET:
+                tags = [unit.tag for unit in group]
+                actions.append(_unit_command_action(sending.ability, tags, order.target, queued=order.queued))
+            case Aim.NOTHING:
+                actions.append(
+                    _unit_command_action(sending.ability, [unit.tag for unit in group], None, queued=order.queued)
+                )
+    return actions
 
 
-def _unit_command_action(
-    ability: AbilityId, tags: list[int], target: Target | None, *, queued: bool
-) -> sc2api_pb2.Action:
+def _unit_command_action(ability: int, tags: list[int], target: Target | None, *, queued: bool) -> sc2api_pb2.Action:
     """One raw command giving `ability` to the units of `tags`, aimed at `target`."""
     if target is None:
         command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=tags, queue_command=queued)

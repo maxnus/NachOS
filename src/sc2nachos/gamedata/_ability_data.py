@@ -11,7 +11,13 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._techtree._overrides import COST_OVERRIDES, KEEPS_ORDERS_ABILITIES, KEEPS_ORDERS_BY_TYPE
+from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._techtree._overrides import (
+    COST_OVERRIDES,
+    KEEPS_ORDERS_ABILITIES,
+    KEEPS_ORDERS_BY_TYPE,
+    SENT_AS,
+)
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
@@ -251,8 +257,11 @@ class AbilityData:
     order_behavior: OrderBehavior
     """What ordering it does to the unit's current orders: the behavior the types carrying it out share, or `REPLACES`
     where they differ; `order_behavior_for` gives each unit type's."""
-    sent_as: AbilityId | None
-    """For a custom id, the game's ability it goes out as, aimed at the unit itself; `None` for the game's own."""
+    sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
+    """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
+    the ability itself. `GENERAL_UNLOAD` goes out to a medivac as its unload at a point aimed at the medivac, and a
+    custom id names every type it can be given to: `GENERAL_SIEGE` a tank's siege mode and a liberator's defender
+    mode, aimed at the order's point. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
@@ -281,31 +290,75 @@ class AbilityData:
             footprint_radius=data.footprint_radius if data.HasField("footprint_radius") else None,
             needs_placement=data.is_building,
             allows_autocast=data.allow_autocast,
-            performers=tech_tree.ability_performers.get(ability, frozenset()),
+            performers=_performers(ability, tech_tree),
             products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
             cost=costs.get(ability, _FREE),
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
-            sent_as=None,
+            sent_as=SENT_AS.get(ability, _SENT_UNCHANGED),
             _behaviors_by_performer=behavior.by_type,
         )
 
     @classmethod
-    def _sent_as_itself(cls, ability: AbilityId, sent_as: Self) -> Self:
-        """The custom ability `ability`, sent as `sent_as`'s ability aimed at the unit itself: offered to the types
-        `sent_as` is, aimed at nothing, making nothing and keeping their orders."""
+    def _custom(
+        cls,
+        ability: AbilityId,
+        game_rows: Mapping[int, data_pb2.AbilityData],
+        tech_tree: TechTree,
+        behaviors: Mapping[AbilityId, OrderBehaviors],
+        costs: Mapping[AbilityId, Cost],
+        cancels: Mapping[AbilityId, AbilityId],
+    ) -> Self:
+        """The custom ability `ability`, sent as `SENT_AS` names for each type, with what `tech_tree`, `behaviors`,
+        `costs` and `cancels` say about it. It takes a target where the abilities it goes out as at the order's target
+        take one, and reaches as far as the furthest of them."""
+        sent_as = SENT_AS[ability]
+        aimed = [game_rows[sending.ability] for sending in sent_as.values() if sending.aim is Aim.TARGET]
+        behavior = behaviors.get(ability, _REPLACES)
         return cls(
             id=ability,
-            target_type=TargetType.NOTHING,
-            cast_range=0.0,
+            target_type=_target_type({TargetType(row.target) for row in aimed}, untargeted=len(aimed) < len(sent_as)),
+            cast_range=max((row.cast_range for row in aimed), default=0.0),
             footprint_radius=None,
             needs_placement=False,
             allows_autocast=False,
-            performers=sent_as.performers,
-            products=_MAKES_NOTHING,
-            cost=_FREE,
-            cancelled_by=None,
-            order_behavior=OrderBehavior.KEEPS_ORDERS,
-            sent_as=sent_as.id,
-            _behaviors_by_performer=_NO_BEHAVIORS,
+            performers=_performers(ability, tech_tree),
+            products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
+            cost=costs.get(ability, _FREE),
+            cancelled_by=cancels.get(ability),
+            order_behavior=behavior.own,
+            sent_as=sent_as,
+            _behaviors_by_performer=behavior.by_type,
         )
+
+
+# What an ability goes out as where no type is sent another: itself, for every type.
+_SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
+
+
+def _performers(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
+    """The unit types offered `ability`, and those offered the ability it goes out to them as: a medivac is offered
+    the unload at a point that `GENERAL_UNLOAD` goes out to it as."""
+    performers = tech_tree.ability_performers
+    offered = performers.get(ability, frozenset())
+    sent_as = SENT_AS.get(ability, _SENT_UNCHANGED)
+    return offered | {
+        unit_type
+        for unit_type, sending in sent_as.items()
+        if (sent := AbilityId.get(sending.ability)) is not None and unit_type in performers.get(sent, frozenset())
+    }
+
+
+def _target_type(aimed: set[TargetType], *, untargeted: bool) -> TargetType:
+    """What an ability takes that goes out as abilities taking `aimed` at its target, and to other types as one aimed
+    at nothing, if `untargeted`."""
+    if not aimed:
+        return TargetType.NOTHING
+    if len(aimed) > 1:
+        raise ValueError(f"an ability goes out as ones taking {sorted(kind.name for kind in aimed)}")
+    (kind,) = aimed
+    if not untargeted:
+        return kind
+    if kind is not TargetType.POINT:
+        raise ValueError(f"an ability goes out as ones taking {kind.name} and ones taking nothing")
+    return TargetType.POINT_OR_NOTHING

@@ -3,11 +3,11 @@
 from sc2nachos.gamedata._techtree._build_75689 import TECH_TREE
 from sc2nachos.gamedata._techtree._overrides import (
     COST_OVERRIDES,
-    CUSTOM_ABILITIES,
     KEEPS_ORDERS_ABILITIES,
     KEEPS_ORDERS_BY_TYPE,
     MISNAMED_RESEARCH_ABILITIES,
     SELF_MORPHS,
+    SENT_AS,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.gamedata._techtree._tech_tree import TechTree
@@ -16,9 +16,9 @@ __all__ = [
     "COST_OVERRIDES",
     "KEEPS_ORDERS_ABILITIES",
     "KEEPS_ORDERS_BY_TYPE",
-    "CUSTOM_ABILITIES",
     "MISNAMED_RESEARCH_ABILITIES",
     "SELF_MORPHS",
+    "SENT_AS",
     "TECH_TREE",
     "UNNAMED_CREATION_ABILITIES",
     "TechTree",

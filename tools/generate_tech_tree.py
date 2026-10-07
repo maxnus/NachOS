@@ -300,7 +300,8 @@ def _products(
     Each of the game's ids makes one thing; the curated id several stand for makes what each type's own does. A type
     that shares its ability with the type the table names it for, as a rich refinery shares the plain build with a
     refinery, leaves the table's product in place. An id no type is offered is carried out by the types offered
-    another the same curated id stands for, as a liberator is offered the siege whose reported id the table names, or
+    another the same curated id stands for and making nothing else by it, as a liberator is offered the siege whose
+    reported id the table names, or
     by the type `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one nothing carries out is left
     out, and `tests/test_tech_tree.py` checks that every unit type and upgrade is still made by something. Raises
     `ValueError` where a type would make two things by one curated id.
@@ -323,16 +324,19 @@ def _products(
             makers[ability].add(unit_type)
             curated_makers[_folded(ability)].add(unit_type)
     products: defaultdict[AbilityId, dict[UnitTypeId, UnitTypeId | UpgradeId]] = defaultdict(dict)
-    for ability, product in made.items():
-        self_morph = SELF_MORPHS.get(_folded(ability))
+    # The ids some type is offered first, so that one no type is offered goes to the types left making nothing by the
+    # curated id it reads as.
+    for ability, product in sorted(made.items(), key=lambda entry: not makers.get(entry[0])):
+        curated = _folded(ability)
+        self_morph = SELF_MORPHS.get(curated)
         carried_out_by = (
             makers.get(ability)
-            or curated_makers.get(_folded(ability))
+            or curated_makers.get(curated, set()) - products[curated].keys()
             or ({self_morph} if self_morph is not None else set())
         )
         for maker in carried_out_by:
-            if products[_folded(ability)].setdefault(maker, product) is not product:
-                raise ValueError(f"{maker.name} makes two things by {_folded(ability).name}")
+            if products[curated].setdefault(maker, product) is not product:
+                raise ValueError(f"{maker.name} makes two things by {curated.name}")
     return dict(products)
 
 

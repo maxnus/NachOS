@@ -1,9 +1,10 @@
 """Ability identifiers.
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
-catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as a game
-ability aimed at the unit itself (`AbilityData.sent_as`). A custom id is assigned `auto()`, which numbers it above
-every game id, and the game never reports one. Unknown ids raise.
+catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as each unit
+type's own game ability (`AbilityData.sent_as`): GENERAL_SIEGE as a tank's siege mode and a liberator's defender mode.
+A custom id is assigned `auto()`, which numbers it above every game id; what the game reports for it reads as it.
+Unknown ids raise.
 
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
 LARVA_MORPH_ZERGLING -- and GENERAL where several units can. An action several units perform has one id, whichever
@@ -13,8 +14,8 @@ game's own id for each unit reads as it (`_REMAPPED_IDS`). A leveled research ha
 next level, as the upgrade it makes does.
 
 Where a unit reports running another id than the one it was ordered, and the game links neither to the other, that id
-reads as the one ordered too: a liberator ordered LIBERATOR_SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which
-reads as LIBERATOR_SIEGE.
+reads as the one ordered too: a liberator ordered GENERAL_SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which
+reads as GENERAL_SIEGE.
 """
 
 from enum import auto, nonmember
@@ -167,14 +168,20 @@ class AbilityId(IdEnum):
     GENERAL_RETURN = RawAbilityId.Harvest_Return
     GENERAL_ROOT = RawAbilityId.Morph_Root
     GENERAL_SALVAGE = RawAbilityId.SalvageEffect_Salvage
+    # A tank's siege mode, a liberator's defender mode aimed at its zone, an observer's surveillance mode and an
+    # overseer's oversight mode, and leaving each. The game has no id for either across the four.
+    GENERAL_SIEGE = auto()
     GENERAL_SMART = RawAbilityId.Smart  # the right-click order
     GENERAL_SPRAY = RawAbilityId.Effect_Spray
     GENERAL_STIM = RawAbilityId.Effect_Stim
     GENERAL_STOP = RawAbilityId.Stop
     GENERAL_UNBURROW = RawAbilityId.BurrowUp
+    # Puts every passenger down where the transport is: UnloadAll for a bunker, command center, planetary fortress or
+    # nydus, and the unload at a point aimed at the transport itself for a medivac, warp prism or transport overlord,
+    # which answer UnloadAll `Error` (in game).
     GENERAL_UNLOAD = RawAbilityId.UnloadAll
     GENERAL_UNLOAD_AT = RawAbilityId.UnloadAllAt
-    GENERAL_UNLOAD_IN_PLACE = auto()
+    GENERAL_UNSIEGE = auto()
     GENERAL_UPROOT = RawAbilityId.Morph_Uproot
     GHOST_ACADEMY_BUILD_NUKE = RawAbilityId.Build_Nuke
     GHOST_ACADEMY_RESEARCH_GHOST_CLOAK = RawAbilityId.Research_PersonalCloaking
@@ -212,8 +219,6 @@ class AbilityId(IdEnum):
     LARVA_MORPH_ULTRALISK = RawAbilityId.LarvaTrain_Ultralisk
     LARVA_MORPH_VIPER = RawAbilityId.LarvaTrain_Viper
     LARVA_MORPH_ZERGLING = RawAbilityId.LarvaTrain_Zergling
-    LIBERATOR_SIEGE = RawAbilityId.Morph_LiberatorAGMode
-    LIBERATOR_UNSIEGE = RawAbilityId.Morph_LiberatorAAMode
     LOCUST_SWOOP = RawAbilityId.Effect_LocustSwoop
     LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED = RawAbilityId.Research_AdaptiveTalons
     LURKER_DEN_RESEARCH_LURKER_RANGE = RawAbilityId.LurkerDenResearch_ResearchLurkerRange
@@ -228,8 +233,6 @@ class AbilityId(IdEnum):
     # Id zero, no ability at all, so unlike the rest it names no performer.
     NULL = RawAbilityId.Null_Null
     NYDUS_NETWORK_BUILD_NYDUS_WORM = RawAbilityId.Build_NydusWorm
-    OBSERVER_SIEGE = RawAbilityId.Morph_SurveillanceMode  # "Surveillance Mode" in game
-    OBSERVER_UNSIEGE = RawAbilityId.Morph_ObserverMode
     ORACLE_BUILD_STASIS_WARD = RawAbilityId.Build_StasisTrap
     ORACLE_PULSAR_BEAM_OFF = RawAbilityId.Behavior_PulsarBeamOff
     ORACLE_PULSAR_BEAM_ON = RawAbilityId.Behavior_PulsarBeamOn
@@ -242,9 +245,7 @@ class AbilityId(IdEnum):
     OVERLORD_MORPH_OVERLORD_TRANSPORT = RawAbilityId.Morph_OverlordTransport
     OVERLORD_MORPH_OVERSEER = RawAbilityId.Morph_Overseer
     OVERSEER_CONTAMINATE = RawAbilityId.Contaminate_Contaminate
-    OVERSEER_SIEGE = RawAbilityId.Morph_OversightMode  # "Oversight Mode" in game
     OVERSEER_SPAWN_CHANGELING = RawAbilityId.SpawnChangeling_SpawnChangeling
-    OVERSEER_UNSIEGE = RawAbilityId.Morph_OverseerMode
     PHOENIX_GRAVITON_BEAM = RawAbilityId.GravitonBeam_GravitonBeam
     PROBE_BUILD_ASSIMILATOR = RawAbilityId.ProtossBuild_Assimilator
     PROBE_BUILD_CYBERNETICS_CORE = RawAbilityId.ProtossBuild_CyberneticsCore
@@ -308,8 +309,6 @@ class AbilityId(IdEnum):
     SENTRY_HALLUCINATE_WARP_PRISM = RawAbilityId.Hallucination_WarpPrism
     SENTRY_HALLUCINATE_ZEALOT = RawAbilityId.Hallucination_Zealot
     SHIELD_BATTERY_RECHARGE = RawAbilityId.ShieldBatteryRechargeEx5_ShieldBatteryRecharge
-    SIEGE_TANK_SIEGE = RawAbilityId.SiegeMode_SiegeMode
-    SIEGE_TANK_UNSIEGE = RawAbilityId.Unsiege_Unsiege
     SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS = RawAbilityId.Research_ZerglingAdrenalGlands
     SPAWNING_POOL_RESEARCH_ZERGLING_SPEED = RawAbilityId.Research_ZerglingMetabolicBoost
     SPIRE_MORPH_GREATER_SPIRE = RawAbilityId.UpgradeToGreaterSpire_GreaterSpire
@@ -366,7 +365,8 @@ class AbilityId(IdEnum):
     ZERGLING_MORPH_BANELING = RawAbilityId.MorphToBaneling_Baneling
 
     # The game's own id for each unit of an action several units perform, with the action's: the id a unit is offered
-    # and reports. The game takes the action's id as an order and runs each unit's own (in game). Then the id a unit
+    # and reports. The game takes the action's id as an order and runs each unit's own (in game). Then each type's own
+    # id of an action the game has no id for across types, with the custom id that goes out as it. Then the id a unit
     # reports running for an order given by another, where the game links neither to the other, with the id ordered.
     # Ordering such a reported id does nothing, except that the archon's, given to both templar and aimed at one of
     # them, merges them too (in game).
@@ -516,8 +516,16 @@ class AbilityId(IdEnum):
                 RawAbilityId.UnloadAllAt_WarpPrism: GENERAL_UNLOAD_AT,
                 RawAbilityId.SpineCrawlerUproot_SpineCrawlerUproot: GENERAL_UPROOT,
                 RawAbilityId.SporeCrawlerUproot_SporeCrawlerUproot: GENERAL_UPROOT,
-                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: LIBERATOR_SIEGE,
-                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: LIBERATOR_UNSIEGE,
+                RawAbilityId.Morph_LiberatorAGMode: GENERAL_SIEGE,
+                RawAbilityId.Morph_OversightMode: GENERAL_SIEGE,
+                RawAbilityId.Morph_SurveillanceMode: GENERAL_SIEGE,
+                RawAbilityId.SiegeMode_SiegeMode: GENERAL_SIEGE,
+                RawAbilityId.Morph_LiberatorAAMode: GENERAL_UNSIEGE,
+                RawAbilityId.Morph_ObserverMode: GENERAL_UNSIEGE,
+                RawAbilityId.Morph_OverseerMode: GENERAL_UNSIEGE,
+                RawAbilityId.Unsiege_Unsiege: GENERAL_UNSIEGE,
+                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: GENERAL_SIEGE,
+                RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: GENERAL_UNSIEGE,
                 RawAbilityId.Archon_Warp_Target: GENERAL_MORPH_ARCHON,
             }
         )
