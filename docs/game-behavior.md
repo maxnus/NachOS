@@ -226,6 +226,10 @@ Each entry ends with how it was seen:
   dies (#25, #34; tested).
 - An order to one larva may be carried out by another larva of the same hatchery, and larva die with their
   hatchery. A morph ordered on several units morphs only one of them (tool `sweep_tech_tree`, tool `sweep_alerts`).
+- A larva stands close to its own hatchery. Over 1200 steps, the larvae of two hatcheries 13.5 apart, those a hatchery
+  grows and an inject's, stood 2.6 to 3.6 from their own hatchery's center and never nearer the other. A drone's morph
+  given to a hatchery itself is answered `NotSupported`, and no larva takes it (tool `sweep_orders`, `larvae`; local
+  game, Linux build 75689).
 - Only one mothership can stand at a time, arming a nuke needs a factory, and a game starts with 50 minerals (tool
   `sweep_tech_tree`, tool `sweep_alerts`).
 - The game itself disguises a changeling, collapses a tower, lifts a locust into the air and burrows a creep tumor
@@ -393,9 +397,10 @@ Each entry ends with how it was seen:
   only 320 works. The rich assimilator's and rich extractor's rows name no creation ability; the plain one builds
   on a rich geyser (#23, #29).
 - `RequestQueryAvailableAbilities` leaves out what a unit lacks the tech for, counts an add-on only for the structure
-  it is attached to, ignores energy and cooldowns, and offers an unpowered structure nothing that needs power: an
-  unpowered gateway trains nothing, though a probe is offered a gateway and a forge once a nexus stands, with no
-  pylon (#29).
+  it is attached to, and offers an unpowered structure nothing that needs power: an unpowered gateway trains nothing,
+  though a probe is offered a gateway and a forge once a nexus stands, with no pylon (#29). Asked to ignore costs,
+  it ignores energy and cooldowns too (#29); counting them, it leaves out a warp gate's warp-ins while the gate waits
+  (below).
 - A requirement drops out of the answer within 4 steps of its structure leaving the observation; a lifted barracks
   still counts as a barracks, a lowered depot as a depot and a hive as a lair. A ghost is offered 4 steps after its
   academy appears (a tech lab alone is not enough), and weapons level 2 after level 1 (#29; tested).
@@ -526,6 +531,9 @@ Each entry ends with how it was seen:
 - A barracks training marines keeps training when given a rally, or a cancel, which drops the last marine; a lift is
   refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
   production as it was, and a carrier keeps building interceptors through a stop (tool `sweep_orders`).
+- A structure takes the next level the step it is done with the last. An engineering bay read infantry weapons 1
+  99.96% done at step 2575; at 2576 it showed no order, level 1 was among this player's upgrades, and level 2 given
+  then was answered `Success` (tool `sweep_orders`, `research-after`; local game, Linux build 75689).
 - A research that another of this player's structures is already doing is answered `Success`, and nothing is
   researched or reported. A level queued behind the previous one, still in research, is refused `NotSupported` (tool
   `sweep_orders`).
@@ -606,6 +614,13 @@ Each entry ends with how it was seen:
   `sweep_orders`).
 - A warp gate keeps no queue either: given two zealot warp-ins in one request, both answered `Success`, it shows no
   orders at all, then or 16 steps later (tool `sweep_orders`).
+- A warp gate waits after each warp-in: 448 steps after a zealot or an adept, 512 after a stalker or a sentry, and 720
+  after a high or a dark templar, 20, 22.9 and 32.1 seconds. Given one every step, a gate made by debug command took
+  the first at once and the next on the step its wait ended, each time; every one given meanwhile was answered
+  `NotEnoughCharges` and charged nothing. Meanwhile the gate showed no order, read inactive and wore no buff, and the
+  abilities query offered the warp-in when it ignored costs; counting them, it left the warp-in out from the
+  observation after a warp-in to the observation the gate was ready (tool `sweep_orders`, `warp-gate-cooldown`;
+  local game, Linux build 75689).
 - An order to a dead unit's tag, or to a tag never used, is answered `Error`; to an enemy unit,
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).
