@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
-from sc2nachos.gamedata._techtree import SENT_AS, TECH_TREE
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
 
@@ -49,7 +49,7 @@ class GameData:
         game_rows = {row.ability_id: row for row in data.abilities}
         custom = {
             ability: AbilityData._custom(ability, game_rows, TECH_TREE, behaviors, costs, cancels)
-            for ability, sent_as in SENT_AS.items()
+            for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }
         self._abilities = MappingProxyType({**rows, **custom})

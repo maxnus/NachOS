@@ -150,7 +150,7 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 _UNLOADS_IN_PLACE = SentAs(AbilityId.GENERAL_UNLOAD_AT, Aim.ITSELF)
 _TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.OVERLORD_TRANSPORT)
 
-SENT_AS: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
+ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
     {
         AbilityId.GENERAL_UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
         # A liberator's siege is aimed at the zone it guards; the others' at nothing. A form given its own siege again
