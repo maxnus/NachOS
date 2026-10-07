@@ -65,9 +65,9 @@ upgrade, and its general id is not curated: nothing is offered it. The generic c
 a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
 
 **A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but
-read as the one ordered, from the same table: a liberator ordered `LIBERATOR_SIEGE` reports
+read as the one ordered, from the same table: a liberator ordered `GENERAL_SIEGE` reports
 `LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when ordered, and reads
-`LIBERATOR_SIEGE`. The only way to find such a pair is to order the ability in game and read the performer's
+`GENERAL_SIEGE`. The only way to find such a pair is to order the ability in game and read the performer's
 orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each of the
 raven's and viper's spells show in the caster's orders under the id ordered.
 
@@ -99,7 +99,7 @@ table remaps to the action's id; never by the name.
 
 **An ability is named after the unit that performs it, then what it does**, as `SUPPLY_DEPOT_LOWER` and
 `MEDIVAC_BOOST` always were: `SCV_BUILD_BARRACKS`, `BARRACKS_TRAIN_MARINE`, `LARVA_MORPH_ZERGLING`,
-`ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`, `GHOST_SNIPE`, `SIEGE_TANK_SIEGE`. The performer comes from
+`ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`, `GHOST_SNIPE`, `SUPPLY_DEPOT_LOWER`. The performer comes from
 the ability's catalog group -- `TerranBuild` is an SCV's, `LarvaTrain` a larva's. The performer implies the
 race, so the name drops it, where `UpgradeId` has to keep it.
 

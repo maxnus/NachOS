@@ -12,7 +12,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -40,7 +40,10 @@ _SMART = AbilityId.GENERAL_SMART
 _UNLOAD = AbilityId.GENERAL_UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _UNLOAD_AT = AbilityId.GENERAL_UNLOAD_AT
-_SIEGE = AbilityId.LIBERATOR_SIEGE
+_SIEGE = AbilityId.GENERAL_SIEGE
+_UNSIEGE = AbilityId.GENERAL_UNSIEGE
+_SIEGED = {UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED}
+_SIEGE_FORMS = [UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR, *_SIEGED]
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 _AT_A_POINT = data_pb2.AbilityData.Target.Point
@@ -56,6 +59,9 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC, attributes=[data_pb2.Attribute.Mechanical]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LIBERATOR, attributes=[data_pb2.Attribute.Mechanical]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LIBERATOR_SIEGED, attributes=[data_pb2.Attribute.Mechanical]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK, attributes=[data_pb2.Attribute.Mechanical]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK_SIEGED, attributes=[data_pb2.Attribute.Mechanical]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.BUNKER, attributes=[data_pb2.Attribute.Structure]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_ATTACK, target=_AT_A_POINT_OR_UNIT),
@@ -69,7 +75,14 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_UNLOAD),
         data_pb2.AbilityData(ability_id=_TRAIN_SCV),
         data_pb2.AbilityData(ability_id=_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT),
-        data_pb2.AbilityData(ability_id=_SIEGE, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_LiberatorAGMode, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_SurveillanceMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_OversightMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Unsiege_Unsiege),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_LiberatorAAMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_ObserverMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_OverseerMode),
     ],
 )
 
@@ -82,16 +95,16 @@ def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
 class _Game:
     """An order book over a tracker, fed one observation at a time as `Api.play` feeds it."""
 
-    def __init__(self, *verdicts: list[ActionResult]) -> None:
-        """A game that answers each flush with the next of `verdicts`, one result per action sent."""
+    def __init__(self, *verdicts: list[ActionResult], tables: GameData = _TABLES) -> None:
+        """A game with `tables` that answers each flush with the next of `verdicts`, one result per action sent."""
         responses = [
             make_response(action=sc2api_pb2.ResponseAction(result=[_verdict(result) for result in verdict]))
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(tables, Enemy())
         self.map = GameMap(make_game_info())
-        self.book = OrderBook(_TABLES)
+        self.book = OrderBook(tables)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
         """Take in an observation of `units` at `step`, in which the units under the tags `dead` died."""
@@ -542,12 +555,13 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         assert order.state is OrderState.SENT
 
 
-class TestALiberatorSieging:
-    """A liberator ordered `LIBERATOR_SIEGE` at a point is a sieged liberator by the next observation, and reports
+class TestSieging:
+    """`GENERAL_SIEGE` goes out as each type's own siege: a tank's siege mode aimed at nothing, a liberator's defender
+    mode aimed at its zone. A liberator ordered it at a point is a sieged liberator by the next observation, and reports
     `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered the siege again, it is refused
     `NotSupported` (in game)."""
 
-    def test_it_reads_as_carrying_out_the_siege_it_was_ordered(self) -> None:
+    def test_a_sieged_liberator_reads_as_carrying_out_the_siege(self) -> None:
         game = _Game()
         game.observe(0, _sieged_liberator(1))
 
@@ -563,8 +577,60 @@ class TestALiberatorSieging:
         order = game.book.issue(game.own(1), _SIEGE, target=(20.0, 21.0))
 
         (command,) = _commands(game.flush())
-        assert command.ability_id == _SIEGE
+        assert command.ability_id == RawAbilityId.Morph_LiberatorAGMode
         assert order.state is OrderState.REFUSED
+
+    def test_a_tank_and_a_liberator_go_out_each_as_its_own_siege(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+
+        order = game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+
+        tank, liberator = _commands(game.flush())
+        assert (tank.ability_id, list(tank.unit_tags)) == (RawAbilityId.SiegeMode_SiegeMode, [1])
+        assert not tank.HasField("target_world_space_pos")
+        assert (liberator.ability_id, list(liberator.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
+        assert (liberator.target_world_space_pos.x, liberator.target_world_space_pos.y) == (20.0, 21.0)
+        assert order.state is OrderState.SENT
+
+    def test_a_tank_alone_needs_no_point(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK))
+
+        game.book.issue(game.own(1), _SIEGE)
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == RawAbilityId.SiegeMode_SiegeMode
+
+    def test_a_liberator_needs_a_point(self) -> None:
+        game = _Game()
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+
+        with pytest.raises(TypeError, match="GENERAL_SIEGE takes a point for LIBERATOR"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE)
+
+    def test_a_type_with_no_siege_is_refused_at_the_call(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1))
+
+        with pytest.raises(ValueError, match="GENERAL_SIEGE has nothing to be sent as for MARINE"):
+            game.book.issue(game.own(1), _SIEGE)
+
+    def test_a_game_whose_tables_lack_a_siege_refuses_it_at_the_call(self) -> None:
+        game = _Game(tables=make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK)))
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK))
+
+        with pytest.raises(ValueError, match="GENERAL_SIEGE has nothing in this game's tables to be sent as"):
+            game.book.issue(game.own(1), _SIEGE)
+
+    def test_the_unsiege_goes_out_as_each_type_s_own_aimed_at_nothing(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
+
+        game.book.issue([game.own(1), game.own(2)], _UNSIEGE)
+
+        sent = [(command.ability_id, list(command.unit_tags)) for command in _commands(game.flush())]
+        assert sent == [(RawAbilityId.Unsiege_Unsiege, [1]), (RawAbilityId.Morph_LiberatorAAMode, [2])]
 
 
 def _sieged_liberator(tag: int) -> raw_pb2.Unit:
@@ -630,30 +696,40 @@ def _medivac(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.MEDIVAC, at=(14.0, 14.0), orders=orders)
 
 
-class TestUnloadingInPlace:
-    """A transport's unload aimed at itself unloads where it is and keeps its move (in game), so it has a custom id,
-    sent as the unload at a point aimed at the transport itself."""
+class TestUnloadingWhereTheTransportIs:
+    """`GENERAL_UNLOAD` puts everyone down where the transport is: a bunker takes it as it is, and a medivac, which
+    answers it `Error`, as its unload at a point aimed at itself, which unloads where it is and keeps its move (in
+    game)."""
 
-    def test_it_goes_out_as_the_general_unload_at_aimed_at_the_transport_itself(self) -> None:
+    def test_a_medivac_is_sent_the_general_unload_at_aimed_at_itself(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _medivac(1))
 
-        order = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        order = game.book.issue(game.own(1), _UNLOAD)
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _UNLOAD_AT
         assert command.target_unit_tag == 1
         assert list(command.unit_tags) == [1]
-        assert order.ability is AbilityId.GENERAL_UNLOAD_IN_PLACE
+        assert order.ability is _UNLOAD
         assert order.target is None
         assert order.state is OrderState.SENT
+
+    def test_a_bunker_and_a_medivac_go_out_each_as_it_takes_it(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.BUNKER), _medivac(2))
+
+        game.book.issue([game.own(1), game.own(2)], _UNLOAD)
+
+        sent = [(c.ability_id, list(c.unit_tags), c.target_unit_tag) for c in _commands(game.flush())]
+        assert sent == [(_UNLOAD, [1], 0), (_UNLOAD_AT, [2], 2)]
 
     def test_a_move_in_the_same_turn_goes_out_too(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _medivac(1))
 
         move = game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0))
-        unload = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        unload = game.book.issue(game.own(1), _UNLOAD)
 
         assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _UNLOAD_AT]
         assert (move.state, unload.state) == (OrderState.SENT, OrderState.SENT)
@@ -663,7 +739,7 @@ class TestUnloadingInPlace:
         game = _Game([ActionResult.ERROR, ActionResult.SUCCESS, ActionResult.ERROR])
         game.observe(0, _medivac(1), _medivac(2), _medivac(3))
 
-        order = game.book.issue([game.own(1), game.own(2), game.own(3)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], _UNLOAD)
 
         commands = _commands(game.flush())
         assert [(command.ability_id, list(command.unit_tags), command.target_unit_tag) for command in commands] == [
@@ -678,20 +754,11 @@ class TestUnloadingInPlace:
         game = _Game([ActionResult.NOT_SUPPORTED, ActionResult.ERROR])
         game.observe(0, _medivac(1), _medivac(2))
 
-        order = game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        order = game.book.issue([game.own(1), game.own(2)], _UNLOAD)
         game.flush()
 
         assert order.state is OrderState.REFUSED
         assert order.action_result is ActionResult.NOT_SUPPORTED
-
-    def test_it_raises_where_the_tables_give_it_nothing_to_be_sent_as(self) -> None:
-        tables = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC))
-        book = OrderBook(tables)
-        game = _Game()
-        game.observe(0, _medivac(1))
-
-        with pytest.raises(ValueError, match="GENERAL_UNLOAD_IN_PLACE"):
-            book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
 
     def test_an_unload_at_a_sibling_transport_is_fine_for_a_transport_ordered_alone(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -707,7 +774,7 @@ class TestUnloadingInPlace:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED])
         game.observe(0, _medivac(1), _medivac(2), _marine(3))
 
-        game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        game.book.issue([game.own(1), game.own(2)], _UNLOAD)
         stim = game.book.issue(game.own(3), _STIM)
 
         assert len(_commands(game.flush())) == 3
@@ -717,7 +784,7 @@ class TestUnloadingInPlace:
         game = _Game()
         game.observe(0, _medivac(1), _medivac(2))
 
-        with pytest.raises(TypeError, match="GENERAL_UNLOAD_IN_PLACE"):
+        with pytest.raises(TypeError, match="GENERAL_UNLOAD_AT aimed at the unit itself is GENERAL_UNLOAD"):
             game.book.issue([game.own(1), game.own(2)], _UNLOAD_AT, target=game.own(2))
 
     def test_an_unload_at_a_point_still_replaces_a_move(self) -> None:
@@ -1078,10 +1145,10 @@ class _UnloadingBot:
         if all(medivac.cargo_used > 0 for medivac in medivacs):
             self.unloaded_at = {medivac.tag: medivac.position for medivac in medivacs}
             if self.unload_first:
-                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+                self.unload = api.orders.issue(medivacs, _UNLOAD)
             self.move = api.orders.issue(medivacs, _MOVE, target=middle + (12.0, 0.0))
             if not self.unload_first:
-                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+                self.unload = api.orders.issue(medivacs, _UNLOAD)
 
 
 class _SiegingBot:
@@ -1113,6 +1180,76 @@ class _SiegingBot:
         """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
         shows the first."""
         return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].issued_step + 32)
+
+
+class _GroupSiegingBot:
+    """A bot that sieges a tank and a liberator in one order aimed at the liberator's zone, and once both are sieged,
+    unsieges them in one order."""
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.siege: Order[None] | None = None
+        self.unsiege: Order[None] | None = None
+        self.sieged: list[UnitTypeId] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        units = api.units.own.of_type(_SIEGE_FORMS)
+        middle = api.map.playable_area.center
+        if len(units) < 2:
+            if event.step < 64:
+                api.client.debug(
+                    [
+                        _create(UnitTypeId.SIEGE_TANK, middle, self.player, quantity=1),
+                        _create(UnitTypeId.LIBERATOR, middle + (0.0, 3.0), self.player, quantity=1),
+                    ]
+                )
+            return
+        if self.siege is None:
+            liberator = next(unit for unit in units if unit.type_id is UnitTypeId.LIBERATOR)
+            self.siege = api.orders.issue(units, _SIEGE, target=liberator.position + (4.0, 0.0))
+        elif self.unsiege is None and {unit.type_id for unit in units} == _SIEGED:
+            self.sieged = sorted(unit.type_id for unit in units)
+            self.unsiege = api.orders.issue(units, _UNSIEGE)
+
+
+class _GroupUnloadingBot:
+    """A bot that loads a bunker and a medivac with a marine each, then unloads both in one order."""
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.loads: list[Order[None]] = []
+        self.unload: Order[None] | None = None
+        self.marines_left_out = 0
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        transports = api.units.own.of_type([UnitTypeId.BUNKER, UnitTypeId.MEDIVAC])
+        marines = api.units.own.of_type(UnitTypeId.MARINE)
+        middle = api.map.playable_area.center
+        if len(transports) < 2:
+            if event.step < 64:
+                api.client.debug(
+                    [
+                        _create(UnitTypeId.BUNKER, middle, self.player, quantity=1),
+                        _create(UnitTypeId.MEDIVAC, middle + (6.0, 0.0), self.player, quantity=1),
+                        _create(UnitTypeId.MARINE, middle + (0.0, 3.0), self.player, quantity=2),
+                    ]
+                )
+            return
+        if not self.loads:
+            if len(marines) >= 2:
+                self.loads = [
+                    api.orders.issue(transport, AbilityId.GENERAL_LOAD, target=marine)
+                    for transport, marine in zip(transports, marines, strict=False)
+                ]
+            return
+        if self.unload is None and all(transport.cargo_used > 0 for transport in transports):
+            # Units made by debug show up a turn or two later, so there may be more marines than were loaded.
+            self.marines_left_out = len(marines)
+            self.unload = api.orders.issue(transports, _UNLOAD)
 
 
 class _UnloadingBotUnloadingFirst(_UnloadingBot):
@@ -1175,8 +1312,30 @@ class TestAgainstTheRealGame:
         (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
         assert first == [(_SIEGE, True)]
 
+    def test_a_tank_and_a_liberator_siege_and_unsiege_in_one_order_each(self) -> None:
+        bot = _play_a_minute(_GroupSiegingBot)
 
-def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot)](make_bot: type[BotT]) -> BotT:
+        assert bot.siege is not None and bot.unsiege is not None
+        print("siege:", bot.siege.state.name, bot.siege.action_result, "unsiege:", bot.unsiege.state.name)
+        assert bot.sieged == sorted(_SIEGED)
+        assert (bot.siege.state, bot.unsiege.state) == (OrderState.SENT, OrderState.SENT)
+        units = bot.api.units.own.of_type(_SIEGE_FORMS)
+        assert {unit.type_id for unit in units} == {UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR}
+
+    def test_a_bunker_and_a_medivac_unload_in_one_order(self) -> None:
+        bot = _play_a_minute(_GroupUnloadingBot)
+
+        print("loads:", [(order.state.name, order.action_result) for order in bot.loads])
+        assert bot.unload is not None
+        assert bot.unload.state is OrderState.SENT
+        transports = bot.api.units.own.of_type([UnitTypeId.BUNKER, UnitTypeId.MEDIVAC])
+        assert [transport.cargo_used for transport in transports] == [0, 0]
+        assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == bot.marines_left_out + 2
+
+
+def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot, _GroupSiegingBot, _GroupUnloadingBot)](
+    make_bot: type[BotT],
+) -> BotT:
     """Play a minute of a game against a very easy computer with the bot `make_bot` makes, and return the bot."""
     try:
         game_map = MapFile.find("PylonAIE_v4")

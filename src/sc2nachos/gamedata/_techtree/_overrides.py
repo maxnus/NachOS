@@ -11,7 +11,9 @@ from types import MappingProxyType
 from typing import Final
 
 from sc2nachos.gamedata._cost import Cost
+from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.ids.raw import RawAbilityId
 
 MISNAMED_RESEARCH_ABILITIES: Final[Mapping[UpgradeId, AbilityId]] = MappingProxyType(
     {
@@ -142,13 +144,62 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 )
 
 
-CUSTOM_ABILITIES: Final[Mapping[AbilityId, AbilityId]] = MappingProxyType(
-    {AbilityId.GENERAL_UNLOAD_IN_PLACE: AbilityId.GENERAL_UNLOAD_AT}
+# A medivac, a warp prism and a transport overlord given their unload at a point aimed at themselves unload where they
+# are and leave a move going; aimed at a point, they fly there first. Each answers UnloadAll `Error`, which a bunker, a
+# command center, a planetary fortress and a nydus take (tool `sweep_orders`, `held-orders`).
+_UNLOADS_IN_PLACE = SentAs(AbilityId.GENERAL_UNLOAD_AT, Aim.ITSELF)
+_TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.OVERLORD_TRANSPORT)
+
+SENT_AS: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
+    {
+        AbilityId.GENERAL_UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
+        # A liberator's siege is aimed at the zone it guards; the others' at nothing. A form given its own siege again
+        # is sent it too, and the game answers as it does: a sieged liberator `NotSupported` (in game).
+        AbilityId.GENERAL_SIEGE: MappingProxyType(
+            {
+                **dict.fromkeys(
+                    (UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED),
+                    SentAs(RawAbilityId.SiegeMode_SiegeMode, Aim.NOTHING),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED),
+                    SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED),
+                    SentAs(RawAbilityId.Morph_SurveillanceMode, Aim.NOTHING),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED),
+                    SentAs(RawAbilityId.Morph_OversightMode, Aim.NOTHING),
+                ),
+            }
+        ),
+        AbilityId.GENERAL_UNSIEGE: MappingProxyType(
+            {
+                **dict.fromkeys(
+                    (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
+                    SentAs(RawAbilityId.Unsiege_Unsiege, Aim.NOTHING),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LIBERATOR),
+                    SentAs(RawAbilityId.Morph_LiberatorAAMode, Aim.NOTHING),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.OBSERVER_SIEGED, UnitTypeId.OBSERVER),
+                    SentAs(RawAbilityId.Morph_ObserverMode, Aim.NOTHING),
+                ),
+                **dict.fromkeys(
+                    (UnitTypeId.OVERSEER_SIEGED, UnitTypeId.OVERSEER),
+                    SentAs(RawAbilityId.Morph_OverseerMode, Aim.NOTHING),
+                ),
+            }
+        ),
+    }
 )
-"""The game's ability each custom id is sent as, aimed at the unit itself. A medivac, a warp prism and a transport
-overlord given their unload at a point aimed at themselves unload where they are and leave a move going; aimed at a
-point, they fly there first (tool `sweep_orders`, `held-orders`). An unload in place therefore keeps the transport's
-orders, and an unload at a point replaces them."""
+"""The game's ability each ability goes out as for the unit types named, and what it is aimed at; any other type is
+sent the ability itself. A custom id names every type it can be given to. A group of several types gets one command
+for each ability it goes out as, or one per unit where that is aimed at the unit itself."""
 
 COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {

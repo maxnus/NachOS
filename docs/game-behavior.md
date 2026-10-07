@@ -350,7 +350,7 @@ Each entry ends with how it was seen:
 - A liberator ordered to siege (2558) reports 2554 running, and unsieging works the same way, though `remaps_to`
   links neither pair (#23). Ordered at a point, it is a sieged liberator by the next observation, and reports 2554
   aimed at itself, not at the point, while its zone forms: 64 steps, after which it reports no order. Ordered the
-  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `LIBERATOR_SIEGE` and the archon's 1767
+  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `GENERAL_SIEGE` and the archon's 1767
   as `GENERAL_MORPH_ARCHON` (#103; tested).
 - The archon: `Morph_Archon` (1766) given to two templar in one command, high or dark, even 6 apart, walks them to
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
@@ -537,8 +537,8 @@ Each entry ends with how it was seen:
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
 - A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
-  a sieged tank `SIEGE_TANK_SIEGE` and a burrowed lurker `BurrowDown_Lurker`. A sieged liberator shows `LIBERATOR_SIEGE`
-  (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
+  a sieged tank its siege mode, which reads as `GENERAL_SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
+  liberator shows `GENERAL_SIEGE` too (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
   A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed

@@ -889,7 +889,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.create(UnitTypeId.SIEGE_TANK, out_there))
         game.turn(2)
         tank = game.newest(UnitTypeId.SIEGE_TANK)
-        game.order(AbilityId.SIEGE_TANK_SIEGE, tank)
+        game.order(RawAbilityId.SiegeMode_SiegeMode, tank)
         game.turn(90)
         assert tank.type_id is UnitTypeId.SIEGE_TANK_SIEGED
         assert game.tracker.unit_tracker.present.get(tank.id) is tank

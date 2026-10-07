@@ -60,21 +60,27 @@ that trains does so through a smart, which sets its rally (in game), so for thos
 `order.order_behavior` what it does to the order's units: the behavior their types share, or `REPLACES` where they
 differ.
 
-**Unloading in place has an id of its own.** A medivac, a warp prism or a transport overlord given its unload at a
-point aimed at itself unloads where it is and keeps its move; aimed at a point, it flies there and unloads (in game).
-An id holds one behavior, so the first has a custom id, `GENERAL_UNLOAD_IN_PLACE`, aimed at nothing, which keeps a
-transport's orders:
+**Some ids go out as another of the game's abilities for some unit types.** `api.data.abilities[ability].sent_as`
+says which, and what each is aimed at. `GENERAL_UNLOAD` puts everyone down where the transport is: a bunker, a command
+center, a planetary fortress and a nydus take it as it is, and a medivac, a warp prism and a transport overlord, which
+answer it `Error`, are sent their unload at a point aimed at themselves, which unloads where they are and keeps their
+move; aimed at a point, they fly there and unload (in game). So an unload keeps a transport's orders, and an unload at
+a point replaces them:
 
 ```python
 api.orders.issue(medivac, AbilityId.GENERAL_MOVE, target=retreat)
-api.orders.issue(medivac, AbilityId.GENERAL_UNLOAD_IN_PLACE)  # both go out
+api.orders.issue([bunker, medivac], AbilityId.GENERAL_UNLOAD)  # all three commands go out
 ```
 
-It goes out as the game's `GENERAL_UNLOAD_AT` aimed at the transport itself, which
-`api.data.abilities[ability].sent_as` names, one command a transport. An order to several is answered as the game
-answers one command naming several units: `SUCCESS` if any transport took it, an empty one left out, and otherwise
+`GENERAL_SIEGE` and `GENERAL_UNSIEGE` are custom ids, which the game has no ability for: each goes out as the tank's,
+the liberator's, the observer's or the overseer's own. The siege takes a point, which only the liberator's is aimed at,
+for its zone, so an order naming a liberator needs one and the rest ignore it. A custom id given a type it has nothing
+to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the game's.
+
+An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
+itself, and is answered as the game answers one command naming several units: `SUCCESS` if any took it, and otherwise
 the first refusal (in game). An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
-`GENERAL_UNLOAD_IN_PLACE`. `AbilityId.is_custom` tells a custom id from the game's.
+`GENERAL_UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -175,4 +181,4 @@ current order and one for each queued. The two need not agree: the game snaps a 
 cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
 reads it as the action's, so a moving marine shows `GENERAL_MOVE` and a gathering SCV `GENERAL_GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
-`LIBERATOR_SIEGE`, and each templar of a merge `GENERAL_MORPH_ARCHON` aimed at the other.
+`GENERAL_SIEGE`, and each templar of a merge `GENERAL_MORPH_ARCHON` aimed at the other.

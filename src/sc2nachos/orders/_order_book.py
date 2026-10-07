@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import OrderBehavior
-from sc2nachos.gamedata._techtree import CUSTOM_ABILITIES
+from sc2nachos.gamedata._sent_as import Aim
+from sc2nachos.gamedata._techtree import SENT_AS
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
@@ -21,18 +22,30 @@ from sc2nachos.state import ActionResult
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Iterator, Sequence
+    from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 
     from sc2nachos.gamedata import AbilityData, GameData
+    from sc2nachos.gamedata._sent_as import SentAs
     from sc2nachos.geometry import PointLike
+    from sc2nachos.ids import UnitTypeId
     from sc2nachos.protocol import Client
     from sc2nachos.units import OwnUnit, Target
 
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
 # and the one after that on the ladder or in realtime (docs/game-behavior.md).
 _SHOWN_WITHIN = 2
-# The game's general abilities that have a custom id for when aimed at the unit itself, with that id.
-_CUSTOM_ID_OF = MappingProxyType({game: custom for custom, game in CUSTOM_ABILITIES.items()})
+# The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
+# `GENERAL_UNLOAD`.
+_IS_AIMED_AT_ITSELF = MappingProxyType(
+    {
+        sending.ability: ability
+        for ability, sent_as in SENT_AS.items()
+        for sending in sent_as.values()
+        if sending.aim is Aim.ITSELF
+    }
+)
+# What an ability goes out as where no type is sent another.
+_SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 
 @final
@@ -116,19 +129,29 @@ class OrderBook:
         how a unit is made to drop its queue and go on with its current order. It still competes with the turn's other
         orders like any other.
 
-        Raises `TypeError` for a target the ability cannot be aimed at, and for a transport's unload at a point aimed at
-        one of `units` itself, which is `GENERAL_UNLOAD_IN_PLACE` for that one: a group given an unload at one of its
-        own transports is two orders. Raises `ValueError` for a custom ability this game's tables give nothing to send
-        as.
+        An ability that goes out as another for some types (`AbilityData.sent_as`) is sent as one command per ability
+        it goes out as, and answered `SUCCESS` if any of them was, as the game answers one command naming several
+        units.
+
+        Raises `TypeError` for a target the ability cannot be aimed at, for an order without one to a type that goes
+        out aimed at it, as a liberator's siege does, and for a transport's unload at a point aimed at one of `units`
+        itself, which is `GENERAL_UNLOAD` for that one: a group given an unload at one of its own transports is two
+        orders. Raises `ValueError` for a custom ability given to a type it has nothing to be sent as for, or which this
+        game's tables lack an ability it is sent as for.
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        if ability.is_custom and (row is None or row.sent_as is None):
-            raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
+        sent_as = SENT_AS.get(ability, _SENT_UNCHANGED)
+        if ability.is_custom:
+            if row is None:
+                raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
+            _check_sent_as(ability, sent_as, given)
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
+        if aimed is None:
+            _check_aimed_where_needed(ability, sent_as, given)
         if isinstance(aimed, Unit):
             _check_not_aimed_at_itself(ability, aimed, given)
         order = Order(
@@ -173,7 +196,7 @@ class OrderBook:
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...], int]] = []
         for order, units in self._orders_to_send(issued, forced):
-            order_actions = create_unit_command_actions(order, units, self._sent_as(order))
+            order_actions = create_unit_command_actions(order, units, SENT_AS.get(order.ability, _SENT_UNCHANGED))
             actions += order_actions
             sent.append((order, units, len(order_actions)))
         if self._camera_location is not None:
@@ -194,11 +217,6 @@ class OrderBook:
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
             if taken and not order.queued:
                 self._remember_sent(order, units)
-
-    def _sent_as(self, order: Order[Any]) -> AbilityId | None:
-        """The game's ability `order` goes out as, aimed at each unit itself, if it is a custom one."""
-        row = self._game_data.abilities.get(order.ability)
-        return None if row is None else row.sent_as
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -340,8 +358,23 @@ def _answer(results: Sequence[int]) -> ActionResult:
     return ActionResult.SUCCESS if ActionResult.SUCCESS in answers else answers[0]
 
 
+def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], units: Sequence[OwnUnit[Any]]) -> None:
+    """Raise `ValueError` if the custom `ability` has nothing to be sent as for one of `units`."""
+    if missing := sorted({unit.type_id.name for unit in units if unit.type_id not in sent_as}):
+        raise ValueError(f"{ability.name} has nothing to be sent as for {', '.join(missing)}")
+
+
+def _check_aimed_where_needed(
+    ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], units: Sequence[OwnUnit[Any]]
+) -> None:
+    """Raise `TypeError` if `ability`, given no target, goes out at the order's target for one of `units`."""
+    aiming = {unit.type_id: sending for unit in units if (sending := sent_as.get(unit.type_id)) is not None}
+    if needing := sorted(unit_type.name for unit_type, sending in aiming.items() if sending.aim is Aim.TARGET):
+        raise TypeError(f"{ability.name} takes a point for {', '.join(needing)}, and was given no target")
+
+
 def _check_not_aimed_at_itself(ability: AbilityId, target: Unit[Any], units: Sequence[OwnUnit[Any]]) -> None:
-    """Raise `TypeError` if `ability` is aimed at one of `units` and a custom id is that."""
-    custom = _CUSTOM_ID_OF.get(ability)
+    """Raise `TypeError` if `ability` is aimed at one of `units` and another id is that."""
+    custom = _IS_AIMED_AT_ITSELF.get(ability)
     if custom is not None and any(unit.id == target.id for unit in units):
         raise TypeError(f"{ability.name} aimed at the unit itself is {custom.name}")

@@ -16,6 +16,7 @@ from sc2nachos.gamedata import (
     TargetType,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
+from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
@@ -407,8 +408,9 @@ class TestARecordedGamesTables:
     def test_a_unit_that_cannot_move_still_holds_an_order_of_its_own(self, path: Path) -> None:
         """A sieged tank and a burrowed lurker hold an attack, which leaving the form takes them off (in game)."""
         data = _tables(path)
-        for ability in (AbilityId.SIEGE_TANK_UNSIEGE, AbilityId.LIBERATOR_UNSIEGE):
-            assert data.abilities[ability].order_behavior is OrderBehavior.REPLACES, ability.name
+        unsiege = data.abilities[AbilityId.GENERAL_UNSIEGE]
+        for unit_type in (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED):
+            assert unsiege.order_behavior_for(unit_type) is OrderBehavior.REPLACES, unit_type.name
         unburrow = data.abilities[AbilityId.GENERAL_UNBURROW]
         assert unburrow.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES
 
@@ -427,21 +429,43 @@ class TestARecordedGamesTables:
                 behavior = data.abilities[ability].order_behavior_for(unit_type)
                 assert behavior is OrderBehavior.KEEPS_ORDERS, (ability.name, unit_type.name)
 
-    def test_an_unload_in_place_keeps_a_transport_s_orders_and_goes_out_as_its_unload_at(self, path: Path) -> None:
+    def test_the_unload_keeps_every_transport_s_orders_and_goes_out_to_a_medivac_as_its_unload_at(
+        self, path: Path
+    ) -> None:
         data = _tables(path)
-        row = data.abilities[AbilityId.GENERAL_UNLOAD_IN_PLACE]
-        assert row.sent_as is AbilityId.GENERAL_UNLOAD_AT
+        row = data.abilities[AbilityId.GENERAL_UNLOAD]
+        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.GENERAL_UNLOAD_AT, Aim.ITSELF)
+        assert UnitTypeId.BUNKER not in row.sent_as
         assert row.target_type is TargetType.NOTHING
-        assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
-        assert row.performers == {
-            UnitTypeId.MEDIVAC,
-            UnitTypeId.WARP_PRISM,
-            UnitTypeId.WARP_PRISM_PHASING,
-            UnitTypeId.OVERLORD_TRANSPORT,
-        }
-        assert data.abilities[AbilityId.GENERAL_UNLOAD_AT].sent_as is None
+        assert {UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.OVERLORD_TRANSPORT} <= (
+            row.performers
+        )
+        for unit_type in (UnitTypeId.BUNKER, UnitTypeId.MEDIVAC):
+            assert row.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        assert not data.abilities[AbilityId.GENERAL_UNLOAD_AT].sent_as
         unload_at = data.abilities[AbilityId.GENERAL_UNLOAD_AT]
         assert unload_at.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
+
+    def test_the_siege_is_a_custom_id_taking_a_point_for_the_liberator_alone(self, path: Path) -> None:
+        """Each type's own siege makes its sieged form, and the liberator's is aimed at its zone."""
+        data = _tables(path)
+        siege = data.abilities[AbilityId.GENERAL_SIEGE]
+        assert siege.target_type is TargetType.POINT_OR_NOTHING
+        liberator = data.abilities[AbilityId.GENERAL_SIEGE].sent_as[UnitTypeId.LIBERATOR]
+        assert liberator == SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET)
+        assert siege.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
+        assert siege.performers == {
+            UnitTypeId.SIEGE_TANK,
+            UnitTypeId.LIBERATOR,
+            UnitTypeId.OBSERVER,
+            UnitTypeId.OVERSEER,
+        }
+        assert siege.products[UnitTypeId.SIEGE_TANK] is UnitTypeId.SIEGE_TANK_SIEGED
+        assert siege.products[UnitTypeId.LIBERATOR] is UnitTypeId.LIBERATOR_SIEGED
+        assert siege.order_behavior is OrderBehavior.REPLACES
+        unsiege = data.abilities[AbilityId.GENERAL_UNSIEGE]
+        assert unsiege.target_type is TargetType.NOTHING
+        assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.GENERAL_SIEGE
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.GENERAL_SMART]
@@ -643,6 +667,11 @@ class TestARecordedGamesTables:
             (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
         ):
             assert data.units[unit].base_type is base
+
+
+def _answer_row(path: Path, ability: int) -> data_pb2.AbilityData:
+    """The game's own row of `ability` in a recorded game's tables."""
+    return next(row for row in _answer(path).abilities if row.ability_id == ability)
 
 
 def _derived(data: GameData, ability: AbilityId) -> Cost:

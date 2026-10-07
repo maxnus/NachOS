@@ -2592,16 +2592,36 @@ def _middle_item(game: _Game, *, panels: bool) -> list[Trial]:
 # Each form that holds an order without moving: the unit it is made from, the ability that makes it, and the abilities
 # tried on it while it holds one.
 _FORMS = (
-    (UnitTypeId.SIEGE_TANK, AbilityId.SIEGE_TANK_SIEGE, UnitTypeId.SIEGE_TANK_SIEGED, (AbilityId.SIEGE_TANK_UNSIEGE,)),
-    (UnitTypeId.LIBERATOR, AbilityId.LIBERATOR_SIEGE, UnitTypeId.LIBERATOR_SIEGED, (AbilityId.LIBERATOR_UNSIEGE,)),
+    (
+        UnitTypeId.SIEGE_TANK,
+        RawAbilityId.SiegeMode_SiegeMode,
+        UnitTypeId.SIEGE_TANK_SIEGED,
+        (RawAbilityId.Unsiege_Unsiege,),
+    ),
+    (
+        UnitTypeId.LIBERATOR,
+        RawAbilityId.Morph_LiberatorAGMode,
+        UnitTypeId.LIBERATOR_SIEGED,
+        (RawAbilityId.Morph_LiberatorAAMode,),
+    ),
     (
         UnitTypeId.LURKER,
         RawAbilityId.BurrowDown_Lurker,
         UnitTypeId.LURKER_BURROWED,
         (RawAbilityId.BurrowUp_Lurker, RawAbilityId.Behavior_HoldFireOn_Lurker, AbilityId.GENERAL_HOLD_FIRE_ON),
     ),
-    (UnitTypeId.OBSERVER, AbilityId.OBSERVER_SIEGE, UnitTypeId.OBSERVER_SIEGED, (AbilityId.OBSERVER_UNSIEGE,)),
-    (UnitTypeId.OVERSEER, AbilityId.OVERSEER_SIEGE, UnitTypeId.OVERSEER_SIEGED, (AbilityId.OVERSEER_UNSIEGE,)),
+    (
+        UnitTypeId.OBSERVER,
+        RawAbilityId.Morph_SurveillanceMode,
+        UnitTypeId.OBSERVER_SIEGED,
+        (RawAbilityId.Morph_ObserverMode,),
+    ),
+    (
+        UnitTypeId.OVERSEER,
+        RawAbilityId.Morph_OversightMode,
+        UnitTypeId.OVERSEER_SIEGED,
+        (RawAbilityId.Morph_OverseerMode,),
+    ),
     (
         UnitTypeId.WARP_PRISM,
         AbilityId.WARP_PRISM_PHASING_MODE,
@@ -2915,7 +2935,7 @@ def _liberator(game: _Game, target_type: UnitTypeId, own: bool, wait: int, trial
     if liberator is None or target is None:
         trial.notes["class"] = "not made"
         return
-    trial.notes["siege"] = game.order(AbilityId.LIBERATOR_SIEGE, [liberator], _at(target))
+    trial.notes["siege"] = game.order(RawAbilityId.Morph_LiberatorAGMode, [liberator], _at(target))
     if not game.until(
         lambda: (now := game.unit(liberator.tag)) is not None and now.unit_type == UnitTypeId.LIBERATOR_SIEGED,
         limit=600,
@@ -2932,7 +2952,7 @@ def _liberator(game: _Game, target_type: UnitTypeId, own: bool, wait: int, trial
     before = [] if unit is None else [_Shown.of(order) for order in unit.orders]
     game.read("attacking", [liberator.tag, target.tag])
     held = next((order for order in before if "ATTACK" in order.ability), None)
-    _after(game, AbilityId.LIBERATOR_UNSIEGE, liberator.tag, None, held, [target.tag], trial)
+    _after(game, RawAbilityId.Morph_LiberatorAAMode, liberator.tag, None, held, [target.tag], trial)
 
 
 # Structures that make something, what each trains, and whether it needs a pylon beside it.

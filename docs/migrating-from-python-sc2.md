@@ -151,10 +151,13 @@ it.
   `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
-- **Unloading in place is `GENERAL_UNLOAD_IN_PLACE`, not an unload at the transport.** python-sc2 bots write
-  `medivac(AbilityId.UNLOADALLAT_MEDIVAC, medivac)`, which keeps the medivac's move in game but shares its id with the
-  unload at a point, which replaces it. NachOS raises `TypeError` for the first and sends its custom id the same way,
-  for a medivac, a warp prism and a transport overlord alike ([orders](orders.md#one-order-a-unit-a-turn)).
+- **Unloading in place is `GENERAL_UNLOAD`, for every transport, not an unload at the transport.** python-sc2 bots
+  write `medivac(AbilityId.UNLOADALLAT_MEDIVAC, medivac)`, which keeps the medivac's move in game but shares its id
+  with the unload at a point, which replaces it, and `bunker(AbilityId.UNLOADALL_BUNKER)`. NachOS raises `TypeError`
+  for the first and sends `GENERAL_UNLOAD` to a medivac, a warp prism and a transport overlord the same way
+  ([orders](orders.md#one-order-a-unit-a-turn)). Likewise `GENERAL_SIEGE` and `GENERAL_UNSIEGE` stand for
+  `SIEGEMODE_SIEGEMODE`, `MORPH_LIBERATORAGMODE`, `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and their ways
+  back.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
   item in the middle of a queue through the UI action `ActionProductionPanelRemoveFromQueue`, which names a slot and
   needs the structure selected and a game joined with a feature layer. A raw unit command carries no slot, and the
@@ -487,7 +490,7 @@ it.
   python-sc2 keeps every one of these, because the game marks them available.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
   no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `GENERAL_UNLOAD`,
-  `GENERAL_UNLOAD_AT` and `GENERAL_UNLOAD_IN_PLACE` put everyone down at once.
+  and `GENERAL_UNLOAD_AT` put everyone down at once.
 - **A row's `id` is its own**, and a table holds no row for a unit type's own id of an action, only for the action.
   python-sc2's `AbilityData.id` returns the generic id the ability remaps to, and `exact_id` the row's own.
 - **A cost is minerals, vespene and supply; times are steps beside it.** python-sc2's `Cost` carries a `time` in
