@@ -555,49 +555,34 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
 
 class TestALiberatorSieging:
-    """A liberator ordered `LIBERATOR_SIEGE` reports `LiberatorMorphtoAG_LiberatorAGMode` aimed at its zone, while it
-    morphs and for as long as it stays sieged (in game), and the game links neither id to the other."""
+    """A liberator ordered `LIBERATOR_SIEGE` at a point is a sieged liberator by the next observation, and reports
+    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered the siege again, it is refused
+    `NotSupported` (in game)."""
 
-    @pytest.mark.parametrize(
-        "unit_type", [UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED], ids=["morphing", "sieged"]
-    )
-    def test_it_reads_as_carrying_out_the_siege_it_was_ordered(self, unit_type: UnitTypeId) -> None:
+    def test_it_reads_as_carrying_out_the_siege_it_was_ordered(self) -> None:
         game = _Game()
-        game.observe(0, _liberator(1, unit_type, at_zone=(20.0, 21.0)))
+        game.observe(0, _sieged_liberator(1))
 
         (order,) = game.own(1).orders
 
         assert order.ability is _SIEGE
-        assert order.target == Point((20.0, 21.0))
+        assert order.target is game.own(1)
 
-    @pytest.mark.parametrize(
-        "unit_type", [UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED], ids=["morphing", "sieged"]
-    )
-    def test_the_same_siege_again_is_not_sent(self, unit_type: UnitTypeId) -> None:
-        game = _Game()
-        game.observe(0, _liberator(1, unit_type, at_zone=(20.0, 21.0)))
+    def test_the_siege_again_is_sent_since_it_was_aimed_at_a_point_and_shows_aimed_at_the_liberator(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED])
+        game.observe(0, _sieged_liberator(1))
 
         order = game.book.issue(game.own(1), _SIEGE, target=(20.0, 21.0))
 
-        assert game.flush() is None
-        assert order.state is OrderState.REDUNDANT
-
-    def test_a_siege_on_another_zone_is_sent(self) -> None:
-        game = _Game([ActionResult.SUCCESS])
-        game.observe(0, _liberator(1, UnitTypeId.LIBERATOR_SIEGED, at_zone=(20.0, 21.0)))
-
-        order = game.book.issue(game.own(1), _SIEGE, target=(24.0, 21.0))
-
         (command,) = _commands(game.flush())
         assert command.ability_id == _SIEGE
-        assert order.state is OrderState.SENT
+        assert order.state is OrderState.REFUSED
 
 
-def _liberator(tag: int, unit_type: UnitTypeId, *, at_zone: tuple[float, float]) -> raw_pb2.Unit:
-    """One of this player's liberators of `unit_type`, showing the order it reports for a siege on `at_zone`."""
-    zone = common_pb2.Point(x=at_zone[0], y=at_zone[1])
-    siege = raw_pb2.UnitOrder(ability_id=RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, target_world_space_pos=zone)
-    return make_unit(tag, unit_type, at=(18.0, 21.0), orders=(siege,))
+def _sieged_liberator(tag: int) -> raw_pb2.Unit:
+    """One of this player's liberators, sieged, showing the order it reports while its zone forms."""
+    siege = raw_pb2.UnitOrder(ability_id=RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, target_unit_tag=tag)
+    return make_unit(tag, UnitTypeId.LIBERATOR_SIEGED, at=(18.0, 21.0), orders=(siege,))
 
 
 class TestAGroupOfSeveralTypes:
@@ -1113,8 +1098,7 @@ class _UnloadingBot:
 
 
 class _SiegingBot:
-    """A bot that sieges a liberator, then orders the same siege again while it morphs and once it is sieged, each a
-    few turns after the last, so that the liberator's own report is what the order book goes by."""
+    """A bot that sieges a liberator, then orders the same siege again on two turns from 32 steps later."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -1135,20 +1119,13 @@ class _SiegingBot:
         self.reported.append((event.step, liberator.type_id.name, orders))
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
-        if self._siege_due(event.step, liberator):
+        if self._siege_due(event.step):
             self.sieges.append(api.orders.issue(liberator, _SIEGE, target=self.zone))
 
-    def _siege_due(self, step: int, liberator: OwnUnit[Any]) -> bool:
-        """Whether to order the siege now: at once, 32 steps later, and again once the liberator is sieged."""
-        match len(self.sieges):
-            case 0:
-                return True
-            case 1:
-                return step >= self.sieges[0].issued_step + 32
-            case 2:
-                return liberator.type_id is UnitTypeId.LIBERATOR_SIEGED
-            case _:
-                return False
+    def _siege_due(self, step: int) -> bool:
+        """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
+        shows the first."""
+        return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].issued_step + 32)
 
 
 class _UnloadingBotUnloadingFirst(_UnloadingBot):
@@ -1200,15 +1177,15 @@ class TestAgainstTheRealGame:
             assert medivac.cargo_used == 0
             assert medivac.position.distance_to(bot.unloaded_at[medivac.tag]) > 6.0
 
-    def test_a_liberator_ordered_the_siege_it_is_carrying_out_is_not_sent_it_again(self) -> None:
+    def test_a_liberator_sieged_at_once_shows_the_siege_aimed_at_itself_and_refuses_it_again(self) -> None:
         bot = _play_a_minute(_SiegingBot)
 
         print("the liberator, turn by turn:", bot.reported[:12])
         print("sieges:", [(order.issued_step, order.state.name, order.action_result) for order in bot.sieges])
-        print("zone ordered:", bot.zone)
-        assert [order.state for order in bot.sieges] == [OrderState.SENT, OrderState.REDUNDANT, OrderState.REDUNDANT]
-        (liberator,) = bot.api.units.own.of_type(UnitTypeId.LIBERATOR_SIEGED)
-        assert [order.ability for order in liberator.orders] == [_SIEGE]
+        assert [order.state for order in bot.sieges] == [OrderState.SENT, OrderState.REFUSED, OrderState.REFUSED]
+        assert [order.action_result for order in bot.sieges[1:]] == [ActionResult.NOT_SUPPORTED] * 2
+        (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type == "LIBERATOR_SIEGED")
+        assert first and first[0].startswith("LIBERATOR_SIEGE at OwnUnit(LIBERATOR_SIEGED")
 
 
 def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot, _SiegingBot)](make_bot: type[BotT]) -> BotT:
