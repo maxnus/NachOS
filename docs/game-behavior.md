@@ -355,6 +355,17 @@ Each entry ends with how it was seen:
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
   is refused. 1767 given to both, targeting one of them, merges them too; given to one it does nothing, though it
   answers `Success` (#37; tested).
+- `GENERAL_ATTACK` at a point runs `GENERAL_ATTACK_EXACT` (23) for a high templar, a lurker, an oracle and an adept's
+  shade, which are offered `GENERAL_SCAN_MOVE` (19) too, as it does for a marine. At an enemy drone it is refused
+  `NotSupported` by the lurker, the oracle without its beam, and the shade, and taken by the templar and the marine.
+  `GENERAL_SCAN_MOVE` ordered by its own id shows as itself for the lurker, the oracle and the shade (tool
+  `sweep_orders`, `attack-or-scan`; run 37610767491). A burrowed infestor or roach runs `GENERAL_ATTACK` as
+  `GENERAL_SCAN_MOVE` (below).
+- An unburrow's autocast is the type's, not the id's. With an enemy drone beside it, a burrowed roach whose
+  `ROACH_UNBURROW` or `DRONE_UNBURROW` was switched to autocast came up within 50 steps; one whose
+  `GENERAL_UNBURROW` was switched stayed down, and a burrowed drone stayed down with either switched. Every switch
+  was answered `Success`. The tables allow autocast on the roach's unburrow and not on the drone's (tool
+  `sweep_orders`, `unburrow-autocast`; run 37610767491).
 - A spell ordered at a target out of reach (storm, neural parasite, the raven's and viper's) shows in the caster's
   orders under the id ordered. Hallucinations, Guardian Shield, Chrono Boost, Supply Drop, warp-ins, bunker orders
   and cancels finish at once and show nothing (#33).
@@ -472,6 +483,17 @@ Each entry ends with how it was seen:
   offered only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine or an
   add-on can be done within the step its order lands in, before the structure is first read (tool
   `sweep_tech_tree`).
+- The generic `Cancel` (3659) does whatever cancel a unit is offered, beyond a queue. Each of these was put into the
+  state it is offered a cancel in, and in every one it was offered exactly one: a command center morphing to an
+  orbital or a fortress, a barracks, factory and starport building an add-on, a hatchery, lair and spire morphing, a
+  supply depot going up, a zergling, roach, hydralisk, overlord (to an overseer and to a transport) and corruptor in
+  their cocoon or egg, a ghost sniping and arming a nuke, an infestor's neural parasite, a phoenix's graviton beam, a
+  void ray's prismatic alignment, an adept with its shade out and the shade itself. Given `Cancel`, each was answered
+  `Success`, and the game reported the action as that unit's own cancel. Each was undone as its own cancel undoes it:
+  a structure kept its type and lost its order, the depot was gone, a cocoon or egg became the unit it came from, a
+  channel stopped, the void ray lost its buff, and the shade was gone. A ghost's nuke still showed 6 steps after
+  `Cancel` and was gone 48 steps after, exactly as after the ghost's own `Cancel_Nuke` (tool `sweep_orders`,
+  `cancels-whole` and `nuke-cancels`; runs 37610767491 and 37611317534).
 - A cancelled SCV refunds its 50 minerals by the next observation, whether half made or only queued, and the refund
   pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then an
   SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay for

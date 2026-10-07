@@ -271,18 +271,22 @@ and for whether an ability makes a structure, and both come out the same within 
 - **The liberator repeat.** Done in #103 (runs 37605755080 and 37606192575): a liberator is sieged by the next
   observation, reports its siege aimed at itself for the 64 steps its zone takes to form, and refuses the siege
   again `NotSupported`.
-- **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** An adept shade, a high templar, a lurker and an oracle are offered
-  both. Find which one `GENERAL_ATTACK` runs for each, and whether a bot loses anything by not being able to order
-  `Scan_Move` by name.
-- **What `GENERAL_CANCEL` does to a structure building an add-on.** If it cancels the add-on, `CANCEL_ADD_ON` is sent
-  as `GENERAL_CANCEL`; otherwise, as each structure's own cancel. That would need `sent_as` per performer, which
-  `AbilityData.sent_as` cannot hold today.
-- **Whether `GENERAL_CANCEL` should collapse whole.** The "offered two members" test above counted every state a
-  type can be in. A command center is offered both morph cancels and `GENERAL_CANCEL_BUILDING`, but never more than
-  one at a time, since it cannot morph twice or morph while under construction. The same holds for a ghost's two
-  cancels. If no unit is ever offered two cancels at once, `CANCEL` alone does every cancel, the 22 members go, and
-  `cancelled_by` is always `CANCEL`. Raised with the owner on 2026-10-07; not decided.
-- **`allows_autocast` on the unburrows.** If no unburrow can be autocast, the field stays a plain bool.
+- **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** Done (run 37610767491, docs/game-behavior.md): at a point,
+  `GENERAL_ATTACK` runs `GENERAL_ATTACK_EXACT` for all four, as for a marine, and only a burrowed infestor or roach
+  runs it as the scan move. So the scan move reads as the attack, and a bot loses nothing it was seen to need: the
+  scan move by its own id is what the attack already does to a unit that cannot fire.
+- **What `GENERAL_CANCEL` does, and whether it collapses whole.** Done (runs 37610767491 and 37611317534): in each
+  of 23 states a unit is offered a cancel of the family in, from a morphing command center to a nuke, it is offered
+  exactly one, and `GENERAL_CANCEL` does what that one does; the game even reports the action as the unit's own
+  cancel. **Not yet decided by the owner**, but the agent recommends collapsing the family whole into `CANCEL`: its
+  22 members go, `CANCEL_ADD_ON` is not needed, and `cancelled_by` is `CANCEL` for a morph, an add-on or a structure
+  going up and `CANCEL_LAST` for a train or a research. `CANCEL_LAST` stays a second id, since the generic cancel is
+  answered `Error` by a structure that is training (docs/game-behavior.md).
+- **`allows_autocast` on the unburrows.** Done (run 37610767491): an unburrow's autocast is the performer's. A burrowed
+  roach comes up by autocast and a burrowed drone does not, whichever per-unit id is switched; switching
+  `GENERAL_UNBURROW` does nothing. So `allows_autocast` becomes a mapping from performer, as the owner chose for the
+  other fields that vary, and once NachOS sends autocast switches (it reads them only, as `AutocastToggle`), a family
+  id must go out as a performer's own id.
 
 ### Pull requests
 
