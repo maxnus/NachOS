@@ -536,7 +536,7 @@ it.
   zergling of a zergling and a burrowed roach of a roach.
   A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
   to cancel, halt or unload. A warp gate warps in the six units a gateway trains, each by an ability of its own:
-  `WARP_GATE_WARP_IN_ZEALOT`'s `products` make a zealot of a warp gate. A zealot's `creation_ability` is
+  `WARP_GATE_WARP_IN_ZEALOT`'s `products` are `{WARP_GATE: ZEALOT}`. A zealot's `creation_ability` is
   `GATEWAY_TRAIN_ZEALOT`, whose `performers` hold no warp gate.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
