@@ -62,6 +62,8 @@ and runs its trials in turn::
   generic cancel and the ghost's own.
 - `attack-or-scan` gives a high templar, a lurker, an oracle and an adept's shade, each offered both the attack and
   the scan move, and a marine, an attack at a point and at an enemy drone, then each of the two at the point.
+  `scan-only` does the same for a medivac, a raven, an observer, a MULE, an infestor and a widow mine, offered the
+  scan move and not the attack.
 - `unburrow-autocast` sets a burrowed roach's and a burrowed drone's unburrow to autocast, with an enemy drone beside.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
@@ -3441,14 +3443,30 @@ def _nuking(game: _Game, trial: Trial) -> int | None:
 # --- What an attack runs for a unit offered both the attack and the scan move
 
 
-# Each unit offered both, and the marine, which is offered the attack alone, to read the others against.
+# Each unit offered both, the marine, which is offered the attack alone, and units offered the scan move alone.
 _ATTACKERS = (UnitTypeId.HIGH_TEMPLAR, UnitTypeId.LURKER, UnitTypeId.ORACLE, UnitTypeId.ADEPT_SHADE, UnitTypeId.MARINE)
+_SCANNERS = (
+    UnitTypeId.MEDIVAC,
+    UnitTypeId.RAVEN,
+    UnitTypeId.OBSERVER,
+    UnitTypeId.MULE,
+    UnitTypeId.INFESTOR,
+    UnitTypeId.WIDOW_MINE,
+)
 
 
 def _attack_or_scan(game: _Game) -> list[Trial]:
+    return _attack_trials(game, _ATTACKERS)
+
+
+def _scan_only(game: _Game) -> list[Trial]:
+    return _attack_trials(game, _SCANNERS)
+
+
+def _attack_trials(game: _Game, unit_types: Sequence[UnitTypeId]) -> list[Trial]:
     return [
         game.trial(f"{unit_type.name} given each attack", partial(_attacks, game, unit_type))
-        for unit_type in _ATTACKERS
+        for unit_type in unit_types
     ]
 
 
@@ -3714,6 +3732,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "cancels-whole": _Sweep(Race.TERRAN, _cancels_whole, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "nuke-cancels": _Sweep(Race.TERRAN, _nuke_cancels, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "attack-or-scan": _Sweep(Race.TERRAN, _attack_or_scan, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "scan-only": _Sweep(Race.TERRAN, _scan_only, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "unburrow-autocast": _Sweep(Race.TERRAN, _unburrow_autocast, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
