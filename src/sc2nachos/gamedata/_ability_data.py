@@ -319,6 +319,8 @@ class AbilityData:
     order_behavior: OrderBehavior
     """What ordering it does to the unit's current orders. For a general id, the behavior shared by its exact ids that
     are offered to some type, or `REPLACES` where they differ; `order_behavior_for` gives each unit type's."""
+    sent_as: AbilityId | None
+    """For a custom id, the game's ability it goes out as, aimed at the unit itself; `None` for the game's own."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
@@ -353,5 +355,27 @@ class AbilityData:
             cost=costs.get(ability, _FREE),
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
+            sent_as=None,
             _behaviors_by_performer=behavior.by_type,
+        )
+
+    @classmethod
+    def _sent_as_itself(cls, ability: AbilityId, sent_as: Self) -> Self:
+        """The custom ability `ability`, sent as `sent_as`'s ability aimed at the unit itself: offered to the types
+        `sent_as` is, aimed at nothing, making nothing and keeping their orders."""
+        return cls(
+            id=ability,
+            target_type=TargetType.NOTHING,
+            cast_range=0.0,
+            footprint_radius=None,
+            needs_placement=False,
+            allows_autocast=False,
+            remaps_to=None,
+            performers=sent_as.performers,
+            product=None,
+            cost=_FREE,
+            cancelled_by=None,
+            order_behavior=OrderBehavior.KEEPS_ORDERS,
+            sent_as=sent_as.id,
+            _behaviors_by_performer=_NO_BEHAVIORS,
         )

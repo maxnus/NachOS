@@ -50,6 +50,11 @@ and runs its trials in turn::
   `gateway-orders` the gateway's, without `tech_tree`. `fortress-unload` gives a loaded, training planetary
   fortress each unload, and `burrowed-movers` gives a burrowed roach and infestor an attack they must move for,
   then unburrow; `burrowed-movers-tech-tree` does the same under `tech_tree`, which grants Tunneling Claws.
+- `group-verdicts` gives one unload at a point to two medivacs, one loaded and one empty in either order, to two
+  empty ones and to one empty one, to find what the game answers a command some of whose units cannot take it now.
+- `target-dependent` gives a moving transport a load at a passenger beside it and further off, a moving caster a
+  spell at an enemy in reach and out of it, and a training planetary fortress an attack at a point rather than a unit,
+  to find whether what an ability does to a unit's orders depends on what it is aimed at.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -3118,6 +3123,134 @@ def _burrowed_given(game: _Game, burrowed: UnitTypeId, trial: Trial) -> None:
     _after(game, AbilityId.GENERAL_UNBURROW, unit.tag, None, held, [], trial)
 
 
+# --- Whether an ability does something else to a unit's orders depending on what it is aimed at
+
+
+# Each transport and the passenger it is given a load at.
+_LOADERS = (
+    (UnitTypeId.MEDIVAC, UnitTypeId.MARINE),
+    (UnitTypeId.WARP_PRISM, UnitTypeId.ZEALOT),
+    (UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.ZERGLING),
+)
+# Each caster and a spell it aims at an enemy siege tank, which it reaches from where it stands (4 away) or not (16).
+_CASTERS = (
+    (UnitTypeId.RAVEN, AbilityId.RAVEN_ANTI_ARMOR_MISSILE),
+    (UnitTypeId.RAVEN, AbilityId.RAVEN_INTERFERENCE_MATRIX),
+    (UnitTypeId.BATTLECRUISER, AbilityId.BATTLECRUISER_YAMATO),
+)
+
+
+def _target_dependent(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for transport, passenger in _LOADERS:
+        for apart in (1, 8):
+            label = f"{transport.name} moving, given GENERAL_LOAD at a {passenger.name} {apart} away"
+            trials.append(game.trial(label, partial(_loading_on_the_move, game, transport, passenger, apart)))
+    for caster, spell in _CASTERS:
+        for apart in (4, 16):
+            label = f"{caster.name} moving, given {spell.name} at an enemy SIEGE_TANK {apart} away"
+            trials.append(game.trial(label, partial(_casting_on_the_move, game, caster, spell, apart)))
+    label = "PLANETARY_FORTRESS training, given GENERAL_ATTACK at the point of an enemy COMMAND_CENTER in range"
+    trials.append(game.trial(label, partial(_fortress_at_a_point, game)))
+    return trials
+
+
+def _moving(game: _Game, tag: int, trial: Trial) -> _Shown | None:
+    """Move the unit `tag` sideways and return the move as it shows it."""
+    unit = game.units[tag]
+    trial.notes["moves"] = game.order(AbilityId.GENERAL_MOVE, [tag], _at(unit) + (0, _MOVE_DISTANCE))
+    game.turn(2)
+    game.read("moving", [tag])
+    now = game.unit(tag)
+    return _Shown.of(now.orders[0]) if now is not None and now.orders else None
+
+
+def _loading_on_the_move(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, apart: float, trial: Trial) -> None:
+    pad = game.spot(game.toward(12), 6)
+    made = game.sandbox.spawn([(transport, game.player, pad), (passenger, game.player, pad + (apart, 0))])
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    carrier = next((unit for unit in made if unit.unit_type == transport), None)
+    rider = next((unit for unit in made if unit.unit_type == passenger), None)
+    if carrier is None or rider is None:
+        trial.notes["class"] = "not made"
+        return
+    move = _moving(game, carrier.tag, trial)
+    _after(game, AbilityId.GENERAL_LOAD, carrier.tag, rider.tag, move, [rider.tag], trial)
+    trial.notes["cargo after"] = _cargo(game, carrier.tag)
+
+
+def _casting_on_the_move(game: _Game, caster: UnitTypeId, spell: AbilityId, apart: float, trial: Trial) -> None:
+    pad = game.spot(game.toward(16), 10)
+    made = game.sandbox.spawn(
+        [(caster, game.player, pad - (apart / 2, 0)), (UnitTypeId.SIEGE_TANK, game.enemy, pad + (apart / 2, 0))]
+    )
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    unit = next((unit for unit in made if unit.owner == game.player), None)
+    enemy = next((unit for unit in made if unit.owner == game.enemy), None)
+    if unit is None or enemy is None:
+        trial.notes["class"] = "not made"
+        return
+    game.set_energy(200, [unit])
+    move = _moving(game, unit.tag, trial)
+    _after(game, spell, unit.tag, enemy.tag, move, [enemy.tag], trial)
+
+
+def _fortress_at_a_point(game: _Game, trial: Trial) -> None:
+    if (armed := _armed(game, UnitTypeId.PLANETARY_FORTRESS, 8, trial)) is None:
+        return
+    fortress, enemy = armed
+    trial.notes["trains"] = game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [fortress])
+    game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [fortress], queued=True)
+    game.turn(2)
+    game.read("training", [fortress.tag])
+    now = game.unit(fortress.tag)
+    held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
+    _after(game, AbilityId.GENERAL_ATTACK, fortress.tag, _at(enemy), held, [enemy.tag], trial)
+
+
+# --- What the game answers one command naming several units, some of which cannot take it now
+
+
+# Which medivacs of the group carry a marine, in the order the command names them. The single empty medivac is the
+# answer the others are read against.
+_GROUP_CARGO = ((True, False), (False, True), (False, False), (False,))
+
+
+def _group_verdicts(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for cargo in _GROUP_CARGO:
+        named = ", ".join("loaded" if full else "empty" for full in cargo)
+        label = f"one GENERAL_UNLOAD_AT at a point naming medivacs: {named}"
+        trials.append(game.trial(label, partial(_group_unload, game, cargo)))
+    return trials
+
+
+def _group_unload(game: _Game, cargo: tuple[bool, ...], trial: Trial) -> None:
+    tags: list[int] = []
+    for full in cargo:
+        if full:
+            if (loaded := _loaded(game, UnitTypeId.MEDIVAC, UnitTypeId.MARINE, trial)) is None:
+                return
+            tags.append(loaded[0])
+        else:
+            made = game.create(UnitTypeId.MEDIVAC, game.spot(game.toward(12), 4))
+            if not made:
+                trial.notes["class"] = "not made"
+                return
+            tags.append(made[0].tag)
+    trial.notes["cargo before"] = [_cargo(game, tag) for tag in tags]
+    point = _at(game.units[tags[0]]) + (0, 4)
+    trial.notes["verdict"] = game.order(AbilityId.GENERAL_UNLOAD_AT, tags, point)
+    last = 0
+    for at in (*_READS, 200):
+        game.turn(at - last)
+        last = at
+        game.read(f"{at} after", tags)
+        trial.notes[f"cargo {at} after"] = [_cargo(game, tag) for tag in tags]
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
@@ -3296,6 +3429,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "fortress-unload": _Sweep(Race.TERRAN, _fortress_unload, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "burrowed-movers": _Sweep(Race.TERRAN, _burrowed_movers),
     "burrowed-movers-tech-tree": _Sweep(Race.TERRAN, _burrowed_movers, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "group-verdicts": _Sweep(Race.TERRAN, _group_verdicts),
+    "target-dependent": _Sweep(Race.TERRAN, _target_dependent, (*_BASE_CHEATS, Cheat.COOLDOWN, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

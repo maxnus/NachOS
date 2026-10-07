@@ -59,9 +59,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   needed at all, with a queue in NachOS coming that leaves the game's queue little to do, and had it removed on
   condition that an order can still be sent though a unit is carrying it out. A forced order is never `REDUNDANT`,
   and re-sending a unit's current order that way drops its queue as `clear_queue` did.
-- **An ability whose behavior depends on its target is split into NachOS ids, one per behavior** (review of #77,
-  2026-10-06), so that a behavior stays one per ability and type. The owner's idea, for the unload below; a pull
-  request after #77.
+- **An ability whose behavior depends on its target is split into custom ids, one per behavior** (review of #77,
+  2026-10-06), so that a behavior stays one per ability and type. The owner's idea. Done for the unload in #101: one
+  `GENERAL_UNLOAD_IN_PLACE` for every transport, drawn from a counter in `AbilityId` that starts at 1,000,000, and an
+  unload at a point aimed at the transport itself raises `TypeError` (the owner's choices, 2026-10-06, in review:
+  one id rather than one per transport, "custom ids" rather than "NachOS ids"). A load, three spells and a fortress's attack were swept and
+  need no split (docs/game-behavior.md).
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -142,11 +145,6 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
   then a train.
 - What a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
   planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
-- An unload at a point aimed at the transport itself leaves a medivac's, a warp prism's and an overlord's move
-  going (in game), yet reads `REPLACES`, which is right only for one aimed at a point, so a turn that moves a
-  transport and unloads it in place sends only the last. Decided: a NachOS-only "unload here" id per transport, with
-  `KEEPS_ORDERS`, sent to the game as the transport's unload at a point aimed at itself (see "Decided"). Its pull
-  request also looks for other abilities whose behavior depends on their target.
 
 ### Suggested first pull request
 

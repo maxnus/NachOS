@@ -60,6 +60,22 @@ that trains does so through a smart, which sets its rally (in game), so for thos
 `order.order_behavior` what it does to the order's units: the behavior their types share, or `REPLACES` where they
 differ.
 
+**Unloading in place has an id of its own.** A medivac, a warp prism or a transport overlord given its unload at a
+point aimed at itself unloads where it is and keeps its move; aimed at a point, it flies there and unloads (in game).
+An id holds one behavior, so the first has a custom id, `GENERAL_UNLOAD_IN_PLACE`, aimed at nothing, which keeps a
+transport's orders:
+
+```python
+api.orders.issue(medivac, AbilityId.GENERAL_MOVE, target=retreat)
+api.orders.issue(medivac, AbilityId.GENERAL_UNLOAD_IN_PLACE)  # both go out
+```
+
+It goes out as the game's `GENERAL_UNLOAD_AT` aimed at the transport itself, which
+`api.data.abilities[ability].sent_as` names, one command a transport. An order to several is answered as the game
+answers one command naming several units: `SUCCESS` if any transport took it, an empty one left out, and otherwise
+the first refusal (in game). An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
+`GENERAL_UNLOAD_IN_PLACE`. `AbilityId.is_custom` tells a custom id from the game's.
+
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
 start on it, so NachOS sends only the last. To fill a queue on purpose — a reactor's second slot, say, which the

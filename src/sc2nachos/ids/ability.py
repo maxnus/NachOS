@@ -1,12 +1,16 @@
 """Ability identifiers.
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
-catalog member, never a literal id. Unknown ids raise.
+catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as a game
+ability aimed at the unit itself (`AbilityData.sent_as`). A custom id is assigned `auto()`, which numbers it above
+every game id, and the game never reports one. Unknown ids raise.
 
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
 LARVA_MORPH_ZERGLING -- and GENERAL where several units can. Where the game remaps a family onto one id, that
 one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its three leveled siblings.
 """
+
+from enum import auto
 
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId
@@ -235,6 +239,7 @@ class AbilityId(IdEnum):
     GENERAL_UNBURROW = RawAbilityId.BurrowUp
     GENERAL_UNLOAD = RawAbilityId.UnloadAll
     GENERAL_UNLOAD_AT = RawAbilityId.UnloadAllAt
+    GENERAL_UNLOAD_IN_PLACE = auto()
     GENERAL_UPROOT = RawAbilityId.Morph_Uproot
     GHOST_ACADEMY_BUILD_NUKE = RawAbilityId.Build_Nuke
     GHOST_ACADEMY_RESEARCH_GHOST_CLOAK = RawAbilityId.Research_PersonalCloaking

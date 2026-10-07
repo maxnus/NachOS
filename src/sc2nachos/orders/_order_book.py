@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final, overload
 
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata._techtree import CUSTOM_ABILITIES
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
-from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_action
+from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_actions
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._order_state import OrderState
 from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
@@ -29,6 +31,8 @@ if TYPE_CHECKING:
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
 # and the one after that on the ladder or in realtime (docs/game-behavior.md).
 _SHOWN_WITHIN = 2
+# The game's general abilities that have a custom id for when aimed at the unit itself, with that id.
+_CUSTOM_ID_OF = MappingProxyType({game: custom for custom, game in CUSTOM_ABILITIES.items()})
 
 
 @final
@@ -112,14 +116,21 @@ class OrderBook:
         how a unit is made to drop its queue and go on with its current order. It still competes with the turn's other
         orders like any other.
 
-        Raises `TypeError` for a target the ability cannot be aimed at.
+        Raises `TypeError` for a target the ability cannot be aimed at, and for a transport's unload at a point aimed at
+        one of `units` itself, which is `GENERAL_UNLOAD_IN_PLACE` for that one: a group given an unload at one of its
+        own transports is two orders. Raises `ValueError` for a custom ability this game's tables give nothing to send
+        as.
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
+        if ability.is_custom and (row is None or row.sent_as is None):
+            raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
+        if isinstance(aimed, Unit):
+            _check_not_aimed_at_itself(ability, row, aimed, given)
         order = Order(
             ability,
             given,
@@ -160,25 +171,34 @@ class OrderBook:
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         actions: list[sc2api_pb2.Action] = []
-        sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]] = []
+        sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...], int]] = []
         for order, units in self._orders_to_send(issued, forced):
-            actions.append(create_unit_command_action(order, units))
-            sent.append((order, units))
+            order_actions = create_unit_command_actions(order, units, self._sent_as(order))
+            actions += order_actions
+            sent.append((order, units, len(order_actions)))
         if self._camera_location is not None:
             actions.append(create_camera_move_action(self._camera_location))
             self._camera_location = None
         if not actions:
             return
         results = client.act(actions).result
-        if len(results) < len(sent):
-            raise ProtocolError(f"the game answered {len(results)} of the {len(sent)} orders it was sent")
+        unit_commands = sum(count for _, _, count in sent)
+        if len(results) < unit_commands:
+            raise ProtocolError(f"the game answered {len(results)} of the {unit_commands} commands it was sent")
         # A camera move, if any, is answered last and belongs to no order.
-        for (order, units), result in zip(sent, results[: len(sent)], strict=True):
-            action_result = ActionResult.read(result)
+        answered = 0
+        for order, units, count in sent:
+            action_result = _answer(results[answered : answered + count])
+            answered += count
             taken = action_result is ActionResult.SUCCESS
             order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
             if taken and not order.queued:
                 self._remember_sent(order, units)
+
+    def _sent_as(self, order: Order[Any]) -> AbilityId | None:
+        """The game's ability `order` goes out as, aimed at each unit itself, if it is a custom one."""
+        row = self._game_data.abilities.get(order.ability)
+        return None if row is None else row.sent_as
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -317,3 +337,20 @@ def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
     """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
     ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
+
+
+def _answer(results: Sequence[int]) -> ActionResult:
+    """The game's answer to an order sent as `results`' commands, read as it answers one command naming several units:
+    `SUCCESS` if any unit took it, and otherwise the first refusal (in game)."""
+    answers = [ActionResult.read(result) for result in results]
+    return ActionResult.SUCCESS if ActionResult.SUCCESS in answers else answers[0]
+
+
+def _check_not_aimed_at_itself(
+    ability: AbilityId, row: AbilityData | None, target: Unit[Any], units: Sequence[OwnUnit[Any]]
+) -> None:
+    """Raise `TypeError` if `ability`, of the row `row`, is aimed at one of `units` and a custom id is that."""
+    general = ability if row is None or row.remaps_to is None else row.remaps_to
+    custom = _CUSTOM_ID_OF.get(general)
+    if custom is not None and any(unit.id == target.id for unit in units):
+        raise TypeError(f"{ability.name} aimed at the unit itself is {custom.name}")

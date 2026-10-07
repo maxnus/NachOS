@@ -11,26 +11,37 @@ from sc2nachos.geometry import Point
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from sc2nachos.ids import AbilityId
     from sc2nachos.orders._order import Order
-    from sc2nachos.units import OwnUnit
+    from sc2nachos.units import OwnUnit, Target
 
 
-def create_unit_command_action(order: Order[Any], units: Sequence[OwnUnit[Any]]) -> sc2api_pb2.Action:
-    """One raw command giving `order` to `units`."""
-    target = order.target
-    tags = [unit.tag for unit in units]
+def create_unit_command_actions(
+    order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: AbilityId | None
+) -> list[sc2api_pb2.Action]:
+    """The raw commands giving `order` to `units`: one, or, for a custom ability, one per unit giving it `sent_as`
+    aimed at itself."""
+    if sent_as is None:
+        return [_unit_command_action(order.ability, [unit.tag for unit in units], order.target, queued=order.queued)]
+    return [_unit_command_action(sent_as, [unit.tag], unit, queued=order.queued) for unit in units]
+
+
+def _unit_command_action(
+    ability: AbilityId, tags: list[int], target: Target | None, *, queued: bool
+) -> sc2api_pb2.Action:
+    """One raw command giving `ability` to the units of `tags`, aimed at `target`."""
     if target is None:
-        command = raw_pb2.ActionRawUnitCommand(ability_id=order.ability, unit_tags=tags, queue_command=order.queued)
+        command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=tags, queue_command=queued)
     elif isinstance(target, Point):
         command = raw_pb2.ActionRawUnitCommand(
-            ability_id=order.ability,
+            ability_id=ability,
             unit_tags=tags,
-            queue_command=order.queued,
+            queue_command=queued,
             target_world_space_pos=common_pb2.Point2D(x=target[0], y=target[1]),
         )
     else:
         command = raw_pb2.ActionRawUnitCommand(
-            ability_id=order.ability, unit_tags=tags, queue_command=order.queued, target_unit_tag=target.tag
+            ability_id=ability, unit_tags=tags, queue_command=queued, target_unit_tag=target.tag
         )
     return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
 

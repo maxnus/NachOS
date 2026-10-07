@@ -41,6 +41,8 @@ _RALLY = AbilityId.GENERAL_RALLY
 _SMART = AbilityId.GENERAL_SMART
 _UNLOAD = AbilityId.GENERAL_UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
+_UNLOAD_AT = AbilityId.GENERAL_UNLOAD_AT
+_MEDIVAC_UNLOAD_AT = AbilityId.MEDIVAC_UNLOAD_AT
 # An unset `target` reads as the enum's first value, the one for an ability aimed at nothing.
 _AT_A_POINT_OR_UNIT = data_pb2.AbilityData.Target.PointOrUnit
 _AT_A_POINT = data_pb2.AbilityData.Target.Point
@@ -53,6 +55,7 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER_BURROWED, attributes=[data_pb2.Attribute.Biological]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.QUEEN, attributes=[data_pb2.Attribute.Biological]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_BURROWED, attributes=[data_pb2.Attribute.Structure]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC, attributes=[data_pb2.Attribute.Mechanical]),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_MOVE_EXACT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_MOVE),
@@ -70,6 +73,10 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_SMART, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_UNLOAD),
         data_pb2.AbilityData(ability_id=_TRAIN_SCV),
+        data_pb2.AbilityData(ability_id=_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT),
+        data_pb2.AbilityData(
+            ability_id=_MEDIVAC_UNLOAD_AT, target=_AT_A_POINT_OR_UNIT, remaps_to_ability_id=_UNLOAD_AT
+        ),
     ],
 )
 
@@ -594,6 +601,114 @@ class TestAGroupOfSeveralTypes:
         assert move.state is OrderState.OVERRIDDEN
 
 
+def _medivac(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """One of this player's medivacs, carrying out `orders`."""
+    return make_unit(tag, UnitTypeId.MEDIVAC, at=(14.0, 14.0), orders=orders)
+
+
+class TestUnloadingInPlace:
+    """A transport's unload aimed at itself unloads where it is and keeps its move (in game), so it has a custom id,
+    sent as the unload at a point aimed at the transport itself."""
+
+    def test_it_goes_out_as_the_general_unload_at_aimed_at_the_transport_itself(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _medivac(1))
+
+        order = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _UNLOAD_AT
+        assert command.target_unit_tag == 1
+        assert list(command.unit_tags) == [1]
+        assert order.ability is AbilityId.GENERAL_UNLOAD_IN_PLACE
+        assert order.target is None
+        assert order.state is OrderState.SENT
+
+    def test_a_move_in_the_same_turn_goes_out_too(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _medivac(1))
+
+        move = game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0))
+        unload = game.book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+        assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _UNLOAD_AT]
+        assert (move.state, unload.state) == (OrderState.SENT, OrderState.SENT)
+
+    def test_a_group_is_sent_one_command_a_transport_and_taken_if_any_takes_it(self) -> None:
+        """One command naming several medivacs is answered `SUCCESS` if any of them takes it (in game)."""
+        game = _Game([ActionResult.ERROR, ActionResult.SUCCESS, ActionResult.ERROR])
+        game.observe(0, _medivac(1), _medivac(2), _medivac(3))
+
+        order = game.book.issue([game.own(1), game.own(2), game.own(3)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+        commands = _commands(game.flush())
+        assert [(command.ability_id, list(command.unit_tags), command.target_unit_tag) for command in commands] == [
+            (_UNLOAD_AT, [1], 1),
+            (_UNLOAD_AT, [2], 2),
+            (_UNLOAD_AT, [3], 3),
+        ]
+        assert order.state is OrderState.SENT
+        assert order.action_result is ActionResult.SUCCESS
+
+    def test_a_group_every_transport_refuses_is_refused_with_the_first_answer(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED, ActionResult.ERROR])
+        game.observe(0, _medivac(1), _medivac(2))
+
+        order = game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        game.flush()
+
+        assert order.state is OrderState.REFUSED
+        assert order.action_result is ActionResult.NOT_SUPPORTED
+
+    def test_it_raises_where_the_tables_give_it_nothing_to_be_sent_as(self) -> None:
+        tables = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC))
+        book = OrderBook(tables)
+        game = _Game()
+        game.observe(0, _medivac(1))
+
+        with pytest.raises(ValueError, match="GENERAL_UNLOAD_IN_PLACE"):
+            book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+    def test_an_unload_at_a_sibling_transport_is_fine_for_a_transport_ordered_alone(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _medivac(1), _medivac(2))
+
+        order = game.book.issue(game.own(1), _UNLOAD_AT, target=game.own(2))
+
+        (command,) = _commands(game.flush())
+        assert command.target_unit_tag == 2
+        assert order.state is OrderState.SENT
+
+    def test_an_order_after_it_is_answered_by_its_own_result(self) -> None:
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED])
+        game.observe(0, _medivac(1), _medivac(2), _marine(3))
+
+        game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        stim = game.book.issue(game.own(3), _STIM)
+
+        assert len(_commands(game.flush())) == 3
+        assert stim.action_result is ActionResult.NOT_SUPPORTED
+
+    @pytest.mark.parametrize("ability", [_MEDIVAC_UNLOAD_AT, _UNLOAD_AT])
+    def test_an_unload_at_aimed_at_the_transport_itself_is_refused_at_the_call(self, ability: AbilityId) -> None:
+        game = _Game()
+        game.observe(0, _medivac(1), _medivac(2))
+
+        with pytest.raises(TypeError, match="GENERAL_UNLOAD_IN_PLACE"):
+            game.book.issue([game.own(1), game.own(2)], ability, target=game.own(2))
+
+    def test_an_unload_at_a_point_still_replaces_a_move(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _medivac(1))
+
+        move = game.book.issue(game.own(1), _MOVE, target=(30.0, 31.0))
+        game.book.issue(game.own(1), _MEDIVAC_UNLOAD_AT, target=(20.0, 21.0))
+
+        (command,) = _commands(game.flush())
+        assert command.ability_id == _MEDIVAC_UNLOAD_AT
+        assert move.state is OrderState.OVERRIDDEN
+
+
 class TestForcingAnOrder:
     """`force` sends an order to a unit already carrying it out, which drops what it has queued (in game)."""
 
@@ -898,6 +1013,58 @@ class _OrderingBot:
             self.at_a_dead_tag = api.orders.issue(self.killed, _MOVE, target=middle)
 
 
+class _UnloadingBot:
+    """A bot that loads two medivacs, then in one turn moves them on and unloads them where they are, the move given
+    first unless `unload_first`."""
+
+    unload_first = False
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.loads: list[Order[None]] = []
+        self.move: Order[None] | None = None
+        self.unload: Order[None] | None = None
+        self.unloaded_at: dict[int, Point] = {}
+        self.reported: list[tuple[int, list[str]]] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        medivacs = api.units.own.of_type(UnitTypeId.MEDIVAC)
+        marines = api.units.own.of_type(UnitTypeId.MARINE)
+        middle = api.map.playable_area.center
+        if self.unload is not None:
+            self.reported.append((event.step, [order.ability.name for medivac in medivacs for order in medivac.orders]))
+            return
+        if len(medivacs) < 2:
+            if event.step < 64:
+                api.client.debug(
+                    [
+                        _create(UnitTypeId.MEDIVAC, middle, self.player, quantity=2),
+                        _create(UnitTypeId.MARINE, middle, self.player, quantity=2),
+                    ]
+                )
+            return
+        if not self.loads:
+            if len(marines) >= 2:
+                self.loads = [
+                    api.orders.issue(medivac, AbilityId.MEDIVAC_LOAD, target=marine)
+                    for medivac, marine in zip(medivacs, marines, strict=False)
+                ]
+            return
+        if all(medivac.cargo_used > 0 for medivac in medivacs):
+            self.unloaded_at = {medivac.tag: medivac.position for medivac in medivacs}
+            if self.unload_first:
+                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+            self.move = api.orders.issue(medivacs, _MOVE, target=middle + (12.0, 0.0))
+            if not self.unload_first:
+                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+
+class _UnloadingBotUnloadingFirst(_UnloadingBot):
+    unload_first = True
+
+
 def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> debug_pb2.DebugCommand:
     """A debug command that creates `quantity` units of `unit_type` at `at`."""
     position = common_pb2.Point2D(x=at.x, y=at.y)
@@ -910,20 +1077,7 @@ class TestAgainstTheRealGame:
     """Run with `pytest -m integration`. Plays a minute of a game, giving orders as a bot would."""
 
     def test_orders_go_out_each_turn_and_carry_the_games_answer(self) -> None:
-        try:
-            game_map = MapFile.find("PylonAIE_v4")
-        except MapNotFoundError as missing:
-            pytest.skip(str(missing))
-        with (
-            GameProcess.launch(window=(640, 480)) as process,
-            closing(Client(WebSocketTransport.connect(process.url))) as client,
-        ):
-            client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
-            player = client.join_game(Race.TERRAN)
-            api = Api()
-            bot = _OrderingBot(api, player)
-            api.events.on(TurnEvent)(bot.turn)
-            api.play(client, steps_per_turn=8, time_limit=60)
+        bot = _play_a_minute(_OrderingBot)
 
         assert bot.moved is not None
         assert bot.moved.state is OrderState.SENT
@@ -938,3 +1092,39 @@ class TestAgainstTheRealGame:
         assert bot.at_a_dead_tag is not None
         assert bot.at_a_dead_tag.state is OrderState.REFUSED
         assert bot.at_a_dead_tag.action_result is ActionResult.ERROR
+
+    @pytest.mark.parametrize("unload_first", [False, True], ids=["move first", "unload first"])
+    def test_transports_unload_where_they_are_and_move_on_in_one_turn(self, unload_first: bool) -> None:
+        bot = _play_a_minute(_UnloadingBotUnloadingFirst if unload_first else _UnloadingBot)
+
+        print("loads:", [(order.state.name, order.action_result) for order in bot.loads])
+        print("orders the medivacs showed after:", bot.reported[:6])
+        assert bot.move is not None and bot.unload is not None
+        assert (bot.move.state, bot.unload.state) == (OrderState.SENT, OrderState.SENT)
+        api = bot.api
+        marines = api.units.own.of_type(UnitTypeId.MARINE)
+        assert len(marines) == 2
+        for marine in marines:
+            assert min(marine.position.distance_to(at) for at in bot.unloaded_at.values()) < 3.0
+        for medivac in api.units.own.of_type(UnitTypeId.MEDIVAC):
+            assert medivac.cargo_used == 0
+            assert medivac.position.distance_to(bot.unloaded_at[medivac.tag]) > 6.0
+
+
+def _play_a_minute[BotT: (_OrderingBot, _UnloadingBot)](make_bot: type[BotT]) -> BotT:
+    """Play a minute of a game against a very easy computer with the bot `make_bot` makes, and return the bot."""
+    try:
+        game_map = MapFile.find("PylonAIE_v4")
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    with (
+        GameProcess.launch(window=(640, 480)) as process,
+        closing(Client(WebSocketTransport.connect(process.url))) as client,
+    ):
+        client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
+        player = client.join_game(Race.TERRAN)
+        api = Api()
+        bot = make_bot(api, player)
+        api.events.on(TurnEvent)(bot.turn)
+        api.play(client, steps_per_turn=8, time_limit=60)
+    return bot
