@@ -9,12 +9,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #117. `uv run pytest` passes 1658 tests; `uv run pytest -m integration` passes 25
-  against a real game (run 2026-10-07).
-- **Now: step 1's timing cases**, planned with the owner on 2026-10-07 (below). #117 fixed #116 for a lifted command
-  center, and the timing sweeps have measured what the rest waited on; what to build is the owner's to decide next.
-  The money cases are done: #115, an order without state, and #116, the queue. Step 2, one id per action, is done
-  (#103 to #107).
+- nachOS `main` has every PR to #118. `uv run pytest` passes 1667 tests on the larva hold's branch; `uv run pytest -m
+  integration` passes 26 against a real game (run 2026-10-07).
+- **Step 1, a queue per unit, is done once the larva hold is in** (branch `claude/larva-hold`): the money cases (#115,
+  #116), the lifted command center (#117), the timing sweeps (#118), and the larva hold. Warp-ins are not held, and
+  spells stay with the game. Step 2, one id per action, is done (#103 to #107). Next is step 3, the rest of M4.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -101,9 +100,8 @@ sent to the game to avoid paying upfront. The intention to build is known to nac
 location) and as soon as the worker is close enough, they will start the build. Similar for the flying barracks +
 build add-on."*
 
-**Status: the money cases are done** (#115, an order without state, and #116, the queue). **The timing cases are
-planned** (2026-10-07, "The timing cases" below). The decisions and the design follow the cases below; what is left is
-under "Pull requests".
+**Status: done with the larva hold.** The money cases are #115 and #116; the timing cases (2026-10-07, "The timing
+cases" below) are #117, #118 and the larva hold. The decisions and the design follow the cases below.
 
 ### Why: what the game does with an order it cannot carry out yet
 
@@ -248,6 +246,12 @@ Orders the game refuses now and would take later, settled one question at a time
    how far a hatchery's larvae stand from it, and what the game answers to a larva morph given to the hatchery.
 5. **Spells stay with the game**: the game walks a caster into reach itself, no money is at stake, and a hold would
    cost micro up to a turn.
+6. **Warp-ins are not held** (the owner, after #118, against the recommendation to time each gate's wait): a warp-in
+   goes out as given; during the gate's wait the game refuses it `NotEnoughCharges` at no cost, and the bot retries.
+7. **A larva is its hatchery's whose larva spot is nearest** (the owner's idea, after #118): larvae gather south of a
+   hatchery, so its center moved 2.85 south, as measured, tells two close hatcheries' larvae apart where a plain
+   nearest center would not. A held morph goes to a free larva, one per larva a turn; two given in a turn are two;
+   given to several hatcheries it goes to the one with the most free larvae, less what it holds.
 
 ### Pull requests
 
@@ -268,8 +272,9 @@ Orders the game refuses now and would take later, settled one question at a time
      charged nothing, and the gate reads no different.
    - **A larva stands within 3.6 of its own hatchery's center**, an inject's too, and a morph given to a hatchery is
      refused `NotSupported`.
-5. **The timing cases built**, once the owner has decided on what the sweeps found: the larva hold, and whether and
-   how a warp-in is held.
+5. **The larva hold**: branch `claude/larva-hold`. The `larvae` sweep measures where larvae stand from each of
+   four hatcheries in two games; a larva's morph given to a hatchery, a lair or a hive is held as a train is and goes
+   to a free larva by its larva spot.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 

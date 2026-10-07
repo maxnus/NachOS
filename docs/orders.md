@@ -1,9 +1,9 @@
 # Orders
 
 A bot orders its units through `api.orders` from its handlers. Orders are sent in one request after the turn's last
-handler returns, so a turn that orders nothing sends nothing. A worker's build, and a structure's train, research,
-add-on or morph, waits in NachOS until its unit can start it, so nothing is paid early
-([orders NachOS holds](#orders-nachos-holds)).
+handler returns, so a turn that orders nothing sends nothing. A worker's build, a structure's train, research,
+add-on or morph, and a larva's morph given to a hatchery wait in NachOS until the unit can start them, so nothing is
+paid early ([orders NachOS holds](#orders-nachos-holds)).
 
 ```python
 @api.events.on(TurnEvent)
@@ -136,6 +136,7 @@ can start it, and sends it then:
 | A worker's build | the worker is within `build_reach` of the site, or of its edge for a geyser. NachOS sends the worker to the site meanwhile. `Api(build_reach=...)` sets the reach; it is 2.5 by default. |
 | A train or a research | the structure has a slot free: it runs one at a time, two with a finished reactor, and none while lifted, so a train given to a lifted barracks waits for it to land. A warp gate keeps no queue, and its warp-ins go out as given. |
 | An add-on or a structure's morph | the structure is idle, and on the ground. A lifted barracks, factory or starport given an add-on at a point is sent to land there, and given the add-on once it has; given no point, it raises `TypeError`. A lifted command center given a morph holds it until the bot lands it: a morph names no point to land at. |
+| A larva's morph given to a hatchery, a lair or a hive | one of its larvae is free: showing no order, and sent none that may not show yet. The morph goes to that larva. A hatchery's larvae are those nearest its larva spot, 2.85 south of its center, where they gather (in game). Each larva takes one morph a turn; two morphs given in one turn are two, as trains are. A morph given to a larva goes out as given. |
 
 What costs nothing, a move, an attack, a gather, goes to the game as before, queued or not, so a worker's mining and
 a unit's micro are unchanged. Whatever is queued behind a held order waits with it, and goes out right behind it, in
@@ -170,7 +171,8 @@ picks that one when the order is issued, and `order.units` names it: the structu
 soonest, counting what it runs and what is held for it, or the worker that walks to the site soonest, one already
 busy only if all are, the lowest id among equals. The pick counts the turn's earlier orders, so two trains given to
 the same three barracks go to two of them, and the order goes behind what the unit picked already has. A larva's
-train, a warp-in and a unit's own morph are not held, and go to every unit named, as the game takes them.
+morph given to several hatcheries goes to the one with the most free larvae, less what it holds. A larva's morph
+given to larvae, a warp-in and a unit's own morph are not held, and go to every unit named, as the game takes them.
 
 A queued order to several units, some of which have orders held, goes out at once to the others, in one command, and
 to each of those once its held orders have gone out.

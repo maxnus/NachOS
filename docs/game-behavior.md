@@ -226,10 +226,12 @@ Each entry ends with how it was seen:
   dies (#25, #34; tested).
 - An order to one larva may be carried out by another larva of the same hatchery, and larva die with their
   hatchery. A morph ordered on several units morphs only one of them (tool `sweep_tech_tree`, tool `sweep_alerts`).
-- A larva stands close to its own hatchery. Over 1200 steps, the larvae of two hatcheries 13.5 apart, those a hatchery
-  grows and an inject's, stood 2.6 to 3.6 from their own hatchery's center and never nearer the other. A drone's morph
-  given to a hatchery itself is answered `NotSupported`, and no larva takes it (tool `sweep_orders`, `larvae`; local
-  game, Linux build 75689).
+- A larva gathers south of its own hatchery. In two games, one from each start location, with four hatcheries each
+  (the first, one beside it, two across the map, one injected), 28 larvae read every 8 steps for 1200 steps stood
+  2.0 to 3.6 south of their hatchery's center and 2.2 west to 1.6 east of it: on average 2.85 south, and never more
+  than 2.3 from that spot. None stood nearer another hatchery. A hatchery grew a larva every 240 steps while it had
+  fewer than three. A drone's morph given to a hatchery itself is answered `NotSupported`, and no larva takes it
+  (tool `sweep_orders`, `larvae`; `tests/test_orders.py`, the larva hold test; local game, Linux build 75689).
 - Only one mothership can stand at a time, arming a nuke needs a factory, and a game starts with 50 minerals (tool
   `sweep_tech_tree`, tool `sweep_alerts`).
 - The game itself disguises a changeling, collapses a tower, lifts a locust into the air and burrows a creep tumor

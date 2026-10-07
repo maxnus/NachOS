@@ -114,7 +114,8 @@ class _Game:
         self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
         changed_hands = [unit for unit, _ in changes.units_alliance_changed]
-        self.book._observe(step, [*changes.units_died, *changes.units_found_dead, *changed_hands])
+        lost = [*changes.units_died, *changes.units_found_dead, *changed_hands]
+        self.book._observe(step, lost, self.tracker.unit_tracker.present)
 
     def flush(self) -> sc2api_pb2.RequestAction | None:
         """Send the turn's orders and return the request that went out, or `None` if none did."""
@@ -1064,6 +1065,8 @@ _ORBITAL = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
 _WEAPONS_1 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
 _WEAPONS_2 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
 _WARP_IN_ADEPT = AbilityId.WARP_GATE_WARP_IN_ADEPT
+_DRONE = AbilityId.LARVA_MORPH_DRONE
+_OVERLORD = AbilityId.LARVA_MORPH_OVERLORD
 _SITE = (30.0, 30.0)
 
 
@@ -1096,6 +1099,11 @@ _HOLDING_TABLES = make_tables(
     _row(UnitTypeId.REAPER, minerals=50, vespene=50, steps=716.0),
     _row(UnitTypeId.ADEPT, minerals=100, vespene=25, steps=448.0),
     _row(UnitTypeId.WARP_GATE, structure=True, minerals=150),
+    _row(UnitTypeId.LARVA),
+    _row(UnitTypeId.DRONE, minerals=50, steps=272.0),
+    _row(UnitTypeId.OVERLORD, minerals=100, steps=400.0),
+    _row(UnitTypeId.HATCHERY, structure=True, minerals=300, steps=1590.0),
+    _row(UnitTypeId.LAIR, structure=True, minerals=450, steps=1790.0),
     _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, steps=470.0),
     _row(UnitTypeId.REFINERY, structure=True, minerals=75, steps=470.0),
     _row(UnitTypeId.BARRACKS, structure=True, minerals=150, steps=1030.0),
@@ -1124,6 +1132,8 @@ _HOLDING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_WEAPONS_1),
         data_pb2.AbilityData(ability_id=_WEAPONS_2),
         data_pb2.AbilityData(ability_id=_WARP_IN_ADEPT, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=_DRONE),
+        data_pb2.AbilityData(ability_id=_OVERLORD),
     ],
     upgrades=[
         data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
@@ -1173,6 +1183,18 @@ def _flying_command_center(
 ) -> raw_pb2.Unit:
     """One of this player's command centers, lifted, carrying out `orders`."""
     return make_unit(tag, UnitTypeId.COMMAND_CENTER_FLYING, at=at, is_flying=True, orders=orders)
+
+
+def _hatchery(
+    tag: int, at: tuple[float, float] = (50.0, 50.0), unit_type: UnitTypeId = UnitTypeId.HATCHERY
+) -> raw_pb2.Unit:
+    """One of this player's hatcheries, or a lair or a hive, at `at`."""
+    return make_unit(tag, unit_type, at=at)
+
+
+def _larva(tag: int, at: tuple[float, float] = (50.0, 47.2), *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """One of this player's larvae at `at`, where the larvae of a hatchery at (50, 50) gather (in game)."""
+    return make_unit(tag, UnitTypeId.LARVA, at=at, orders=orders)
 
 
 def _making(ability: AbilityId, progress: float = 0.5) -> raw_pb2.UnitOrder:
@@ -1538,6 +1560,115 @@ class TestHoldingProduction:
         game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
 
         assert _sent(game.flush()) == [(_RALLY, [1], (20.0, 21.0), False)]
+
+
+class TestHoldingALarvaMorph:
+    """A morph given to a hatchery is refused (in game), so NachOS holds it there and gives it to a larva of the
+    hatchery once one is free. A hatchery's larvae gather south of it, within 2.3 of a spot 2.85 below its center (in
+    game)."""
+
+    def test_it_goes_to_a_free_larva_of_the_hatchery(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1), _larva(2))
+
+        order = game.book.issue(game.own(1), _DRONE)
+
+        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
+        assert order.units == (game.own(1),)
+        assert game.book.issued_to(game.own(1)) == ()
+
+    def test_with_no_free_larva_it_is_held_until_one_appears(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1))
+        drone = game.book.issue(game.own(1), _DRONE)
+
+        assert game.flush() is None
+        assert game.book.issued_to(game.own(1)) == (drone,)
+
+        game.observe(16, _hatchery(1), _larva(2))
+
+        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
+
+    def test_two_morphs_go_to_two_larvae_in_one_turn_and_neither_overrides_the_other(self) -> None:
+        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1), _larva(2), _larva(3, (49.5, 47.0)))
+
+        game.book.issue(game.own(1), _DRONE)
+        game.book.issue(game.own(1), _OVERLORD)
+
+        assert _sent(game.flush()) == [(_DRONE, [2], None, False), (_OVERLORD, [3], None, False)]
+
+    def test_a_larva_sent_a_morph_is_not_used_again_while_that_may_not_show(self) -> None:
+        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1), _larva(2))
+        game.book.issue(game.own(1), _DRONE)
+        second = game.book.issue(game.own(1), _DRONE)
+        game.flush()
+
+        game.observe(16, _hatchery(1), _larva(2))
+        assert game.flush() is None
+        game.observe(32, _hatchery(1), _larva(4))
+
+        assert _sent(game.flush()) == [(_DRONE, [4], None, False)]
+        assert game.book.issued_to(game.own(1)) == ()
+        assert second.units == (game.own(1),)
+
+    def test_a_larva_by_another_hatcherys_spot_is_not_this_ones(self) -> None:
+        """Nearer the other hatchery's center, but nearer this one's spot: a hatchery 5 below this one."""
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1), _hatchery(2, at=(50.0, 45.0)), _larva(3, (50.0, 46.4)))
+        below = game.book.issue(game.own(2), _DRONE)
+
+        assert game.flush() is None
+        assert game.book.issued_to(game.own(2)) == (below,)
+
+        below.withdraw()
+        game.book.issue(game.own(1), _DRONE)
+
+        assert _sent(game.flush()) == [(_DRONE, [3], None, False)]
+
+    def test_given_to_several_it_goes_to_the_one_with_the_most_free_larvae(self) -> None:
+        game = _holding()
+        game.observe(
+            0,
+            _hatchery(1),
+            _larva(3),
+            _hatchery(2, at=(70.0, 50.0)),
+            _larva(4, (70.0, 47.2)),
+            _larva(5, (69.5, 47.0)),
+        )
+
+        order = game.book.issue([game.own(1), game.own(2)], _DRONE)
+
+        assert order.units == (game.own(2),)
+
+    def test_a_refused_morph_drops_what_is_held_behind_it(self) -> None:
+        game = _holding([ActionResult.NOT_ENOUGH_FOOD])
+        game.observe(0, _hatchery(1), _larva(2))
+        game.book.issue(game.own(1), _DRONE)
+        game.book.issue(game.own(1), _DRONE)
+
+        game.flush()
+
+        assert game.refused() == [(2, _DRONE, ActionResult.NOT_ENOUGH_FOOD)]
+        assert game.book.issued_to(game.own(1)) == ()
+
+    def test_a_lair_holds_one_too(self) -> None:
+        game = _holding()
+        game.observe(0, _hatchery(1, unit_type=UnitTypeId.LAIR))
+        drone = game.book.issue(game.own(1), _DRONE)
+
+        assert game.flush() is None
+        assert game.book.issued_to(game.own(1)) == (drone,)
+
+    def test_a_morph_given_to_a_larva_goes_out_as_given(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _hatchery(1), _larva(2))
+
+        game.book.issue(game.own(2), _DRONE)
+
+        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
+        assert game.book._held == {}
 
 
 class TestWhatReplacesHeldItems:
@@ -2006,6 +2137,32 @@ class _HeldRefineryBot(_HeldBuildBot):
     refinery = True
 
 
+class _LarvaBot:
+    """A zerg bot that gives its hatchery five drones at once, more than it has larvae, under cheats for supply and
+    resources, and records each turn after how many are still held."""
+
+    race = Race.ZERG
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.cheated = False
+        self.drones: list[Order[None]] = []
+        self.held: list[int] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        hatchery = api.units.own.of_type(UnitTypeId.HATCHERY)[0]
+        if not self.cheated:
+            cheats = (debug_pb2.DebugGameState.Value(name) for name in ("food", "all_resources"))
+            api.client.debug([debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats])
+            self.cheated = True
+        elif not self.drones:
+            self.drones = [api.orders.issue(hatchery, _DRONE) for _ in range(5)]
+        else:
+            self.held.append(len(api.orders.issued_to(hatchery)))
+
+
 def _command_center_at(api: Api) -> Point:
     """Where this player's command center stands."""
     return api.units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
@@ -2103,6 +2260,17 @@ class TestAgainstTheRealGame:
         assert [transport.cargo_used for transport in transports] == [0, 0]
         assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == bot.marines_left_out + 2
 
+    def test_drones_given_to_a_hatchery_wait_for_larvae(self) -> None:
+        bot, failures = _play_a_minute(_LarvaBot)
+
+        print("held, turn by turn:", bot.held)
+        print("refused or given up:", failures)
+        assert not [failure for failure in failures if failure.ability is _DRONE]
+        assert max(bot.held) == 2
+        assert bot.held[-1] == 0
+        made = bot.api.units.own.of_type([UnitTypeId.DRONE, UnitTypeId.EGG])
+        assert len(made) >= 12 + 5
+
     @pytest.mark.parametrize("make_bot", [_HeldBuildBot, _HeldRefineryBot], ids=["depot", "refinery"])
     def test_a_held_build_takes_no_minerals_until_its_worker_is_within_reach(
         self, make_bot: type[_HeldBuildBot]
@@ -2126,12 +2294,12 @@ class TestAgainstTheRealGame:
 
 
 def _play_a_minute[
-    BotT: (_OrderingBot, _UnloadingBot, _SiegingBot, _GroupSiegingBot, _GroupUnloadingBot, _HeldBuildBot)
+    BotT: (_OrderingBot, _UnloadingBot, _SiegingBot, _GroupSiegingBot, _GroupUnloadingBot, _HeldBuildBot, _LarvaBot)
 ](
     make_bot: type[BotT],
 ) -> tuple[BotT, list[ActionFailure]]:
-    """Play a minute of a game against a very easy computer with the bot `make_bot` makes, and return the bot and
-    what `api.action_failures` listed turn by turn."""
+    """Play a minute of a game against a very easy computer with the bot `make_bot` makes, as terran unless it names a
+    race, and return the bot and what `api.action_failures` listed turn by turn."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -2141,7 +2309,7 @@ def _play_a_minute[
         closing(Client(WebSocketTransport.connect(process.url))) as client,
     ):
         client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
-        player = client.join_game(Race.TERRAN)
+        player = client.join_game(getattr(make_bot, "race", Race.TERRAN))
         api = Api()
         bot = make_bot(api, player)
         failures: list[ActionFailure] = []

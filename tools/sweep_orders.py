@@ -77,8 +77,8 @@ and runs its trials in turn::
 - `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
   reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
   offered the warp-in by the abilities query, ignoring costs and counting them.
-- `larvae` gives a hatchery a drone's morph itself, then raises a second hatchery beside the first, injects it, and
-  reads where every larva stands from its own hatchery and from the other.
+- `larvae` gives a hatchery a drone's morph itself, then raises three more hatcheries, one beside the first and two
+  across the map, injects one, and reads where every larva stands from its own hatchery and from the others.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -2426,40 +2426,38 @@ def _larvae(game: _Game) -> list[Trial]:
 
     def spread(trial: Trial) -> None:
         game.create(UnitTypeId.SPAWNING_POOL, game.spot(game.toward(6), 2))
-        (other,) = game.create(UnitTypeId.HATCHERY, game.spot(game.toward(11), 3))
-        (queen,) = game.create(UnitTypeId.QUEEN, _at(other) + (3, 0))
+        # Beside the first, and two more across the map, so that where a larva stands is seen at several places.
+        across = game.map.playable_area
+        places = (game.toward(11), across.center, Point((across.center.x, (across.center.y + game.home.y) / 2)))
+        others = [game.create(UnitTypeId.HATCHERY, game.spot(place, 3))[0] for place in places]
+        (queen,) = game.create(UnitTypeId.QUEEN, _at(others[0]) + (3, 0))
         game.set_energy(200, [queen])
         game.turn(2)
-        trial.notes["hatcheries apart"] = round(_at(home).distance_to(_at(other)), 2)
-        trial.notes["inject"] = game.order(AbilityId.QUEEN_INJECT, [queen], other)
-        hatcheries = (home.tag, other.tag)
+        hatcheries = {each.tag: _at(each) for each in (home, *others)}
+        trial.notes["hatcheries at"] = {str(tag): [at.x, at.y] for tag, at in hatcheries.items()}
+        trial.notes["inject"] = game.order(AbilityId.QUEEN_INJECT, [queen], others[0])
         # Each larva's own hatchery is the one it stood nearest when first seen.
         owners: dict[int, int] = {}
         rows: list[list[object]] = []
         for _ in range(150):
             game.turn(8)
-            standing = {tag: _at(unit) for tag in hatcheries if (unit := game.unit(tag)) is not None}
             for larva in game.own(UnitTypeId.LARVA):
-                away = {tag: _at(larva).distance_to(at) for tag, at in standing.items()}
-                own = owners.setdefault(larva.tag, min(away, key=lambda tag: away[tag]))
-                other_away = min((distance for tag, distance in away.items() if tag != own), default=None)
+                at = _at(larva)
+                own = owners.setdefault(larva.tag, min(hatcheries, key=lambda tag: at.distance_to(hatcheries[tag])))
+                offset = at - hatcheries[own]
+                others_away = [at.distance_to(spot) for tag, spot in hatcheries.items() if tag != own]
                 rows.append(
-                    [game.step, larva.tag, round(away[own], 2), None if other_away is None else round(other_away, 2)]
+                    [game.step, larva.tag, own, round(offset.x, 3), round(offset.y, 3), round(min(others_away), 2)]
                 )
-        trial.notes["larvae seen"] = {str(tag): sum(1 for each in owners.values() if each == tag) for tag in hatcheries}
-        trial.notes["farthest from its own hatchery"] = max((float(str(row[2])) for row in rows), default=None)
-        trial.notes["nearest to the other hatchery"] = min(
-            (float(str(row[3])) for row in rows if row[3] is not None), default=None
-        )
-        trial.notes["ever nearer the other"] = any(
-            row[3] is not None and float(str(row[3])) < float(str(row[2])) for row in rows
-        )
-        trial.notes["rows (step, larva, from its own, from the other)"] = rows
+        trial.notes["larvae seen by hatchery"] = {
+            str(tag): sum(1 for each in owners.values() if each == tag) for tag in hatcheries
+        }
+        trial.notes["rows (step, larva, its hatchery, offset x, offset y, from the nearest other)"] = rows
 
     # Before the hatchery's larvae are spent.
     return [
         game.trial("a drone's morph given to a hatchery", to_the_hatchery),
-        game.trial("two hatcheries 11 apart, one injected, and where their larvae stand", spread),
+        game.trial("hatcheries in four places, one injected, and where their larvae stand", spread),
     ]
 
 
