@@ -24,6 +24,6 @@ class SentAs:
 
     ability: int
     """The game's ability id. It may be one no curated id names, such as a tank's siege mode, which reads as
-    `GENERAL_SIEGE`."""
+    `SIEGE`."""
     aim: Aim
     """What it is aimed at."""

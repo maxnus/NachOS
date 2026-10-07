@@ -350,27 +350,27 @@ Each entry ends with how it was seen:
 - A liberator ordered to siege (2558) reports 2554 running, and unsieging works the same way, though `remaps_to`
   links neither pair (#23). Ordered at a point, it is a sieged liberator by the next observation, and reports 2554
   aimed at itself, not at the point, while its zone forms: 64 steps, after which it reports no order. Ordered the
-  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `GENERAL_SIEGE` and the archon's 1767
-  as `GENERAL_MORPH_ARCHON` (#103; tested).
+  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `SIEGE` and the archon's 1767
+  as `MORPH_ARCHON` (#103; tested).
 - The archon: `Morph_Archon` (1766) given to two templar in one command, high or dark, even 6 apart, walks them to
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
   is refused. 1767 given to both, targeting one of them, merges them too; given to one it does nothing, though it
   answers `Success` (#37; tested).
-- `GENERAL_ATTACK` at a point runs `attack_Attack` (23) for a high templar, a lurker, an oracle and an adept's
+- `ATTACK` at a point runs `attack_Attack` (23) for a high templar, a lurker, an oracle and an adept's
   shade, which are offered `Scan_Move` (19) too, as it does for a marine. At an enemy drone it is refused
   `NotSupported` by the lurker, the oracle without its beam, and the shade, and taken by the templar and the marine.
   `Scan_Move` ordered by its own id shows as itself for the lurker, the oracle and the shade (tool
-  `sweep_orders`, `attack-or-scan`; run 37610767491). A burrowed infestor or roach runs `GENERAL_ATTACK` as
-  `Scan_Move` (below). NachOS reads both as `GENERAL_ATTACK`.
+  `sweep_orders`, `attack-or-scan`; run 37610767491). A burrowed infestor or roach runs `ATTACK` as
+  `Scan_Move` (below). NachOS reads both as `ATTACK`.
 - A unit offered `Scan_Move` and not `attack_Attack` (24 types, among them the medivac, raven, observer, overlords,
-  warp prism, MULE, infestor, viper and widow mine) runs `GENERAL_ATTACK` as the scan move. A medivac, a raven, an
+  warp prism, MULE, infestor, viper and widow mine) runs `ATTACK` as the scan move. A medivac, a raven, an
   observer, a MULE, an infestor and a widow mine given it at a point or at an enemy drone all showed `Scan_Move`,
   and each refused `attack_Attack` `NotSupported`. The widow mine showed its own
   `WIDOW_MINE_ATTACK` ahead of the scan move once the drone was near (tool `sweep_orders`, `scan-only`; run
   37611898076).
 - An unburrow's autocast is the type's, not the id's. With an enemy drone beside it, a burrowed roach whose
   `BurrowUp_Roach` or `BurrowUp_Drone` was switched to autocast came up within 50 steps; one whose
-  `GENERAL_UNBURROW` was switched stayed down, and a burrowed drone stayed down with either switched. Every switch
+  `UNBURROW` was switched stayed down, and a burrowed drone stayed down with either switched. Every switch
   was answered `Success`. The tables allow autocast on the roach's unburrow and not on the drone's (tool
   `sweep_orders`, `unburrow-autocast`; run 37610767491).
 - A spell ordered at a target out of reach (storm, neural parasite, the raven's and viper's) shows in the caster's
@@ -537,8 +537,8 @@ Each entry ends with how it was seen:
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
 - A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
-  a sieged tank its siege mode, which reads as `GENERAL_SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
-  liberator shows `GENERAL_SIEGE` too (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
+  a sieged tank its siege mode, which reads as `SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
+  liberator shows `SIEGE` too (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
   A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
@@ -551,12 +551,12 @@ Each entry ends with how it was seen:
   do. The `tech_tree` cheat grants Tunneling Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`,
   `structure-orders` and `burrowed-movers`).
 - A loaded command center or planetary fortress training two SCVs goes on training while it unloads, by
-  `UnloadAll_CommandCenter` (413, which both are offered) or `GENERAL_UNLOAD`. A command
+  `UnloadAll_CommandCenter` (413, which both are offered) or `UNLOAD`. A command
   center's unload at a point is refused, `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
   point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
-  aimed at a point, it replaces the move and flies there first. `GENERAL_UNLOAD` is answered `Error` by each of the
+  aimed at a point, it replaces the move and flies there first. `UNLOAD` is answered `Error` by each of the
   three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`). Two medivacs given a move
-  and `GENERAL_UNLOAD_AT` aimed at each itself, in one request and in either order, put their marines down where
+  and `UNLOAD_AT` aimed at each itself, in one request and in either order, put their marines down where
   they stood and flew on; from the next observation each showed only its move (`tests/test_orders.py`, run on GitHub
   Actions).
 - Nothing else swept does something different to a unit's orders by what it is aimed at. A moving medivac, warp
@@ -671,7 +671,7 @@ Each entry ends with how it was seen:
 
 - This player's own chat message comes back once, in the next observation, under its own player id; every player's
   chat is delivered (#28; tested).
-- An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `GENERAL_MOVE`, a
+- An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `MOVE`, a
   research ordered by its general id as its level (1186) (#28; tested).
 - The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
   out at: one action per command, naming the units that took it, the ability as it runs, the target as sent and

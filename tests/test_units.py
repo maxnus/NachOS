@@ -555,22 +555,22 @@ class TestOwnUnits:
 
     def test_an_order_names_its_ability_and_a_point_a_unit_or_nothing(self) -> None:
         orders = [
-            raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_MOVE, target_world_space_pos=common_pb2.Point(x=5, y=6)),
-            raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_ATTACK, target_unit_tag=9),
+            raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=5, y=6)),
+            raw_pb2.UnitOrder(ability_id=AbilityId.ATTACK, target_unit_tag=9),
             raw_pb2.UnitOrder(ability_id=AbilityId.BARRACKS_TRAIN_MARINE, progress=0.5),
         ]
         game = _Game()
         marine, _ = game.observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
-            UnitOrder(AbilityId.GENERAL_MOVE, Point((5.0, 6.0)), 0.0),
-            UnitOrder(AbilityId.GENERAL_ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
+            UnitOrder(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
+            UnitOrder(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
             UnitOrder(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
 
     def test_a_tag_no_unit_was_reported_under_raises(self) -> None:
-        marine = _one(make_unit(1, orders=[raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_ATTACK, target_unit_tag=9)]))
+        marine = _one(make_unit(1, orders=[raw_pb2.UnitOrder(ability_id=AbilityId.ATTACK, target_unit_tag=9)]))
         assert isinstance(marine, OwnUnit)
         with pytest.raises(UnknownTagError, match="never reported a unit under tag 9"):
             _ = marine.orders
@@ -900,12 +900,12 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         )
         game.turn(2)
         marine, medivac = game.newest(UnitTypeId.MARINE), game.newest(UnitTypeId.MEDIVAC)
-        game.order(AbilityId.GENERAL_LOAD, medivac, target=marine)
+        game.order(AbilityId.LOAD, medivac, target=marine)
         game.turn(40)
         assert marine.is_stale
         assert isinstance(medivac, OwnUnit)
         assert marine in {passenger.unit for passenger in medivac.passengers}
-        game.order(AbilityId.GENERAL_UNLOAD_AT, medivac, target=medivac.position)
+        game.order(AbilityId.UNLOAD_AT, medivac, target=medivac.position)
         game.turn(60)
         assert not marine.is_stale
         assert game.tracker.unit_tracker.present.get(marine.id) is marine

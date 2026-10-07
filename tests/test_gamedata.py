@@ -44,8 +44,8 @@ _CHARGED = {
     AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1),
     AbilityId.DRONE_MORPH_SPAWNING_POOL: Cost(200, 0, -1),
     AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
-    AbilityId.GENERAL_BUILD_REACTOR: Cost(50, 50),
-    AbilityId.GENERAL_BUILD_TECH_LAB: Cost(50, 25),
+    AbilityId.BUILD_REACTOR: Cost(50, 50),
+    AbilityId.BUILD_TECH_LAB: Cost(50, 25),
     AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
     AbilityId.HATCHERY_MORPH_LAIR: Cost(150, 100),
     AbilityId.LAIR_MORPH_HIVE: Cost(200, 150),
@@ -62,7 +62,7 @@ _CHARGED = {
 _REFUNDED = {
     AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Resources(113, 0),
     AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: Resources(113, 113),
-    AbilityId.GENERAL_BUILD_TECH_LAB: Resources(38, 19),
+    AbilityId.BUILD_TECH_LAB: Resources(38, 19),
     AbilityId.SCV_BUILD_SUPPLY_DEPOT: Resources(75, 0),
 }
 
@@ -212,14 +212,14 @@ class TestReadingTheTables:
     ) -> None:
         """A templar reports `Archon_Warp_Target`, aimed at the other, for the merge it was ordered; the row is the
         merge's own, which takes no target."""
-        merge = data_pb2.AbilityData(ability_id=AbilityId.GENERAL_MORPH_ARCHON)
+        merge = data_pb2.AbilityData(ability_id=AbilityId.MORPH_ARCHON)
         reported = data_pb2.AbilityData(
             ability_id=RawAbilityId.Archon_Warp_Target, target=data_pb2.AbilityData.Target.Unit
         )
         rows = [reported, merge] if reported_first else [merge, reported]
         data = GameData(sc2api_pb2.ResponseData(abilities=rows))
-        assert set(data.abilities) == {AbilityId.GENERAL_MORPH_ARCHON}
-        assert data.abilities[AbilityId.GENERAL_MORPH_ARCHON].target_type is TargetType.NOTHING
+        assert set(data.abilities) == {AbilityId.MORPH_ARCHON}
+        assert data.abilities[AbilityId.MORPH_ARCHON].target_type is TargetType.NOTHING
 
     def test_what_makes_a_unit_type_is_what_the_tech_tree_found_and_not_what_the_message_names(self) -> None:
         """The game names an ability for a lurker that no longer works; the tech tree names the one that does."""
@@ -268,9 +268,9 @@ class TestReadingTheTables:
         assert row.target_type is TargetType.POINT
 
     def test_an_ability_that_is_aimed_at_nothing_has_no_footprint(self) -> None:
-        stim = data_pb2.AbilityData(ability_id=AbilityId.GENERAL_STIM, target=data_pb2.AbilityData.Target.Value("None"))
+        stim = data_pb2.AbilityData(ability_id=AbilityId.STIM, target=data_pb2.AbilityData.Target.Value("None"))
         data = GameData(sc2api_pb2.ResponseData(abilities=[stim]))
-        row = data.abilities[AbilityId.GENERAL_STIM]
+        row = data.abilities[AbilityId.STIM]
         assert row.target_type is TargetType.NOTHING
         assert row.footprint_radius is None
 
@@ -370,22 +370,22 @@ class TestARecordedGamesTables:
 
     def test_a_general_ability_acts_at_once_where_every_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_CLOAK_OFF):
+        for ability in (AbilityId.STIM, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_general_ability_does_for_each_type_what_the_one_that_type_performs_does(self, path: Path) -> None:
         """A ghost's hold fire keeps its orders, and a lurker's takes a burrowed lurker off its attack (in game); a
         queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF):
+        for ability in (AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF):
             row = data.abilities[ability]
             assert row.order_behavior is OrderBehavior.REPLACES, ability.name
             assert row.order_behavior_for(UnitTypeId.GHOST) is OrderBehavior.KEEPS_ORDERS, ability.name
             assert row.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES, ability.name
-        tumor = data.abilities[AbilityId.GENERAL_BUILD_CREEP_TUMOR]
+        tumor = data.abilities[AbilityId.BUILD_CREEP_TUMOR]
         assert tumor.order_behavior_for(UnitTypeId.QUEEN) is OrderBehavior.REPLACES
         assert tumor.order_behavior_for(UnitTypeId.CREEP_TUMOR_BURROWED) is OrderBehavior.NEEDS_IDLE
-        attack = data.abilities[AbilityId.GENERAL_ATTACK]
+        attack = data.abilities[AbilityId.ATTACK]
         assert attack.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
         assert attack.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
 
@@ -393,14 +393,14 @@ class TestARecordedGamesTables:
         """The tables offer a command center's, a medivac's and a carrier's own id to nobody, since a unit is offered
         unload only while it carries something; each takes the behavior the offered ids share."""
         data = _tables(path)
-        unload = data.abilities[AbilityId.GENERAL_UNLOAD]
+        unload = data.abilities[AbilityId.UNLOAD]
         for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MEDIVAC):
             assert unload.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
-        cancel = data.abilities[AbilityId.GENERAL_CANCEL_LAST]
+        cancel = data.abilities[AbilityId.CANCEL_LAST]
         assert cancel.order_behavior_for(UnitTypeId.CARRIER) is OrderBehavior.KEEPS_ORDERS
 
     def test_an_action_that_keeps_every_type_s_orders_keeps_each_one_s(self, path: Path) -> None:
-        stim = _tables(path).abilities[AbilityId.GENERAL_STIM]
+        stim = _tables(path).abilities[AbilityId.STIM]
         assert stim.order_behavior is OrderBehavior.KEEPS_ORDERS
         for unit_type in (UnitTypeId.MARINE, UnitTypeId.MARAUDER):
             assert stim.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
@@ -408,23 +408,23 @@ class TestARecordedGamesTables:
     def test_a_unit_that_cannot_move_still_holds_an_order_of_its_own(self, path: Path) -> None:
         """A sieged tank and a burrowed lurker hold an attack, which leaving the form takes them off (in game)."""
         data = _tables(path)
-        unsiege = data.abilities[AbilityId.GENERAL_UNSIEGE]
+        unsiege = data.abilities[AbilityId.UNSIEGE]
         for unit_type in (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED):
             assert unsiege.order_behavior_for(unit_type) is OrderBehavior.REPLACES, unit_type.name
-        unburrow = data.abilities[AbilityId.GENERAL_UNBURROW]
+        unburrow = data.abilities[AbilityId.UNBURROW]
         assert unburrow.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES
 
     def test_a_fortress_trains_on_through_an_attack_and_a_stop(self, path: Path) -> None:
         """It attacks and stops with the ids every unit does, yet neither takes it off its training (in game)."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_STOP):
+        for ability in (AbilityId.ATTACK, AbilityId.STOP):
             row = data.abilities[ability]
             assert row.order_behavior_for(UnitTypeId.PLANETARY_FORTRESS) is OrderBehavior.KEEPS_ORDERS, ability.name
             assert row.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES, ability.name
 
     def test_a_command_center_and_a_fortress_train_on_while_they_unload_and_load(self, path: Path) -> None:
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_UNLOAD, AbilityId.GENERAL_LOAD_ALL):
+        for ability in (AbilityId.UNLOAD, AbilityId.LOAD_ALL):
             for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
                 behavior = data.abilities[ability].order_behavior_for(unit_type)
                 assert behavior is OrderBehavior.KEEPS_ORDERS, (ability.name, unit_type.name)
@@ -433,8 +433,8 @@ class TestARecordedGamesTables:
         self, path: Path
     ) -> None:
         data = _tables(path)
-        row = data.abilities[AbilityId.GENERAL_UNLOAD]
-        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.GENERAL_UNLOAD_AT, Aim.ITSELF)
+        row = data.abilities[AbilityId.UNLOAD]
+        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
         assert UnitTypeId.BUNKER not in row.sent_as
         assert row.target_type is TargetType.NOTHING
         assert {UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.OVERLORD_TRANSPORT} <= (
@@ -442,16 +442,16 @@ class TestARecordedGamesTables:
         )
         for unit_type in (UnitTypeId.BUNKER, UnitTypeId.MEDIVAC):
             assert row.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
-        assert not data.abilities[AbilityId.GENERAL_UNLOAD_AT].sent_as
-        unload_at = data.abilities[AbilityId.GENERAL_UNLOAD_AT]
+        assert not data.abilities[AbilityId.UNLOAD_AT].sent_as
+        unload_at = data.abilities[AbilityId.UNLOAD_AT]
         assert unload_at.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
 
     def test_the_siege_is_a_custom_id_taking_a_point_for_the_liberator_alone(self, path: Path) -> None:
         """Each type's own siege makes its sieged form, and the liberator's is aimed at its zone."""
         data = _tables(path)
-        siege = data.abilities[AbilityId.GENERAL_SIEGE]
+        siege = data.abilities[AbilityId.SIEGE]
         assert siege.target_type is TargetType.POINT_OR_NOTHING
-        liberator = data.abilities[AbilityId.GENERAL_SIEGE].sent_as[UnitTypeId.LIBERATOR]
+        liberator = data.abilities[AbilityId.SIEGE].sent_as[UnitTypeId.LIBERATOR]
         assert liberator == SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET)
         assert siege.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
         assert siege.performers == {
@@ -463,19 +463,19 @@ class TestARecordedGamesTables:
         assert siege.products[UnitTypeId.SIEGE_TANK] is UnitTypeId.SIEGE_TANK_SIEGED
         assert siege.products[UnitTypeId.LIBERATOR] is UnitTypeId.LIBERATOR_SIEGED
         assert siege.order_behavior is OrderBehavior.REPLACES
-        unsiege = data.abilities[AbilityId.GENERAL_UNSIEGE]
+        unsiege = data.abilities[AbilityId.UNSIEGE]
         assert unsiege.target_type is TargetType.NOTHING
-        assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.GENERAL_SIEGE
+        assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.SIEGE
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
-        smart = _tables(path).abilities[AbilityId.GENERAL_SMART]
+        smart = _tables(path).abilities[AbilityId.SMART]
         for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY):
             assert smart.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
         assert smart.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
 
     def test_a_structure_holds_no_order_of_its_own_even_with_a_weapon(self, path: Path) -> None:
         """A bunker is offered an attack and a stop, yet loading it leaves alone what it is doing."""
-        load = _tables(path).abilities[AbilityId.GENERAL_LOAD]
+        load = _tables(path).abilities[AbilityId.LOAD]
         assert load.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
         assert load.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
 
@@ -484,9 +484,9 @@ class TestARecordedGamesTables:
         data = _tables(path)
         halves = (
             (UnitTypeId.BANELING, AbilityId.BANELING_ATTACK_STRUCTURES_ON, AbilityId.BANELING_ATTACK_STRUCTURES_OFF),
-            (UnitTypeId.BANSHEE, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_CLOAK_OFF),
-            (UnitTypeId.GHOST, AbilityId.GENERAL_CLOAK_ON, AbilityId.GENERAL_CLOAK_OFF),
-            (UnitTypeId.GHOST, AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF),
+            (UnitTypeId.BANSHEE, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF),
+            (UnitTypeId.GHOST, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF),
+            (UnitTypeId.GHOST, AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF),
             (UnitTypeId.ORACLE, AbilityId.ORACLE_PULSAR_BEAM_ON, AbilityId.ORACLE_PULSAR_BEAM_OFF),
             (UnitTypeId.OVERLORD, AbilityId.OVERLORD_CREEP_ON, AbilityId.OVERLORD_CREEP_OFF),
         )
@@ -496,7 +496,7 @@ class TestARecordedGamesTables:
                 assert behavior is OrderBehavior.KEEPS_ORDERS, (unit_type.name, ability.name)
         # A lurker is offered hold fire only while burrowed, and a burrowed lurker is offered no move, so neither half
         # was ever given to a moving one; hold fire takes it off its attack (in game).
-        for ability in (AbilityId.GENERAL_HOLD_FIRE_ON, AbilityId.GENERAL_HOLD_FIRE_OFF):
+        for ability in (AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF):
             behavior = data.abilities[ability].order_behavior_for(UnitTypeId.LURKER_BURROWED)
             assert behavior is OrderBehavior.REPLACES, ability.name
 
@@ -505,8 +505,8 @@ class TestARecordedGamesTables:
         while it was making anything."""
         data = _tables(path)
         queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
-        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.GENERAL_BUILD_TECH_LAB)
-        replaces = (AbilityId.GENERAL_MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
+        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BUILD_TECH_LAB)
+        replaces = (AbilityId.MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
         assert [data.abilities[ability].order_behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
         assert [data.abilities[ability].order_behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
         assert [data.abilities[ability].order_behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
@@ -514,13 +514,13 @@ class TestARecordedGamesTables:
     def test_an_action_several_structures_perform_takes_the_class_of_what_each_makes(self, path: Path) -> None:
         """A lift makes a flying barracks of a barracks and a flying starport of a starport."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_BUILD_REACTOR, AbilityId.GENERAL_LIFT):
+        for ability in (AbilityId.BUILD_REACTOR, AbilityId.LIFT):
             assert data.abilities[ability].order_behavior is OrderBehavior.NEEDS_IDLE, ability.name
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
         """Measured for a rally and a cancel, and taken to hold for the rest (docs/game-behavior.md)."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_RALLY_UNITS, AbilityId.GENERAL_RALLY_WORKERS, AbilityId.GENERAL_CANCEL_LAST):
+        for ability in (AbilityId.RALLY_UNITS, AbilityId.RALLY_WORKERS, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
@@ -580,7 +580,7 @@ class TestARecordedGamesTables:
     def test_an_action_several_types_perform_costs_what_each_makes_and_each_level_its_own(self, path: Path) -> None:
         """Every tech lab is 50/25, and each level of a research is priced apart."""
         data = _tables(path)
-        assert data.abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cost == Cost(50, 25)
+        assert data.abilities[AbilityId.BUILD_TECH_LAB].cost == Cost(50, 25)
         levels = (
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
@@ -602,7 +602,7 @@ class TestARecordedGamesTables:
     def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
         """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_STIM, AbilityId.GENERAL_MOVE, AbilityId.GENERAL_CANCEL_LAST):
+        for ability in (AbilityId.STIM, AbilityId.MOVE, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].cost == Cost(0, 0)
 
     def test_a_morph_and_an_add_on_are_cancelled_by_the_general_cancel(self, path: Path) -> None:
@@ -612,14 +612,14 @@ class TestARecordedGamesTables:
         for ability in (
             AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
             AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS,
-            AbilityId.GENERAL_BUILD_TECH_LAB,
-            AbilityId.GENERAL_BUILD_REACTOR,
+            AbilityId.BUILD_TECH_LAB,
+            AbilityId.BUILD_REACTOR,
             AbilityId.HATCHERY_MORPH_LAIR,
             AbilityId.LAIR_MORPH_HIVE,
             AbilityId.SPIRE_MORPH_GREATER_SPIRE,
         ):
-            assert data.abilities[ability].cancelled_by is AbilityId.GENERAL_CANCEL, ability.name
-        assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
+            assert data.abilities[ability].cancelled_by is AbilityId.CANCEL, ability.name
+        assert data.abilities[AbilityId.MOVE].cancelled_by is None
 
     def test_a_train_or_a_research_is_cancelled_by_the_general_queue_cancel_where_there_is_a_queue(
         self, path: Path
@@ -634,7 +634,7 @@ class TestARecordedGamesTables:
             AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
         ):
-            assert data.abilities[ability].cancelled_by is AbilityId.GENERAL_CANCEL_LAST, ability.name
+            assert data.abilities[ability].cancelled_by is AbilityId.CANCEL_LAST, ability.name
         warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)

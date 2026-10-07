@@ -520,7 +520,7 @@ def _cast(game: _Game, performer: UnitTypeId, ability: int, queued: bool, pad: P
     helped = [unit.tag for unit in made if unit.owner == game.player and unit.tag != caster.tag]
     game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Life, 20, helped)
     destination = _at(caster).towards(game.middle, _MOVE_DISTANCE)
-    game.order(AbilityId.GENERAL_MOVE, [caster], destination)
+    game.order(AbilityId.MOVE, [caster], destination)
     game.turn(2)
     game.read("moving", [caster])
     # The move as the unit shows it: a battlecruiser moves by an ability of its own, and a carrier building
@@ -608,7 +608,7 @@ def _terran_production(game: _Game) -> list[Trial]:
         game.order(train_scv, [center])
         game.turn(2)
         game.read("then a sixth", [center])
-        game.act(*(game.command(AbilityId.GENERAL_CANCEL_LAST, [center]) for _ in range(5)))
+        game.act(*(game.command(AbilityId.CANCEL_LAST, [center]) for _ in range(5)))
 
     trials.append(game.trial("a command center training an SCV given more to train", trains))
 
@@ -693,10 +693,10 @@ def _terran_production(game: _Game) -> list[Trial]:
         trial.notes["rally"] = _name(rally)
         game.order(rally, [barracks[0]], game.toward(20))
         game.order(RawAbilityId.Lift_Barracks, [barracks[1]])
-        game.order(AbilityId.GENERAL_STOP, [barracks[2]])
-        game.order(AbilityId.GENERAL_CANCEL_LAST, [barracks[3]])
-        game.order(AbilityId.GENERAL_MOVE, [barracks[4]], game.toward(20))
-        game.order(AbilityId.GENERAL_HOLD_POSITION, [barracks[5]])
+        game.order(AbilityId.STOP, [barracks[2]])
+        game.order(AbilityId.CANCEL_LAST, [barracks[3]])
+        game.order(AbilityId.MOVE, [barracks[4]], game.toward(20))
+        game.order(AbilityId.HOLD_POSITION, [barracks[5]])
         game.turn(2)
         game.read("each given its order", barracks)
 
@@ -730,7 +730,7 @@ def _zerg_production(game: _Game) -> list[Trial]:
         game.order(queen, [hatchery], queued=True)
         game.turn(2)
         game.read("then one queued", [hatchery])
-        game.act(*(game.command(AbilityId.GENERAL_CANCEL_LAST, [hatchery]) for _ in range(3)))
+        game.act(*(game.command(AbilityId.CANCEL_LAST, [hatchery]) for _ in range(3)))
 
     trials.append(game.trial("a hatchery training a queen given more queens", queens))
 
@@ -807,7 +807,7 @@ def _protoss_production(game: _Game) -> list[Trial]:
         game.order(AbilityId.NEXUS_CHRONO_BOOST, [nexus], nexus)
         game.turn(2)
         game.read("then chrono boosted by itself", [nexus])
-        game.act(*(game.command(AbilityId.GENERAL_CANCEL_LAST, [nexus]) for _ in range(3)))
+        game.act(*(game.command(AbilityId.CANCEL_LAST, [nexus]) for _ in range(3)))
 
     trials.append(game.trial("a nexus training a probe given more probes and chrono boost", probes))
 
@@ -852,7 +852,7 @@ def _requests(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     start = game.toward(8)
     far, near, aside = game.toward(24), game.toward(16), start.towards(game.home, 6)
-    move = AbilityId.GENERAL_MOVE
+    move = AbilityId.MOVE
 
     def marine() -> raw_pb2.Unit:
         return game.create(UnitTypeId.MARINE, start)[0]
@@ -946,8 +946,8 @@ def _requests(game: _Game) -> list[Trial]:
         trial.notes["snapshot tag"] = None if snapshot is None else snapshot.tag
         by_seen, by_snapshot = marine(), marine()
         trial.notes["given"] = ["attack by the tag seen", "attack by the snapshot's tag"]
-        game.order(AbilityId.GENERAL_ATTACK, [by_seen], pylon.tag)
-        game.order(AbilityId.GENERAL_ATTACK, [by_snapshot], snapshot.tag if snapshot is not None else 0)
+        game.order(AbilityId.ATTACK, [by_seen], pylon.tag)
+        game.order(AbilityId.ATTACK, [by_snapshot], snapshot.tag if snapshot is not None else 0)
         game.turn(1)
         game.read("after", [by_seen, by_snapshot])
         game.turn(48)
@@ -960,7 +960,7 @@ def _requests(game: _Game) -> list[Trial]:
         stop, walk, stim = marine(), marine(), marine()
         (scv,) = game.own(UnitTypeId.SCV)[:1]
         trial.notes["given"] = ["stop at a point", "move at nothing", "stim at a point", "build a depot at a unit"]
-        game.order(AbilityId.GENERAL_STOP, [stop], far)
+        game.order(AbilityId.STOP, [stop], far)
         game.order(move, [walk])
         game.order(RawAbilityId.Effect_Stim_Marine, [stim], far)
         game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], stop)
@@ -976,12 +976,12 @@ def _requests(game: _Game) -> list[Trial]:
         game.read("moving", [unit])
         trial.notes["given"] = ["the same move again", "stop to an idle marine", "hold position twice"]
         game.order(move, [unit], far)
-        game.order(AbilityId.GENERAL_STOP, [idle])
+        game.order(AbilityId.STOP, [idle])
         game.turn(1)
         game.read("after", [unit, idle])
-        game.order(AbilityId.GENERAL_HOLD_POSITION, [idle])
+        game.order(AbilityId.HOLD_POSITION, [idle])
         game.turn(2)
-        game.order(AbilityId.GENERAL_HOLD_POSITION, [idle])
+        game.order(AbilityId.HOLD_POSITION, [idle])
         game.turn(1)
         game.read("after hold position twice", [idle])
 
@@ -1011,9 +1011,9 @@ def _requests(game: _Game) -> list[Trial]:
         site = game.spot(game.toward(14), 1)
         (unit,) = game.create(UnitTypeId.MARINE, site.towards(game.home, 4))
         (pylon,) = game.create(UnitTypeId.PYLON, site, owner=game.enemy)
-        game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+        game.order(AbilityId.ATTACK, [unit], pylon)
         game.turn(8)
-        game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+        game.order(AbilityId.ATTACK, [unit], pylon)
         game.turn(1)
         game.read("after the same attack again", [unit])
 
@@ -1071,7 +1071,7 @@ def _requests(game: _Game) -> list[Trial]:
         trial.notes["structures asked at"] = asked
         game.turn(2)
         game.read("SCVs sent to build a depot and a barracks off the grid", builders)
-        game.order(AbilityId.GENERAL_STOP, builders)
+        game.order(AbilityId.STOP, builders)
 
     trials.append(game.trial("points kept to what precision", points))
 
@@ -1131,12 +1131,12 @@ def _repeats(game: _Game) -> list[Trial]:
             life = {pylon.tag: pylon.health + pylon.shield for pylon in pylons}
             reported = len(trial.reported)
             for unit, pylon in zip(marines, pylons, strict=True):
-                game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+                game.order(AbilityId.ATTACK, [unit], pylon)
             for step in range(1, 897):
                 game.turn(1)
                 for unit, pylon, (_, every) in zip(marines, pylons, attack_cadences, strict=True):
                     if every and step % every == 0:
-                        game.order(AbilityId.GENERAL_ATTACK, [unit], pylon)
+                        game.order(AbilityId.ATTACK, [unit], pylon)
             for unit, pylon, (label, _) in zip(marines, pylons, attack_cadences, strict=True):
                 damage[label].append(round(life[pylon.tag] - _life(game, pylon.tag), 1))
                 reports[label] += sum(
@@ -1158,11 +1158,11 @@ def _repeats(game: _Game) -> list[Trial]:
             (unit,) = game.create(UnitTypeId.MARINE, game.toward(6))
             origin = _at(unit)
             destination = origin.towards(game.middle, 40)
-            game.order(AbilityId.GENERAL_MOVE, [unit], destination)
+            game.order(AbilityId.MOVE, [unit], destination)
             for step in range(1, 113):
                 game.turn(1)
                 if every and step % every == 0:
-                    game.order(AbilityId.GENERAL_MOVE, [unit], destination)
+                    game.order(AbilityId.MOVE, [unit], destination)
             covered[label] = round(_at(game.units[unit.tag]).distance_to(origin), 2)
             game.kill([unit])
         trial.notes["distance over 112 steps"] = covered
@@ -1174,7 +1174,7 @@ def _repeats(game: _Game) -> list[Trial]:
         scvs = game.own(UnitTypeId.SCV)
         field = _nearest_field(game)
         worker, others = scvs[0], scvs[1:]
-        game.order(AbilityId.GENERAL_MOVE, others, game.home.towards(_at(field), -10))
+        game.order(AbilityId.MOVE, others, game.home.towards(_at(field), -10))
 
         def doing(name: str) -> bool:
             unit = game.unit(worker.tag)
@@ -1245,7 +1245,7 @@ def _watch_build(game: _Game, trial: Trial, builder: raw_pb2.Unit, site: Point, 
     for _ in range(38):
         game.turn(16)
         if not mining and (busy := [u for u in game.own(UnitTypeId.SCV) if u.tag != builder.tag and u.orders]):
-            game.order(AbilityId.GENERAL_STOP, busy)
+            game.order(AbilityId.STOP, busy)
         unit = game.units[builder.tag]
         there = next((u for u in game.own(UnitTypeId.SUPPLY_DEPOT) if _at(u).distance_to(site) < 1), None)
         progress = None if there is None else round(there.build_progress, 2)
@@ -1292,7 +1292,7 @@ def _errors(game: _Game) -> list[Trial]:
         builder, *others = game.own(UnitTypeId.SCV)
         site = _depot_site(game, trial)
         # The rest stop mining, so that no minerals come in meanwhile.
-        game.order(AbilityId.GENERAL_STOP, others)
+        game.order(AbilityId.STOP, others)
         trial.notes["minerals before the depot"] = game.minerals
         game.order(depot, [builder], site)
         game.order(train_scv, [center])
@@ -1305,7 +1305,7 @@ def _errors(game: _Game) -> list[Trial]:
         game.until(lambda: game.minerals >= 100, steps=16, limit=6000)
         builder, *others = game.own(UnitTypeId.SCV)
         site = _depot_site(game, trial)
-        game.order(AbilityId.GENERAL_STOP, others)
+        game.order(AbilityId.STOP, others)
         if short:
             # SCVs are queued until fewer minerals are left than a depot costs.
             while game.minerals >= 100 and len(game.units[center.tag].orders) < 5:
@@ -1314,9 +1314,7 @@ def _errors(game: _Game) -> list[Trial]:
         trial.notes["minerals before the orders"] = game.minerals
         # Behind the command center first, so the builder takes a while to reach the site.
         waypoint = game.home.towards(game.middle, -10)
-        game.act(
-            game.command(AbilityId.GENERAL_MOVE, [builder], waypoint), game.command(depot, [builder], site, queued=True)
-        )
+        game.act(game.command(AbilityId.MOVE, [builder], waypoint), game.command(depot, [builder], site, queued=True))
         if short:
             # The rest mine again, so that minerals come in while the builder is on its way.
             game.order(RawAbilityId.Harvest_Gather_SCV, others, _nearest_field(game))
@@ -1360,7 +1358,7 @@ def _errors(game: _Game) -> list[Trial]:
         game.until(lambda: _at(game.units[builder.tag]).distance_to(site) < 4, limit=600)
         (standing,) = game.create(blocker, site, owner=owner)
         if owner == game.player:
-            game.order(AbilityId.GENERAL_HOLD_POSITION, [standing])
+            game.order(AbilityId.HOLD_POSITION, [standing])
         game.turn(48)
         game.read("48 steps after the blocker came", [builder, standing])
         game.turn(192)
@@ -1393,7 +1391,7 @@ def _spell_errors(game: _Game) -> list[Trial]:
         game.set_energy(75, [templar])
         game.turn(2)
         destination = start.towards(game.middle, 8)
-        game.order(AbilityId.GENERAL_MOVE, [templar], destination)
+        game.order(AbilityId.MOVE, [templar], destination)
         game.order(storm, [templar], destination.towards(game.middle, 4), queued=True)
         # Not 0, which a debug command reads as the maximum.
         game.set_energy(1, [templar])
@@ -1464,7 +1462,7 @@ def _realtime(game: _Game) -> list[Trial]:
 
         def give() -> None:
             index[0] += 1
-            game.order(AbilityId.GENERAL_MOVE, [scv], points[index[0] % 2])
+            game.order(AbilityId.MOVE, [scv], points[index[0] % 2])
 
         def shows() -> bool:
             unit = game.unit(scv.tag)
@@ -1497,7 +1495,7 @@ def _realtime(game: _Game) -> list[Trial]:
 
 # --- 9. Cancels, add-ons and how much a structure holds
 
-_CANCEL_LAST = AbilityId.GENERAL_CANCEL_LAST
+_CANCEL_LAST = AbilityId.CANCEL_LAST
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _REAPER = AbilityId.BARRACKS_TRAIN_REAPER
@@ -1723,7 +1721,7 @@ def _refunds(game: _Game) -> list[Trial]:
         """Mine until there are `amount` minerals, then stop, so that no more come in."""
         game.order(RawAbilityId.Harvest_Gather_SCV, game.own(UnitTypeId.SCV), _nearest_field(game))
         game.until(lambda: game.minerals >= amount, steps=4, limit=6000)
-        game.order(AbilityId.GENERAL_STOP, game.own(UnitTypeId.SCV))
+        game.order(AbilityId.STOP, game.own(UnitTypeId.SCV))
         game.turn(2)
 
     def spend_below(amount: int) -> None:
@@ -2000,7 +1998,7 @@ def _toggled(game: _Game, performer: UnitTypeId, on: Ability, off: Ability, pad:
     mover = made[0]
     game.set_energy(200, [mover])
     destination = _at(mover).towards(game.middle, _MOVE_DISTANCE)
-    game.order(AbilityId.GENERAL_MOVE, [mover], destination)
+    game.order(AbilityId.MOVE, [mover], destination)
     game.turn(2)
     game.read("moving", [mover])
     moving = game.unit(mover.tag)
@@ -2462,7 +2460,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
         # 130 steps of walking.
         at = game.spot(game.toward(10), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
-        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        game.order(AbilityId.HOLD_POSITION, [guard])
         given = game.step
         trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
         for _ in range(60):
@@ -2487,7 +2485,7 @@ def _producer_dies(game: _Game) -> list[Trial]:
             return
         at = game.spot(game.toward(14), 3)
         (guard,) = game.create(UnitTypeId.MARINE, at)
-        game.order(AbilityId.GENERAL_HOLD_POSITION, [guard])
+        game.order(AbilityId.HOLD_POSITION, [guard])
         given = game.step
         waiting = max(gave_up_after[0] - 2, 0)
         trial.notes["ordered"] = game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [scv], at)
@@ -2608,7 +2606,7 @@ _FORMS = (
         UnitTypeId.LURKER,
         RawAbilityId.BurrowDown_Lurker,
         UnitTypeId.LURKER_BURROWED,
-        (RawAbilityId.BurrowUp_Lurker, RawAbilityId.Behavior_HoldFireOn_Lurker, AbilityId.GENERAL_HOLD_FIRE_ON),
+        (RawAbilityId.BurrowUp_Lurker, RawAbilityId.Behavior_HoldFireOn_Lurker, AbilityId.HOLD_FIRE_ON),
     ),
     (
         UnitTypeId.OBSERVER,
@@ -2637,7 +2635,7 @@ _FORMS = (
 )
 # The orders a unit is given to hold, in the order tried, until one shows: at the enemy target, or a point off to the
 # side.
-_HELD = (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_MOVE, AbilityId.GENERAL_PATROL, AbilityId.GENERAL_HOLD_POSITION)
+_HELD = (AbilityId.ATTACK, AbilityId.MOVE, AbilityId.PATROL, AbilityId.HOLD_POSITION)
 # Each transport, its passenger, and whether it holds a train rather than a move.
 _TRANSPORTS = (
     (
@@ -2670,7 +2668,7 @@ def _held_orders(game: _Game) -> list[Trial]:
         )
         trials.append(found)
         offered = found.notes.get("unloads")
-        tried: list[int] = [unload, unload_at, AbilityId.GENERAL_UNLOAD, AbilityId.GENERAL_UNLOAD_AT]
+        tried: list[int] = [unload, unload_at, AbilityId.UNLOAD, AbilityId.UNLOAD_AT]
         if isinstance(offered, list):
             tried += [ability for ability in offered if isinstance(ability, int) and ability not in tried]
         for ability in tried:
@@ -2680,9 +2678,9 @@ def _held_orders(game: _Game) -> list[Trial]:
                 label += f" at {aim}" if aim else ""
                 trials.append(game.trial(label, partial(_unloading, game, transport, passenger, ability, aim)))
     for first, then in (
-        (AbilityId.GENERAL_ATTACK, None),
-        (AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_STOP),
-        (AbilityId.GENERAL_STOP, None),
+        (AbilityId.ATTACK, None),
+        (AbilityId.ATTACK, AbilityId.STOP),
+        (AbilityId.STOP, None),
     ):
         steps = first.name + (f" then {then.name}" if then is not None else "")
         trials.append(game.trial(f"BUNKER with a MARINE, given {steps}", partial(_bunker, game, first, then)))
@@ -2798,9 +2796,9 @@ def _loaded(game: _Game, transport: UnitTypeId, passenger: UnitTypeId, trial: Tr
         return None
     # A command center loads the workers around it; the rest load the unit they are aimed at.
     for ability, units, aim in (
-        (AbilityId.GENERAL_LOAD, [carrier], rider),
+        (AbilityId.LOAD, [carrier], rider),
         (RawAbilityId.LoadAll_CommandCenter, [carrier], None),
-        (AbilityId.GENERAL_SMART, [rider], carrier),
+        (AbilityId.SMART, [rider], carrier),
     ):
         trial.notes[f"load by {ability.name}"] = game.order(ability, units, aim)
         if game.until(lambda: _cargo(game, carrier.tag) > 0, limit=300):
@@ -2817,7 +2815,7 @@ def _hold(game: _Game, transport: UnitTypeId, tag: int, trial: Trial) -> _Shown 
         game.order(AbilityId.COMMAND_CENTER_TRAIN_SCV, [tag], queued=True)
     else:
         unit = game.units[tag]
-        trial.notes["holds"] = game.order(AbilityId.GENERAL_MOVE, [tag], _at(unit).towards(game.middle, _MOVE_DISTANCE))
+        trial.notes["holds"] = game.order(AbilityId.MOVE, [tag], _at(unit).towards(game.middle, _MOVE_DISTANCE))
     game.turn(2)
     game.read("holding", [tag])
     now = game.unit(tag)
@@ -2946,7 +2944,7 @@ def _liberator(game: _Game, target_type: UnitTypeId, own: bool, wait: int, trial
     near = [tag for tag, unit in game.units.items() if _at(unit).distance_to(pad) < 8 and tag != liberator.tag]
     game.read("sieged", [liberator.tag, *near])
     trial.notes["near"] = [_type_name(game.units[tag].unit_type) for tag in near]
-    trial.notes["attack"] = game.order(AbilityId.GENERAL_ATTACK, [liberator], target)
+    trial.notes["attack"] = game.order(AbilityId.ATTACK, [liberator], target)
     game.turn(2)
     unit = game.unit(liberator.tag)
     before = [] if unit is None else [_Shown.of(order) for order in unit.orders]
@@ -2996,12 +2994,12 @@ def _structure_orders(game: _Game) -> list[Trial]:
 
 def _producer_orders(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
-    smart = AbilityId.GENERAL_SMART
+    smart = AbilityId.SMART
     for structure, train, powered in _PRODUCERS:
-        label = f"{structure.name} training, given GENERAL_SMART at a point"
+        label = f"{structure.name} training, given SMART at a point"
         trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, smart)))
         if structure in _TOWN_HALLS:
-            label = f"{structure.name} training, given GENERAL_SMART at a mineral field"
+            label = f"{structure.name} training, given SMART at a mineral field"
             trials.append(game.trial(label, partial(_busy_given, game, structure, train, powered, smart, field=True)))
     for structure in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
         label = f"{structure.name} training, given LoadAll_CommandCenter with an SCV beside it"
@@ -3013,8 +3011,8 @@ def _producer_orders(game: _Game) -> list[Trial]:
 
 
 def _gateway_orders(game: _Game) -> list[Trial]:
-    label = "GATEWAY training, given GENERAL_SMART at a point"
-    smart = AbilityId.GENERAL_SMART
+    label = "GATEWAY training, given SMART at a point"
+    smart = AbilityId.SMART
     return [
         game.trial(label, partial(_busy_given, game, UnitTypeId.GATEWAY, AbilityId.GATEWAY_TRAIN_ZEALOT, True, smart))
     ]
@@ -3023,7 +3021,7 @@ def _gateway_orders(game: _Game) -> list[Trial]:
 def _fortress_unload(game: _Game) -> list[Trial]:
     fortress, scv = UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV
     trials = [game.trial("PLANETARY_FORTRESS carrying a SCV: offered", partial(_offered_unloads, game, fortress, scv))]
-    for ability in (RawAbilityId.UnloadAll_CommandCenter, AbilityId.GENERAL_UNLOAD):
+    for ability in (RawAbilityId.UnloadAll_CommandCenter, AbilityId.UNLOAD):
         label = f"PLANETARY_FORTRESS carrying a SCV and training, given {ability.name}"
         trials.append(game.trial(label, partial(_unloading, game, fortress, scv, ability, "")))
     return trials
@@ -3032,7 +3030,7 @@ def _fortress_unload(game: _Game) -> list[Trial]:
 def _burrowed_movers(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     for burrowed in (UnitTypeId.ROACH_BURROWED, UnitTypeId.INFESTOR_BURROWED):
-        label = f"{burrowed.name} given an attack, a while later, then GENERAL_UNBURROW"
+        label = f"{burrowed.name} given an attack, a while later, then UNBURROW"
         trials.append(game.trial(label, partial(_burrowed_attacks, game, burrowed)))
     return trials
 
@@ -3058,17 +3056,17 @@ def _burrowed_attacks(game: _Game, burrowed: UnitTypeId, trial: Trial) -> None:
     game.read("48 steps on", [unit.tag])
     now = game.unit(unit.tag)
     trial.notes["moved"] = None if now is None else round(_at(now).distance_to(_at(unit)), 2)
-    _after(game, AbilityId.GENERAL_UNBURROW, unit.tag, None, held, [], trial)
+    _after(game, AbilityId.UNBURROW, unit.tag, None, held, [], trial)
 
 
 def _armed_orders(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     for structure, target, powered in _ARMED:
-        for then in (AbilityId.GENERAL_STOP, AbilityId.GENERAL_ATTACK, AbilityId.GENERAL_SMART):
+        for then in (AbilityId.STOP, AbilityId.ATTACK, AbilityId.SMART):
             label = f"{structure.name} attacking a {target.name}, given {then.name}"
             trials.append(game.trial(label, partial(_armed_given, game, structure, target, powered, then)))
     for burrowed in _BURROWED:
-        label = f"{burrowed.name} holding an order, given GENERAL_UNBURROW"
+        label = f"{burrowed.name} holding an order, given UNBURROW"
         trials.append(game.trial(label, partial(_burrowed_given, game, burrowed)))
     return trials
 
@@ -3133,7 +3131,7 @@ def _armed_given(
     if armed is None or len(enemies) < 2:
         trial.notes["class"] = "not made"
         return
-    trial.notes["attack"] = game.order(AbilityId.GENERAL_ATTACK, [armed], enemies[0])
+    trial.notes["attack"] = game.order(AbilityId.ATTACK, [armed], enemies[0])
     game.turn(2)
     game.read("attacking", [armed.tag, *enemies])
     now = game.unit(armed.tag)
@@ -3158,7 +3156,7 @@ def _burrowed_given(game: _Game, burrowed: UnitTypeId, trial: Trial) -> None:
         trial.notes["class"] = "not made"
         return
     held = _held(game, unit.tag, enemy.tag, trial)
-    _after(game, AbilityId.GENERAL_UNBURROW, unit.tag, None, held, [], trial)
+    _after(game, AbilityId.UNBURROW, unit.tag, None, held, [], trial)
 
 
 # --- Whether an ability does something else to a unit's orders depending on what it is aimed at
@@ -3182,13 +3180,13 @@ def _target_dependent(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     for transport, passenger in _LOADERS:
         for apart in (1, 8):
-            label = f"{transport.name} moving, given GENERAL_LOAD at a {passenger.name} {apart} away"
+            label = f"{transport.name} moving, given LOAD at a {passenger.name} {apart} away"
             trials.append(game.trial(label, partial(_loading_on_the_move, game, transport, passenger, apart)))
     for caster, spell in _CASTERS:
         for apart in (4, 16):
             label = f"{caster.name} moving, given {spell.name} at an enemy SIEGE_TANK {apart} away"
             trials.append(game.trial(label, partial(_casting_on_the_move, game, caster, spell, apart)))
-    label = "PLANETARY_FORTRESS training, given GENERAL_ATTACK at the point of an enemy COMMAND_CENTER in range"
+    label = "PLANETARY_FORTRESS training, given ATTACK at the point of an enemy COMMAND_CENTER in range"
     trials.append(game.trial(label, partial(_fortress_at_a_point, game)))
     return trials
 
@@ -3196,7 +3194,7 @@ def _target_dependent(game: _Game) -> list[Trial]:
 def _moving(game: _Game, tag: int, trial: Trial) -> _Shown | None:
     """Move the unit `tag` sideways and return the move as it shows it."""
     unit = game.units[tag]
-    trial.notes["moves"] = game.order(AbilityId.GENERAL_MOVE, [tag], _at(unit) + (0, _MOVE_DISTANCE))
+    trial.notes["moves"] = game.order(AbilityId.MOVE, [tag], _at(unit) + (0, _MOVE_DISTANCE))
     game.turn(2)
     game.read("moving", [tag])
     now = game.unit(tag)
@@ -3214,7 +3212,7 @@ def _loading_on_the_move(game: _Game, transport: UnitTypeId, passenger: UnitType
         trial.notes["class"] = "not made"
         return
     move = _moving(game, carrier.tag, trial)
-    _after(game, AbilityId.GENERAL_LOAD, carrier.tag, rider.tag, move, [rider.tag], trial)
+    _after(game, AbilityId.LOAD, carrier.tag, rider.tag, move, [rider.tag], trial)
     trial.notes["cargo after"] = _cargo(game, carrier.tag)
 
 
@@ -3245,7 +3243,7 @@ def _fortress_at_a_point(game: _Game, trial: Trial) -> None:
     game.read("training", [fortress.tag])
     now = game.unit(fortress.tag)
     held = _Shown.of(now.orders[0]) if now is not None and now.orders else None
-    _after(game, AbilityId.GENERAL_ATTACK, fortress.tag, _at(enemy), held, [enemy.tag], trial)
+    _after(game, AbilityId.ATTACK, fortress.tag, _at(enemy), held, [enemy.tag], trial)
 
 
 # --- What the game answers one command naming several units, some of which cannot take it now
@@ -3260,7 +3258,7 @@ def _group_verdicts(game: _Game) -> list[Trial]:
     trials: list[Trial] = []
     for cargo in _GROUP_CARGO:
         named = ", ".join("loaded" if full else "empty" for full in cargo)
-        label = f"one GENERAL_UNLOAD_AT at a point naming medivacs: {named}"
+        label = f"one UNLOAD_AT at a point naming medivacs: {named}"
         trials.append(game.trial(label, partial(_group_unload, game, cargo)))
     return trials
 
@@ -3280,7 +3278,7 @@ def _group_unload(game: _Game, cargo: tuple[bool, ...], trial: Trial) -> None:
             tags.append(made[0].tag)
     trial.notes["cargo before"] = [_cargo(game, tag) for tag in tags]
     point = _at(game.units[tags[0]]) + (0, 4)
-    trial.notes["verdict"] = game.order(AbilityId.GENERAL_UNLOAD_AT, tags, point)
+    trial.notes["verdict"] = game.order(AbilityId.UNLOAD_AT, tags, point)
     last = 0
     for at in (*_READS, 200):
         game.turn(at - last)
@@ -3322,23 +3320,23 @@ _CHANNELS = (
 
 
 def _cancels_whole(game: _Game) -> list[Trial]:
-    """Put each unit that can be offered a cancel of the `GENERAL_CANCEL` family into the state it is offered one in,
-    read every cancel it is offered then, and give it `GENERAL_CANCEL`."""
+    """Put each unit that can be offered a cancel of the `CANCEL` family into the state it is offered one in,
+    read every cancel it is offered then, and give it `CANCEL`."""
     trials: list[Trial] = []
     for structure, ability, half in _STRUCTURE_WORK:
-        label = f"{structure.name} given {ability.name}, then GENERAL_CANCEL"
+        label = f"{structure.name} given {ability.name}, then CANCEL"
         trials.append(game.trial(label, partial(_cancelling, game, partial(_working, game, structure, ability, half))))
-    label = "a SUPPLY_DEPOT going up, given GENERAL_CANCEL"
+    label = "a SUPPLY_DEPOT going up, given CANCEL"
     trials.append(game.trial(label, partial(_cancelling, game, partial(_going_up, game))))
     for unit_type, ability, morphing in _UNIT_MORPHS:
-        label = f"{unit_type.name} given {ability.name}, its {morphing.name} then given GENERAL_CANCEL"
+        label = f"{unit_type.name} given {ability.name}, its {morphing.name} then given CANCEL"
         start = partial(_morphing, game, unit_type, ability, morphing)
         trials.append(game.trial(label, partial(_cancelling, game, start)))
     for caster, spell, aimed in _CHANNELS:
-        label = f"{caster.name} given {spell.name}, then GENERAL_CANCEL"
+        label = f"{caster.name} given {spell.name}, then CANCEL"
         trials.append(game.trial(label, partial(_cancelling, game, partial(_channeling, game, caster, spell, aimed))))
     for shade in (False, True):
-        label = f"an ADEPT given ADEPT_SHADE, then {'its shade' if shade else 'the adept'} given GENERAL_CANCEL"
+        label = f"an ADEPT given ADEPT_SHADE, then {'its shade' if shade else 'the adept'} given CANCEL"
         trials.append(game.trial(label, partial(_cancelling, game, partial(_shading, game, shade))))
     return [*trials, *_nuke_cancels(game)]
 
@@ -3346,14 +3344,14 @@ def _cancels_whole(game: _Game) -> list[Trial]:
 def _nuke_cancels(game: _Game) -> list[Trial]:
     """A ghost's nuke given the generic cancel, and given its own, to read the two against each other."""
     trials: list[Trial] = []
-    for cancel in (AbilityId.GENERAL_CANCEL, RawAbilityId.Cancel_Nuke):
+    for cancel in (AbilityId.CANCEL, RawAbilityId.Cancel_Nuke):
         label = f"a GHOST given GHOST_TACTICAL_NUKE, then {cancel.name}"
         trials.append(game.trial(label, partial(_cancelling, game, partial(_nuking, game), cancel=cancel)))
     return trials
 
 
 def _cancelling(
-    game: _Game, start: Callable[[Trial], int | None], trial: Trial, *, cancel: Ability = AbilityId.GENERAL_CANCEL
+    game: _Game, start: Callable[[Trial], int | None], trial: Trial, *, cancel: Ability = AbilityId.CANCEL
 ) -> None:
     """Start what `start` starts, then read the cancels the unit it returns is offered and give it `cancel`."""
     tag = start(trial)
@@ -3499,7 +3497,7 @@ def _attack_trials(game: _Game, unit_types: Sequence[UnitTypeId]) -> list[Trial]
 
 
 def _attacks(game: _Game, unit_type: UnitTypeId, trial: Trial) -> None:
-    """Give the unit `GENERAL_ATTACK` at a point and at an enemy drone, then each of the two it runs as at the point,
+    """Give the unit `ATTACK` at a point and at an enemy drone, then each of the two it runs as at the point,
     reading what it shows after each."""
     pad = game.spot(game.toward(14), 8)
     maker = UnitTypeId.ADEPT if unit_type is UnitTypeId.ADEPT_SHADE else unit_type
@@ -3524,10 +3522,10 @@ def _attacks(game: _Game, unit_type: UnitTypeId, trial: Trial) -> None:
     ]
     point = _at(unit) + (0, 8)
     for label, ability, target in (
-        ("GENERAL_ATTACK at a point", AbilityId.GENERAL_ATTACK, point),
-        ("GENERAL_ATTACK at the drone", AbilityId.GENERAL_ATTACK, drone),
+        ("ATTACK at a point", AbilityId.ATTACK, point),
+        ("ATTACK at the drone", AbilityId.ATTACK, drone),
         ("attack_Attack at a point", RawAbilityId.attack_Attack, point),
-        ("GENERAL_SCAN_MOVE at a point", RawAbilityId.Scan_Move, point),
+        ("SCAN_MOVE at a point", RawAbilityId.Scan_Move, point),
     ):
         verdict = game.order(ability, [unit], target)
         game.turn(2)
@@ -3535,7 +3533,7 @@ def _attacks(game: _Game, unit_type: UnitTypeId, trial: Trial) -> None:
         now = game.unit(unit.tag)
         shown = [] if now is None else [_name(order.ability_id) for order in now.orders]
         trial.notes[label] = {"verdict": verdict, "shows": shown}
-        game.order(AbilityId.GENERAL_STOP, [unit])
+        game.order(AbilityId.STOP, [unit])
         game.turn(2)
 
 
@@ -3545,7 +3543,7 @@ def _attacks(game: _Game, unit_type: UnitTypeId, trial: Trial) -> None:
 # Each burrowed type, and the unburrows its autocast is switched for: the table allows it for the roach's and not
 # for the drone's.
 _AUTOCAST_UNBURROWS = (
-    (UnitTypeId.ROACH_BURROWED, (RawAbilityId.BurrowUp_Roach, RawAbilityId.BurrowUp_Drone, AbilityId.GENERAL_UNBURROW)),
+    (UnitTypeId.ROACH_BURROWED, (RawAbilityId.BurrowUp_Roach, RawAbilityId.BurrowUp_Drone, AbilityId.UNBURROW)),
     (UnitTypeId.DRONE_BURROWED, (RawAbilityId.BurrowUp_Drone, RawAbilityId.BurrowUp_Roach)),
 )
 

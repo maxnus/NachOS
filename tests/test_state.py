@@ -223,14 +223,14 @@ class TestWhatHappened:
         actions = [
             # The id a move runs as, which reads as the move.
             _command(RawAbilityId.Move_Move, 1, 2, target_world_space_pos=common_pb2.Point2D(x=5.0, y=6.0)),
-            _command(AbilityId.GENERAL_ATTACK, 1, target_unit_tag=9),
-            _command(AbilityId.GENERAL_STOP, 2, queued=True),
+            _command(AbilityId.ATTACK, 1, target_unit_tag=9),
+            _command(AbilityId.STOP, 2, queued=True),
         ]
         state = game.observe(16, units=[make_unit(1), make_unit(2)], dead=(9,), actions=actions)
         assert state.actions == (
-            UnitCommand(15, AbilityId.GENERAL_MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
-            UnitCommand(15, AbilityId.GENERAL_ATTACK, (marine,), enemy, queued=False),
-            UnitCommand(15, AbilityId.GENERAL_STOP, (other,), None, queued=True),
+            UnitCommand(15, AbilityId.MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
+            UnitCommand(15, AbilityId.ATTACK, (marine,), enemy, queued=False),
+            UnitCommand(15, AbilityId.STOP, (other,), None, queued=True),
         )
         assert enemy.is_dead
 
@@ -334,11 +334,11 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
 
         # A unit command, as the game runs it.
         drone = units.own.of_type(UnitTypeId.DRONE)[0]
-        game.order(AbilityId.GENERAL_MOVE, drone, target=out_there)
+        game.order(AbilityId.MOVE, drone, target=out_there)
         game.turn(1)
         (command,) = game.state.actions
         assert isinstance(command, UnitCommand)
-        assert (command.ability, command.units) == (AbilityId.GENERAL_MOVE, (drone,))
+        assert (command.ability, command.units) == (AbilityId.MOVE, (drone,))
         # The game sends points in single precision.
         assert command.target == pytest.approx(out_there, abs=1e-3)
 

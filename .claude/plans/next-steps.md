@@ -314,6 +314,9 @@ and for whether an ability makes a structure, and both come out the same within 
      choice of all four. The game has no shared id for either. The siege takes a point, which only the liberator's
      part uses, for its zone; the unsiege takes nothing. Each type's own game id reads as the custom one.
 4. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the earlier diffs stay readable.
+   PR 4 (branch `claude/drop-general-prefix`): 39 ids renamed, `AbilityId` re-sorted by name (the two custom ids keep
+   their order, so their values), the tech tree regenerated (reordered only) and the naming rule in the docs reworded.
+   Earlier entries in this plan keep the names of their day.
 
 ## 3. The rest of M4
 

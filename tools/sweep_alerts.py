@@ -355,7 +355,7 @@ def _bursts(game: _Game, at: Point, unit_type: UnitTypeId, *, gaps: Sequence[int
     (target,) = made
     if unit_type is not UnitTypeId.SUPPLY_DEPOT:
         # A unit that cannot fight back drifts away from what attacks it, unless it holds its position.
-        game.order(AbilityId.GENERAL_HOLD_POSITION, made)
+        game.order(AbilityId.HOLD_POSITION, made)
     hit: list[int] = []
     for attack, gap in enumerate((0, *gaps)):
         game.turn(max(gap, 4))
@@ -704,8 +704,8 @@ def _terran(game: _Game) -> list[Trial]:
     trials.append(game.trial("3 supply depots built by 3 SCVs at once", depots))
 
     def add_ons() -> list[int]:
-        game.order(AbilityId.GENERAL_BUILD_TECH_LAB, [barracks[1]])
-        game.order(AbilityId.GENERAL_BUILD_REACTOR, [barracks[2]])
+        game.order(AbilityId.BUILD_TECH_LAB, [barracks[1]])
+        game.order(AbilityId.BUILD_REACTOR, [barracks[2]])
         game.appear([UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.REACTOR_BARRACKS], 2)
         placed = game.own(UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.REACTOR_BARRACKS)
         return game.finish((unit.tag for unit in placed), steps=1)
@@ -995,8 +995,8 @@ def _protoss(game: _Game) -> list[Trial]:
     def archons() -> list[int]:
         templar = game.create(UnitTypeId.HIGH_TEMPLAR, game.spot(game.toward(6), 1), count=2)
         dark = game.create(UnitTypeId.DARK_TEMPLAR, game.spot(game.toward(6), 1), count=2)
-        game.order(AbilityId.GENERAL_MORPH_ARCHON, templar)
-        game.order(AbilityId.GENERAL_MORPH_ARCHON, dark)
+        game.order(AbilityId.MORPH_ARCHON, templar)
+        game.order(AbilityId.MORPH_ARCHON, dark)
         return game.appear([UnitTypeId.ARCHON], 2)
 
     trials.append(game.trial("2 archons merged, one of high and one of dark templar", archons))

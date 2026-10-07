@@ -139,7 +139,7 @@ class TestGeneratingTheTables:
             research_abilities={"Stimpack": "BarracksTechLabResearch_Stimpack"},
         )
         tree = _generator().read(findings, _no_upgrades())
-        assert tree.ability_performers[AbilityId.GENERAL_BURROW] == {UnitTypeId.ZERGLING}
+        assert tree.ability_performers[AbilityId.BURROW] == {UnitTypeId.ZERGLING}
         assert tree.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
         # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
@@ -154,12 +154,12 @@ class TestGeneratingTheTables:
             creation_abilities={"BarracksFlying": "Lift_Barracks", "StarportFlying": "Lift_Starport"},
         )
         tree = _generator().read(findings, _no_upgrades())
-        assert tree.ability_requirements[UnitTypeId.BARRACKS].keys() == {AbilityId.GENERAL_LIFT}
-        assert tree.ability_products[AbilityId.GENERAL_LIFT] == {
+        assert tree.ability_requirements[UnitTypeId.BARRACKS].keys() == {AbilityId.LIFT}
+        assert tree.ability_products[AbilityId.LIFT] == {
             UnitTypeId.BARRACKS: UnitTypeId.BARRACKS_FLYING,
             UnitTypeId.STARPORT: UnitTypeId.STARPORT_FLYING,
         }
-        assert tree.creation_abilities[UnitTypeId.STARPORT_FLYING] is AbilityId.GENERAL_LIFT
+        assert tree.creation_abilities[UnitTypeId.STARPORT_FLYING] is AbilityId.LIFT
 
     def test_an_ability_needing_nothing_reads_as_needing_nothing(self) -> None:
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine"]})
@@ -172,8 +172,8 @@ class TestGeneratingTheTables:
         claws = _requirement("RoachBurrowed", "Move_Move", [], ["TunnelingClaws"])
         tree = _generator().read(_findings(offered=offered, requirements=[claws]), _no_upgrades())
         needs = tree.ability_requirements
-        assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.GENERAL_MOVE].upgrades == {UpgradeId.TUNNELING_CLAWS}
-        assert needs[UnitTypeId.MARINE][AbilityId.GENERAL_MOVE] == TechRequirements()
+        assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.MOVE].upgrades == {UpgradeId.TUNNELING_CLAWS}
+        assert needs[UnitTypeId.MARINE][AbilityId.MOVE] == TechRequirements()
 
     def test_an_ability_whose_requirements_were_never_read_is_refused(self) -> None:
         """It is refused rather than read as needing nothing."""
@@ -220,7 +220,7 @@ class TestGeneratingTheTables:
             _trial("Zergling", "BurrowDown_Drone", "DroneBurrowed", "other"),
         ]
         tree = _generator().read(_findings(offered=offered, made=made), _no_upgrades())
-        assert set(tree.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.GENERAL_BURROW}
+        assert set(tree.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.BURROW}
         assert tree.morph_sources[UnitTypeId.DRONE_BURROWED] is UnitTypeId.DRONE
 
     def test_what_an_ability_uses_up_is_what_its_product_is_made_out_of(self) -> None:
@@ -324,8 +324,8 @@ class TestWhatTheTablesSay:
 
     def test_a_burrowed_roach_moves_only_with_tunneling_claws(self, tables: GameData) -> None:
         claws = TechRequirements(upgrades=frozenset({UpgradeId.TUNNELING_CLAWS}))
-        assert tables.units[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.GENERAL_MOVE] == claws
-        assert tables.units[UnitTypeId.ROACH].ability_requirements[AbilityId.GENERAL_MOVE] == TechRequirements()
+        assert tables.units[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.MOVE] == claws
+        assert tables.units[UnitTypeId.ROACH].ability_requirements[AbilityId.MOVE] == TechRequirements()
 
     def test_a_barracks_needs_a_depot_which_a_lowered_one_counts_as(self, tables: GameData) -> None:
         barracks = tables.units[UnitTypeId.SCV].ability_requirements[AbilityId.SCV_BUILD_BARRACKS]
@@ -345,11 +345,11 @@ class TestWhatTheTablesSay:
         assert set(stimpack.values()) == {UpgradeId.STIMPACK}
 
     def test_an_action_several_types_perform_is_offered_to_each_and_makes_each_its_own(self, tables: GameData) -> None:
-        burrow = tables.abilities[AbilityId.GENERAL_BURROW]
+        burrow = tables.abilities[AbilityId.BURROW]
         assert {UnitTypeId.DRONE, UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.WIDOW_MINE} <= burrow.performers
         assert burrow.products[UnitTypeId.ZERGLING] is UnitTypeId.ZERGLING_BURROWED
         assert burrow.products[UnitTypeId.ROACH] is UnitTypeId.ROACH_BURROWED
-        assert AbilityId.GENERAL_BURROW in tables.units[UnitTypeId.ZERGLING].abilities
+        assert AbilityId.BURROW in tables.units[UnitTypeId.ZERGLING].abilities
 
     def test_every_unit_type_and_upgrade_is_made_by_its_ability(self, tables: GameData) -> None:
         """The generator leaves out a product nothing carries out, so a sweep that loses one shows here. A rich
@@ -399,7 +399,7 @@ class TestWhatTheTablesSay:
         assert not tables.units[UnitTypeId.PYLON].needs_power
 
     def test_a_unit_type_carries_what_it_is_offered(self, tables: GameData) -> None:
-        assert AbilityId.GENERAL_STIM in tables.units[UnitTypeId.MARINE].abilities
+        assert AbilityId.STIM in tables.units[UnitTypeId.MARINE].abilities
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, tables: GameData) -> None:
         """A gateway becomes a warp gate by itself once the research is done. Every research ability has a
@@ -478,7 +478,7 @@ def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(toward)))
             game.turn(2)
             barracks = game.newest(UnitTypeId.BARRACKS)
-            game.order(AbilityId.GENERAL_BUILD_TECH_LAB, barracks, target=barracks.position)
+            game.order(AbilityId.BUILD_TECH_LAB, barracks, target=barracks.position)
             game.turn(22 * 8)
             assert AbilityId.BARRACKS_TRAIN_GHOST not in _offered(transport, barracks)
             game.debug(game.create(UnitTypeId.GHOST_ACADEMY, game.open_ground(toward.towards(home, -8))))

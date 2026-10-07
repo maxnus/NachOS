@@ -178,7 +178,7 @@ class Sweep:
         made = self._game.spawn(requests)
         for unit in made:
             if unit.unit_type in _ADD_ON_BUILDERS:
-                self._game.order(AbilityId.GENERAL_BUILD_TECH_LAB, unit.tag, Point((unit.pos.x, unit.pos.y)))
+                self._game.order(AbilityId.BUILD_TECH_LAB, unit.tag, Point((unit.pos.x, unit.pos.y)))
         self._client.step(22 * 20)
         standing = [unit for unit in self._game.units() if unit.owner == self._player]
         self._world.update(unit.tag for unit in standing)
@@ -277,10 +277,10 @@ class Sweep:
         friends = [unit for unit in self._in_trial(sandbox) if unit.owner == self._player]
         before = {unit.tag: set(unit.buff_ids) for unit in friends}
         for friend in friends:
-            self._game.order(AbilityId.GENERAL_MOVE, friend.tag, sandbox + (4, 0))
+            self._game.order(AbilityId.MOVE, friend.tag, sandbox + (4, 0))
         for _ in range(_WATCHES):
             self._client.step(_STEPS_PER_WATCH)
-            self._record(zone, AbilityId.GENERAL_MOVE, before, self._in_trial(sandbox))
+            self._record(zone, AbilityId.MOVE, before, self._in_trial(sandbox))
 
     def _set_up_trial(self, unit_type: UnitTypeId, sandbox: Point, *, owner: int | None = None) -> raw_pb2.Unit | None:
         """Clear the sandbox of the last trial, and put in a fresh caster, with energy, and fresh targets.
