@@ -9,11 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #116. `uv run pytest` passes 1658 tests on the branch of the #116 fix; `uv run pytest
-  -m integration` passes 25 against a real game (run 2026-10-07).
-- **Now: step 1's timing cases**, planned with the owner on 2026-10-07 (below): a fix to #116 first, then a sweep,
-  then a decision on what it found and a PR. The money cases are done: #115, an order without state, and #116, the
-  queue. Step 2, one id per action, is done (#103 to #107).
+- nachOS `main` has every PR to #117. `uv run pytest` passes 1658 tests; `uv run pytest -m integration` passes 25
+  against a real game (run 2026-10-07).
+- **Now: step 1's timing cases**, planned with the owner on 2026-10-07 (below). #117 fixed #116 for a lifted command
+  center, and the timing sweeps have measured what the rest waited on; what to build is the owner's to decide next.
+  The money cases are done: #115, an order without state, and #116, the queue. Step 2, one id per action, is done
+  (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -243,7 +244,7 @@ Orders the game refuses now and would take later, settled one question at a time
    is charged, the cooldown per unit type, and whether `is_active`, a buff or the available-abilities query shows a
    gate ready. A warp-in goes out as given until then.
 4. **A larva morph given to a hatchery is held there until one of its larvae is free**: `issue(hatchery,
-   LARVA_TRAIN_DRONE)` goes to a larva of the hatchery showing no order and given none this turn. To measure first:
+   LARVA_MORPH_DRONE)` goes to a larva of the hatchery showing no order and given none this turn. To measure first:
    how far a hatchery's larvae stand from it, and what the game answers to a larva morph given to the hatchery.
 5. **Spells stay with the game**: the game walks a caster into reach itself, no money is at stake, and a hold would
    cost micro up to a turn.
@@ -258,11 +259,17 @@ Orders the game refuses now and would take later, settled one question at a time
    released goes out as a command of its own, so a split group order's later parts keep no spacing; and a train or a
    research is held only for a structure offered `CANCEL_LAST`, or its lifted form, so a warp-in is not held (review
    of #116).
-3. **The #116 fix** (timing case 1): branch `claude/held-morph-on-the-ground`.
-4. **The timing sweeps**: `research-after`, `warp-gate-cooldown` and `larvae` in `tools/sweep_orders.py`, findings into
-   `docs/game-behavior.md`. Branch `claude/timing-sweeps`.
-5. **The timing cases built**, once the owner has decided on what the sweeps found: the larva hold, warp-ins if
-   anything shows a gate ready, and the +2 lag if it needs a change.
+3. **The #116 fix** (timing case 1): #117, branch `claude/held-morph-on-the-ground`.
+4. **The timing sweeps**: `research-after`, `warp-gate-cooldown` and `larvae` in `tools/sweep_orders.py`, findings in
+   `docs/game-behavior.md`. Branch `claude/timing-sweeps`. What they found:
+   - **+2 needs nothing**: a bay takes level 2 the step it is done with level 1, as the queue already gives it.
+   - **A warp gate's wait shows only to the abilities query counting costs**: 448 steps after a zealot or an adept,
+     512 after a stalker or a sentry, 720 after a templar; a warp-in given meanwhile is answered `NotEnoughCharges` and
+     charged nothing, and the gate reads no different.
+   - **A larva stands within 3.6 of its own hatchery's center**, an inject's too, and a morph given to a hatchery is
+     refused `NotSupported`.
+5. **The timing cases built**, once the owner has decided on what the sweeps found: the larva hold, and whether and
+   how a warp-in is held.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 

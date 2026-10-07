@@ -145,11 +145,11 @@ class Sandbox:
         if commands:
             self.debug(*(debug_pb2.DebugCommand(unit_value=command) for command in commands))
 
-    def offered(self, tags: Iterable[int]) -> dict[int, list[int]]:
-        """The abilities each unit is offered, ignoring what they cost."""
+    def offered(self, tags: Iterable[int], *, ignoring_costs: bool = True) -> dict[int, list[int]]:
+        """The abilities each unit is offered, ignoring what they cost unless `ignoring_costs` is false."""
         query = query_pb2.RequestQuery(
             abilities=[query_pb2.RequestQueryAvailableAbilities(unit_tag=tag) for tag in tags],
-            ignore_resource_requirements=True,
+            ignore_resource_requirements=ignoring_costs,
         )
         response = self.transport.request(sc2api_pb2.Request(query=query))
         answers = response.query.abilities

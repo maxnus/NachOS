@@ -72,6 +72,13 @@ and runs its trials in turn::
 - `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
   done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
   come.
+- `research-after` has an engineering bay research infantry weapons 1, and gives it level 2 at the first observation
+  it shows nothing, and then each step until the game takes it.
+- `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
+  reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
+  offered the warp-in by the abilities query, ignoring costs and counting them.
+- `larvae` gives a hatchery a drone's morph itself, then raises a second hatchery beside the first, injects it, and
+  reads where every larva stands from its own hatchery and from the other.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -87,6 +94,8 @@ the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in g
 - A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built ahead of its move,
   so a unit's move is read from its orders rather than assumed.
 - The `gas` cheat hands out no vespene, so `refunds` pays for an SCV and an orbital command, not a research.
+- `Sandbox.spawn` observes the game itself, not through `_Game`, so what a sweep spawns before its first trial is
+  turned over once more first; otherwise the trial takes it for its own and kills it when done.
 """
 
 import argparse
@@ -239,6 +248,7 @@ class _Game:
         self.minerals = 0
         self.vespene = 0
         self.supply = (0, 0)
+        self.upgrades: set[int] = set()
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
@@ -267,6 +277,7 @@ class _Game:
         self.minerals = common.minerals
         self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
+        self.upgrades = set(observation.raw_data.player.upgrade_ids)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
             self.running.errors.extend(_error(error, self.step) for error in response.action_errors)
@@ -2280,6 +2291,178 @@ def _protoss_slots(game: _Game) -> list[Trial]:
     return trials
 
 
+# --- The timing cases: the next level after a research, a warp gate's wait, a hatchery's larvae
+
+
+def _research_after(game: _Game) -> list[Trial]:
+    """How soon an engineering bay that has finished infantry weapons 1 takes level 2."""
+    level_1, level_2 = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
+
+    def after(trial: Trial) -> None:
+        pad = game.spot(game.toward(8), 4)
+        made = game.sandbox.spawn(
+            [(UnitTypeId.ENGINEERING_BAY, game.player, pad), (UnitTypeId.ARMORY, game.player, pad + (0, 5))]
+        )
+        game.made.update(unit.tag for unit in made)
+        game.turn(4)
+        bay = next((unit for unit in made if unit.unit_type == UnitTypeId.ENGINEERING_BAY), None)
+        if bay is None:
+            trial.notes["class"] = "not made"
+            return
+        trial.notes["level 1"] = game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, [bay])
+
+        def researching() -> raw_pb2.UnitOrder | None:
+            unit = game.unit(bay.tag)
+            return unit.orders[0] if unit is not None and unit.orders else None
+
+        # The research shows from the observation after the order.
+        game.until(lambda: researching() is not None, limit=64)
+        game.until(lambda: (order := researching()) is None or order.progress > 0.98, steps=16, limit=4000)
+        last: list[list[object]] = []
+        while (order := researching()) is not None and len(last) < 200:
+            last.append([game.step, round(order.progress, 4), level_1 in game.upgrades])
+            game.turn(1)
+        trial.notes["last steps researching (step, progress, level 1 done)"] = last[-6:]
+        trial.notes["bay first idle at"] = game.step
+        answers: list[list[object]] = []
+        while len(answers) < 64:
+            verdict = game.order(level_2, [bay])
+            answers.append([game.step, verdict, level_1 in game.upgrades])
+            if verdict == "Success":
+                break
+            game.turn(1)
+        trial.notes["level 2 given (step, verdict, level 1 done)"] = answers
+        game.turn(4)
+        game.read("after level 2 was given", [bay])
+
+    return [game.trial("an engineering bay given infantry weapons 2 from its first idle observation", after)]
+
+
+_WARP_INS = (
+    (AbilityId.WARP_GATE_WARP_IN_ZEALOT, UnitTypeId.ZEALOT),
+    (AbilityId.WARP_GATE_WARP_IN_STALKER, UnitTypeId.STALKER),
+    (AbilityId.WARP_GATE_WARP_IN_ADEPT, UnitTypeId.ADEPT),
+    (AbilityId.WARP_GATE_WARP_IN_SENTRY, UnitTypeId.SENTRY),
+    (AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR, UnitTypeId.HIGH_TEMPLAR),
+    (AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR, UnitTypeId.DARK_TEMPLAR),
+)
+# Where a warp-in goes, from the pylon that powers it.
+_WARP_SPOTS = ((3.5, 0.0), (-3.5, 0.0), (3.5, -3.0))
+
+
+def _warp_gate_cooldown(game: _Game) -> list[Trial]:
+    """How long a warp gate waits between warp-ins, what the game answers a warp-in during the wait and whether it
+    charges for one, and whether anything a bot can read shows the gate ready."""
+    for requirement in (UnitTypeId.CYBERNETICS_CORE, UnitTypeId.TEMPLAR_ARCHIVE, UnitTypeId.DARK_SHRINE):
+        pad = game.spot(game.toward(8), 3)
+        made = game.sandbox.spawn([(UnitTypeId.PYLON, game.player, pad + (0, 3)), (requirement, game.player, pad)])
+        game.made.update(unit.tag for unit in made)
+    # Observed before the first trial, which would otherwise take them for its own and kill them once done.
+    game.turn(4)
+    return [
+        game.trial(f"a warp gate warping in {unit_type.name} every step", partial(_warping, game, ability, unit_type))
+        for ability, unit_type in _WARP_INS
+    ]
+
+
+def _warping(game: _Game, ability: AbilityId, unit_type: UnitTypeId, trial: Trial) -> None:
+    """Give a fresh warp gate a warp-in of `unit_type` every step until three are taken, reading the gate each step."""
+    pad = game.spot(game.toward(16), 4)
+    made = game.sandbox.spawn([(UnitTypeId.WARP_GATE, game.player, pad), (UnitTypeId.PYLON, game.player, pad + (0, 5))])
+    game.made.update(unit.tag for unit in made)
+    game.turn(4)
+    gate = next((unit for unit in made if unit.unit_type == UnitTypeId.WARP_GATE), None)
+    pylon = next((unit for unit in made if unit.unit_type == UnitTypeId.PYLON), None)
+    if gate is None or pylon is None:
+        trial.notes["class"] = "not made"
+        return
+    spots = [_at(pylon) + offset for offset in _WARP_SPOTS]
+    taken: list[int] = []
+    rows: list[list[object]] = []
+    end = game.step + 2400
+    while len(taken) < len(spots) and game.step < end:
+        given_at, purse = game.step, game.minerals
+        before = {unit.tag for unit in game.own(unit_type)}
+        verdict = game.order(ability, [gate], spots[len(taken)])
+        game.turn(1)
+        new = [unit for unit in game.own(unit_type) if unit.tag not in before]
+        now = game.unit(gate.tag)
+        ignoring = game.sandbox.offered([gate.tag]).get(gate.tag, [])
+        counting = game.sandbox.offered([gate.tag], ignoring_costs=False).get(gate.tag, [])
+        rows.append(
+            [
+                given_at,
+                verdict,
+                game.minerals - purse,
+                bool(new),
+                None if now is None else now.is_active,
+                [] if now is None else [_buff_name(buff) for buff in now.buff_ids],
+                ability in ignoring,
+                ability in counting,
+            ]
+        )
+        if new:
+            taken.append(given_at)
+    trial.notes["taken at"] = taken
+    trial.notes["steps between"] = [later - earlier for earlier, later in zip(taken, taken[1:], strict=False)]
+    trial.notes["answers while waiting"] = sorted({str(row[1]) for row in rows if not row[3]})
+    trial.notes["charged while waiting"] = sorted({int(str(row[2])) for row in rows if not row[3]})
+    trial.notes[
+        "rows (given at, verdict, purse change, taken, active, buffs, offered ignoring costs, counting them)"
+    ] = rows
+
+
+def _larvae(game: _Game) -> list[Trial]:
+    """What the game does with a larva's morph given to the hatchery itself, and where each hatchery's larvae stand."""
+    (home,) = game.own(UnitTypeId.HATCHERY)[:1]
+
+    def to_the_hatchery(trial: Trial) -> None:
+        larvae = game.own(UnitTypeId.LARVA)
+        trial.notes["larvae before"] = len(larvae)
+        trial.notes["a drone given to the hatchery"] = game.order(AbilityId.LARVA_MORPH_DRONE, [home])
+        game.turn(2)
+        game.read("the hatchery and its larvae after", [home, *larvae])
+        trial.notes["eggs after"] = len(game.own(UnitTypeId.EGG))
+
+    def spread(trial: Trial) -> None:
+        game.create(UnitTypeId.SPAWNING_POOL, game.spot(game.toward(6), 2))
+        (other,) = game.create(UnitTypeId.HATCHERY, game.spot(game.toward(11), 3))
+        (queen,) = game.create(UnitTypeId.QUEEN, _at(other) + (3, 0))
+        game.set_energy(200, [queen])
+        game.turn(2)
+        trial.notes["hatcheries apart"] = round(_at(home).distance_to(_at(other)), 2)
+        trial.notes["inject"] = game.order(AbilityId.QUEEN_INJECT, [queen], other)
+        hatcheries = (home.tag, other.tag)
+        # Each larva's own hatchery is the one it stood nearest when first seen.
+        owners: dict[int, int] = {}
+        rows: list[list[object]] = []
+        for _ in range(150):
+            game.turn(8)
+            standing = {tag: _at(unit) for tag in hatcheries if (unit := game.unit(tag)) is not None}
+            for larva in game.own(UnitTypeId.LARVA):
+                away = {tag: _at(larva).distance_to(at) for tag, at in standing.items()}
+                own = owners.setdefault(larva.tag, min(away, key=lambda tag: away[tag]))
+                other_away = min((distance for tag, distance in away.items() if tag != own), default=None)
+                rows.append(
+                    [game.step, larva.tag, round(away[own], 2), None if other_away is None else round(other_away, 2)]
+                )
+        trial.notes["larvae seen"] = {str(tag): sum(1 for each in owners.values() if each == tag) for tag in hatcheries}
+        trial.notes["farthest from its own hatchery"] = max((float(str(row[2])) for row in rows), default=None)
+        trial.notes["nearest to the other hatchery"] = min(
+            (float(str(row[3])) for row in rows if row[3] is not None), default=None
+        )
+        trial.notes["ever nearer the other"] = any(
+            row[3] is not None and float(str(row[3])) < float(str(row[2])) for row in rows
+        )
+        trial.notes["rows (step, larva, from its own, from the other)"] = rows
+
+    # Before the hatchery's larvae are spent.
+    return [
+        game.trial("a drone's morph given to a hatchery", to_the_hatchery),
+        game.trial("two hatcheries 11 apart, one injected, and where their larvae stand", spread),
+    ]
+
+
 # --- 14. Which cancel a structure part way through something is offered
 
 
@@ -4048,6 +4231,9 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
     # instead.
     "progress": _Sweep(Race.ZERG, _progress),
+    "research-after": _Sweep(Race.TERRAN, _research_after),
+    "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    "larvae": _Sweep(Race.ZERG, _larvae),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(
