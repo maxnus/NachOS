@@ -1131,7 +1131,8 @@ class _SiegingBot:
                 api.client.debug([_create(UnitTypeId.LIBERATOR, api.map.playable_area.center, self.player, quantity=1)])
             return
         liberator = liberators[0]
-        self.reported.append((event.step, liberator.type_id.name, [order.ability.name for order in liberator.orders]))
+        orders = [f"{order.ability.name} at {order.target}" for order in liberator.orders]
+        self.reported.append((event.step, liberator.type_id.name, orders))
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
         if self._siege_due(event.step, liberator):
@@ -1204,6 +1205,7 @@ class TestAgainstTheRealGame:
 
         print("the liberator, turn by turn:", bot.reported[:12])
         print("sieges:", [(order.issued_step, order.state.name, order.action_result) for order in bot.sieges])
+        print("zone ordered:", bot.zone)
         assert [order.state for order in bot.sieges] == [OrderState.SENT, OrderState.REDUNDANT, OrderState.REDUNDANT]
         (liberator,) = bot.api.units.own.of_type(UnitTypeId.LIBERATOR_SIEGED)
         assert [order.ability for order in liberator.orders] == [_SIEGE]
