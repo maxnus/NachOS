@@ -130,7 +130,7 @@ class OrderBook:
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
         if isinstance(aimed, Unit):
-            _check_not_aimed_at_itself(ability, row, aimed, given)
+            _check_not_aimed_at_itself(ability, aimed, given)
         order = Order(
             ability,
             given,
@@ -274,20 +274,20 @@ class OrderBook:
         if order.queued:
             return units
         row = self._game_data.abilities.get(order.ability)
-        general = self._general_ability(order.ability)
         return tuple(
             unit
             for unit in units
-            if _behavior_for(row, unit) is not OrderBehavior.REPLACES or not self._is_doing(unit, general, order.target)
+            if _behavior_for(row, unit) is not OrderBehavior.REPLACES
+            or not self._is_doing(unit, order.ability, order.target)
         )
 
-    def _is_doing(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
-        """Whether `unit` is doing `general` at `target`: the last order sent to it says, while it may not show yet,
+    def _is_doing(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
+        """Whether `unit` is doing `ability` at `target`: the last order sent to it says, while it may not show yet,
         and otherwise its first reported order."""
         sent = self._sent_and_not_shown(unit)
         if sent is not None:
-            return self._general_ability(sent.ability) is general and same_target(sent.target, target)
-        return self._unit_is_at(unit, general, target)
+            return sent.ability is ability and same_target(sent.target, target)
+        return self._unit_is_at(unit, ability, target)
 
     def _sent_and_not_shown(self, unit: OwnUnit[Any]) -> Order[Any] | None:
         """The last order sent to `unit` that replaced its orders, while the observations may not show it yet."""
@@ -296,14 +296,14 @@ class OrderBook:
             return last[0]
         return None
 
-    def _unit_is_at(self, unit: OwnUnit[Any], general: AbilityId, target: Target | None) -> bool:
-        """Whether `unit`'s first order runs `general` at `target`. A unit the last observation left out, in a
+    def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
+        """Whether `unit`'s first order runs `ability` at `target`. A unit the last observation left out, in a
         transport for one, is at nothing."""
         orders = unit._latest_report.orders
         if unit.is_stale or not orders:
             return False
         first = orders[0]
-        if self._general_ability(_ability_of_unit_order(first)) is not general:
+        if _ability_of_unit_order(first) is not ability:
             return False
         match first.WhichOneof("target"):
             case "target_world_space_pos":
@@ -313,12 +313,6 @@ class OrderBook:
                 return isinstance(target, Unit) and target.tag == first.target_unit_tag
             case _:
                 return target is None
-
-    def _general_ability(self, ability: AbilityId) -> AbilityId:
-        """The general ability `ability` remaps to. That is what a unit reports, and what the game reports carrying
-        out."""
-        row = self._game_data.abilities.get(ability)
-        return ability if row is None or row.remaps_to is None else row.remaps_to
 
 
 def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> OrderBehavior:
@@ -346,11 +340,8 @@ def _answer(results: Sequence[int]) -> ActionResult:
     return ActionResult.SUCCESS if ActionResult.SUCCESS in answers else answers[0]
 
 
-def _check_not_aimed_at_itself(
-    ability: AbilityId, row: AbilityData | None, target: Unit[Any], units: Sequence[OwnUnit[Any]]
-) -> None:
-    """Raise `TypeError` if `ability`, of the row `row`, is aimed at one of `units` and a custom id is that."""
-    general = ability if row is None or row.remaps_to is None else row.remaps_to
-    custom = _CUSTOM_ID_OF.get(general)
+def _check_not_aimed_at_itself(ability: AbilityId, target: Unit[Any], units: Sequence[OwnUnit[Any]]) -> None:
+    """Raise `TypeError` if `ability` is aimed at one of `units` and a custom id is that."""
+    custom = _CUSTOM_ID_OF.get(ability)
     if custom is not None and any(unit.id == target.id for unit in units):
         raise TypeError(f"{ability.name} aimed at the unit itself is {custom.name}")

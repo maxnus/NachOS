@@ -81,7 +81,8 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_id_a_game_reported_is_curated(path: Path) -> None:
-    """A curated enum raises on an id it lacks, so an id a real game reports must be in it."""
+    """A curated enum raises on an id it reads as no member, so an id a real game reports must read as one: its own,
+    or for a unit type's own id of an action several types perform, that action's."""
     reported: dict[type[ReadableIntEnum], set[int]] = {enum: set() for enum in _CURATED}
     for observation in _observations(Recording(path)):
         raw = observation.observation.raw_data
@@ -93,8 +94,7 @@ def test_every_id_a_game_reported_is_curated(path: Path) -> None:
         reported[UpgradeId].update(raw.player.upgrade_ids)
         reported[EffectId].update(effect.effect_id for effect in raw.effects)
 
-    known = {enum: {int(member) for member in enum} for enum in _CURATED}
-    missing = {enum.__name__: sorted(ids - known[enum]) for enum, ids in reported.items()}
+    missing = {enum.__name__: sorted(i for i in ids if i and enum.get(i) is None) for enum, ids in reported.items()}
     assert not any(missing.values()), f"{path.stem} reported ids with no curated member: {missing}"
 
 

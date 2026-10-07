@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos.ids import AbilityId
+
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
@@ -135,9 +137,14 @@ class _BuilderTracker:
         return None
 
     def _order_makes_structure(self, order: raw_pb2.UnitOrder, structure: Unit[Any]) -> bool:
-        """Whether `order` runs the ability that creates `structure`'s type."""
+        """Whether `order` runs the ability that creates `structure`'s type. A unit reports its type's own id of an
+        action several types perform, as a queen does the creep tumor build; the creation ability is the action's."""
         row = self._tracker.game_data.units.get(structure._type_id)
-        return row is not None and row.creation_ability == order.ability_id
+        return (
+            row is not None
+            and row.creation_ability is not None
+            and row.creation_ability is AbilityId.get(order.ability_id)
+        )
 
     def _structures_under_construction(self) -> list[Unit[Any]]:
         """This player's unfinished units in the last observation, computed on first use."""

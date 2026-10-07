@@ -26,17 +26,18 @@ class TechTree:
     base_build: int
     """The game build that was swept."""
     ability_requirements: Mapping[UnitTypeId, Mapping[AbilityId, TechRequirements]]
-    """The abilities each unit type can be offered, with the tech each needs first."""
-    ability_remaps: Mapping[AbilityId, AbilityId]
-    """The general ability each exact ability remaps to."""
+    """The abilities each unit type can be offered, with the tech each needs first. An action several types perform is
+    under its one id, though the game offers each type its own."""
     ability_cancels: Mapping[AbilityId, AbilityId]
     """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke. It depends on the product: a
     command center morphing to an orbital command is offered a different cancel from one morphing to a planetary
     fortress."""
     creation_abilities: Mapping[UnitTypeId, AbilityId]
     """The ability that makes each unit type."""
-    ability_products: Mapping[AbilityId, UnitTypeId | UpgradeId]
-    """The unit type or upgrade each ability makes."""
+    ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]]
+    """The unit type or upgrade each ability makes, by the unit type that carries it out: a barracks lifts into a
+    flying barracks and a starport into a flying starport. A structure that turns itself into another, as a gateway
+    becomes a warp gate, carries it out though it is offered nothing."""
     morph_sources: Mapping[UnitTypeId, UnitTypeId]
     """The source type of each unit type morphed from another."""
     power_consumers: frozenset[UnitTypeId]
@@ -49,8 +50,7 @@ class TechTree:
     upgrade_levels: Mapping[UpgradeId, int]
     """The level of each leveled upgrade within its line."""
     ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)
-    """The unit types offered each ability. A general ability's performers are those of the exact abilities that remap
-    to it."""
+    """The unit types offered each ability."""
     research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
     """The ability that researches each upgrade, inverted from `ability_products`."""
 
@@ -59,12 +59,11 @@ class TechTree:
         for unit_type, abilities in self.ability_requirements.items():
             for ability in abilities:
                 performers[ability].add(unit_type)
-        for exact, general in self.ability_remaps.items():
-            performers[general] |= performers.get(exact, set())
         by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
         object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
         researched: dict[UpgradeId, AbilityId] = {}
-        for ability, product in self.ability_products.items():
-            if isinstance(product, UpgradeId):
-                researched[product] = ability
+        for ability, products in self.ability_products.items():
+            for product in products.values():
+                if isinstance(product, UpgradeId):
+                    researched[product] = ability
         object.__setattr__(self, "research_abilities", MappingProxyType(researched))

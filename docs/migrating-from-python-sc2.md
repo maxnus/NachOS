@@ -195,7 +195,7 @@ it.
   an ability read off a unit raises when it is read, and a handler of a buff event has every unit's buffs read each
   turn. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
-  `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
+  `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `GENERAL_BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
   `UpgradeId` has to keep it. python-sc2 keeps Blizzard's catalog spelling: `BARRACKSTRAIN_MARINE`,
   `TERRANBUILD_BARRACKS`, `RESEARCH_TERRANINFANTRYARMORLEVEL1`. An ability several units perform is named
@@ -450,9 +450,9 @@ it.
 | `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |
 | `EQUIVALENTS_FOR_TECH_PROGRESS` | `unit_data.tech_aliases` of the type that stands |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
-| `GENERIC_REDIRECT_ABILITIES` | `ability_data.remaps_to` |
+| `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
 | a requirement's `requires_power` | `unit_data.needs_power` |
-| nothing | `ability_data.product`, `unit_data.morphed_from` |
+| nothing | `ability_data.products`, by the type that carries it out, and `unit_data.morphed_from` |
 | `DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, `SPEED_INCREASE_DICT` | `unit_data.upgrades`, `unit_data.with_upgrades(upgrades)` |
 | nothing | `upgrade_data.upgrade_type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
 
@@ -462,12 +462,16 @@ it.
   names itself exactly as the catalog does, so `RawUnitTypeId(int(row.id)).name` is the game's spelling. An
   ability has three names and none of them is it
   ([game behavior](game-behavior.md#upgrades-and-the-games-tables)), and python-sc2 carries all three.
-- **`remaps_to` runs from the exact ability to the general one.** A unit always reports the exact id it is
-  running; the general one is a spelling you may order instead, which the game carries out as the exact one: order
-  `GENERAL_MOVE` and the unit reports `GENERAL_MOVE_EXACT`. python-sc2 folds this into `AbilityData.id`, which
-  returns the remapped id while `exact_id` returns the row's own, and ships the same relation by hand as
-  `generic_redirect_abilities`. Neither links the liberator's siege and unsiege, which the game's rows leave out
-  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **An action several unit types perform has one id.** The game gives each type its own -- `HARVEST_GATHER_SCV`,
+  `HARVEST_GATHER_PROBE` and `HARVEST_GATHER_DRONE` in python-sc2's spelling -- and a unit is offered and reports its
+  own, though the game takes the action's id, `HARVEST_GATHER`, as an order for any of them. NachOS curates only
+  `GENERAL_GATHER`, and reads each type's own as it: it is what you order, what a unit is offered and what it
+  reports. python-sc2 folds the same way in `AbilityData.id`, which returns the remapped id while `exact_id` returns
+  the row's own, and keeps both spellings in `AbilityId`. NachOS also reads the liberator's siege and unsiege and the
+  archon's merge as the ids ordered, which neither the game's rows nor python-sc2 link
+  ([game behavior](game-behavior.md#abilities-and-orders)). A leveled research keeps an id per level and has no
+  general one: python-sc2's `RESEARCH_TERRANINFANTRYWEAPONS` has no counterpart, and
+  `ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1` is `ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1`.
 - **A table holds only the rows a bot can name.** It keeps the rows of the game's catalog that the curated ids
   name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters on the
   `available` flag instead, which filters nothing ([game behavior](game-behavior.md#upgrades-and-the-games-tables)).
@@ -482,10 +486,10 @@ it.
   disguise, and read `None`. The viking's alias is a row no unit is ever one of, so `tech_aliases` drops it.
   python-sc2 keeps every one of these, because the game marks them available.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
-  no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `MEDIVAC_UNLOAD` and
-  `MEDIVAC_UNLOAD_AT` put everyone down at once.
-- **A row's `id` is its own.** python-sc2's `AbilityData.id` returns the generic id the ability remaps to, and
-  `exact_id` the row's own. NachOS keeps `id` as the row's own and puts `remaps_to` beside it.
+  no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `GENERAL_UNLOAD`,
+  `GENERAL_UNLOAD_AT` and `GENERAL_UNLOAD_IN_PLACE` put everyone down at once.
+- **A row's `id` is its own**, and a table holds no row for a unit type's own id of an action, only for the action.
+  python-sc2's `AbilityData.id` returns the generic id the ability remaps to, and `exact_id` the row's own.
 - **A cost is minerals, vespene and supply; times are steps beside it.** python-sc2's `Cost` carries a `time` in
   steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong nearly
   everywhere. NachOS's `Cost` adds, subtracts and scales, supply included, and `build_steps` and `research_steps`
@@ -500,8 +504,8 @@ it.
   25 and a baneling 25/25. python-sc2 does the same in `morph_cost` and `calculate_ability_cost` off a hand-written
   `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, since the game's rows now price a reactor 50/50
   and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325 rather than the
-  drone's 50 and a hatchery's 300. A general research id, which stands for three levels, holds the first level's
-  price, which is what it runs until that level is done.
+  drone's 50 and a hatchery's 300. An action several types perform costs the same whichever does it, every tech
+  lab 50/25.
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData`
   holds little of them ([game behavior](game-behavior.md#upgrades-and-the-games-tables)). python-sc2's dicts come
   from sc2-techtree, which read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which
@@ -518,8 +522,8 @@ it.
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
   zerg unit that burrows is offered every zerg unit's burrow, and ordered any of them burrows as itself, so a
-  zergling's `abilities` hold only `ZERGLING_BURROW`. A general ability is never offered, so its `performers` are
-  those of the abilities that remap to it.
+  zergling is offered `GENERAL_BURROW` by its own burrow alone, and `GENERAL_BURROW`'s `products` make a burrowed
+  zergling of a zergling and a burrowed roach of a roach.
   A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
   to cancel, halt or unload. What a gateway warps in is not curated yet, so a warp gate trains nothing in the tables.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is

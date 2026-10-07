@@ -759,19 +759,19 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         )
         game.turn(22)
         assert (marine.health_max, reader._of_owner(marine)) == (55.0, {UpgradeId.COMBAT_SHIELD})
-        game.order(AbilityId.MARINE_STIM, marine)
+        game.order(AbilityId.GENERAL_STIM, marine)
         game.turn(4)
         assert reader._of_owner(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
 
         marauder = _made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
-        game.order(AbilityId.MARAUDER_STIM, marauder)
+        game.order(AbilityId.GENERAL_STIM, marauder)
         game.turn(4)
         assert reader._of_owner(marauder) == {UpgradeId.STIMPACK}
 
         banshee = _made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
         ghost = _made(game, UnitTypeId.GHOST, toward + (-6, 6))
-        game.order(AbilityId.BANSHEE_CLOAK_ON, banshee)
-        game.order(AbilityId.GHOST_CLOAK_ON, ghost)
+        game.order(AbilityId.GENERAL_CLOAK_ON, banshee)
+        game.order(AbilityId.GENERAL_CLOAK_ON, ghost)
         game.turn(8)
         assert (reader._of_owner(banshee), reader._of_owner(ghost)) == (
             {UpgradeId.BANSHEE_CLOAK},
@@ -850,7 +850,7 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
         )
         zergling = _made(game, UnitTypeId.ZERGLING, near + (-4, 0))
         assert reader._of_owner(zergling) == frozenset()
-        game.order(AbilityId.ZERGLING_BURROW, zergling)
+        game.order(AbilityId.GENERAL_BURROW, zergling)
         _until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
         assert reader._of_owner(zergling) == {UpgradeId.BURROW}
 

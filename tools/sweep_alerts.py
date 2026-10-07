@@ -32,6 +32,7 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 
@@ -634,7 +635,7 @@ def _rival_trials(me: _Game, enemy: _Game) -> list[Trial]:
     def nuke(target: Point, ghost_at: Point) -> list[int]:
         enemy.order(AbilityId.GHOST_ACADEMY_BUILD_NUKE, enemy.own(UnitTypeId.GHOST_ACADEMY))
         (ghost,) = enemy.create(UnitTypeId.GHOST, ghost_at)
-        enemy.order(AbilityId.GHOST_HOLD_FIRE_ON, [ghost])
+        enemy.order(RawAbilityId.Behavior_HoldFireOn_Ghost, [ghost])
         me.turn(400)
         enemy.observe()
         verdict = enemy.order(AbilityId.GHOST_TACTICAL_NUKE, [ghost], target)
@@ -796,7 +797,7 @@ def _terran(game: _Game) -> list[Trial]:
         refineries = [unit for geyser in _geysers(game) for unit in game.create(UnitTypeId.REFINERY, _at(geyser))]
         scvs = game.own(UnitTypeId.SCV)
         for i, refinery in enumerate(refineries):
-            game.order(AbilityId.SCV_GATHER, scvs[3 * i : 3 * i + 3], refinery)
+            game.order(RawAbilityId.Harvest_Gather_SCV, scvs[3 * i : 3 * i + 3], refinery)
         tags = [unit.tag for unit in refineries]
         return game._first(
             lambda: (unit.tag for unit in game.of_tags(tags) if unit.vespene_contents == 0),
@@ -810,7 +811,7 @@ def _terran(game: _Game) -> list[Trial]:
     def minerals() -> list[int]:
         if near := [unit for unit in _minerals(game) if unit.tag in game.home_fields]:
             for i, scv in enumerate(game.own(UnitTypeId.SCV)):
-                game.order(AbilityId.SCV_GATHER, [scv], near[i % len(near)])
+                game.order(RawAbilityId.Harvest_Gather_SCV, [scv], near[i % len(near)])
             game.until(lambda: len(game.fields_gone) == len(game.home_fields), steps=32, limit=40_000)
         return []
 

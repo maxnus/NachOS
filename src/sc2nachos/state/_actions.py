@@ -32,8 +32,8 @@ class UnitCommand(Action):
     """An order given to units of this player's."""
 
     ability: AbilityId
-    """The ability ordered, as the game runs it: a move is `GENERAL_MOVE_EXACT`, and a research names its level
-    (in game)."""
+    """The ability ordered, as the game runs it: an action several types perform reads as that action, whichever
+    type's own id the game names, and a research names its level (in game)."""
     units: tuple[Unit[Any], ...]
     target: Target | None
     """The point or unit the order was aimed at, or `None` for an order that takes neither."""

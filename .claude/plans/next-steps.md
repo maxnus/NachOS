@@ -36,8 +36,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replace would leave a structure idle for a turn (#43).
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
-- **Reversed on 2026-10-07, to land with step 2: the general research ids go.** Until then a general research id
-  costs its first level (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` is 100/100), since it runs the first level until
+- **Reversed on 2026-10-07, done in step 2's PR 2: the general research ids are gone.** Before, a general research id
+  cost its first level (`ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS` was 100/100), since it runs the first level until
   that is done. The owner asked whether they are needed at all; a bot researches by level or by `UpgradeId`.
 - **Reversed on 2026-09-26: an order keeps only what NachOS knows for certain** (#69): its turn (`PENDING`,
   `OVERRIDDEN`, `WITHDRAWN`, `REDUNDANT`) and the game's answer (`SENT`, `REFUSED`). `RUNNING`, `DONE`, `DROPPED`,
@@ -67,12 +67,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   one id rather than one per transport, "custom ids" rather than "NachOS ids"). A load, three spells and a fortress's attack were swept and
   need no split (docs/game-behavior.md).
 - **One public id per action** (2026-10-07, step 2). A family whose members do one thing for different performers
-  collapses to one id, which is issued, offered and read back; its per-unit ids stay only in `RawAbilityId`. The
-  leveled researches keep one id per level. `GENERAL_CANCEL` keeps its members, except that the three add-on
-  cancels become one custom `CANCEL_ADD_ON`. The liberator's and the archon's `_EXACT` ids are read as the id
-  ordered; a repeated `MORPH_ARCHON` is sent again rather than special-cased. A field that varies by performer is a
-  mapping from unit type on every row (`row.products[unit_type]`). `GENERAL_` goes from every name. The owner's
-  choices, in conversation, after asking *"why is there a `LIBERATOR_SIEGE` and a `LIBERATOR_SIEGE_EXACT`"*.
+  collapses to one id, which is issued, offered and read back; its per-unit ids stay only in `RawAbilityId`. The leveled
+  researches keep one id per level. `GENERAL_CANCEL`'s family collapses whole into `CANCEL` (the owner, on the
+  measurement; it replaced an earlier choice of one custom `CANCEL_ADD_ON` for the add-on cancels). The liberator's and
+  the archon's `_EXACT` ids are read as the id ordered; a repeated `MORPH_ARCHON` is sent again rather than
+  special-cased. A field that varies by performer is a mapping from unit type on every row (`row.products[unit_type]`).
+  `GENERAL_` goes from every name. The owner's choices, in conversation, after asking *"why is there a `LIBERATOR_SIEGE`
+  and a `LIBERATOR_SIEGE_EXACT`"*.
 - **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
   the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
   overturned.
@@ -200,11 +201,10 @@ One public id per action. It is the id issued, the one offered in `unit.abilitie
   and never uses a general research id. With them go the first-level cost of a general research
   (`_ability_data.py`, the `first_level` code), the naming rule and test that tie a general research to its levels,
   the deferred `api.next_level`, and `_general_ability` in the order book, whose last use they were.
-- **`GENERAL_CANCEL` keeps its members** (22 ids), except the three add-on cancels:
-  - `BARRACKS_CANCEL_ADD_ON`, `FACTORY_CANCEL_ADD_ON` and `STARPORT_CANCEL_ADD_ON` become one `CANCEL_ADD_ON`. The game
-    has no id for it, so it is a custom id. The measurement below decides what it is sent as.
-  - With that, a building add-on is cancelled by `CANCEL_ADD_ON` on every structure, so `cancelled_by` stays one
-    value.
+- **`GENERAL_CANCEL`'s family collapses whole into `CANCEL`** (22 ids), the owner's choice on the measurement below:
+  a unit is never offered two of its cancels at once, and the generic one does what each does. `cancelled_by` is
+  `CANCEL` for a morph, an add-on or a structure going up, and `CANCEL_LAST` for a train or a research.
+  `CANCEL_LAST` stays a second id: the generic cancel is answered `Error` by a structure that is training.
 - **The three oddities are read as the id ordered.** The liberator's two `_EXACT` ids go. `Archon_Warp_Target`
   (1767) is read as `MORPH_ARCHON`: a walking templar then shows `MORPH_ARCHON` aimed at its partner. Issued again
   while they walk, the order has no target where the reported one has, so the repeat is not recognised and is sent.
@@ -220,8 +220,7 @@ One public id per action. It is the id issued, the one offered in `unit.abilitie
   `MORPH_ARCHON`, `CANCEL`, and so on. `VIKING_LIFT` (`Morph_VikingFighterMode`) is not in the lift family and keeps
   its name, beside `LIFT`.
 
-About 145 fewer ids: 127 per-unit ids, the 3 oddities, the 13 general researches, and 3 add-on cancels for 1 custom
-id.
+About 165 fewer ids: 127 per-unit ids, the 22 cancels, the 13 general researches, and the 3 oddities.
 
 The families that collapse, with what their members differ in (from `api.data` and `TECH_TREE` on main,
 2026-10-07):
@@ -231,7 +230,7 @@ The families that collapse, with what their members differ in (from `api.data` a
 | `GENERAL_ATTACK` | 4 | order behavior (bunker, battlecruiser); requirement (`GENERAL_SCAN_MOVE` needs tunneling claws when burrowed) |
 | `GENERAL_BLINK` | 2 | requirement (blink or shadow stride research) |
 | `GENERAL_BUILD_CREEP_TUMOR` | 2 | product (`CREEP_TUMOR` or `CREEP_TUMOR_QUEEN`) |
-| `GENERAL_BUILD_REACTOR`, `GENERAL_BUILD_TECH_LAB` | 3 + 3 | product, and `cancelled_by` (each structure's own add-on cancel, until `CANCEL_ADD_ON`) |
+| `GENERAL_BUILD_REACTOR`, `GENERAL_BUILD_TECH_LAB` | 3 + 3 | product |
 | `GENERAL_BURROW` | 12 | product (the burrowed type); requirement (none for lurker and widow mine) |
 | `GENERAL_UNBURROW` | 12 | `allows_autocast`. Every burrowed zerg type is offered 10 of the 12, so they are interchangeable |
 | `GENERAL_CANCEL_LAST` | 7 | nothing; no type is offered two |
@@ -271,27 +270,46 @@ and for whether an ability makes a structure, and both come out the same within 
 - **The liberator repeat.** Done in #103 (runs 37605755080 and 37606192575): a liberator is sieged by the next
   observation, reports its siege aimed at itself for the 64 steps its zone takes to form, and refuses the siege
   again `NotSupported`.
-- **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** An adept shade, a high templar, a lurker and an oracle are offered
-  both. Find which one `GENERAL_ATTACK` runs for each, and whether a bot loses anything by not being able to order
-  `Scan_Move` by name.
-- **What `GENERAL_CANCEL` does to a structure building an add-on.** If it cancels the add-on, `CANCEL_ADD_ON` is sent
-  as `GENERAL_CANCEL`; otherwise, as each structure's own cancel. That would need `sent_as` per performer, which
-  `AbilityData.sent_as` cannot hold today.
-- **Whether `GENERAL_CANCEL` should collapse whole.** The "offered two members" test above counted every state a
-  type can be in. A command center is offered both morph cancels and `GENERAL_CANCEL_BUILDING`, but never more than
-  one at a time, since it cannot morph twice or morph while under construction. The same holds for a ghost's two
-  cancels. If no unit is ever offered two cancels at once, `CANCEL` alone does every cancel, the 22 members go, and
-  `cancelled_by` is always `CANCEL`. Raised with the owner on 2026-10-07; not decided.
-- **`allows_autocast` on the unburrows.** If no unburrow can be autocast, the field stays a plain bool.
+- **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** Done (runs 37610767491 and 37611898076, docs/game-behavior.md).
+  At a point, `GENERAL_ATTACK` runs `GENERAL_ATTACK_EXACT` for the four offered both, as for a marine. For the 24
+  types offered the scan move and not the attack, the medivac among them (the owner's question), it runs as the scan
+  move, at a point or at an enemy, and `GENERAL_ATTACK_EXACT` is refused; a burrowed infestor or roach does the same.
+  So the scan move is the per-unit attack of the units that cannot fire, it reads as `ATTACK`, and a bot loses
+  nothing it was seen to need.
+- **What `GENERAL_CANCEL` does, and whether it collapses whole.** Done (runs 37610767491 and 37611317534): in each
+  of 23 states a unit is offered a cancel of the family in, from a morphing command center to a nuke, it is offered
+  exactly one, and `GENERAL_CANCEL` does what that one does; the game even reports the action as the unit's own
+  cancel. The owner chose to collapse the family whole into `CANCEL` (2026-10-07).
+- **`allows_autocast` on the unburrows.** Done (run 37610767491): an unburrow's autocast is the performer's. A burrowed
+  roach comes up by autocast and a burrowed drone does not, whichever per-unit id is switched; switching
+  `GENERAL_UNBURROW` does nothing. The plan was to make `allows_autocast` a mapping from performer; PR 2 left it a
+  bool, "for some type that carries it out", with the roach and the drone named in its docstring. The game's rows
+  say which unburrow id allows it, but nothing links a burrowed type to its own unburrow among the ten it is offered,
+  so a mapping would need a rule written by hand. It matters once NachOS sends autocast switches (it reads them only,
+  as `AutocastToggle`): a family id must then go out as a performer's own id, and that needs the same link. Raised
+  with the owner in PR 2; not decided.
 
 ### Pull requests
 
 1. **The three oddities.** #103: `AbilityId._REMAPPED_IDS`, read by `AbilityId.read` and `get`, with just
    the liberator and archon pairs. The next PR extends it.
-2. **The families.** Extend the map, remove the per-unit ids and the general research ids from `AbilityId`, add
-   `CANCEL_ADD_ON`, re-key the tables, turn the varying fields into mappings, and update the docs.
-3. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the second one's diff stays
-   readable.
+2. **The families.** PR 2 (branch `claude/one-id-per-action-families`): the map extended to 146 ids, the per-unit
+   ids, the cancels and the general research ids gone from `AbilityId`, the generator folding at the end, products
+   by performer, order behaviors judged per type, and the docs. Where it departs from the plan: `allows_autocast`
+   stays a bool (above), and a type that holds no order of its own keeps it for every ability that makes nothing, so
+   a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
+   game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
+3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). A custom id whose
+   `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as
+   #101 answers a group. With it:
+   - `GENERAL_UNLOAD` and `GENERAL_UNLOAD_IN_PLACE` become one id, `GENERAL_UNLOAD`, "put everyone down here": sent as
+     UnloadAll to a bunker, command center, planetary fortress or nydus, and as UnloadAllAt aimed at itself to a
+     medivac, warp prism or transport overlord, which answer UnloadAll `Error` (`held-orders`). `GENERAL_UNLOAD_AT`
+     stays, for a point.
+   - `GENERAL_SIEGE` and `GENERAL_UNSIEGE` for the tank, the liberator, the observer and the overseer, the owner's
+     choice of all four. The game has no shared id for either. The siege takes a point, which only the liberator's
+     part uses, for its zone; the unsiege takes nothing. Each type's own game id reads as the custom one.
+4. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the earlier diffs stay readable.
 
 ## 3. The rest of M4
 
