@@ -299,8 +299,17 @@ and for whether an ability makes a structure, and both come out the same within 
    stays a bool (above), and a type that holds no order of its own keeps it for every ability that makes nothing, so
    a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
    game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
-3. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the second one's diff stays
-   readable.
+3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). A custom id whose
+   `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as
+   #101 answers a group. With it:
+   - `GENERAL_UNLOAD` and `GENERAL_UNLOAD_IN_PLACE` become one id, `GENERAL_UNLOAD`, "put everyone down here": sent as
+     UnloadAll to a bunker, command center, planetary fortress or nydus, and as UnloadAllAt aimed at itself to a
+     medivac, warp prism or transport overlord, which answer UnloadAll `Error` (`held-orders`). `GENERAL_UNLOAD_AT`
+     stays, for a point.
+   - `GENERAL_SIEGE` and `GENERAL_UNSIEGE` for the tank, the liberator, the observer and the overseer, the owner's
+     choice of all four. The game has no shared id for either. The siege takes a point, which only the liberator's
+     part uses, for its zone; the unsiege takes nothing. Each type's own game id reads as the custom one.
+4. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the earlier diffs stay readable.
 
 ## 3. The rest of M4
 
