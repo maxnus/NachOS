@@ -50,6 +50,8 @@ and runs its trials in turn::
   `gateway-orders` the gateway's, without `tech_tree`. `fortress-unload` gives a loaded, training planetary
   fortress each unload, and `burrowed-movers` gives a burrowed roach and infestor an attack they must move for,
   then unburrow; `burrowed-movers-tech-tree` does the same under `tech_tree`, which grants Tunneling Claws.
+- `group-verdicts` gives one unload at a point to two medivacs, one loaded and one empty in either order, to two
+  empty ones and to one empty one, to find what the game answers a command some of whose units cannot take it now.
 - `target-dependent` gives a moving transport a load at a passenger beside it and further off, a moving caster a
   spell at an enemy in reach and out of it, and a training planetary fortress an attack at a point rather than a unit,
   to find whether what an ability does to a unit's orders depends on what it is aimed at.
@@ -3208,6 +3210,47 @@ def _fortress_at_a_point(game: _Game, trial: Trial) -> None:
     _after(game, AbilityId.GENERAL_ATTACK, fortress.tag, _at(enemy), held, [enemy.tag], trial)
 
 
+# --- What the game answers one command naming several units, some of which cannot take it now
+
+
+# Which medivacs of the group carry a marine, in the order the command names them. The single empty medivac is the
+# answer the others are read against.
+_GROUP_CARGO = ((True, False), (False, True), (False, False), (False,))
+
+
+def _group_verdicts(game: _Game) -> list[Trial]:
+    trials: list[Trial] = []
+    for cargo in _GROUP_CARGO:
+        named = ", ".join("loaded" if full else "empty" for full in cargo)
+        label = f"one GENERAL_UNLOAD_AT at a point naming medivacs: {named}"
+        trials.append(game.trial(label, partial(_group_unload, game, cargo)))
+    return trials
+
+
+def _group_unload(game: _Game, cargo: tuple[bool, ...], trial: Trial) -> None:
+    tags: list[int] = []
+    for full in cargo:
+        if full:
+            if (loaded := _loaded(game, UnitTypeId.MEDIVAC, UnitTypeId.MARINE, trial)) is None:
+                return
+            tags.append(loaded[0])
+        else:
+            made = game.create(UnitTypeId.MEDIVAC, game.spot(game.toward(12), 4))
+            if not made:
+                trial.notes["class"] = "not made"
+                return
+            tags.append(made[0].tag)
+    trial.notes["cargo before"] = [_cargo(game, tag) for tag in tags]
+    point = _at(game.units[tags[0]]) + (0, 4)
+    trial.notes["verdict"] = game.order(AbilityId.GENERAL_UNLOAD_AT, tags, point)
+    last = 0
+    for at in (*_READS, 200):
+        game.turn(at - last)
+        last = at
+        game.read(f"{at} after", tags)
+        trial.notes[f"cargo {at} after"] = [_cargo(game, tag) for tag in tags]
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
@@ -3386,6 +3429,7 @@ _SWEEPS: dict[str, _Sweep] = {
     "fortress-unload": _Sweep(Race.TERRAN, _fortress_unload, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "burrowed-movers": _Sweep(Race.TERRAN, _burrowed_movers),
     "burrowed-movers-tech-tree": _Sweep(Race.TERRAN, _burrowed_movers, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    "group-verdicts": _Sweep(Race.TERRAN, _group_verdicts),
     "target-dependent": _Sweep(Race.TERRAN, _target_dependent, (*_BASE_CHEATS, Cheat.COOLDOWN, Cheat.TECH_TREE)),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
