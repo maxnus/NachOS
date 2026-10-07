@@ -239,7 +239,7 @@ class _Game:
         self.player = sandbox.player
         self.enemy = 3 - sandbox.player
         self.realtime = realtime
-        self.map = GameMap(self.client.game_info())
+        self.map = GameMap._of_game(self.client.game_info(), self.client.observation())
         raw_data = self.client.game_data()
         self.data = GameData(raw_data)
         self.aims = {entry.ability_id: entry.target for entry in raw_data.abilities}

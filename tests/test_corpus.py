@@ -189,14 +189,18 @@ _ENTERED = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent)
 _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 
 
+def _map(recording: Recording) -> GameMap:
+    """The map of a recorded game, read as a game reads it from its answers."""
+    info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
+    return GameMap._of_game(info, next(iter(_observations(recording))))
+
+
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
     """A unit that crosses a vital value is on the side it crossed to, a unit that enters an area is inside it and one
     that leaves is outside, and each unit crosses alternately in each direction."""
     recording = Recording(path)
-    game_map = GameMap(
-        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    )
+    game_map = _map(recording)
     client = Client(PlaybackTransport(recording))
     client.create_game("recorded", [Participant(), Computer()])
     client.join_game(Race.RANDOM)
@@ -257,9 +261,7 @@ _STATE_READS = sorted(
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
     tracker = _Tracker(_tables(recording), Enemy())
-    game_map = GameMap(
-        next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    )
+    game_map = _map(recording)
     for observation in _observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)

@@ -131,7 +131,7 @@ class Sweep:
         self._client = client
         self._player = player
         self._race = race
-        self._map = GameMap(client.game_info())
+        self._map = GameMap._of_game(client.game_info(), client.observation())
         raw_data = client.game_data()
         self._data = GameData(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}

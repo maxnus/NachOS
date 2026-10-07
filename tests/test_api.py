@@ -17,7 +17,7 @@ from sc2nachos.events import (
     TurnStartEvent,
     UnitDiedEvent,
 )
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -30,6 +30,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import ActionResult
+from sc2nachos.units import UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 # A map from the current AIE ladder pool, for the test games.
@@ -277,6 +278,32 @@ class TestPlaying:
             ],
         ]
 
+    def test_what_is_in_production_is_read_by_a_type_a_group_an_id_or_several(self) -> None:
+        warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
+        client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
+        api = Api()
+        counted: list[tuple[int, int, int, int, float | None]] = []
+        zealots: list[tuple[UnitTypeId, int, float | None]] = []
+
+        @api.events.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            stalkers = (UnitTypeId.ZEALOT, UnitTypeId.STALKER)
+            counted.append(
+                (
+                    len(api.in_production(UnitTypeId.ZEALOT)),
+                    len(api.in_production(stalkers)),
+                    len(api.in_production(UnitType.Protoss)),
+                    len(api.in_production(UnitType.Stalker, UnitType.Adept)),
+                    api.research_progress(UpgradeId.WARP_GATE),
+                )
+            )
+            zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
+
+        api.play(client)
+
+        assert counted == [(1, 1, 1, 0, None)]
+        assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
+
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""
         api = Api()
@@ -287,6 +314,12 @@ class TestPlaying:
         assert api.client is client
         asked = [request.observation.game_loop for request in transport.requests if request.HasField("observation")]
         assert asked == [0, 4]
+
+
+def _production_is_asked_by_types_or_by_ids(api: Api) -> None:
+    """What the type checker makes of asking what is in production. Never run."""
+    api.in_production([UnitTypeId.ZEALOT], UnitType.Stalker)  # pyright: ignore[reportArgumentType]
+    api.in_production(UnitTypeId.ZEALOT, UnitType.Stalker)  # pyright: ignore[reportArgumentType]
 
 
 def _record(api: Api, seen: list[tuple[str, int]]) -> None:

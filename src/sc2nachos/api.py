@@ -1,6 +1,7 @@
 """Everything a bot talks to."""
 
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, overload
 
 from loguru import logger
 
@@ -12,12 +13,13 @@ from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, 
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Grid
-from sc2nachos.ids import UpgradeId
+from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client, GameEndedError
-from sc2nachos.state import ActionFailure, Effect, Score, Supply, UiUnitCounts
-from sc2nachos.units import Unit, Units
+from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
+from sc2nachos.units import Unit, Units, UnitType
+from sc2nachos.units._units import _type_ids
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -146,6 +148,32 @@ class Api:
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade this player has finished. Raises `UncuratedIdError` if one is one the curated ids leave out."""
         return self._current_game().state.upgrades
+
+    @overload
+    def in_production(
+        self, unit_type: type[UnitType.AnyType], /, *unit_types: type[UnitType.AnyType]
+    ) -> tuple[InProduction, ...]: ...
+
+    @overload
+    def in_production(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> tuple[InProduction, ...]: ...
+
+    def in_production(
+        self, types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId], /, *unit_types: type[UnitType.AnyType]
+    ) -> tuple[InProduction, ...]:
+        """The units of the given types this player has started making or paid for, in the last observation.
+
+        There is one for each unit: a train a structure shows, queued ones included; an egg or a cocoon becoming one; a
+        structure going up, a structure morphing into one, a unit warping in; and a build a worker has been sent to
+        make, until the structure stands. A reactor's two marines are two. What NachOS holds and has not sent is not
+        among them; it is in `api.orders.issued_to`. Takes the types as `Units.of_type` does.
+        """
+        wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids(types, unit_types)
+        return self._current_game().state.production.of_types(wanted)
+
+    def research_progress(self, upgrade: UpgradeId) -> float | None:
+        """How far along this player's research of `upgrade` is, from 0 to 1, or `None` if nothing researches it. A
+        finished one is in `upgrades`."""
+        return self._current_game().state.production.progress(upgrade)
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:

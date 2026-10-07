@@ -96,7 +96,7 @@ def show(name: str, seconds: float, installation: Installation) -> None:
             players = [Participant(), Computer(Race.TERRAN, Difficulty.VERY_EASY, AIBuild.MACRO)]
             client.create_game(game_map.path, players, realtime=True)
             client.join_game(Race.TERRAN, name="NachOS")
-            drawn = GameMap(client.game_info())
+            drawn = GameMap._of_game(client.game_info(), client.observation())
             covered = sum(len(ramp.tiles) for ramp in drawn.ramps)
             logger.info("{} has {} ramps, covering {} tiles", drawn.name, len(drawn.ramps), covered)
             picture = drawing(drawn)

@@ -73,6 +73,39 @@ class TestUnitType:
     def test_any_type_is_every_type(self) -> None:
         assert UnitType.AnyType._type_ids == set(UnitTypeId)
 
+    def test_the_workers_and_townhalls_are_those_curated(self) -> None:
+        assert UnitType.Worker._type_ids == {
+            UnitTypeId.SCV,
+            UnitTypeId.PROBE,
+            UnitTypeId.DRONE,
+            UnitTypeId.DRONE_BURROWED,
+        }
+        assert UnitType.Townhall._type_ids == {
+            UnitTypeId.COMMAND_CENTER,
+            UnitTypeId.COMMAND_CENTER_FLYING,
+            UnitTypeId.ORBITAL_COMMAND,
+            UnitTypeId.ORBITAL_COMMAND_FLYING,
+            UnitTypeId.PLANETARY_FORTRESS,
+            UnitTypeId.NEXUS,
+            UnitTypeId.HATCHERY,
+            UnitTypeId.LAIR,
+            UnitTypeId.HIVE,
+        }
+
+    def test_mineral_fields_geysers_and_gas_buildings_are_what_the_tables_say_holds_minerals_or_vespene(
+        self, tables: GameData
+    ) -> None:
+        rows = [tables.units[unit_type] for unit_type in UnitTypeId]
+        vespene = {row.id for row in rows if row.has_vespene}
+        assert UnitType.AnyMineralField._type_ids == {row.id for row in rows if row.has_minerals}
+        assert UnitType.AnyVespeneGeyser._type_ids == vespene - UnitType.GasBuilding._type_ids
+        assert UnitType.GasBuilding._type_ids == vespene & UnitType.Structure._type_ids - {
+            row.id for row in rows if row.race is Race.NONE
+        }
+        counts = [len(group._type_ids) for group in (UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)]
+        assert counts == [15, 6]
+        assert UnitTypeId.REFINERY_RICH in UnitType.GasBuilding._type_ids
+
 
 _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
@@ -104,6 +137,8 @@ def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnU
     assert_type(units.own.of_type(UnitType.ProtossStructure), Units[OwnUnit[UnitType.ProtossStructure]])
     assert_type(units.of_type(UnitType.Marine).own, Units[OwnUnit[UnitType.Marine]])
     assert_type(units.of_type(UnitTypeId.MARINE), Units[Unit[Any]])
+    assert_type(units.own.of_type(UnitType.Worker), Units[OwnUnit[UnitType.Worker]])
+    assert_type(units.of_type(UnitType.AnyMineralField), Units[Unit[UnitType.AnyMineralField]])
     assert_type(own.excluding_type(UnitType.Marine), Units[OwnUnit[Any]])
     units.of_type(UnitType.Marine, UnitTypeId.MARINE)  # pyright: ignore[reportArgumentType]
 

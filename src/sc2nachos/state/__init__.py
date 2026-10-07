@@ -4,6 +4,7 @@ from sc2nachos.state._action_result import ActionResult, UnknownActionResultErro
 from sc2nachos.state._actions import Action, ActionFailure, AutocastToggle, CameraMove, UnitCommand
 from sc2nachos.state._alert import Alert
 from sc2nachos.state._effect import Effect
+from sc2nachos.state._in_production import InProduction
 from sc2nachos.state._score import CategoryScore, Score, ValueScore, VitalScore
 from sc2nachos.state._supply import Supply
 from sc2nachos.state._ui_unit_counts import UiUnitCounts
@@ -17,6 +18,7 @@ __all__ = [
     "CameraMove",
     "CategoryScore",
     "Effect",
+    "InProduction",
     "Score",
     "Supply",
     "UiUnitCounts",

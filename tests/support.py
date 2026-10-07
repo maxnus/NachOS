@@ -287,7 +287,7 @@ class RealGame:
         self.client = client
         self.player = player
         self.events = events or EventBus()
-        self.map = GameMap(client.game_info())
+        self.map = GameMap._of_game(client.game_info(), client.observation())
         self.enemy = Enemy()
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None

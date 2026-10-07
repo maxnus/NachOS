@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Self, final
 
 import numpy
+from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
 from sc2nachos.geometry._point import coordinates
+from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -41,10 +43,11 @@ class GameMap:
         "_placement",
         "_playable",
         "_ramps",
+        "_start_location",
     )
 
-    def __init__(self, info: sc2api_pb2.ResponseGameInfo) -> None:
-        """Read the map from the game's answer to `RequestGameInfo`."""
+    def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: Point) -> None:
+        """Read the map from the game's answer to `RequestGameInfo`, with this player's start at `start_location`."""
         start = info.start_raw
         playable = Rectangle._from_proto(start.playable_area)
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
@@ -57,7 +60,24 @@ class GameMap:
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
         self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
+        self._start_location = start_location
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
+
+    @classmethod
+    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
+        """The map of a game whose first observation is `observation`: this player starts where its townhall stands
+        in it, or in the middle of the playable area on a map that gives it none."""
+        townhalls = (
+            unit
+            for unit in observation.observation.raw_data.units
+            if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type in UnitType.Townhall._type_ids
+        )
+        townhall = next(townhalls, None)
+        if townhall is None:
+            start = Rectangle._from_proto(info.start_raw.playable_area).center
+        else:
+            start = Point((townhall.pos.x, townhall.pos.y))
+        return cls(info, start_location=start)
 
     @property
     def name(self) -> str:
@@ -117,6 +137,11 @@ class GameMap:
     def ramps(self) -> tuple[Ramp, ...]:
         """Every ramp on the map, ordered by lower left tile."""
         return self._ramps
+
+    @property
+    def start_location(self) -> Point:
+        """Where this player's first townhall stood when the game began, a tile's center. It stays the same all game."""
+        return self._start_location
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:

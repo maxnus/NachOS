@@ -253,6 +253,9 @@ it.
 | python-sc2 | NachOS |
 |---|---|
 | `bot.all_units` | `api.units`, and `api.known_units` with the units out of sight |
+| `bot.workers`, `townhalls`, `gas_buildings` | `api.units.own.of_type(UnitType.Worker)`, `UnitType.Townhall`, `UnitType.GasBuilding` |
+| `bot.mineral_field`, `vespene_geyser` | `api.units.of_type(UnitType.AnyMineralField)`, `UnitType.AnyVespeneGeyser` |
+| `bot.enemy_units`, `enemy_structures` | `api.units.enemy.excluding_type(UnitType.Structure)`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `Visibility.IN_VISION` |
@@ -316,6 +319,10 @@ it.
   the others, as `is_powered` is on anything but a Protoss structure. A unit typed `Unit[Any]` reads as any type;
   on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
   it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
+- **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, read through `of_type`
+  like any other: `UnitType.Worker`, `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`. A MULE is
+  not a worker, and a lifted command center is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are
+  the plain kinds alone.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **A unit's weapons, speed and armor include its owner's upgrades.** Yours come from the observation, the enemy's
   from `api.enemy.upgrades`. python-sc2's `real_speed` includes only your own upgrades and needs
@@ -367,6 +374,8 @@ it.
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `state.upgrades` | `api.upgrades` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the orders NachOS holds, which are in `api.orders.issued_to` |
+| `bot.already_pending_upgrade(u)` | `api.research_progress(u)`, `None` when nothing researches it; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
@@ -398,6 +407,7 @@ it.
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
+| `start_location` | `api.map.start_location` |
 | `enemy_start_locations` | `api.map.opponent_start_locations` |
 | `game_info.map_ramps` | `api.map.ramps` |
 | `game_info.vision_blockers` | nothing; see below |
