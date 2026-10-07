@@ -898,15 +898,6 @@ class TestWhatTheGameRefused:
         (command,) = _commands(game.flush())
         assert list(command.unit_tags) == [2]
 
-    def test_an_order_withdrawn_before_the_turn_ends_is_never_sent(self) -> None:
-        game = _Game()
-        game.observe(0, _marine(1))
-        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-
-        order.withdraw()
-
-        assert game.flush() is None
-
 
 class TestOrdersThatQueue:
     """A train queues behind what a structure is making, so it is neither a duplicate nor a replacement (in game)."""
@@ -1016,6 +1007,15 @@ class TestAPointAsTheGameReadsIt:
 
 
 class TestWhatAnOrderStopsCountingFor:
+    def test_an_order_withdrawn_before_the_turn_ends_is_never_sent(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+
+        order.withdraw()
+
+        assert game.flush() is None
+
     def test_a_withdrawn_order_speaks_for_no_unit(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))

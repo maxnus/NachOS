@@ -80,8 +80,7 @@ to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the 
 
 An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
 itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
-ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
-`UNLOAD`.
+ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -151,8 +150,8 @@ neither a slot nor a mineral within the same step ([game behavior](game-behavior
 ## What the game did
 
 An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
-to its units, or left with no unit that is not already carrying it out. Until then it shows in `issued_to` and
-`pending`. NachOS does not follow it after.
+to its units, or every unit it was given already carrying it out. Until then it shows in `issued_to` and `pending`.
+NachOS does not follow it after.
 
 The game answers each command as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
 once for each unit the command named, with the ability ordered and the game's verdict. One it takes need not be

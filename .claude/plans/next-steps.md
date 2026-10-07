@@ -9,10 +9,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #113. `uv run pytest` passes 1604 tests on PR A's branch; `uv run pytest -m integration`
-  passes 23 against a real game (run 2026-10-07).
+- nachOS `main` has every PR to #113. `uv run pytest` passes 1604 tests on #115's branch; `uv run pytest -m
+  integration` passes 23 against a real game (run 2026-10-07).
 - **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state
-  (branch `claude/order-without-state`), then PR B, the queue. Step 2, one id per action, is done (#103 to #107).
+  (#115), then PR B, the queue. Step 2, one id per action, is done (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -48,7 +48,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
   units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46. Reversed again on
   2026-10-07: an order has no state at all (below).
-- **Reversed on 2026-10-07: an order has no state** (step 1's PR A). `order.state`, `order.action_result` and
+- **Reversed on 2026-10-07: an order has no state** (step 1's PR A, #115). `order.state`, `order.action_result` and
   `OrderState` went. A command the game refuses is listed in `api.action_failures` on the next turn, once for each
   unit it named, under the id ordered, ahead of what the game gave up on. The `Order` stays as a handle: its `data`,
   `withdraw()`, and what `issued_to` and `pending` list. The owner, while the queue was being planned: *"why do we
@@ -99,8 +99,8 @@ sent to the game to avoid paying upfront. The intention to build is known to nac
 location) and as soon as the worker is close enough, they will start the build. Similar for the flying barracks +
 build add-on."*
 
-**Status: planned with the owner on 2026-10-07, in two PRs.** PR A, an order without state ("Decided" above), lands
-first; PR B, the queue, is built on it. The decisions and the design follow the cases below.
+**Status: planned with the owner on 2026-10-07, in two PRs.** PR A, an order without state (#115, "Decided"
+above), lands first; PR B, the queue, is built on it. The decisions and the design follow the cases below.
 
 ### Why: what the game does with an order it cannot carry out yet
 
@@ -222,16 +222,16 @@ site is taken before the worker arrives fails with `CouldntReachTarget` and is r
 starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
 given, so the game holds none of those sequences and a queue in NachOS would have to.
 
-Still to measure: whether a worker moved to a geyser ends within 2.5 of its edge (PR B's integration test), and
-what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command
-center's and the planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
+Still to measure: whether a worker moved to a geyser ends within 2.5 of its edge (PR B's integration test), and what
+a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
+planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 
 ### Pull requests
 
-1. **PR A, an order without state**: branch `claude/order-without-state`.
+1. **PR A, an order without state**: #115, branch `claude/order-without-state`.
 2. **PR B, the queue**: the money cases (a worker's build, alone or behind moves; a flying structure's add-on; a train
    or research behind production), the pick, and an add-on or morph on a busy structure. Branch
-   `claude/per-unit-queue`, off `origin/main` once PR A is in. Left for later: warp-ins, larva, a spell on arrival,
+   `claude/per-unit-queue`, off `origin/main` once #115 is in. Left for later: warp-ins, larva, a spell on arrival,
    tech still going up, and a flying command center that lands and morphs.
 
 ## 2. One id per action: the families and the `_EXACT` ids
