@@ -634,8 +634,9 @@ class TestUnloadingInPlace:
         assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _UNLOAD_AT]
         assert (move.state, unload.state) == (OrderState.SENT, OrderState.SENT)
 
-    def test_a_group_is_sent_one_command_a_transport_and_answered_by_the_first_refusal(self) -> None:
-        game = _Game([ActionResult.SUCCESS, ActionResult.ERROR, ActionResult.SUCCESS])
+    def test_a_group_is_sent_one_command_a_transport_and_taken_if_any_takes_it(self) -> None:
+        """One command naming several medivacs is answered `SUCCESS` if any of them takes it (in game)."""
+        game = _Game([ActionResult.ERROR, ActionResult.SUCCESS, ActionResult.ERROR])
         game.observe(0, _medivac(1), _medivac(2), _medivac(3))
 
         order = game.book.issue([game.own(1), game.own(2), game.own(3)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
@@ -646,8 +647,37 @@ class TestUnloadingInPlace:
             (_UNLOAD_AT, [2], 2),
             (_UNLOAD_AT, [3], 3),
         ]
+        assert order.state is OrderState.SENT
+        assert order.action_result is ActionResult.SUCCESS
+
+    def test_a_group_every_transport_refuses_is_refused_with_the_first_answer(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED, ActionResult.ERROR])
+        game.observe(0, _medivac(1), _medivac(2))
+
+        order = game.book.issue([game.own(1), game.own(2)], AbilityId.GENERAL_UNLOAD_IN_PLACE)
+        game.flush()
+
         assert order.state is OrderState.REFUSED
-        assert order.action_result is ActionResult.ERROR
+        assert order.action_result is ActionResult.NOT_SUPPORTED
+
+    def test_it_raises_where_the_tables_give_it_nothing_to_be_sent_as(self) -> None:
+        tables = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MEDIVAC))
+        book = OrderBook(tables)
+        game = _Game()
+        game.observe(0, _medivac(1))
+
+        with pytest.raises(ValueError, match="GENERAL_UNLOAD_IN_PLACE"):
+            book.issue(game.own(1), AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+    def test_an_unload_at_a_sibling_transport_is_fine_for_a_transport_ordered_alone(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _medivac(1), _medivac(2))
+
+        order = game.book.issue(game.own(1), _UNLOAD_AT, target=game.own(2))
+
+        (command,) = _commands(game.flush())
+        assert command.target_unit_tag == 2
+        assert order.state is OrderState.SENT
 
     def test_an_order_after_it_is_answered_by_its_own_result(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED])
@@ -984,7 +1014,10 @@ class _OrderingBot:
 
 
 class _UnloadingBot:
-    """A bot that loads two medivacs, then in one turn moves them on and unloads them where they are."""
+    """A bot that loads two medivacs, then in one turn moves them on and unloads them where they are, the move given
+    first unless `unload_first`."""
+
+    unload_first = False
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -1021,8 +1054,15 @@ class _UnloadingBot:
             return
         if all(medivac.cargo_used > 0 for medivac in medivacs):
             self.unloaded_at = {medivac.tag: medivac.position for medivac in medivacs}
+            if self.unload_first:
+                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
             self.move = api.orders.issue(medivacs, _MOVE, target=middle + (12.0, 0.0))
-            self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+            if not self.unload_first:
+                self.unload = api.orders.issue(medivacs, AbilityId.GENERAL_UNLOAD_IN_PLACE)
+
+
+class _UnloadingBotUnloadingFirst(_UnloadingBot):
+    unload_first = True
 
 
 def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> debug_pb2.DebugCommand:
@@ -1053,8 +1093,9 @@ class TestAgainstTheRealGame:
         assert bot.at_a_dead_tag.state is OrderState.REFUSED
         assert bot.at_a_dead_tag.action_result is ActionResult.ERROR
 
-    def test_transports_unload_where_they_are_and_move_on_in_one_turn(self) -> None:
-        bot = _play_a_minute(_UnloadingBot)
+    @pytest.mark.parametrize("unload_first", [False, True], ids=["move first", "unload first"])
+    def test_transports_unload_where_they_are_and_move_on_in_one_turn(self, unload_first: bool) -> None:
+        bot = _play_a_minute(_UnloadingBotUnloadingFirst if unload_first else _UnloadingBot)
 
         print("loads:", [(order.state.name, order.action_result) for order in bot.loads])
         print("orders the medivacs showed after:", bot.reported[:6])

@@ -2,12 +2,14 @@
 
 import importlib.util
 import re
+from enum import auto
 from pathlib import Path
 
 import pytest
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids._id_enum import CUSTOM_IDS_FROM, IdEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
 
 CURATED = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
@@ -35,8 +37,8 @@ def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
 
 @pytest.mark.parametrize("enum", CURATED)
 def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> None:
-    """Curated modules define members from the raw catalog, never as literal ids, and custom ids from a counter that
-    starts above the game's.
+    """Curated modules define members from the raw catalog, never as literal ids, and custom ids by `auto()`, which
+    numbers them above the game's.
 
     No game id is written as a number, so a patch that renumbers something needs a regeneration, not a hand-edit.
     """
@@ -47,7 +49,7 @@ def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> N
     assert assignments, f"{enum.__name__} has no members"
     for assignment in assignments:
         literal = f"{enum.__name__} member assigned a literal: {assignment}"
-        assert assignment.startswith(("Raw", "next(_custom_ids)")), literal
+        assert assignment.startswith("Raw") or assignment == "auto()", literal
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
@@ -65,6 +67,16 @@ def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw:
     abilities."""
     catalog = {int(member) for member in raw}
     assert {int(member) for member in _game_ids(curated)} <= catalog
+
+
+def test_auto_numbers_custom_ids_after_each_other_whatever_game_ids_lie_between() -> None:
+    class Sample(IdEnum):
+        GAME = RawAbilityId.Smart
+        FIRST = auto()
+        OTHER_GAME = RawAbilityId.Stop
+        SECOND = auto()
+
+    assert (Sample.FIRST, Sample.SECOND) == (CUSTOM_IDS_FROM, CUSTOM_IDS_FROM + 1)
 
 
 def test_custom_abilities_lie_above_every_game_id() -> None:

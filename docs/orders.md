@@ -71,8 +71,9 @@ api.orders.issue(medivac, AbilityId.GENERAL_UNLOAD_IN_PLACE)  # both go out
 ```
 
 It goes out as the game's `GENERAL_UNLOAD_AT` aimed at the transport itself, which
-`api.data.abilities[ability].sent_as` names, one command a transport; an order to several reads the first answer
-that is not `SUCCESS`. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
+`api.data.abilities[ability].sent_as` names, one command a transport. An order to several is answered as the game
+answers one command naming several units: `SUCCESS` if any transport took it, an empty one left out, and otherwise
+the first refusal (in game). An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
 `GENERAL_UNLOAD_IN_PLACE`. `AbilityId.is_custom` tells a custom id from the game's.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a

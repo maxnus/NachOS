@@ -2,23 +2,18 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as a game
-ability aimed at the unit itself (`AbilityData.sent_as`). Custom ids are drawn from a counter that starts above every
-game id, and the game never reports one. Unknown ids raise.
+ability aimed at the unit itself (`AbilityData.sent_as`). A custom id is assigned `auto()`, which numbers it above
+every game id, and the game never reports one. Unknown ids raise.
 
 Each names the unit that performs it and then what it does -- SCV_BUILD_BARRACKS, BARRACKS_TRAIN_MARINE,
 LARVA_MORPH_ZERGLING -- and GENERAL where several units can. Where the game remaps a family onto one id, that
 one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its three leveled siblings.
 """
 
-from itertools import count
+from enum import auto
 
-from sc2nachos.ids._id_enum import IdEnum
+from sc2nachos.ids._id_enum import CUSTOM_IDS_FROM, IdEnum
 from sc2nachos.ids.raw import RawAbilityId
-
-# The first custom id, above every id the game has.
-_CUSTOM_IDS_FROM = 1_000_000
-# Where each custom id is drawn from.
-_custom_ids = count(_CUSTOM_IDS_FROM)
 
 
 class AbilityId(IdEnum):
@@ -244,7 +239,7 @@ class AbilityId(IdEnum):
     GENERAL_UNBURROW = RawAbilityId.BurrowUp
     GENERAL_UNLOAD = RawAbilityId.UnloadAll
     GENERAL_UNLOAD_AT = RawAbilityId.UnloadAllAt
-    GENERAL_UNLOAD_IN_PLACE = next(_custom_ids)
+    GENERAL_UNLOAD_IN_PLACE = auto()
     GENERAL_UPROOT = RawAbilityId.Morph_Uproot
     GHOST_ACADEMY_BUILD_NUKE = RawAbilityId.Build_Nuke
     GHOST_ACADEMY_RESEARCH_GHOST_CLOAK = RawAbilityId.Research_PersonalCloaking
@@ -529,4 +524,4 @@ class AbilityId(IdEnum):
     @property
     def is_custom(self) -> bool:
         """Whether this is a custom id: the game has no ability of it, and NachOS sends it as one of the game's."""
-        return self >= _CUSTOM_IDS_FROM
+        return self >= CUSTOM_IDS_FROM
