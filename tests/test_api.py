@@ -278,29 +278,31 @@ class TestPlaying:
             ],
         ]
 
-    def test_what_is_in_production_is_counted_by_a_type_a_group_an_id_or_several(self) -> None:
+    def test_what_is_in_production_is_read_by_a_type_a_group_an_id_or_several(self) -> None:
         warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
         client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
         api = Api()
-        counted: list[tuple[int, int, int, int, int, float | None]] = []
+        counted: list[tuple[int, int, int, int, float | None]] = []
+        zealots: list[tuple[UnitTypeId, int, float | None]] = []
 
         @api.events.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             stalkers = (UnitTypeId.ZEALOT, UnitTypeId.STALKER)
             counted.append(
                 (
-                    api.in_production(UnitType.Zealot),
-                    api.in_production(UnitTypeId.ZEALOT),
-                    api.in_production(stalkers),
-                    api.in_production(UnitType.Protoss),
-                    api.in_production(UnitType.Stalker, UnitType.Adept),
+                    len(api.in_production(UnitTypeId.ZEALOT)),
+                    len(api.in_production(stalkers)),
+                    len(api.in_production(UnitType.Protoss)),
+                    len(api.in_production(UnitType.Stalker, UnitType.Adept)),
                     api.research_progress(UpgradeId.WARP_GATE),
                 )
             )
+            zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
 
         api.play(client)
 
-        assert counted == [(1, 1, 1, 1, 0, None)]
+        assert counted == [(1, 1, 1, 0, None)]
+        assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
 
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""

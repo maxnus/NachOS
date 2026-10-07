@@ -58,7 +58,7 @@ class _Game:
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None, tables: GameData = _TABLES) -> None:
         self.tracker = _Tracker(tables, Enemy())
-        self.map = GameMap(game_info or make_game_info(), start_location=(0.5, 0.5))
+        self.map = GameMap(game_info or make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int = 0, **fields: Any) -> _State:
         observation = make_observation(step, **fields)
@@ -86,6 +86,9 @@ _MAKING_TABLES = make_tables(
     _row(UnitTypeId.LARVA),
     _row(UnitTypeId.EGG),
     _row(UnitTypeId.DRONE, minerals=50),
+    _row(UnitTypeId.ZERGLING, minerals=25),
+    _row(UnitTypeId.BANELING_COCOON),
+    _row(UnitTypeId.BANELING, minerals=50),
     _row(UnitTypeId.ZEALOT, minerals=100),
     _row(UnitTypeId.SIEGE_TANK, minerals=150),
     _row(UnitTypeId.SIEGE_TANK_SIEGED, minerals=150),
@@ -98,6 +101,7 @@ _MAKING_TABLES = make_tables(
         ),
         data_pb2.AbilityData(ability_id=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND),
         data_pb2.AbilityData(ability_id=AbilityId.LARVA_MORPH_DRONE),
+        data_pb2.AbilityData(ability_id=AbilityId.ZERGLING_MORPH_BANELING),
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
     ],
@@ -118,65 +122,76 @@ def _making(ability: int, progress: float = 0.0, at: tuple[float, float] | None 
     return order
 
 
+def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int, float | None]]:
+    """The tag of the unit each `unit_type` in production is read from, and its progress."""
+    return [(item.unit.tag, item.progress) for item in state.production.of_types({unit_type})]
+
+
 class TestProduction:
-    def test_each_train_a_structure_shows_counts_once(self) -> None:
+    def test_each_train_a_structure_shows_is_one_at_its_progress(self) -> None:
         train = AbilityId.BARRACKS_TRAIN_MARINE
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[
-                _done(1, UnitTypeId.BARRACKS, _making(train, 0.5), _making(train, 0.2), add_on_tag=2),
+                _done(1, UnitTypeId.BARRACKS, _making(train, 0.5), _making(train, 0.25), add_on_tag=2),
                 _done(2, UnitTypeId.REACTOR_BARRACKS),
             ]
         )
-        assert state.production.count([UnitTypeId.MARINE]) == 2
+        assert _made(state, UnitTypeId.MARINE) == [(1, 0.5), (1, 0.25)]
 
-    def test_an_egg_counts_for_what_it_becomes(self) -> None:
+    def test_an_egg_is_what_it_becomes_at_its_progress(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
-            units=[_done(1, UnitTypeId.EGG, _making(AbilityId.LARVA_MORPH_DRONE, 0.4))]
+            units=[_done(1, UnitTypeId.EGG, _making(AbilityId.LARVA_MORPH_DRONE, 0.375))]
         )
-        assert state.production.count([UnitTypeId.DRONE]) == 1
-        assert state.production.count([UnitTypeId.EGG]) == 0
+        assert _made(state, UnitTypeId.DRONE) == [(1, 0.375)]
+        assert _made(state, UnitTypeId.EGG) == []
 
-    def test_a_worker_on_its_way_to_build_counts_until_the_structure_stands_which_then_counts(self) -> None:
+    def test_a_worker_on_its_way_to_build_is_one_until_the_structure_stands_which_then_is(self) -> None:
         build = _making(AbilityId.SCV_BUILD_SUPPLY_DEPOT, at=(20.0, 20.0))
         game = _Game(tables=_MAKING_TABLES)
         walking = game.observe(units=[_done(1, UnitTypeId.SCV, build, at=(10.0, 10.0))])
-        assert walking.production.count([UnitTypeId.SUPPLY_DEPOT]) == 1
-        depot = make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(20.0, 20.0), build_progress=0.3)
+        assert _made(walking, UnitTypeId.SUPPLY_DEPOT) == [(1, 0.0)]
+        depot = make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(20.0, 20.0), build_progress=0.25)
         building = game.observe(16, units=[_done(1, UnitTypeId.SCV, build, at=(19.0, 20.0)), depot])
-        assert building.production.count([UnitTypeId.SUPPLY_DEPOT]) == 1
+        assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(2, 0.25)]
 
-    def test_an_add_on_counts_by_its_order_until_it_stands_which_then_counts(self) -> None:
+    def test_an_add_on_is_one_by_its_order_until_it_stands_which_then_is(self) -> None:
         game = _Game(tables=_MAKING_TABLES)
         ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR))])
-        assert ordered.production.count([UnitTypeId.REACTOR_BARRACKS]) == 1
+        assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, 0.0)]
         going_up = game.observe(
             16,
             units=[
                 _done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR), add_on_tag=2),
-                make_unit(2, UnitTypeId.REACTOR_BARRACKS, build_progress=0.1),
+                make_unit(2, UnitTypeId.REACTOR_BARRACKS, build_progress=0.125),
             ],
         )
-        assert going_up.production.count([UnitTypeId.REACTOR_BARRACKS]) == 1
+        assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(2, 0.125)]
 
-    def test_a_structure_morphing_counts_for_what_it_becomes(self) -> None:
+    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND))]
         )
-        assert state.production.count([UnitTypeId.ORBITAL_COMMAND]) == 1
+        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None)]
 
-    def test_a_unit_warping_in_counts(self) -> None:
+    def test_a_cocoon_is_what_it_becomes_at_no_known_progress(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[_done(1, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING))]
+        )
+        assert _made(state, UnitTypeId.BANELING) == [(1, None)]
+
+    def test_a_unit_warping_in_is_one_at_its_progress(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
-        assert state.production.count([UnitTypeId.ZEALOT]) == 1
+        assert _made(state, UnitTypeId.ZEALOT) == [(1, 0.5)]
 
-    def test_a_free_order_that_makes_a_form_never_counts(self) -> None:
+    def test_a_free_order_that_makes_a_form_is_none(self) -> None:
         siege = _making(RawAbilityId.SiegeMode_SiegeMode)
         state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.SIEGE_TANK_SIEGED, siege)])
-        assert state.production.count([UnitTypeId.SIEGE_TANK_SIEGED]) == 0
+        assert _made(state, UnitTypeId.SIEGE_TANK_SIEGED) == []
 
-    def test_an_enemys_production_is_not_counted(self) -> None:
+    def test_an_enemys_production_is_none(self) -> None:
         enemy = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5, alliance=_ENEMY)
         state = _Game(tables=_MAKING_TABLES).observe(units=[enemy])
-        assert state.production.count([UnitTypeId.ZEALOT]) == 0
+        assert _made(state, UnitTypeId.ZEALOT) == []
 
     def test_a_research_reads_its_progress_and_nothing_else_does(self) -> None:
         research = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)

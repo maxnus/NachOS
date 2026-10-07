@@ -374,7 +374,7 @@ it.
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `api.in_production(t)`, without the orders NachOS holds, which are in `api.orders.issued_to` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the orders NachOS holds, which are in `api.orders.issued_to` |
 | `bot.already_pending_upgrade(u)` | `api.research_progress(u)`, `None` when nothing researches it; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |

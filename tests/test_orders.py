@@ -105,7 +105,7 @@ class _Game:
         ]
         self.client, self.transport = make_client(*responses)
         self.tracker = _Tracker(tables, Enemy())
-        self.map = GameMap(make_game_info(), start_location=(0.5, 0.5))
+        self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(tables, build_reach=build_reach)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
@@ -2140,7 +2140,7 @@ class _HeldRefineryBot(_HeldBuildBot):
 class _ProductionBot:
     """A terran bot that raises a barracks and an engineering bay by debug command under cheats for supply and
     resources, gives the barracks two marines and the bay infantry weapons 1, and records each turn after what is in
-    production: the marines made and held, and the research's progress."""
+    production: the marines made and held, the research's progress, and the first marine's."""
 
     race = Race.TERRAN
 
@@ -2149,7 +2149,7 @@ class _ProductionBot:
         self.player = player
         self.made = False
         self.ordered = False
-        self.reads: list[tuple[int, int, float | None]] = []
+        self.reads: list[tuple[int, int, float | None, float | None]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -2173,7 +2173,8 @@ class _ProductionBot:
         elif self.ordered:
             held = len(api.orders.issued_to(barracks[0]))
             progress = api.research_progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
-            self.reads.append((api.in_production(UnitType.Marine), held, progress))
+            marines = api.in_production(UnitType.Marine)
+            self.reads.append((len(marines), held, progress, marines[0].progress if marines else None))
 
 
 class _LarvaBot:
@@ -2302,15 +2303,20 @@ class TestAgainstTheRealGame:
     def test_what_is_in_production_is_what_the_game_makes_and_not_what_is_held(self) -> None:
         bot, failures = _play_a_minute(_ProductionBot)
 
-        print("(marines in production, held, research progress), turn by turn:", bot.reads)
+        print("(marines in production, held, research progress, marine progress), turn by turn:", bot.reads)
         print("refused or given up:", failures)
         assert bot.reads
-        assert (1, 1) in {(count, held) for count, held, _ in bot.reads}
-        assert (1, 0) in {(count, held) for count, held, _ in bot.reads}
-        assert all(count <= 1 for count, _, _ in bot.reads)
-        progress = [each for _, _, each in bot.reads if each is not None]
+        assert (1, 1) in {(count, held) for count, held, _, _ in bot.reads}
+        assert (1, 0) in {(count, held) for count, held, _, _ in bot.reads}
+        assert all(count <= 1 for count, _, _, _ in bot.reads)
+        progress = [each for _, _, each, _ in bot.reads if each is not None]
         assert progress == sorted(progress)
         assert 0.0 < progress[-1] < 1.0
+        assert all(marine is not None for count, _, _, marine in bot.reads if count)
+        for still_held in (1, 0):
+            marine = [each for count, held, _, each in bot.reads if count and held == still_held and each is not None]
+            assert marine == sorted(marine)
+            assert marine[-1] > marine[0]
 
     def test_drones_given_to_a_hatchery_wait_for_larvae(self) -> None:
         bot, failures = _play_a_minute(_LarvaBot)

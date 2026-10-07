@@ -74,7 +74,7 @@ class _State:
 
     @cached_property
     def production(self) -> _Production:
-        """What this player's units are making."""
+        """What this player's units are making, and how far along each research is."""
         return _Production(self._tracker.unit_tracker.present.own, self._tracker.game_data)
 
     @cached_property

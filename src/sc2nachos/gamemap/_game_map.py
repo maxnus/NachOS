@@ -46,7 +46,7 @@ class GameMap:
         "_start_location",
     )
 
-    def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: PointLike) -> None:
+    def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: Point) -> None:
         """Read the map from the game's answer to `RequestGameInfo`, with this player's start at `start_location`."""
         start = info.start_raw
         playable = Rectangle._from_proto(start.playable_area)
@@ -60,8 +60,7 @@ class GameMap:
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
         self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
-        x, y = coordinates(start_location)[:2]
-        self._start_location = Point((x, y))
+        self._start_location = start_location
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
 
     @classmethod

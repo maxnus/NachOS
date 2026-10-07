@@ -446,8 +446,10 @@ when each starts.
      `VespeneGeyser` already name the plain types, hence `Any`.
    - **`api.map.start_location`**, beside `opponent_start_locations`, read once off the first observation's own
      townhall.
-   - **`api.in_production(types)`** counts what the game has started or charged for, per item, and not what NachOS
-     holds, which is in `issued_to`; **`api.research_progress(upgrade)`** is from 0 to 1, or `None`.
+   - **`api.in_production(types)`** gives what the game has started or charged for, one `InProduction` per unit,
+     with the unit it is read from and its progress, and not what NachOS holds, which is in `issued_to`; a count is
+     its `len` (the owner, review of #121). A morph other than a larva's reads progress `None`, since the game reports
+     0 from start to end. **`api.research_progress(upgrade)`** is from 0 to 1, or `None`.
    - **No `api.enemy.units`**: the enemy's units stay `api.units.enemy`, and the migration guide maps python-sc2's
      `enemy_units` and `enemy_structures` onto it.
 6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.

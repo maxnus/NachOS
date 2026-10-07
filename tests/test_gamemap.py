@@ -30,14 +30,14 @@ class TestReadingAMap:
                 "..........#.....",
                 "................",
             ),
-            start_location=(0.5, 0.5),
+            start_location=Point((0.5, 0.5)),
         )
         assert game_map.pathing[Tile(10, 1)]
         assert game_map.placement[Tile(10, 1)]
         assert game_map.pathing.sum() == game_map.placement.sum() == 1
 
     def test_the_grids_cover_the_playable_area_and_read_closed_past_it(self) -> None:
-        game_map = GameMap(make_game_info(*["#" * 8] * 6, playable=(1, 2, 7, 5)), start_location=(0.5, 0.5))
+        game_map = GameMap(make_game_info(*["#" * 8] * 6, playable=(1, 2, 7, 5)), start_location=Point((0.5, 0.5)))
         assert game_map.playable_area == Rectangle(1, 2, 6, 3)
         for grid in (game_map.pathing, game_map.placement, game_map.height):
             assert grid.bounds == game_map.playable_area
@@ -54,7 +54,7 @@ class TestReadingAMap:
     )
     def test_a_byte_of_height_is_an_eighth_with_127_at_zero(self, byte: int, height: float) -> None:
         game_map = GameMap(
-            make_game_info("##", "##", heights=make_bytes([byte] * 2, [byte] * 2)), start_location=(0.5, 0.5)
+            make_game_info("##", "##", heights=make_bytes([byte] * 2, [byte] * 2)), start_location=Point((0.5, 0.5))
         )
         assert game_map.height[Tile(0, 0)] == game_map.height_at(Point((0.3, 0.8))) == height
 
@@ -62,7 +62,7 @@ class TestReadingAMap:
         # The bytes are corner heights, so four tiles have five corners, each a quarter higher.
         heights = make_bytes(*[[191, 193, 195, 197, 199]] * 3)
         game_map = GameMap(
-            make_game_info(*["#####"] * 3, playable=(0, 0, 4, 2), heights=heights), start_location=(0.5, 0.5)
+            make_game_info(*["#####"] * 3, playable=(0, 0, 4, 2), heights=heights), start_location=Point((0.5, 0.5))
         )
         assert [game_map.height[Tile(x, 0)] for x in range(4)] == [8.125, 8.375, 8.625, 8.875]
         assert game_map.height_at(Point((1.25, 0.5))) == 8.3125
@@ -83,23 +83,24 @@ class TestReadingAMap:
         self, rows: list[list[int]], height: float
     ) -> None:
         game_map = GameMap(
-            make_game_info(*["###"] * 3, playable=(0, 0, 2, 2), heights=make_bytes(*rows)), start_location=(0.5, 0.5)
+            make_game_info(*["###"] * 3, playable=(0, 0, 2, 2), heights=make_bytes(*rows)),
+            start_location=Point((0.5, 0.5)),
         )
         assert game_map.height[Tile(0, 0)] == height
         assert game_map.height_at(Point((0.1, 0.1))) == height
 
     def test_a_height_at_takes_a_point_and_not_a_tile(self) -> None:
         with pytest.raises(TypeError, match="pass its .center"):
-            GameMap(make_game_info(), start_location=(0.5, 0.5)).height_at(Tile(1, 1))
+            GameMap(make_game_info(), start_location=Point((0.5, 0.5))).height_at(Tile(1, 1))
 
     def test_a_height_at_past_the_playable_area_raises(self) -> None:
         with pytest.raises(IndexError, match="lies outside"):
-            GameMap(make_game_info(*["#" * 8] * 6, playable=(1, 2, 7, 5)), start_location=(0.5, 0.5)).height_at(
+            GameMap(make_game_info(*["#" * 8] * 6, playable=(1, 2, 7, 5)), start_location=Point((0.5, 0.5))).height_at(
                 Point((0.5, 0.5))
             )
 
     def test_this_players_start_location_is_the_one_it_was_given(self) -> None:
-        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=(1.5, 1.5))
+        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=Point((1.5, 1.5)))
         assert game_map.start_location == Point((1.5, 1.5))
         assert game_map.opponent_start_locations == (Point((5.5, 2.5)),)
 
@@ -116,7 +117,7 @@ class TestReadingAMap:
         assert GameMap._of_game(info, make_observation(0)).start_location == Point((4.0, 3.5))
 
     def test_the_grids_refuse_writes_but_a_copy_does_not(self) -> None:
-        game_map = GameMap(make_game_info(), start_location=(0.5, 0.5))
+        game_map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         assert game_map.pathing.readonly
         with pytest.raises(TypeError, match="is read-only"):
             game_map.pathing[Tile(0, 0)] = False
@@ -125,11 +126,11 @@ class TestReadingAMap:
         assert game_map.pathing[Tile(0, 0)]
 
     def test_the_opponent_start_locations_are_the_ones_the_game_names(self) -> None:
-        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=(0.5, 0.5))
+        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=Point((0.5, 0.5)))
         assert game_map.opponent_start_locations == (Point((5.5, 2.5)),)
 
     def test_a_slope_a_unit_walks_but_cannot_build_on_is_a_ramp(self) -> None:
-        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=(0.5, 0.5))
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5)))
         (ramp,) = game_map.ramps
         assert set(ramp.tiles) == {Tile(x, y) for x in range(1, 5) for y in range(3)}
         assert set(ramp.top) == {Tile(4, y) for y in range(3)}
@@ -146,7 +147,7 @@ class TestReadingAMap:
             [192, 193, 193, 193, 193],
             [190, 191, 191, 191, 191],
         )
-        game_map = GameMap(make_game_info(*["~~~~"] * 4, heights=heights), start_location=(0.5, 0.5))
+        game_map = GameMap(make_game_info(*["~~~~"] * 4, heights=heights), start_location=Point((0.5, 0.5)))
         (ramp,) = game_map.ramps
         assert game_map.height[Tile(0, 0)] == game_map.height[Tile(1, 0)] - 0.0625
         assert set(ramp.bottom) == {Tile(x, 0) for x in range(4)}
@@ -154,18 +155,20 @@ class TestReadingAMap:
 
     def test_a_ramp_that_runs_diagonally_is_one_ramp(self) -> None:
         # No two of the three tiles share an edge, so connecting only across edges would find no ramp.
-        game_map = GameMap(make_game_info("#~####", "##~###", "###~##", heights=_SLOPE), start_location=(0.5, 0.5))
+        game_map = GameMap(
+            make_game_info("#~####", "##~###", "###~##", heights=_SLOPE), start_location=Point((0.5, 0.5))
+        )
         (ramp,) = game_map.ramps
         assert set(ramp.tiles) == {Tile(1, 2), Tile(2, 1), Tile(3, 0)}
 
     def test_ground_that_climbs_no_level_is_no_ramp(self) -> None:
         # A bridge or a stand of trees, level throughout, and the first two tiles of the slope, 0.5 apart.
-        assert not GameMap(make_game_info("####", "#~~#", "####"), start_location=(0.5, 0.5)).ramps
-        assert not GameMap(make_game_info(*["#~~###"] * 3, heights=_SLOPE), start_location=(0.5, 0.5)).ramps
+        assert not GameMap(make_game_info("####", "#~~#", "####"), start_location=Point((0.5, 0.5))).ramps
+        assert not GameMap(make_game_info(*["#~~###"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5))).ramps
 
     def test_ramps_are_ordered_by_their_lower_left_tile(self) -> None:
         game_map = GameMap(
-            make_game_info(*["#~~~~#"] * 3, "......", *["#~~~~#"] * 3, heights=_SLOPE), start_location=(0.5, 0.5)
+            make_game_info(*["#~~~~#"] * 3, "......", *["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5))
         )
         assert [min(ramp.tiles) for ramp in game_map.ramps] == [Tile(1, 0), Tile(1, 4)]
 
@@ -173,11 +176,11 @@ class TestReadingAMap:
         info = make_game_info()
         info.start_raw.pathing_grid.data = info.start_raw.pathing_grid.data[:-1]
         with pytest.raises(ProtocolError, match="cannot be 7 bytes"):
-            GameMap(info, start_location=(0.5, 0.5))
+            GameMap(info, start_location=Point((0.5, 0.5)))
 
     def test_a_playable_area_past_the_image_is_refused(self) -> None:
         with pytest.raises(ProtocolError, match="does not cover"):
-            GameMap(make_game_info(playable=(0, 0, 9, 8)), start_location=(0.5, 0.5))
+            GameMap(make_game_info(playable=(0, 0, 9, 8)), start_location=Point((0.5, 0.5)))
 
 
 def _start(path: Path) -> tuple[sc2api_pb2.ResponseGameInfo, sc2api_pb2.ResponseObservation]:
