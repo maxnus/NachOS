@@ -83,21 +83,21 @@ class CameraMove(Action):
 @final
 @dataclass(frozen=True, slots=True)
 class ActionFailure:
-    """An order the game accepted and then gave up on, reported in the observation it gave up in (in game).
+    """An order the game refused when it was sent, or accepted and then gave up on (in game).
 
-    Not an `Action`: an action is something this player did, and this is something the game undid. Not an
+    Not an `Action`: an action is something this player did, and this is something the game refused or undid. Not an
     exception either: the game reports it, and nothing raises it.
     """
 
     step: int
-    """The step the game gave up at."""
+    """The step the order was refused at, which is the step it was issued at, or the step the game gave up at."""
     unit: Unit[Any] | None
-    """The unit whose order was given up, or `None` if the game named none."""
+    """The unit whose order was refused or given up, or `None` if the game named none. A refusal always names one."""
     ability: AbilityId | None
-    """The ability given up, or `None` if the game named none."""
+    """The ability refused, as it was ordered, or the ability given up, or `None` if the game named none."""
     action_result: ActionResult
-    """Why the game gave up: `NOT_ENOUGH_FOOD` for a marine with no supply left, `CANT_BUILD_LOCATION_INVALID` for
-    a site taken meanwhile."""
+    """Why: `NOT_ENOUGH_MINERALS` for a build refused as it was sent, `NOT_ENOUGH_FOOD` for a marine with no supply
+    left, `CANT_BUILD_LOCATION_INVALID` for a site taken meanwhile."""
 
     @classmethod
     def _from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:

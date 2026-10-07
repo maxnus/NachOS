@@ -10,7 +10,8 @@ def on_turn(event: TurnEvent) -> None:
         api.orders.issue(marine, AbilityId.ATTACK, target=enemy_base)
 ```
 
-`issue` returns an `Order`, which says whether it was sent and what the game answered.
+`issue` returns the `Order`: what was asked, the bot's own `data`, and `withdraw()` to take it back before it is
+sent. What the game refuses is listed in `api.action_failures`.
 
 ## Giving one
 
@@ -30,7 +31,7 @@ api.orders.camera(base)
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
   is the point the game was given, not quite the one passed in. `camera` stores its point the same way.
 - **`queued`** puts the order behind each unit's current orders instead of replacing them.
-- **`force`** sends the order even to units already carrying it out, so it never reads `REDUNDANT`
+- **`force`** sends the order even to units already carrying it out, which are otherwise left out
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
   queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
   turn's other orders.
@@ -40,7 +41,7 @@ api.orders.camera(base)
 
 ## One order a unit a turn
 
-A unit carries out only the last order it is given in a turn. Earlier ones become `OVERRIDDEN`. The game does the
+A unit carries out only the last order it is given in a turn. Earlier ones are never sent to it. The game does the
 same with two unqueued orders in one request, so NachOS sends only the one that would have stood.
 
 The exception is `OrderBehavior.KEEPS_ORDERS`: an ability that leaves the unit doing what it was doing. That is stim,
@@ -78,9 +79,8 @@ for its zone, so an order naming a liberator needs one and the rest ignore it. A
 to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the game's.
 
 An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
-itself, and is answered as the game answers one command naming several units: `SUCCESS` if any took it, and otherwise
-the first refusal (in game). An unload at a point aimed at one of the transports ordered raises `TypeError`, naming
-`UNLOAD`.
+itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
+ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -110,22 +110,22 @@ A bot that wants its own ranking puts it in `data` and reads it back from the or
 **An order a unit is already carrying out is not sent to it.** In game, an unqueued order equal to a unit's first
 is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is sent,
 an unqueued order that replaces a unit's orders leaves out each unit already doing it, and an order left with no unit
-reads `REDUNDANT`. What a unit is doing is the last such order NachOS sent it, while the observation after that turn
+is not sent. What a unit is doing is the last such order NachOS sent it, while the observation after that turn
 may not show it yet, as on the ladder; otherwise it is the unit's first reported order, whoever gave it. So an order
 sent last turn counts though the unit still shows its old one, and in a stepped game an order the unit finished, or
 the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
 
-A bot that gives the same order every turn gets a new `Order` each time: the first reads `SENT`, and the rest
-`REDUNDANT` for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
+A bot that gives the same order every turn gets a new `Order` each time: the first is sent, and the rest are left
+out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
 sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
 which goes out regardless.
 
 ## What an order needs
 
-The game handles an order it cannot pay for in one of three ways: it refuses it, which reads `REFUSED` with the
-game's verdict; it answers `SUCCESS` and silently drops it, so the order reads `SENT` and no unit ever shows it; or,
-for a queued order the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
+The game handles an order it cannot pay for in one of three ways: it refuses it, which `api.action_failures` lists
+with the game's verdict; it answers `SUCCESS` and silently drops it, so nothing is listed and no unit ever shows it;
+or, for a queued order the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
 supply frees up.
 
 A bot budgets for itself, since only it knows what matters most:
@@ -147,29 +147,22 @@ tech lab included, and a morph's or an add-on's own cancel, since those answer `
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
 neither a slot nor a mineral within the same step ([game behavior](game-behavior.md#abilities-and-orders)).
 
-## What became of it
+## What the game did
 
-`order.state` says what became of the order in its turn. Every state but `PENDING` is final: an order settles when
-the turn's request goes out, and NachOS does not follow it after.
+An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
+to its units, or every unit it was given already carrying it out. Until then it shows in `issued_to` and `pending`.
+NachOS does not follow it after.
 
-| State | What it means |
-| --- | --- |
-| `PENDING` | Issued this turn, and nothing sent yet. |
-| `SENT` | Sent and answered `SUCCESS`. |
-| `REFUSED` | Sent and answered something else: `order.action_result` says what. |
-| `OVERRIDDEN` | Never sent: a later order of the same turn took every unit this one was given to. |
-| `WITHDRAWN` | Never sent: taken back with `order.withdraw()` while pending. |
-| `REDUNDANT` | Never sent: every unit it held was already carrying out the same order, as its first. |
-
-### Learning what the game did
-
-`SENT` says the game took the order, not that a unit carried it out. The game can drop it silently, give up on it
-later, or have another unit carry it out, one larva for another. What happened shows in the game itself:
+The game answers each command as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
+once for each unit the command named, with the ability ordered and the game's verdict. One it takes need not be
+carried out: the game can drop it silently, give up on it later, or have another unit carry it out, one larva for
+another. What happened shows in the game itself:
 
 - **`unit.orders`**: what each unit is doing now, its current order and then its queued ones.
 - **`OwnConstructionStartedEvent`** and **`OwnUnitCreatedEvent`**: a structure placed, a unit made.
 - **`UnitDiedEvent`**: a unit died, and with a producer, whatever it was making was lost.
-- **`api.action_failures`**: every order the game gave up on since the previous observation, with the unit and why.
+- **`api.action_failures`**: every order the game refused when the last turn's were sent, and every one it accepted
+  earlier and gave up on since the previous observation, with the unit and why.
 
 An order's effect can show up an observation late, two on the ladder, so wait for it rather than expecting it in the
 next observation.

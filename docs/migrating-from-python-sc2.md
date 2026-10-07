@@ -131,22 +131,23 @@ it.
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| nothing | `order.state`, `order.action_result`, `order.data` |
+| nothing | `order.data`, `order.withdraw()` |
+| the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
-- **An order is something you hold on to.** `issue` returns an `Order` that says whether it was sent and what the
-  game answered; python-sc2 returns nothing. What a unit then did with it shows in its orders, in events and in
-  `api.action_failures`.
+- **An order is something you hold on to until it is sent.** `issue` returns an `Order` that carries the bot's own
+  `data` and can be withdrawn while the turn's handlers run; python-sc2 returns nothing. What the game refused shows
+  in `api.action_failures` on the next turn, and what a unit then did, in its orders and in events.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
-  the game's verdict says whether it was taken. A bot keeps its own budget within a turn
+  `api.action_failures` lists what the game refused. A bot keeps its own budget within a turn
   ([orders](orders.md#what-an-order-needs)).
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free. NachOS does the same when the turn is sent: an order a unit is
-  already carrying out first is left out for it, and one left with no unit reads `REDUNDANT`
+  already carrying out first is left out for it, and one left with no unit is not sent
   ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
   `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers

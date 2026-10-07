@@ -15,10 +15,9 @@ from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
 from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_actions
 from sc2nachos.orders._order import Order
-from sc2nachos.orders._order_state import OrderState
 from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
-from sc2nachos.state import ActionResult
+from sc2nachos.state import ActionFailure, ActionResult
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
@@ -65,6 +64,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
+        "_refusals",
         "_step",
     )
 
@@ -80,6 +80,8 @@ class OrderBook:
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
         self._camera_location: Point | None = None
+        # What the game refused of the last turn's orders, one entry per unit a refused command named.
+        self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
         self._step = 0
 
@@ -124,14 +126,12 @@ class OrderBook:
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
-        observation after its turn may not show it yet, and otherwise its first reported order. An order left with no
-        unit to send to reads `REDUNDANT`. `force` sends it to those units too, so it is never `REDUNDANT`: that is
-        how a unit is made to drop its queue and go on with its current order. It still competes with the turn's other
-        orders like any other.
+        observation after its turn may not show it yet, and otherwise its first reported order. `force` sends it to
+        those units too: that is how a unit is made to drop its queue and go on with its current order. It still
+        competes with the turn's other orders like any other.
 
         An ability that goes out as another for some types (`AbilityData.sent_as`) is sent as one command per ability
-        it goes out as, and answered `SUCCESS` if any of them was, as the game answers one command naming several
-        units.
+        it goes out as. A command the game refuses is listed in `api.action_failures` once for each unit it names.
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an order without one to a type that goes
         out aimed at it, as a liberator's siege does, and for a transport's unload at a point aimed at one of `units`
@@ -177,12 +177,12 @@ class OrderBook:
         orders = self._issued_by_unit.get(unit.id)
         if not orders:
             return ()
-        return tuple(order for order in orders if order.state is OrderState.PENDING)
+        return tuple(order for order in orders if order._pending)
 
     @property
     def pending(self) -> tuple[Order[Any], ...]:
         """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
-        return tuple(order for order in self._issued if order.state is OrderState.PENDING)
+        return tuple(order for order in self._issued if order._pending)
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
@@ -190,35 +190,34 @@ class OrderBook:
         self._camera_location = Point((as_sent(aimed[0]), as_sent(aimed[1])))
 
     def _send(self, client: Client) -> None:
-        """Send the turn's orders and record the game's answer on each. Sends nothing if there is nothing to send."""
+        """Send the turn's orders, and keep what the game refused of them. Sends nothing if there is nothing to send."""
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
-        actions: list[sc2api_pb2.Action] = []
-        sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...], int]] = []
+        self._refusals = ()
+        commands: list[tuple[Order[Any], sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]] = []
         for order, units in self._orders_to_send(issued, forced):
-            order_actions = create_unit_command_actions(
-                order, units, ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
-            )
-            actions += order_actions
-            sent.append((order, units, len(order_actions)))
+            sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
+            commands += [(order, *command) for command in create_unit_command_actions(order, units, sent_as)]
+        for order in issued:
+            order._pending = False
+        actions = [action for _, action, _ in commands]
         if self._camera_location is not None:
             actions.append(create_camera_move_action(self._camera_location))
             self._camera_location = None
         if not actions:
             return
         results = client.act(actions).result
-        unit_commands = sum(count for _, _, count in sent)
-        if len(results) < unit_commands:
-            raise ProtocolError(f"the game answered {len(results)} of the {unit_commands} commands it was sent")
+        if len(results) < len(commands):
+            raise ProtocolError(f"the game answered {len(results)} of the {len(commands)} commands it was sent")
         # A camera move, if any, is answered last and belongs to no order.
-        answered = 0
-        for order, units, count in sent:
-            action_result = _answer(results[answered : answered + count])
-            answered += count
-            taken = action_result is ActionResult.SUCCESS
-            order._settle(OrderState.SENT if taken else OrderState.REFUSED, action_result=action_result)
-            if taken and not order.queued:
+        refusals: list[ActionFailure] = []
+        for (order, _, units), result in zip(commands, results, strict=False):
+            action_result = ActionResult.read(result)
+            if action_result is not ActionResult.SUCCESS:
+                refusals += [ActionFailure(self._step, unit, order.ability, action_result) for unit in units]
+            elif not order.queued:
                 self._remember_sent(order, units)
+        self._refusals = tuple(refusals)
 
     def _observe(self, step: int, dead: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `step`, which found `dead` dead."""
@@ -233,29 +232,25 @@ class OrderBook:
         """Each order of the turn that goes out, with the units it goes out to.
 
         An order that acts at once, or that is queued behind a unit's current orders, competes with nothing. Of the
-        rest, a unit keeps only the last it was given, and an order left with no unit is overridden. An order is then
-        left out for the units already carrying it out, and one left with no unit is redundant. An order in `forced`
-        goes out regardless.
+        rest, a unit keeps only the last it was given. An order is then left out for the units already carrying it
+        out, unless it is in `forced`. An order left with no unit is not sent.
         """
         holder: dict[int, Order[Any]] = {}
         for order in issued:
-            if order.state is OrderState.PENDING:
+            if order._pending:
                 for unit in order.units:
                     if self._competes_for(order, unit):
                         holder[unit.id] = order
         for order in issued:
-            if order.state is not OrderState.PENDING:
+            if not order._pending:
                 continue
             units = tuple(
                 unit for unit in order.units if holder.get(unit.id) is order or not self._competes_for(order, unit)
             )
-            if not units:
-                order._settle(OrderState.OVERRIDDEN)
-                continue
-            if order not in forced and not (units := self._units_not_carrying_it_out(order, units)):
-                order._settle(OrderState.REDUNDANT)
-                continue
-            yield order, units
+            if order not in forced:
+                units = self._units_not_carrying_it_out(order, units)
+            if units:
+                yield order, units
 
     def _competes_for(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
         """Whether `order` competes with the turn's other orders for `unit`.
@@ -351,13 +346,6 @@ def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
     """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
     ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
-
-
-def _answer(results: Sequence[int]) -> ActionResult:
-    """The game's answer to an order sent as `results`' commands, read as it answers one command naming several units:
-    `SUCCESS` if any unit took it, and otherwise the first refusal (in game)."""
-    answers = [ActionResult.read(result) for result in results]
-    return ActionResult.SUCCESS if ActionResult.SUCCESS in answers else answers[0]
 
 
 def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], units: Sequence[OwnUnit[Any]]) -> None:

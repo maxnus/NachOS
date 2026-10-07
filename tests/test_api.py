@@ -4,7 +4,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-from s2clientprotocol import sc2api_pb2
+from s2clientprotocol import error_pb2, sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
@@ -17,6 +17,7 @@ from sc2nachos.events import (
     TurnStartEvent,
     UnitDiedEvent,
 )
+from sc2nachos.ids import AbilityId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
@@ -28,6 +29,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
+from sc2nachos.state import ActionResult
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 # A map from the current AIE ladder pool, for the test games.
@@ -234,6 +236,41 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(0)),
         )
         assert Api().play(client) is Result.UNDECIDED
+
+    def test_the_last_turn_s_refusals_are_listed_ahead_of_what_the_game_gave_up_on(self) -> None:
+        marine = make_unit(1)
+        given_up = sc2api_pb2.ActionError(
+            unit_tag=1, ability_id=AbilityId.ATTACK, result=error_pb2.ActionResult.NotEnoughFood
+        )
+        client, _ = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0, units=[marine])),
+            make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.NotSupported])),
+            make_response(step=sc2api_pb2.ResponseStep()),
+            make_response(observation=make_observation(2, units=[marine], action_errors=[given_up])),
+            make_response(step=sc2api_pb2.ResponseStep()),
+            make_response(Status.ENDED, observation=make_observation(4, (1, Result.VICTORY), units=[marine])),
+        )
+        api = Api()
+        listed: list[list[tuple[int, int | None, AbilityId | None, ActionResult]]] = []
+
+        @api.events.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            failures = api.action_failures
+            listed.append([(f.step, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
+            if event.step == 0:
+                api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
+
+        api.play(client, steps_per_turn=2)
+
+        assert listed == [
+            [],
+            [
+                (0, 1, AbilityId.MOVE, ActionResult.NOT_SUPPORTED),
+                (2, 1, AbilityId.ATTACK, ActionResult.NOT_ENOUGH_FOOD),
+            ],
+        ]
 
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""

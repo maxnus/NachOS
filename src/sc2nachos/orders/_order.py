@@ -1,21 +1,18 @@
-"""One order a bot gave, and the game's answer to it."""
+"""One order a bot gave."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final
 
-from sc2nachos.orders._order_state import OrderState
-
 if TYPE_CHECKING:
     from sc2nachos.gamedata import OrderBehavior
     from sc2nachos.ids import AbilityId
-    from sc2nachos.state import ActionResult
     from sc2nachos.units import OwnUnit, Target
 
 
 @final
 class Order[T]:
-    """An order a bot gave: whether it was sent, and the game's answer.
+    """An order a bot gave. A refusal by the game shows in `api.action_failures`.
 
     `T` is whatever the bot attached as `data`. NachOS carries it and never reads it.
     """
@@ -25,11 +22,10 @@ class Order[T]:
         "_order_behavior",
         "_data",
         "_issued_step",
+        "_pending",
         "_queued",
-        "_state",
         "_target",
         "_units",
-        "_action_result",
     )
 
     def __init__(
@@ -51,12 +47,12 @@ class Order[T]:
         self._data = data
         self._order_behavior = order_behavior
         self._issued_step = step
-        self._state = OrderState.PENDING
-        self._action_result: ActionResult | None = None
+        # Until the turn is sent or the bot withdraws it.
+        self._pending = True
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
-        return f"Order({self._ability.name}, {units}, {self._state.value})"
+        return f"Order({self._ability.name}, {units})"
 
     @property
     def ability(self) -> AbilityId:
@@ -90,27 +86,11 @@ class Order[T]:
         return self._data
 
     @property
-    def state(self) -> OrderState:
-        """The order's current state."""
-        return self._state
-
-    @property
-    def action_result(self) -> ActionResult | None:
-        """The game's answer, or `None` until the order is sent."""
-        return self._action_result
-
-    @property
     def issued_step(self) -> int:
         """The step of the observation the order was issued in. It is also the step it was sent at, since a turn's
         orders go out before the game steps again."""
         return self._issued_step
 
     def withdraw(self) -> None:
-        """Take the order back, so it is never sent. An order no longer pending is left as it is."""
-        if self._state is OrderState.PENDING:
-            self._state = OrderState.WITHDRAWN
-
-    def _settle(self, state: OrderState, *, action_result: ActionResult | None = None) -> None:
-        """Record the order's final state, and the game's answer if it was sent. Only the order book calls this."""
-        self._state = state
-        self._action_result = action_result
+        """Take the order back, so it is never sent. An order whose turn has been sent is left as it is."""
+        self._pending = False

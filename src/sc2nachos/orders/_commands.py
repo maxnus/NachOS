@@ -19,32 +19,34 @@ if TYPE_CHECKING:
 
 def create_unit_command_actions(
     order: Order[Any], units: Sequence[OwnUnit[Any]], sent_as: Mapping[UnitTypeId, SentAs]
-) -> list[sc2api_pb2.Action]:
-    """The raw commands giving `order` to `units`: one naming the units that take the order's own ability, then, for
-    each ability `sent_as` sends their types instead, one naming its units, or one per unit where it is aimed at the
-    unit itself."""
-    own: list[int] = []
+) -> list[tuple[sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]]:
+    """The raw commands giving `order` to `units`, each with the units it names: one naming the units that take the
+    order's own ability, then, for each ability `sent_as` sends their types instead, one naming its units, or one per
+    unit where it is aimed at the unit itself."""
+    own: list[OwnUnit[Any]] = []
     sent: dict[SentAs, list[OwnUnit[Any]]] = {}
     for unit in units:
         if (sending := sent_as.get(unit.type_id)) is None:
-            own.append(unit.tag)
+            own.append(unit)
         else:
             sent.setdefault(sending, []).append(unit)
-    actions = [_unit_command_action(order.ability, own, order.target, queued=order.queued)] if own else []
+    commands = [_naming(order.ability, own, order.target, queued=order.queued)] if own else []
     for sending, group in sent.items():
         match sending.aim:
             case Aim.ITSELF:
-                actions += [
-                    _unit_command_action(sending.ability, [unit.tag], unit, queued=order.queued) for unit in group
-                ]
+                commands += [_naming(sending.ability, [unit], unit, queued=order.queued) for unit in group]
             case Aim.TARGET:
-                tags = [unit.tag for unit in group]
-                actions.append(_unit_command_action(sending.ability, tags, order.target, queued=order.queued))
+                commands.append(_naming(sending.ability, group, order.target, queued=order.queued))
             case Aim.NOTHING:
-                actions.append(
-                    _unit_command_action(sending.ability, [unit.tag for unit in group], None, queued=order.queued)
-                )
-    return actions
+                commands.append(_naming(sending.ability, group, None, queued=order.queued))
+    return commands
+
+
+def _naming(
+    ability: int, units: Sequence[OwnUnit[Any]], target: Target | None, *, queued: bool
+) -> tuple[sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]:
+    """One raw command giving `ability` to `units`, aimed at `target`, with the units it names."""
+    return _unit_command_action(ability, [unit.tag for unit in units], target, queued=queued), tuple(units)
 
 
 def _unit_command_action(ability: int, tags: list[int], target: Target | None, *, queued: bool) -> sc2api_pb2.Action:

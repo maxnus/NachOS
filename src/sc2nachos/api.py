@@ -138,11 +138,13 @@ class Api:
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:
-        """The orders the game accepted and then gave up on since the observation before.
+        """The orders the game refused when the last turn's were sent, one for each unit a refused command named, then
+        those it accepted earlier and gave up on since the observation before.
 
-        Raises `UncuratedIdError` if one names an ability the curated ids leave out.
+        Raises `UncuratedIdError` if one the game gave up on names an ability the curated ids leave out.
         """
-        return self._current_game().state.action_failures
+        game = self._current_game()
+        return game.orders._refusals + game.state.action_failures
 
     @property
     def enemy(self) -> Enemy:

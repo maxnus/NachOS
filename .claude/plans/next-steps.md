@@ -9,9 +9,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #108. `uv run pytest` passes 1598 tests; `uv run pytest -m integration` passes 23
-  against a real game (run 2026-10-07).
-- **Next: step 1, a queue per unit.** Step 2, one id per action, is done (#103 to #107).
+- nachOS `main` has every PR to #113. `uv run pytest` passes 1604 tests on #115's branch; `uv run pytest -m
+  integration` passes 23 against a real game (run 2026-10-07).
+- **Now: step 1, a queue per unit**, planned with the owner on 2026-10-07 as two PRs: PR A, an order without state
+  (#115), then PR B, the queue. Step 2, one id per action, is done (#103 to #107).
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -28,8 +29,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 ## Decided, so not to be proposed again
 
 - **NachOS checks nothing an order needs** (#46). Minerals, vespene, supply, queue room and tech are the game's to
-  judge and the bot's to budget. NachOS sends what it is given, and the order's state and `action_result` say what
-  became of it. No budget, no refusal by NachOS itself, no `can_afford`, no `api.orders.cancel`. A built version
+  judge and the bot's to budget. NachOS sends what it is given, and `api.action_failures` lists what the game
+  refused. No budget, no refusal by NachOS itself, no `can_afford`, no `api.orders.cancel`. A built version
   with all of that was dropped as too complicated for what it bought: an advanced bot ranks its own spending anyway.
 - **NachOS has no order priority of its own.** A unit takes the last order it is given in a turn. Handlers already
   run priority first, and a bot that wants a rank puts it in the order's `data` and reads `api.orders.issued_to`.
@@ -45,7 +46,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `LOST` and `FAILED` went, with `api.orders.running`, `order.taken_by` and `order.failure`: each was read from later
   observations, and the code review of 2026-09-24 found each could be wrong. The owner asked: *"Why do we actually
   need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
-  units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46.
+  units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46. Reversed again on
+  2026-10-07: an order has no state at all (below).
+- **Reversed on 2026-10-07: an order has no state** (step 1's PR A, #115). `order.state`, `order.action_result` and
+  `OrderState` went. A command the game refuses is listed in `api.action_failures` on the next turn, once for each
+  unit it named, under the id ordered, ahead of what the game gave up on. The `Order` stays as a handle: its `data`,
+  `withdraw()`, and what `issued_to` and `pending` list. The owner, while the queue was being planned: *"why do we
+  need order state at all? In python-sc2 I believe issuing an order doesn't return anything. What do we get by having
+  this object with a state?"* The state's one job nothing else did was to carry the game's refusal; `OVERRIDDEN`,
+  `WITHDRAWN` and `REDUNDANT` a bot rarely needs, and the `HELD` and `DROPPED` the queue would have needed,
+  `issued_to` already says. It also spares a group order split by the queue a state per unit.
 - **Every call to `issue` is an order of its own; one a unit is already carrying out is not sent to it** (#68).
   With nothing followed across turns, a repeated order costs one small object a turn. The owner first had a repeat
   hand back the order already sent, then reversed that in the review of #77, since the one object could describe
@@ -89,8 +99,8 @@ sent to the game to avoid paying upfront. The intention to build is known to nac
 location) and as soon as the worker is close enough, they will start the build. Similar for the flying barracks +
 build add-on."*
 
-**Status: agreed in principle, not planned.** Start with a plan on a new branch off `origin/main`, and settle it
-with the owner (Claude Code's plan mode) before writing code.
+**Status: planned with the owner on 2026-10-07, in two PRs.** PR A, an order without state (#115, "Decided"
+above), lands first; PR B, the queue, is built on it. The decisions and the design follow the cases below.
 
 ### Why: what the game does with an order it cannot carry out yet
 
@@ -120,30 +130,86 @@ All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units
 3. **Sequences the game may not queue at all (not measured)**: a flying command center that lands at an expansion
    and then becomes an orbital or planetary fortress; a lifted barracks that lands and then trains.
 
-### What the plan has to settle
+### Decided for the queue (the owner, 2026-10-07)
 
-- **How it looks to a bot.** What `queued=True` means now (behind NachOS's queue, not the game's); how a bot adds,
-  reads, reorders and withdraws items; what an `Order` in NachOS's queue reads as (a new state before `SENT`?); and
-  the one exception, a structure with a reactor, where the game's own second slot is wanted.
-- **What an unqueued order does to the queue**: presumably replaces it, as the game does.
-- **When an item goes out.** Conditions on position and on the unit's state ("close enough", "landed", "idle", "gate
-  ready", "larva free") fit the rule that NachOS checks nothing an order needs. Waiting on minerals, supply or tech
-  would bring those checks back; the previous agent recommended leaving them to the bot and sending the item
-  anyway, letting the game refuse it. The owner has not ruled on this yet: ask.
-- **What ends a queue**: the unit dying, morphing, being taken over; an item refused or failed (does the rest go
-  on?); observation lag, since an order's effect can show up an observation late. An order's state no longer says
-  whether a unit carried it out (decided 2026-09-26), so an item is released on the unit's condition, read from
-  the unit itself. The order book already keeps, per unit, the last order sent that replaced its orders and the
-  observation its turn read, and takes it for what the unit is doing while the next observation may not show it
-  (PR #77): that record is the queue's head, and that rule is how the queue tells an item not yet shown from one
-  finished or dropped.
-- **What stays in the game's queue.** Speed mining needs the game's own queue so the next leg starts on the exact
-  step; a queue held by the library advances only at a turn boundary. Micro re-decides every step on purpose, one
-  order per unit. So the game's queue has to stay reachable for those.
-- **What it rewrites**: #44's machinery (`orders/_order_book.py`, `_order.py`, `_order_state.py`), and
-  `docs/orders.md`, where `queued=True`, the reactor example and the cancel paragraph change: taking back an item
-  NachOS still holds becomes a plain withdraw, and only what the game already has needs a real cancel
-  (`AbilityData.cancelled_by`).
+Settled one question at a time, each with the previous agent's recommendation unless it says otherwise.
+
+1. **An item waits on its unit alone.** It goes out once its unit can start it (the worker within reach of its site,
+   the structure landed, a free slot), whatever the bank, the supply cap or the tech say. #46 stands: what the bank
+   lacks, the game refuses, and the refusal shows in `api.action_failures`.
+2. **NachOS holds only an item that costs and that its unit cannot start yet**: a worker's build, a train, a
+   research, an add-on, a structure's morph. Everything else goes to the game as now, queued or not, so speed mining
+   and micro are unchanged. A free item queued behind a held one is held too and goes out right behind it, queued, in
+   the same request. A held build sends a move to its site ahead of it (its lead-in); a flying structure's add-on
+   sends a `LAND` at its point, and goes out with no target once the structure has landed and is idle. A structure's
+   game queue holds only what it runs at once, one item or two with a finished reactor, so the reactor is the same
+   rule with two slots, not an exception.
+3. **A held order is read through `issued_to(unit)`**: the held items in queue order, then the turn's pending ones.
+   `pending` stays the turn's own. `withdraw()` takes a held order back. No reorder. Withdrawing a held build leaves
+   its lead-in.
+4. **`queued` follows the ability's `OrderBehavior`** (first decided as "every unqueued order replaces the held
+   items", then reconsidered with the owner, since the hold removes both reasons a structure made the last thing a
+   turn told it: the money, and the reactor's `queued=True`):
+   - `REPLACES` (move, attack, build): unqueued replaces the held items and the game's queue; queued goes behind.
+   - `QUEUES` (train, research): always goes behind the held items, and never overrides another, in its turn or
+     across turns. Two trains given in one turn are two items. This reverses the in-turn override for structures. A
+     handler that trains every turn piles up held trains, uncharged, and checks `issued_to` itself.
+   - `NEEDS_IDLE` (add-on, morph): unqueued replaces the held items and waits until the structure is idle; queued
+     goes behind.
+   - `KEEPS_ORDERS`: touches nothing.
+5. **A refused release drops everything held behind it** (the owner, against the recommendation to let each item
+   stand alone). A train the game answers `SUCCESS` and silently never makes is no refusal, so a broke structure
+   still loses its held trains one by one.
+6. **NachOS lets go of a unit's whole held queue** when an item ahead is refused, the unit dies (reported or found
+   dead), the unit changes hands, or a lead-in fails: the worker idle out of reach after its move, the structure idle
+   and still flying after its land. The order last sent stands for what the unit is doing for `_SHOWN_WITHIN`
+   observations. The items just leave `issued_to`; nothing else reports them.
+7. **A held kind given to several units is held for one unit, which NachOS picks at `issue`** (the owner's
+   direction, after an item shared by several units' queues was ruled out as too complicated). `order.units` is the
+   unit picked. The pick counts the turn's earlier orders, uses the last observation, is never revised, and breaks
+   ties by lowest id. It ranks by the steps until the unit could start the item: a structure 0 with a free slot,
+   else the steps until a slot frees, from what it runs (`1 - progress` of the product's time; a morph or add-on
+   reports 0 progress) and the full time of what NachOS holds for it, over its slots; a worker by straight-line travel
+   steps at its speed, a busy one (holding items, or its first order a build) only if all are, then the nearest,
+   behind its items. A picked order never drops held items. Larva trains and unit morphs are not held kinds, so they
+   go to every unit as today.
+8. **A held build goes out within 2.5 of its site** (the owner: 4 is too far; AvocaDOS uses 2.5), configurable as
+   `Api(build_reach=2.5)`, fixed per api. For a site that is a unit, a geyser, from its edge.
+9. **Nothing in NachOS's queue is redundant.** The owner: *"the redundant machinery is about game orders. It's
+   explicitly to reduce unnecessary traffic and APM."* An override applies before the redundancy check, which then
+   decides only what goes to the game. A build repeated every turn replaces the held one and restarts its lead-in.
+10. **An add-on or morph given to a busy grounded structure is held too**, by the same "until idle" rule: an orbital
+    as soon as the SCV being trained is done. +2 after +1 is a research behind a research.
+11. **A queued order to several units, some holding items, is split**: it goes out at once to the units holding
+    nothing, in one command, and to each other unit when its queue reaches it. Possible because an order has no state.
+
+Known consequences, for the docs: held trains have no cap (the game capped a queue at 5, 8 with a reactor); a slot
+that frees within `_SHOWN_WITHIN` observations of a release waits up to a turn; an add-on given to several barracks no
+longer goes, by the game's pick, to one with room beside it.
+
+### PR B, the design
+
+- `orders/_held_queue.py`, `HeldQueue`: one unit's held items, head first, each an `(order, unit)` pair so a split
+  group order sits in several queues; its lead-in record (the item it serves, the observation it was sent); what it
+  released within `_SHOWN_WITHIN` observations. `_SHOWN_WITHIN` moves here.
+- `orders/_starting.py`, plain functions: `site_of`, `within_reach`, `slots` (2 for a finished add-on whose
+  `tech_aliases` hold `REACTOR`, 0 while flying, else 1), `travel_steps`, `product_steps`,
+  `steps_until_a_slot_frees`.
+- `OrderBook`: `_held: dict[int, HeldQueue]` and `_build_reach`. `issue` picks (7) and raises `TypeError` for an
+  ability that `needs_placement` given no target while a unit is flying. `_competes_for` is
+  `not queued and behavior in (REPLACES, NEEDS_IDLE)`. `_send`: the turn's orders through the competition; the
+  overrides (4); each order joins a queue (when its unit holds items and it is queued or `QUEUES`, or when it is a held
+  kind) or goes out as given; then each queue releases what can start (after a lead-in unqueued, after a `LAND` with no
+  target), drops itself if its lead-in failed, or sends the head's lead-in unless `_is_doing` says the unit is on it;
+  one request, the turn's orders first; a refusal drops the rest of its queue. `_observe` drops the queues of the
+  dead and of units that changed hands (`units_alliance_changed`, passed by `_game.py`); a change of type drops
+  nothing, so a barracks that lands keeps its add-on. A stale unit is neither started nor given up on.
+- When an item can start: `QUEUES` with a free slot, counting reported and in-flight production, a `NEEDS_IDLE` order
+  filling every slot (the add-on order a barracks still shows a step after); `NEEDS_IDLE` when idle and not flying; a
+  build within reach, and a queued one only after its own turn with the unit idle or on its lead-in; anything else at
+  once.
+- Tests: `_HOLDING_TABLES` with costs, times and speeds beside the free `_TABLES`; an integration test where a held
+  depot takes no minerals until its SCV is within 2.5, and a refinery to check a worker's reach of a geyser.
 
 ### Measurements it needs (`tools/sweep_orders.py`, findings into `docs/game-behavior.md`)
 
@@ -156,14 +222,17 @@ site is taken before the worker arrives fails with `CouldntReachTarget` and is r
 starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
 given, so the game holds none of those sequences and a queue in NachOS would have to.
 
-Still to measure: what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command
-center's and the planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
+Still to measure: whether a worker moved to a geyser ends within 2.5 of its edge (PR B's integration test), and what
+a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
+planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
 
-### Suggested first pull request
+### Pull requests
 
-The three money cases whose state is plain to observe: the worker build (with its behind-a-move form), the flying
-add-on, and the queued train or research. The timing cases follow the same pattern and can come after. Confirm the
-scope with the owner.
+1. **PR A, an order without state**: #115, branch `claude/order-without-state`.
+2. **PR B, the queue**: the money cases (a worker's build, alone or behind moves; a flying structure's add-on; a train
+   or research behind production), the pick, and an add-on or morph on a busy structure. Branch
+   `claude/per-unit-queue`, off `origin/main` once #115 is in. Left for later: warp-ins, larva, a spell on arrival,
+   tech still going up, and a flying command center that lands and morphs.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 
