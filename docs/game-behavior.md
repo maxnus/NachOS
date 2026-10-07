@@ -537,8 +537,8 @@ Each entry ends with how it was seen:
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
 - A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
-  a sieged tank `SiegeMode_SiegeMode` and a burrowed lurker `BurrowDown_Lurker`. A sieged liberator shows `GENERAL_SIEGE`
-  (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
+  a sieged tank its siege mode, which reads as `GENERAL_SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
+  liberator shows `GENERAL_SIEGE` too (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
   A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed

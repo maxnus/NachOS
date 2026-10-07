@@ -12,7 +12,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -79,6 +79,10 @@ _TABLES = make_tables(
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=RawAbilityId.Morph_SurveillanceMode),
         data_pb2.AbilityData(ability_id=RawAbilityId.Morph_OversightMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Unsiege_Unsiege),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_LiberatorAAMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_ObserverMode),
+        data_pb2.AbilityData(ability_id=RawAbilityId.Morph_OverseerMode),
     ],
 )
 
@@ -91,16 +95,16 @@ def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
 class _Game:
     """An order book over a tracker, fed one observation at a time as `Api.play` feeds it."""
 
-    def __init__(self, *verdicts: list[ActionResult]) -> None:
-        """A game that answers each flush with the next of `verdicts`, one result per action sent."""
+    def __init__(self, *verdicts: list[ActionResult], tables: GameData = _TABLES) -> None:
+        """A game with `tables` that answers each flush with the next of `verdicts`, one result per action sent."""
         responses = [
             make_response(action=sc2api_pb2.ResponseAction(result=[_verdict(result) for result in verdict]))
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(tables, Enemy())
         self.map = GameMap(make_game_info())
-        self.book = OrderBook(_TABLES)
+        self.book = OrderBook(tables)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
         """Take in an observation of `units` at `step`, in which the units under the tags `dead` died."""
@@ -610,6 +614,13 @@ class TestSieging:
         game.observe(0, _marine(1))
 
         with pytest.raises(ValueError, match="GENERAL_SIEGE has nothing to be sent as for MARINE"):
+            game.book.issue(game.own(1), _SIEGE)
+
+    def test_a_game_whose_tables_lack_a_siege_refuses_it_at_the_call(self) -> None:
+        game = _Game(tables=make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK)))
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK))
+
+        with pytest.raises(ValueError, match="GENERAL_SIEGE has nothing in this game's tables to be sent as"):
             game.book.issue(game.own(1), _SIEGE)
 
     def test_the_unsiege_goes_out_as_each_type_s_own_aimed_at_nothing(self) -> None:

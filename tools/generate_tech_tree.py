@@ -301,10 +301,9 @@ def _products(
     that shares its ability with the type the table names it for, as a rich refinery shares the plain build with a
     refinery, leaves the table's product in place. An id no type is offered is carried out by the types offered
     another the same curated id stands for and making nothing else by it, as a liberator is offered the siege whose
-    reported id the table names, or
-    by the type `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one nothing carries out is left
-    out, and `tests/test_tech_tree.py` checks that every unit type and upgrade is still made by something. Raises
-    `ValueError` where a type would make two things by one curated id.
+    reported id the table names, or by the type `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one
+    nothing carries out is left out, and `tests/test_tech_tree.py` checks that every unit type and upgrade is still
+    made by something. Raises `ValueError` where a type would make two things by one curated id.
     """
     made: dict[RawAbilityId, UnitTypeId | UpgradeId] = {}
     for unit_type, ability in creation.items():

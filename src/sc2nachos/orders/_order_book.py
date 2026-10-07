@@ -136,7 +136,8 @@ class OrderBook:
         Raises `TypeError` for a target the ability cannot be aimed at, for an order without one to a type that goes
         out aimed at it, as a liberator's siege does, and for a transport's unload at a point aimed at one of `units`
         itself, which is `GENERAL_UNLOAD` for that one: a group given an unload at one of its own transports is two
-        orders. Raises `ValueError` for a custom ability given to a type it has nothing to be sent as for.
+        orders. Raises `ValueError` for a custom ability given to a type it has nothing to be sent as for, or which this
+        game's tables lack an ability it is sent as for.
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
@@ -144,6 +145,8 @@ class OrderBook:
         row = self._game_data.abilities.get(ability)
         sent_as = SENT_AS.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:
+            if row is None:
+                raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
             _check_sent_as(ability, sent_as, given)
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
