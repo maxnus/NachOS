@@ -301,7 +301,7 @@ and for whether an ability makes a structure, and both come out the same within 
    a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
    game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
 3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). PR 3 (branch
-   `claude/one-id-per-type`): `AbilityData.sent_as`, from the `SENT_AS` override, replaces `CUSTOM_ABILITIES`; a
+   `claude/one-id-per-type`): `AbilityData.sent_as`, from the `ABILITIES_SENT_AS_ANOTHER` override, replaces `CUSTOM_ABILITIES`; a
    custom row's target type and cast range are worked out from the abilities it is sent as, and the sieged forms are
    listed too, so a repeated siege is still refused by the game rather than by NachOS. A custom id whose
    `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as

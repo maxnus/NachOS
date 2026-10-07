@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.gamedata._sent_as import Aim
-from sc2nachos.gamedata._techtree import SENT_AS
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId
@@ -39,7 +39,7 @@ _SHOWN_WITHIN = 2
 _IS_AIMED_AT_ITSELF = MappingProxyType(
     {
         sending.ability: ability
-        for ability, sent_as in SENT_AS.items()
+        for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
         for sending in sent_as.values()
         if sending.aim is Aim.ITSELF
     }
@@ -143,7 +143,7 @@ class OrderBook:
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        sent_as = SENT_AS.get(ability, _SENT_UNCHANGED)
+        sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:
             if row is None:
                 raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
@@ -196,7 +196,9 @@ class OrderBook:
         actions: list[sc2api_pb2.Action] = []
         sent: list[tuple[Order[Any], tuple[OwnUnit[Any], ...], int]] = []
         for order, units in self._orders_to_send(issued, forced):
-            order_actions = create_unit_command_actions(order, units, SENT_AS.get(order.ability, _SENT_UNCHANGED))
+            order_actions = create_unit_command_actions(
+                order, units, ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
+            )
             actions += order_actions
             sent.append((order, units, len(order_actions)))
         if self._camera_location is not None:
