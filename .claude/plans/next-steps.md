@@ -64,7 +64,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   2026-10-06), so that a behavior stays one per ability and type. The owner's idea. Done for the unload in #101: one
   `GENERAL_UNLOAD_IN_PLACE` for every transport, drawn from a counter in `AbilityId` that starts at 1,000,000, and an
   unload at a point aimed at the transport itself raises `TypeError` (the owner's choices, 2026-10-06, in review:
-  one id rather than one per transport, "custom ids" rather than "NachOS ids"). A load, three spells and a fortress's attack were swept and
+  one id rather than one per transport, "custom ids" rather than "NachOS ids"). PR 3 below folded
+  `GENERAL_UNLOAD_IN_PLACE` back into `GENERAL_UNLOAD`, which is sent as each transport's own unload. A load, three spells and a fortress's attack were swept and
   need no split (docs/game-behavior.md).
 - **One public id per action** (2026-10-07, step 2). A family whose members do one thing for different performers
   collapses to one id, which is issued, offered and read back; its per-unit ids stay only in `RawAbilityId`. The leveled
@@ -216,7 +217,7 @@ One public id per action. It is the id issued, the one offered in `unit.abilitie
   with one entry for an ability one type performs. That is the owner's choice of the three shapes offered. The
   others were `row.product_for(unit_type)`, as `order_behavior_for` is, and `row.by_performer[unit_type].product`.
   Required tech already lives per unit type, in `TECH_TREE.ability_requirements[unit_type][ability]`.
-- **`GENERAL_` goes from every name**: `LIFT`, `BURROW`, `STIM`, `GATHER`, `SMART`, `SALVAGE`, `UNLOAD_IN_PLACE`,
+- **`GENERAL_` goes from every name**: `LIFT`, `BURROW`, `STIM`, `GATHER`, `SMART`, `SALVAGE`, `SIEGE`,
   `MORPH_ARCHON`, `CANCEL`, and so on. `VIKING_LIFT` (`Morph_VikingFighterMode`) is not in the lift family and keeps
   its name, beside `LIFT`.
 
@@ -299,7 +300,10 @@ and for whether an ability makes a structure, and both come out the same within 
    stays a bool (above), and a type that holds no order of its own keeps it for every ability that makes nothing, so
    a missile turret or a cannon given an attack or a smart now keeps its orders, where it took the behavior of the
    game id it shared with units. A gateway's warp gate morph needed a new override, `SELF_MORPHS`.
-3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). A custom id whose
+3. **One id sent as each unit type's own** (the owner, in the review of #104, 2026-10-07). PR 3 (branch
+   `claude/one-id-per-type`): `AbilityData.sent_as`, from the `SENT_AS` override, replaces `CUSTOM_ABILITIES`; a
+   custom row's target type and cast range are worked out from the abilities it is sent as, and the sieged forms are
+   listed too, so a repeated siege is still refused by the game rather than by NachOS. A custom id whose
    `sent_as` names a game ability per unit type, a group order going out as one command per type and answered as
    #101 answers a group. With it:
    - `GENERAL_UNLOAD` and `GENERAL_UNLOAD_IN_PLACE` become one id, `GENERAL_UNLOAD`, "put everyone down here": sent as
