@@ -1,12 +1,10 @@
 """The base of every curated id enum, which names the raw catalog member of an id it leaves out."""
 
 from collections.abc import Sequence
+from enum import nonmember
 
 from sc2nachos._enum import ReadableIntEnum, UnknownValueError
 from sc2nachos.ids import raw
-
-# The first custom id, above every id the game has.
-CUSTOM_IDS_FROM = 1_000_000
 
 
 class UncuratedIdError(UnknownValueError):
@@ -28,14 +26,23 @@ class IdEnum(ReadableIntEnum):
     Calling the enum on an id it leaves out raises `ValueError`, as with any enum; `read` raises `UncuratedIdError`,
     which names the raw catalog member.
 
-    A member assigned `auto()` is a custom id, one the game does not have: the next above `CUSTOM_IDS_FROM` after the
-    custom ids defined before it. Its value depends on its place among them, so a custom id is never written down
+    A member assigned `auto()` is a custom id, one the game does not have: the next from `CUSTOM_IDS_FROM` up after
+    the custom ids defined before it. Its value depends on its place among them, so a custom id is never written down
     by value.
     """
 
+    CUSTOM_IDS_FROM = nonmember(1_000_000)
+    """The first custom id, above every id the game has."""
+
     @staticmethod
     def _generate_next_value_(name: str, start: int, count: int, last_values: Sequence[int]) -> int:
-        return max((value for value in last_values if value >= CUSTOM_IDS_FROM), default=CUSTOM_IDS_FROM - 1) + 1
+        first = IdEnum.CUSTOM_IDS_FROM
+        return max((value for value in last_values if value >= first), default=first - 1) + 1
+
+    @property
+    def is_custom(self) -> bool:
+        """Whether this is a custom id: the game has none of it, and NachOS sends it as one of the game's."""
+        return self >= self.CUSTOM_IDS_FROM
 
     @classmethod
     def _unknown(cls, value: int) -> UnknownValueError:

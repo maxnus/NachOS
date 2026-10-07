@@ -9,7 +9,7 @@ import pytest
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
-from sc2nachos.ids._id_enum import CUSTOM_IDS_FROM, IdEnum
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
 
 CURATED = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
@@ -19,9 +19,9 @@ PAIRS = tuple(zip(CURATED, RAW, strict=True))
 _MEMBER = re.compile(r"^    [A-Z][A-Z0-9_]* = (.+)$")
 
 
-def _game_ids(enum: type[ReadableIntEnum]) -> list[ReadableIntEnum]:
-    """The members of `enum` the game has, leaving out custom abilities."""
-    return [member for member in enum if not (isinstance(member, AbilityId) and member.is_custom)]
+def _game_ids(enum: type[IdEnum]) -> list[IdEnum]:
+    """The members of `enum` the game has, leaving out custom ids."""
+    return [member for member in enum if not member.is_custom]
 
 
 @pytest.mark.parametrize("enum", CURATED + RAW)
@@ -53,7 +53,7 @@ def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> N
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
-def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
+def test_curated_bridges_to_raw_by_value(curated: type[IdEnum], raw: type[ReadableIntEnum]) -> None:
     """A curated member equals its raw counterpart and interchanges with it as a mapping key."""
     for member in _game_ids(curated):
         counterpart = raw(int(member))
@@ -62,7 +62,7 @@ def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: ty
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
-def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
+def test_curated_is_a_subset_of_the_catalog(curated: type[IdEnum], raw: type[ReadableIntEnum]) -> None:
     """Every curated id the game has exists in the generated catalog — curation filters, and invents only custom
     abilities."""
     catalog = {int(member) for member in raw}
@@ -76,7 +76,8 @@ def test_auto_numbers_custom_ids_after_each_other_whatever_game_ids_lie_between(
         OTHER_GAME = RawAbilityId.Stop
         SECOND = auto()
 
-    assert (Sample.FIRST, Sample.SECOND) == (CUSTOM_IDS_FROM, CUSTOM_IDS_FROM + 1)
+    assert (Sample.FIRST, Sample.SECOND) == (IdEnum.CUSTOM_IDS_FROM, IdEnum.CUSTOM_IDS_FROM + 1)
+    assert Sample.FIRST.is_custom and not Sample.GAME.is_custom
 
 
 def test_custom_abilities_lie_above_every_game_id() -> None:

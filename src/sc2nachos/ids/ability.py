@@ -12,7 +12,7 @@ one takes the bare name: ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS beside its th
 
 from enum import auto
 
-from sc2nachos.ids._id_enum import CUSTOM_IDS_FROM, IdEnum
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId
 
 
@@ -520,8 +520,3 @@ class AbilityId(IdEnum):
     # The catalog also holds MorphZerglingToBaneling, which a zergling is never offered and which does nothing.
     ZERGLING_MORPH_BANELING = RawAbilityId.MorphToBaneling_Baneling
     ZERGLING_UNBURROW = RawAbilityId.BurrowUp_Zergling
-
-    @property
-    def is_custom(self) -> bool:
-        """Whether this is a custom id: the game has no ability of it, and NachOS sends it as one of the game's."""
-        return self >= CUSTOM_IDS_FROM
