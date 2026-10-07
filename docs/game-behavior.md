@@ -166,12 +166,13 @@ Each entry ends with how it was seen:
   cloaked observer reports none (#12; corpus).
 - Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
   tag 2³², which names no unit (#25; corpus).
-- Order progress runs from 0 to 1 for a train, a research and a larva's egg, evenly over the build time in the game's
-  table, and is 0 otherwise (#25; corpus). A morph's order reads 0 from start to end, and so does a structure's
-  building an add-on: an orbital command, a planetary fortress, a lair, a hive, a greater spire, a tech lab, a
-  reactor, every cocoon and the lurker egg. Nothing a unit reports says how far a morph has got. Each was done once
-  the table's build time had passed since the order, to within the 16 steps between reads, except the lurker egg,
-  which hatched 402 to 418 steps after the order against the table's 553 (tool `sweep_orders`, build 75689).
+- Order progress runs from 0 to 1 for training and research and is 0 otherwise (#25; corpus). A larva's egg
+  counts up like a train, and an SCV's and an egg's run evenly over the build time in the game's table. A
+  morph's order reads 0 from start to end, and so does a structure's building an add-on: an orbital command, a
+  planetary fortress, a lair, a hive, a greater spire, a tech lab, a reactor, every cocoon and the lurker egg.
+  Nothing a unit reports says how far a morph has got. Each was done once the table's build time had passed since
+  the order, to within the 16 steps between reads, except the lurker egg, which hatched 402 to 418 steps after the
+  order against the table's 553 (tool `sweep_orders`, build 75689).
 - Points come back in single precision (tested). Facing is in radians from the +x axis, and z is on the
   terrain-height scale (stated).
 - Units on flat ground stand up to 0.03 below the map's height or up to 0.16 above it (corpus).

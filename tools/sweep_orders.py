@@ -3580,8 +3580,7 @@ def _autocast_unburrow(game: _Game, burrowed: UnitTypeId, unburrow: Ability, tri
 
 # --- What a unit reports of how far a morph has got, and an injected hatchery of when its larva come
 
-# What every morph in `_STRUCTURE_WORK` and `_UNIT_MORPHS` needs standing, and the half width each is given. They are
-# made by debug command rather than waived by `tech_tree`, which changes how fast a barracks trains.
+# What every morph in `_STRUCTURE_WORK` and `_UNIT_MORPHS` needs standing, and the half width each is given.
 _MORPH_NEEDS = (
     (UnitTypeId.BARRACKS, 4),
     (UnitTypeId.ENGINEERING_BAY, 3),
@@ -3662,17 +3661,23 @@ def _build_steps(game: _Game, ability: Ability, performer: int) -> float | None:
 
 def _progress_summary(reads: Sequence[_ProgressRead], ordered_at: int, build_steps: float | None) -> dict[str, object]:
     """What one unit's reads show: its type, build progress and order progress while it worked, and the step it was
-    first read done at against the step its build time has it done."""
-    working = [read for read in reads if len(read) > 1 and read[3]]
-    done = next((read for read in reads if len(read) == 1 or not read[3]), None)
+    first read done at, after it last worked, against the step its build time has it done."""
+    at_work = [index for index, read in enumerate(reads) if len(read) > 1 and read[3]]
+    working = [reads[index] for index in at_work]
+    last = at_work[-1] if at_work else None
+    done = None if last is None or last + 1 >= len(reads) else reads[last + 1]
     progress = [cast("list[dict[str, object]]", read[3])[0].get("progress", 0) for read in working]
+    if last is None:
+        after: object = "never started"
+    else:
+        after = None if done is None else ("gone" if len(done) == 1 else done[1])
     return {
         "type while working": sorted({str(read[1]) for read in working}),
         "build progress while working": sorted({cast("float", read[2]) for read in working}),
         "order progress, first and last read": [progress[0], progress[-1]] if progress else None,
-        "last read working": working[-1][0] if working else None,
+        "last read working": None if last is None else reads[last][0],
         "first read done": None if done is None else done[0],
-        "after": None if done is None else ("gone" if len(done) == 1 else done[1]),
+        "after": after,
         "ordered at plus build steps": None if build_steps is None else ordered_at + build_steps,
     }
 
@@ -3888,7 +3893,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "attack-or-scan": _Sweep(Race.TERRAN, _attack_or_scan, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "scan-only": _Sweep(Race.TERRAN, _scan_only, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "unburrow-autocast": _Sweep(Race.TERRAN, _unburrow_autocast, (*_BASE_CHEATS, Cheat.TECH_TREE)),
-    # Not `tech_tree`, which changes how fast a barracks trains; what each morph needs is made instead.
+    # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
+    # instead.
     "progress": _Sweep(Race.ZERG, _progress),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
