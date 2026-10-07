@@ -976,7 +976,7 @@ class TestAgainstTheRealGame:
             # An add-on is a unit of its own, seen as soon as it is started.
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 13), size=5)))
             game.turn(4)
-            game.order(AbilityId.GENERAL_BUILD_REACTOR, _own(game, UnitTypeId.BARRACKS))
+            game.order(AbilityId.BUILD_REACTOR, _own(game, UnitTypeId.BARRACKS))
             _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.REACTOR_BARRACKS), steps=1)
             reactor = _own(game, UnitTypeId.REACTOR_BARRACKS)
             assert reactor.build_progress < 0.1
@@ -1005,7 +1005,7 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.SCV_BUILD_ENGINEERING_BAY, scv, target=spot)
             _until(game, lambda: len(_of(seen, OwnConstructionStartedEvent)) == 3, steps=2)
             bay = _of(seen, OwnConstructionStartedEvent)[-1].unit
-            game.order(AbilityId.GENERAL_CANCEL_BUILDING, bay)
+            game.order(AbilityId.CANCEL, bay)
             _until(game, lambda: bay.is_dead)
             assert UnitDiedEvent(bay, step=game.step) in seen
 
@@ -1045,9 +1045,9 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, _own(game, UnitTypeId.GHOST_ACADEMY))
             _until(game, lambda: UpgradeId.GHOST_CLOAK in game.tracker.upgrade_tracker.own)
             ghost = _own(game, UnitTypeId.GHOST)
-            game.order(AbilityId.GHOST_CLOAK_ON, ghost)
+            game.order(AbilityId.CLOAK_ON, ghost)
             _until(game, lambda: _of(seen, OwnUnitCloakChangedEvent), steps=1)
-            game.order(AbilityId.GHOST_CLOAK_OFF, ghost)
+            game.order(AbilityId.CLOAK_OFF, ghost)
             _until(game, lambda: len(_of(seen, OwnUnitCloakChangedEvent)) == 2, steps=1)
             assert [(event.unit, event.previous_cloak_state) for event in _of(seen, OwnUnitCloakChangedEvent)] == [
                 (ghost, CloakState.NOT_CLOAKED),
@@ -1113,7 +1113,8 @@ class TestAgainstTheRealGame:
             (damaged,) = _of(seen, OwnUnitDamagedEvent)
             assert damaged.unit is zealot and damaged.damage == pytest.approx(zealot.shield_max - 10, abs=1)
 
-            # Two templar ordered to merge walk to each other, each reporting the order it runs, and become an archon.
+            # Two templar ordered to merge walk to each other, each reporting the merge aimed at the other, and become
+            # an archon.
             at = home.towards(middle, 5)
             game.debug(game.create(UnitTypeId.HIGH_TEMPLAR, at), game.create(UnitTypeId.HIGH_TEMPLAR, at + (6.0, 0.0)))
             _until(game, lambda: len(game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HIGH_TEMPLAR)) == 2)
@@ -1123,11 +1124,12 @@ class TestAgainstTheRealGame:
                 if isinstance(u, OwnUnit)
             ]
             merge = raw_pb2.ActionRawUnitCommand(
-                ability_id=AbilityId.GENERAL_MORPH_ARCHON, unit_tags=[unit.tag for unit in templar]
+                ability_id=AbilityId.MORPH_ARCHON, unit_tags=[unit.tag for unit in templar]
             )
             game.client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=merge))])
             _until(game, lambda: all(unit.orders for unit in templar), steps=1)
-            assert [unit.orders[0].ability for unit in templar] == [AbilityId.GENERAL_MORPH_ARCHON_EXACT] * 2
+            assert [unit.orders[0].ability for unit in templar] == [AbilityId.MORPH_ARCHON] * 2
+            assert [unit.orders[0].target for unit in templar] == templar[::-1]
             _until(game, lambda: _alerts(seen, Alert.MERGE_COMPLETE))
             assert game.tracker.unit_tracker.present.own.of_type(UnitTypeId.ARCHON)
 
@@ -1258,9 +1260,9 @@ class TestAgainstTheRealGame:
             ]
 
             # The zealot walks into the circle and out of it again, and an enemy overlord made inside it has entered it.
-            game.order(AbilityId.GENERAL_MOVE, zealot, target=circle.center)
+            game.order(AbilityId.MOVE, zealot, target=circle.center)
             _until(game, lambda: _of(watched, OwnUnitEnteredAreaEvent), steps=2)
-            game.order(AbilityId.GENERAL_MOVE, zealot, target=home.towards(middle, 20))
+            game.order(AbilityId.MOVE, zealot, target=home.towards(middle, 20))
             _until(game, lambda: _of(watched, OwnUnitLeftAreaEvent), steps=2)
             assert [type(event) for event in _of(watched, *_AREAS) if event.unit is zealot] == list(_AREAS)
             game.debug(game.create(UnitTypeId.OVERLORD, circle.center, owner=3 - game.player))

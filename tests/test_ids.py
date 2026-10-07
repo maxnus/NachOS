@@ -1,17 +1,27 @@
 """Identifier enums: the curated public API and the raw catalog it is defined from."""
 
 import importlib.util
+import re
+from enum import auto
 from pathlib import Path
 
 import pytest
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
 
 CURATED = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
 RAW = (RawUnitTypeId, RawAbilityId, RawUpgradeId, RawBuffId, RawEffectId)
 PAIRS = tuple(zip(CURATED, RAW, strict=True))
+# A member's line in an enum's source, and what it is assigned.
+_MEMBER = re.compile(r"^    [A-Z][A-Z0-9_]* = (.+)$")
+
+
+def _game_ids(enum: type[IdEnum]) -> list[IdEnum]:
+    """The members of `enum` the game has, leaving out custom ids."""
+    return [member for member in enum if not member.is_custom]
 
 
 @pytest.mark.parametrize("enum", CURATED + RAW)
@@ -27,37 +37,53 @@ def test_ids_are_readable_int_enums(enum: type[ReadableIntEnum]) -> None:
 
 @pytest.mark.parametrize("enum", CURATED)
 def test_curated_members_are_not_bare_integers(enum: type[ReadableIntEnum]) -> None:
-    """Curated modules define members from the raw catalog, never as literal ids.
+    """Curated modules define members from the raw catalog, never as literal ids, and custom ids by `auto()`, which
+    numbers them above the game's.
 
     No game id is written as a number, so a patch that renumbers something needs a regeneration, not a hand-edit.
     """
     import inspect
 
     source = inspect.getsource(enum)
-    assignments = [
-        line.split("=", 1)[1].strip()
-        for line in source.splitlines()
-        if "=" in line and not line.strip().startswith(("#", '"', "'"))
-    ]
+    assignments = [member[1].strip() for line in source.splitlines() if (member := _MEMBER.match(line))]
     assert assignments, f"{enum.__name__} has no members"
     for assignment in assignments:
-        assert assignment.startswith("Raw"), f"{enum.__name__} member assigned a literal: {assignment}"
+        literal = f"{enum.__name__} member assigned a literal: {assignment}"
+        assert assignment.startswith("Raw") or assignment == "auto()", literal
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
-def test_curated_bridges_to_raw_by_value(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
+def test_curated_bridges_to_raw_by_value(curated: type[IdEnum], raw: type[ReadableIntEnum]) -> None:
     """A curated member equals its raw counterpart and interchanges with it as a mapping key."""
-    for member in curated:
+    for member in _game_ids(curated):
         counterpart = raw(int(member))
         assert member == counterpart
         assert {counterpart: "value"}[member] == "value"
 
 
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
-def test_curated_is_a_subset_of_the_catalog(curated: type[ReadableIntEnum], raw: type[ReadableIntEnum]) -> None:
-    """Every curated id exists in the generated catalog — curation filters, it never invents."""
+def test_curated_is_a_subset_of_the_catalog(curated: type[IdEnum], raw: type[ReadableIntEnum]) -> None:
+    """Every curated id the game has exists in the generated catalog — curation filters, and invents only custom
+    abilities."""
     catalog = {int(member) for member in raw}
-    assert {int(member) for member in curated} <= catalog
+    assert {int(member) for member in _game_ids(curated)} <= catalog
+
+
+def test_auto_numbers_custom_ids_after_each_other_whatever_game_ids_lie_between() -> None:
+    class Sample(IdEnum):
+        GAME = RawAbilityId.Smart
+        FIRST = auto()
+        OTHER_GAME = RawAbilityId.Stop
+        SECOND = auto()
+
+    assert (Sample.FIRST, Sample.SECOND) == (IdEnum.CUSTOM_IDS_FROM, IdEnum.CUSTOM_IDS_FROM + 1)
+    assert Sample.FIRST.is_custom and not Sample.GAME.is_custom
+
+
+def test_custom_abilities_lie_above_every_game_id() -> None:
+    custom = [member for member in AbilityId if member.is_custom]
+    assert custom, "there are custom abilities"
+    assert min(custom) > max(int(member) for member in RawAbilityId)
 
 
 @pytest.mark.parametrize("enum", CURATED + RAW)
@@ -81,12 +107,38 @@ def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
         enum(unknown)
 
 
+@pytest.mark.parametrize(
+    ("reported", "ordered"),
+    [
+        (RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, AbilityId.SIEGE),
+        (RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode, AbilityId.UNSIEGE),
+        (RawAbilityId.SiegeMode_SiegeMode, AbilityId.SIEGE),
+        (RawAbilityId.Morph_ObserverMode, AbilityId.UNSIEGE),
+        (RawAbilityId.Archon_Warp_Target, AbilityId.MORPH_ARCHON),
+    ],
+)
+def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: RawAbilityId, ordered: AbilityId) -> None:
+    """Read and got, it is the member; called, it is not one, since the game's tables hold a row of its own."""
+    assert AbilityId.read(reported) is ordered
+    assert AbilityId.get(reported) is ordered
+    with pytest.raises(ValueError):
+        AbilityId(reported)
+
+
+@pytest.mark.parametrize("enum", CURATED)
+def test_a_remapped_id_is_no_members_own_and_reads_as_a_member(enum: type[IdEnum]) -> None:
+    """Calling the enum must not answer a remapped id, since the game's tables hold a row of its own under it."""
+    for remapped, own in enum._REMAPPED_IDS.items():
+        assert remapped not in enum._value2member_map_
+        assert own in enum._value2member_map_
+
+
 def test_known_ids_have_expected_values() -> None:
     """A few ids pinned to the game's numbering, as a canary for a bad regeneration."""
     assert UnitTypeId.SCV == 45
     assert UnitTypeId.MARINE == 48
     assert UnitTypeId.COMMAND_CENTER == 18
-    assert AbilityId.GENERAL_SMART == 1
+    assert AbilityId.SMART == 1
 
 
 def test_renaming_preserves_identity() -> None:

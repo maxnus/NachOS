@@ -20,7 +20,12 @@ from types import MappingProxyType
 
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.gamedata import Attribute, TechRequirements, UnitTypeUpgrade, UpgradeType, WeaponUpgrade
-from sc2nachos.gamedata._techtree import MISNAMED_RESEARCH_ABILITIES, UNNAMED_CREATION_ABILITIES, TechTree
+from sc2nachos.gamedata._techtree import (
+    MISNAMED_RESEARCH_ABILITIES,
+    SELF_MORPHS,
+    UNNAMED_CREATION_ABILITIES,
+    TechTree,
+)
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
 
@@ -46,8 +51,8 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 '''
 
-type Trial = tuple[UnitTypeId, AbilityId, UnitTypeId, str]
-"""A unit type ordered an ability, the unit type the ability makes, and what the order did."""
+type Trial = tuple[UnitTypeId, RawAbilityId, UnitTypeId, str]
+"""A unit type ordered an ability, by the game's own id, the unit type the ability makes, and what the order did."""
 
 
 def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object]) -> TechTree:
@@ -70,22 +75,26 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
         )
     found = read_upgrades(upgrade_findings)
     trials = _trials(findings)
-    made = {(ability, product) for _, ability, product, result in trials if result in ("morph", "build")}
+    made = {(int(ability), product) for _, ability, product, result in trials if result in ("morph", "build")}
     if unconfirmed := sorted(
-        f"{u.name} by {a.name}" for a, u in UNNAMED_CREATION_ABILITIES.items() if (a, u) not in made
+        f"{u.name} by {a.name}" for a, u in UNNAMED_CREATION_ABILITIES.items() if (int(a), u) not in made
     ):
         raise ValueError(f"the sweep did not see these make their unit type: {', '.join(unconfirmed)}")
 
+    # Read by the game's own ids, which tell apart what a type is offered of an action several types perform: a
+    # zergling offered a roach's burrow burrows as a zergling.
     turned = {(performer, ability) for performer, ability, _, result in trials if result == "other"}
-    offered: dict[UnitTypeId, set[AbilityId]] = {}
+    offered: dict[UnitTypeId, set[RawAbilityId]] = {}
     for type_name, ability_names in _mapping(findings["offered"]).items():
         if (unit_type := _unit_type(type_name)) is not None:
-            abilities = filter(None, map(_ability, _strings(ability_names)))
-            offered[unit_type] = {ability for ability in abilities if (unit_type, ability) not in turned}
+            abilities = filter(None, map(_game_ability, _strings(ability_names)))
+            offered[unit_type] = {
+                ability for ability in abilities if _fold(ability) and (unit_type, ability) not in turned
+            }
 
-    needs: dict[tuple[UnitTypeId, AbilityId], TechRequirements] = {}
+    needs: dict[tuple[UnitTypeId, RawAbilityId], TechRequirements] = {}
     for record in _records(findings["requirements"]):
-        performer, ability = _unit_type(str(record["performer"])), _ability(str(record["ability"]))
+        performer, ability = _unit_type(str(record["performer"])), _game_ability(str(record["ability"]))
         if performer is None or ability is None or ability not in offered.get(performer, ()):
             continue
         structures = frozenset(_required(_unit_type, record["structures"]))
@@ -96,20 +105,22 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     if unread := sorted(f"{unit.name} {ability.name}" for unit, ability in pairs if (unit, ability) not in needs):
         raise ValueError(f"what these need was never read: {', '.join(unread)}")
 
-    creation_abilities = _creation_abilities(findings)
+    creation = _creation_abilities(findings)
+    sources = _morph_sources(trials)
     return TechTree(
         base_build=int(str(findings["base_build"])),
         ability_requirements=MappingProxyType(
+            {unit: MappingProxyType(_folded_needs(unit, abilities, needs)) for unit, abilities in offered.items()}
+        ),
+        ability_cancels=MappingProxyType(_cancels(findings)),
+        creation_abilities=MappingProxyType({unit: _folded(ability) for unit, ability in creation.items()}),
+        ability_products=MappingProxyType(
             {
-                unit: MappingProxyType({ability: needs[unit, ability] for ability in abilities})
-                for unit, abilities in offered.items()
+                ability: MappingProxyType(by_maker)
+                for ability, by_maker in _products(creation, offered, findings).items()
             }
         ),
-        ability_remaps=MappingProxyType(_remaps(findings)),
-        ability_cancels=MappingProxyType(_cancels(findings)),
-        creation_abilities=MappingProxyType(creation_abilities),
-        ability_products=MappingProxyType(_products(creation_abilities, findings)),
-        morph_sources=MappingProxyType(_morph_sources(trials)),
+        morph_sources=MappingProxyType(sources),
         # A pylon stands in its own field and needs no power, though the sweep once recorded one read as powered.
         power_consumers=frozenset(filter(None, map(_unit_type, _strings(findings["powered"])))) - {UnitTypeId.PYLON},
         unit_type_upgrades=MappingProxyType(
@@ -118,6 +129,21 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
         upgrade_types=MappingProxyType(found.types),
         upgrade_levels=MappingProxyType(found.levels),
     )
+
+
+def _folded_needs(
+    unit_type: UnitTypeId,
+    abilities: Iterable[RawAbilityId],
+    needs: Mapping[tuple[UnitTypeId, RawAbilityId], TechRequirements],
+) -> dict[AbilityId, TechRequirements]:
+    """What `unit_type` needs for each ability it is offered, by the curated id. Raises `ValueError` where two of the
+    game's ids one curated id stands for need different things, which one id could not say."""
+    folded: dict[AbilityId, TechRequirements] = {}
+    for ability in sorted(abilities, key=int):
+        curated = _folded(ability)
+        if folded.setdefault(curated, needs[unit_type, ability]) != needs[unit_type, ability]:
+            raise ValueError(f"{unit_type.name} needs different things for the ids {curated.name} stands for")
+    return folded
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,25 +259,26 @@ def uncurated(findings: Mapping[str, object]) -> frozenset[str]:
     return frozenset(name for name in names if _ability(name) is None)
 
 
-def _remaps(findings: Mapping[str, object]) -> dict[AbilityId, AbilityId]:
-    """The general ability each ability stands for, as the game's table says, where the curated ids name both."""
-    remaps = _mapping(findings["remaps"]).items()
-    return {exact: general for e, g in remaps if (exact := _ability(e)) and (general := _ability(str(g)))}
-
-
 def _cancels(findings: Mapping[str, object]) -> dict[AbilityId, AbilityId]:
-    """The cancel a structure was offered for each thing it was set making, where the curated ids name both."""
-    cancels = _mapping(findings["cancels"]).items()
-    return {work: cancel for w, c in cancels if (work := _ability(w)) and (cancel := _ability(str(c)))}
+    """The cancel a structure was offered for each thing it was set making, where the curated ids name both. Raises
+    `ValueError` where the game's ids one curated id stands for were offered different cancels."""
+    cancels: dict[AbilityId, AbilityId] = {}
+    for work_name, cancel_name in _mapping(findings["cancels"]).items():
+        work, cancel = _game_ability(work_name), _game_ability(str(cancel_name))
+        if work is None or cancel is None or (curated := _fold(work)) is None or (by := _fold(cancel)) is None:
+            continue
+        if cancels.setdefault(curated, by) is not by:
+            raise ValueError(f"the ids {curated.name} stands for are cancelled by different ids")
+    return cancels
 
 
-def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, AbilityId]:
-    """The ability that makes each unit type: the game's table's where that works, else the unnamed creation ability,
-    of which there may be only one."""
+def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, RawAbilityId]:
+    """The game's own ability that makes each unit type: the game's table's where that works, else the unnamed creation
+    ability, of which there may be only one."""
     named = {
         unit_type: ability
         for type_name, ability_name in _mapping(findings["creation_abilities"]).items()
-        if (unit_type := _unit_type(type_name)) and (ability := _ability(str(ability_name)))
+        if (unit_type := _unit_type(type_name)) and (ability := _game_ability(str(ability_name))) and _fold(ability)
     }
     unnamed: defaultdict[UnitTypeId, set[AbilityId]] = defaultdict(set)
     for ability, unit_type in UNNAMED_CREATION_ABILITIES.items():
@@ -259,27 +286,57 @@ def _creation_abilities(findings: Mapping[str, object]) -> dict[UnitTypeId, Abil
             unnamed[unit_type].add(ability)
     if ambiguous := sorted(unit_type.name for unit_type, abilities in unnamed.items() if len(abilities) > 1):
         raise ValueError(f"the table names no working ability for these, and more than one is listed: {ambiguous}")
-    return named | {unit_type: ability for unit_type, (ability,) in unnamed.items()}
+    return named | {unit_type: RawAbilityId(ability) for unit_type, (ability,) in unnamed.items()}
 
 
 def _products(
-    creation_abilities: Mapping[UnitTypeId, AbilityId], findings: Mapping[str, object]
-) -> dict[AbilityId, UnitTypeId | UpgradeId]:
-    """The unit type or upgrade each ability makes, including the unnamed creation abilities and the research abilities
-    the table misnames. A type that shares its ability with the type the table names it for, as a rich refinery shares
-    the plain build with a refinery, leaves the table's product in place."""
-    products: dict[AbilityId, UnitTypeId | UpgradeId] = {}
-    for unit_type, ability in creation_abilities.items():
-        if UNNAMED_CREATION_ABILITIES.get(ability) is not unit_type:
-            products.setdefault(ability, unit_type)
+    creation: Mapping[UnitTypeId, RawAbilityId],
+    offered: Mapping[UnitTypeId, Iterable[RawAbilityId]],
+    findings: Mapping[str, object],
+) -> dict[AbilityId, dict[UnitTypeId, UnitTypeId | UpgradeId]]:
+    """The unit type or upgrade each ability makes, by the unit type that carries it out, including the unnamed creation
+    abilities and the research abilities the table misnames.
+
+    Each of the game's ids makes one thing; the curated id several stand for makes what each type's own does. A type
+    that shares its ability with the type the table names it for, as a rich refinery shares the plain build with a
+    refinery, leaves the table's product in place. An id no type is offered is carried out by the types offered
+    another the same curated id stands for and making nothing else by it, as a liberator is offered the siege whose
+    reported id the table names, or by the type `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one
+    nothing carries out is left out, and `tests/test_tech_tree.py` checks that every unit type and upgrade is still
+    made by something. Raises `ValueError` where a type would make two things by one curated id.
+    """
+    made: dict[RawAbilityId, UnitTypeId | UpgradeId] = {}
+    for unit_type, ability in creation.items():
+        if UNNAMED_CREATION_ABILITIES.get(_folded(ability)) is not unit_type:
+            made.setdefault(ability, unit_type)
     for ability, unit_type in UNNAMED_CREATION_ABILITIES.items():
-        products.setdefault(ability, unit_type)
+        made.setdefault(RawAbilityId(ability), unit_type)
     for upgrade_name, ability_name in _mapping(findings["research_abilities"]).items():
-        if (upgrade := _upgrade(upgrade_name)) and (ability := _ability(str(ability_name))):
-            products[ability] = upgrade
+        if (upgrade := _upgrade(upgrade_name)) and (ability := _game_ability(str(ability_name))) and _fold(ability):
+            made[ability] = upgrade
     for upgrade, ability in MISNAMED_RESEARCH_ABILITIES.items():
-        products[ability] = upgrade
-    return products
+        made[RawAbilityId(ability)] = upgrade
+    makers: defaultdict[RawAbilityId, set[UnitTypeId]] = defaultdict(set)
+    curated_makers: defaultdict[AbilityId, set[UnitTypeId]] = defaultdict(set)
+    for unit_type, abilities in offered.items():
+        for ability in abilities:
+            makers[ability].add(unit_type)
+            curated_makers[_folded(ability)].add(unit_type)
+    products: defaultdict[AbilityId, dict[UnitTypeId, UnitTypeId | UpgradeId]] = defaultdict(dict)
+    # The ids some type is offered first, so that one no type is offered goes to the types left making nothing by the
+    # curated id it reads as.
+    for ability, product in sorted(made.items(), key=lambda entry: not makers.get(entry[0])):
+        curated = _folded(ability)
+        self_morph = SELF_MORPHS.get(curated)
+        carried_out_by = (
+            makers.get(ability)
+            or curated_makers.get(curated, set()) - products[curated].keys()
+            or ({self_morph} if self_morph is not None else set())
+        )
+        for maker in carried_out_by:
+            if products[curated].setdefault(maker, product) is not product:
+                raise ValueError(f"{maker.name} makes two things by {curated.name}")
+    return dict(products)
 
 
 def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
@@ -381,7 +438,7 @@ def _order(value: object) -> str:
 def _trials(findings: Mapping[str, object]) -> list[Trial]:
     trials: list[Trial] = []
     for record in _records(findings["made"]):
-        performer, ability = _unit_type(str(record["performer"])), _ability(str(record["ability"]))
+        performer, ability = _unit_type(str(record["performer"])), _game_ability(str(record["ability"]))
         product = _unit_type(str(record["product"]))
         if performer is not None and ability is not None and product is not None:
             trials.append((performer, ability, product, str(record["result"])))
@@ -392,8 +449,25 @@ def _unit_type(name: str) -> UnitTypeId | None:
     return UnitTypeId.get(RawUnitTypeId[name]) if name in RawUnitTypeId.__members__ else None
 
 
+def _game_ability(name: str) -> RawAbilityId | None:
+    """The game's own ability `name`, whether or not a curated id stands for it."""
+    return RawAbilityId[name] if name in RawAbilityId.__members__ else None
+
+
+def _fold(ability: RawAbilityId) -> AbilityId | None:
+    """The curated id that stands for the game's `ability`: its own, or the id of an action several types perform."""
+    return AbilityId.get(ability)
+
+
+def _folded(ability: RawAbilityId) -> AbilityId:
+    if (curated := _fold(ability)) is None:
+        raise ValueError(f"no curated id stands for {ability.name}")
+    return curated
+
+
 def _ability(name: str) -> AbilityId | None:
-    return AbilityId.get(RawAbilityId[name]) if name in RawAbilityId.__members__ else None
+    """The curated id that stands for the game's ability `name`."""
+    return None if (ability := _game_ability(name)) is None else _fold(ability)
 
 
 def _upgrade(name: str) -> UpgradeId | None:

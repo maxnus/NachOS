@@ -157,7 +157,8 @@ To post the report on the pull request, add a job after the match:
 On a self-hosted runner, `setup-sc2` uses the client already installed there and never downloads one. Install the
 [Linux 4.10 client](https://github.com/Blizzard/s2client-proto#downloads) on the machine, and set `SC2PATH` to it
 unless it is at `~/StarCraftII`. Your maps are still
-copied in for each game.
+copied in for each game. uv keeps the packages it downloads in the runner user's `~/.cache/uv`, where later games
+find them; `uv cache prune` clears out the ones no longer used.
 
 Keep self-hosted runners off public repositories: a pull request from a fork could run its code on your machine.
 

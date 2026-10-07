@@ -76,7 +76,7 @@ _ADD_ONS = {
     UnitTypeId.FACTORY: (UnitTypeId.TECH_LAB_FACTORY, UnitTypeId.REACTOR_FACTORY),
     UnitTypeId.STARPORT: (UnitTypeId.TECH_LAB_STARPORT, UnitTypeId.REACTOR_STARPORT),
 }
-_BUILD_ADD_ON = {"TechLab": AbilityId.GENERAL_BUILD_TECH_LAB, "Reactor": AbilityId.GENERAL_BUILD_REACTOR}
+_BUILD_ADD_ON = {"TechLab": AbilityId.BUILD_TECH_LAB, "Reactor": AbilityId.BUILD_REACTOR}
 # Not ordered while switching toggles: anything that makes, researches, sends the unit somewhere, stops it or empties
 # a transport, whose unload is read while it still carries something. Salvaging a bunker and exploding a baneling are
 # toggles of a kind too, and harmless here.
@@ -97,7 +97,7 @@ _NOT_SWITCHES += (
 _WORKERS = {Race.TERRAN: UnitTypeId.SCV, Race.PROTOSS: UnitTypeId.PROBE, Race.ZERG: UnitTypeId.DRONE}
 # The kinds of work a structure is set to while its cancel is read; arming a nuke is a `Build`.
 _MAKING = ("Train", "Research", "UpgradeTo", "Build")
-# Of those, the work a structure's single queue cancel takes back, which `GENERAL_CANCEL_LAST` stands for: each kind
+# Of those, the work a structure's single queue cancel takes back, which `CANCEL_LAST` stands for: each kind
 # is tried once per structure and paired with no cancel. Every morph and add-on is tried and paired with the cancel it
 # was offered (tool `sweep_orders`).
 _QUEUE_WORK = ("Train", "Research")
@@ -322,7 +322,7 @@ class TechSweep:
 
     def _build_add_ons(self, made: Iterable[raw_pb2.Unit]) -> None:
         """Order a tech lab on the second of each add-on builder and a reactor on the third."""
-        builds = (None, AbilityId.GENERAL_BUILD_TECH_LAB, AbilityId.GENERAL_BUILD_REACTOR)
+        builds = (None, AbilityId.BUILD_TECH_LAB, AbilityId.BUILD_REACTOR)
         counts: defaultdict[int, int] = defaultdict(int)
         for unit in sorted(made, key=lambda unit: unit.tag):
             if unit.unit_type not in _ADD_ONS:
@@ -627,7 +627,7 @@ class TechSweep:
         self.read_requirements(found)
 
     def _read_tech_lab_researching(self, unit_type: UnitTypeId) -> set[Pair]:
-        """What a tech lab of `unit_type` is offered while it researches, and whether `GENERAL_CANCEL_LAST` takes the
+        """What a tech lab of `unit_type` is offered while it researches, and whether `CANCEL_LAST` takes the
         research back, which is what `cancelled_by` names for it.
 
         Only a structure builds a tech lab, and one created alone is offered no research, so the one on its host since
@@ -645,13 +645,13 @@ class TechSweep:
         found, busy = self._read_until_idle(standing.tag)
         if not busy:
             logger.warning("A {} set to {} was never seen busy", unit_type.name, _ability_name(research))
-        answer = self._game.order(int(AbilityId.GENERAL_CANCEL_LAST), standing.tag)
+        answer = self._game.order(int(AbilityId.CANCEL_LAST), standing.tag)
         self._client.step(2)
         after = next((unit for unit in self._mine() if unit.tag == standing.tag), None)
         took_back = answer == SUCCESS and after is not None and not after.orders
         logger.log(
             "INFO" if took_back else "WARNING",
-            "GENERAL_CANCEL_LAST {} a {}'s {}",
+            "CANCEL_LAST {} a {}'s {}",
             "took back" if took_back else "did not take back",
             unit_type.name,
             _ability_name(research),

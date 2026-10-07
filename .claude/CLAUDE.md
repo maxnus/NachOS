@@ -23,6 +23,9 @@
 
 ## Reviews
 
+- **Review every pull request you open** before calling it ready: read its whole diff on GitHub, for correctness,
+  tests, docs and generated files, and report the findings to the owner, or say there are none. The
+  `claude-code-review` workflow posts only high-confidence bugs and does not replace this.
 - **Walking through findings**: one `AskUserQuestion` per finding, with everything in the question text, since text
   written before the question is not shown with it: file and line, the original snippet, the owner's comment if
   there is one, and the verdict (confirmed, partly, not recommended; new in this PR or already there). Put proposed

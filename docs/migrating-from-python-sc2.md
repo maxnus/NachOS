@@ -24,7 +24,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   Faster speed ([Units](#units)).
 - **The tables are keyed by id, and the relations between them were swept in game**, replacing python-sc2's
   hand-written dicts ([The tables](#the-tables)).
-- **Orders are buffered and sent once a turn** through `api.orders`, and each reports its own outcome
+- **Orders are buffered and sent once a turn** through `api.orders`, and each reports the game's answer
   ([Orders](#orders)). Debug commands are still protocol messages through `api.client.debug`.
 
 ## Running a game
@@ -120,20 +120,22 @@ reads it, is in [game-behavior.md](game-behavior.md).
 
 ## Orders
 
-[orders.md](orders.md) says how an order is given, what it competes with, and what becomes of it.
+[orders.md](orders.md) says how an order is given, what it competes with, and how to learn what the game did with
+it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.GENERAL_MOVE, target=p)` |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.MOVE, target=p)` |
 | `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.orders.clear_queue(unit)`, `api.orders.issued_to(unit)` |
+| nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| nothing | `order.state`, `order.action_result`, `order.failure`, `order.data` |
+| nothing | `order.state`, `order.action_result`, `order.data` |
 
-- **An order is something you hold on to.** `issue` returns an `Order` that says what the game answered, whether
-  it was carried out, and whether it has finished. python-sc2 returns nothing.
+- **An order is something you hold on to.** `issue` returns an `Order` that says whether it was sent and what the
+  game answered; python-sc2 returns nothing. What a unit then did with it shows in its orders, in events and in
+  `api.action_failures`.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
@@ -141,15 +143,21 @@ reads it, is in [game-behavior.md](game-behavior.md).
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
   the game's verdict says whether it was taken. A bot keeps its own budget within a turn
   ([orders](orders.md#what-an-order-needs)).
-- **An order whose unit died before it was done reads `LOST`, not `DONE`.** python-sc2 leaves a bot to notice;
-  NachOS says so, because the game reports a producer killed halfway through what it was making as dying and
-  nothing more.
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
-  queued behind it, so re-sending one is not free. NachOS holds it back and the order reads `RUNNING`; to drop a
-  queue on purpose, call `api.orders.clear_queue(unit)`.
+  queued behind it, so re-sending one is not free. NachOS does the same when the turn is sent: an order a unit is
+  already carrying out first is left out for it, and one left with no unit reads `REDUNDANT`
+  ([orders](orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
+  `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
+- **Unloading in place is `UNLOAD`, for every transport, not an unload at the transport.** python-sc2 bots
+  write `medivac(AbilityId.UNLOADALLAT_MEDIVAC, medivac)`, which keeps the medivac's move in game but shares its id
+  with the unload at a point, which replaces it, and `bunker(AbilityId.UNLOADALL_BUNKER)`. NachOS raises `TypeError`
+  for the first and sends `UNLOAD` to a medivac, a warp prism and a transport overlord the same way
+  ([orders](orders.md#one-order-a-unit-a-turn)). Likewise `SIEGE` and `UNSIEGE` stand for
+  `SIEGEMODE_SIEGEMODE`, `MORPH_LIBERATORAGMODE`, `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and their ways
+  back.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
   item in the middle of a queue through the UI action `ActionProductionPanelRemoveFromQueue`, which names a slot and
   needs the structure selected and a game joined with a feature layer. A raw unit command carries no slot, and the
@@ -190,11 +198,11 @@ reads it, is in [game-behavior.md](game-behavior.md).
   an ability read off a unit raises when it is read, and a handler of a buff event has every unit's buffs read each
   turn. python-sc2 has no curation to be missing from.
 - **An ability is named after the unit that performs it, then what it does**: `BARRACKS_TRAIN_MARINE`,
-  `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `ZERGLING_BURROW`,
+  `SCV_BUILD_BARRACKS`, `LARVA_TRAIN_ZERGLING`, `HATCHERY_MORPH_LAIR`, `BURROW`,
   `ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1`. The performer carries the race, so the name drops it where
   `UpgradeId` has to keep it. python-sc2 keeps Blizzard's catalog spelling: `BARRACKSTRAIN_MARINE`,
   `TERRANBUILD_BARRACKS`, `RESEARCH_TERRANINFANTRYARMORLEVEL1`. An ability several units perform is named
-  `GENERAL` in the performer's place -- `GENERAL_BURROW`, `GENERAL_LIFT`, `GENERAL_ATTACK`.
+  by what it does alone -- `BURROW`, `LIFT`, `ATTACK`.
 - **Ids are ints.** They are `IntEnum`s, so `UnitTypeId.MARINE == 48` is true. python-sc2's ids are plain
   `Enum`s, for which it is false.
 - **The match enums are upper case**: `Race.TERRAN`, `Difficulty.VERY_HARD`, `Result.VICTORY`, and
@@ -445,9 +453,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 | `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |
 | `EQUIVALENTS_FOR_TECH_PROGRESS` | `unit_data.tech_aliases` of the type that stands |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
-| `GENERIC_REDIRECT_ABILITIES` | `ability_data.remaps_to` |
+| `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
 | a requirement's `requires_power` | `unit_data.needs_power` |
-| nothing | `ability_data.product`, `unit_data.morphed_from` |
+| nothing | `ability_data.products`, by the type that carries it out, and `unit_data.morphed_from` |
 | `DAMAGE_BONUS_PER_UPGRADE`, `SPEED_UPGRADE_DICT`, `SPEED_INCREASE_DICT` | `unit_data.upgrades`, `unit_data.with_upgrades(upgrades)` |
 | nothing | `upgrade_data.upgrade_type` and `upgrade_data.level`: the upgrade level units report an upgrade adds to, and which level of its line it is |
 
@@ -457,12 +465,16 @@ reads it, is in [game-behavior.md](game-behavior.md).
   names itself exactly as the catalog does, so `RawUnitTypeId(int(row.id)).name` is the game's spelling. An
   ability has three names and none of them is it
   ([game behavior](game-behavior.md#upgrades-and-the-games-tables)), and python-sc2 carries all three.
-- **`remaps_to` runs from the exact ability to the general one.** A unit always reports the exact id it is
-  running; the general one is a spelling you may order instead, which the game carries out as the exact one: order
-  `GENERAL_MOVE` and the unit reports `GENERAL_MOVE_EXACT`. python-sc2 folds this into `AbilityData.id`, which
-  returns the remapped id while `exact_id` returns the row's own, and ships the same relation by hand as
-  `generic_redirect_abilities`. Neither links the liberator's siege and unsiege, which the game's rows leave out
-  ([game behavior](game-behavior.md#abilities-and-orders)).
+- **An action several unit types perform has one id.** The game gives each type its own -- `HARVEST_GATHER_SCV`,
+  `HARVEST_GATHER_PROBE` and `HARVEST_GATHER_DRONE` in python-sc2's spelling -- and a unit is offered and reports its
+  own, though the game takes the action's id, `HARVEST_GATHER`, as an order for any of them. NachOS curates only
+  `GATHER`, and reads each type's own as it: it is what you order, what a unit is offered and what it
+  reports. python-sc2 folds the same way in `AbilityData.id`, which returns the remapped id while `exact_id` returns
+  the row's own, and keeps both spellings in `AbilityId`. NachOS also reads the liberator's siege and unsiege and the
+  archon's merge as the ids ordered, which neither the game's rows nor python-sc2 link
+  ([game behavior](game-behavior.md#abilities-and-orders)). A leveled research keeps an id per level and has no
+  general one: python-sc2's `RESEARCH_TERRANINFANTRYWEAPONS` has no counterpart, and
+  `ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1` is `ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1`.
 - **A table holds only the rows a bot can name.** It keeps the rows of the game's catalog that the curated ids
   name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters on the
   `available` flag instead, which filters nothing ([game behavior](game-behavior.md#upgrades-and-the-games-tables)).
@@ -477,10 +489,10 @@ reads it, is in [game-behavior.md](game-behavior.md).
   disguise, and read `None`. The viking's alias is a row no unit is ever one of, so `tech_aliases` drops it.
   python-sc2 keeps every one of these, because the game marks them available.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
-  no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `MEDIVAC_UNLOAD` and
-  `MEDIVAC_UNLOAD_AT` put everyone down at once.
-- **A row's `id` is its own.** python-sc2's `AbilityData.id` returns the generic id the ability remaps to, and
-  `exact_id` the row's own. NachOS keeps `id` as the row's own and puts `remaps_to` beside it.
+  no path for yet ([game behavior](game-behavior.md#abilities-and-orders)), so `UNLOAD`,
+  and `UNLOAD_AT` put everyone down at once.
+- **A row's `id` is its own**, and a table holds no row for a unit type's own id of an action, only for the action.
+  python-sc2's `AbilityData.id` returns the generic id the ability remaps to, and `exact_id` the row's own.
 - **A cost is minerals, vespene and supply; times are steps beside it.** python-sc2's `Cost` carries a `time` in
   steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong nearly
   everywhere. NachOS's `Cost` adds, subtracts and scales, supply included, and `build_steps` and `research_steps`
@@ -495,8 +507,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   25 and a baneling 25/25. python-sc2 does the same in `morph_cost` and `calculate_ability_cost` off a hand-written
   `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, since the game's rows now price a reactor 50/50
   and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325 rather than the
-  drone's 50 and a hatchery's 300. A general research id, which stands for three levels, holds the first level's
-  price, which is what it runs until that level is done.
+  drone's 50 and a hatchery's 300. An action several types perform costs the same whichever does it, every tech
+  lab 50/25.
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData`
   holds little of them ([game behavior](game-behavior.md#upgrades-and-the-games-tables)). python-sc2's dicts come
   from sc2-techtree, which read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which
@@ -513,8 +525,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
   zerg unit that burrows is offered every zerg unit's burrow, and ordered any of them burrows as itself, so a
-  zergling's `abilities` hold only `ZERGLING_BURROW`. A general ability is never offered, so its `performers` are
-  those of the abilities that remap to it, and an id a unit only reports, such as `LIBERATOR_SIEGE_EXACT`, has none.
+  zergling is offered `BURROW` by its own burrow alone, and `BURROW`'s `products` make a burrowed
+  zergling of a zergling and a burrowed roach of a roach.
   A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
   to cancel, halt or unload. What a gateway warps in is not curated yet, so a warp gate trains nothing in the tables.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is

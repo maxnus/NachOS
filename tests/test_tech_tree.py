@@ -129,18 +129,37 @@ class TestGeneratingTheTables:
 
     def test_what_performs_and_makes_an_ability_comes_with_the_tables_the_sweep_read(self) -> None:
         findings = _findings(
-            offered={"Zergling": ["BurrowDown_Zergling"], "Barracks": ["BarracksTrain_Marine"]},
+            offered={
+                "Zergling": ["BurrowDown_Zergling"],
+                "Barracks": ["BarracksTrain_Marine"],
+                "BarracksTechLab": ["BarracksTechLabResearch_Stimpack"],
+            },
             remaps={"BurrowDown_Zergling": "BurrowDown"},
             creation_abilities={"Marine": "BarracksTrain_Marine", "Baneling": "MorphZerglingToBaneling_Baneling"},
             research_abilities={"Stimpack": "BarracksTechLabResearch_Stimpack"},
         )
         tree = _generator().read(findings, _no_upgrades())
-        assert tree.ability_performers[AbilityId.GENERAL_BURROW] == {UnitTypeId.ZERGLING}
+        assert tree.ability_performers[AbilityId.BURROW] == {UnitTypeId.ZERGLING}
         assert tree.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
         # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
-        assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] is UnitTypeId.MARINE
-        assert tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK] is UpgradeId.STIMPACK
+        assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
+        stimpack = tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
+        assert stimpack == {UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK}
+
+    def test_an_action_several_types_perform_makes_what_each_one_s_own_id_makes(self) -> None:
+        """A barracks offered its own lift becomes a flying barracks, and a starport a flying starport."""
+        findings = _findings(
+            offered={"Barracks": ["Lift_Barracks"], "Starport": ["Lift_Starport"]},
+            creation_abilities={"BarracksFlying": "Lift_Barracks", "StarportFlying": "Lift_Starport"},
+        )
+        tree = _generator().read(findings, _no_upgrades())
+        assert tree.ability_requirements[UnitTypeId.BARRACKS].keys() == {AbilityId.LIFT}
+        assert tree.ability_products[AbilityId.LIFT] == {
+            UnitTypeId.BARRACKS: UnitTypeId.BARRACKS_FLYING,
+            UnitTypeId.STARPORT: UnitTypeId.STARPORT_FLYING,
+        }
+        assert tree.creation_abilities[UnitTypeId.STARPORT_FLYING] is AbilityId.LIFT
 
     def test_an_ability_needing_nothing_reads_as_needing_nothing(self) -> None:
         findings = _findings(offered={"Barracks": ["BarracksTrain_Marine"]})
@@ -153,13 +172,13 @@ class TestGeneratingTheTables:
         claws = _requirement("RoachBurrowed", "Move_Move", [], ["TunnelingClaws"])
         tree = _generator().read(_findings(offered=offered, requirements=[claws]), _no_upgrades())
         needs = tree.ability_requirements
-        assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.GENERAL_MOVE_EXACT].upgrades == {UpgradeId.TUNNELING_CLAWS}
-        assert needs[UnitTypeId.MARINE][AbilityId.GENERAL_MOVE_EXACT] == TechRequirements()
+        assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.MOVE].upgrades == {UpgradeId.TUNNELING_CLAWS}
+        assert needs[UnitTypeId.MARINE][AbilityId.MOVE] == TechRequirements()
 
     def test_an_ability_whose_requirements_were_never_read_is_refused(self) -> None:
         """It is refused rather than read as needing nothing."""
         findings = _findings(offered={"Ghost": ["Behavior_CloakOff_Ghost"]}, unread=True)
-        with pytest.raises(ValueError, match="GHOST GHOST_CLOAK_OFF"):
+        with pytest.raises(ValueError, match="GHOST Behavior_CloakOff_Ghost"):
             _generator().read(findings, _no_upgrades())
 
     def test_two_unnamed_creation_abilities_for_a_type_the_table_names_nothing_for_are_refused(
@@ -201,7 +220,7 @@ class TestGeneratingTheTables:
             _trial("Zergling", "BurrowDown_Drone", "DroneBurrowed", "other"),
         ]
         tree = _generator().read(_findings(offered=offered, made=made), _no_upgrades())
-        assert set(tree.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.ZERGLING_BURROW}
+        assert set(tree.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.BURROW}
         assert tree.morph_sources[UnitTypeId.DRONE_BURROWED] is UnitTypeId.DRONE
 
     def test_what_an_ability_uses_up_is_what_its_product_is_made_out_of(self) -> None:
@@ -305,8 +324,8 @@ class TestWhatTheTablesSay:
 
     def test_a_burrowed_roach_moves_only_with_tunneling_claws(self, tables: GameData) -> None:
         claws = TechRequirements(upgrades=frozenset({UpgradeId.TUNNELING_CLAWS}))
-        assert tables.units[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.GENERAL_MOVE_EXACT] == claws
-        assert tables.units[UnitTypeId.ROACH].ability_requirements[AbilityId.GENERAL_MOVE_EXACT] == TechRequirements()
+        assert tables.units[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.MOVE] == claws
+        assert tables.units[UnitTypeId.ROACH].ability_requirements[AbilityId.MOVE] == TechRequirements()
 
     def test_a_barracks_needs_a_depot_which_a_lowered_one_counts_as(self, tables: GameData) -> None:
         barracks = tables.units[UnitTypeId.SCV].ability_requirements[AbilityId.SCV_BUILD_BARRACKS]
@@ -321,13 +340,27 @@ class TestWhatTheTablesSay:
     def test_an_ability_is_performed_by_the_types_offered_it_and_makes_its_product(self, tables: GameData) -> None:
         marine = tables.abilities[AbilityId.BARRACKS_TRAIN_MARINE]
         assert marine.performers == {UnitTypeId.BARRACKS}
-        assert marine.product is UnitTypeId.MARINE
-        assert tables.abilities[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK].product is UpgradeId.STIMPACK
+        assert marine.products == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
+        stimpack = tables.abilities[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK].products
+        assert set(stimpack.values()) == {UpgradeId.STIMPACK}
 
-    def test_a_general_ability_is_performed_by_whatever_performs_one_standing_for_it(self, tables: GameData) -> None:
-        burrow = tables.abilities[AbilityId.GENERAL_BURROW].performers
-        assert {UnitTypeId.DRONE, UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.WIDOW_MINE} <= burrow
-        assert tables.abilities[AbilityId.ZERGLING_BURROW].performers == {UnitTypeId.ZERGLING}
+    def test_an_action_several_types_perform_is_offered_to_each_and_makes_each_its_own(self, tables: GameData) -> None:
+        burrow = tables.abilities[AbilityId.BURROW]
+        assert {UnitTypeId.DRONE, UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.WIDOW_MINE} <= burrow.performers
+        assert burrow.products[UnitTypeId.ZERGLING] is UnitTypeId.ZERGLING_BURROWED
+        assert burrow.products[UnitTypeId.ROACH] is UnitTypeId.ROACH_BURROWED
+        assert AbilityId.BURROW in tables.units[UnitTypeId.ZERGLING].abilities
+
+    def test_every_unit_type_and_upgrade_is_made_by_its_ability(self, tables: GameData) -> None:
+        """The generator leaves out a product nothing carries out, so a sweep that loses one shows here. A rich
+        refinery and its kin share the plain one's build, which makes the plain one."""
+        for unit_type, row in tables.units.items():
+            ability = row.creation_ability
+            if ability is not None and UNNAMED_CREATION_ABILITIES.get(ability) is not unit_type:
+                assert unit_type in tables.abilities[ability].products.values(), unit_type.name
+        for upgrade, row in tables.upgrades.items():
+            if (ability := row.research_ability) is not None:
+                assert upgrade in tables.abilities[ability].products.values(), upgrade.name
 
     def test_a_unit_made_out_of_another_says_which(self, tables: GameData) -> None:
         units = tables.units
@@ -343,18 +376,21 @@ class TestWhatTheTablesSay:
         self, tables: GameData
     ) -> None:
         baneling = tables.abilities[AbilityId.ZERGLING_MORPH_BANELING]
-        assert baneling.product is UnitTypeId.BANELING
+        assert baneling.products == {UnitTypeId.ZERGLING: UnitTypeId.BANELING}
         assert tables.units[UnitTypeId.BANELING].creation_ability is AbilityId.ZERGLING_MORPH_BANELING
         assert tables.units[UnitTypeId.BANELING].morphed_from is UnitTypeId.ZERGLING
         assert tables.units[UnitTypeId.LURKER].morphed_from is UnitTypeId.HYDRALISK
         assert tables.units[UnitTypeId.EXTRACTOR_RICH].morphed_from is UnitTypeId.DRONE
         assert tables.units[UnitTypeId.ASSIMILATOR_RICH].morphed_from is None
         # The build ability a rich refinery shares with a refinery makes a refinery, as the table says.
-        assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].product is UnitTypeId.REFINERY
+        assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].products == {UnitTypeId.SCV: UnitTypeId.REFINERY}
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
         zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
-        assert (zealot.product, zealot.performers) == (UnitTypeId.ZEALOT, {UnitTypeId.WARP_GATE})
+        assert (zealot.products, zealot.performers) == (
+            {UnitTypeId.WARP_GATE: UnitTypeId.ZEALOT},
+            {UnitTypeId.WARP_GATE},
+        )
         assert tables.units[UnitTypeId.ZEALOT].creation_ability is AbilityId.GATEWAY_TRAIN_ZEALOT
 
     def test_a_gateway_needs_power_and_a_nexus_and_a_pylon_do_not(self, tables: GameData) -> None:
@@ -363,17 +399,17 @@ class TestWhatTheTablesSay:
         assert not tables.units[UnitTypeId.PYLON].needs_power
 
     def test_a_unit_type_carries_what_it_is_offered(self, tables: GameData) -> None:
-        assert AbilityId.MARINE_STIM in tables.units[UnitTypeId.MARINE].abilities
+        assert AbilityId.STIM in tables.units[UnitTypeId.MARINE].abilities
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, tables: GameData) -> None:
-        """A gateway becomes a warp gate by itself once the research is done, and a liberator reports the exact siege
-        it was never offered. Every research ability has a performer."""
+        """A gateway becomes a warp gate by itself once the research is done. Every research ability has a
+        performer."""
         makers = [row.creation_ability for row in tables.units.values()]
         makers += [row.research_ability for row in tables.upgrades.values()]
         unperformed = {
             ability for ability in makers if ability is not None and not tables.abilities[ability].performers
         }
-        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE, AbilityId.LIBERATOR_SIEGE_EXACT}
+        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE}
 
     def test_a_morph_several_types_perform_is_made_out_of_the_one_the_others_come_from(self, tables: GameData) -> None:
         """An overlord and the overlord transport it becomes can both become an overseer."""
@@ -442,7 +478,7 @@ def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(toward)))
             game.turn(2)
             barracks = game.newest(UnitTypeId.BARRACKS)
-            game.order(AbilityId.GENERAL_BUILD_TECH_LAB, barracks, target=barracks.position)
+            game.order(AbilityId.BUILD_TECH_LAB, barracks, target=barracks.position)
             game.turn(22 * 8)
             assert AbilityId.BARRACKS_TRAIN_GHOST not in _offered(transport, barracks)
             game.debug(game.create(UnitTypeId.GHOST_ACADEMY, game.open_ground(toward.towards(home, -8))))

@@ -32,6 +32,7 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 
@@ -354,7 +355,7 @@ def _bursts(game: _Game, at: Point, unit_type: UnitTypeId, *, gaps: Sequence[int
     (target,) = made
     if unit_type is not UnitTypeId.SUPPLY_DEPOT:
         # A unit that cannot fight back drifts away from what attacks it, unless it holds its position.
-        game.order(AbilityId.GENERAL_HOLD_POSITION, made)
+        game.order(AbilityId.HOLD_POSITION, made)
     hit: list[int] = []
     for attack, gap in enumerate((0, *gaps)):
         game.turn(max(gap, 4))
@@ -634,7 +635,7 @@ def _rival_trials(me: _Game, enemy: _Game) -> list[Trial]:
     def nuke(target: Point, ghost_at: Point) -> list[int]:
         enemy.order(AbilityId.GHOST_ACADEMY_BUILD_NUKE, enemy.own(UnitTypeId.GHOST_ACADEMY))
         (ghost,) = enemy.create(UnitTypeId.GHOST, ghost_at)
-        enemy.order(AbilityId.GHOST_HOLD_FIRE_ON, [ghost])
+        enemy.order(RawAbilityId.Behavior_HoldFireOn_Ghost, [ghost])
         me.turn(400)
         enemy.observe()
         verdict = enemy.order(AbilityId.GHOST_TACTICAL_NUKE, [ghost], target)
@@ -703,8 +704,8 @@ def _terran(game: _Game) -> list[Trial]:
     trials.append(game.trial("3 supply depots built by 3 SCVs at once", depots))
 
     def add_ons() -> list[int]:
-        game.order(AbilityId.GENERAL_BUILD_TECH_LAB, [barracks[1]])
-        game.order(AbilityId.GENERAL_BUILD_REACTOR, [barracks[2]])
+        game.order(AbilityId.BUILD_TECH_LAB, [barracks[1]])
+        game.order(AbilityId.BUILD_REACTOR, [barracks[2]])
         game.appear([UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.REACTOR_BARRACKS], 2)
         placed = game.own(UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.REACTOR_BARRACKS)
         return game.finish((unit.tag for unit in placed), steps=1)
@@ -796,7 +797,7 @@ def _terran(game: _Game) -> list[Trial]:
         refineries = [unit for geyser in _geysers(game) for unit in game.create(UnitTypeId.REFINERY, _at(geyser))]
         scvs = game.own(UnitTypeId.SCV)
         for i, refinery in enumerate(refineries):
-            game.order(AbilityId.SCV_GATHER, scvs[3 * i : 3 * i + 3], refinery)
+            game.order(RawAbilityId.Harvest_Gather_SCV, scvs[3 * i : 3 * i + 3], refinery)
         tags = [unit.tag for unit in refineries]
         return game._first(
             lambda: (unit.tag for unit in game.of_tags(tags) if unit.vespene_contents == 0),
@@ -810,7 +811,7 @@ def _terran(game: _Game) -> list[Trial]:
     def minerals() -> list[int]:
         if near := [unit for unit in _minerals(game) if unit.tag in game.home_fields]:
             for i, scv in enumerate(game.own(UnitTypeId.SCV)):
-                game.order(AbilityId.SCV_GATHER, [scv], near[i % len(near)])
+                game.order(RawAbilityId.Harvest_Gather_SCV, [scv], near[i % len(near)])
             game.until(lambda: len(game.fields_gone) == len(game.home_fields), steps=32, limit=40_000)
         return []
 
@@ -994,8 +995,8 @@ def _protoss(game: _Game) -> list[Trial]:
     def archons() -> list[int]:
         templar = game.create(UnitTypeId.HIGH_TEMPLAR, game.spot(game.toward(6), 1), count=2)
         dark = game.create(UnitTypeId.DARK_TEMPLAR, game.spot(game.toward(6), 1), count=2)
-        game.order(AbilityId.GENERAL_MORPH_ARCHON, templar)
-        game.order(AbilityId.GENERAL_MORPH_ARCHON, dark)
+        game.order(AbilityId.MORPH_ARCHON, templar)
+        game.order(AbilityId.MORPH_ARCHON, dark)
         return game.appear([UnitTypeId.ARCHON], 2)
 
     trials.append(game.trial("2 archons merged, one of high and one of dark templar", archons))

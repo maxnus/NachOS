@@ -184,10 +184,8 @@ jobs:
 
       - *nachos
 
-      # Burnysc2 and other public submodules are often recorded with SSH urls, and a runner has no key.
-      - name: Reach submodules over https
-        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
-
+      # Submodules recorded with SSH urls, as burnysc2 often is, are fetched over https: checkout rewrites
+      # git@github.com: itself when it is given no ssh-key, for the fetch only.
       - name: Check out the bot
         uses: actions/checkout@v4
         with:
@@ -203,10 +201,13 @@ jobs:
           CHECKOUTS: ${{ needs.prepare.outputs.checkouts }}
         run: python3 .nachos/.github/match/checkouts.py
 
+      # A self-hosted runner keeps uv's cache in its user's own cache folder, which outlives the job; a GitHub-hosted
+      # runner keeps it in the Actions cache.
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
+          enable-cache: ${{ runner.environment == 'github-hosted' }}
+          cache-local-path: ${{ runner.environment == 'self-hosted' && '~/.cache/uv' || '' }}
 
       - name: Install
         working-directory: bot

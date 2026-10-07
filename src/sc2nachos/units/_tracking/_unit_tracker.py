@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any
 from s2clientprotocol import raw_pb2
 
 from sc2nachos._errors import NachOSError
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.ids import AbilityId
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
@@ -23,13 +24,11 @@ _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# The types that can leave the spot they are remembered at, by lifting off or uprooting: the performers named by the
-# curated `*_LIFT` and `*_UPROOT` abilities. Every ability name starts with its performer.
+# The structures that can leave the spot they are remembered at: those offered a lift or an uproot.
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
-    UnitTypeId[performer]
-    for ability in AbilityId
-    if ability.name.endswith(("_LIFT", "_UPROOT"))
-    and (performer := ability.name.rsplit("_", 1)[0]) in UnitTypeId.__members__
+    unit_type
+    for ability in (AbilityId.LIFT, AbilityId.UPROOT)
+    for unit_type in TECH_TREE.ability_performers.get(ability, ())
 )
 
 type _UnitsByTag = dict[int, Unit[Any]]

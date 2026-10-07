@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
-from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
 
@@ -34,18 +34,25 @@ class GameData:
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
         )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE, structures)
+        behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
         # An ability's cost is derived from its product, so the other tables come first.
         costs = ability_costs(self._units, self._upgrades, TECH_TREE)
         cancels = cancel_abilities(TECH_TREE, behaviors)
-        self._abilities = _read_table(
+        rows = _read_table(
             data.abilities,
             lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
             lambda row: row.id,
         )
+        game_rows = {row.ability_id: row for row in data.abilities}
+        custom = {
+            ability: AbilityData._custom(ability, game_rows, TECH_TREE, behaviors, costs, cancels)
+            for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
+            if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
+        }
+        self._abilities = MappingProxyType({**rows, **custom})
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
 
     @property
@@ -55,7 +62,7 @@ class GameData:
 
     @property
     def abilities(self) -> Mapping[AbilityId, AbilityData]:
-        """The abilities, by id."""
+        """The abilities, by id, the custom ones included."""
         return self._abilities
 
     @property

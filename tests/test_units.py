@@ -38,6 +38,7 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SPINE_CRAWLER, ability_id=AbilityId.DRONE_MORPH_SPINE_CRAWLER),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -272,7 +273,6 @@ class TestTheFog:
             UnitTypeId.SPINE_CRAWLER,
             UnitTypeId.SPORE_CRAWLER,
             UnitTypeId.STARPORT,
-            UnitTypeId.VIKING,
         }
 
     def test_a_unit_that_died_is_not_the_one_a_copy_at_its_position_is(self) -> None:
@@ -486,6 +486,17 @@ class TestConstruction:
         ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target_world_space_pos=common_pb2.Point(x=24.3, y=19.8)
     )
 
+    def test_a_queen_planting_a_tumor_is_its_builder_by_her_own_id_of_the_build(self) -> None:
+        """She reports the queen's own id of the creep tumor build, which reads as the action's, the tumor's creation
+        ability."""
+        plant = raw_pb2.UnitOrder(
+            ability_id=RawAbilityId.Build_CreepTumor_Queen, target_world_space_pos=common_pb2.Point(x=24.0, y=20.0)
+        )
+        tumor_at = make_unit(2, UnitTypeId.CREEP_TUMOR_QUEEN, at=(24.0, 20.0), build_progress=0.2)
+        queen, tumor = _Game().observe(0, make_unit(1, UnitTypeId.QUEEN, at=(22.0, 20.0), orders=(plant,)), tumor_at)
+        assert isinstance(queen, OwnUnit) and isinstance(tumor, OwnUnit)
+        assert (queen.construction, tumor.builder) == (tumor, queen)
+
     def test_an_scv_building_a_structure_is_its_builder_until_it_finishes(self) -> None:
         game = _Game()
         scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
@@ -544,22 +555,22 @@ class TestOwnUnits:
 
     def test_an_order_names_its_ability_and_a_point_a_unit_or_nothing(self) -> None:
         orders = [
-            raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_MOVE, target_world_space_pos=common_pb2.Point(x=5, y=6)),
-            raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_ATTACK, target_unit_tag=9),
+            raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=5, y=6)),
+            raw_pb2.UnitOrder(ability_id=AbilityId.ATTACK, target_unit_tag=9),
             raw_pb2.UnitOrder(ability_id=AbilityId.BARRACKS_TRAIN_MARINE, progress=0.5),
         ]
         game = _Game()
         marine, _ = game.observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
-            UnitOrder(AbilityId.GENERAL_MOVE, Point((5.0, 6.0)), 0.0),
-            UnitOrder(AbilityId.GENERAL_ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
+            UnitOrder(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
+            UnitOrder(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
             UnitOrder(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
 
     def test_a_tag_no_unit_was_reported_under_raises(self) -> None:
-        marine = _one(make_unit(1, orders=[raw_pb2.UnitOrder(ability_id=AbilityId.GENERAL_ATTACK, target_unit_tag=9)]))
+        marine = _one(make_unit(1, orders=[raw_pb2.UnitOrder(ability_id=AbilityId.ATTACK, target_unit_tag=9)]))
         assert isinstance(marine, OwnUnit)
         with pytest.raises(UnknownTagError, match="never reported a unit under tag 9"):
             _ = marine.orders
@@ -878,7 +889,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.debug(game.create(UnitTypeId.SIEGE_TANK, out_there))
         game.turn(2)
         tank = game.newest(UnitTypeId.SIEGE_TANK)
-        game.order(AbilityId.SIEGE_TANK_SIEGE, tank)
+        game.order(RawAbilityId.SiegeMode_SiegeMode, tank)
         game.turn(90)
         assert tank.type_id is UnitTypeId.SIEGE_TANK_SIEGED
         assert game.tracker.unit_tracker.present.get(tank.id) is tank
@@ -889,12 +900,12 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         )
         game.turn(2)
         marine, medivac = game.newest(UnitTypeId.MARINE), game.newest(UnitTypeId.MEDIVAC)
-        game.order(AbilityId.MEDIVAC_LOAD, medivac, target=marine)
+        game.order(AbilityId.LOAD, medivac, target=marine)
         game.turn(40)
         assert marine.is_stale
         assert isinstance(medivac, OwnUnit)
         assert marine in {passenger.unit for passenger in medivac.passengers}
-        game.order(AbilityId.MEDIVAC_UNLOAD_AT, medivac, target=medivac.position)
+        game.order(AbilityId.UNLOAD_AT, medivac, target=medivac.position)
         game.turn(60)
         assert not marine.is_stale
         assert game.tracker.unit_tracker.present.get(marine.id) is marine

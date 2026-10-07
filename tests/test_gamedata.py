@@ -1,7 +1,6 @@
 """The game data, from tables written here and from the recorded games."""
 
 import math
-import re
 from pathlib import Path
 
 import pytest
@@ -17,11 +16,11 @@ from sc2nachos.gamedata import (
     TargetType,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
+from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
-    TECH_TREE,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
@@ -35,8 +34,6 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 # and a structure were each measured from the refund a cancel gives back, three quarters of the charge rounded up
 # (tool `sweep_orders`, docs/game-behavior.md); the rest are the game's long-standing prices (stated).
 _CHARGED = {
-    AbilityId.BARRACKS_BUILD_REACTOR: Cost(50, 50),
-    AbilityId.BARRACKS_BUILD_TECH_LAB: Cost(50, 25),
     AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: Cost(100, 100),
     AbilityId.BARRACKS_TRAIN_MARINE: Cost(50, 0, 1),
     AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
@@ -47,6 +44,8 @@ _CHARGED = {
     AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1),
     AbilityId.DRONE_MORPH_SPAWNING_POOL: Cost(200, 0, -1),
     AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
+    AbilityId.BUILD_REACTOR: Cost(50, 50),
+    AbilityId.BUILD_TECH_LAB: Cost(50, 25),
     AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
     AbilityId.HATCHERY_MORPH_LAIR: Cost(150, 100),
     AbilityId.LAIR_MORPH_HIVE: Cost(200, 150),
@@ -61,9 +60,9 @@ _CHARGED = {
 
 # The refund a cancel gave back, at real prices, in the observation the cancel landed in (tool `sweep_orders`).
 _REFUNDED = {
-    AbilityId.BARRACKS_BUILD_TECH_LAB: Resources(38, 19),
     AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: Resources(113, 0),
     AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: Resources(113, 113),
+    AbilityId.BUILD_TECH_LAB: Resources(38, 19),
     AbilityId.SCV_BUILD_SUPPLY_DEPOT: Resources(75, 0),
 }
 
@@ -207,6 +206,21 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE, ursadon, unheard_of]))
         assert set(data.units) == {UnitTypeId.MARINE}
 
+    @pytest.mark.parametrize("reported_first", [True, False], ids=["reported first", "ordered first"])
+    def test_the_row_of_an_id_a_unit_reports_for_another_does_not_take_the_ordered_ones_place(
+        self, reported_first: bool
+    ) -> None:
+        """A templar reports `Archon_Warp_Target`, aimed at the other, for the merge it was ordered; the row is the
+        merge's own, which takes no target."""
+        merge = data_pb2.AbilityData(ability_id=AbilityId.MORPH_ARCHON)
+        reported = data_pb2.AbilityData(
+            ability_id=RawAbilityId.Archon_Warp_Target, target=data_pb2.AbilityData.Target.Unit
+        )
+        rows = [reported, merge] if reported_first else [merge, reported]
+        data = GameData(sc2api_pb2.ResponseData(abilities=rows))
+        assert set(data.abilities) == {AbilityId.MORPH_ARCHON}
+        assert data.abilities[AbilityId.MORPH_ARCHON].target_type is TargetType.NOTHING
+
     def test_what_makes_a_unit_type_is_what_the_tech_tree_found_and_not_what_the_message_names(self) -> None:
         """The game names an ability for a lurker that no longer works; the tech tree names the one that does."""
         lurker = data_pb2.UnitTypeData(unit_id=UnitTypeId.LURKER, ability_id=_DEAD_LURKER_MORPH)
@@ -254,9 +268,9 @@ class TestReadingTheTables:
         assert row.target_type is TargetType.POINT
 
     def test_an_ability_that_is_aimed_at_nothing_has_no_footprint(self) -> None:
-        stim = data_pb2.AbilityData(ability_id=AbilityId.GENERAL_STIM, target=data_pb2.AbilityData.Target.Value("None"))
+        stim = data_pb2.AbilityData(ability_id=AbilityId.STIM, target=data_pb2.AbilityData.Target.Value("None"))
         data = GameData(sc2api_pb2.ResponseData(abilities=[stim]))
-        row = data.abilities[AbilityId.GENERAL_STIM]
+        row = data.abilities[AbilityId.STIM]
         assert row.target_type is TargetType.NOTHING
         assert row.footprint_radius is None
 
@@ -350,57 +364,163 @@ class TestARecordedGamesTables:
             assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
             assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
 
-    def test_a_general_ability_acts_at_once_where_one_it_stands_for_does(self, path: Path) -> None:
+    def test_every_row_can_be_kept_in_a_set(self, path: Path) -> None:
+        abilities = _tables(path).abilities
+        assert len(set(abilities.values())) == len(abilities)
+
+    def test_a_general_ability_acts_at_once_where_every_one_it_stands_for_does(self, path: Path) -> None:
         data = _tables(path)
-        generals = (
-            AbilityId.GENERAL_STIM,
-            AbilityId.GENERAL_CLOAK_ON,
-            AbilityId.GENERAL_CLOAK_OFF,
-            AbilityId.GENERAL_HOLD_FIRE_ON,
-            AbilityId.GENERAL_HOLD_FIRE_OFF,
-        )
-        for ability in generals:
+        for ability in (AbilityId.STIM, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+
+    def test_a_general_ability_does_for_each_type_what_the_one_that_type_performs_does(self, path: Path) -> None:
+        """A ghost's hold fire keeps its orders, and a lurker's takes a burrowed lurker off its attack (in game); a
+        queen's creep tumor replaces her orders, and the tumor's own needs it idle."""
+        data = _tables(path)
+        for ability in (AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF):
+            row = data.abilities[ability]
+            assert row.order_behavior is OrderBehavior.REPLACES, ability.name
+            assert row.order_behavior_for(UnitTypeId.GHOST) is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert row.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES, ability.name
+        tumor = data.abilities[AbilityId.BUILD_CREEP_TUMOR]
+        assert tumor.order_behavior_for(UnitTypeId.QUEEN) is OrderBehavior.REPLACES
+        assert tumor.order_behavior_for(UnitTypeId.CREEP_TUMOR_BURROWED) is OrderBehavior.NEEDS_IDLE
+        attack = data.abilities[AbilityId.ATTACK]
+        assert attack.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
+        assert attack.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
+
+    def test_an_ability_offered_to_nobody_has_no_say_in_its_general_ones(self, path: Path) -> None:
+        """The tables offer a command center's, a medivac's and a carrier's own id to nobody, since a unit is offered
+        unload only while it carries something; each takes the behavior the offered ids share."""
+        data = _tables(path)
+        unload = data.abilities[AbilityId.UNLOAD]
+        for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MEDIVAC):
+            assert unload.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        cancel = data.abilities[AbilityId.CANCEL_LAST]
+        assert cancel.order_behavior_for(UnitTypeId.CARRIER) is OrderBehavior.KEEPS_ORDERS
+
+    def test_an_action_that_keeps_every_type_s_orders_keeps_each_one_s(self, path: Path) -> None:
+        stim = _tables(path).abilities[AbilityId.STIM]
+        assert stim.order_behavior is OrderBehavior.KEEPS_ORDERS
+        for unit_type in (UnitTypeId.MARINE, UnitTypeId.MARAUDER):
+            assert stim.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+
+    def test_a_unit_that_cannot_move_still_holds_an_order_of_its_own(self, path: Path) -> None:
+        """A sieged tank and a burrowed lurker hold an attack, which leaving the form takes them off (in game)."""
+        data = _tables(path)
+        unsiege = data.abilities[AbilityId.UNSIEGE]
+        for unit_type in (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED):
+            assert unsiege.order_behavior_for(unit_type) is OrderBehavior.REPLACES, unit_type.name
+        unburrow = data.abilities[AbilityId.UNBURROW]
+        assert unburrow.order_behavior_for(UnitTypeId.LURKER_BURROWED) is OrderBehavior.REPLACES
+
+    def test_a_fortress_trains_on_through_an_attack_and_a_stop(self, path: Path) -> None:
+        """It attacks and stops with the ids every unit does, yet neither takes it off its training (in game)."""
+        data = _tables(path)
+        for ability in (AbilityId.ATTACK, AbilityId.STOP):
+            row = data.abilities[ability]
+            assert row.order_behavior_for(UnitTypeId.PLANETARY_FORTRESS) is OrderBehavior.KEEPS_ORDERS, ability.name
+            assert row.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES, ability.name
+
+    def test_a_command_center_and_a_fortress_train_on_while_they_unload_and_load(self, path: Path) -> None:
+        data = _tables(path)
+        for ability in (AbilityId.UNLOAD, AbilityId.LOAD_ALL):
+            for unit_type in (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS):
+                behavior = data.abilities[ability].order_behavior_for(unit_type)
+                assert behavior is OrderBehavior.KEEPS_ORDERS, (ability.name, unit_type.name)
+
+    def test_the_unload_keeps_every_transport_s_orders_and_goes_out_to_a_medivac_as_its_unload_at(
+        self, path: Path
+    ) -> None:
+        data = _tables(path)
+        row = data.abilities[AbilityId.UNLOAD]
+        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
+        assert UnitTypeId.BUNKER not in row.sent_as
+        assert row.target_type is TargetType.NOTHING
+        assert {UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.OVERLORD_TRANSPORT} <= (
+            row.performers
+        )
+        for unit_type in (UnitTypeId.BUNKER, UnitTypeId.MEDIVAC):
+            assert row.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        assert not data.abilities[AbilityId.UNLOAD_AT].sent_as
+        unload_at = data.abilities[AbilityId.UNLOAD_AT]
+        assert unload_at.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
+
+    def test_the_siege_is_a_custom_id_taking_a_point_for_the_liberator_alone(self, path: Path) -> None:
+        """Each type's own siege makes its sieged form, and the liberator's is aimed at its zone."""
+        data = _tables(path)
+        siege = data.abilities[AbilityId.SIEGE]
+        assert siege.target_type is TargetType.POINT_OR_NOTHING
+        liberator = data.abilities[AbilityId.SIEGE].sent_as[UnitTypeId.LIBERATOR]
+        assert liberator == SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET)
+        assert siege.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
+        assert siege.performers == {
+            UnitTypeId.SIEGE_TANK,
+            UnitTypeId.LIBERATOR,
+            UnitTypeId.OBSERVER,
+            UnitTypeId.OVERSEER,
+        }
+        assert siege.products[UnitTypeId.SIEGE_TANK] is UnitTypeId.SIEGE_TANK_SIEGED
+        assert siege.products[UnitTypeId.LIBERATOR] is UnitTypeId.LIBERATOR_SIEGED
+        assert siege.order_behavior is OrderBehavior.REPLACES
+        unsiege = data.abilities[AbilityId.UNSIEGE]
+        assert unsiege.target_type is TargetType.NOTHING
+        assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.SIEGE
+
+    def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
+        smart = _tables(path).abilities[AbilityId.SMART]
+        for unit_type in (UnitTypeId.BARRACKS, UnitTypeId.NEXUS, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY):
+            assert smart.order_behavior_for(unit_type) is OrderBehavior.KEEPS_ORDERS, unit_type.name
+        assert smart.order_behavior_for(UnitTypeId.MARINE) is OrderBehavior.REPLACES
+
+    def test_a_structure_holds_no_order_of_its_own_even_with_a_weapon(self, path: Path) -> None:
+        """A bunker is offered an attack and a stop, yet loading it leaves alone what it is doing."""
+        load = _tables(path).abilities[AbilityId.LOAD]
+        assert load.order_behavior_for(UnitTypeId.BUNKER) is OrderBehavior.KEEPS_ORDERS
+        assert load.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
 
     def test_both_halves_of_a_toggle_keep_a_unit_s_orders(self, path: Path) -> None:
         """Each half was given in turn to a moving unit, and its move stayed first in its orders (in game)."""
         data = _tables(path)
         halves = (
-            (AbilityId.BANELING_ATTACK_STRUCTURES_ON, AbilityId.BANELING_ATTACK_STRUCTURES_OFF),
-            (AbilityId.BANSHEE_CLOAK_ON, AbilityId.BANSHEE_CLOAK_OFF),
-            (AbilityId.GHOST_CLOAK_ON, AbilityId.GHOST_CLOAK_OFF),
-            (AbilityId.GHOST_HOLD_FIRE_ON, AbilityId.GHOST_HOLD_FIRE_OFF),
-            (AbilityId.ORACLE_PULSAR_BEAM_ON, AbilityId.ORACLE_PULSAR_BEAM_OFF),
-            (AbilityId.OVERLORD_CREEP_ON, AbilityId.OVERLORD_CREEP_OFF),
+            (UnitTypeId.BANELING, AbilityId.BANELING_ATTACK_STRUCTURES_ON, AbilityId.BANELING_ATTACK_STRUCTURES_OFF),
+            (UnitTypeId.BANSHEE, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF),
+            (UnitTypeId.GHOST, AbilityId.CLOAK_ON, AbilityId.CLOAK_OFF),
+            (UnitTypeId.GHOST, AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF),
+            (UnitTypeId.ORACLE, AbilityId.ORACLE_PULSAR_BEAM_ON, AbilityId.ORACLE_PULSAR_BEAM_OFF),
+            (UnitTypeId.OVERLORD, AbilityId.OVERLORD_CREEP_ON, AbilityId.OVERLORD_CREEP_OFF),
         )
-        for ability in (half for pair in halves for half in pair):
-            assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
+        for unit_type, *pair in halves:
+            for ability in pair:
+                behavior = data.abilities[ability].order_behavior_for(unit_type)
+                assert behavior is OrderBehavior.KEEPS_ORDERS, (unit_type.name, ability.name)
         # A lurker is offered hold fire only while burrowed, and a burrowed lurker is offered no move, so neither half
-        # was ever given to a moving one.
-        assert data.abilities[AbilityId.LURKER_HOLD_FIRE_OFF].order_behavior is OrderBehavior.REPLACES
+        # was ever given to a moving one; hold fire takes it off its attack (in game).
+        for ability in (AbilityId.HOLD_FIRE_ON, AbilityId.HOLD_FIRE_OFF):
+            behavior = data.abilities[ability].order_behavior_for(UnitTypeId.LURKER_BURROWED)
+            assert behavior is OrderBehavior.REPLACES, ability.name
 
     def test_what_a_structure_makes_queues_and_what_it_becomes_needs_it_idle(self, path: Path) -> None:
         """Ordering one of these was seen in game to queue behind what a structure was making, or to be refused
         while it was making anything."""
         data = _tables(path)
         queues = (AbilityId.BARRACKS_TRAIN_MARINE, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
-        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BARRACKS_BUILD_TECH_LAB)
-        replaces = (AbilityId.GENERAL_MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
+        idle = (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.BUILD_TECH_LAB)
+        replaces = (AbilityId.MOVE, AbilityId.SCV_BUILD_BARRACKS, AbilityId.LARVA_MORPH_DRONE)
         assert [data.abilities[ability].order_behavior for ability in queues] == [OrderBehavior.QUEUES] * 2
         assert [data.abilities[ability].order_behavior for ability in idle] == [OrderBehavior.NEEDS_IDLE] * 2
         assert [data.abilities[ability].order_behavior for ability in replaces] == [OrderBehavior.REPLACES] * 3
 
-    def test_a_general_ability_takes_the_class_of_the_ones_it_stands_for(self, path: Path) -> None:
-        """A general research id carries no product of its own: its levels do."""
+    def test_an_action_several_structures_perform_takes_the_class_of_what_each_makes(self, path: Path) -> None:
+        """A lift makes a flying barracks of a barracks and a flying starport of a starport."""
         data = _tables(path)
-        levels = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS
-        assert data.abilities[levels].order_behavior is OrderBehavior.QUEUES
-        assert data.abilities[AbilityId.GENERAL_BUILD_REACTOR].order_behavior is OrderBehavior.NEEDS_IDLE
+        for ability in (AbilityId.BUILD_REACTOR, AbilityId.LIFT):
+            assert data.abilities[ability].order_behavior is OrderBehavior.NEEDS_IDLE, ability.name
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
         """Measured for a rally and a cancel, and taken to hold for the rest (docs/game-behavior.md)."""
         data = _tables(path)
-        for ability in (AbilityId.GENERAL_RALLY, AbilityId.COMMAND_CENTER_RALLY, AbilityId.GENERAL_CANCEL_QUEUE):
+        for ability in (AbilityId.RALLY_UNITS, AbilityId.RALLY_WORKERS, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
 
     def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
@@ -415,17 +535,6 @@ class TestARecordedGamesTables:
         }
         assert set(lost) == {UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED}
         assert all(aliases == [_PHANTOM_VIKING] for aliases in lost.values())
-
-    def test_a_general_ability_is_named_after_the_levels_that_remap_to_it(self, path: Path) -> None:
-        """Renaming an upgrade has to carry its general ability along, or the two drift apart."""
-        data = _tables(path)
-        levels: dict[AbilityId, set[str]] = {}
-        for ability in AbilityId:
-            general = data.abilities[ability].remaps_to
-            if general is not None and re.fullmatch(r".+_[123]", ability.name):
-                levels.setdefault(general, set()).add(ability.name.rsplit("_", 1)[0])
-        for general, stems in levels.items():
-            assert stems == {general.name}, f"{general.name} is not what its levels are called: {sorted(stems)}"
 
     def test_a_row_is_keyed_by_its_own_id(self, path: Path) -> None:
         data = _tables(path)
@@ -468,10 +577,10 @@ class TestARecordedGamesTables:
         for ability, cost in COST_OVERRIDES.items():
             assert _derived(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
 
-    def test_a_general_id_holds_the_price_what_it_stands_for_shares_or_the_first_level(self, path: Path) -> None:
-        """Every tech lab is 50/25, and a general research means its first level until that is done."""
+    def test_an_action_several_types_perform_costs_what_each_makes_and_each_level_its_own(self, path: Path) -> None:
+        """Every tech lab is 50/25, and each level of a research is priced apart."""
         data = _tables(path)
-        assert data.abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cost == Cost(50, 25)
+        assert data.abilities[AbilityId.BUILD_TECH_LAB].cost == Cost(50, 25)
         levels = (
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
@@ -482,62 +591,53 @@ class TestARecordedGamesTables:
             Cost(150, 150),
             Cost(200, 200),
         ]
-        assert data.abilities[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS].cost == Cost(100, 100)
 
-    def test_every_general_id_that_makes_something_has_a_price(self, path: Path) -> None:
-        """None is left at zero because the abilities it stands for differ."""
+    def test_what_an_action_makes_costs_the_same_whichever_type_carries_it_out(self, path: Path) -> None:
+        """One id has one price, so none is left at zero because what it makes differs by type."""
         data = _tables(path)
-        for exact, general in TECH_TREE.ability_remaps.items():
-            if exact in data.abilities and data.abilities[exact].cost != Cost(0, 0):
-                assert data.abilities[general].cost != Cost(0, 0), general.name
+        for ability, row in data.abilities.items():
+            prices = {_derived_cost(product, data.units, data.upgrades) for product in row.products.values()}
+            assert len(prices) <= 1, f"{ability.name} costs {prices}"
 
     def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
         """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""
         data = _tables(path)
-        for ability in (AbilityId.MARINE_STIM, AbilityId.GENERAL_MOVE, AbilityId.GENERAL_CANCEL_LAST):
+        for ability in (AbilityId.STIM, AbilityId.MOVE, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].cost == Cost(0, 0)
 
-    def test_a_morph_and_an_add_on_name_the_cancel_the_game_offers_for_them(self, path: Path) -> None:
-        """A morphing command center is offered a different cancel from a training one, and a different one for each
-        morph, so the cancel to send depends on the work (tool `sweep_tech_tree`)."""
+    def test_a_morph_and_an_add_on_are_cancelled_by_the_general_cancel(self, path: Path) -> None:
+        """Each structure part way through one is offered its own cancel, the one the general cancel runs (tool
+        `sweep_orders`, `cancels-whole`); a training one answers the general cancel `Error`."""
         data = _tables(path)
-        for ability, cancel in (
-            (AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, AbilityId.COMMAND_CENTER_CANCEL_ORBITAL_COMMAND),
-            (AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS, AbilityId.COMMAND_CENTER_CANCEL_PLANETARY_FORTRESS),
-            (AbilityId.BARRACKS_BUILD_TECH_LAB, AbilityId.BARRACKS_CANCEL_ADD_ON),
-            (AbilityId.BARRACKS_BUILD_REACTOR, AbilityId.BARRACKS_CANCEL_ADD_ON),
-            (AbilityId.FACTORY_BUILD_TECH_LAB, AbilityId.FACTORY_CANCEL_ADD_ON),
-            (AbilityId.FACTORY_BUILD_REACTOR, AbilityId.FACTORY_CANCEL_ADD_ON),
-            (AbilityId.STARPORT_BUILD_TECH_LAB, AbilityId.STARPORT_CANCEL_ADD_ON),
-            (AbilityId.STARPORT_BUILD_REACTOR, AbilityId.STARPORT_CANCEL_ADD_ON),
-            (AbilityId.HATCHERY_MORPH_LAIR, AbilityId.HATCHERY_CANCEL_LAIR),
-            (AbilityId.LAIR_MORPH_HIVE, AbilityId.LAIR_CANCEL_HIVE),
+        for ability in (
+            AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
+            AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS,
+            AbilityId.BUILD_TECH_LAB,
+            AbilityId.BUILD_REACTOR,
+            AbilityId.HATCHERY_MORPH_LAIR,
+            AbilityId.LAIR_MORPH_HIVE,
+            AbilityId.SPIRE_MORPH_GREATER_SPIRE,
         ):
-            assert data.abilities[ability].cancelled_by is cancel, ability.name
-        assert data.abilities[AbilityId.GENERAL_MOVE].cancelled_by is None
+            assert data.abilities[ability].cancelled_by is AbilityId.CANCEL, ability.name
+        assert data.abilities[AbilityId.MOVE].cancelled_by is None
 
     def test_a_train_or_a_research_is_cancelled_by_the_general_queue_cancel_where_there_is_a_queue(
         self, path: Path
     ) -> None:
-        """Every queue cancel remaps to it, so it is right for any structure: a command center and a planetary fortress
-        train an SCV with different cancels on offer, and a researching tech lab accepted it (tool `sweep_tech_tree`).
-        A warp gate keeps no queue, so a warp-in has no cancel."""
+        """Every structure's own queue cancel reads as it, so it is right for any structure: a command center and a
+        planetary fortress train an SCV with different cancels of their own, and a researching tech lab accepted it
+        (tool `sweep_tech_tree`). A warp gate keeps no queue, so a warp-in has no cancel."""
         data = _tables(path)
         for ability in (
             AbilityId.BARRACKS_TRAIN_MARINE,
             AbilityId.COMMAND_CENTER_TRAIN_SCV,
             AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS,
         ):
-            assert data.abilities[ability].cancelled_by is AbilityId.GENERAL_CANCEL_LAST, ability.name
+            assert data.abilities[ability].cancelled_by is AbilityId.CANCEL_LAST, ability.name
         warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
-
-    def test_a_general_id_holds_a_cancel_only_where_what_it_stands_for_shares_one(self, path: Path) -> None:
-        """A tech lab on a barracks, a factory or a starport is cancelled by its host's own cancel."""
-        assert _tables(path).abilities[AbilityId.GENERAL_BUILD_TECH_LAB].cancelled_by is None
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
@@ -554,7 +654,7 @@ class TestARecordedGamesTables:
         for upgrade, ability in MISNAMED_RESEARCH_ABILITIES.items():
             assert AbilityId.get(named[upgrade]) is None, f"the table names a curated ability for {upgrade.name}"
             assert data.upgrades[upgrade].research_ability is ability
-            assert data.abilities[ability].product is upgrade
+            assert set(data.abilities[ability].products.values()) == {upgrade}
             # Without the product it would read as an ability that makes nothing, which keeps a unit's orders.
             assert data.abilities[ability].order_behavior is OrderBehavior.QUEUES
         assert _RESEARCHED_BY_A_DEAD_ID
@@ -569,8 +669,13 @@ class TestARecordedGamesTables:
             assert data.units[unit].base_type is base
 
 
+def _answer_row(path: Path, ability: int) -> data_pb2.AbilityData:
+    """The game's own row of `ability` in a recorded game's tables."""
+    return next(row for row in _answer(path).abilities if row.ability_id == ability)
+
+
 def _derived(data: GameData, ability: AbilityId) -> Cost:
     """What the game's own rows say the ability costs, before the overrides correct them."""
-    product = data.abilities[ability].product
-    derived = None if product is None else _derived_cost(product, data.units, data.upgrades)
-    return derived or Cost(0, 0)
+    products = data.abilities[ability].products.values()
+    derived = {_derived_cost(product, data.units, data.upgrades) for product in products}
+    return derived.pop() or Cost(0, 0) if len(derived) == 1 else Cost(0, 0)
