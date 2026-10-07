@@ -182,10 +182,11 @@ The `_EXACT` names are two different things:
 - `GENERAL_MOVE_EXACT`, `GENERAL_ATTACK_EXACT`, `GENERAL_STOP_EXACT`, `GENERAL_HOLD_POSITION_EXACT` and
   `GENERAL_PATROL_EXACT` are ordinary family members. They are the per-unit id of every ordinary unit at once, so
   there was no unit to name them after.
-- `LIBERATOR_SIEGE_EXACT`, `LIBERATOR_UNSIEGE_EXACT` and `GENERAL_MORPH_ARCHON_EXACT` are the oddities. The id ordered
-  differs from the id reported, and `remaps_to` links neither. The order book therefore cannot see a liberator that
-  is sieging as already doing `LIBERATOR_SIEGE`: a repeat is sent instead of `REDUNDANT`. This was read from the code
-  and has not been tested.
+- `LIBERATOR_SIEGE_EXACT`, `LIBERATOR_UNSIEGE_EXACT` and `GENERAL_MORPH_ARCHON_EXACT` were the oddities: the id
+  ordered differs from the id reported, and `remaps_to` links neither. Done in #103, which reads each as the id
+  ordered. The agent had expected a repeated siege to be sent instead of reading `REDUNDANT` because of them; in game
+  the repeat is never the same order anyway, since the liberator's report is aimed at itself and not at the point
+  ordered, and the game refuses it `NotSupported`.
 
 ### What changes
 
@@ -267,8 +268,9 @@ and for whether an ability makes a structure, and both come out the same within 
 
 ### Measurements it needs (`tools/sweep_orders.py`)
 
-- **The liberator repeat.** Confirm the gap before fixing it: siege a liberator, then order `LIBERATOR_SIEGE` again
-  while it morphs.
+- **The liberator repeat.** Done in #103 (runs 37605755080 and 37606192575): a liberator is sieged by the next
+  observation, reports its siege aimed at itself for the 64 steps its zone takes to form, and refuses the siege
+  again `NotSupported`.
 - **`GENERAL_ATTACK` against `GENERAL_SCAN_MOVE`.** An adept shade, a high templar, a lurker and an oracle are offered
   both. Find which one `GENERAL_ATTACK` runs for each, and whether a bot loses anything by not being able to order
   `Scan_Move` by name.
@@ -284,8 +286,8 @@ and for whether an ability makes a structure, and both come out the same within 
 
 ### Pull requests
 
-1. **The three oddities.** A reported-as map on the wire with just the liberator and archon pairs, and the
-   liberator repeat test. It is small, closes a real gap, and introduces the translation the next PR extends.
+1. **The three oddities.** #103: `_REPORTED_IDS` in `ids/ability.py`, read by `AbilityId.read` and `get`, with just
+   the liberator and archon pairs. The next PR extends it.
 2. **The families.** Extend the map, remove the per-unit ids and the general research ids from `AbilityId`, add
    `CANCEL_ADD_ON`, re-key the tables, turn the varying fields into mappings, and update the docs.
 3. **The rename**: `GENERAL_` dropped everywhere, as a mechanical PR on its own so the second one's diff stays
