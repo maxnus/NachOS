@@ -1,7 +1,7 @@
 """Find how the game takes orders: what each ability does to a unit's orders, what the queue flag does to training and
 research, what several orders to one unit in one request do, what the game reports it carried out, how precisely it
-keeps a point, what re-sending an order costs, which orders fail after the game has accepted them, and when a realtime
-game shows an order.
+keeps a point, what re-sending an order costs, which orders fail after the game has accepted them, when a realtime
+game shows an order, and what a unit reports of how far a morph has got.
 
 Needs StarCraft II installed. Each sweep plays its own game against the easiest computer, under the cheats it names,
 and runs its trials in turn::
@@ -69,6 +69,9 @@ and runs its trials in turn::
   `scan-only` does the same for a medivac, a raven, an observer, a MULE, an infestor and a widow mine, offered the
   scan move and not the attack.
 - `unburrow-autocast` sets a burrowed roach's and a burrowed drone's unburrow to autocast, with an enemy drone beside.
+- `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
+  done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
+  come.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -92,7 +95,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Self
+from typing import Self, cast
 
 from _sandbox import Cheat, OpenGround, Sandbox, playing
 from loguru import logger
@@ -3580,6 +3583,136 @@ def _autocast_unburrow(game: _Game, burrowed: UnitTypeId, unburrow: Ability, tri
     trial.notes["type after"] = "gone" if now is None else _type_name(now.unit_type)
 
 
+# --- What a unit reports of how far a morph has got, and an injected hatchery of when its larva come
+
+# What every morph in `_STRUCTURE_WORK` and `_UNIT_MORPHS` needs standing, and the half width each is given.
+_MORPH_NEEDS = (
+    (UnitTypeId.BARRACKS, 4),
+    (UnitTypeId.ENGINEERING_BAY, 3),
+    (UnitTypeId.SPAWNING_POOL, 2),
+    (UnitTypeId.BANELING_NEST, 2),
+    (UnitTypeId.ROACH_WARREN, 2),
+    (UnitTypeId.HIVE, 3),
+    (UnitTypeId.INFESTATION_PIT, 2),
+    (UnitTypeId.LURKER_DEN, 2),
+    (UnitTypeId.GREATER_SPIRE, 2),
+)
+# How often, and for how long at most, a unit at work is read: a hive and a greater spire take 1600 steps.
+_PROGRESS_EVERY = 16
+_PROGRESS_LIMIT = 1800
+
+# One read of a unit: the step, then its type, build progress and orders, or nothing more once it is gone.
+type _ProgressRead = list[object]
+
+
+def _progress(game: _Game) -> list[Trial]:
+    """Start every morph, a larva's drone and an SCV in one request and read each every 16 steps until it is done;
+    then inject a hatchery and read its buff until its larva come."""
+    for needed, half in _MORPH_NEEDS:
+        game.create(needed, game.spot(game.toward(10), half))
+    return [
+        game.trial("every morph, a drone and an SCV, read until done", partial(_morphs_read, game)),
+        game.trial("a hatchery injected, read until its larva come", partial(_inject_read, game)),
+    ]
+
+
+def _morphs_read(game: _Game, trial: Trial) -> None:
+    started: dict[str, tuple[raw_pb2.Unit, Ability]] = {}
+    # Further out than `_MORPH_NEEDS`: 16 from home, a factory's reactor was answered `Success` and never started.
+    for structure, ability, half in _STRUCTURE_WORK:
+        for unit in game.create(structure, game.spot(game.toward(32), half)):
+            started[f"{structure.name} given {ability.name}"] = (unit, ability)
+    for unit_type, ability, _ in _UNIT_MORPHS:
+        for unit in game.create(unit_type, game.spot(game.toward(16), 2)):
+            started[f"{unit_type.name} given {ability.name}"] = (unit, ability)
+    for unit in game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(16), 3)):
+        started["COMMAND_CENTER given COMMAND_CENTER_TRAIN_SCV"] = (unit, _TRAIN_SCV)
+    for unit in game.own(UnitTypeId.LARVA)[:1]:
+        started["LARVA given LARVA_MORPH_DRONE"] = (unit, AbilityId.LARVA_MORPH_DRONE)
+    eggs_before = {unit.tag for unit in game.own(UnitTypeId.EGG)}
+    ordered_at = game.step
+    verdicts = game.act(*(game.command(ability, [unit]) for unit, ability in started.values()))
+    trial.notes["ordered at"] = ordered_at
+    trial.notes["verdicts"] = dict(zip(started, verdicts, strict=False))
+    game.turn(2)
+    tags = {label: unit.tag for label, (unit, _) in started.items()}
+    # The game hands a larva's order to a larva of its choosing, so the egg is found rather than assumed.
+    if egg := next((unit for unit in game.own(UnitTypeId.EGG) if unit.tag not in eggs_before), None):
+        tags["LARVA given LARVA_MORPH_DRONE"] = egg.tag
+    reads: dict[str, list[_ProgressRead]] = {label: [] for label in tags}
+    while game.step < ordered_at + _PROGRESS_LIMIT:
+        for label, tag in tags.items():
+            unit = game.unit(tag)
+            read: _ProgressRead = [game.step]
+            if unit is not None:
+                read += [_type_name(unit.unit_type), round(unit.build_progress, 4), [_order(o) for o in unit.orders]]
+            reads[label].append(read)
+        if all((unit := game.unit(tag)) is None or not unit.orders for tag in tags.values()):
+            break
+        game.turn(_PROGRESS_EVERY)
+    trial.notes["each, read"] = {
+        label: _progress_summary(reads[label], ordered_at, _build_steps(game, ability, unit.unit_type))
+        for label, (unit, ability) in started.items()
+    }
+    trial.notes["each, every read: step, type, build progress, orders"] = reads
+
+
+def _build_steps(game: _Game, ability: Ability, performer: int) -> float | None:
+    """The build time in the game's table of what `ability` makes of a `performer`, or `None` where it names none."""
+    row = None if (curated := AbilityId.get(ability)) is None else game.data.abilities.get(curated)
+    product = None if row is None or (maker := UnitTypeId.get(performer)) is None else row.products.get(maker)
+    return game.data.units[product].build_steps if isinstance(product, UnitTypeId) else None
+
+
+def _progress_summary(reads: Sequence[_ProgressRead], ordered_at: int, build_steps: float | None) -> dict[str, object]:
+    """What one unit's reads show: its type, build progress and order progress while it worked, and the step it was
+    first read done at, after it last worked, against the step its build time has it done."""
+    at_work = [index for index, read in enumerate(reads) if len(read) > 1 and read[3]]
+    working = [reads[index] for index in at_work]
+    last = at_work[-1] if at_work else None
+    done = None if last is None or last + 1 >= len(reads) else reads[last + 1]
+    progress = [cast("list[dict[str, object]]", read[3])[0].get("progress", 0) for read in working]
+    if last is None:
+        after: object = "never started"
+    else:
+        after = None if done is None else ("gone" if len(done) == 1 else done[1])
+    return {
+        "type while working": sorted({str(read[1]) for read in working}),
+        "build progress while working": sorted({cast("float", read[2]) for read in working}),
+        "order progress, first and last read": [progress[0], progress[-1]] if progress else None,
+        "last read working": None if last is None else reads[last][0],
+        "first read done": None if done is None else done[0],
+        "after": after,
+        "ordered at plus build steps": None if build_steps is None else ordered_at + build_steps,
+    }
+
+
+def _inject_read(game: _Game, trial: Trial) -> None:
+    (hatchery,) = game.create(UnitTypeId.HATCHERY, game.spot(game.toward(24), 3))
+    (queen,) = game.create(UnitTypeId.QUEEN, _at(hatchery) + (3, 0))
+    game.set_energy(50, [queen])
+    game.turn(1)
+    trial.notes["ordered at"] = game.step
+    trial.notes["verdict"] = game.order(AbilityId.QUEEN_INJECT, [queen], hatchery)
+    reads: list[list[object]] = []
+    injected = False
+    # Until 64 steps after the buff is gone, since the larva hatch up to 38 steps after it (#24).
+    end = game.step + _PROGRESS_LIMIT
+    while game.step < end:
+        unit = game.unit(hatchery.tag)
+        if unit is None:
+            break
+        larvae = sum(1 for larva in game.own(UnitTypeId.LARVA) if _at(larva).distance_to(_at(unit)) < 5)
+        buffs = [_buff_name(buff) for buff in unit.buff_ids]
+        reads.append([game.step, buffs, unit.buff_duration_remain, unit.buff_duration_max, larvae])
+        if buffs:
+            injected = True
+        elif injected:
+            end = min(end, game.step + 64)
+        game.turn(_PROGRESS_EVERY)
+    trial.notes["step, buffs, buff_duration_remain, buff_duration_max, larvae beside"] = reads
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
@@ -3912,6 +4045,9 @@ _SWEEPS: dict[str, _Sweep] = {
     "attack-or-scan": _Sweep(Race.TERRAN, _attack_or_scan, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "scan-only": _Sweep(Race.TERRAN, _scan_only, (*_BASE_CHEATS, Cheat.TECH_TREE)),
     "unburrow-autocast": _Sweep(Race.TERRAN, _unburrow_autocast, (*_BASE_CHEATS, Cheat.TECH_TREE)),
+    # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
+    # instead.
+    "progress": _Sweep(Race.ZERG, _progress),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

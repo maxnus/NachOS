@@ -151,7 +151,8 @@ Each entry ends with how it was seen:
 - `life` is health alone; shields are separate (stated). A marine has 45 health, 55 with Combat Shield, and the
   tables hold no health (#34; tested).
 - `build_progress` counts up while a structure is built or a unit warps in (a zealot read 0.01, 0.32, 0.64, 0.95,
-  1.00); an egg or cocoon reads 1 throughout, with the progress in its order (#25).
+  1.00), and reads 1 throughout a morph: a larva's egg, a cocoon, and a structure becoming another (#25; tool
+  `sweep_orders`, build 75689).
 - Only the command center (12 of 16, then 9 once three SCVs went to gas) and the refinery (3 of 3) reported
   harvesters. `ideal_harvesters` is 2 per mineral field and 3 per geyser (#25).
 - `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a nexus, an assimilator,
@@ -163,9 +164,15 @@ Each entry ends with how it was seen:
 - A unit lifted by a graviton beam wears `PHOENIX_GRAVITON_BEAM` and reports `is_flying` false (#26; tested).
 - Visible enemy units report their armor and shield levels, and armed ones their attack level too; an undetected
   cloaked observer reports none (#12; corpus).
-- Order and rally points have height 0. Order progress runs from 0 to 1 for training and research and is 0
-  otherwise. A rally onto a unit that is gone, such as a mined-out mineral field, holds tag 2³², which names no unit
-  (#25; corpus).
+- Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
+  tag 2³², which names no unit (#25; corpus).
+- Order progress runs from 0 to 1 for training and research and is 0 otherwise (#25; corpus). A larva's egg
+  counts up like a train, and an SCV's and an egg's run evenly over the build time in the game's table. A
+  morph's order reads 0 from start to end, and so does a structure's building an add-on: an orbital command, a
+  planetary fortress, a lair, a hive, a greater spire, a tech lab, a reactor, every cocoon and the lurker egg.
+  Nothing a unit reports says how far a morph has got. Each was done once the table's build time had passed since
+  the order, to within the 16 steps between reads, except the lurker egg, which hatched 402 to 418 steps after the
+  order against the table's 553 (tool `sweep_orders`, build 75689).
 - Points come back in single precision (tested). Facing is in radians from the +x axis, and z is on the
   terrain-height scale (stated).
 - Units on flat ground stand up to 0.03 below the map's height or up to 0.16 above it (corpus).
@@ -273,7 +280,8 @@ Each entry ends with how it was seen:
 - `RavenShredderMissileTint` is on an anti-armor missile's target from launch to impact, steps 18 to 52, and the
   armor reduction goes on every unit hit (#24).
 - `QueenSpawnLarvaTimer` runs 640 steps, and the larva hatch 30 to 38 steps after it ends; a second inject queues
-  behind the first, and nothing shows it (#24).
+  behind the first, and nothing shows it (#24). The hatchery's `buff_duration_remain` counts it down a step at a
+  time, against a `buff_duration_max` of 640 (tool `sweep_orders`, build 75689).
 - A fungal growth showed the step after the cast and was gone 64 steps later (#37; tested).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).

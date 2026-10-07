@@ -430,7 +430,8 @@ class Unit[K: UnitType.AnyType]:
     def build_progress(self) -> float:
         """A structure's progress through construction, or a unit's through warping in, from 0 to 1.
 
-        Anything else reads 1, including an egg or a cocoon morphing into a unit, whose progress is its order's.
+        Anything else reads 1, anything morphing included. A larva's egg has its progress in its order; a cocoon and a
+        structure morphing report none (in game).
         """
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("build progress")
