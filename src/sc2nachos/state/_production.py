@@ -6,13 +6,12 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
-from sc2nachos.units import OwnUnit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from sc2nachos.gamedata import AbilityData, GameData
-    from sc2nachos.units import Unit
+    from sc2nachos.units import OwnUnit
 
 
 @final
@@ -28,13 +27,12 @@ class _Production:
 
     __slots__ = ("_counts", "_progress")
 
-    def __init__(self, units: Iterable[Unit[Any]], game_data: GameData) -> None:
-        """Read what this player's units among `units` are making, by what `game_data` says each ability makes."""
+    def __init__(self, units: Iterable[OwnUnit[Any]], game_data: GameData) -> None:
+        """Read what `units` are making, by what `game_data` says each ability makes."""
         self._counts: Counter[UnitTypeId] = Counter()
         self._progress: dict[UpgradeId, float] = {}
         for unit in units:
-            if isinstance(unit, OwnUnit) and not unit.is_stale:
-                self._read(unit, game_data)
+            self._read(unit, game_data)
 
     def count(self, unit_types: Iterable[UnitTypeId]) -> int:
         """How many units of `unit_types` are being made."""

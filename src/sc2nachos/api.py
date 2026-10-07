@@ -1,7 +1,7 @@
 """Everything a bot talks to."""
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, overload
 
 from loguru import logger
 
@@ -148,6 +148,12 @@ class Api:
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade this player has finished. Raises `UncuratedIdError` if one is one the curated ids leave out."""
         return self._current_game().state.upgrades
+
+    @overload
+    def in_production(self, unit_type: type[UnitType.AnyType], /, *unit_types: type[UnitType.AnyType]) -> int: ...
+
+    @overload
+    def in_production(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> int: ...
 
     def in_production(
         self, types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId], /, *unit_types: type[UnitType.AnyType]

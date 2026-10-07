@@ -47,8 +47,7 @@ class GameMap:
     )
 
     def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: PointLike) -> None:
-        """Read the map from the game's answer to `RequestGameInfo`, which leaves out where this player starts:
-        `start_location`."""
+        """Read the map from the game's answer to `RequestGameInfo`, with this player's start at `start_location`."""
         start = info.start_raw
         playable = Rectangle._from_proto(start.playable_area)
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)

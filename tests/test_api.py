@@ -314,6 +314,12 @@ class TestPlaying:
         assert asked == [0, 4]
 
 
+def _production_is_asked_by_types_or_by_ids(api: Api) -> None:
+    """What the type checker makes of asking what is in production. Never run."""
+    api.in_production([UnitTypeId.ZEALOT], UnitType.Stalker)  # pyright: ignore[reportArgumentType]
+    api.in_production(UnitTypeId.ZEALOT, UnitType.Stalker)  # pyright: ignore[reportArgumentType]
+
+
 def _record(api: Api, seen: list[tuple[str, int]]) -> None:
     """Record every lifecycle event `api` hands out into `seen`, as the type name and the step."""
     for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
