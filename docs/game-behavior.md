@@ -740,7 +740,17 @@ Each entry ends with how it was seen:
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
 - At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers;
-  the placement grid blocks rocks but no resource or townhall (#17; corpus).
+  the placement grid blocks most rocks but no resource or townhall (#17; corpus). It leaves open the ground under
+  Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates, though the game
+  takes no townhall there (tool `sweep_townhall_placement`; corpus).
+- A townhall's footprint and a mineral field's leave a gap along each axis, 0 where they overlap on it. The game
+  refuses the townhall while both gaps are under 3 tiles, unless both are 2. A geyser refuses it while the two gaps
+  add up to under 3. All 15 kinds of field and 6 of geyser refuse alike, and a command center, a nexus and a hatchery
+  are refused alike (tool `sweep_townhall_placement`).
+- Around NachOS's expansions on the 7 maps of the corpus, those rules, with every other neutral unit blocking the
+  square its radius spans, agree with the game on 21,289 of 21,315 tile centers. On the other 26 the game takes a
+  townhall that the square refuses, beside diagonal collapsible towers and some 6x6 rocks and debris; none is an
+  expansion's best spot (tool `sweep_townhall_placement`).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
@@ -748,7 +758,9 @@ Each entry ends with how it was seen:
   onto unbuildable ground was never made (#25, #32).
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
-- PylonAIE_v4 has no rich geyser (tool `sweep_tech_tree`).
+- PylonAIE_v4 has two rich geysers, each the one geyser of a base, and neither in sight from a start (corpus).
+- UltraloveAIE_v2 has neutral critters, `CleaningBot` and `LabBot`, which `show_map` brings into sight (tool
+  `sweep_townhall_placement`).
 
 ## Score and supply
 

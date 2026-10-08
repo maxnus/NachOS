@@ -153,3 +153,4 @@ buildings.
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
 | Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |
+| Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py`, which starts the game |

@@ -9,12 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #120. `uv run pytest` passes 1682 tests on the derived reads' branch; `uv run pytest
-  -m integration` passes 27 against a real game (run 2026-10-07).
+- nachOS `main` has every PR to #121. `uv run pytest` passes 1716 tests on the expansions' branch; `uv run pytest -m
+  integration` passes 27 against a real game (run 2026-10-08).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
-  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is on branch
-  `claude/derived-reads`.
+  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
+  and the expansions the demo bot needs are on branch `claude/expansions`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -439,7 +439,7 @@ and for whether an ability makes a structure, and both come out the same within 
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
 
-5. **The derived reads**: branch `claude/derived-reads`. Decided by the owner, 2026-10-07:
+5. **The derived reads**, done (#121). Decided by the owner, 2026-10-07:
    - **The unit sets are `UnitType` groups only**, read through `of_type`, with no second spelling on `Units` or
      `Api`: `Worker` (no MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and
      `GasBuilding`. The last three are what the tables say holds minerals or vespene; `MineralField` and
@@ -452,6 +452,19 @@ when each starts.
      0 from start to end. **`api.research_progress(upgrade)`** is from 0 to 1, or `None`.
    - **No `api.enemy.units`**: the enemy's units stay `api.units.enemy`, and the migration guide maps python-sc2's
      `enemy_units` and `enemy_structures` onto it.
+   - **The expansions**, which the demo bot needs to expand: branch `claude/expansions`, chosen before slices 6 and
+     7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
+     - **`api.expansions`**, found once at the start: each `Expansion` has its townhall's `location` and its
+       `mineral_fields` and `geysers` as units, the same objects all game. It is on the api, not the map, so that
+       `GameMap` stays a pure reading of the protos built before any unit: a map holding one game's units could not
+       be shared, would make a circle if the tracker ever needs the map, and would leave tools without expansions.
+     - **Where a townhall may stand is measured**, by `tools/sweep_townhall_placement.py`, not taken from
+       python-sc2's distances, which put 4 bases of the pool where the game takes no townhall.
+     - **A group of 5 to 12 resources is an expansion**: fewer is a blocker, more a wall.
+     - **A geyser more than 10 from its group's townhall gets an expansion of its own**, sharing the fields, as on
+       Torches' gold bases.
+     - **They come nearest this player's start first by walking**, by a private Dijkstra over the start's pathing
+       grid; no public pathfinding comes with it.
 6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
