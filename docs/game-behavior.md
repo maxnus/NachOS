@@ -740,7 +740,7 @@ Each entry ends with how it was seen:
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
 - At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers;
-  the placement grid blocks most rocks but no resource or townhall (#17; corpus). It leaves open the ground under
+  the placement grid blocks rocks but no resource or townhall (#17; corpus). It leaves open the ground under
   Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates, though the game
   takes no townhall there (tool `sweep_townhall_placement`; corpus).
 - A townhall's footprint and a mineral field's leave a gap along each axis, 0 where they overlap on it. The game
