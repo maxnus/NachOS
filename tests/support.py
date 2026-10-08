@@ -42,6 +42,7 @@ from sc2nachos.events import (
 )
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap._expansion import find_expansions
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
@@ -262,12 +263,26 @@ def played(
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
     step = observation.observation.game_loop
     if game is None:
+        tracker.update(observation.observation.raw_data, step)
+        expansions = find_expansions(game_map, tracker.unit_tracker.present.neutral)
         state = _State(observation, tracker, game_map)
         orders = OrderBook(tracker.game_data, build_reach=2.5)
         game = _Game(
-            client, game_map, tracker.game_data, tracker.enemy, infer, tracker, orders, observation, state, step
+            client,
+            game_map,
+            expansions,
+            tracker.game_data,
+            tracker.enemy,
+            infer,
+            tracker,
+            orders,
+            observation,
+            state,
+            step,
         )
-    game._take_in(observation, step)
+        game._read(observation, step)
+    else:
+        game._take_in(observation, step)
     events._set_step(step)
     events._hand_out(game.report(events))
     return game
