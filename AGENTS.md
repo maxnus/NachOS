@@ -72,6 +72,8 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
   accurate: a plain name a reader can predict beats a clever synonym.
+- **A constant or a function is named for what it holds or returns**, so its name needs no comment:
+  `_MIN_RESOURCES_PER_EXPANSION`, never `_FEWEST`.
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 - **Type hints** on all parameters and return types.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.

@@ -793,3 +793,5 @@ Each entry ends with how it was seen:
 - **What an ability a busy structure refuses would do to what it is making** is still open: a lift, a morph and an
   add-on are answered `NotSupported`, so what they would do to a queue was never seen. Every ability a producer does
   take leaves what it is making alone (tool `sweep_orders`).
+- **Why the start's placement grid leaves open the ground under Xel'Naga towers and unbuildable plates and bricks**,
+  where no townhall can stand (tool `sweep_townhall_placement`).

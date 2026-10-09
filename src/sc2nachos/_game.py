@@ -53,7 +53,6 @@ from sc2nachos.events import (
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
-from sc2nachos.gamemap._expansion import find_expansions
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
@@ -68,7 +67,7 @@ from sc2nachos.units._tracking import _Tracker
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _Game:
     """One game as it is played: its client, and everything seen of it so far."""
 
@@ -99,17 +98,17 @@ class _Game:
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         game = cls(
-            client,
-            game_map,
-            find_expansions(game_map, tracker.unit_tracker.present.neutral),
-            game_data,
-            enemy,
-            enemy_upgrade_inference,
-            tracker,
-            OrderBook(game_data, build_reach=build_reach),
-            observation,
-            _State(observation, tracker, game_map),
-            step,
+            client=client,
+            game_map=game_map,
+            expansions=game_map._expansions_among(tracker.unit_tracker.present.neutral),
+            game_data=game_data,
+            enemy=enemy,
+            enemy_upgrade_inference=enemy_upgrade_inference,
+            tracker=tracker,
+            orders=OrderBook(game_data, build_reach=build_reach),
+            observation=observation,
+            state=_State(observation, tracker, game_map),
+            step=step,
         )
         game._read(observation, step)
         return game

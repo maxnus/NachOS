@@ -230,6 +230,7 @@ it.
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
 | `p.rounded`, which floors | `Tile.containing(p)`, the tile the point is on |
 | `p.snap()` | `Tile.containing(p).center` |
+| `await client.query_pathing(a, b)`, asked of the game | `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block |
 
 - **Equality is exact.** python-sc2 treats points as equal if every coordinate is within 1e-8, and counts a
   missing coordinate as zero, so `Point3((1, 2, 0)) == Point2((1, 2))`. NachOS points compare as the tuples they

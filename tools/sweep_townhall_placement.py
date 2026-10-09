@@ -34,7 +34,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
-from sc2nachos.gamemap._expansion import _townhall_centers, find_expansions
+from sc2nachos.gamemap._expansion import _where_townhall_allowed
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
@@ -43,14 +43,12 @@ from sc2nachos.match import Race
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType
 
-# How far from a resource, in tiles along each axis, centers are asked about, and the open ground needed for it: a
-# townhall at the farthest center reaches two and a half tiles further. Only main bases have open ground 19 across.
-_REACH = 7
-_HALF = _REACH + 2
-# How many open squares are tried, farthest from every unit first, for one where every townhall would be taken.
-_TRIES = 64
-# How many steps a removed resource is waited for.
-_REMOVAL = 64
+# In tiles along each axis. A townhall at the farthest center asked about reaches two and a half tiles further, and
+# only main bases have open ground 19 across.
+_ASKED_REACH = 7
+_OPEN_GROUND_HALF_WIDTH = _ASKED_REACH + 2
+_OPEN_GROUND_TRIES = 64
+_REMOVAL_WAIT_STEPS = 64
 _TOWNHALLS = {
     "command center": AbilityId.SCV_BUILD_COMMAND_CENTER,
     "nexus": AbilityId.PROBE_BUILD_NEXUS,
@@ -64,7 +62,7 @@ type Offset = tuple[float, float]
 
 
 @dataclass(slots=True)
-class Kind:
+class ResourceRefusals:
     """What the game refused around one kind of resource."""
 
     name: str
@@ -77,7 +75,7 @@ class Kind:
     """Whether every townhall was refused exactly where the rule for its kind of resource says."""
 
 
-def _gaps(offset: Offset, size: tuple[int, int]) -> tuple[float, float]:
+def _footprint_gaps(offset: Offset, size: tuple[int, int]) -> tuple[float, float]:
     """The tiles a townhall centered `offset` from a resource of footprint `size` leaves between their footprints,
     across and up: 0 along an axis their footprints overlap on."""
     reach = _TOWNHALL_SIZE / 2
@@ -86,93 +84,101 @@ def _gaps(offset: Offset, size: tuple[int, int]) -> tuple[float, float]:
 
 def refused_by_mineral_field(offset: Offset) -> bool:
     """Whether a mineral field refuses a townhall centered `offset` from it: both gaps under 3, but not both 2."""
-    across, up = _gaps(offset, _MINERAL_FIELD_SIZE)
+    across, up = _footprint_gaps(offset, _MINERAL_FIELD_SIZE)
     return across < 3 and up < 3 and not (across == 2 and up == 2)
 
 
 def refused_by_geyser(offset: Offset) -> bool:
     """Whether a geyser refuses a townhall centered `offset` from it: the two gaps adding up to under 3."""
-    across, up = _gaps(offset, _GEYSER_SIZE)
+    across, up = _footprint_gaps(offset, _GEYSER_SIZE)
     return across + up < 3
 
 
-def _centers(around: Point) -> list[Point]:
-    """Every tile center within `_REACH` tiles of `around`, along each axis."""
+def _tile_centers_around(around: Point) -> list[Point]:
+    """Every tile center within `_ASKED_REACH` tiles of `around`, along each axis."""
     x0, y0 = int(around.x), int(around.y)
     return [
         Point((x + 0.5, y + 0.5))
-        for x in range(x0 - _REACH, x0 + _REACH + 1)
-        for y in range(y0 - _REACH, y0 + _REACH + 1)
+        for x in range(x0 - _ASKED_REACH, x0 + _ASKED_REACH + 1)
+        for y in range(y0 - _ASKED_REACH, y0 + _ASKED_REACH + 1)
     ]
 
 
-def _picture(kind: Kind) -> str:
-    """The centers around `kind`, the top row first: `#` refused, `.` allowed."""
-    refused = set(kind.refused["command center"])
+def _refusal_picture(refusals: ResourceRefusals) -> str:
+    """The centers around the resource `refusals` describes, the top row first: `#` refused, `.` allowed."""
+    refused = set(refusals.refused["command center"])
     # Centers sit on half tiles, so their offsets from a resource on a tile edge are a half off whole numbers.
-    shift_x = 0.5 - kind.position[0] % 1
-    shift_y = 0.5 - kind.position[1] % 1
+    shift_x = 0.5 - refusals.position[0] % 1
+    shift_y = 0.5 - refusals.position[1] % 1
     rows = []
-    for dy in range(_REACH, -_REACH - 1, -1):
+    for dy in range(_ASKED_REACH, -_ASKED_REACH - 1, -1):
         rows.append(
-            "".join("#" if (dx + shift_x, dy + shift_y) in refused else "." for dx in range(-_REACH, _REACH + 1))
+            "".join(
+                "#" if (dx + shift_x, dy + shift_y) in refused else "." for dx in range(-_ASKED_REACH, _ASKED_REACH + 1)
+            )
         )
     return "\n".join(rows)
 
 
-def _refused(game: Sandbox, centers: Sequence[Point], ability: AbilityId) -> set[Point]:
+def _refused_centers(game: Sandbox, centers: Sequence[Point], ability: AbilityId) -> set[Point]:
     """Those of `centers` the game would refuse the townhall `ability` builds."""
     return {center for center, fits in zip(centers, game.placeable(ability, centers), strict=True) if not fits}
 
 
-def _open_square(game: Sandbox, game_map: GameMap, units: Sequence[raw_pb2.Unit]) -> Point:
-    """The center of open ground, as far from every unit as can be, where the game would take every townhall at
-    every center asked about."""
-    size = 2 * _HALF + 1
-    fits = sliding_window_view(numpy.asarray(game_map.placement.values), (size, size)).all(axis=(2, 3))
-    xs, ys = numpy.nonzero(fits)
+def _clear_open_ground(game: Sandbox, game_map: GameMap, units: Sequence[raw_pb2.Unit]) -> Point:
+    """The center of open ground where the game would take every townhall at every center asked about: of the
+    `_OPEN_GROUND_TRIES` open squares farthest from every unit, the farthest that qualifies."""
+    size = 2 * _OPEN_GROUND_HALF_WIDTH + 1
+    open_squares = sliding_window_view(numpy.asarray(game_map.placement.values), (size, size)).all(axis=(2, 3))
+    xs, ys = numpy.nonzero(open_squares)
     origin = game_map.placement.origin
-    centers = numpy.stack((xs + origin.x + _HALF + 0.5, ys + origin.y + _HALF + 0.5), axis=-1)
+    centers = numpy.stack(
+        (xs + origin.x + _OPEN_GROUND_HALF_WIDTH + 0.5, ys + origin.y + _OPEN_GROUND_HALF_WIDTH + 0.5), axis=-1
+    )
     positions = numpy.array([(unit.pos.x, unit.pos.y) for unit in units])
-    nearest = numpy.linalg.norm(centers[:, numpy.newaxis] - positions[numpy.newaxis], axis=-1).min(axis=1)
-    for index in numpy.argsort(-nearest)[:_TRIES]:
+    distance_to_nearest_unit = numpy.linalg.norm(centers[:, numpy.newaxis] - positions[numpy.newaxis], axis=-1).min(
+        axis=1
+    )
+    for index in numpy.argsort(-distance_to_nearest_unit)[:_OPEN_GROUND_TRIES]:
         x, y = centers[index]
         at = Point((float(x), float(y)))
-        if not any(_refused(game, _centers(at), ability) for ability in _TOWNHALLS.values()):
+        if not any(_refused_centers(game, _tile_centers_around(at), ability) for ability in _TOWNHALLS.values()):
             return at
     raise RuntimeError(f"no open ground {size} tiles across takes every townhall")
 
 
-def _remove(game: Sandbox, tags: Sequence[int]) -> None:
+def _remove_and_wait(game: Sandbox, tags: Sequence[int]) -> None:
     """Remove the units under `tags` and wait until they are gone."""
     game.kill(tags)
-    for _ in range(_REMOVAL):
+    for _ in range(_REMOVAL_WAIT_STEPS):
         game.client.step(1)
         if not {unit.tag for unit in game.units()} & set(tags):
             return
     raise RuntimeError(f"{len(tags)} units were not removed")
 
 
-def _measure(game: Sandbox, at: Point, unit_type: UnitTypeId, size: tuple[int, int]) -> Kind | None:
+def _measure_refusals(
+    game: Sandbox, at: Point, unit_type: UnitTypeId, size: tuple[int, int]
+) -> ResourceRefusals | None:
     """Create one `unit_type` at `at`, ask about every center around it, and remove it."""
     made = game.spawn([(unit_type, NEUTRAL, at)])
     if not made:
         return None
     unit = made[0]
     position = (unit.pos.x, unit.pos.y)
-    centers = _centers(at)
+    centers = _tile_centers_around(at)
     offsets = {center: (center.x - position[0], center.y - position[1]) for center in centers}
-    kind = Kind(unit_type.name, size, position)
+    refusals = ResourceRefusals(unit_type.name, size, position)
     rule = refused_by_geyser if size == _GEYSER_SIZE else refused_by_mineral_field
     stated = sorted(offset for offset in offsets.values() if rule(offset))
     for townhall, ability in _TOWNHALLS.items():
-        kind.refused[townhall] = sorted(offsets[center] for center in _refused(game, centers, ability))
-    kind.as_stated = all(refused == stated for refused in kind.refused.values())
-    _remove(game, [unit.tag])
-    return kind
+        refusals.refused[townhall] = sorted(offsets[center] for center in _refused_centers(game, centers, ability))
+    refusals.as_stated = all(refused == stated for refused in refusals.refused.values())
+    _remove_and_wait(game, [unit.tag])
+    return refusals
 
 
-def footprint(installation: Installation) -> list[Kind]:
+def measure_resource_refusals(installation: Installation) -> list[ResourceRefusals]:
     """Measure what every kind of mineral field and geyser refuses a townhall."""
     kinds = [(UnitTypeId(type_id), _MINERAL_FIELD_SIZE) for type_id in sorted(UnitType.AnyMineralField._type_ids)]
     kinds += [(UnitTypeId(type_id), _GEYSER_SIZE) for type_id in sorted(UnitType.AnyVespeneGeyser._type_ids)]
@@ -183,23 +189,23 @@ def footprint(installation: Installation) -> list[Kind]:
         game.client.step(4)
         # Workers wander onto the ground asked about, and the only open ground wide enough is beside resources.
         resources = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
-        _remove(game, [unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV}])
+        _remove_and_wait(game, [unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV}])
         game_map = GameMap._of_game(game.client.game_info(), game.client.observation())
-        at = _open_square(game, game_map, game.units())
+        at = _clear_open_ground(game, game_map, game.units())
         for unit_type, size in kinds:
-            kind = _measure(game, at, unit_type, size)
-            if kind is None:
+            refusals = _measure_refusals(game, at, unit_type, size)
+            if refusals is None:
                 continue
-            found.append(kind)
-            verdict = "as stated" if kind.as_stated else "NOT as stated"
-            logger.info("{} at {}: {}\n{}", kind.name, kind.position, verdict, _picture(kind))
-    stated = sum(kind.as_stated for kind in found)
+            found.append(refusals)
+            verdict = "as stated" if refusals.as_stated else "NOT as stated"
+            logger.info("{} at {}: {}\n{}", refusals.name, refusals.position, verdict, _refusal_picture(refusals))
+    stated = sum(refusals.as_stated for refusals in found)
     logger.info("{} of {} kinds refuse a townhall as stated", stated, len(found))
     return found
 
 
 @dataclass(slots=True)
-class Bases:
+class ExpansionCheck:
     """Where the game and NachOS disagree on a townhall around the expansions NachOS finds on one map."""
 
     map: str
@@ -213,7 +219,7 @@ class Bases:
     """The raw names of the unit types `show_map` revealed that `UnitTypeId` leaves out, set aside unread."""
 
 
-def _curated(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[str]]:
+def _without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[str]]:
     """`raw` without the units whose type `UnitTypeId` leaves out, and those types' raw names."""
     kept = raw_pb2.ObservationRaw()
     kept.CopyFrom(raw)
@@ -229,7 +235,7 @@ def _curated(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[
     return kept, sorted(left_out)
 
 
-def _bases_on(installation: Installation, map_name: str) -> Bases:
+def _check_expansions_on(installation: Installation, map_name: str) -> ExpansionCheck:
     """Ask the game about every center around each expansion NachOS finds on `map_name`, but the two starts, where
     the townhalls stand."""
     with playing(Race.TERRAN, installation, map_name=map_name) as game:
@@ -238,51 +244,51 @@ def _bases_on(installation: Installation, map_name: str) -> Bases:
         observation = game.client.observation()
         game_map = GameMap._of_game(game.client.game_info(), observation)
         tracker = _Tracker(GameData(game.client.game_data()), Enemy())
-        raw, uncurated = _curated(observation.observation.raw_data)
+        raw, uncurated = _without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral = tracker.unit_tracker.present.neutral
-        expansions = find_expansions(game_map, neutral)
+        expansions = game_map._expansions_among(neutral)
         fields, geysers = neutral.of_type(UnitType.AnyMineralField), neutral.of_type(UnitType.AnyVespeneGeyser)
         blockers = neutral.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
-        legal = _townhall_centers(game_map.placement, fields, geysers, blockers)
+        townhall_allowed = _where_townhall_allowed(game_map.placement, fields, geysers, blockers)
         starts = {game_map.start_location, *game_map.opponent_start_locations}
         centers = sorted(
             {
                 center
                 for expansion in expansions
                 if expansion.location not in starts
-                for center in _centers(expansion.location)
+                for center in _tile_centers_around(expansion.location)
             }
         )
         locations = [(expansion.location.x, expansion.location.y) for expansion in expansions]
-        bases = Bases(map_name, locations, asked=len(centers), uncurated=uncurated)
-        refused = _refused(game, centers, _TOWNHALLS["command center"])
+        check = ExpansionCheck(map_name, locations, asked=len(centers), uncurated=uncurated)
+        refused = _refused_centers(game, centers, _TOWNHALLS["command center"])
         for center in centers:
             taken = center not in refused
-            if taken != bool(legal[game_map.placement.index_of(center)]):
-                bases.disagreed.append((center.x, center.y, taken))
-    return bases
+            if taken != bool(townhall_allowed[game_map.placement.index_of(center)]):
+                check.disagreed.append((center.x, center.y, taken))
+    return check
 
 
-def bases(installation: Installation) -> list[Bases]:
+def check_expansions(installation: Installation) -> list[ExpansionCheck]:
     """Compare the game with NachOS around the expansions of every map in the corpus."""
     found = []
     for map_name in sorted({game.map for game in GAMES}):
-        on_map = _bases_on(installation, map_name)
-        found.append(on_map)
+        check = _check_expansions_on(installation, map_name)
+        found.append(check)
         logger.info(
             "{}: {} expansions, {} centers asked, {} disagreed {}; uncurated units set aside: {}",
             map_name,
-            len(on_map.expansions),
-            on_map.asked,
-            len(on_map.disagreed),
-            on_map.disagreed,
-            on_map.uncurated or "none",
+            len(check.expansions),
+            check.asked,
+            len(check.disagreed),
+            check.disagreed,
+            check.uncurated or "none",
         )
     return found
 
 
-_SWEEPS = {"footprint": footprint, "bases": bases}
+_SWEEPS = {"footprint": measure_resource_refusals, "bases": check_expansions}
 
 
 def main(argv: Sequence[str]) -> None:

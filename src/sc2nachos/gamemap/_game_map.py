@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, Any, Self, final
 
 import numpy
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.gamemap._expansion import _find_expansions
 from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
@@ -18,7 +19,9 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from s2clientprotocol import common_pb2, sc2api_pb2
 
+    from sc2nachos.gamemap._expansion import Expansion
     from sc2nachos.geometry import PointLike
+    from sc2nachos.units import Unit, Units
 
 # Corners of one tile at least this far apart in height are on opposite sides of a cliff: across a ramp they differ
 # by at most 1.25, across a cliff by at least 2.
@@ -99,10 +102,10 @@ class GameMap:
 
     @property
     def placement(self) -> Grid[bool]:
-        """Where a structure can be placed at the start of the game, as the game reports it.
+        """Where the game's placement grid lets a structure stand at the start of the game.
 
-        Rocks block it; no resource or townhall does. Nor do Xel'Naga towers, unbuildable plates and bricks, or
-        all of some 6x6 debris and gates, though the game takes no townhall on them.
+        The game's grid blocks rocks, but not resources, townhalls, Xel'Naga towers, unbuildable plates and bricks, or
+        all of some 6x6 debris and gates, though no townhall can stand on those.
         """
         return self._placement
 
@@ -146,6 +149,11 @@ class GameMap:
     def start_location(self) -> Point:
         """Where this player's first townhall stood when the game began, a tile's center. It stays the same all game."""
         return self._start_location
+
+    def _expansions_among(self, neutral_units: Units[Unit[Any]]) -> tuple[Expansion, ...]:
+        """The expansions of this map with `neutral_units` on it at the start, nearest this player's start first by the
+        ground a unit walks. Those no walk reaches come last, nearest first in a line."""
+        return _find_expansions(self, neutral_units)
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:

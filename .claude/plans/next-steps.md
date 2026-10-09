@@ -471,10 +471,15 @@ slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
 - **A group of 5 to 12 resources is an expansion**: fewer is a blocker, more a wall.
 - **A geyser more than 10 from its group's townhall gets an expansion of its own**, sharing the fields, as on
   Torches' gold bases.
-- **They come nearest this player's start first by walking**, by a private Dijkstra over the start's pathing grid;
-  no public pathfinding comes with it.
+- **They come nearest this player's start first by walking**, by `Grid.path_distance_from` over the start's pathing
+  grid. Reversed in review of #122: that method is public, beside `Grid.distance_from`, since nothing in it is
+  ground-specific (the owner); it gives distances, never a path.
+- **They are found by `GameMap._expansions_among(neutral_units)`**, a private method that stores nothing on the map,
+  so `api.expansions` stays the one public spelling (the owner, review of #122).
 - **Blockers stay every neutral unit but a resource** (the owner, review of #122): critters are never in a main base
   at the start, the only place one could be seen then.
+- **No `NeutralUnit` class** (the owner, review of #122): neutral units have nothing the game reports for them alone
+  but `mineral_contents`, which `Unit` has.
 
 ## 4. After each nachOS pull request merges
 

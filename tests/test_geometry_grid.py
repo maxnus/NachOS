@@ -1,6 +1,7 @@
 """Grids of per-tile values."""
 
 import contextlib
+import math
 
 import numpy
 import pytest
@@ -177,6 +178,8 @@ class TestOutsidePropagation:
         assert left.smoothed(1.0, outside=0.0).outside == 0.0
         assert left.distance_from(Point((1.5, 1.5))).outside is None
         assert left.distance_from(Point((1.5, 1.5)), outside=0.0).outside == 0.0
+        assert pathable.path_distance_from(Point((1.5, 1.5))).outside is None
+        assert pathable.path_distance_from(Point((1.5, 1.5)), outside=0.0).outside == 0.0
 
     def test_copy_keeps_it(self) -> None:
         left, _ = self.grids()
@@ -397,6 +400,29 @@ class TestDerivedGrids:
         assert distances[Tile(2, 2)] == pytest.approx(2.0)
         assert distances[Tile(1, 1)] == pytest.approx(1.0)
         assert distances[Tile(0, 0)] == 0.0
+
+    def test_a_path_distance_goes_around_what_is_false(self) -> None:
+        """A wall at x = 12 from y = 20 to 23 leaves one way round, over the top row: up 3 and a diagonal to (11, 24),
+        2 across, and a diagonal and 3 down to (14, 20)."""
+        passable = Grid(numpy.ones((5, 5), dtype=bool), origin=Tile(10, 20))
+        passable[Rectangle(12, 20, 1, 4)] = False
+        distances = passable.path_distance_from(Point((10.5, 20.5)))
+        assert distances[Tile(10, 20)] == 0.0
+        assert distances[Tile(11, 21)] == pytest.approx(math.sqrt(2))
+        assert distances[Tile(14, 20)] == pytest.approx(8 + 2 * math.sqrt(2))
+        assert distances.origin == passable.origin
+
+    def test_a_path_never_cuts_across_a_corner_between_two_false_tiles(self) -> None:
+        passable = Grid(numpy.ones((2, 2), dtype=bool))
+        passable[Tile(1, 0)] = False
+        passable[Tile(0, 1)] = False
+        assert passable.path_distance_from(Point((0.5, 0.5)))[Tile(1, 1)] == math.inf
+
+    def test_a_path_distance_reads_zero_where_it_starts_even_on_a_false_tile(self) -> None:
+        passable = Grid(numpy.zeros((2, 2), dtype=bool))
+        distances = passable.path_distance_from(Point((0.5, 0.5)))
+        assert distances[Tile(0, 0)] == 0.0
+        assert distances[Tile(1, 0)] == math.inf
 
     def test_smoothed_spreads_a_spike_without_moving_it(self) -> None:
         grid = Grid.zeros(9, 9)
