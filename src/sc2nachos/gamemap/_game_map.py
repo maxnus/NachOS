@@ -150,11 +150,6 @@ class GameMap:
         """Where this player's first townhall stood when the game began, a tile's center. It stays the same all game."""
         return self._start_location
 
-    def _expansions_among(self, neutral_units: Units[Unit[Any]]) -> tuple[Expansion, ...]:
-        """The expansions of this map with `neutral_units` on it at the start, nearest this player's start first by the
-        ground a unit walks. Those no walk reaches come last, nearest first in a line."""
-        return _find_expansions(self, neutral_units)
-
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:
         """Every start location on the map but this player's own.
@@ -162,6 +157,11 @@ class GameMap:
         Each is a townhall's position, which is a tile's center, so `Tile.containing` reads it exactly.
         """
         return self._opponent_start_locations
+
+    def _expansions_among(self, neutral_units: Units[Unit[Any]]) -> tuple[Expansion, ...]:
+        """The expansions of this map with `neutral_units` on it at the start, nearest this player's start first by the
+        ground a unit walks. Those no walk reaches come last, nearest first in a line."""
+        return _find_expansions(self, neutral_units)
 
 
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:

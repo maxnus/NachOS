@@ -79,20 +79,20 @@ class _MapAtStart:
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
     @property
-    def neutral(self) -> Units[Unit[Any]]:
+    def neutral_units(self) -> Units[Unit[Any]]:
         return self.tracker.unit_tracker.present.neutral
 
     def expansions(self) -> tuple[Expansion, ...]:
-        return self.map._expansions_among(self.neutral)
+        return self.map._expansions_among(self.neutral_units)
 
     def townhall_refusals_around(self, resource: tuple[float, float]) -> list[str]:
         """The townhall centers within 7 tiles of `resource` along each axis, the top row first: `#` refused."""
-        neutral = self.neutral
+        neutral_units = self.neutral_units
         townhall_allowed = _where_townhall_allowed(
             self.map.placement,
-            neutral.of_type(UnitType.AnyMineralField),
-            neutral.of_type(UnitType.AnyVespeneGeyser),
-            neutral.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser),
+            neutral_units.of_type(UnitType.AnyMineralField),
+            neutral_units.of_type(UnitType.AnyVespeneGeyser),
+            neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser),
         )
         # The tile centers nearest the resource's own center, a half tile off it where it stands on a tile edge.
         x0, y0 = int(resource[0]) + 0.5, int(resource[1]) + 0.5
@@ -185,8 +185,8 @@ class TestWhatIsAnExpansion:
     def test_a_base_is_one_expansion_where_its_townhall_stood_holding_its_resources(self) -> None:
         neutral_units = _NeutralUnits()
         neutral_units.base((24.5, 24.5))
-        game = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
-        (expansion,) = game.expansions()
+        map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
+        (expansion,) = map_at_start.expansions()
         assert expansion.location == Point((24.5, 24.5))
         assert {unit.tag for unit in expansion.mineral_fields} == set(range(1, 9))
         assert {unit.tag for unit in expansion.geysers} == {9, 10}
@@ -204,8 +204,8 @@ class TestWhatIsAnExpansion:
     def test_fields_mined_from_either_side_are_an_expansion_on_each_with_its_own_geyser(self) -> None:
         neutral_units = _NeutralUnits()
         neutral_units.base((24.5, 14.5), _GOLD_FIELDS, _GOLD_GEYSERS)
-        game = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 14.5))
-        lower, upper = game.expansions()
+        map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 14.5))
+        lower, upper = map_at_start.expansions()
         assert (lower.location, upper.location) == (Point((24.5, 14.5)), Point((24.5, 27.5)))
         assert [unit.tag for unit in lower.geysers] == [7]
         assert [unit.tag for unit in upper.geysers] == [8]
@@ -216,8 +216,8 @@ class TestWhatIsAnExpansion:
         """The game lists a field anew under another tag when it comes into sight."""
         neutral_units = _NeutralUnits()
         neutral_units.base((24.5, 24.5))
-        game = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
-        (expansion,) = game.expansions()
+        map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
+        (expansion,) = map_at_start.expansions()
         remembered = neutral_units.units[0]
         seen = make_unit(
             100,
@@ -227,10 +227,10 @@ class TestWhatIsAnExpansion:
             mineral_contents=1800,
         )
         units = [seen, *neutral_units.units[1:]]
-        game.tracker.update(make_observation(16, units=units).observation.raw_data, 16)
+        map_at_start.tracker.update(make_observation(16, units=units).observation.raw_data, 16)
         (field,) = [unit for unit in expansion.mineral_fields if unit.tag == 100]
         assert field.mineral_contents == 1800
-        assert field in game.tracker.unit_tracker.present
+        assert field in map_at_start.tracker.unit_tracker.present
 
 
 class TestTheOrder:
@@ -242,15 +242,15 @@ class TestTheOrder:
         neutral_units = _NeutralUnits()
         for at in ((10.5, 15.5), (38.5, 15.5), (10.5, 50.5)):
             neutral_units.base(at)
-        game = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
-        assert _locations(game.expansions()) == [(10.5, 15.5), (10.5, 50.5), (38.5, 15.5)]
+        map_at_start = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
+        assert _locations(map_at_start.expansions()) == [(10.5, 15.5), (10.5, 50.5), (38.5, 15.5)]
 
     def test_a_base_no_walk_reaches_comes_last(self) -> None:
         neutral_units = _NeutralUnits()
         for at in ((64.5, 30.5), (10.5, 15.5), (38.5, 15.5)):
             neutral_units.base(at)
-        game = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
-        assert _locations(game.expansions()) == [(10.5, 15.5), (38.5, 15.5), (64.5, 30.5)]
+        map_at_start = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
+        assert _locations(map_at_start.expansions()) == [(10.5, 15.5), (38.5, 15.5), (64.5, 30.5)]
 
 
 def _recorded_map_and_neutral_units(path: Path) -> tuple[GameMap, Units[Unit[Any]]]:
@@ -287,17 +287,17 @@ _COUNTS = {
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedMap:
     def test_this_player_starts_at_the_first_expansion_holding_the_fields_it_sees(self, path: Path) -> None:
-        game_map, neutral = _recorded_map_and_neutral_units(path)
-        first = game_map._expansions_among(neutral)[0]
+        game_map, neutral_units = _recorded_map_and_neutral_units(path)
+        first = game_map._expansions_among(neutral_units)[0]
         assert first.location == game_map.start_location
         assert len(first.mineral_fields) == 8
         assert all(field.visibility is Visibility.IN_VISION for field in first.mineral_fields)
 
     def test_every_opponent_starts_at_an_expansion(self, path: Path) -> None:
-        game_map, neutral = _recorded_map_and_neutral_units(path)
-        locations = {expansion.location for expansion in game_map._expansions_among(neutral)}
+        game_map, neutral_units = _recorded_map_and_neutral_units(path)
+        locations = {expansion.location for expansion in game_map._expansions_among(neutral_units)}
         assert set(game_map.opponent_start_locations) <= locations
 
     def test_the_map_has_as_many_expansions_as_counted(self, path: Path) -> None:
-        game_map, neutral = _recorded_map_and_neutral_units(path)
-        assert len(game_map._expansions_among(neutral)) == _COUNTS[path.stem.split("-")[0]]
+        game_map, neutral_units = _recorded_map_and_neutral_units(path)
+        assert len(game_map._expansions_among(neutral_units)) == _COUNTS[path.stem.split("-")[0]]

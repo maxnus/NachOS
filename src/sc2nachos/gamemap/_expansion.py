@@ -95,9 +95,12 @@ def _where_townhall_allowed(
     for unit in blockers:
         _mark_unplaceable_under(placeable, placement.origin, unit.position, unit.radius)
     townhall_allowed = numpy.zeros_like(placeable)
-    half = _TOWNHALL_SIZE // 2
-    fits = sliding_window_view(placeable, (_TOWNHALL_SIZE, _TOWNHALL_SIZE)).all(axis=(2, 3))
-    townhall_allowed[half : half + fits.shape[0], half : half + fits.shape[1]] = fits
+    townhall_half_width = _TOWNHALL_SIZE // 2
+    townhall_fits = sliding_window_view(placeable, (_TOWNHALL_SIZE, _TOWNHALL_SIZE)).all(axis=(2, 3))
+    townhall_allowed[
+        townhall_half_width : townhall_half_width + townhall_fits.shape[0],
+        townhall_half_width : townhall_half_width + townhall_fits.shape[1],
+    ] = townhall_fits
     for unit in mineral_fields:
         _disallow_townhalls_near_resource(townhall_allowed, placement.origin, unit.position, _MINERAL_FIELD_SIZE)
     for unit in geysers:
@@ -131,10 +134,10 @@ def _disallow_townhalls_near_resource(
     under 3 tiles, unless both are 2; a geyser, while the two gaps add up to under 3 (tool
     `sweep_townhall_placement`).
     """
-    reach = _MIN_GAP_FROM_TOWNHALL_TO_RESOURCE + (_TOWNHALL_SIZE + max(size)) // 2 + 1
+    refusal_reach = _MIN_GAP_FROM_TOWNHALL_TO_RESOURCE + (_TOWNHALL_SIZE + max(size)) // 2 + 1
     column, row = math.floor(position[0]) - origin[0], math.floor(position[1]) - origin[1]
-    xs = numpy.arange(max(column - reach, 0), min(column + reach + 1, townhall_allowed.shape[0]))
-    ys = numpy.arange(max(row - reach, 0), min(row + reach + 1, townhall_allowed.shape[1]))
+    xs = numpy.arange(max(column - refusal_reach, 0), min(column + refusal_reach + 1, townhall_allowed.shape[0]))
+    ys = numpy.arange(max(row - refusal_reach, 0), min(row + refusal_reach + 1, townhall_allowed.shape[1]))
     if not len(xs) or not len(ys):
         return
     centers_x = (xs + origin[0] + 0.5)[:, numpy.newaxis]
@@ -219,8 +222,11 @@ def _sorted_by_walking_distance(expansions: list[Expansion], game_map: GameMap) 
     walkable = numpy.array(game_map.pathing.values)
     # The start's own townhall blocks the ground under it.
     x, y = game_map.pathing.index_of(start)
-    half = _TOWNHALL_SIZE // 2
-    walkable[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = True
+    townhall_half_width = _TOWNHALL_SIZE // 2
+    walkable[
+        max(x - townhall_half_width, 0) : x + townhall_half_width + 1,
+        max(y - townhall_half_width, 0) : y + townhall_half_width + 1,
+    ] = True
     walking_distance = Grid(walkable, origin=game_map.pathing.origin).path_distance_from(start)
     return tuple(
         sorted(

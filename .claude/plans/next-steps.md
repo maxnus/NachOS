@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #121. `uv run pytest` passes 1716 tests on the expansions' branch; `uv run pytest -m
-  integration` passes 27 against a real game (run 2026-10-08).
+- nachOS `main` has every PR to #121. `uv run pytest` passes 1720 tests on the expansions' branch; `uv run pytest -m
+  integration` passes 27 against a real game (run 2026-10-09).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
   action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),

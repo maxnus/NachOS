@@ -297,14 +297,15 @@ class Grid[T: float]:
 
     def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
-        where no path reaches.
+        where no path reaches. A nonzero value counts as true.
 
         A path steps to a tile sharing a side or a corner, and across a corner only where both tiles sharing a side
-        with the two are true. The tile holding `point` reads 0 whatever it holds. Raises `IndexError` for a point the
-        grid does not cover.
+        with the two are true. The tile holding `point` reads 0 even when false, but no path leaves a false tile, so
+        every other tile then reads `inf`. Raises `IndexError` for a point the grid does not cover.
         """
         start = self.index_of(point)
-        width, height = self._data.shape
+        passable = self._data.astype(bool, copy=False)
+        width, height = passable.shape
         tiles = numpy.arange(width * height).reshape(width, height)
         sources, targets, lengths = [], [], []
         for dx, dy, length in _PATH_STEPS:
@@ -313,9 +314,9 @@ class Grid[T: float]:
             from_ys, to_ys = (
                 (slice(0, height - dy), slice(dy, height)) if dy >= 0 else (slice(-dy, height), slice(0, height + dy))
             )
-            open_step = self._data[from_xs, from_ys] & self._data[to_xs, to_ys]
+            open_step = passable[from_xs, from_ys] & passable[to_xs, to_ys]
             if dx and dy:
-                open_step &= self._data[to_xs, from_ys] & self._data[from_xs, to_ys]
+                open_step &= passable[to_xs, from_ys] & passable[from_xs, to_ys]
             sources.append(tiles[from_xs, from_ys][open_step])
             targets.append(tiles[to_xs, to_ys][open_step])
             lengths.append(numpy.full(int(open_step.sum()), length))

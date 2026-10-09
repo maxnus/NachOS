@@ -78,8 +78,10 @@ class ResourceRefusals:
 def _footprint_gaps(offset: Offset, size: tuple[int, int]) -> tuple[float, float]:
     """The tiles a townhall centered `offset` from a resource of footprint `size` leaves between their footprints,
     across and up: 0 along an axis their footprints overlap on."""
-    reach = _TOWNHALL_SIZE / 2
-    return max(abs(offset[0]) - reach - size[0] / 2, 0.0), max(abs(offset[1]) - reach - size[1] / 2, 0.0)
+    townhall_half_side = _TOWNHALL_SIZE / 2
+    across = max(abs(offset[0]) - townhall_half_side - size[0] / 2, 0.0)
+    up = max(abs(offset[1]) - townhall_half_side - size[1] / 2, 0.0)
+    return across, up
 
 
 def refused_by_mineral_field(offset: Offset) -> bool:
@@ -122,7 +124,8 @@ def _refusal_picture(refusals: ResourceRefusals) -> str:
 
 def _refused_centers(game: Sandbox, centers: Sequence[Point], ability: AbilityId) -> set[Point]:
     """Those of `centers` the game would refuse the townhall `ability` builds."""
-    return {center for center, fits in zip(centers, game.placeable(ability, centers), strict=True) if not fits}
+    answers = game.placeable(ability, centers)
+    return {center for center, placeable in zip(centers, answers, strict=True) if not placeable}
 
 
 def _clear_open_ground(game: Sandbox, game_map: GameMap, units: Sequence[raw_pb2.Unit]) -> Point:
@@ -161,28 +164,30 @@ def _measure_refusals(
     game: Sandbox, at: Point, unit_type: UnitTypeId, size: tuple[int, int]
 ) -> ResourceRefusals | None:
     """Create one `unit_type` at `at`, ask about every center around it, and remove it."""
-    made = game.spawn([(unit_type, NEUTRAL, at)])
-    if not made:
+    spawned = game.spawn([(unit_type, NEUTRAL, at)])
+    if not spawned:
         return None
-    unit = made[0]
+    unit = spawned[0]
     position = (unit.pos.x, unit.pos.y)
     centers = _tile_centers_around(at)
     offsets = {center: (center.x - position[0], center.y - position[1]) for center in centers}
     refusals = ResourceRefusals(unit_type.name, size, position)
-    rule = refused_by_geyser if size == _GEYSER_SIZE else refused_by_mineral_field
-    stated = sorted(offset for offset in offsets.values() if rule(offset))
+    refusal_rule = refused_by_geyser if size == _GEYSER_SIZE else refused_by_mineral_field
+    stated_refusals = sorted(offset for offset in offsets.values() if refusal_rule(offset))
     for townhall, ability in _TOWNHALLS.items():
         refusals.refused[townhall] = sorted(offsets[center] for center in _refused_centers(game, centers, ability))
-    refusals.as_stated = all(refused == stated for refused in refusals.refused.values())
+    refusals.as_stated = all(refused == stated_refusals for refused in refusals.refused.values())
     _remove_and_wait(game, [unit.tag])
     return refusals
 
 
 def measure_resource_refusals(installation: Installation) -> list[ResourceRefusals]:
     """Measure what every kind of mineral field and geyser refuses a townhall."""
-    kinds = [(UnitTypeId(type_id), _MINERAL_FIELD_SIZE) for type_id in sorted(UnitType.AnyMineralField._type_ids)]
-    kinds += [(UnitTypeId(type_id), _GEYSER_SIZE) for type_id in sorted(UnitType.AnyVespeneGeyser._type_ids)]
-    found = []
+    resource_kinds = [
+        (UnitTypeId(type_id), _MINERAL_FIELD_SIZE) for type_id in sorted(UnitType.AnyMineralField._type_ids)
+    ]
+    resource_kinds += [(UnitTypeId(type_id), _GEYSER_SIZE) for type_id in sorted(UnitType.AnyVespeneGeyser._type_ids)]
+    all_refusals = []
     with playing(Race.TERRAN, installation) as game:
         game.cheat(Cheat.SHOW_MAP)
         # The map's resources come into sight under new tags.
@@ -192,16 +197,16 @@ def measure_resource_refusals(installation: Installation) -> list[ResourceRefusa
         _remove_and_wait(game, [unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV}])
         game_map = GameMap._of_game(game.client.game_info(), game.client.observation())
         at = _clear_open_ground(game, game_map, game.units())
-        for unit_type, size in kinds:
+        for unit_type, size in resource_kinds:
             refusals = _measure_refusals(game, at, unit_type, size)
             if refusals is None:
                 continue
-            found.append(refusals)
+            all_refusals.append(refusals)
             verdict = "as stated" if refusals.as_stated else "NOT as stated"
             logger.info("{} at {}: {}\n{}", refusals.name, refusals.position, verdict, _refusal_picture(refusals))
-    stated = sum(refusals.as_stated for refusals in found)
-    logger.info("{} of {} kinds refuse a townhall as stated", stated, len(found))
-    return found
+    stated_count = sum(refusals.as_stated for refusals in all_refusals)
+    logger.info("{} of {} kinds refuse a townhall as stated", stated_count, len(all_refusals))
+    return all_refusals
 
 
 @dataclass(slots=True)
@@ -246,10 +251,13 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         tracker = _Tracker(GameData(game.client.game_data()), Enemy())
         raw, uncurated = _without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
-        neutral = tracker.unit_tracker.present.neutral
-        expansions = game_map._expansions_among(neutral)
-        fields, geysers = neutral.of_type(UnitType.AnyMineralField), neutral.of_type(UnitType.AnyVespeneGeyser)
-        blockers = neutral.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
+        neutral_units = tracker.unit_tracker.present.neutral
+        expansions = game_map._expansions_among(neutral_units)
+        fields, geysers = (
+            neutral_units.of_type(UnitType.AnyMineralField),
+            neutral_units.of_type(UnitType.AnyVespeneGeyser),
+        )
+        blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
         townhall_allowed = _where_townhall_allowed(game_map.placement, fields, geysers, blockers)
         starts = {game_map.start_location, *game_map.opponent_start_locations}
         centers = sorted(
@@ -272,10 +280,10 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
 
 def check_expansions(installation: Installation) -> list[ExpansionCheck]:
     """Compare the game with NachOS around the expansions of every map in the corpus."""
-    found = []
+    all_checks = []
     for map_name in sorted({game.map for game in GAMES}):
         check = _check_expansions_on(installation, map_name)
-        found.append(check)
+        all_checks.append(check)
         logger.info(
             "{}: {} expansions, {} centers asked, {} disagreed {}; uncurated units set aside: {}",
             map_name,
@@ -285,7 +293,7 @@ def check_expansions(installation: Installation) -> list[ExpansionCheck]:
             check.disagreed,
             check.uncurated or "none",
         )
-    return found
+    return all_checks
 
 
 _SWEEPS = {"footprint": measure_resource_refusals, "bases": check_expansions}

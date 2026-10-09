@@ -418,6 +418,14 @@ class TestDerivedGrids:
         passable[Tile(0, 1)] = False
         assert passable.path_distance_from(Point((0.5, 0.5)))[Tile(1, 1)] == math.inf
 
+    def test_a_path_distance_counts_a_nonzero_value_as_true(self) -> None:
+        """Round a false middle tile along two sides, since every diagonal beside it would cut its corner."""
+        passable = Grid(numpy.ones((3, 3), dtype=numpy.uint8))
+        passable[Tile(1, 1)] = 0
+        distances = passable.path_distance_from(Point((0.5, 0.5)))
+        assert distances[Tile(2, 2)] == pytest.approx(4.0)
+        assert distances[Tile(1, 1)] == math.inf
+
     def test_a_path_distance_reads_zero_where_it_starts_even_on_a_false_tile(self) -> None:
         passable = Grid(numpy.zeros((2, 2), dtype=bool))
         distances = passable.path_distance_from(Point((0.5, 0.5)))
