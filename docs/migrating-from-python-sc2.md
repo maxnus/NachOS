@@ -230,6 +230,7 @@ it.
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
 | `p.rounded`, which floors | `Tile.containing(p)`, the tile the point is on |
 | `p.snap()` | `Tile.containing(p).center` |
+| `await client.query_pathing(a, b)`, asked of the game | `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
 
 - **Equality is exact.** python-sc2 treats points as equal if every coordinate is within 1e-8, and counts a
   missing coordinate as zero, so `Point3((1, 2, 0)) == Point2((1, 2))`. NachOS points compare as the tuples they
@@ -413,6 +414,10 @@ it.
 | `game_info.vision_blockers` | nothing; see below |
 | `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
 | `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
+| `expansion_locations_list` | `[expansion.location for expansion in api.expansions]` |
+| `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
+| `get_next_expansion()` | the first of `api.expansions` with no townhall near it |
+| `owned_expansions` | nothing; a bot looks for its townhalls at each `location` |
 
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
@@ -439,6 +444,19 @@ it.
   ([game behavior](game-behavior.md#terrain-placement-and-pathing)). python-sc2's `vision_blockers` is that whole
   mixture: on PylonAIE_v4 it calls 33 tiles of each of the map's two bridges a vision blocker. A bot that needs the
   real ones can find them in a game, from what its units can and cannot see.
+- **The expansions are where the game takes a townhall, in walking order.** `api.expansions` comes nearest this
+  player's start first by the ground a unit walks; python-sc2's list has no order, and the nearest in a line is the
+  wrong natural on 3 maps of the 2026 pool. On that pool both find the same expansions, but python-sc2 puts 4 where
+  the game takes no townhall: both of Magannatha's gold bases, on a Xel'Naga tower, and two of LeyLines' bases, a
+  tile too close to their resources. NachOS finds each spot by the rule the game was measured to follow, with towers
+  and debris in the way ([game behavior](game-behavior.md#terrain-placement-and-pathing)). Each expansion says
+  whether a player starts there, `is_start_location`, and how far a ground unit walks to it from this player's start,
+  `walking_distance_from_start`. To rank them by how much nearer they are to this player than to the opponent:
+
+  ```python
+  theirs = api.map.pathing.path_distance_from(api.map.opponent_start_locations[0])
+  ranked = sorted(api.expansions, key=lambda e: e.walking_distance_from_start - theirs[e.location])
+  ```
 - **No wall-in placements.** python-sc2's `Ramp` also says where to put supply depots and a barracks to wall off a
   ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 

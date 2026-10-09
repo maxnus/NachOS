@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, Any, Self, final
 
 import numpy
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.gamemap._expansion import (
+    Expansion,
+    _resources_of_each_base,
+    _townhall_locations_of_base,
+    _walking_distance_from_start,
+    _where_townhall_allowed,
+)
 from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
@@ -19,6 +26,7 @@ if TYPE_CHECKING:
     from s2clientprotocol import common_pb2, sc2api_pb2
 
     from sc2nachos.geometry import PointLike
+    from sc2nachos.units import Unit, Units
 
 # Corners of one tile at least this far apart in height are on opposite sides of a cliff: across a ramp they differ
 # by at most 1.25, across a cliff by at least 2.
@@ -99,7 +107,11 @@ class GameMap:
 
     @property
     def placement(self) -> Grid[bool]:
-        """Where a structure can be placed at the start of the game. Rocks block it; no resource or townhall does."""
+        """Where the game's placement grid lets a structure stand at the start of the game.
+
+        The game's grid blocks rocks, but not resources, townhalls, Xel'Naga towers, unbuildable plates and bricks, or
+        all of some 6x6 debris and gates, though no townhall can stand on those.
+        """
         return self._placement
 
     @property
@@ -150,6 +162,39 @@ class GameMap:
         Each is a townhall's position, which is a tile's center, so `Tile.containing` reads it exactly.
         """
         return self._opponent_start_locations
+
+    def _expansions_among(self, neutral_units: Units[Unit[Any]]) -> tuple[Expansion, ...]:
+        """The expansions of this map with `neutral_units` on it at the start, nearest this player's start first by the
+        ground a unit walks. Those no walk reaches come last, nearest first in a line.
+
+        The mineral fields and geysers make the expansions; every other neutral unit blocks the ground under it.
+        """
+        mineral_fields = neutral_units.of_type(UnitType.AnyMineralField)
+        geysers = neutral_units.of_type(UnitType.AnyVespeneGeyser)
+        blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
+        townhall_allowed = _where_townhall_allowed(self._placement, mineral_fields, geysers, blockers)
+        walking_distance = _walking_distance_from_start(self._pathing, self._start_location)
+        start_locations = {self._start_location, *self._opponent_start_locations}
+        expansions = [
+            Expansion(
+                location=location,
+                mineral_fields=base_fields.sorted_by_distance_to(location),
+                geysers=location_geysers.sorted_by_distance_to(location),
+                is_start_location=location in start_locations,
+                walking_distance_from_start=walking_distance[location],
+            )
+            for base_fields, base_geysers in _resources_of_each_base(mineral_fields, geysers)
+            for location, location_geysers in _townhall_locations_of_base(
+                townhall_allowed, self._placement.origin, base_fields, base_geysers
+            )
+        ]
+        start = self._start_location
+        return tuple(
+            sorted(
+                expansions,
+                key=lambda expansion: (expansion.walking_distance_from_start, start.distance_to(expansion.location)),
+            )
+        )
 
 
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:

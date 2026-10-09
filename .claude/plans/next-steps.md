@@ -9,12 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #120. `uv run pytest` passes 1682 tests on the derived reads' branch; `uv run pytest
-  -m integration` passes 27 against a real game (run 2026-10-07).
+- nachOS `main` has every PR to #121. `uv run pytest` passes 1723 tests on the expansions' branch; `uv run pytest -m
+  integration` passes 27 against a real game (run 2026-10-09).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
-  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is on branch
-  `claude/derived-reads`.
+  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
+  and the expansions the demo bot needs are on branch `claude/expansions`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -439,7 +439,7 @@ and for whether an ability makes a structure, and both come out the same within 
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
 
-5. **The derived reads**: branch `claude/derived-reads`. Decided by the owner, 2026-10-07:
+5. **The derived reads**, done (#121). Decided by the owner, 2026-10-07:
    - **The unit sets are `UnitType` groups only**, read through `of_type`, with no second spelling on `Units` or
      `Api`: `Worker` (no MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and
      `GasBuilding`. The last three are what the tables say holds minerals or vespene; `MineralField` and
@@ -456,6 +456,44 @@ when each starts.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
    against `Computer` using only NachOS, and doubles as the library's example for other developers.
+
+### Before 8: the expansions
+
+The demo bot needs to know where to expand, so the expansions come first: branch `claude/expansions`, chosen before
+slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
+
+- **`api.expansions`**, found once at the start: each `Expansion` has its townhall's `location` and its
+  `mineral_fields` and `geysers` as units, the same objects all game. It is on the api, not the map, so that
+  `GameMap` stays a pure reading of the protos built before any unit: a map holding one game's units could not be
+  shared, would make a circle if the tracker ever needs the map, and would leave tools without expansions.
+- **Where a townhall may stand is measured**, by `tools/sweep_townhall_placement.py`, not taken from python-sc2's
+  distances, which put 4 bases of the pool where the game takes no townhall. The rule is stated, and built, as a
+  zone around each resource that no townhall's footprint may cover (the owner, review of #122).
+- **A group of resources with 6 to 10 mineral fields is an expansion**: fewer fields are a blocker, more a wall.
+  Tightened from "5 to 12 resources" in review of #122, as the corpus's bases have 6 to 10 fields (the owner).
+- **A geyser more than 11 from its group's townhall gets an expansion of its own**, sharing the fields, as on
+  Torches' gold bases. A base's own geysers stand up to 9.22 from its townhall, the far-side one 13.0.
+- **They come nearest this player's start first by walking**, by `Grid.path_distance_from` over the start's pathing
+  grid. Reversed in review of #122: that method is public, beside `Grid.distance_from`, since nothing in it is
+  ground-specific (the owner); it gives distances, never a path.
+- **Each expansion says `is_start_location` and `walking_distance_from_start`** (the owner, review of #122). The
+  order stays by this player's walk: ranking by own walk minus the opponent's is a judgment for the bot, and with
+  more than two starts the opponent's is unknown. The migration guide shows how a bot ranks them so.
+- **They are found by `GameMap._expansions_among(neutral_units)`**, a private method that does the work and stores
+  nothing on the map, so `api.expansions` stays the one public spelling (the owner, review of #122).
+- **Blockers stay every neutral unit but a resource** (the owner, review of #122): critters are never in a main base
+  at the start, the only place one could be seen then.
+- **No `NeutralUnit` class** (the owner, review of #122): neutral units have nothing the game reports for them alone
+  but `mineral_contents`, which `Unit` has.
+
+### Next, planned with the owner: the placement grids
+
+The demo bot will place depots and pylons, so it needs to know where a structure can stand now, not at the start.
+The owner's idea (review of #122): two grids, one static, blocking what never leaves (geysers, towers, rocks until
+destroyed), and one up to date with every known unit, in sight or in the fog. To plan as a PR of its own: what is kept
+per turn and what it costs, structures in the fog, and whether pathing gets the same pair. The start's placement grid
+blocks no resource or townhall, in sight or not; its pathing grid blocks this player's townhall, fields and geysers,
+the ones in sight (corpus).
 
 ## 4. After each nachOS pull request merges
 

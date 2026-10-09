@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy
 import scipy.ndimage
+from scipy.sparse import coo_array
+from scipy.sparse.csgraph import dijkstra
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._point import coordinates
@@ -20,6 +23,10 @@ if TYPE_CHECKING:
 
 _ORIGIN = Tile(0, 0)
 
+
+# Each step a path can take to a neighboring tile, across, up or diagonally, with its length. The steps back the other
+# way are the same edges of an undirected graph.
+_PATH_STEPS = ((1, 0, 1.0), (0, 1, 1.0), (1, 1, math.sqrt(2)), (1, -1, math.sqrt(2)))
 
 # Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64` subclasses
 # `float`; without them listed, the operand round-trips through numpy and back at twice the cost. A module constant,
@@ -287,6 +294,38 @@ class Grid[T: float]:
         """For each true tile, the distance to the nearest false one; zero on a false tile."""
         distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
         return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
+
+    def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
+        """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
+        where no path reaches. A nonzero value counts as true.
+
+        A path steps to a tile sharing a side or a corner, and across a corner only where both tiles sharing a side
+        with the two are true. The tile holding `point` reads 0 even when false, but no path leaves a false tile, so
+        every other tile then reads `inf`. Raises `IndexError` for a point the grid does not cover.
+        """
+        start = self.index_of(point)
+        passable = self._data.astype(bool, copy=False)
+        width, height = passable.shape
+        tiles = numpy.arange(width * height).reshape(width, height)
+        sources, targets, lengths = [], [], []
+        for dx, dy, length in _PATH_STEPS:
+            # The tiles a step leaves from and lands on, as slices of the grid lined up with each other.
+            from_xs, to_xs = slice(0, width - dx), slice(dx, width)
+            from_ys, to_ys = (
+                (slice(0, height - dy), slice(dy, height)) if dy >= 0 else (slice(-dy, height), slice(0, height + dy))
+            )
+            open_step = passable[from_xs, from_ys] & passable[to_xs, to_ys]
+            if dx and dy:
+                open_step &= passable[to_xs, from_ys] & passable[from_xs, to_ys]
+            sources.append(tiles[from_xs, from_ys][open_step])
+            targets.append(tiles[to_xs, to_ys][open_step])
+            lengths.append(numpy.full(int(open_step.sum()), length))
+        steps = coo_array(
+            (numpy.concatenate(lengths), (numpy.concatenate(sources), numpy.concatenate(targets))),
+            shape=(width * height, width * height),
+        )
+        distances = dijkstra(steps.tocsr(), directed=False, indices=int(tiles[start]))
+        return Grid(numpy.asarray(distances).reshape(width, height), origin=self._origin, outside=outside)
 
     def smoothed(self, sigma: float, *, within: Grid[bool] | None = None, outside: float | None = None) -> Grid[float]:
         """A Gaussian blur of the values, `sigma` measured in tiles.

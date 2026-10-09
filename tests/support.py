@@ -262,12 +262,23 @@ def played(
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
     step = observation.observation.game_loop
     if game is None:
-        state = _State(observation, tracker, game_map)
-        orders = OrderBook(tracker.game_data, build_reach=2.5)
+        tracker.update(observation.observation.raw_data, step)
         game = _Game(
-            client, game_map, tracker.game_data, tracker.enemy, infer, tracker, orders, observation, state, step
+            client=client,
+            game_map=game_map,
+            expansions=game_map._expansions_among(tracker.unit_tracker.present.neutral),
+            game_data=tracker.game_data,
+            enemy=tracker.enemy,
+            enemy_upgrade_inference=infer,
+            tracker=tracker,
+            orders=OrderBook(tracker.game_data, build_reach=2.5),
+            observation=observation,
+            state=_State(observation, tracker, game_map),
+            step=step,
         )
-    game._take_in(observation, step)
+        game._read(observation, step)
+    else:
+        game._take_in(observation, step)
     events._set_step(step)
     events._hand_out(game.report(events))
     return game

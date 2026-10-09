@@ -17,6 +17,7 @@ from sc2nachos.events import (
     TurnStartEvent,
     UnitDiedEvent,
 )
+from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
@@ -30,7 +31,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import ActionResult
-from sc2nachos.units import UnitType
+from sc2nachos.units import Alliance, UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 # A map from the current AIE ladder pool, for the test games.
@@ -56,9 +57,15 @@ def _game(*steps: int, ending: Result | None = Result.VICTORY, stepped: bool = T
     return responses
 
 
-def _game_of(*observations: sc2api_pb2.ResponseObservation) -> list[sc2api_pb2.Response]:
-    """The game's side of a whole conversation: a turn at each of `observations`, the last ending the game."""
-    responses = [make_response(game_info=make_game_info()), make_response(data=sc2api_pb2.ResponseData())]
+def _game_of(
+    *observations: sc2api_pb2.ResponseObservation, game_info: sc2api_pb2.ResponseGameInfo | None = None
+) -> list[sc2api_pb2.Response]:
+    """The game's side of a whole conversation on the map `game_info` gives, or eight by eight of open ground: a turn
+    at each of `observations`, the last ending the game."""
+    responses = [
+        make_response(game_info=game_info or make_game_info()),
+        make_response(data=sc2api_pb2.ResponseData()),
+    ]
     for index, observation in enumerate(observations):
         final = index == len(observations) - 1
         responses.append(make_response(Status.ENDED if final else Status.IN_GAME, observation=observation))
@@ -124,7 +131,7 @@ def _somewhere() -> MapFile:
 
 
 class TestBeforeAGame:
-    @pytest.mark.parametrize("name", ["client", "map", "data", "step", "time", "result", "units"])
+    @pytest.mark.parametrize("name", ["client", "map", "expansions", "data", "step", "time", "result", "units"])
     def test_what_belongs_to_a_game_says_there_is_none(self, name: str) -> None:
         """Zero is a valid step and `None` means a game still going, so neither can mean no game."""
         with pytest.raises(NotPlayingError, match="no game has been joined"):
@@ -303,6 +310,33 @@ class TestPlaying:
 
         assert counted == [(1, 1, 1, 0, None)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
+
+    def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
+        fields = [
+            make_unit(tag, UnitTypeId.MINERAL_FIELD, at=(10.0 + 2 * tag, 20.5), alliance=Alliance.NEUTRAL)
+            for tag in range(1, 7)
+        ]
+        observations = [
+            make_observation(0, units=fields),
+            make_observation(2, units=fields),
+            make_observation(4, (1, Result.VICTORY), units=fields),
+        ]
+        client, _ = _joined(*_game_of(*observations, game_info=make_game_info(*["#" * 32] * 32)))
+        api = Api()
+        seen: list[tuple[Expansion, ...]] = []
+        held: list[bool] = []
+
+        @api.events.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            seen.append(api.expansions)
+            held.extend(field in api.units for expansion in api.expansions for field in expansion.mineral_fields)
+
+        api.play(client, steps_per_turn=2)
+
+        assert len(seen) == 2 and seen[0] is seen[1]
+        field_tags = [sorted(field.tag for field in expansion.mineral_fields) for expansion in seen[0]]
+        assert field_tags == [[1, 2, 3, 4, 5, 6]]
+        assert held == [True] * 12
 
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""

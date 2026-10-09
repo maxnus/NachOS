@@ -52,7 +52,7 @@ from sc2nachos.events import (
 )
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
-from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
@@ -67,12 +67,13 @@ from sc2nachos.units._tracking import _Tracker
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _Game:
     """One game as it is played: its client, and everything seen of it so far."""
 
     client: Final[Client]
     game_map: Final[GameMap]
+    expansions: Final[tuple[Expansion, ...]]
     game_data: Final[GameData]
     enemy: Final[Enemy]
     enemy_upgrade_inference: Final[UpgradeInference]
@@ -86,8 +87,8 @@ class _Game:
 
     @classmethod
     def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference, build_reach: float) -> Self:
-        """Start the game `client` has joined: fetch its map and pre-upgrade tables once, and observe it. A held build
-        goes out once its worker is within `build_reach` of the site."""
+        """Start the game `client` has joined: fetch its map and pre-upgrade tables once, observe it, and find its
+        expansions. A held build goes out once its worker is within `build_reach` of the site."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
         step = _step(observation)
@@ -95,19 +96,21 @@ class _Game:
         enemy = Enemy()
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._of_game(info, observation)
+        tracker.update(observation.observation.raw_data, step)
         game = cls(
-            client,
-            game_map,
-            game_data,
-            enemy,
-            enemy_upgrade_inference,
-            tracker,
-            OrderBook(game_data, build_reach=build_reach),
-            observation,
-            _State(observation, tracker, game_map),
-            step,
+            client=client,
+            game_map=game_map,
+            expansions=game_map._expansions_among(tracker.unit_tracker.present.neutral),
+            game_data=game_data,
+            enemy=enemy,
+            enemy_upgrade_inference=enemy_upgrade_inference,
+            tracker=tracker,
+            orders=OrderBook(game_data, build_reach=build_reach),
+            observation=observation,
+            state=_State(observation, tracker, game_map),
+            step=step,
         )
-        game._take_in(observation, step)
+        game._read(observation, step)
         return game
 
     def observe(self, step: int | None = None) -> None:
@@ -117,9 +120,14 @@ class _Game:
 
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
         """Read `observation`: its units, the enemy upgrades they show if inference is on, and the rest it reports."""
+        self.tracker.update(observation.observation.raw_data, step)
+        self._read(observation, step)
+
+    def _read(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
+        """Read `observation`, whose units the tracker has taken in: the enemy upgrades they show if inference is on,
+        and the rest it reports."""
         self.observation = observation
         self.step = step
-        self.tracker.update(observation.observation.raw_data, step)
         self.state = _State(observation, self.tracker, self.game_map)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
