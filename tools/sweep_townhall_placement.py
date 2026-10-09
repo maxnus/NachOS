@@ -4,7 +4,7 @@ Needs StarCraft II installed. `footprint` plays one game on the sandbox's map un
 workers and the map's resources gone, on open ground where the game would take a townhall at every center around.
 It creates each kind of mineral field and geyser there in turn, and asks the game at every tile center around it
 whether a command center, a nexus and a hatchery could be placed there. It prints, for each kind, a picture of the
-centers refused, and whether they are exactly those `refused_by_mineral_field` or `refused_by_geyser` names.
+centers refused, and whether they are exactly those `refused_by_zone` names.
 
 `bases` plays one game on each map of the corpus under `show_map`, and asks the game about a command center at every
 tile center around each expansion NachOS finds there, but the two starts, where the townhalls stand. It prints every
@@ -57,6 +57,10 @@ _TOWNHALLS = {
 _TOWNHALL_SIZE = 5
 _MINERAL_FIELD_SIZE = (2, 1)
 _GEYSER_SIZE = (3, 3)
+_ZONE_MARGIN = 3
+# A mineral field's zone loses one tile at each corner, and a geyser's three: the corner and the tile beside it on each
+# side.
+_ZONE_CORNER_CUT = {_MINERAL_FIELD_SIZE: 1, _GEYSER_SIZE: 2}
 
 type Offset = tuple[float, float]
 
@@ -75,25 +79,32 @@ class ResourceRefusals:
     """Whether every townhall was refused exactly where the rule for its kind of resource says."""
 
 
-def _footprint_gaps(offset: Offset, size: tuple[int, int]) -> tuple[float, float]:
-    """The tiles a townhall centered `offset` from a resource of footprint `size` leaves between their footprints,
-    across and up: 0 along an axis their footprints overlap on."""
-    townhall_half_side = _TOWNHALL_SIZE / 2
-    across = max(abs(offset[0]) - townhall_half_side - size[0] / 2, 0.0)
-    up = max(abs(offset[1]) - townhall_half_side - size[1] / 2, 0.0)
-    return across, up
+def _zone_tile_centers(size: tuple[int, int]) -> set[Offset]:
+    """The centers of the tiles a resource of footprint `size` keeps townhalls off, as offsets from its position: its
+    footprint grown by `_ZONE_MARGIN` tiles on every side, less the tiles fewer than its corner cut's steps along the
+    edges from a corner."""
+    corner_cut = _ZONE_CORNER_CUT[size]
+    width, height = size[0] + 2 * _ZONE_MARGIN, size[1] + 2 * _ZONE_MARGIN
+    left, bottom = -size[0] / 2 - _ZONE_MARGIN, -size[1] / 2 - _ZONE_MARGIN
+    return {
+        (left + x + 0.5, bottom + y + 0.5)
+        for x in range(width)
+        for y in range(height)
+        if min(x, width - 1 - x) + min(y, height - 1 - y) >= corner_cut
+    }
 
 
-def refused_by_mineral_field(offset: Offset) -> bool:
-    """Whether a mineral field refuses a townhall centered `offset` from it: both gaps under 3, but not both 2."""
-    across, up = _footprint_gaps(offset, _MINERAL_FIELD_SIZE)
-    return across < 3 and up < 3 and not (across == 2 and up == 2)
-
-
-def refused_by_geyser(offset: Offset) -> bool:
-    """Whether a geyser refuses a townhall centered `offset` from it: the two gaps adding up to under 3."""
-    across, up = _footprint_gaps(offset, _GEYSER_SIZE)
-    return across + up < 3
+def refused_by_zone(offset: Offset, size: tuple[int, int]) -> bool:
+    """Whether a resource of footprint `size` refuses a townhall centered `offset` from it: whether the townhall's
+    footprint covers a tile of the resource's zone."""
+    zone = _zone_tile_centers(size)
+    townhall_half_width = _TOWNHALL_SIZE // 2
+    townhall_tiles = (
+        (offset[0] + x, offset[1] + y)
+        for x in range(-townhall_half_width, townhall_half_width + 1)
+        for y in range(-townhall_half_width, townhall_half_width + 1)
+    )
+    return any(tile in zone for tile in townhall_tiles)
 
 
 def _tile_centers_around(around: Point) -> list[Point]:
@@ -172,8 +183,7 @@ def _measure_refusals(
     centers = _tile_centers_around(at)
     offsets = {center: (center.x - position[0], center.y - position[1]) for center in centers}
     refusals = ResourceRefusals(unit_type.name, size, position)
-    refusal_rule = refused_by_geyser if size == _GEYSER_SIZE else refused_by_mineral_field
-    stated_refusals = sorted(offset for offset in offsets.values() if refusal_rule(offset))
+    stated_refusals = sorted(offset for offset in offsets.values() if refused_by_zone(offset, size))
     for townhall, ability in _TOWNHALLS.items():
         refusals.refused[townhall] = sorted(offsets[center] for center in _refused_centers(game, centers, ability))
     refusals.as_stated = all(refused == stated_refusals for refused in refusals.refused.values())

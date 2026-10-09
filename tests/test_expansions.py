@@ -1,5 +1,6 @@
 """Tests for the expansions found at the start of a game."""
 
+import math
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -188,17 +189,24 @@ class TestWhatIsAnExpansion:
         map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
         (expansion,) = map_at_start.expansions()
         assert expansion.location == Point((24.5, 24.5))
+        assert expansion.is_start_location
+        assert expansion.walking_distance_from_start == 0.0
         assert {unit.tag for unit in expansion.mineral_fields} == set(range(1, 9))
         assert {unit.tag for unit in expansion.geysers} == {9, 10}
         distances = [field.position.distance_to(expansion.location) for field in expansion.mineral_fields]
         assert distances == sorted(distances)
 
-    @pytest.mark.parametrize("count", [4, 13])
-    def test_too_few_resources_together_or_too_many_are_no_expansion(self, count: int) -> None:
-        """Four are a blocker to mine out, thirteen a wall."""
+    @pytest.mark.parametrize(("field_count", "expansion_count"), [(5, 0), (6, 1), (10, 1), (11, 0)])
+    def test_an_expansion_has_6_to_10_mineral_fields(self, field_count: int, expansion_count: int) -> None:
+        """Fewer are a blocker to mine out, more a wall."""
         neutral_units = _NeutralUnits()
-        for index in range(count):
+        for index in range(field_count):
             neutral_units.add(UnitTypeId.MINERAL_FIELD_RICH, (8.0 + 2 * index, 20.5))
+        assert len(_MapAtStart(_map_rows(48, 48), neutral_units, start=(0.5, 0.5)).expansions()) == expansion_count
+
+    def test_geysers_do_not_count_toward_the_fields(self) -> None:
+        neutral_units = _NeutralUnits()
+        neutral_units.base((24.5, 24.5), _MAIN_FIELDS[:5], _MAIN_GEYSERS)
         assert _MapAtStart(_map_rows(48, 48), neutral_units, start=(0.5, 0.5)).expansions() == ()
 
     def test_fields_mined_from_either_side_are_an_expansion_on_each_with_its_own_geyser(self) -> None:
@@ -243,14 +251,20 @@ class TestTheOrder:
         for at in ((10.5, 15.5), (38.5, 15.5), (10.5, 50.5)):
             neutral_units.base(at)
         map_at_start = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
-        assert _locations(map_at_start.expansions()) == [(10.5, 15.5), (10.5, 50.5), (38.5, 15.5)]
+        expansions = map_at_start.expansions()
+        assert _locations(expansions) == [(10.5, 15.5), (10.5, 50.5), (38.5, 15.5)]
+        start, open_side, behind_the_wall = (expansion.walking_distance_from_start for expansion in expansions)
+        assert (start, open_side) == (0.0, 35.0)
+        assert behind_the_wall > open_side
 
     def test_a_base_no_walk_reaches_comes_last(self) -> None:
         neutral_units = _NeutralUnits()
         for at in ((64.5, 30.5), (10.5, 15.5), (38.5, 15.5)):
             neutral_units.base(at)
         map_at_start = _MapAtStart(self._ROWS, neutral_units, start=(10.5, 15.5))
-        assert _locations(map_at_start.expansions()) == [(10.5, 15.5), (38.5, 15.5), (64.5, 30.5)]
+        expansions = map_at_start.expansions()
+        assert _locations(expansions) == [(10.5, 15.5), (38.5, 15.5), (64.5, 30.5)]
+        assert expansions[-1].walking_distance_from_start == math.inf
 
 
 def _recorded_map_and_neutral_units(path: Path) -> tuple[GameMap, Units[Unit[Any]]]:
@@ -293,10 +307,11 @@ class TestARecordedMap:
         assert len(first.mineral_fields) == 8
         assert all(field.visibility is Visibility.IN_VISION for field in first.mineral_fields)
 
-    def test_every_opponent_starts_at_an_expansion(self, path: Path) -> None:
+    def test_the_start_locations_are_the_expansions_marked_as_one(self, path: Path) -> None:
         game_map, neutral_units = _recorded_map_and_neutral_units(path)
-        locations = {expansion.location for expansion in game_map._expansions_among(neutral_units)}
-        assert set(game_map.opponent_start_locations) <= locations
+        expansions = game_map._expansions_among(neutral_units)
+        marked = {expansion.location for expansion in expansions if expansion.is_start_location}
+        assert marked == {game_map.start_location, *game_map.opponent_start_locations}
 
     def test_the_map_has_as_many_expansions_as_counted(self, path: Path) -> None:
         game_map, neutral_units = _recorded_map_and_neutral_units(path)

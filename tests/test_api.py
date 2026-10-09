@@ -314,7 +314,7 @@ class TestPlaying:
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [
             make_unit(tag, UnitTypeId.MINERAL_FIELD, at=(10.0 + 2 * tag, 20.5), alliance=Alliance.NEUTRAL)
-            for tag in range(1, 6)
+            for tag in range(1, 7)
         ]
         observations = [
             make_observation(0, units=fields),
@@ -334,8 +334,9 @@ class TestPlaying:
         api.play(client, steps_per_turn=2)
 
         assert len(seen) == 2 and seen[0] is seen[1]
-        assert [sorted(field.tag for field in expansion.mineral_fields) for expansion in seen[0]] == [[1, 2, 3, 4, 5]]
-        assert held == [True] * 10
+        field_tags = [sorted(field.tag for field in expansion.mineral_fields) for expansion in seen[0]]
+        assert field_tags == [[1, 2, 3, 4, 5, 6]]
+        assert held == [True] * 12
 
     def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
         """An api at module scope plays every game of its process."""

@@ -449,7 +449,14 @@ it.
   wrong natural on 3 maps of the 2026 pool. On that pool both find the same expansions, but python-sc2 puts 4 where
   the game takes no townhall: both of Magannatha's gold bases, on a Xel'Naga tower, and two of LeyLines' bases, a
   tile too close to their resources. NachOS finds each spot by the rule the game was measured to follow, with towers
-  and debris in the way ([game behavior](game-behavior.md#terrain-placement-and-pathing)).
+  and debris in the way ([game behavior](game-behavior.md#terrain-placement-and-pathing)). Each expansion says
+  whether a player starts there, `is_start_location`, and how far a ground unit walks to it from this player's start,
+  `walking_distance_from_start`. To rank them by how much nearer they are to this player than to the opponent:
+
+  ```python
+  theirs = api.map.pathing.path_distance_from(api.map.opponent_start_locations[0])
+  ranked = sorted(api.expansions, key=lambda e: e.walking_distance_from_start - theirs[e.location])
+  ```
 - **No wall-in placements.** python-sc2's `Ramp` also says where to put supply depots and a barracks to wall off a
   ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 

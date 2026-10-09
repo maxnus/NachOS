@@ -740,17 +740,20 @@ Each entry ends with how it was seen:
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
 - At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers;
-  the placement grid blocks rocks but no resource or townhall (#17; corpus). It leaves open the ground under
-  Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates, though the game
-  takes no townhall there (tool `sweep_townhall_placement`; corpus).
-- A townhall's footprint and a mineral field's leave a gap along each axis, 0 where they overlap on it. The game
-  refuses the townhall while both gaps are under 3 tiles, unless both are 2. A geyser refuses it while the two gaps
-  add up to under 3. All 15 kinds of field and 6 of geyser refuse alike, and a command center, a nexus and a hatchery
-  are refused alike (tool `sweep_townhall_placement`).
-- Around NachOS's expansions on the 7 maps of the corpus, those rules, with every other neutral unit blocking the
-  square its radius spans, agree with the game on 21,289 of 21,315 tile centers. On the other 26 the game takes a
-  townhall that the square refuses, beside diagonal collapsible towers and some 6x6 rocks and debris; none is an
-  expansion's best spot (tool `sweep_townhall_placement`).
+  the placement grid blocks rocks but no resource or townhall, in sight or not (#17; corpus). It leaves open the
+  ground under Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates,
+  though the game takes no townhall there (tool `sweep_townhall_placement`; corpus).
+- Each mineral field and geyser keeps townhalls off a zone around it: its footprint grown by 3 tiles on every side,
+  with each corner cut, by one tile at a mineral field and by three at a geyser (the corner tile and the tile beside
+  it on each side). The game refuses a townhall whose footprint covers any tile of a zone. All 15 kinds of field and 6
+  of geyser keep the same zones, and a command center, a nexus and a hatchery are refused alike (tool
+  `sweep_townhall_placement`).
+- NachOS's rule for where a townhall may stand was checked against the game on the 7 maps of the corpus. Around each
+  expansion NachOS finds, the game was asked whether it would take a townhall at every tile center within 7 tiles:
+  21,315 centers in all. NachOS gives the game's answer at all but 26. At those 26 the game would take a townhall and
+  NachOS refuses it: they lie beside diagonal collapsible towers and some 6x6 rocks and debris, where NachOS blocks
+  the whole square a unit's radius spans and the game less. None of them would give an expansion a better spot
+  (tool `sweep_townhall_placement`).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.

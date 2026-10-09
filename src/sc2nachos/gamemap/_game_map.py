@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, Any, Self, final
 import numpy
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.gamemap._expansion import _find_expansions
+from sc2nachos.gamemap._expansion import (
+    Expansion,
+    _resources_of_each_base,
+    _townhall_locations_of_base,
+    _walking_distance_from_start,
+    _where_townhall_allowed,
+)
 from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
@@ -19,7 +25,6 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from s2clientprotocol import common_pb2, sc2api_pb2
 
-    from sc2nachos.gamemap._expansion import Expansion
     from sc2nachos.geometry import PointLike
     from sc2nachos.units import Unit, Units
 
@@ -160,8 +165,36 @@ class GameMap:
 
     def _expansions_among(self, neutral_units: Units[Unit[Any]]) -> tuple[Expansion, ...]:
         """The expansions of this map with `neutral_units` on it at the start, nearest this player's start first by the
-        ground a unit walks. Those no walk reaches come last, nearest first in a line."""
-        return _find_expansions(self, neutral_units)
+        ground a unit walks. Those no walk reaches come last, nearest first in a line.
+
+        The mineral fields and geysers make the expansions; every other neutral unit blocks the ground under it.
+        """
+        mineral_fields = neutral_units.of_type(UnitType.AnyMineralField)
+        geysers = neutral_units.of_type(UnitType.AnyVespeneGeyser)
+        blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
+        townhall_allowed = _where_townhall_allowed(self._placement, mineral_fields, geysers, blockers)
+        walking_distance = _walking_distance_from_start(self._pathing, self._start_location)
+        start_locations = {self._start_location, *self._opponent_start_locations}
+        expansions = [
+            Expansion(
+                location=location,
+                mineral_fields=base_fields.sorted_by_distance_to(location),
+                geysers=location_geysers.sorted_by_distance_to(location),
+                is_start_location=location in start_locations,
+                walking_distance_from_start=walking_distance[location],
+            )
+            for base_fields, base_geysers in _resources_of_each_base(mineral_fields, geysers)
+            for location, location_geysers in _townhall_locations_of_base(
+                townhall_allowed, self._placement.origin, base_fields, base_geysers
+            )
+        ]
+        start = self._start_location
+        return tuple(
+            sorted(
+                expansions,
+                key=lambda expansion: (expansion.walking_distance_from_start, start.distance_to(expansion.location)),
+            )
+        )
 
 
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:
