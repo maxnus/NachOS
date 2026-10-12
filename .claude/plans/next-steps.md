@@ -462,7 +462,7 @@ when each starts.
 The demo bot needs to know where to expand, so the expansions come first: branch `claude/expansions`, chosen before
 slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
 
-- **`api.expansions`**, found once at the start: each `Expansion` has its townhall's `location` and its
+- **`api.expansions`**, found once at the start: each `Expansion` has its townhall's `center` and its
   `mineral_fields` and `geysers` as units, the same objects all game. It is on the api, not the map, so that
   `GameMap` stays a pure reading of the protos built before any unit: a map holding one game's units could not be
   shared, would make a circle if the tracker ever needs the map, and would leave tools without expansions.
@@ -473,14 +473,17 @@ slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
   Tightened from "5 to 12 resources" in review of #122, as the corpus's bases have 6 to 10 fields (the owner).
 - **A geyser more than 11 from its group's townhall gets an expansion of its own**, sharing the fields, as on
   Torches' gold bases. A base's own geysers stand up to 9.22 from its townhall, the far-side one 13.0.
-- **They come nearest this player's start first by walking**, by `Grid.path_distance_from` over the start's pathing
-  grid. Reversed in review of #122: that method is public, beside `Grid.distance_from`, since nothing in it is
-  ground-specific (the owner); it gives distances, never a path.
-- **Each expansion says `is_start_location` and `walking_distance_from_start`** (the owner, review of #122). The
-  order stays by this player's walk: ranking by own walk minus the opponent's is a judgment for the bot, and with
-  more than two starts the opponent's is unknown. The migration guide shows how a bot ranks them so.
-- **They are found by `GameMap._expansions_among(neutral_units)`**, a private method that does the work and stores
-  nothing on the map, so `api.expansions` stays the one public spelling (the owner, review of #122).
+- **They come nearest this player's start first by pathing distance**, by `Grid.path_distance_from` over the start's
+  pathing grid. Reversed in review of #122: that method is public, beside `Grid.distance_from`, since nothing in it
+  is ground-specific (the owner); it gives distances, never a path. "Pathing distance", never "walking distance"
+  (the owner).
+- **Each expansion says `is_start_location` and `pathing_distance_from_start`** (the owner, review of #122). The
+  order stays by this player's pathing distance: ranking by own distance minus the opponent's is a judgment for the
+  bot, and with more than two starts the opponent's is unknown. Its townhall's spot is `center` (the owner).
+- **They are found by `Expansion._find_all(game_map, neutral_units)`**, a private classmethod beside the steps in
+  _expansion.py, so `GameMap` knows nothing of units and `api.expansions` stays the one public spelling (the owner,
+  review of #122). Where a townhall may stand is `_TownhallSites`, built once from the placement grid, the resources
+  and the other neutral units (the owner).
 - **Blockers stay every neutral unit but a resource** (the owner, review of #122): critters are never in a main base
   at the start, the only place one could be seen then.
 - **No `NeutralUnit` class** (the owner, review of #122): neutral units have nothing the game reports for them alone
@@ -493,7 +496,9 @@ The owner's idea (review of #122): two grids, one static, blocking what never le
 destroyed), and one up to date with every known unit, in sight or in the fog. To plan as a PR of its own: what is kept
 per turn and what it costs, structures in the fog, and whether pathing gets the same pair. The start's placement grid
 blocks no resource or townhall, in sight or not; its pathing grid blocks this player's townhall, fields and geysers,
-the ones in sight (corpus).
+the ones in sight (corpus). That PR also measures each neutral structure's footprint, which the API never reports,
+for a table that replaces the square its radius spans: the expansions block towers and debris by that square for now
+(the owner, review of #122).
 
 ## 4. After each nachOS pull request merges
 

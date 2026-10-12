@@ -100,7 +100,7 @@ class _Game:
         game = cls(
             client=client,
             game_map=game_map,
-            expansions=game_map._expansions_among(tracker.unit_tracker.present.neutral),
+            expansions=Expansion._find_all(game_map, tracker.unit_tracker.present.neutral),
             game_data=game_data,
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,

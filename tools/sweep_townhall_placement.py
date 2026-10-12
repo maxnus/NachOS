@@ -33,8 +33,8 @@ from s2clientprotocol import raw_pb2
 
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import GameMap
-from sc2nachos.gamemap._expansion import _where_townhall_allowed
+from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gamemap._townhall_sites import _TownhallSites
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
@@ -224,8 +224,8 @@ class ExpansionCheck:
     """Where the game and NachOS disagree on a townhall around the expansions NachOS finds on one map."""
 
     map: str
-    expansions: list[tuple[float, float]]
-    """Each expansion's location, as NachOS orders them."""
+    expansion_centers: list[tuple[float, float]]
+    """Each expansion's townhall center, as NachOS orders them."""
     asked: int = 0
     """How many centers the game was asked about."""
     disagreed: list[tuple[float, float, bool]] = field(default_factory=list)
@@ -262,28 +262,28 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         raw, uncurated = _without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral
-        expansions = game_map._expansions_among(neutral_units)
-        fields, geysers = (
-            neutral_units.of_type(UnitType.AnyMineralField),
-            neutral_units.of_type(UnitType.AnyVespeneGeyser),
+        expansions = Expansion._find_all(game_map, neutral_units)
+        sites = _TownhallSites(
+            game_map.placement,
+            mineral_fields=neutral_units.of_type(UnitType.AnyMineralField),
+            geysers=neutral_units.of_type(UnitType.AnyVespeneGeyser),
+            blockers=neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser),
         )
-        blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
-        townhall_allowed = _where_townhall_allowed(game_map.placement, fields, geysers, blockers)
         starts = {game_map.start_location, *game_map.opponent_start_locations}
         centers = sorted(
             {
                 center
                 for expansion in expansions
-                if expansion.location not in starts
-                for center in _tile_centers_around(expansion.location)
+                if expansion.center not in starts
+                for center in _tile_centers_around(expansion.center)
             }
         )
-        locations = [(expansion.location.x, expansion.location.y) for expansion in expansions]
-        check = ExpansionCheck(map_name, locations, asked=len(centers), uncurated=uncurated)
+        expansion_centers = [(expansion.center.x, expansion.center.y) for expansion in expansions]
+        check = ExpansionCheck(map_name, expansion_centers, asked=len(centers), uncurated=uncurated)
         refused = _refused_centers(game, centers, _TOWNHALLS["command center"])
         for center in centers:
             taken = center not in refused
-            if taken != bool(townhall_allowed[game_map.placement.index_of(center)]):
+            if taken != sites.allows(center):
                 check.disagreed.append((center.x, center.y, taken))
     return check
 
@@ -297,7 +297,7 @@ def check_expansions(installation: Installation) -> list[ExpansionCheck]:
         logger.info(
             "{}: {} expansions, {} centers asked, {} disagreed {}; uncurated units set aside: {}",
             map_name,
-            len(check.expansions),
+            len(check.expansion_centers),
             check.asked,
             len(check.disagreed),
             check.disagreed,

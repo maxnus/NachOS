@@ -24,10 +24,6 @@ if TYPE_CHECKING:
 _ORIGIN = Tile(0, 0)
 
 
-# Each step a path can take to a neighboring tile, across, up or diagonally, with its length. The steps back the other
-# way are the same edges of an undirected graph.
-_PATH_STEPS = ((1, 0, 1.0), (0, 1, 1.0), (1, 1, math.sqrt(2)), (1, -1, math.sqrt(2)))
-
 # Scalars a grid combines with. numpy scalars subclass neither `int` nor `bool`, and only `float64` subclasses
 # `float`; without them listed, the operand round-trips through numpy and back at twice the cost. A module constant,
 # because an inline `a | b` union is rebuilt on every call at seven times the cost.
@@ -303,12 +299,15 @@ class Grid[T: float]:
         with the two are true. The tile holding `point` reads 0 even when false, but no path leaves a false tile, so
         every other tile then reads `inf`. Raises `IndexError` for a point the grid does not cover.
         """
+        # Each step a path can take to a neighboring tile, across, up or diagonally, with its length. The steps back the
+        # other way are the same edges of an undirected graph.
+        neighbor_steps = ((1, 0, 1.0), (0, 1, 1.0), (1, 1, math.sqrt(2)), (1, -1, math.sqrt(2)))
         start = self.index_of(point)
         passable = self._data.astype(bool, copy=False)
         width, height = passable.shape
         tiles = numpy.arange(width * height).reshape(width, height)
         sources, targets, lengths = [], [], []
-        for dx, dy, length in _PATH_STEPS:
+        for dx, dy, length in neighbor_steps:
             # The tiles a step leaves from and lands on, as slices of the grid lined up with each other.
             from_xs, to_xs = slice(0, width - dx), slice(dx, width)
             from_ys, to_ys = (

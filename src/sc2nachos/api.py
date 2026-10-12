@@ -88,9 +88,8 @@ class Api:
 
     @property
     def expansions(self) -> tuple[Expansion, ...]:
-        """Every place on the map to build a townhall, as the game began, nearest this player's start first by the
-        ground a unit walks: its own start, then its natural. Those no walk reaches come last, nearest first in a line.
-        """
+        """Every place on the map to build a townhall, as the game began, by pathing distance from this player's start,
+        nearest first: its own start, then its natural. Those no path reaches come last, nearest first in a line."""
         return self._current_game().expansions
 
     @property

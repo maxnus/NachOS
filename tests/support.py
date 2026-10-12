@@ -41,7 +41,7 @@ from sc2nachos.events import (
     UnitTypeChangedEvent,
 )
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
@@ -266,7 +266,7 @@ def played(
         game = _Game(
             client=client,
             game_map=game_map,
-            expansions=game_map._expansions_among(tracker.unit_tracker.present.neutral),
+            expansions=Expansion._find_all(game_map, tracker.unit_tracker.present.neutral),
             game_data=tracker.game_data,
             enemy=tracker.enemy,
             enemy_upgrade_inference=infer,
