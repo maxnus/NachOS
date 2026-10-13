@@ -11,6 +11,7 @@ from s2clientprotocol import data_pb2
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
+from sc2nachos.gamedata._footprints import FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
+    from sc2nachos.geometry import Footprint
 
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
@@ -141,6 +143,10 @@ class UnitTypeData:
     """Whether minerals can be mined from it."""
     has_vespene: bool
     """Whether vespene can be mined from it."""
+    footprint: Footprint | None
+    """The tiles one covers where it stands, as measured in game. `None` for a type that moves, and for the few the
+    game would not create to be measured: the acceleration zones, the flying inhibitor zones and a plain creep
+    tumor."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
     a level its units report, such as a shields level, adds nothing."""
@@ -198,5 +204,6 @@ class UnitTypeData:
             base_type=UnitTypeId.get(unit.unit_alias),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
+            footprint=FOOTPRINTS.get(unit_type),
             upgrades=tech_tree.unit_type_upgrades.get(unit_type, MappingProxyType({})),
         )

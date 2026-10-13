@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.enemy import Enemy
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
@@ -380,6 +380,22 @@ def _drone_building(tag: int, ability: AbilityId, **target: Any) -> raw_pb2.Unit
 
 def _spine(tag: int, progress: float) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.SPINE_CRAWLER, at=(24.0, 20.0), build_progress=progress)
+
+
+class TestFootprint:
+    def test_a_unit_covers_its_types_footprint(self) -> None:
+        assert _one(_depot(1)).footprint == Footprint.square(2)
+
+    def test_a_unit_whose_type_covers_nothing_has_no_footprint(self) -> None:
+        assert _one(make_unit(1, UnitTypeId.MARINE)).footprint is None
+
+    def test_one_of_the_maps_units_with_no_footprint_measured_covers_the_square_its_radius_spans(self) -> None:
+        zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6)
+        assert _one(zone).footprint == Footprint.square(5)
+
+    def test_one_of_the_maps_units_spanning_no_tile_covers_nothing(self) -> None:
+        zone = make_unit(1, UnitTypeId.ACCELERATION_ZONE_LARGE, alliance=Alliance.NEUTRAL, radius=0.0)
+        assert _one(zone).footprint is None
 
 
 class TestUnitsThatBecomeStructures:
