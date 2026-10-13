@@ -1,4 +1,4 @@
-"""Where the game takes a townhall on a map at the start of a game."""
+"""Where an expansion's townhall may stand on a map at the start of a game."""
 
 from __future__ import annotations
 
@@ -46,9 +46,9 @@ _GEYSER_TOWNHALL_ZONE = _townhall_zone(_GEYSER_SIZE, corner_cut=2)
 
 
 @final
-class _TownhallSites:
-    """Where the game takes a townhall's center on a map at the start, with its resources and its other neutral units
-    on it.
+class _ExpansionLocations:
+    """Where an expansion's townhall may be centered on a map at the start, with its resources and its other neutral
+    units on it.
 
     A townhall may stand wherever its footprint covers only placeable tiles, none under a neutral unit and none in a
     resource's zone. A mineral field or a geyser keeps townhalls off its footprint grown by 3 tiles on every side, with
@@ -65,7 +65,8 @@ class _TownhallSites:
         geysers: Units[Unit[UnitType.AnyVespeneGeyser]],
         blockers: Units[Unit[Any]],
     ) -> None:
-        """The sites on the ground `placement` leaves open, with `mineral_fields`, `geysers` and `blockers` on it."""
+        """The locations on the ground `placement` leaves open, with `mineral_fields`, `geysers` and `blockers` on
+        it."""
         townhall_may_cover = numpy.array(placement.values)
         for unit in blockers:
             self._mark_unplaceable_under(townhall_may_cover, placement, unit.position, unit.radius)

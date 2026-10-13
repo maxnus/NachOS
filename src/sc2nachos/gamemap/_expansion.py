@@ -9,7 +9,7 @@ import numpy
 from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components
 
-from sc2nachos.gamemap._townhall_sites import _TownhallSites
+from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Grid, Point
 from sc2nachos.units import Units
 from sc2nachos.units._unit_type import UnitType
@@ -58,14 +58,17 @@ class Expansion:
     @classmethod
     def _find_all(cls, game_map: GameMap, neutral_units: Units[Unit[Any]]) -> tuple[Self, ...]:
         """The expansions of `game_map` with `neutral_units` on it at the start, by pathing distance from this player's
-        start, nearest first. Those no path reaches come last, nearest first in a line.
+        start, nearest first. Those no path reaches come last, sorted by increasing straight-line distance from this
+        player's start.
 
         The mineral fields and geysers make the expansions; every other neutral unit blocks the ground under it.
         """
         mineral_fields = neutral_units.of_type(UnitType.AnyMineralField)
         geysers = neutral_units.of_type(UnitType.AnyVespeneGeyser)
         blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
-        sites = _TownhallSites(game_map.placement, mineral_fields=mineral_fields, geysers=geysers, blockers=blockers)
+        expansion_locations = _ExpansionLocations(
+            game_map.placement, mineral_fields=mineral_fields, geysers=geysers, blockers=blockers
+        )
         start = game_map.start_location
         pathing_distance = _pathing_distance_from_start(game_map.pathing, start)
         start_locations = {start, *game_map.opponent_start_locations}
@@ -78,7 +81,7 @@ class Expansion:
                 pathing_distance_from_start=pathing_distance[center],
             )
             for base_fields, base_geysers in _resources_of_each_base(mineral_fields, geysers)
-            for center, center_geysers in _townhall_centers_of_base(sites, base_fields, base_geysers)
+            for center, center_geysers in _townhall_centers_of_base(expansion_locations, base_fields, base_geysers)
         ]
         return tuple(
             sorted(expansions, key=lambda exp: (exp.pathing_distance_from_start, start.distance_to(exp.center)))
@@ -121,14 +124,14 @@ def _resource_groups(positions: ndarray) -> list[list[int]]:
 
 
 def _townhall_centers_of_base(
-    sites: _TownhallSites,
+    expansion_locations: _ExpansionLocations,
     fields: Units[Unit[UnitType.AnyMineralField]],
     geysers: Units[Unit[UnitType.AnyVespeneGeyser]],
 ) -> list[tuple[Point, Units[Unit[UnitType.AnyVespeneGeyser]]]]:
     """Where a townhall's center can go to mine one base's `fields` and `geysers`, each center with the geysers it
     mines: one, and one more for each geyser too far from it, on the far side of the fields. Every center mines all
     of `fields`."""
-    center = sites.best_center_for([*fields, *geysers])
+    center = expansion_locations.best_center_for([*fields, *geysers])
     if center is None:
         return []
     near_geysers: list[Unit[UnitType.AnyVespeneGeyser]] = []
@@ -136,7 +139,7 @@ def _townhall_centers_of_base(
     for geyser in geysers:
         far_side_center = None
         if geyser.position.distance_to(center) > _MAX_GEYSER_DISTANCE_FROM_TOWNHALL:
-            far_side_center = sites.best_center_for([*fields, geyser])
+            far_side_center = expansion_locations.best_center_for([*fields, geyser])
         if far_side_center is None or far_side_center == center:
             near_geysers.append(geyser)
         else:

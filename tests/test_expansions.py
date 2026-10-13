@@ -11,7 +11,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
-from sc2nachos.gamemap._townhall_sites import _TownhallSites
+from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import Recording
@@ -89,7 +89,7 @@ class _MapAtStart:
     def townhall_refusals_around(self, resource: tuple[float, float]) -> list[str]:
         """The townhall centers within 7 tiles of `resource` along each axis, the top row first: `#` refused."""
         neutral_units = self.neutral_units
-        sites = _TownhallSites(
+        expansion_locations = _ExpansionLocations(
             self.map.placement,
             mineral_fields=neutral_units.of_type(UnitType.AnyMineralField),
             geysers=neutral_units.of_type(UnitType.AnyVespeneGeyser),
@@ -98,7 +98,8 @@ class _MapAtStart:
         # The tile centers nearest the resource's own center, a half tile off it where it stands on a tile edge.
         x0, y0 = int(resource[0]) + 0.5, int(resource[1]) + 0.5
         return [
-            "".join("." if sites.allows((x0 + dx, y0 + dy)) else "#" for dx in range(-7, 8)) for dy in range(7, -8, -1)
+            "".join("." if expansion_locations.allows((x0 + dx, y0 + dy)) else "#" for dx in range(-7, 8))
+            for dy in range(7, -8, -1)
         ]
 
 

@@ -482,8 +482,8 @@ slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
   bot, and with more than two starts the opponent's is unknown. Its townhall's spot is `center` (the owner).
 - **They are found by `Expansion._find_all(game_map, neutral_units)`**, a private classmethod beside the steps in
   _expansion.py, so `GameMap` knows nothing of units and `api.expansions` stays the one public spelling (the owner,
-  review of #122). Where a townhall may stand is `_TownhallSites`, built once from the placement grid, the resources
-  and the other neutral units (the owner).
+  review of #122). Where a townhall may stand is `_ExpansionLocations`, built once from the placement grid, the
+  resources and the other neutral units (the owner).
 - **Blockers stay every neutral unit but a resource** (the owner, review of #122): critters are never in a main base
   at the start, the only place one could be seen then.
 - **No `NeutralUnit` class** (the owner, review of #122): neutral units have nothing the game reports for them alone

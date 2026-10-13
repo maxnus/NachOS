@@ -34,7 +34,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
-from sc2nachos.gamemap._townhall_sites import _TownhallSites
+from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
@@ -263,7 +263,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral
         expansions = Expansion._find_all(game_map, neutral_units)
-        sites = _TownhallSites(
+        expansion_locations = _ExpansionLocations(
             game_map.placement,
             mineral_fields=neutral_units.of_type(UnitType.AnyMineralField),
             geysers=neutral_units.of_type(UnitType.AnyVespeneGeyser),
@@ -283,7 +283,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         refused = _refused_centers(game, centers, _TOWNHALLS["command center"])
         for center in centers:
             taken = center not in refused
-            if taken != sites.allows(center):
+            if taken != expansion_locations.allows(center):
                 check.disagreed.append((center.x, center.y, taken))
     return check
 
