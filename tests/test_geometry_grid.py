@@ -6,7 +6,8 @@ import math
 import numpy
 import pytest
 
-from sc2nachos.geometry import Circle, Grid, Point, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Circle, Footprint, Grid, Point, Rectangle, Tile, TileSet
+from test_geometry_footprint import DIAGONAL, SHAPES
 
 
 def playable_grid() -> Grid[float]:
@@ -580,3 +581,81 @@ class TestMutation:
         grid = Grid(numpy.arange(9.0).reshape(3, 3))
         with pytest.raises(TypeError, match="must hold booleans"):
             _ = grid[Grid(numpy.ones((3, 3), dtype=int))]  # pyright: ignore[reportArgumentType]
+
+
+def _ground(*rows: str) -> Grid[bool]:
+    """A grid drawn top row first, `#` true, its lower left tile at (10, 20)."""
+    values = numpy.array([[row[x] == "#" for row in reversed(rows)] for x in range(len(rows[0]))])
+    return Grid(values, origin=Tile(10, 20))
+
+
+def _patchy_ground() -> Grid[bool]:
+    """Ground with gaps in it, so a footprint fits at some centers and not at others."""
+    generator = numpy.random.default_rng(7)
+    return Grid(generator.random((12, 10)) > 0.15, origin=Tile(10, 20), outside=False)
+
+
+class TestFootprints:
+    @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
+    def test_centers_fitting_agrees_with_fits_at_every_tile(self, footprint: Footprint) -> None:
+        ground = _patchy_ground()
+        fitting = ground.centers_fitting(footprint)
+        for x in range(ground.width):
+            for y in range(ground.height):
+                tile = ground.tile_at((x, y))
+                assert fitting[tile] == ground.fits(footprint, at=footprint.center_in(tile)), tile
+
+    def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:
+        ground = _ground(".##.", "####", "####", ".##.")
+        assert not ground.fits(Footprint.square(4), at=Point((12.0, 22.0)))
+        assert ground.fits(Footprint.square(4, cut_corners=1), at=Point((12.0, 22.0)))
+
+    def test_beyond_the_grid_reads_outside(self) -> None:
+        open_ground = _ground("###", "###", "###")
+        assert not open_ground.with_outside(False).fits(Footprint.square(3), at=Point((10.5, 20.5)))
+        assert open_ground.with_outside(True).fits(Footprint.square(3), at=Point((10.5, 20.5)))
+
+    def test_beyond_a_grid_with_no_outside_raises(self) -> None:
+        with pytest.raises(IndexError, match="reaches past"):
+            _ground("###", "###", "###").fits(Footprint.square(3), at=Point((10.5, 20.5)))
+
+    def test_centers_fitting_reads_false_beyond_a_grid_with_no_outside(self) -> None:
+        fitting = _ground("###", "###", "###").centers_fitting(Footprint.square(3))
+        assert fitting.values.tolist() == [[False] * 3, [False, True, False], [False] * 3]
+        assert fitting.outside is False
+
+    def test_covering_nothing_fits_everywhere(self) -> None:
+        ground = _ground("...", "...")
+        assert ground.fits(Footprint.from_rows(), at=Point((11.5, 20.5)))
+        assert ground.centers_fitting(Footprint.from_rows()).all()
+
+    def test_fill_footprint_sets_the_tiles_covered(self) -> None:
+        ground = _ground("....", "....", "....", "....")
+        ground.fill_footprint(DIAGONAL, at=Point((12.0, 22.0)), value=True)
+        assert ground.equals(_ground("..##", ".###", "###.", "##.."))
+
+    def test_fill_footprint_skips_the_tiles_beyond_the_grid(self) -> None:
+        ground = _ground("###", "###", "###")
+        ground.fill_footprint(Footprint.square(3), at=Point((10.5, 20.5)), value=False)
+        assert ground.equals(_ground("###", "..#", "..#"))
+
+    def test_a_footprint_wholly_beyond_the_grid_changes_nothing(self) -> None:
+        ground = _ground("###", "###")
+        ground.fill_footprint(Footprint.square(2), at=Point((50.0, 50.0)), value=False)
+        assert ground.all()
+
+    def test_a_read_only_grid_refuses_a_footprint(self) -> None:
+        ground = Grid(numpy.ones((3, 3), dtype=bool), readonly=True)
+        with pytest.raises(TypeError, match="read-only"):
+            ground.fill_footprint(Footprint.square(2), at=Point((1.0, 1.0)), value=False)
+
+
+class TestAsReadonly:
+    def test_it_refuses_writes_and_shares_the_values(self) -> None:
+        grid = Grid.zeros(2, 2)
+        readonly = grid.as_readonly()
+        with pytest.raises(TypeError, match="read-only"):
+            readonly[Point((0.5, 0.5))] = 1.0
+        grid[Point((0.5, 0.5))] = 1.0
+        assert readonly[Point((0.5, 0.5))] == 1.0
+        assert not readonly.copy().readonly

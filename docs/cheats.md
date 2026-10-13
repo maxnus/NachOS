@@ -28,7 +28,8 @@ What debug commands create is not always what a player would have:
 - **A debug-created unit can be yours where the real one is nobody's.** A force field a sentry casts is a neutral
   unit, owner 16, offered nothing; created straight onto the map it is yours and offered `Shatter`, which no player
   can ever reach. Check `alliance` on the real unit before trusting what a created one is offered.
-- **A creep tumor is created only on creep, and a plain `CREEP_TUMOR` never.** A queen's `CREEP_TUMOR_QUEEN` appeared
-  beside a hatchery, at no spot off creep, and not at every spot on it either.
+- **A creep tumor is created only on creep, and not at every spot on it.** A queen's `CREEP_TUMOR_QUEEN` appeared
+  beside a hatchery, at no spot off creep, and not at every spot on it either. A plain `CREEP_TUMOR` appeared on a
+  hatchery's creep once `tools/sweep_placement.py` tried a few spots (build 75689), though #28 saw none.
 - **A vital set to 0 is set to its maximum.** `DebugSetUnitValue` with 0 fills a unit's energy or shields instead of
   emptying them, so drain a unit to 1 instead.

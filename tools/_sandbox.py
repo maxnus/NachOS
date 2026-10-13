@@ -168,12 +168,16 @@ class Sandbox:
 
     def placeable(self, ability: int, points: Sequence[Point]) -> list[bool]:
         """Whether the structure `ability` builds could go up at each of `points` right now."""
+        return [answer == SUCCESS for answer in self.placement_answers(ability, points)]
+
+    def placement_answers(self, ability: int, points: Sequence[Point]) -> list[error_pb2.ActionResult.ValueType]:
+        """The game's answer, success or why not, to the structure `ability` builds going up at each of `points`."""
         placements = [
             query_pb2.RequestQueryBuildingPlacement(ability_id=ability, target_pos=common_pb2.Point2D(x=p.x, y=p.y))
             for p in points
         ]
         response = self.transport.request(sc2api_pb2.Request(query=query_pb2.RequestQuery(placements=placements)))
-        return [answer.result == SUCCESS for answer in response.query.placements]
+        return [answer.result for answer in response.query.placements]
 
     def order(self, ability: int, tag: int, target: Point | int | None = None) -> error_pb2.ActionResult.ValueType:
         """Order `ability` on the unit `tag`, aimed at a point, a unit's tag or nothing, and return the verdict."""

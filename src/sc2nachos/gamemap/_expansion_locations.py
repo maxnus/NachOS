@@ -24,20 +24,17 @@ _TOWNHALL_ZONE_MARGIN = 3
 _MAX_TOWNHALL_OFFSET_FROM_RESOURCES = 8
 
 
-def _townhall_zone(size: tuple[int, int], corner_cut: int) -> Footprint:
-    """The tiles a resource of footprint `size` keeps townhalls off, laid around the resource's center: its footprint
-    grown by `_TOWNHALL_ZONE_MARGIN` tiles on every side, less the tiles fewer than `corner_cut` steps along the edges
-    from a corner (tool `sweep_townhall_placement`)."""
-    width, height = size[0] + 2 * _TOWNHALL_ZONE_MARGIN, size[1] + 2 * _TOWNHALL_ZONE_MARGIN
-    steps_from_side_x = numpy.minimum(numpy.arange(width), numpy.arange(width)[::-1])[:, numpy.newaxis]
-    steps_from_side_y = numpy.minimum(numpy.arange(height), numpy.arange(height)[::-1])[numpy.newaxis, :]
-    return Footprint(steps_from_side_x + steps_from_side_y >= corner_cut)
-
-
-# A mineral field's zone loses one tile at each corner, and a geyser's three: the corner and the tile beside it on each
-# side.
-_MINERAL_FIELD_TOWNHALL_ZONE = _townhall_zone(_MINERAL_FIELD_SIZE, corner_cut=1)
-_GEYSER_TOWNHALL_ZONE = _townhall_zone(_GEYSER_SIZE, corner_cut=2)
+# The tiles a resource keeps townhalls off, laid around its center: its footprint grown by `_TOWNHALL_ZONE_MARGIN`
+# tiles on every side, less one tile at each corner of a mineral field's and three at a geyser's, the corner and the
+# tile beside it on each side (tool `sweep_townhall_placement`).
+_MINERAL_FIELD_TOWNHALL_ZONE = Footprint.rectangle(
+    _MINERAL_FIELD_SIZE[0] + 2 * _TOWNHALL_ZONE_MARGIN,
+    _MINERAL_FIELD_SIZE[1] + 2 * _TOWNHALL_ZONE_MARGIN,
+    cut_corners=1,
+)
+_GEYSER_TOWNHALL_ZONE = Footprint.rectangle(
+    _GEYSER_SIZE[0] + 2 * _TOWNHALL_ZONE_MARGIN, _GEYSER_SIZE[1] + 2 * _TOWNHALL_ZONE_MARGIN, cut_corners=2
+)
 
 
 @final
@@ -66,12 +63,12 @@ class _ExpansionLocations:
         townhall_may_cover = placement.copy()
         for unit in blockers:
             if (footprint := unit.footprint) is not None:
-                footprint.fill(townhall_may_cover, at=unit.position, value=False)
+                townhall_may_cover.fill_footprint(footprint, at=unit.position, value=False)
         for unit in mineral_fields:
-            _MINERAL_FIELD_TOWNHALL_ZONE.fill(townhall_may_cover, at=unit.position, value=False)
+            townhall_may_cover.fill_footprint(_MINERAL_FIELD_TOWNHALL_ZONE, at=unit.position, value=False)
         for unit in geysers:
-            _GEYSER_TOWNHALL_ZONE.fill(townhall_may_cover, at=unit.position, value=False)
-        self._allowed = _TOWNHALL_FOOTPRINT.centers_fitting(townhall_may_cover)
+            townhall_may_cover.fill_footprint(_GEYSER_TOWNHALL_ZONE, at=unit.position, value=False)
+        self._allowed = townhall_may_cover.centers_fitting(_TOWNHALL_FOOTPRINT)
 
     def allows(self, center: PointLike) -> bool:
         """Whether the game takes a townhall centered on the tile holding `center`."""

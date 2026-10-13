@@ -105,7 +105,8 @@ Each entry ends with how it was seen:
   and no structure on ground it cannot stand on; a photon cannon ordered onto this player's creep was never made
   (tool `sweep_alerts`, #37).
 - A unit made for player 0 is reported as owner 16 (tool `_sandbox`).
-- Debug commands can make a larva but not a plain creep tumor, and a queen's tumor only on creep (#28).
+- Debug commands can make a larva, and a creep tumor, plain or a queen's, only on creep and not at every spot on it
+  (#28; tool `sweep_placement`, build 75689).
 - A debug-made force field belongs to its player and is offered Shatter; one a sentry casts is neutral, owner 16,
   and offered nothing, and Shatter ordered on it is refused (#23, #33).
 - A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
@@ -746,12 +747,12 @@ Each entry ends with how it was seen:
   structure once it was gone, and none the grid blocks did, but one under a collapsible tower beside a rock. Rocks on a
   ramp, as on LeyLinesAIE_v3 and PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689;
   corpus).
-- A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the
-  game snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure
-  morphs into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive
-  5x5, a warp gate 3x3, a greater spire 2x2. An add-on covers 2x2 beside its host. A queen's or a burrowed creep tumor
-  and an oracle's stasis ward cover one tile. Nothing that flies covers any, nor an uprooted crawler, a KD8 charge or
-  a Xel'Naga healing shrine (tool `sweep_placement`, build 75689).
+- A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the game
+  snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure morphs
+  into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive 5x5, a warp
+  gate 3x3, a greater spire 2x2. An add-on covers 2x2 beside its host. A creep tumor, plain, a queen's or burrowed, and
+  an oracle's stasis ward cover one tile. Nothing that flies covers any, nor an uprooted crawler, a KD8 charge or a
+  Xel'Naga healing shrine (tool `sweep_placement`, build 75689).
 - A mineral field covers 2x1 and a geyser 3x3; a Xel'Naga tower and unbuildable plates and bricks 2x2; an inhibitor
   zone one tile; a collapsible tower and its debris 5x5; and the unit that pushes units from under a falling tower a
   7x7 square less three tiles at each corner. Rocks and debris cover the size their name gives, but a 4x4 one loses a
@@ -759,8 +760,15 @@ Each entry ends with how it was seen:
   square (tool `sweep_placement`, build 75689).
 - The footprints were measured one unit at a time on open ground, by asking whether a sensor tower, refused on creep,
   or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
-  refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone, a
-  flying inhibitor zone and a plain creep tumor the game does not create at all (tool `sweep_placement`, build 75689).
+  refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone and a
+  flying inhibitor zone the game does not create at all (tool `sweep_placement`, build 75689).
+- Whether a structure may stand on creep was asked of each build a worker or a queen places at a point, on open ground
+  and on a hatchery's creep, with a pylon's power over both. A zerg structure but a hatchery and a nydus worm, and a
+  creep tumor, is taken only on creep, and refused off it `CantBuildTooFarFromCreepSource`; a terran or protoss
+  structure but an oracle's stasis ward only off it, and refused on it `CantBuildTooCloseToCreepSource`; a hatchery, a
+  nydus worm and a stasis ward either way. A zerg structure needs creep under every tile of its footprint: beside a
+  hatchery, a spawning pool was refused while the creep had not yet reached one corner of its 3x3 (tool
+  `sweep_placement`, build 75689).
 - An add-on is its host's own type only while attached: created alone by a debug command, a barracks', factory's or
   starport's tech lab or reactor comes out plain, and a barracks lifting off leaves its reactor plain. The sweep
   measures each beside a host told to build it (tool `sweep_placement`; local game, build 75689).
@@ -780,7 +788,7 @@ Each entry ends with how it was seen:
   measured footprint. Blocking the square a unit's radius spans instead, it refused 26 the game takes, beside diagonal
   collapsible towers and some 6x6 rocks and debris, though none would have given an expansion a better spot (tool
   `sweep_townhall_placement`, build 75689).
-- `api.placement.dynamic` was checked against the game on the 7 maps of the corpus, with every unit but a structure
+- `api.placement.free` was checked against the game on the 7 maps of the corpus, with every unit but a structure
   killed: asked whether a one-tile structure could stand on each tile of the playable area, 127,020 tiles in all, the
   game gives the grid's answer at all but 14, on UltraloveAIE_v2, beside its two unbuildable plates, as "Not
   understood yet" says (tool `sweep_placement`, build 75689).
@@ -831,5 +839,5 @@ Each entry ends with how it was seen:
   as a 4x4 rock covers. Those tiles take a structure once the plate is killed. Every other plate covers its 2x2: those
   the other maps place, and on Ultralove one created by a debug command on the very spot of one killed, and 16 more at
   offsets from the tile grid and at facings from 15° to 351°, which the game snaps to tile corners. The API reports
-  nothing that sets the two apart, so `api.placement.dynamic` blocks their 2x2 and leaves those 14 tiles open (tool
+  nothing that sets the two apart, so `api.placement.dynamic` closes only their 2x2 and leaves those 14 tiles open (tool
   `sweep_placement`; local game, build 75689).

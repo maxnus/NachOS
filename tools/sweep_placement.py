@@ -5,7 +5,9 @@ the map's resources gone, in a new game whenever one ends in the tie a game with
 minutes. On open ground it makes one unit at a time of every structure type and every neutral type, and asks the game
 at every tile center around it whether a one-tile structure could stand there: a sensor tower, which the game refuses
 on creep, and a queen's creep tumor, which it refuses off creep. The tiles both are refused are the unit's footprint.
-It writes them to `data/footprints.json`, which `tools/generate_footprints.py` reads.
+Then, in a game of its own, it asks the game about each build a worker or a queen places at a point, on open ground
+and on a hatchery's creep, with a pylon powering both. It writes all of it to `data/footprints.json`, which
+`tools/generate_footprints.py` reads.
 
 `ground-under-rocks` plays one game on each map of the corpus under `show_map`. For each neutral unit but a resource,
 it asks the same about every tile of the unit's footprint, as `data/footprints.json` has it, before and after killing
@@ -15,7 +17,7 @@ gone.
 
 `grids` plays one game on each map of the corpus under `show_map`, with every unit of both players' that is no
 structure killed, and asks the same about every tile of the playable area. It prints every tile where the game and
-`api.placement.dynamic` disagree::
+`api.placement.free` disagree::
 
     uv run python tools/sweep_placement.py footprints
     uv run python tools/generate_footprints.py
@@ -39,12 +41,13 @@ from _sandbox import NEUTRAL, NEUTRAL_REPORTED, Cheat, Sandbox, playing, without
 from loguru import logger
 from numpy.lib.stride_tricks import sliding_window_view
 from record_corpus import GAMES
-from s2clientprotocol import data_pb2, raw_pb2
+from s2clientprotocol import data_pb2, error_pb2, raw_pb2
 
 from sc2nachos.enemy import Enemy
-from sc2nachos.gamedata import Attribute, GameData
+from sc2nachos.gamedata import Attribute, GameData, TargetType
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point, Tile
+from sc2nachos.gamemap._image_data import image_tiles
+from sc2nachos.geometry import Footprint, Point, Tile
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import Installation
@@ -52,7 +55,7 @@ from sc2nachos.match import Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import GameEndedError
 from sc2nachos.state import PlacementGrids
-from sc2nachos.state._placement_grids import static_placement
+from sc2nachos.state._state import _State
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType
 
@@ -66,11 +69,15 @@ _WIDE_PROBE_REACH = 8
 # How far past the tiles asked about a unit may stand and still cover one of them.
 _NEIGHBOR_REACH = 8
 _CLEARING_TRIES = 8
+_MEASURING_TRIES = 3
 _SETTLING_STEPS = 32
 _DEBRIS_STEPS = 96
 _ADD_ON_BUILD_STEPS = 480
 _TILES_ASKED_AT_ONCE = 4096
 _CREEP_SPREADING_STEPS = 240
+_SPOTS_TO_TRY_ON_CREEP = ((0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (2, 0), (0, 2))
+# How long a hatchery's creep may take to cover a townhall's ground beside it: about 960 steps, seen.
+_CREEP_COVERING_STEPS = 3200
 _OFF_CREEP_PROBE = AbilityId.SCV_BUILD_SENSOR_TOWER
 _ON_CREEP_PROBE = RawAbilityId.Build_CreepTumor_Queen
 _RESOURCES = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
@@ -78,6 +85,11 @@ _RESOURCES = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._typ
 _MADE_ONLY_ON_CREEP = (UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_QUEEN)
 # The add-ons the game does not create alone, each with its host and its host's build of it. Lifted off, a host leaves
 # a plain tech lab or reactor behind, so these are measured beside their host.
+# A build the placement query refuses under the ability's own id, by the id of the unit that places it.
+_ASKED_AS = {
+    UnitTypeId.CREEP_TUMOR_QUEEN: RawAbilityId.Build_CreepTumor_Queen,
+    UnitTypeId.CREEP_TUMOR: RawAbilityId.Build_CreepTumor_Tumor,
+}
 _ADD_ON_HOSTS = {
     UnitTypeId.TECH_LAB_BARRACKS: (UnitTypeId.BARRACKS, RawAbilityId.Build_TechLab_Barracks),
     UnitTypeId.REACTOR_BARRACKS: (UnitTypeId.BARRACKS, RawAbilityId.Build_Reactor_Barracks),
@@ -111,6 +123,9 @@ class FootprintFindings:
     moving: dict[str, MeasuredFootprint] = field(default_factory=dict)
     """The structure types that move, such as a flying barracks, measured for the record."""
     not_made: list[str] = field(default_factory=list)
+    creep: dict[str, dict[str, str]] = field(default_factory=dict)
+    """For each structure type a worker or a queen places at a point, the game's answer to its build on creep and off
+    it, with a pylon's power over both: `Success` or why not."""
 
 
 def _tile_centers_around(at: Point, reach: int) -> list[Point]:
@@ -240,11 +255,13 @@ def _measured_add_on(game: Sandbox, add_on: UnitTypeId, at: Point, reach: int) -
     return None
 
 
-def _measured_at(game: Sandbox, unit_type: UnitTypeId, owner: int, at: Point, reach: int) -> MeasuredFootprint | None:
-    """Make one `unit_type` for `owner` at or near `at`, and ask about every tile within `reach` of `at`. None if the
-    game would not make one."""
+def _measured_at(
+    game: Sandbox, unit_type: UnitTypeId, owner: int, at: Point, reach: int, *, made_at: Point | None = None
+) -> MeasuredFootprint | None:
+    """Make one `unit_type` for `owner` at or near `made_at`, `at` unless given, and ask about every tile within
+    `reach` of `at`. None if the game would not make one."""
     centers = _tile_centers_around(at, reach)
-    made = game.spawn([(unit_type, owner, at)])
+    made = game.spawn([(unit_type, owner, made_at or at)])
     if not made:
         return None
     return _measured((made[0].pos.x, made[0].pos.y), _covered_tiles(game, centers), centers)
@@ -254,13 +271,42 @@ def _measure(
     game: Sandbox, ground: _MeasuringGround, unit_type: UnitTypeId, owner: int, *, on_creep: bool = False
 ) -> MeasuredFootprint | None:
     """The footprint of one `unit_type` made for `owner`, asked about within `_PROBE_REACH` and again within
+    `_WIDE_PROBE_REACH` if it reaches that far, and measured again if its tiles do not center where it stands, as when
+    something left over stood beside it. None if the game would not make one."""
+    footprint = None
+    for _ in range(_MEASURING_TRIES):
+        footprint = _measure_once(game, ground, unit_type, owner, on_creep=on_creep)
+        if footprint is None or _centers_where_it_stands(footprint):
+            return footprint
+        logger.warning("{} covered tiles that do not center where it stands; measuring it again", unit_type.name)
+    return footprint
+
+
+def _centers_where_it_stands(measured: MeasuredFootprint) -> bool:
+    """Whether the tiles `measured` covered center on where the unit stood, as a footprint centers."""
+    if measured.lower_left is None:
+        return True
+    box = Footprint.from_rows(*measured.rows).bounding_box(Point(measured.position))
+    return (int(box.x), int(box.y)) == tuple(measured.lower_left)
+
+
+def _measure_once(
+    game: Sandbox, ground: _MeasuringGround, unit_type: UnitTypeId, owner: int, *, on_creep: bool
+) -> MeasuredFootprint | None:
+    """The footprint of one `unit_type` made for `owner`, asked about within `_PROBE_REACH` and again within
     `_WIDE_PROBE_REACH` if it reaches that far. None if the game would not make one."""
     footprint = None
     for reach in (_PROBE_REACH, _WIDE_PROBE_REACH):
         at = ground.cleared(reach)
         if on_creep:
             _leave_creep(game, at)
-        footprint = _measured_at(game, unit_type, owner, at, reach)
+            # The game makes a creep tumor at some spots on creep and not at others (in game).
+            for dx, dy in _SPOTS_TO_TRY_ON_CREEP:
+                made_at = Point((at.x + dx, at.y + dy))
+                if (footprint := _measured_at(game, unit_type, owner, at, reach, made_at=made_at)) is not None:
+                    break
+        else:
+            footprint = _measured_at(game, unit_type, owner, at, reach)
         if footprint is None and unit_type in _ADD_ON_HOSTS:
             # Asked for an add-on of a host's, the game makes a plain one, which would stand where the host builds.
             footprint = _measured_add_on(game, unit_type, ground.cleared(reach), reach)
@@ -358,7 +404,63 @@ def measure_footprints(installation: Installation) -> FootprintFindings:
         len(findings.moving),
         findings.not_made or "none",
     )
+    findings.creep = measure_creep(installation, findings.unit_types)
     return findings
+
+
+def _builds_placed_at_a_point(game_data: GameData, measured: Iterable[str]) -> dict[str, int]:
+    """The ability that places each of the types named in `measured` that a player's unit places at a point, as the
+    placement query takes it."""
+    builds = {}
+    for name in measured:
+        unit_type = UnitTypeId.read(RawUnitTypeId[name])
+        row = game_data.units.get(unit_type)
+        if row is None or row.race is Race.NONE or row.creation_ability is None:
+            continue
+        ability = game_data.abilities[row.creation_ability]
+        if ability.needs_placement and ability.target_type is TargetType.POINT:
+            builds[name] = _ASKED_AS.get(unit_type, row.creation_ability)
+    return builds
+
+
+def _answers_at(game: Sandbox, builds: Mapping[str, int], at: Point) -> dict[str, str]:
+    """The game's answer to each of `builds` placed at `at`, by its name."""
+    return {
+        name: error_pb2.ActionResult.Name(game.placement_answers(ability, [at])[0]) for name, ability in builds.items()
+    }
+
+
+def _wait_for_creep(game: Sandbox, around: Point) -> None:
+    """Step the game until creep covers the 5x5 tiles around `around`, as a townhall's ground."""
+    for _ in range(_CREEP_COVERING_STEPS // _SETTLING_STEPS):
+        observation = game.client.observation()
+        game_map = GameMap._of_game(game.client.game_info(), observation)
+        creep = image_tiles(observation.observation.raw_data.map_state.creep, game_map.playable_area)
+        x, y = game_map.placement.index_of(around)
+        if creep[x - 2 : x + 3, y - 2 : y + 3].all():
+            return
+        game.client.step(_SETTLING_STEPS)
+    raise RuntimeError(f"creep never covered the ground around {around}")
+
+
+def measure_creep(installation: Installation, measured: Iterable[str]) -> dict[str, dict[str, str]]:
+    """Ask the game about each structure type in `measured` that a unit places at a point, off creep and then on a
+    hatchery's creep beside it, with a pylon powering the ground both times."""
+    with playing(Race.TERRAN, installation) as game:
+        builds = _builds_placed_at_a_point(GameData(game.client.game_data()), measured)
+        ground = _measuring_ground(game)
+        at = ground.cleared(_WIDE_PROBE_REACH)
+        asked = Point((at.x + 1.5, at.y + 1.5))
+        pylon = (UnitTypeId.PYLON, game.player, Point((at.x + 4, at.y - 3)))
+        game.spawn([pylon])
+        off_creep = _answers_at(game, builds, asked)
+        at = ground.cleared(_WIDE_PROBE_REACH)
+        game.spawn([(UnitTypeId.HATCHERY, game.player, Point((at.x - 4.5, at.y - 4.5))), pylon])
+        _wait_for_creep(game, asked)
+        on_creep = _answers_at(game, builds, asked)
+    for name in builds:
+        logger.info("{}: on creep {}, off creep {}", name, on_creep[name], off_creep[name])
+    return {name: {"on_creep": on_creep[name], "off_creep": off_creep[name]} for name in builds}
 
 
 def _record(findings: FootprintFindings, kind: _TypeToMeasure, footprint: MeasuredFootprint | None) -> None:
@@ -509,7 +611,7 @@ def check_ground_under_rocks(installation: Installation) -> list[GroundUnderRock
 
 @dataclass(slots=True)
 class GridCheck:
-    """Where the game and `api.placement.dynamic` disagree on one map."""
+    """Where the game and `api.placement.free` disagree on one map."""
 
     map: str
     asked: int = 0
@@ -538,15 +640,18 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
         tracker = _Tracker(data, Enemy())
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
-        present = tracker.unit_tracker.present
-        static = static_placement(game_map.placement, present.neutral)
+        state = _State(observation, tracker, game_map)
         orders = OrderBook(data, build_reach=2.5)
-        dynamic = PlacementGrids(static, units=present, game_data=data, orders=orders).dynamic
+        units = tracker.unit_tracker.present
+        placement = PlacementGrids._at_start(
+            game_map.placement, units=units, state=state, game_data=data, orders=orders
+        )
+        free = placement.free
         tiles = sorted(game_map.playable_area.tiles())
         check = GridCheck(map_name, asked=len(tiles))
         for start in range(0, len(tiles), _TILES_ASKED_AT_ONCE):
             for tile, taken in _taken(game, tiles[start : start + _TILES_ASKED_AT_ONCE]).items():
-                if taken != dynamic[tile]:
+                if taken != free[tile]:
                     check.disagreed.append((tile.x, tile.y, taken))
     return check
 

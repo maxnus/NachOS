@@ -21,10 +21,10 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state import PlacementGrids
-from sc2nachos.state._placement_grids import static_placement
+from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import make_bits, make_client, make_game_info, make_observation, make_response, make_tables, make_unit
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -51,6 +51,8 @@ _TABLES = make_tables(
     _row(UnitTypeId.BARRACKS, minerals=150),
     _row(UnitTypeId.BARRACKS_FLYING, minerals=150, speed=0.9375),
     _row(UnitTypeId.REACTOR_BARRACKS, minerals=50, alias=(UnitTypeId.REACTOR,)),
+    _row(UnitTypeId.SPAWNING_POOL, minerals=200),
+    _row(UnitTypeId.HATCHERY, minerals=300),
     _row(UnitTypeId.MINERAL_FIELD),
     _row(UnitTypeId.VESPENE_GEYSER),
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
@@ -79,18 +81,27 @@ class _Game:
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES, build_reach=2.5)
-        self.static: Grid[bool] | None = None
+        self.grids: PlacementGrids | None = None
 
-    def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> PlacementGrids:
-        """Take in an observation of `units` at `step`, in which the units under the tags `dead` died, and return its
-        grids. The first observation fixes the static grid, as the start of a game does."""
-        self.tracker.update(make_observation(step, units=units, dead=dead).observation.raw_data, step)
+    def observe(
+        self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = (), creep: tuple[str, ...] = ()
+    ) -> PlacementGrids:
+        """Take in an observation of `units` at `step`, in which the units under the tags `dead` died and creep lies
+        where `creep` draws it, top row first, and return its grids, as `_Game` makes them."""
+        creep_image = make_bits(*(creep or ("." * 16,) * 16))
+        observation = make_observation(step, units=units, dead=dead, creep=creep_image)
+        self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
-        self.book._observe(step, [*changes.units_died, *changes.units_found_dead], self.tracker.unit_tracker.present)
         present = self.tracker.unit_tracker.present
-        if self.static is None:
-            self.static = static_placement(self.map.placement, present.neutral)
-        return PlacementGrids(self.static, units=present, game_data=_TABLES, orders=self.book)
+        self.book._observe(step, [*changes.units_died, *changes.units_found_dead], present)
+        state = _State(observation, self.tracker, self.map)
+        if self.grids is None:
+            self.grids = PlacementGrids._at_start(
+                self.map.placement, units=present, state=state, game_data=_TABLES, orders=self.book
+            )
+        else:
+            self.grids = self.grids._for_observation(present, state)
+        return self.grids
 
     def own(self, tag: int) -> OwnUnit[Any]:
         unit = self.tracker.unit_tracker.by_tag(tag)
@@ -170,22 +181,22 @@ class TestTheDynamicGrid:
             make_unit(4, UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1, at=(12.0, 5.0), alliance=_NEUTRAL),
         )
         assert _picture(grids.dynamic) == [
-            "..##############",
-            "..##############",
-            "..#..######...##",
-            "..#..######...##",
-            "..#########...##",
-            "..##############",
-            "..##############",
-            "..##############",
-            "..##############",
-            "..#########..###",
-            "..########....##",
-            "..########....##",
-            "..##..#####..###",
-            "..##############",
-            "..##############",
-            "..##############",
+            "################",
+            "################",
+            "###..######...##",
+            "###..######...##",
+            "###########...##",
+            "################",
+            "################",
+            "################",
+            "################",
+            "###########..###",
+            "##########....##",
+            "##########....##",
+            "####..#####..###",
+            "################",
+            "################",
+            "################",
         ]
 
     def test_a_unit_that_moves_a_structure_in_the_air_and_a_force_field_block_nothing(self) -> None:
@@ -195,7 +206,16 @@ class TestTheDynamicGrid:
             make_unit(2, UnitTypeId.BARRACKS_FLYING, at=(10.5, 10.5), is_flying=True),
             make_unit(3, UnitTypeId.FORCE_FIELD, at=(12.5, 5.5), alliance=_NEUTRAL, radius=1.0),
         )
-        assert grids.dynamic.equals(grids.static)
+        assert grids.dynamic.all()
+
+    def test_the_geysers_and_collapsible_towers_the_static_grid_closes_are_not_in_it(self) -> None:
+        grids = _Game().observe(
+            0,
+            make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL),
+            make_unit(2, UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK, at=(4.5, 12.5), alliance=_NEUTRAL, radius=2.94),
+        )
+        assert grids.dynamic.all()
+        assert not grids.static[Point((8.5, 8.5))]
 
     def test_one_of_the_maps_units_with_no_footprint_measured_closes_the_square_its_radius_spans(self) -> None:
         zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, at=(8.0, 8.0), alliance=_NEUTRAL, radius=1.1)
@@ -204,8 +224,8 @@ class TestTheDynamicGrid:
 
     def test_the_ground_opens_once_the_structure_is_gone(self) -> None:
         game = _Game()
-        game.observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
-        assert game.observe(1, dead=(1,)).dynamic.equals(game.observe(2).static)
+        assert not game.observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0))).dynamic.all()
+        assert game.observe(1, dead=(1,)).dynamic.all()
 
     def test_it_is_built_once_an_observation(self) -> None:
         grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
@@ -305,8 +325,47 @@ class TestTheReservedGrid:
         ]
 
 
-def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData]:
-    """The map of a recorded game, and a tracker that has taken in its first observation."""
+# Creep over the right half of the drawn map, top row first.
+_CREEP_ON_THE_RIGHT = tuple("." * 8 + "#" * 8 for _ in range(16))
+
+
+class TestTheFreeGrids:
+    def test_free_is_static_and_dynamic_less_reserved(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        grids = game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
+        assert grids.free.equals(grids.static & grids.dynamic & ~grids.reserved)
+        assert not grids.free[Point((1.5, 1.5))]
+        assert not grids.free[Point((12.0, 12.0))]
+        assert not grids.free[Point((8.0, 8.0))]
+        assert grids.free[Point((5.5, 5.5))]
+
+    @pytest.mark.parametrize(
+        ("unit_type", "on_creep", "off_creep"),
+        [
+            (UnitTypeId.SUPPLY_DEPOT, False, True),
+            (UnitTypeId.SPAWNING_POOL, True, False),
+            (UnitTypeId.HATCHERY, True, True),
+        ],
+        ids=lambda value: value.name if isinstance(value, UnitTypeId) else None,
+    )
+    def test_free_for_a_type_keeps_to_the_creep_or_off_it_as_the_type_needs(
+        self, unit_type: UnitTypeId, on_creep: bool, off_creep: bool
+    ) -> None:
+        """A terran structure stands off creep, a zerg one but a hatchery on it, and a hatchery either way."""
+        grids = _Game().observe(0, creep=_CREEP_ON_THE_RIGHT)
+        free = grids.free_for(unit_type)
+        assert free[Point((12.5, 8.5))] is on_creep
+        assert free[Point((4.5, 8.5))] is off_creep
+
+    def test_free_for_a_type_with_no_rule_is_free(self) -> None:
+        grids = _Game().observe(0, creep=_CREEP_ON_THE_RIGHT)
+        assert grids.free_for(UnitTypeId.MARINE).equals(grids.free)
+
+
+def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_pb2.ResponseObservation]:
+    """The map of a recorded game, its first observation, and a tracker that has taken it in."""
     info: sc2api_pb2.ResponseGameInfo | None = None
     data: GameData | None = None
     for exchange in Recording(path):
@@ -320,27 +379,31 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData]:
             observation = response.observation
             tracker = _Tracker(data, Enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker, data
+            return GameMap._of_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedGamesStart:
     def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
-        game_map, tracker, data = _first_observation(path)
-        present = tracker.unit_tracker.present
-        static = static_placement(game_map.placement, present.neutral)
+        game_map, tracker, data, observation = _first_observation(path)
+        state = _State(observation, tracker, game_map)
         orders = OrderBook(data, build_reach=2.5)
-        return game_map, tracker, PlacementGrids(static, units=present, game_data=data, orders=orders)
+        units = tracker.unit_tracker.present
+        return (
+            game_map,
+            tracker,
+            PlacementGrids._at_start(game_map.placement, units=units, state=state, game_data=data, orders=orders),
+        )
 
     def test_every_one_of_the_maps_units_but_an_acceleration_zone_has_a_measured_footprint(self, path: Path) -> None:
         _, tracker, _ = self._grids(path)
         unmeasured = {unit.type_id for unit in tracker.unit_tracker.present.neutral if unit.type_data.footprint is None}
         assert unmeasured <= {UnitTypeId.ACCELERATION_ZONE_SMALL, UnitTypeId.ACCELERATION_ZONE_LARGE}
 
-    def test_the_dynamic_grid_lies_within_the_static_one(self, path: Path) -> None:
+    def test_free_ground_lies_within_the_static_and_the_dynamic_grids(self, path: Path) -> None:
         _, _, grids = self._grids(path)
-        assert not (grids.dynamic & ~grids.static).any()
+        assert not (grids.free & ~(grids.static & grids.dynamic)).any()
 
     def test_the_geysers_and_collapsible_towers_are_closed_from_the_start(self, path: Path) -> None:
         _, tracker, grids = self._grids(path)
@@ -365,8 +428,7 @@ def _depot_site(api: Api) -> Point:
     """Where a supply depot fits on the grids, nearest the point 10 from this player's start toward the middle."""
     depot = api.data.units[UnitTypeId.SUPPLY_DEPOT].footprint
     assert depot is not None
-    placement = api.placement
-    fitting = depot.centers_fitting(placement.dynamic & ~placement.reserved & ~api.creep)
+    fitting = api.placement.free_for(UnitTypeId.SUPPLY_DEPOT).centers_fitting(depot)
     toward = api.map.start_location.towards(api.map.playable_area.center, 10.0)
     return depot.center_in(fitting.distance_from(toward).where(fitting, math.inf).argmin())
 

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy
 import scipy.ndimage
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy.sparse import coo_array
 from scipy.sparse.csgraph import dijkstra
 
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
+    from sc2nachos.geometry._footprint import Footprint
     from sc2nachos.geometry._point import PointLike
 
 _ORIGIN = Tile(0, 0)
@@ -210,10 +212,42 @@ class Grid[T: float]:
         self._refuse_readonly()
         self._data[:] = value
 
+    def fill_footprint(self, footprint: Footprint, *, at: PointLike, value: T) -> None:
+        """Sets every tile `footprint` covers, centered at `at`, to `value`, skipping those beyond the grid."""
+        self._refuse_readonly()
+        grid_slices, mask_slices = self._footprint_slices(footprint, at)
+        self._data[grid_slices][footprint.mask[mask_slices]] = value
+
+    def fits(self: Grid[bool], footprint: Footprint, *, at: PointLike) -> bool:
+        """Whether every tile `footprint` covers, centered at `at`, is true. A tile beyond the grid reads `outside`,
+        and raises `IndexError` if that is `None`."""
+        grid_slices, mask_slices = self._footprint_slices(footprint, at)
+        covered_on_grid = footprint.mask[mask_slices]
+        if numpy.count_nonzero(covered_on_grid) < numpy.count_nonzero(footprint.mask):
+            if self._outside is None:
+                raise IndexError(f"{footprint!r} centered at {at} reaches past {self.bounds!r}")
+            if not self._outside:
+                return False
+        return bool((self._data[grid_slices].astype(bool, copy=False) | ~covered_on_grid).all())
+
     def _refuse_readonly(self) -> None:
         """Raises unless this grid can be written to."""
         if self._readonly:
             raise TypeError(f"{self!r} is read-only, because it is shared; copy() it to change it")
+
+    def _footprint_slices(
+        self, footprint: Footprint, center: PointLike
+    ) -> tuple[tuple[slice, slice], tuple[slice, slice]]:
+        """Where `footprint`, centered at `center`, lies on the grid: the slices of the values it spans, and the
+        matching slices of its mask. Both are empty where it lies wholly beyond the grid."""
+        box = footprint.bounding_box(center)
+        grid_xs, grid_ys = self._slices(box)
+        box_x, box_y = int(box.x) - self._origin[0], int(box.y) - self._origin[1]
+        mask_slices = (
+            slice(grid_xs.start - box_x, grid_xs.stop - box_x),
+            slice(grid_ys.start - box_y, grid_ys.stop - box_y),
+        )
+        return (grid_xs, grid_ys), mask_slices
 
     def _slices(self, rectangle: Rectangle) -> tuple[slice, slice]:
         """The array slices covering the tiles of `rectangle`, clipped to the grid."""
@@ -248,6 +282,27 @@ class Grid[T: float]:
     def copy(self) -> Grid[T]:
         """An independent grid holding the same values."""
         return Grid(self._data.copy(), origin=self._origin, outside=self._outside)
+
+    def as_readonly(self) -> Grid[T]:
+        """The same grid, refusing writes. It shares the values, so a write to this grid shows in it."""
+        return Grid(self.values, origin=self._origin, outside=self._outside, readonly=True)
+
+    def centers_fitting(self: Grid[bool], footprint: Footprint) -> Grid[bool]:
+        """Where `footprint` fits, by the tile holding its center: true where every tile it covers, centered as
+        `footprint.center_in` says, is true. A tile beyond the grid reads `outside`, or false if that is `None`. The
+        result covers the same tiles as this grid and reads false beyond them."""
+        values = self._data.astype(bool, copy=False)
+        mask = footprint.mask
+        if not mask.any():
+            return Grid(numpy.ones_like(values), origin=self._origin, outside=False)
+        before_x, before_y = footprint.width // 2, footprint.height // 2
+        padded = numpy.pad(
+            values,
+            ((before_x, footprint.width - 1 - before_x), (before_y, footprint.height - 1 - before_y)),
+            constant_values=bool(self._outside),
+        )
+        windows = sliding_window_view(padded, mask.shape)
+        return Grid((windows | ~mask).all(axis=(2, 3)), origin=self._origin, outside=False)
 
     def where(self, condition: Grid[bool], other: T | Grid[T]) -> Grid[T]:
         """This grid where `condition` holds, and `other` everywhere else."""

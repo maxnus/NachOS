@@ -1155,12 +1155,12 @@
   },
   "CollapsibleRockTowerDebris": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1173,12 +1173,12 @@
   },
   "CollapsibleRockTowerDebrisRampLeft": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1191,12 +1191,12 @@
   },
   "CollapsibleRockTowerDebrisRampLeftGreen": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1209,12 +1209,12 @@
   },
   "CollapsibleRockTowerDebrisRampRight": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1227,12 +1227,12 @@
   },
   "CollapsibleRockTowerDebrisRampRightGreen": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1245,12 +1245,12 @@
   },
   "CollapsibleRockTowerDiagonal": {
    "position": [
-    69.5,
-    64.5
+    178.5,
+    183.5
    ],
    "lower_left": [
-    67,
-    62
+    176,
+    181
    ],
    "rows": [
     "#####",
@@ -1263,12 +1263,12 @@
   },
   "CollapsibleRockTowerPushUnit": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    175,
-    180
+    66,
+    61
    ],
    "rows": [
     "..###..",
@@ -1283,12 +1283,12 @@
   },
   "CollapsibleRockTowerPushUnitRampLeft": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    175,
-    180
+    66,
+    61
    ],
    "rows": [
     "..###..",
@@ -1303,12 +1303,12 @@
   },
   "CollapsibleRockTowerPushUnitRampLeftGreen": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    175,
-    180
+    66,
+    61
    ],
    "rows": [
     "..###..",
@@ -1323,12 +1323,12 @@
   },
   "CollapsibleRockTowerPushUnitRampRight": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    175,
-    180
+    66,
+    61
    ],
    "rows": [
     "..###..",
@@ -1343,12 +1343,12 @@
   },
   "CollapsibleRockTowerPushUnitRampRightGreen": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    175,
-    180
+    66,
+    61
    ],
    "rows": [
     "..###..",
@@ -1363,12 +1363,12 @@
   },
   "CollapsibleRockTowerRampLeft": {
    "position": [
-    178.5,
-    183.5
+    69.5,
+    64.5
    ],
    "lower_left": [
-    176,
-    181
+    67,
+    62
    ],
    "rows": [
     "#####",
@@ -1399,12 +1399,12 @@
   },
   "CollapsibleRockTowerRampRight": {
    "position": [
-    103.5,
-    140.5
+    90.5,
+    138.5
    ],
    "lower_left": [
-    101,
-    138
+    88,
+    136
    ],
    "rows": [
     "#####",
@@ -1435,12 +1435,12 @@
   },
   "CollapsibleTerranTower": {
    "position": [
-    68.5,
-    129.5
+    66.5,
+    125.5
    ],
    "lower_left": [
-    66,
-    127
+    64,
+    123
    ],
    "rows": [
     "#####",
@@ -1452,102 +1452,6 @@
    "touches_edge": false
   },
   "CollapsibleTerranTowerDebris": {
-   "position": [
-    113.5,
-    163.5
-   ],
-   "lower_left": [
-    111,
-    161
-   ],
-   "rows": [
-    "#####",
-    "#####",
-    "#####",
-    "#####",
-    "#####"
-   ],
-   "touches_edge": false
-  },
-  "CollapsibleTerranTowerDiagonal": {
-   "position": [
-    113.5,
-    163.5
-   ],
-   "lower_left": [
-    111,
-    161
-   ],
-   "rows": [
-    "#####",
-    "#####",
-    "#####",
-    "#####",
-    "#####"
-   ],
-   "touches_edge": false
-  },
-  "CollapsibleTerranTowerPushUnit": {
-   "position": [
-    134.5,
-    84.5
-   ],
-   "lower_left": [
-    131,
-    81
-   ],
-   "rows": [
-    "..###..",
-    ".#####.",
-    "#######",
-    "#######",
-    "#######",
-    ".#####.",
-    "..###.."
-   ],
-   "touches_edge": false
-  },
-  "CollapsibleTerranTowerPushUnitRampLeft": {
-   "position": [
-    134.5,
-    84.5
-   ],
-   "lower_left": [
-    131,
-    81
-   ],
-   "rows": [
-    "..###..",
-    ".#####.",
-    "#######",
-    "#######",
-    "#######",
-    ".#####.",
-    "..###.."
-   ],
-   "touches_edge": false
-  },
-  "CollapsibleTerranTowerPushUnitRampRight": {
-   "position": [
-    134.5,
-    84.5
-   ],
-   "lower_left": [
-    131,
-    81
-   ],
-   "rows": [
-    "..###..",
-    ".#####.",
-    "#######",
-    "#######",
-    "#######",
-    ".#####.",
-    "..###.."
-   ],
-   "touches_edge": false
-  },
-  "CollapsibleTerranTowerRampLeft": {
    "position": [
     134.5,
     84.5
@@ -1565,14 +1469,110 @@
    ],
    "touches_edge": false
   },
-  "CollapsibleTerranTowerRampRight": {
+  "CollapsibleTerranTowerDiagonal": {
    "position": [
-    110.5,
-    123.5
+    134.5,
+    84.5
    ],
    "lower_left": [
-    108,
-    121
+    132,
+    82
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnit": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnitRampLeft": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnitRampRight": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerRampLeft": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    111,
+    161
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerRampRight": {
+   "position": [
+    137.5,
+    124.5
+   ],
+   "lower_left": [
+    135,
+    122
    ],
    "rows": [
     "#####",
@@ -1585,12 +1585,12 @@
   },
   "DestructibleCityDebris2x4Horizontal": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    136,
-    124
+    107,
+    125
    ],
    "rows": [
     "####",
@@ -1600,12 +1600,12 @@
   },
   "DestructibleCityDebris2x4Vertical": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    137,
-    123
+    108,
+    124
    ],
    "rows": [
     "##",
@@ -1617,12 +1617,12 @@
   },
   "DestructibleCityDebris2x6Horizontal": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    135,
-    124
+    106,
+    125
    ],
    "rows": [
     "######",
@@ -1632,12 +1632,12 @@
   },
   "DestructibleCityDebris2x6Vertical": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    137,
-    122
+    108,
+    123
    ],
    "rows": [
     "##",
@@ -1651,12 +1651,12 @@
   },
   "DestructibleCityDebris4x4": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    136,
-    123
+    107,
+    124
    ],
    "rows": [
     ".##.",
@@ -1668,12 +1668,12 @@
   },
   "DestructibleCityDebris6x6": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    135,
-    122
+    106,
+    123
    ],
    "rows": [
     "..##..",
@@ -1733,12 +1733,12 @@
   },
   "DestructibleDebris4x4": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    136,
-    123
+    107,
+    124
    ],
    "rows": [
     ".##.",
@@ -1750,12 +1750,12 @@
   },
   "DestructibleDebris6x6": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    135,
-    122
+    106,
+    123
    ],
    "rows": [
     "..##..",
@@ -1815,12 +1815,12 @@
   },
   "DestructibleExpeditionGate6x6": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    135,
-    122
+    106,
+    123
    ],
    "rows": [
     "..##..",
@@ -1834,12 +1834,12 @@
   },
   "DestructibleIce2x4Horizontal": {
    "position": [
-    138.0,
-    125.0
+    109.0,
+    126.0
    ],
    "lower_left": [
-    136,
-    124
+    107,
+    125
    ],
    "rows": [
     "####",
@@ -2568,12 +2568,12 @@
   },
   "MineralFieldOpaque900": {
    "position": [
-    132.0,
-    178.5
+    179.0,
+    183.5
    ],
    "lower_left": [
-    131,
-    178
+    178,
+    183
    ],
    "rows": [
     "##"
@@ -2745,12 +2745,12 @@
   },
   "SpacePlatformGeyser": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": [
-    177,
-    182
+    113,
+    64
    ],
    "rows": [
     "###",
@@ -2761,12 +2761,12 @@
   },
   "UnbuildableBricksDestructible": {
    "position": [
-    179.0,
-    184.0
+    115.0,
+    66.0
    ],
    "lower_left": [
-    178,
-    183
+    114,
+    65
    ],
    "rows": [
     "##",
@@ -2776,12 +2776,12 @@
   },
   "UnbuildablePlatesDestructible": {
    "position": [
-    179.0,
-    184.0
+    115.0,
+    66.0
    ],
    "lower_left": [
-    178,
-    183
+    114,
+    65
    ],
    "rows": [
     "##",
@@ -2791,12 +2791,12 @@
   },
   "UnbuildableRocksDestructible": {
    "position": [
-    179.0,
-    184.0
+    115.0,
+    66.0
    ],
    "lower_left": [
-    178,
-    183
+    114,
+    65
    ],
    "rows": [
     "##",
@@ -2806,12 +2806,12 @@
   },
   "VespeneGeyser": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": [
-    177,
-    182
+    113,
+    64
    ],
    "rows": [
     "###",
@@ -2822,8 +2822,8 @@
   },
   "XelNagaHealingShrine": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2831,12 +2831,12 @@
   },
   "XelNagaTower": {
    "position": [
-    179.0,
-    184.0
+    115.0,
+    66.0
    ],
    "lower_left": [
-    178,
-    183
+    114,
+    65
    ],
    "rows": [
     "##",
@@ -2844,14 +2844,28 @@
    ],
    "touches_edge": false
   },
-  "CreepTumorQueen": {
+  "CreepTumor": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": [
-    178,
-    183
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "CreepTumorQueen": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
    ],
    "rows": [
     "#"
@@ -2862,8 +2876,8 @@
  "moving": {
   "BarracksFlying": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2871,8 +2885,8 @@
   },
   "CommandCenterFlying": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2880,8 +2894,8 @@
   },
   "FactoryFlying": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2889,8 +2903,8 @@
   },
   "OrbitalCommandFlying": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2898,8 +2912,8 @@
   },
   "SpineCrawlerUprooted": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2907,8 +2921,8 @@
   },
   "SporeCrawlerUprooted": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2916,8 +2930,8 @@
   },
   "StarportFlying": {
    "position": [
-    178.5,
-    183.5
+    114.5,
+    65.5
    ],
    "lower_left": null,
    "rows": [],
@@ -2933,7 +2947,180 @@
   "AccelerationZoneFlyingLarge",
   "InhibitorZoneFlyingSmall",
   "InhibitorZoneFlyingMedium",
-  "InhibitorZoneFlyingLarge",
-  "CreepTumor"
- ]
+  "InhibitorZoneFlyingLarge"
+ ],
+ "creep": {
+  "Armory": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "BanelingNest": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Barracks": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Bunker": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "CommandCenter": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "CyberneticsCore": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "DarkShrine": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "EngineeringBay": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "EvolutionChamber": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Factory": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "FleetBeacon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Forge": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "FusionCore": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Gateway": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "GhostAcademy": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Hatchery": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "HydraliskDen": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "InfestationPit": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "LurkerDenMP": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "MissileTurret": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Nexus": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "NydusCanal": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "NydusNetwork": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "OracleStasisTrap": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "PhotonCannon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Pylon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "RoachWarren": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "RoboticsBay": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "RoboticsFacility": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SensorTower": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "ShieldBattery": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SpawningPool": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "SpineCrawler": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Spire": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "SporeCrawler": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Stargate": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Starport": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SupplyDepot": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "TemplarArchive": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "TwilightCouncil": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "UltraliskCavern": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "CreepTumor": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "CreepTumorQueen": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  }
+ }
 }

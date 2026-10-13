@@ -11,7 +11,7 @@ from s2clientprotocol import data_pb2
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._footprints import FOOTPRINTS
+from sc2nachos.gamedata._footprints import FOOTPRINTS, ON_CREEP
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -20,6 +20,7 @@ from sc2nachos.match import Race
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from sc2nachos.gamedata._on_creep import OnCreep
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
@@ -146,7 +147,10 @@ class UnitTypeData:
     footprint: Footprint | None
     """The tiles one covers where it stands, as measured in game, for every structure type that stands and every type
     of the map's own. `None` for any other type, such as a unit, an egg or a force field, and for the few the game would
-    not create to be measured: the acceleration zones, the flying inhibitor zones and a plain creep tumor."""
+    not create to be measured: the acceleration zones and the flying inhibitor zones."""
+    on_creep: OnCreep | None
+    """Whether a structure of this type may stand on creep, as the game answered its build on creep and off it, for
+    every type a worker or a queen places at a point; `None` for any other type."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
     a level its units report, such as a shields level, adds nothing."""
@@ -205,5 +209,6 @@ class UnitTypeData:
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
+            on_creep=ON_CREEP.get(unit_type),
             upgrades=tech_tree.unit_type_upgrades.get(unit_type, MappingProxyType({})),
         )
