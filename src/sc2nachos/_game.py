@@ -53,14 +53,15 @@ from sc2nachos.events import (
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
-from sc2nachos.geometry import Area
+from sc2nachos.geometry import Area, Grid
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
+from sc2nachos.state._placement_grids import PlacementGrids, static_placement
 from sc2nachos.state._state import _State
-from sc2nachos.units import Unit, VitalType
+from sc2nachos.units import Unit, UnitType, VitalType
 from sc2nachos.units._tracking import _Tracker
 
 # Alerts by their protocol value.
@@ -74,6 +75,7 @@ class _Game:
     client: Final[Client]
     game_map: Final[GameMap]
     expansions: Final[tuple[Expansion, ...]]
+    static_placement: Final[Grid[bool]]
     game_data: Final[GameData]
     enemy: Final[Enemy]
     enemy_upgrade_inference: Final[UpgradeInference]
@@ -81,6 +83,7 @@ class _Game:
     orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
     state: _State
+    placement: PlacementGrids
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -97,17 +100,22 @@ class _Game:
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
+        neutral_units = tracker.unit_tracker.present.neutral
+        static = static_placement(game_map.placement, neutral_units.of_type(UnitType.AnyVespeneGeyser))
+        orders = OrderBook(game_data, build_reach=build_reach)
         game = cls(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, tracker.unit_tracker.present.neutral),
+            expansions=Expansion._find_all(game_map, neutral_units),
+            static_placement=static,
             game_data=game_data,
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
-            orders=OrderBook(game_data, build_reach=build_reach),
+            orders=orders,
             observation=observation,
             state=_State(observation, tracker, game_map),
+            placement=PlacementGrids(static, units=tracker.unit_tracker.present, game_data=game_data, orders=orders),
             step=step,
         )
         game._read(observation, step)
@@ -129,6 +137,9 @@ class _Game:
         self.observation = observation
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
+        self.placement = PlacementGrids(
+            self.static_placement, units=self.tracker.unit_tracker.present, game_data=self.game_data, orders=self.orders
+        )
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)

@@ -409,6 +409,7 @@ class TestThroughTheApi:
         "vision",
         "explored",
         "creep",
+        "placement",
         "effects",
     )
 

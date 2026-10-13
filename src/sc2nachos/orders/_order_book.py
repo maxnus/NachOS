@@ -611,6 +611,16 @@ class OrderBook:
             return last[0]
         return None
 
+    def _not_shown_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
+        """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
+        replaced its orders, and those released from what was held for it."""
+        orders = []
+        if (sent := self._sent_and_not_shown(unit)) is not None:
+            orders.append(sent)
+        if (queue := self._held.get(unit.id)) is not None:
+            orders += self._in_flight(queue)
+        return orders
+
     def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
         """Whether `unit`'s first order runs `ability` at `target`. A unit the last observation left out, in a
         transport for one, is at nothing."""
