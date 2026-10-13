@@ -11,11 +11,16 @@ reads.
 it asks the same about every tile of the unit's footprint, as `data/footprints.json` has it, before and after killing
 the unit and whatever it leaves behind. It prints, for each map and type, how many of those tiles the start's
 placement grid leaves open or blocks, by whether the game took a structure there with the unit standing and once it was
-gone::
+gone.
+
+`grids` plays one game on each map of the corpus under `show_map`, with every unit of both players' that is no
+structure killed, and asks the same about every tile of the playable area. It prints every tile where the game and
+`api.placement.dynamic` disagree::
 
     uv run python tools/sweep_placement.py footprints
     uv run python tools/generate_footprints.py
     uv run python tools/sweep_placement.py ground-under-rocks --out ground-under-rocks.json
+    uv run python tools/sweep_placement.py grids --out placement-grids.json
 """
 
 import argparse
@@ -36,13 +41,19 @@ from numpy.lib.stride_tricks import sliding_window_view
 from record_corpus import GAMES
 from s2clientprotocol import data_pb2, raw_pb2
 
+from sc2nachos.enemy import Enemy
+from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.state import PlacementGrids
+from sc2nachos.state._placement_grids import static_placement
+from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType
 
 REPO = Path(__file__).parents[1]
@@ -58,6 +69,7 @@ _CLEARING_TRIES = 8
 _SETTLING_STEPS = 32
 _DEBRIS_STEPS = 96
 _ADD_ON_BUILD_STEPS = 480
+_TILES_ASKED_AT_ONCE = 4096
 _CREEP_SPREADING_STEPS = 240
 _OFF_CREEP_PROBE = AbilityId.SCV_BUILD_SENSOR_TOWER
 _ON_CREEP_PROBE = RawAbilityId.Build_CreepTumor_Queen
@@ -495,19 +507,76 @@ def check_ground_under_rocks(installation: Installation) -> list[GroundUnderRock
     return all_ground
 
 
+@dataclass(slots=True)
+class GridCheck:
+    """Where the game and `api.placement.dynamic` disagree on one map."""
+
+    map: str
+    asked: int = 0
+    """How many tiles the game was asked about."""
+    disagreed: list[tuple[int, int, bool]] = field(default_factory=list)
+    """Each tile the two disagree on, by its corner, with whether the game takes a structure there."""
+
+
+def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
+    """Ask the game about every tile of `map_name`'s playable area, with only structures left standing, and compare
+    its answers with the dynamic grid."""
+    with playing(Race.TERRAN, installation, map_name=map_name) as game:
+        game.cheat(Cheat.SHOW_MAP)
+        game.client.step(4)
+        data = GameData(game.client.game_data())
+        structure = Attribute.STRUCTURE
+        game.remove(
+            unit.tag
+            for unit in game.units()
+            if unit.owner != NEUTRAL_REPORTED
+            and (unit_type := _curated(unit.unit_type)) is not None
+            and structure not in data.units[unit_type].attributes
+        )
+        observation = game.client.observation()
+        game_map = GameMap._of_game(game.client.game_info(), observation)
+        tracker = _Tracker(data, Enemy())
+        raw, _ = without_uncurated_units(observation.observation.raw_data)
+        tracker.update(raw, observation.observation.game_loop)
+        present = tracker.unit_tracker.present
+        static = static_placement(game_map.placement, present.neutral.of_type(UnitType.AnyVespeneGeyser))
+        orders = OrderBook(data, build_reach=2.5)
+        dynamic = PlacementGrids(static, units=present, game_data=data, orders=orders).dynamic
+        tiles = sorted(game_map.playable_area.tiles())
+        check = GridCheck(map_name, asked=len(tiles))
+        for start in range(0, len(tiles), _TILES_ASKED_AT_ONCE):
+            for tile, taken in _taken(game, tiles[start : start + _TILES_ASKED_AT_ONCE]).items():
+                if taken != dynamic[tile]:
+                    check.disagreed.append((tile.x, tile.y, taken))
+    return check
+
+
+def check_grids(installation: Installation) -> list[GridCheck]:
+    """Compare the game with the dynamic grid on every map in the corpus."""
+    all_checks = []
+    for map_name in sorted({game.map for game in GAMES}):
+        check = _check_grids_on(installation, map_name)
+        all_checks.append(check)
+        logger.info("{}: {} tiles asked, {} disagreed {}", map_name, check.asked, len(check.disagreed), check.disagreed)
+    return all_checks
+
+
 def main(argv: Sequence[str]) -> None:
     """Run the sweep named, and write its findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("sweep", choices=("footprints", "ground-under-rocks"))
+    parser.add_argument("sweep", choices=("footprints", "ground-under-rocks", "grids"))
     parser.add_argument("--out", type=Path, help=f"where to write the findings; the footprints go to {FOOTPRINTS}")
     arguments = parser.parse_args(argv)
     installation = Installation.find()
     if arguments.sweep == "footprints":
         findings: object = asdict(measure_footprints(installation))
         out = arguments.out or FOOTPRINTS
-    else:
+    elif arguments.sweep == "ground-under-rocks":
         findings = [asdict(ground) for ground in check_ground_under_rocks(installation)]
         out = arguments.out or Path("ground-under-rocks.json")
+    else:
+        findings = [asdict(check) for check in check_grids(installation)]
+        out = arguments.out or Path("placement-grids.json")
     out.write_text(json.dumps(findings, indent=1) + "\n", encoding="utf-8")
     logger.info("Wrote the findings to {}", out)
 

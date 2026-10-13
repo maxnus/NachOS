@@ -9,12 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #121. `uv run pytest` passes 1723 tests on the expansions' branch; `uv run pytest -m
-  integration` passes 27 against a real game (run 2026-10-09).
+- nachOS `main` has every PR to #122. `uv run pytest` passes 1838 tests on the placement grids' branch; `uv run pytest
+  -m integration` passes 28 against a real game (run 2026-10-13).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
   action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
-  and the expansions the demo bot needs are on branch `claude/expansions`.
+  so are the expansions the demo bot needs (#122), and the placement grids are on branch `claude/placement-grids`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -457,7 +457,7 @@ when each starts.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
    against `Computer` using only NachOS, and doubles as the library's example for other developers.
 
-### Before 8: the expansions
+### Before 8: the expansions, done (#122)
 
 The demo bot needs to know where to expand, so the expansions come first: branch `claude/expansions`, chosen before
 slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
@@ -489,16 +489,30 @@ slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
 - **No `NeutralUnit` class** (the owner, review of #122): neutral units have nothing the game reports for them alone
   but `mineral_contents`, which `Unit` has.
 
-### Next, planned with the owner: the placement grids
+### Before 8: the placement grids
 
-The demo bot will place depots and pylons, so it needs to know where a structure can stand now, not at the start.
-The owner's idea (review of #122): two grids, one static, blocking what never leaves (geysers, towers, rocks until
-destroyed), and one up to date with every known unit, in sight or in the fog. To plan as a PR of its own: what is kept
-per turn and what it costs, structures in the fog, and whether pathing gets the same pair. The start's placement grid
-blocks no resource or townhall, in sight or not; its pathing grid blocks this player's townhall, fields and geysers,
-the ones in sight (corpus). That PR also measures each neutral structure's footprint, which the API never reports,
-for a table that replaces the square its radius spans: the expansions block towers and debris by that square for now
-(the owner, review of #122).
+The demo bot will place depots and pylons, so it needs to know where a structure can stand now, not at the start:
+branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question at a time:
+
+- **`api.placement` is one object with three grids.** `static` is what cannot change during a game: the ground the
+  map lets a structure stand on, less its geysers. `dynamic` is `static` less every own structure, every other
+  structure in sight or remembered in the fog, and the mineral fields. `reserved` is only the ground under this
+  player's builds ordered and not standing yet, held, issued this turn or on their way, since "what is blocked" and
+  "what is reserved" answer two questions (the owner, against one grid holding both). `api.map.placement` stays the
+  game's grid from the start.
+- **Structures only**: a unit that moves blocks nothing, nor one in the air.
+- **Every structure's footprint is measured**, the players' with their morphed forms and every curated neutral type,
+  by `tools/sweep_placement.py`, into a table read as `api.data.units[t].footprint`. A neutral type the table lacks
+  falls back to the square its radius spans; only the acceleration zones and the flying inhibitor zones are left for
+  it, which the game would not create to be measured.
+- **`Footprint` is a value type in `sc2nachos.geometry`**, with `fits`, `centers_fitting`, `center_in` and `fill`.
+  The expansions block their other neutral units by it, which leaves no disagreement with the game around them.
+- **No up-to-date pathing grid yet**: it waits until something needs it.
+
+Measured on the way: the start's placement grid reads the ground beneath every unit and blocks none, rocks
+included, so `static` opens nothing; a collapsible tower outlives a debug kill. On UltraloveAIE_v2 each unbuildable
+plate keeps a structure off 7 tiles more than its 2x2, which `dynamic` leaves open: the one disagreement with the
+game in 127,020 tiles over the corpus, left as it is until the owner says otherwise.
 
 ## 4. After each nachOS pull request merges
 

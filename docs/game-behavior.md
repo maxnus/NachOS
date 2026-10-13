@@ -774,6 +774,11 @@ Each entry ends with how it was seen:
   measured footprint. Blocking the square a unit's radius spans instead, it refused 26 the game takes, beside diagonal
   collapsible towers and some 6x6 rocks and debris, though none would have given an expansion a better spot (tool
   `sweep_townhall_placement`, build 75689).
+- `api.placement.dynamic` was checked against the game on the 7 maps of the corpus, with every unit but a structure
+  killed: asked whether a one-tile structure could stand on each tile of the playable area, 127,020 tiles in all, the
+  game gives the grid's answer at all but 14, on UltraloveAIE_v2. There each of the two unbuildable plates keeps a
+  structure off 7 tiles around the 2x2 it covers on the other maps and when created by a debug command, and those
+  tiles took a structure once the plates were killed (tool `sweep_placement`, build 75689).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
