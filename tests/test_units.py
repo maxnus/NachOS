@@ -39,6 +39,9 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -386,8 +389,13 @@ class TestFootprint:
     def test_a_unit_covers_its_types_footprint(self) -> None:
         assert _one(_depot(1)).footprint == Footprint.square(2)
 
-    def test_a_unit_whose_type_covers_nothing_has_no_footprint(self) -> None:
+    def test_a_unit_that_is_no_structure_has_no_footprint(self) -> None:
         assert _one(make_unit(1, UnitTypeId.MARINE)).footprint is None
+
+    def test_a_force_field_covers_nothing_though_no_player_owns_it(self) -> None:
+        """A sentry's force field is a neutral unit (in game), of a protoss type the sweep did not measure."""
+        force_field = make_unit(1, UnitTypeId.FORCE_FIELD, alliance=Alliance.NEUTRAL, radius=1.0)
+        assert _one(force_field).footprint is None
 
     def test_one_of_the_maps_units_with_no_footprint_measured_covers_the_square_its_radius_spans(self) -> None:
         zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6)

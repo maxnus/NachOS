@@ -61,7 +61,7 @@ from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
 from sc2nachos.state._placement_grids import PlacementGrids, static_placement
 from sc2nachos.state._state import _State
-from sc2nachos.units import Unit, UnitType, VitalType
+from sc2nachos.units import Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 
 # Alerts by their protocol value.
@@ -101,7 +101,7 @@ class _Game:
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         neutral_units = tracker.unit_tracker.present.neutral
-        static = static_placement(game_map.placement, neutral_units.of_type(UnitType.AnyVespeneGeyser))
+        static = static_placement(game_map.placement, neutral_units)
         orders = OrderBook(game_data, build_reach=build_reach)
         game = cls(
             client=client,

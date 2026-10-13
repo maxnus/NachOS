@@ -10,6 +10,7 @@ from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Attribute
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
+from sc2nachos.match import Race
 from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
@@ -543,11 +544,12 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def footprint(self) -> Footprint | None:
-        """The tiles it covers where it stands: its type's footprint, or for one of the map's units whose type has
-        none, the square its radius spans. `None` for a unit that covers none."""
+        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, with
+        none measured, the square its radius spans. `None` for a unit that covers none, a force field among them."""
         row = self._tracker.game_data.units.get(self.type_id)
-        footprint = None if row is None else row.footprint
-        if footprint is None and self.alliance is Alliance.NEUTRAL:
+        if row is None:
+            return None
+        if row.footprint is None and row.race is Race.NONE:
             side = round(2 * self.radius)
             return Footprint.square(side) if side else None
-        return footprint
+        return row.footprint

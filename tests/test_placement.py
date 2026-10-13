@@ -54,6 +54,9 @@ _TABLES = make_tables(
     _row(UnitTypeId.MINERAL_FIELD),
     _row(UnitTypeId.VESPENE_GEYSER),
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
+    _row(UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
+    _row(UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
     abilities=[
         data_pb2.AbilityData(ability_id=AbilityId.MOVE, target=data_pb2.AbilityData.Target.PointOrUnit),
         data_pb2.AbilityData(ability_id=AbilityId.LAND, target=data_pb2.AbilityData.Target.Point),
@@ -86,7 +89,7 @@ class _Game:
         self.book._observe(step, [*changes.units_died, *changes.units_found_dead], self.tracker.unit_tracker.present)
         present = self.tracker.unit_tracker.present
         if self.static is None:
-            self.static = static_placement(self.map.placement, present.neutral.of_type(UnitType.AnyVespeneGeyser))
+            self.static = static_placement(self.map.placement, present.neutral)
         return PlacementGrids(self.static, units=present, game_data=_TABLES, orders=self.book)
 
     def own(self, tag: int) -> OwnUnit[Any]:
@@ -133,6 +136,20 @@ class TestTheStaticGrid:
         assert grids.static[Point((5.0, 3.5))]
         assert grids.static[Point((12.0, 12.0))]
 
+    def test_a_collapsible_tower_is_closed_from_the_start(self) -> None:
+        """Felled, a tower stays, still covering its 5x5 (tool `sweep_placement`)."""
+        tower = make_unit(1, UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK, at=(8.5, 8.5), alliance=_NEUTRAL, radius=2.94)
+        grids = _Game().observe(0, tower)
+        assert _picture(grids.static, x0=5, y0=5, x1=11, y1=11) == [
+            "#######",
+            "#.....#",
+            "#.....#",
+            "#.....#",
+            "#.....#",
+            "#.....#",
+            "#######",
+        ]
+
     def test_it_stays_as_the_game_began(self) -> None:
         game = _Game()
         first = game.observe(0, make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL))
@@ -171,11 +188,12 @@ class TestTheDynamicGrid:
             "..##############",
         ]
 
-    def test_a_unit_that_moves_and_a_structure_in_the_air_block_nothing(self) -> None:
+    def test_a_unit_that_moves_a_structure_in_the_air_and_a_force_field_block_nothing(self) -> None:
         grids = _Game().observe(
             0,
             make_unit(1, UnitTypeId.MARINE, at=(5.5, 5.5)),
             make_unit(2, UnitTypeId.BARRACKS_FLYING, at=(10.5, 10.5), is_flying=True),
+            make_unit(3, UnitTypeId.FORCE_FIELD, at=(12.5, 5.5), alliance=_NEUTRAL, radius=1.0),
         )
         assert grids.dynamic.equals(grids.static)
 
@@ -311,7 +329,7 @@ class TestARecordedGamesStart:
     def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         game_map, tracker, data = _first_observation(path)
         present = tracker.unit_tracker.present
-        static = static_placement(game_map.placement, present.neutral.of_type(UnitType.AnyVespeneGeyser))
+        static = static_placement(game_map.placement, present.neutral)
         orders = OrderBook(data, build_reach=2.5)
         return game_map, tracker, PlacementGrids(static, units=present, game_data=data, orders=orders)
 
@@ -324,10 +342,11 @@ class TestARecordedGamesStart:
         _, _, grids = self._grids(path)
         assert not (grids.dynamic & ~grids.static).any()
 
-    def test_the_geysers_are_closed_from_the_start(self, path: Path) -> None:
+    def test_the_geysers_and_collapsible_towers_are_closed_from_the_start(self, path: Path) -> None:
         _, tracker, grids = self._grids(path)
-        for geyser in tracker.unit_tracker.present.neutral.of_type(UnitType.AnyVespeneGeyser):
-            assert not grids.static[geyser.position]
+        neutral_units = tracker.unit_tracker.present.neutral
+        for unit in neutral_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
+            assert not grids.static[unit.position]
 
     def test_this_players_townhall_and_mineral_fields_close_the_ground_under_them(self, path: Path) -> None:
         game_map, tracker, grids = self._grids(path)

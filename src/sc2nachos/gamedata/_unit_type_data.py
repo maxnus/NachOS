@@ -144,9 +144,9 @@ class UnitTypeData:
     has_vespene: bool
     """Whether vespene can be mined from it."""
     footprint: Footprint | None
-    """The tiles one covers where it stands, as measured in game. `None` for a type that moves, and for the few the
-    game would not create to be measured: the acceleration zones, the flying inhibitor zones and a plain creep
-    tumor."""
+    """The tiles one covers where it stands, as measured in game, for every structure type that stands and every type
+    of the map's own. `None` for any other type, such as a unit, an egg or a force field, and for the few the game would
+    not create to be measured: the acceleration zones, the flying inhibitor zones and a plain creep tumor."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
     a level its units report, such as a shields level, adds nothing."""

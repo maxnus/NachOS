@@ -49,7 +49,7 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._placement_grids import PlacementGrids, static_placement
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, Unit, Units, UnitType, Visibility
+from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
 
 
@@ -265,7 +265,7 @@ def played(
     if game is None:
         tracker.update(observation.observation.raw_data, step)
         neutral_units = tracker.unit_tracker.present.neutral
-        static = static_placement(game_map.placement, neutral_units.of_type(UnitType.AnyVespeneGeyser))
+        static = static_placement(game_map.placement, neutral_units)
         orders = OrderBook(tracker.game_data, build_reach=2.5)
         game = _Game(
             client=client,

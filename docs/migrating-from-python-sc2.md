@@ -455,11 +455,11 @@ it.
   whether a player starts there, `is_start_location`, and its pathing distance from this player's start,
   `pathing_distance_from_start`.
 - **Where a structure may stand is read, not asked.** python-sc2's `can_place` and `find_placement` ask the game each
-  time. `api.placement` reads it from what NachOS knows, into three grids: `static`, the map's buildable ground less
-  its geysers; `dynamic`, less every structure in sight or remembered in the fog and every mineral field; and
-  `reserved`, the ground under this player's builds not standing yet. Each type's `footprint`, measured in game, says
-  where it fits. Creep, power and units in the way are the bot's to add, and so is the ground around resources that
-  keeps a townhall off, which `api.expansions` already heeds.
+  time. `api.placement` reads it from what NachOS knows, into three grids: `static`, the map's buildable ground less its
+  geysers and collapsible towers; `dynamic`, less every structure in sight or remembered in the fog and every mineral
+  field; and `reserved`, the ground under this player's builds not standing yet. Each type's `footprint`, measured in
+  game, says where it fits. Creep, power and units in the way are the bot's to add, and so is the ground around
+  resources that keeps a townhall off, which `api.expansions` already heeds.
 - **No wall-in placements.** python-sc2's `Ramp` also says where to put supply depots and a barracks to wall off a
   ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 

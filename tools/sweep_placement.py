@@ -1,11 +1,11 @@
 """Measure the ground each structure covers, and what lies under the map's rocks.
 
-Needs StarCraft II installed. `footprints` plays one game on the sandbox's map under `show_map`, with this player's
-workers and the map's resources gone. On open ground it makes one unit at a time of every structure type and every
-neutral type, and asks the game at every tile center around it whether a one-tile structure could stand there: a
-sensor tower, which the game refuses on creep, and a queen's creep tumor, which it refuses off creep. The tiles both
-are refused are the unit's footprint. It writes them to `data/footprints.json`, which `tools/generate_footprints.py`
-reads.
+Needs StarCraft II installed. `footprints` plays on the sandbox's map under `show_map`, with this player's workers and
+the map's resources gone, in a new game whenever one ends in the tie a game with no resources comes to after a few
+minutes. On open ground it makes one unit at a time of every structure type and every neutral type, and asks the game
+at every tile center around it whether a one-tile structure could stand there: a sensor tower, which the game refuses
+on creep, and a queen's creep tumor, which it refuses off creep. The tiles both are refused are the unit's footprint.
+It writes them to `data/footprints.json`, which `tools/generate_footprints.py` reads.
 
 `ground-under-rocks` plays one game on each map of the corpus under `show_map`. For each neutral unit but a resource,
 it asks the same about every tile of the unit's footprint, as `data/footprints.json` has it, before and after killing
@@ -539,7 +539,7 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         present = tracker.unit_tracker.present
-        static = static_placement(game_map.placement, present.neutral.of_type(UnitType.AnyVespeneGeyser))
+        static = static_placement(game_map.placement, present.neutral)
         orders = OrderBook(data, build_reach=2.5)
         dynamic = PlacementGrids(static, units=present, game_data=data, orders=orders).dynamic
         tiles = sorted(game_map.playable_area.tiles())

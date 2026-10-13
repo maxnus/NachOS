@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1838 tests on the placement grids' branch; `uv run pytest
+- nachOS `main` has every PR to #122. `uv run pytest` passes 1840 tests on the placement grids' branch; `uv run pytest
   -m integration` passes 28 against a real game (run 2026-10-13).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
@@ -495,7 +495,8 @@ The demo bot will place depots and pylons, so it needs to know where a structure
 branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question at a time:
 
 - **`api.placement` is one object with three grids.** `static` is what cannot change during a game: the ground the
-  map lets a structure stand on, less its geysers. `dynamic` is `static` less every own structure, every other
+  map lets a structure stand on, less its geysers and its collapsible towers, which stay where they fall (the owner,
+  review of #123; `UnitType.CollapsibleTower`). `dynamic` is `static` less every own structure, every other
   structure in sight or remembered in the fog, and the mineral fields. `reserved` is only the ground under this
   player's builds ordered and not standing yet, held, issued this turn or on their way, since "what is blocked" and
   "what is reserved" answer two questions (the owner, against one grid holding both). `api.map.placement` stays the
@@ -504,15 +505,16 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
 - **Every structure's footprint is measured**, the players' with their morphed forms and every curated neutral type,
   by `tools/sweep_placement.py`, into a table read as `api.data.units[t].footprint`. A neutral type the table lacks
   falls back to the square its radius spans; only the acceleration zones and the flying inhibitor zones are left for
-  it, which the game would not create to be measured.
+  it, which the game would not create to be measured. A force field, a neutral unit of a protoss type, covers nothing
+  (the owner, review of #123).
 - **`Footprint` is a value type in `sc2nachos.geometry`**, with `fits`, `centers_fitting`, `center_in` and `fill`.
   The expansions block their other neutral units by it, which leaves no disagreement with the game around them.
 - **No up-to-date pathing grid yet**: it waits until something needs it.
 
-Measured on the way: the start's placement grid reads the ground beneath every unit and blocks none, rocks
-included, so `static` opens nothing; a collapsible tower outlives a debug kill. On UltraloveAIE_v2 each unbuildable
-plate keeps a structure off 7 tiles more than its 2x2, which `dynamic` leaves open: the one disagreement with the
-game in 127,020 tiles over the corpus, left as it is until the owner says otherwise.
+Measured on the way: the start's placement grid reads the ground beneath every unit and blocks none, rocks included, so
+`static` opens nothing; a collapsible tower, attacked or killed by a debug command, falls and stays. On UltraloveAIE_v2
+each unbuildable plate keeps a structure off 7 tiles more than its 2x2, which `dynamic` leaves open: the one
+disagreement with the game in 127,020 tiles over the corpus, left as it is until the owner says otherwise.
 
 ## 4. After each nachOS pull request merges
 

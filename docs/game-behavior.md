@@ -739,12 +739,13 @@ Each entry ends with how it was seen:
   bridges (#17, #22; corpus).
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
-- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers
-  (#17; corpus). The placement grid reads the ground beneath every unit, and blocks none: no resource, townhall, rock
-  or tower, in sight or not. On the 7 maps of the corpus each neutral unit but a resource was killed in turn, and of
-  the tiles it had covered, every one the start's grid leaves open took a structure once it was gone, and none the
-  grid blocks did, but one under a collapsible tower beside a rock. Rocks on a ramp, as on LeyLinesAIE_v3 and
-  PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689; corpus).
+- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers (#17;
+  corpus). The placement grid reads the ground beneath every unit, and blocks none: no resource, townhall, rock or
+  tower, in sight or not. On the 7 maps of the corpus each neutral unit but a resource was killed in turn, and of the
+  tiles under each that went (a collapsible tower stays; see below), every one the start's grid leaves open took a
+  structure once it was gone, and none the grid blocks did, but one under a collapsible tower beside a rock. Rocks on a
+  ramp, as on LeyLinesAIE_v3 and PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689;
+  corpus).
 - A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the
   game snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure
   morphs into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive
@@ -758,11 +759,16 @@ Each entry ends with how it was seen:
   square (tool `sweep_placement`, build 75689).
 - The footprints were measured one unit at a time on open ground, by asking whether a sensor tower, refused on creep,
   or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
-  refused are its own. The placement query takes a sensor tower with no engineering bay. Asked to create a barracks',
-  factory's or starport's add-on, the game creates a plain one, and an acceleration zone, a flying inhibitor zone and
-  a plain creep tumor it does not create at all (tool `sweep_placement`, build 75689).
-- A collapsible tower outlives a debug kill: it falls, its debris appears beside it, and the game goes on listing the
-  tower, which still covers its 5x5 (tool `sweep_placement`, build 75689).
+  refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone, a
+  flying inhibitor zone and a plain creep tumor the game does not create at all (tool `sweep_placement`, build 75689).
+- An add-on is its host's own type only while attached: created alone by a debug command, a barracks', factory's or
+  starport's tech lab or reactor comes out plain, and a barracks lifting off leaves its reactor plain. The sweep
+  measures each beside a host told to build it (tool `sweep_placement`; local game, build 75689).
+- A collapsible tower stands mostly on ground no structure takes: of the 825 tiles under the corpus's 33, the start's
+  grid blocks 712. Destroyed, by attack as by a debug kill, it falls: its health drops to 0, and its debris, units of
+  their own with 2000 health, lands about 5 tiles off where it falls. The game goes on listing the tower at 0 health,
+  and it still covers its 5x5: the other 113 tiles stayed refused, as did all 25 under one felled on open ground (tool
+  `sweep_placement`; thors attacking one on MagannathaAIE_v2, build 75689).
 - Each mineral field and geyser keeps townhalls off a zone around it: its footprint grown by 3 tiles on every side,
   with each corner cut, by one tile at a mineral field and by three at a geyser (the corner tile and the tile beside
   it on each side). The game refuses a townhall whose footprint covers any tile of a zone. All 15 kinds of field and 6
