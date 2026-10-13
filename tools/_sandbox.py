@@ -196,13 +196,15 @@ def playing(
     *,
     realtime: bool = False,
     interface: sc2api_pb2.InterfaceOptions | None = None,
+    map_name: str = MAP,
 ) -> Iterator[Sandbox]:
-    """A game on `MAP` as `race` against the easiest computer, which keeps the game open and leaves the player alone.
+    """A game on `map_name` as `race` against the easiest computer, which keeps the game open and leaves the player
+    alone.
 
     A `realtime` game is never stepped. An `interface` other than the raw one is joined with here rather than through
     the client.
     """
-    game_map = MapFile.find(MAP, installation=installation)
+    game_map = MapFile.find(map_name, installation=installation)
     with GameProcess.launch(installation, window=(1024, 768)) as game:
         transport = WebSocketTransport.connect(game.url)
         with closing(Client(transport)) as client:

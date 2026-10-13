@@ -72,6 +72,7 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
   accurate: a plain name a reader can predict beats a clever synonym.
+- **A constant, a function or a variable is named for what it holds or returns**, so its name needs no comment.
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 - **Type hints** on all parameters and return types.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
@@ -153,3 +154,4 @@ buildings.
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
 | Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |
+| Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py`, which starts the game |

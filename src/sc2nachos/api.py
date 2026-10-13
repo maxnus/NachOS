@@ -11,7 +11,7 @@ from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
 from sc2nachos.gamedata import GameData, Resources
-from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
@@ -85,6 +85,13 @@ class Api:
     def map(self) -> GameMap:
         """The map the game is played on."""
         return self._current_game().game_map
+
+    @property
+    def expansions(self) -> tuple[Expansion, ...]:
+        """Every place on the map to build a townhall, as the game began, by pathing distance from this player's start,
+        nearest first: its own start, then its natural. Those no path reaches come last, sorted by increasing
+        straight-line distance from this player's start."""
+        return self._current_game().expansions
 
     @property
     def data(self) -> GameData:

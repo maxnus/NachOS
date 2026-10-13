@@ -1208,7 +1208,8 @@ class TechSweep:
     def _geyser(self, *, rich: bool) -> int | bool:
         """The tag of the nearest free geyser to home, `rich` or not: the only unit anything is made on.
 
-        The map has no rich geyser, so one is created when wanted.
+        A geyser out of sight reads no vespene, and none of the map's rich geysers is in sight from home, so one is
+        created when wanted.
         """
         taken = {(round(u.pos.x), round(u.pos.y)) for u in self._mine()}
         geysers = [

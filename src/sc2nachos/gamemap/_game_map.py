@@ -99,7 +99,11 @@ class GameMap:
 
     @property
     def placement(self) -> Grid[bool]:
-        """Where a structure can be placed at the start of the game. Rocks block it; no resource or townhall does."""
+        """Where the game's placement grid lets a structure stand at the start of the game.
+
+        The game's grid blocks rocks, but not resources, townhalls, Xel'Naga towers, unbuildable plates and bricks, or
+        all of some 6x6 debris and gates, though no townhall can stand on those.
+        """
         return self._placement
 
     @property
