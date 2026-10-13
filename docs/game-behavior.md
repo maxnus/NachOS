@@ -739,10 +739,30 @@ Each entry ends with how it was seen:
   bridges (#17, #22; corpus).
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
-- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers;
-  the placement grid blocks rocks but no resource or townhall, in sight or not (#17; corpus). It leaves open the
-  ground under Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates,
-  though the game takes no townhall there (tool `sweep_townhall_placement`; corpus).
+- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers
+  (#17; corpus). The placement grid reads the ground beneath every unit, and blocks none: no resource, townhall, rock
+  or tower, in sight or not. On the 7 maps of the corpus each neutral unit but a resource was killed in turn, and of
+  the tiles it had covered, every one the start's grid leaves open took a structure once it was gone, and none the
+  grid blocks did, but one under a collapsible tower beside a rock. Rocks on a ramp, as on LeyLinesAIE_v3 and
+  PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689; corpus).
+- A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the
+  game snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure
+  morphs into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive
+  5x5, a warp gate 3x3, a greater spire 2x2. An add-on covers 2x2 beside its host. A queen's or a burrowed creep tumor
+  and an oracle's stasis ward cover one tile. Nothing that flies covers any, nor an uprooted crawler, a KD8 charge or
+  a Xel'Naga healing shrine (tool `sweep_placement`, build 75689).
+- A mineral field covers 2x1 and a geyser 3x3; a Xel'Naga tower and unbuildable plates and bricks 2x2; an inhibitor
+  zone one tile; a collapsible tower and its debris 5x5; and the unit that pushes units from under a falling tower a
+  7x7 square less three tiles at each corner. Rocks and debris cover the size their name gives, but a 4x4 one loses a
+  tile at each corner and a 6x6 one three, and a huge diagonal one covers a band five tiles wide across a 10x10
+  square (tool `sweep_placement`, build 75689).
+- The footprints were measured one unit at a time on open ground, by asking whether a sensor tower, refused on creep,
+  or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
+  refused are its own. The placement query takes a sensor tower with no engineering bay. Asked to create a barracks',
+  factory's or starport's add-on, the game creates a plain one, and an acceleration zone, a flying inhibitor zone and
+  a plain creep tumor it does not create at all (tool `sweep_placement`, build 75689).
+- A collapsible tower outlives a debug kill: it falls, its debris appears beside it, and the game goes on listing the
+  tower, which still covers its 5x5 (tool `sweep_placement`, build 75689).
 - Each mineral field and geyser keeps townhalls off a zone around it: its footprint grown by 3 tiles on every side,
   with each corner cut, by one tile at a mineral field and by three at a geyser (the corner tile and the tile beside
   it on each side). The game refuses a townhall whose footprint covers any tile of a zone. All 15 kinds of field and 6
@@ -796,5 +816,3 @@ Each entry ends with how it was seen:
 - **What an ability a busy structure refuses would do to what it is making** is still open: a lift, a morph and an
   add-on are answered `NotSupported`, so what they would do to a queue was never seen. Every ability a producer does
   take leaves what it is making alone (tool `sweep_orders`).
-- **Why the start's placement grid leaves open the ground under Xel'Naga towers and unbuildable plates and bricks**,
-  where no townhall can stand (tool `sweep_townhall_placement`).
