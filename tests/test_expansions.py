@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from s2clientprotocol import raw_pb2, sc2api_pb2
+from s2clientprotocol import data_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
@@ -20,6 +20,12 @@ from sc2nachos.units._tracking import _Tracker
 from support import make_game_info, make_observation, make_tables, make_unit
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
+
+# Rows for the map's units these tests put down, which bring the footprints measured in game.
+_TABLES = make_tables(
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.WATCHTOWER),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
+)
 
 # Pylon's main base, by each resource's offset from where its townhall stands: 8 fields and 2 geysers (corpus).
 _MAIN_FIELDS = (
@@ -76,7 +82,7 @@ class _MapAtStart:
 
     def __init__(self, rows: Sequence[str], neutral_units: _NeutralUnits, *, start: tuple[float, float]) -> None:
         self.map = GameMap(make_game_info(*rows), start_location=Point(start))
-        self.tracker = _Tracker(make_tables(), Enemy())
+        self.tracker = _Tracker(_TABLES, Enemy())
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
     @property
@@ -155,7 +161,7 @@ class TestWhereATownhallGoes:
             "...............",
         ]
 
-    def test_another_neutral_unit_blocks_the_square_its_radius_spans(self) -> None:
+    def test_another_neutral_unit_blocks_its_footprint(self) -> None:
         """The placement grid leaves a watchtower's ground open, though the game takes no townhall on it."""
         neutral_units = _NeutralUnits()
         neutral_units.add(UnitTypeId.WATCHTOWER, (16.0, 16.0), radius=1.125)
@@ -174,6 +180,30 @@ class TestWhereATownhallGoes:
             "....######.....",
             "....######.....",
             "...............",
+            "...............",
+            "...............",
+            "...............",
+        ]
+
+    def test_a_collapsible_tower_blocks_less_than_the_square_its_radius_spans(self) -> None:
+        """Its radius spans 6 tiles, and it covers 5 (tool `sweep_placement`)."""
+        neutral_units = _NeutralUnits()
+        neutral_units.add(UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK, (16.5, 16.5), radius=2.9375)
+        assert _MapAtStart(_map_rows(32, 32), neutral_units, start=(0.5, 0.5)).townhall_refusals_around(
+            (16.5, 16.5)
+        ) == [
+            "...............",
+            "...............",
+            "...............",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
+            "...#########...",
             "...............",
             "...............",
             "...............",

@@ -770,10 +770,10 @@ Each entry ends with how it was seen:
   `sweep_townhall_placement`).
 - NachOS's rule for where a townhall may stand was checked against the game on the 7 maps of the corpus. Around each
   expansion NachOS finds, the game was asked whether it would take a townhall at every tile center within 7 tiles:
-  21,315 centers in all. NachOS gives the game's answer at all but 26. At those 26 the game would take a townhall and
-  NachOS refuses it: they lie beside diagonal collapsible towers and some 6x6 rocks and debris, where NachOS blocks
-  the whole square a unit's radius spans and the game less. None of them would give an expansion a better spot
-  (tool `sweep_townhall_placement`).
+  21,315 centers in all. NachOS gives the game's answer at every one, blocking each of the map's other units by its
+  measured footprint. Blocking the square a unit's radius spans instead, it refused 26 the game takes, beside diagonal
+  collapsible towers and some 6x6 rocks and debris, though none would have given an expansion a better spot (tool
+  `sweep_townhall_placement`, build 75689).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
