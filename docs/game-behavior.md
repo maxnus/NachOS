@@ -782,9 +782,8 @@ Each entry ends with how it was seen:
   `sweep_townhall_placement`, build 75689).
 - `api.placement.dynamic` was checked against the game on the 7 maps of the corpus, with every unit but a structure
   killed: asked whether a one-tile structure could stand on each tile of the playable area, 127,020 tiles in all, the
-  game gives the grid's answer at all but 14, on UltraloveAIE_v2. There each of the two unbuildable plates keeps a
-  structure off 7 tiles around the 2x2 it covers on the other maps and when created by a debug command, and those
-  tiles took a structure once the plates were killed (tool `sweep_placement`, build 75689).
+  game gives the grid's answer at all but 14, on UltraloveAIE_v2, beside its two unbuildable plates, as "Not
+  understood yet" says (tool `sweep_placement`, build 75689).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
@@ -827,3 +826,10 @@ Each entry ends with how it was seen:
 - **What an ability a busy structure refuses would do to what it is making** is still open: a lift, a morph and an
   add-on are answered `NotSupported`, so what they would do to a queue was never seen. Every ability a producer does
   take leaves what it is making alone (tool `sweep_orders`).
+- **Why UltraloveAIE_v2's two unbuildable plates keep a structure off more than their 2x2.** Each stands at a
+  natural, and also keeps a structure off the 7 tiles beside its 2x2 that are not cliff: a 4x4 with its corners cut,
+  as a 4x4 rock covers. Those tiles take a structure once the plate is killed. Every other plate covers its 2x2: those
+  the other maps place, and on Ultralove one created by a debug command on the very spot of one killed, and 16 more at
+  offsets from the tile grid and at facings from 15° to 351°, which the game snaps to tile corners. The API reports
+  nothing that sets the two apart, so `api.placement.dynamic` blocks their 2x2 and leaves those 14 tiles open (tool
+  `sweep_placement`; local game, build 75689).

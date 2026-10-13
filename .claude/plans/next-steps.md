@@ -514,7 +514,8 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
 Measured on the way: the start's placement grid reads the ground beneath every unit and blocks none, rocks included, so
 `static` opens nothing; a collapsible tower, attacked or killed by a debug command, falls and stays. On UltraloveAIE_v2
 each unbuildable plate keeps a structure off 7 tiles more than its 2x2, which `dynamic` leaves open: the one
-disagreement with the game in 127,020 tiles over the corpus, left as it is until the owner says otherwise.
+disagreement with the game in 127,020 tiles over the corpus. Not the type, the spot or the facing; nothing the API
+reports sets those two plates apart, so it is recorded under "Not understood yet" and left (the owner).
 
 ## 4. After each nachOS pull request merges
 
