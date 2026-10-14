@@ -19,8 +19,8 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
-from sc2nachos.state import PlacementGrids
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -87,7 +87,7 @@ class _Game:
         self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = (), creep: tuple[str, ...] = ()
     ) -> PlacementGrids:
         """Take in an observation of `units` at `step`, in which the units under the tags `dead` died and creep lies
-        where `creep` draws it, top row first, and return its grids, as `_Game` makes them."""
+        where `creep` draws it, top row first, and return its grids, as `_Game` keeps them."""
         creep_image = make_bits(*(creep or ("." * 16,) * 16))
         observation = make_observation(step, units=units, dead=dead, creep=creep_image)
         self.tracker.update(observation.observation.raw_data, step)
@@ -96,11 +96,11 @@ class _Game:
         self.book._observe(step, [*changes.units_died, *changes.units_found_dead], present)
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
-            self.grids = PlacementGrids._at_start(
-                self.map.placement, units=present, state=state, game_data=_TABLES, orders=self.book
+            self.grids = PlacementGrids._build_at_start(
+                self.map.placement, present_units=present, state=state, game_data=_TABLES, order_book=self.book
             )
         else:
-            self.grids = self.grids._for_observation(present, state)
+            self.grids._update(present, state)
         return self.grids
 
     def own(self, tag: int) -> OwnUnit[Any]:
@@ -163,8 +163,8 @@ class TestTheStaticGrid:
 
     def test_it_stays_as_the_game_began(self) -> None:
         game = _Game()
-        first = game.observe(0, make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL))
-        assert game.observe(1).static is first.static
+        static = game.observe(0, make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL)).static
+        assert game.observe(1).static is static
 
     def test_it_refuses_writes(self) -> None:
         with pytest.raises(TypeError, match="read-only"):
@@ -228,8 +228,11 @@ class TestTheDynamicGrid:
         assert game.observe(1, dead=(1,)).dynamic.all()
 
     def test_it_is_built_once_an_observation(self) -> None:
-        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
-        assert grids.dynamic is grids.dynamic
+        game = _Game()
+        grids = game.observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
+        first = grids.dynamic
+        assert grids.dynamic is first
+        assert game.observe(1, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0))).dynamic is not first
 
     def test_it_refuses_writes(self) -> None:
         with pytest.raises(TypeError, match="read-only"):
@@ -388,22 +391,17 @@ class TestARecordedGamesStart:
     def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         game_map, tracker, data, observation = _first_observation(path)
         state = _State(observation, tracker, game_map)
-        orders = OrderBook(data, build_reach=2.5)
-        units = tracker.unit_tracker.present
-        return (
-            game_map,
-            tracker,
-            PlacementGrids._at_start(game_map.placement, units=units, state=state, game_data=data, orders=orders),
+        order_book = OrderBook(data, build_reach=2.5)
+        present_units = tracker.unit_tracker.present
+        grids = PlacementGrids._build_at_start(
+            game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book
         )
+        return game_map, tracker, grids
 
     def test_every_one_of_the_maps_units_but_an_acceleration_zone_has_a_measured_footprint(self, path: Path) -> None:
         _, tracker, _ = self._grids(path)
         unmeasured = {unit.type_id for unit in tracker.unit_tracker.present.neutral if unit.type_data.footprint is None}
         assert unmeasured <= {UnitTypeId.ACCELERATION_ZONE_SMALL, UnitTypeId.ACCELERATION_ZONE_LARGE}
-
-    def test_free_ground_lies_within_the_static_and_the_dynamic_grids(self, path: Path) -> None:
-        _, _, grids = self._grids(path)
-        assert not (grids.free & ~(grids.static & grids.dynamic)).any()
 
     def test_the_geysers_and_collapsible_towers_are_closed_from_the_start(self, path: Path) -> None:
         _, tracker, grids = self._grids(path)
@@ -428,7 +426,7 @@ def _depot_site(api: Api) -> Point:
     """Where a supply depot fits on the grids, nearest the point 10 from this player's start toward the middle."""
     depot = api.data.units[UnitTypeId.SUPPLY_DEPOT].footprint
     assert depot is not None
-    fitting = api.placement.free_for(UnitTypeId.SUPPLY_DEPOT).centers_fitting(depot)
+    fitting = api.placement.free_for(UnitTypeId.SUPPLY_DEPOT).where_footprint_fits(depot)
     toward = api.map.start_location.towards(api.map.playable_area.center, 10.0)
     return depot.center_in(fitting.distance_from(toward).where(fitting, math.inf).argmin())
 

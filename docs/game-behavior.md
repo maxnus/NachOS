@@ -105,8 +105,9 @@ Each entry ends with how it was seen:
   and no structure on ground it cannot stand on; a photon cannon ordered onto this player's creep was never made
   (tool `sweep_alerts`, #37).
 - A unit made for player 0 is reported as owner 16 (tool `_sandbox`).
-- Debug commands can make a larva, and a creep tumor, plain or a queen's, only on creep and not at every spot on it
-  (#28; tool `sweep_placement`, build 75689).
+- Debug commands make a larva only on creep: off it, none appeared, and none was reported dead (in game, build 75689).
+- Debug commands make a creep tumor, plain or a queen's, only on creep, and not at every spot on it (#28; tool
+  `sweep_placement`, build 75689).
 - A debug-made force field belongs to its player and is offered Shatter; one a sentry casts is neutral, owner 16,
   and offered nothing, and Shatter ordered on it is refused (#23, #33).
 - A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
@@ -762,11 +763,11 @@ Each entry ends with how it was seen:
   or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
   refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone and a
   flying inhibitor zone the game does not create at all (tool `sweep_placement`, build 75689).
-- Whether a structure may stand on creep was asked of each build a worker or a queen places at a point, on open ground
+- Whether a structure may stand on creep was asked of each structure type a unit places at a point, on open ground
   and on a hatchery's creep, with a pylon's power over both. A zerg structure but a hatchery and a nydus worm, and a
   creep tumor, is taken only on creep, and refused off it `CantBuildTooFarFromCreepSource`; a terran or protoss
-  structure but an oracle's stasis ward only off it, and refused on it `CantBuildTooCloseToCreepSource`; a hatchery, a
-  nydus worm and a stasis ward either way. A zerg structure needs creep under every tile of its footprint: beside a
+  structure but a raven's auto turret and an oracle's stasis ward only off it, and refused on it
+  `CantBuildTooCloseToCreepSource`; a hatchery, a nydus worm, an auto turret and a stasis ward either way. A zerg structure needs creep under every tile of its footprint: beside a
   hatchery, a spawning pool was refused while the creep had not yet reached one corner of its 3x3 (tool
   `sweep_placement`, build 75689).
 - An add-on is its host's own type only while attached: created alone by a debug command, a barracks', factory's or

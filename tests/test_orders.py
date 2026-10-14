@@ -358,6 +358,21 @@ class TestOneOrderAUnitATurn:
         assert game.book.issued_to(game.own(1)) == ()
         assert game.book.pending == ()
 
+    def test_until_shown_keeps_an_order_sent_while_the_observations_may_not_show_it(self) -> None:
+        """The game may show an order an observation late, as on the ladder."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+
+        assert game.book.issued_to(game.own(1)) == ()
+        assert game.book.issued_to(game.own(1), until_shown=True) == (order,)
+
+        game.observe(32, _marine(1, _moving((20.0, 21.0))))
+
+        assert game.book.issued_to(game.own(1), until_shown=True) == ()
+
 
 class TestAnOrderAUnitIsAlreadyCarryingOut:
     """An unqueued order equal to a unit's first is answered `SUCCESS` and carries nothing out, but drops what the

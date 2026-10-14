@@ -11,7 +11,7 @@ from s2clientprotocol import data_pb2
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._footprints import FOOTPRINTS, ON_CREEP
+from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -20,7 +20,7 @@ from sc2nachos.match import Race
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from sc2nachos.gamedata._on_creep import OnCreep
+    from sc2nachos.gamedata._creep_requirement import CreepRequirement
     from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
@@ -136,6 +136,10 @@ class UnitTypeData:
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
     """Whether it needs to be powered by a pylon or a warp prism."""
+    creep_requirement: CreepRequirement | None
+    """Whether a structure of this type may stand on creep, as the game answered its placement on creep and off it,
+    for every type a unit places at a point; `None` for any other type, such as a gas building, which goes on a
+    geyser, an add-on, or a form a structure morphs into."""
     tech_aliases: tuple[UnitTypeId, ...]
     """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
     base_type: UnitTypeId | None
@@ -148,9 +152,6 @@ class UnitTypeData:
     """The tiles one covers where it stands, as measured in game, for every structure type that stands and every type
     of the map's own. `None` for any other type, such as a unit, an egg or a force field, and for the few the game would
     not create to be measured: the acceleration zones and the flying inhibitor zones."""
-    on_creep: OnCreep | None
-    """Whether a structure of this type may stand on creep, as the game answered its build on creep and off it, for
-    every type a worker or a queen places at a point; `None` for any other type."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
     a level its units report, such as a shields level, adds nothing."""
@@ -202,6 +203,7 @@ class UnitTypeData:
             morphed_from=tech_tree.morph_sources.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree.power_consumers,
+            creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
             # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
             # The game calls this the morphed variant, though it names the type morphed from.
@@ -209,6 +211,5 @@ class UnitTypeData:
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
-            on_creep=ON_CREEP.get(unit_type),
             upgrades=tech_tree.unit_type_upgrades.get(unit_type, MappingProxyType({})),
         )

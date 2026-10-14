@@ -2954,6 +2954,10 @@
    "on_creep": "CantBuildTooCloseToCreepSource",
    "off_creep": "Success"
   },
+  "AutoTurret": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
   "BanelingNest": {
    "on_creep": "Success",
    "off_creep": "CantBuildTooFarFromCreepSource"

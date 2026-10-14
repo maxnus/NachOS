@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 from sc2nachos.gamedata import (
     Attribute,
     Cost,
+    CreepRequirement,
     GameData,
     OrderBehavior,
     Resources,
@@ -290,6 +291,24 @@ class TestReadingTheTables:
     ) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type)]))
         assert data.units[unit_type].footprint == footprint
+
+    @pytest.mark.parametrize(
+        ("unit_type", "requirement"),
+        [
+            (UnitTypeId.SUPPLY_DEPOT, CreepRequirement.OFF_CREEP),
+            (UnitTypeId.SPAWNING_POOL, CreepRequirement.ON_CREEP),
+            (UnitTypeId.HATCHERY, CreepRequirement.EITHER),
+            (UnitTypeId.AUTO_TURRET, CreepRequirement.EITHER),
+            (UnitTypeId.REFINERY, None),
+            (UnitTypeId.MARINE, None),
+        ],
+        ids=lambda value: value.name if isinstance(value, UnitTypeId) else None,
+    )
+    def test_a_structure_placed_at_a_point_keeps_to_creep_or_off_it_as_measured_in_game(
+        self, unit_type: UnitTypeId, requirement: CreepRequirement | None
+    ) -> None:
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type)]))
+        assert data.units[unit_type].creep_requirement is requirement
 
     def test_an_ability_that_is_aimed_at_nothing_has_no_footprint(self) -> None:
         stim = data_pb2.AbilityData(ability_id=AbilityId.STIM, target=data_pb2.AbilityData.Target.Value("None"))

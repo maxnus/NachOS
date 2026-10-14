@@ -57,9 +57,9 @@ from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
-from sc2nachos.state._placement_grids import PlacementGrids
 from sc2nachos.state._state import _State
 from sc2nachos.units import Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
@@ -82,7 +82,7 @@ class _Game:
     orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
     state: _State
-    placement: PlacementGrids
+    placement: Final[PlacementGrids]
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -99,22 +99,26 @@ class _Game:
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
-        present = tracker.unit_tracker.present
-        orders = OrderBook(game_data, build_reach=build_reach)
+        present_units = tracker.unit_tracker.present
+        order_book = OrderBook(game_data, build_reach=build_reach)
         state = _State(observation, tracker, game_map)
         game = cls(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, present.neutral),
+            expansions=Expansion._find_all(game_map, present_units.neutral),
             game_data=game_data,
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
-            orders=orders,
+            orders=order_book,
             observation=observation,
             state=state,
-            placement=PlacementGrids._at_start(
-                game_map.placement, units=present, state=state, game_data=game_data, orders=orders
+            placement=PlacementGrids._build_at_start(
+                game_map.placement,
+                present_units=present_units,
+                state=state,
+                game_data=game_data,
+                order_book=order_book,
             ),
             step=step,
         )
@@ -137,7 +141,7 @@ class _Game:
         self.observation = observation
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
-        self.placement = self.placement._for_observation(self.tracker.unit_tracker.present, self.state)
+        self.placement._update(self.tracker.unit_tracker.present, self.state)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)

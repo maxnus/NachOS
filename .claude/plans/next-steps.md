@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1855 tests on the placement grids' branch; `uv run pytest
+- nachOS `main` has every PR to #122. `uv run pytest` passes 1867 tests on the placement grids' branch; `uv run pytest
   -m integration` passes 28 against a real game (run 2026-10-13).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
@@ -494,15 +494,18 @@ slices 6 and 7 (the owner, 2026-10-08). Decided by the owner, 2026-10-08:
 The demo bot will place depots and pylons, so it needs to know where a structure can stand now, not at the start:
 branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question at a time:
 
-- **`api.placement` is one object with three layers** (reworked in review of #123, the owner). `static` is what
+- **`api.placement` is one object with three layers** (reworked in review of #123, the owner), a
+  `sc2nachos.placement.PlacementGrids`, in a package of its own rather than in `state` (the owner, second review):
+  one object for the game, moved on to each observation. `static` is what
   cannot change during a game: the ground the map lets a structure stand on, less its geysers and its collapsible
   towers, which stay where they fall (`UnitType.CollapsibleTower`). `dynamic` holds only what can go: true where no
   structure, in sight or remembered in the fog, and no mineral field stands. `reserved` is only the ground under this
   player's builds ordered and not standing yet, held, issued this turn or on their way, since "what is blocked" and
   "what is reserved" answer two questions (the owner, against one grid holding both). `free` combines the three, and
-  `free_for(unit_type)` keeps to creep or off it by `UnitTypeData.on_creep`, measured by the sweep for every type a
-  unit places at a point (the owner: both). Power stays the bot's. `api.map.placement` stays the game's grid from the
-  start.
+  `free_for(unit_type)` keeps to creep or off it by `UnitTypeData.creep_requirement` (`CreepRequirement`), measured
+  by the sweep for every structure type a unit places at a point, a raven's auto turret included (the owner: both).
+  Power waits for a pull request of its own, which measures what the game requires; `needs_power` stays a bool (the
+  owner, second review). `api.map.placement` stays the game's grid from the start.
 - **Structures only**: a unit that moves blocks nothing, nor one in the air.
 - **Every structure's footprint is measured**, the players' with their morphed forms and every curated neutral type,
   by `tools/sweep_placement.py`, into a table read as `api.data.units[t].footprint`. A neutral type the table lacks
@@ -510,10 +513,10 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
   it, which the game would not create to be measured. A force field, a neutral unit of a protoss type, covers nothing
   (the owner, review of #123).
 - **`Footprint` is a value type in `sc2nachos.geometry`**: a mask, made by `square` and `rectangle` (corners cut or
-  not) or drawn `from_rows`, with its `bounding_box`, `snapped_center` and `center_in`. A grid says where one fits:
-  `Grid.fits`, `Grid.centers_fitting` and `Grid.fill_footprint` (the owner, review of #123, since they read and write
-  the grid's values). The expansions block their other neutral units by it, which leaves no disagreement with the game
-  around them.
+  not) or drawn `from_rows`, with its `bounding_box`, `snapped_center`, `center_in` and `tiles`. A grid says where
+  one fits: `Grid.fits_footprint`, `Grid.where_footprint_fits`, a binary erosion, and `Grid.fill_footprint` (the
+  owner, reviews of #123). The expansions block their other neutral units by it, which leaves no disagreement with the
+  game around them.
 - **No up-to-date pathing grid yet**: it waits until something needs it.
 
 Measured on the way: the start's placement grid reads the ground beneath every unit and blocks none, rocks included, so

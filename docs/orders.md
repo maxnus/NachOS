@@ -146,6 +146,8 @@ A held order shows in `issued_to(unit)`, ahead of the turn's orders to the unit,
 unit already ordered leaves alone a worker on its way to build and a structure with a train waiting. `withdraw()`
 takes it back; the move or the landing already sent stays. Nothing is checked as it goes out: what the bank or the
 supply cap lacks then, the game refuses or stalls, as it would have when the order was given.
+`issued_to(unit, until_shown=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
+in its orders yet: on the ladder an order can show two observations after it went out.
 
 What an order does to what is held for a unit follows what its ability does to the unit's orders:
 

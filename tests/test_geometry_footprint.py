@@ -3,7 +3,7 @@
 import numpy
 import pytest
 
-from sc2nachos.geometry import Footprint, Point, Rectangle, Tile
+from sc2nachos.geometry import Footprint, Point, Rectangle, Tile, TileSet
 
 DIAGONAL = Footprint.from_rows(
     "..##",
@@ -96,6 +96,20 @@ class TestCentering:
     def test_the_bounding_box_of_a_snapped_center(self, footprint: Footprint, center: Point, box: Rectangle) -> None:
         assert footprint.bounding_box(center) == box
 
+    @pytest.mark.parametrize(
+        ("footprint", "ordered_at", "stood_at"),
+        [
+            (Footprint.square(2), Point((86.3, 159.7)), Point((86.0, 160.0))),
+            (Footprint.square(3), Point((82.3, 158.7)), Point((82.5, 158.5))),
+        ],
+        ids=["depot", "barracks"],
+    )
+    def test_it_snaps_as_the_game_snapped_a_build_ordered_off_the_grid(
+        self, footprint: Footprint, ordered_at: Point, stood_at: Point
+    ) -> None:
+        """Where a builder's order showed its structure's site (tool `sweep_orders`)."""
+        assert footprint.snapped_center(ordered_at) == stood_at
+
     def test_an_odd_side_centers_on_the_tile_holding_the_point(self) -> None:
         assert Footprint.square(3).snapped_center(Point((10.9, 20.1))) == Point((10.5, 20.5))
 
@@ -107,3 +121,17 @@ class TestCentering:
         center = footprint.center_in(Tile(10, 20))
         assert Tile.containing(center) == Tile(10, 20)
         assert footprint.snapped_center(center) == center
+
+
+class TestTiles:
+    def test_they_are_the_tiles_covered_where_it_centers(self) -> None:
+        tiles = Footprint.square(2).tiles(at=Point((10.3, 20.7)))
+        assert tiles == TileSet([Tile(9, 20), Tile(10, 20), Tile(9, 21), Tile(10, 21)])
+
+    @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
+    def test_they_are_the_masks_tiles_in_its_bounding_box(self, footprint: Footprint) -> None:
+        center = Point((10.5, 20.5))
+        box = footprint.bounding_box(center)
+        tiles = footprint.tiles(at=center)
+        assert len(tiles) == numpy.count_nonzero(footprint.mask)
+        assert all(footprint.mask[tile.x - int(box.x), tile.y - int(box.y)] for tile in tiles)

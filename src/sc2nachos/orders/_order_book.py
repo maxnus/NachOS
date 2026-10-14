@@ -232,9 +232,11 @@ class OrderBook:
             self._forced.add(order)
         return order
 
-    def issued_to(self, unit: OwnUnit[Any]) -> tuple[Order[Any], ...]:
+    def issued_to(self, unit: OwnUnit[Any], *, until_shown: bool = False) -> tuple[Order[Any], ...]:
         """What `unit` was ordered that has not gone out: what is held for it, head first, then the turn's orders to
-        it so far, in the order they were issued. Withdrawn orders are left out.
+        it so far, in the order they were issued. Withdrawn orders are left out. With `until_shown`, first come the
+        orders that went out to it lately and that the observations may not show yet: the last one sent that replaced
+        its orders, and those released from what was held for it.
 
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
         order a unit is given goes out, or that has a build or a train waiting.
@@ -242,7 +244,8 @@ class OrderBook:
         queue = self._held.get(unit.id)
         held = () if queue is None else queue.orders
         turns = self._issued_by_unit.get(unit.id, ())
-        return tuple(order for order in (*held, *turns) if not order._withdrawn)
+        sent = self._not_shown_yet(unit) if until_shown else ()
+        return (*sent, *(order for order in (*held, *turns) if not order._withdrawn))
 
     @property
     def pending(self) -> tuple[Order[Any], ...]:

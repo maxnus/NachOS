@@ -5,7 +5,6 @@ from sc2nachos.state._actions import Action, ActionFailure, AutocastToggle, Came
 from sc2nachos.state._alert import Alert
 from sc2nachos.state._effect import Effect
 from sc2nachos.state._in_production import InProduction
-from sc2nachos.state._placement_grids import PlacementGrids
 from sc2nachos.state._score import CategoryScore, Score, ValueScore, VitalScore
 from sc2nachos.state._supply import Supply
 from sc2nachos.state._ui_unit_counts import UiUnitCounts
@@ -20,7 +19,6 @@ __all__ = [
     "CategoryScore",
     "Effect",
     "InProduction",
-    "PlacementGrids",
     "Score",
     "Supply",
     "UiUnitCounts",

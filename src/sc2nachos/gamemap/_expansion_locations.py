@@ -17,24 +17,13 @@ if TYPE_CHECKING:
     from sc2nachos.units._unit_type import UnitType
 
 _TOWNHALL_FOOTPRINT = Footprint.square(5)
-_MINERAL_FIELD_SIZE = (2, 1)
-_GEYSER_SIZE = (3, 3)
-_TOWNHALL_ZONE_MARGIN = 3
 # A base's townhall stands at most 5.86 from its resources' mean along an axis (corpus).
 _MAX_TOWNHALL_OFFSET_FROM_RESOURCES = 8
-
-
-# The tiles a resource keeps townhalls off, laid around its center: its footprint grown by `_TOWNHALL_ZONE_MARGIN`
-# tiles on every side, less one tile at each corner of a mineral field's and three at a geyser's, the corner and the
-# tile beside it on each side (tool `sweep_townhall_placement`).
-_MINERAL_FIELD_TOWNHALL_ZONE = Footprint.rectangle(
-    _MINERAL_FIELD_SIZE[0] + 2 * _TOWNHALL_ZONE_MARGIN,
-    _MINERAL_FIELD_SIZE[1] + 2 * _TOWNHALL_ZONE_MARGIN,
-    cut_corners=1,
-)
-_GEYSER_TOWNHALL_ZONE = Footprint.rectangle(
-    _GEYSER_SIZE[0] + 2 * _TOWNHALL_ZONE_MARGIN, _GEYSER_SIZE[1] + 2 * _TOWNHALL_ZONE_MARGIN, cut_corners=2
-)
+# The tiles a resource keeps townhalls off, laid around its center: its footprint, a mineral field's 2x1 and a geyser's
+# 3x3, grown by 3 tiles on every side, less one tile at each corner of a mineral field's and three at a geyser's (tool
+# `sweep_townhall_placement`).
+_MINERAL_FIELD_TOWNHALL_BLOCKING_ZONE = Footprint.rectangle(8, 7, cut_corners=1)
+_GEYSER_TOWNHALL_BLOCKING_ZONE = Footprint.square(9, cut_corners=2)
 
 
 @final
@@ -65,10 +54,10 @@ class _ExpansionLocations:
             if (footprint := unit.footprint) is not None:
                 townhall_may_cover.fill_footprint(footprint, at=unit.position, value=False)
         for unit in mineral_fields:
-            townhall_may_cover.fill_footprint(_MINERAL_FIELD_TOWNHALL_ZONE, at=unit.position, value=False)
+            townhall_may_cover.fill_footprint(_MINERAL_FIELD_TOWNHALL_BLOCKING_ZONE, at=unit.position, value=False)
         for unit in geysers:
-            townhall_may_cover.fill_footprint(_GEYSER_TOWNHALL_ZONE, at=unit.position, value=False)
-        self._allowed = townhall_may_cover.centers_fitting(_TOWNHALL_FOOTPRINT)
+            townhall_may_cover.fill_footprint(_GEYSER_TOWNHALL_BLOCKING_ZONE, at=unit.position, value=False)
+        self._allowed = townhall_may_cover.where_footprint_fits(_TOWNHALL_FOOTPRINT)
 
     def allows(self, center: PointLike) -> bool:
         """Whether the game takes a townhall centered on the tile holding `center`."""

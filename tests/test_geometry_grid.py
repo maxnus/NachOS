@@ -597,37 +597,37 @@ def _patchy_ground() -> Grid[bool]:
 
 class TestFootprints:
     @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
-    def test_centers_fitting_agrees_with_fits_at_every_tile(self, footprint: Footprint) -> None:
+    def test_where_footprint_fits_agrees_with_fits_footprint_at_every_tile(self, footprint: Footprint) -> None:
         ground = _patchy_ground()
-        fitting = ground.centers_fitting(footprint)
+        fitting = ground.where_footprint_fits(footprint)
         for x in range(ground.width):
             for y in range(ground.height):
                 tile = ground.tile_at((x, y))
-                assert fitting[tile] == ground.fits(footprint, at=footprint.center_in(tile)), tile
+                assert fitting[tile] == ground.fits_footprint(footprint, at=footprint.center_in(tile)), tile
 
     def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:
         ground = _ground(".##.", "####", "####", ".##.")
-        assert not ground.fits(Footprint.square(4), at=Point((12.0, 22.0)))
-        assert ground.fits(Footprint.square(4, cut_corners=1), at=Point((12.0, 22.0)))
+        assert not ground.fits_footprint(Footprint.square(4), at=Point((12.0, 22.0)))
+        assert ground.fits_footprint(Footprint.square(4, cut_corners=1), at=Point((12.0, 22.0)))
 
     def test_beyond_the_grid_reads_outside(self) -> None:
         open_ground = _ground("###", "###", "###")
-        assert not open_ground.with_outside(False).fits(Footprint.square(3), at=Point((10.5, 20.5)))
-        assert open_ground.with_outside(True).fits(Footprint.square(3), at=Point((10.5, 20.5)))
+        assert not open_ground.with_outside(False).fits_footprint(Footprint.square(3), at=Point((10.5, 20.5)))
+        assert open_ground.with_outside(True).fits_footprint(Footprint.square(3), at=Point((10.5, 20.5)))
 
     def test_beyond_a_grid_with_no_outside_raises(self) -> None:
         with pytest.raises(IndexError, match="reaches past"):
-            _ground("###", "###", "###").fits(Footprint.square(3), at=Point((10.5, 20.5)))
+            _ground("###", "###", "###").fits_footprint(Footprint.square(3), at=Point((10.5, 20.5)))
 
-    def test_centers_fitting_reads_false_beyond_a_grid_with_no_outside(self) -> None:
-        fitting = _ground("###", "###", "###").centers_fitting(Footprint.square(3))
+    def test_where_footprint_fits_reads_false_beyond_a_grid_with_no_outside(self) -> None:
+        fitting = _ground("###", "###", "###").where_footprint_fits(Footprint.square(3))
         assert fitting.values.tolist() == [[False] * 3, [False, True, False], [False] * 3]
         assert fitting.outside is False
 
     def test_covering_nothing_fits_everywhere(self) -> None:
         ground = _ground("...", "...")
-        assert ground.fits(Footprint.from_rows(), at=Point((11.5, 20.5)))
-        assert ground.centers_fitting(Footprint.from_rows()).all()
+        assert ground.fits_footprint(Footprint.from_rows(), at=Point((11.5, 20.5)))
+        assert ground.where_footprint_fits(Footprint.from_rows()).all()
 
     def test_fill_footprint_sets_the_tiles_covered(self) -> None:
         ground = _ground("....", "....", "....", "....")

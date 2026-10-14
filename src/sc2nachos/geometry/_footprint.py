@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._point import Point, coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile
+from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -48,8 +48,8 @@ class Footprint:
     @classmethod
     def rectangle(cls, width: int, height: int, *, cut_corners: int = 0) -> Footprint:
         """A footprint covering a rectangle `width` tiles across and `height` up, less, at each corner, the tiles
-        fewer than `cut_corners` steps from it along the edges: the corner tile for 1, and the two beside it too for
-        2."""
+        fewer than `cut_corners` steps from it, counting each step across or up: the corner tile for 1, and the two
+        beside it too for 2."""
         steps_from_side_x = numpy.minimum(numpy.arange(width), numpy.arange(width)[::-1])[:, numpy.newaxis]
         steps_from_side_y = numpy.minimum(numpy.arange(height), numpy.arange(height)[::-1])[numpy.newaxis, :]
         return cls(steps_from_side_x + steps_from_side_y >= cut_corners)
@@ -84,6 +84,12 @@ class Footprint:
     def snapped_center(self, near: PointLike) -> Point:
         """Where the footprint centers when placed at `near`, as the game snaps a structure."""
         return self.bounding_box(near).center
+
+    def tiles(self, *, at: PointLike) -> TileSet:
+        """The tiles the footprint covers, centered at `at` as the game snaps it."""
+        box = self.bounding_box(at)
+        left, bottom = int(box.x), int(box.y)
+        return TileSet(Tile(left + int(x), bottom + int(y)) for x, y in zip(*numpy.nonzero(self._mask), strict=True))
 
     def center_in(self, tile: Tile) -> Point:
         """Where the footprint is centered when its center lies in `tile`: the tile's center along a side of odd

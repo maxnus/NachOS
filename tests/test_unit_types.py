@@ -106,6 +106,21 @@ class TestUnitType:
         assert counts == [15, 6]
         assert UnitTypeId.REFINERY_RICH in UnitType.GasBuilding._type_ids
 
+    def test_an_add_on_is_a_tech_lab_or_a_reactor_plain_or_of_any_host(self) -> None:
+        assert UnitType.AnyTechLab._type_ids == {
+            UnitTypeId.TECH_LAB,
+            UnitTypeId.TECH_LAB_BARRACKS,
+            UnitTypeId.TECH_LAB_FACTORY,
+            UnitTypeId.TECH_LAB_STARPORT,
+        }
+        assert UnitType.AnyReactor._type_ids == {
+            UnitTypeId.REACTOR,
+            UnitTypeId.REACTOR_BARRACKS,
+            UnitTypeId.REACTOR_FACTORY,
+            UnitTypeId.REACTOR_STARPORT,
+        }
+        assert UnitType.AnyAddOn._type_ids == UnitType.AnyTechLab._type_ids | UnitType.AnyReactor._type_ids
+
 
 _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 

@@ -1,12 +1,12 @@
-"""Where a structure may stand, as this player knows the map in one observation."""
+"""Where a structure may stand, as this player knows the map."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Self, final
 
-from sc2nachos.gamedata import OnCreep
+from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid
-from sc2nachos.state._build_sites import _BuildSites
+from sc2nachos.placement._build_sites import _BuildSites
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
@@ -19,61 +19,65 @@ if TYPE_CHECKING:
 
 @final
 class PlacementGrids:
-    """Where a structure may stand, as this player knows the map in one observation, in layers: `static`, the ground
-    the map lets a structure stand on all game; `dynamic`, where nothing stands now that can go; and `reserved`, where
-    this player's ordered builds will stand.
+    """Where a structure may stand, as this player knows the map in the current observation, in layers: `static`, the
+    ground the map lets a structure stand on all game; `dynamic`, where nothing stands now that can go; and
+    `reserved`, where this player's ordered builds will stand.
 
     `free` combines them, and `free_for` adds the creep a structure type needs:
-    `placement.free_for(unit_type).centers_fitting(api.data.units[unit_type].footprint)` gives the centers where one
-    may go. None of them knows of power, of units in the way, or of the ground around resources that keeps a townhall
-    off, as `api.expansions` does.
+    `placement.free_for(unit_type).where_footprint_fits(api.data.units[unit_type].footprint)` gives the centers where
+    one may go. None of them knows of power, of units in the way, or of the ground around resources that keeps a
+    townhall off, as `api.expansions` does.
     """
 
-    __slots__ = ("_build_sites", "_dynamic", "_game_data", "_state", "_static", "_units")
+    __slots__ = ("_build_sites", "_dynamic", "_game_data", "_present_units", "_state", "_static")
 
     def __init__(
         self,
-        static: Grid[bool],
+        static_placement_grid: Grid[bool],
         *,
         build_sites: _BuildSites,
-        units: Units[Unit[Any]],
+        present_units: Units[Unit[Any]],
         state: _State,
         game_data: GameData,
     ) -> None:
-        """The grids of the observation `state` reads, whose units are `units`, from the game's `static` grid and its
-        `build_sites`."""
-        self._static = static
+        """The grids of the observation `state` reads, in which this player knows of `present_units`, in sight or
+        remembered, from the game's `static_placement_grid` and its `build_sites`."""
+        self._static = static_placement_grid
         self._build_sites = build_sites
-        self._units = units
+        self._present_units = present_units
         self._state = state
         self._game_data = game_data
         self._dynamic: Grid[bool] | None = None
 
     @classmethod
-    def _at_start(
+    def _build_at_start(
         cls,
-        placement: Grid[bool],
+        placement_grid: Grid[bool],
         *,
-        units: Units[Unit[Any]],
+        present_units: Units[Unit[Any]],
         state: _State,
         game_data: GameData,
-        orders: OrderBook,
+        order_book: OrderBook,
     ) -> Self:
-        """The grids of a game's first observation, which `state` reads, whose units are `units`, from the game's
-        placement grid at the start, which blocks no unit, those in sight included, and with this player's builds as
-        `orders` holds them."""
-        static = placement.copy()
-        for unit in units.neutral.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
+        """The grids of a game's first observation, which `state` reads and in which this player knows of
+        `present_units`, from the game's `placement_grid` at the start, and with this player's builds as `order_book`
+        holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral fields in
+        sight included; it is the pathing grid that blocks those."""
+        static = placement_grid.copy()
+        for unit in present_units.neutral.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             if (footprint := unit.footprint) is not None:
                 static.fill_footprint(footprint, at=unit.position, value=False)
-        build_sites = _BuildSites(game_data, orders)
-        return cls(static.as_readonly(), build_sites=build_sites, units=units, state=state, game_data=game_data)
-
-    def _for_observation(self, units: Units[Unit[Any]], state: _State) -> PlacementGrids:
-        """The grids of a later observation of the same game, which `state` reads and whose units are `units`."""
-        return PlacementGrids(
-            self._static, build_sites=self._build_sites, units=units, state=state, game_data=self._game_data
+        build_sites = _BuildSites(game_data, order_book)
+        return cls(
+            static.as_readonly(), build_sites=build_sites, present_units=present_units, state=state, game_data=game_data
         )
+
+    def _update(self, present_units: Units[Unit[Any]], state: _State) -> None:
+        """Move on to a later observation of the same game, which `state` reads and in which this player knows of
+        `present_units`."""
+        self._present_units = present_units
+        self._state = state
+        self._dynamic = None
 
     @property
     def static(self) -> Grid[bool]:
@@ -92,7 +96,7 @@ class PlacementGrids:
         if self._dynamic is None:
             dynamic = Grid.like(self._static, dtype=bool, outside=False)
             dynamic.fill(True)
-            for unit in self._units.excluding_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
+            for unit in self._present_units.excluding_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
                 if (footprint := unit.footprint) is not None:
                     dynamic.fill_footprint(footprint, at=unit.position, value=False)
             self._dynamic = dynamic.as_readonly()
@@ -103,7 +107,7 @@ class PlacementGrids:
         """The tiles under this player's builds that are ordered and not standing yet: held until the unit can start
         one, issued this turn, or sent and not yet begun. A build issued or withdrawn earlier in the turn shows. An
         add-on reserves the ground beside its host, and a lifted host's landing site too."""
-        return self._build_sites.reserved(self._static, self._units)
+        return self._build_sites.reserved_grid(self._static, self._present_units.own)
 
     @property
     def free(self) -> Grid[bool]:
@@ -112,11 +116,12 @@ class PlacementGrids:
 
     def free_for(self, unit_type: UnitTypeId) -> Grid[bool]:
         """Where a structure of `unit_type` may stand now: `free`, on creep or off it as the type needs
-        (`UnitTypeData.on_creep`). For a type with no rule measured, the same as `free`."""
+        (`UnitTypeData.creep_requirement`). For a type with no requirement measured, the same as `free`. A gas
+        building stands on a geyser, which `static` closes, so it fits nowhere on any of them."""
         row = self._game_data.units.get(unit_type)
-        rule = None if row is None else row.on_creep
-        if rule is OnCreep.REQUIRED:
+        requirement = None if row is None else row.creep_requirement
+        if requirement is CreepRequirement.ON_CREEP:
             return self.free & self._state.creep
-        if rule is OnCreep.REFUSED:
+        if requirement is CreepRequirement.OFF_CREEP:
             return self.free & ~self._state.creep
         return self.free

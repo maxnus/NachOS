@@ -16,8 +16,9 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
-from sc2nachos.state import ActionFailure, Effect, InProduction, PlacementGrids, Score, Supply, UiUnitCounts
+from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
 
