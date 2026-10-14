@@ -46,6 +46,11 @@ class Footprint:
         return cls(mask.reshape(width, len(rows)))
 
     @classmethod
+    def empty(cls) -> Footprint:
+        """A footprint covering no tile, as a Xel'Naga healing shrine's does."""
+        return cls(numpy.zeros((0, 0), dtype=bool))
+
+    @classmethod
     def rectangle(cls, width: int, height: int, *, cut_corners: int = 0) -> Footprint:
         """A footprint covering a rectangle `width` tiles across and `height` up, less, at each corner, the tiles
         fewer than `cut_corners` steps from it, counting each step across or up: the corner tile for 1, and the two
@@ -74,24 +79,24 @@ class Footprint:
         """The number of tiles up its bounding box."""
         return self._mask.shape[1]
 
-    def bounding_box(self, center: PointLike) -> Rectangle:
-        """The tiles `mask` spans, with the footprint centered at `center` as the game snaps it. The footprint covers
-        some of them, or all."""
-        x, y = coordinates(center)[:2]
+    def bounding_box(self, *, at: PointLike) -> Rectangle:
+        """The tiles `mask` spans, with the footprint placed at `at` and centered as the game snaps it. The footprint
+        covers some of them, or all."""
+        x, y = coordinates(at)[:2]
         left, bottom = math.floor(x - self.width / 2 + 0.5), math.floor(y - self.height / 2 + 0.5)
         return Rectangle(left, bottom, self.width, self.height)
 
-    def snapped_center(self, near: PointLike) -> Point:
-        """Where the footprint centers when placed at `near`, as the game snaps a structure."""
-        return self.bounding_box(near).center
+    def snapped_center(self, *, at: PointLike) -> Point:
+        """Where the footprint centers when placed at `at`, as the game snaps a structure."""
+        return self.bounding_box(at=at).center
 
     def tiles(self, *, at: PointLike) -> TileSet:
-        """The tiles the footprint covers, centered at `at` as the game snaps it."""
-        box = self.bounding_box(at)
+        """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""
+        box = self.bounding_box(at=at)
         left, bottom = int(box.x), int(box.y)
         return TileSet(Tile(left + int(x), bottom + int(y)) for x, y in zip(*numpy.nonzero(self._mask), strict=True))
 
-    def center_in(self, tile: Tile) -> Point:
+    def center_in_tile(self, tile: Tile) -> Point:
         """Where the footprint is centered when its center lies in `tile`: the tile's center along a side of odd
         length, and its lower left corner along a side of even length."""
         return Point((tile[0] + 0.5 * (self.width % 2), tile[1] + 0.5 * (self.height % 2)))
@@ -104,7 +109,7 @@ class Footprint:
 
     def __repr__(self) -> str:
         if not self._mask.size:
-            return "Footprint.from_rows()"
+            return "Footprint.empty()"
         for cut_corners in range(min(self.width, self.height)):
             if self == Footprint.rectangle(self.width, self.height, cut_corners=cut_corners):
                 cut = f", cut_corners={cut_corners}" if cut_corners else ""

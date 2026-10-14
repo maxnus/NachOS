@@ -232,9 +232,9 @@ class OrderBook:
             self._forced.add(order)
         return order
 
-    def issued_to(self, unit: OwnUnit[Any], *, until_shown: bool = False) -> tuple[Order[Any], ...]:
+    def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[Order[Any], ...]:
         """What `unit` was ordered that has not gone out: what is held for it, head first, then the turn's orders to
-        it so far, in the order they were issued. Withdrawn orders are left out. With `until_shown`, first come the
+        it so far, in the order they were issued. Withdrawn orders are left out. With `include_sent`, first come the
         orders that went out to it lately and that the observations may not show yet: the last one sent that replaced
         its orders, and those released from what was held for it.
 
@@ -244,7 +244,7 @@ class OrderBook:
         queue = self._held.get(unit.id)
         held = () if queue is None else queue.orders
         turns = self._issued_by_unit.get(unit.id, ())
-        sent = self._not_shown_yet(unit) if until_shown else ()
+        sent = self._sent_but_not_observed_yet(unit) if include_sent else ()
         return (*sent, *(order for order in (*held, *turns) if not order._withdrawn))
 
     @property
@@ -614,7 +614,7 @@ class OrderBook:
             return last[0]
         return None
 
-    def _not_shown_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
+    def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
         replaced its orders, and those released from what was held for it."""
         orders = []

@@ -49,7 +49,7 @@ def read(findings: Mapping[str, Any]) -> dict[UnitTypeId, Footprint]:
         if measured["touches_edge"]:
             raise ValueError(f"{name} may reach past the tiles the sweep asked about")
         if measured["rows"]:
-            box = footprint.bounding_box(Point(tuple(measured["position"])))
+            box = footprint.bounding_box(at=Point(tuple(measured["position"])))
             if Tile(int(box.x), int(box.y)) != Tile(*measured["lower_left"]):
                 raise ValueError(
                     f"{name} at {measured['position']} covered tiles from {measured['lower_left']}, but its footprint"
@@ -67,7 +67,7 @@ def read_creep_requirements(findings: Mapping[str, Any]) -> dict[UnitTypeId, Cre
         if not taken_on and not taken_off:
             raise ValueError(f"the game took {name} neither on creep nor off it: {answers}")
         if taken_on and taken_off:
-            requirement = CreepRequirement.EITHER
+            requirement = CreepRequirement.NONE
         else:
             requirement = CreepRequirement.ON_CREEP if taken_on else CreepRequirement.OFF_CREEP
         requirements[UnitTypeId.read(RawUnitTypeId[name])] = requirement

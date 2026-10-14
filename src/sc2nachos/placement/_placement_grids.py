@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, Self, final
 
 from sc2nachos.gamedata import CreepRequirement
-from sc2nachos.geometry import Grid
+from sc2nachos.geometry import Grid, Point, Rectangle
+from sc2nachos.geometry._point import coordinates
 from sc2nachos.placement._build_sites import _BuildSites
+from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
+    from sc2nachos.geometry import Footprint, PointLike
     from sc2nachos.ids import UnitTypeId
     from sc2nachos.orders import OrderBook
     from sc2nachos.state._state import _State
@@ -23,13 +27,20 @@ class PlacementGrids:
     ground the map lets a structure stand on all game; `dynamic`, where nothing stands now that can go; and
     `reserved`, where this player's ordered builds will stand.
 
-    `free` combines them, and `free_for` adds the creep a structure type needs:
-    `placement.free_for(unit_type).where_footprint_fits(api.data.units[unit_type].footprint)` gives the centers where
-    one may go. None of them knows of power, of units in the way, or of the ground around resources that keeps a
-    townhall off, as `api.expansions` does.
+    `free` combines them, and `free_for` adds what a structure type needs: the creep, and for a townhall, the ground
+    resources leave it. `is_free` says whether one may stand at a point, and `nearest_free` finds the nearest site where
+    one may. None of them knows of power or of units in the way.
     """
 
-    __slots__ = ("_build_sites", "_dynamic", "_game_data", "_present_units", "_state", "_static")
+    __slots__ = (
+        "_build_sites",
+        "_dynamic",
+        "_game_data",
+        "_present_units",
+        "_state",
+        "_static",
+        "_townhall_ground",
+    )
 
     def __init__(
         self,
@@ -48,6 +59,7 @@ class PlacementGrids:
         self._state = state
         self._game_data = game_data
         self._dynamic: Grid[bool] | None = None
+        self._townhall_ground: Grid[bool] | None = None
 
     @classmethod
     def _build_at_start(
@@ -64,7 +76,7 @@ class PlacementGrids:
         holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral fields in
         sight included; it is the pathing grid that blocks those."""
         static = placement_grid.copy()
-        for unit in present_units.neutral.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
+        for unit in present_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             if (footprint := unit.footprint) is not None:
                 static.fill_footprint(footprint, at=unit.position, value=False)
         build_sites = _BuildSites(game_data, order_book)
@@ -78,6 +90,7 @@ class PlacementGrids:
         self._present_units = present_units
         self._state = state
         self._dynamic = None
+        self._townhall_ground = None
 
     @property
     def static(self) -> Grid[bool]:
@@ -116,12 +129,61 @@ class PlacementGrids:
 
     def free_for(self, unit_type: UnitTypeId) -> Grid[bool]:
         """Where a structure of `unit_type` may stand now: `free`, on creep or off it as the type needs
-        (`UnitTypeData.creep_requirement`). For a type with no requirement measured, the same as `free`. A gas
-        building stands on a geyser, which `static` closes, so it fits nowhere on any of them."""
+        (`UnitTypeData.creep_requirement`), and for a townhall, off the ground around each mineral field and geyser
+        this player knows of that keeps one off, as `api.expansions` heeds it. A gas building stands on a geyser,
+        which `static` closes, so it fits nowhere on any of them."""
+        free = self.free
+        if unit_type in UnitType.Townhall._type_ids:
+            free = free & self._ground_townhalls_may_cover()
         row = self._game_data.units.get(unit_type)
         requirement = None if row is None else row.creep_requirement
         if requirement is CreepRequirement.ON_CREEP:
-            return self.free & self._state.creep
+            return free & self._state.creep
         if requirement is CreepRequirement.OFF_CREEP:
-            return self.free & ~self._state.creep
-        return self.free
+            return free & ~self._state.creep
+        return free
+
+    def is_free(self, unit_type: UnitTypeId, *, at: PointLike) -> bool:
+        """Whether a structure of `unit_type` may stand at `at` now, placed as the game snaps it: whether every tile
+        its footprint covers is true on `free_for(unit_type)`. Raises `ValueError` for a type with no footprint."""
+        return self.free_for(unit_type).fits_footprint(self._footprint_of(unit_type), at=at)
+
+    def nearest_free(self, unit_type: UnitTypeId, *, near: PointLike, max_distance: float) -> Point | None:
+        """The center nearest `near`, at most `max_distance` from it, where a structure of `unit_type` may stand now,
+        as `is_free` says, and as the game snaps a structure; the first in tile order of those as near. `None` if
+        there is none. Raises `ValueError` for a type with no footprint."""
+        footprint = self._footprint_of(unit_type)
+        x, y = coordinates(near)[:2]
+        # Wide enough that every footprint centered within `max_distance` lies wholly inside.
+        reach = math.ceil(max_distance) + max(footprint.width, footprint.height)
+        window = Rectangle(math.floor(x) - reach, math.floor(y) - reach, 2 * reach + 1, 2 * reach + 1)
+        fitting = self.free_for(unit_type).cropped(window).where_footprint_fits(footprint)
+        # `distance_from` measures from each tile's center, which along an even side lies half a tile off the center
+        # of the footprint centered in that tile, so `near` moves by as much.
+        shift_x, shift_y = 0.5 - 0.5 * (footprint.width % 2), 0.5 - 0.5 * (footprint.height % 2)
+        distance = fitting.distance_from(Point((x + shift_x, y + shift_y)))
+        candidates = distance.where(fitting & (distance <= max_distance), math.inf)
+        if not fitting.any() or candidates.min() == math.inf:
+            return None
+        return footprint.center_in_tile(candidates.argmin())
+
+    def _footprint_of(self, unit_type: UnitTypeId) -> Footprint:
+        """The footprint a structure of `unit_type` covers; raises `ValueError` for a type with none."""
+        row = self._game_data.units.get(unit_type)
+        if row is None or row.footprint is None:
+            raise ValueError(f"{unit_type.name} has no footprint, so it stands nowhere")
+        return row.footprint
+
+    def _ground_townhalls_may_cover(self) -> Grid[bool]:
+        """True everywhere but on the ground around each mineral field and geyser this player knows of that a
+        townhall may not cover. Built once an observation."""
+        if self._townhall_ground is None:
+            ground = Grid.like(self._static, dtype=bool, outside=False)
+            ground.fill(True)
+            _keep_townhalls_off_resources(
+                ground,
+                mineral_fields=self._present_units.of_type(UnitType.AnyMineralField),
+                geysers=self._present_units.of_type(UnitType.AnyVespeneGeyser),
+            )
+            self._townhall_ground = ground.as_readonly()
+        return self._townhall_ground

@@ -61,6 +61,7 @@ class TestConstruction:
         assert footprint == Footprint.from_rows(*rows)
 
     def test_equal_masks_are_equal_footprints(self) -> None:
+        assert Footprint.from_rows() == Footprint.empty()
         assert Footprint.from_rows("##", "##") == Footprint.square(2)
         assert hash(Footprint.from_rows("##", "##")) == hash(Footprint.square(2))
         assert Footprint.square(2) != Footprint.rectangle(2, 1)
@@ -72,7 +73,7 @@ class TestConstruction:
             (Footprint.from_rows("####", "####"), "Footprint.rectangle(4, 2)"),
             (Footprint.from_rows(".##.", "####", "####", ".##."), "Footprint.square(4, cut_corners=1)"),
             (DIAGONAL, "Footprint(4x4, 10 tiles)"),
-            (Footprint.from_rows(), "Footprint.from_rows()"),
+            (Footprint.from_rows(), "Footprint.empty()"),
         ],
     )
     def test_repr_names_a_rectangle_by_its_size_and_any_other_shape_by_its_tiles(
@@ -94,7 +95,7 @@ class TestCentering:
         ],
     )
     def test_the_bounding_box_of_a_snapped_center(self, footprint: Footprint, center: Point, box: Rectangle) -> None:
-        assert footprint.bounding_box(center) == box
+        assert footprint.bounding_box(at=center) == box
 
     @pytest.mark.parametrize(
         ("footprint", "ordered_at", "stood_at"),
@@ -108,19 +109,19 @@ class TestCentering:
         self, footprint: Footprint, ordered_at: Point, stood_at: Point
     ) -> None:
         """Where a builder's order showed its structure's site (tool `sweep_orders`)."""
-        assert footprint.snapped_center(ordered_at) == stood_at
+        assert footprint.snapped_center(at=ordered_at) == stood_at
 
     def test_an_odd_side_centers_on_the_tile_holding_the_point(self) -> None:
-        assert Footprint.square(3).snapped_center(Point((10.9, 20.1))) == Point((10.5, 20.5))
+        assert Footprint.square(3).snapped_center(at=Point((10.9, 20.1))) == Point((10.5, 20.5))
 
     def test_an_even_side_centers_on_the_nearest_corner(self) -> None:
-        assert Footprint.square(2).snapped_center(Point((10.3, 20.7))) == Point((10.0, 21.0))
+        assert Footprint.square(2).snapped_center(at=Point((10.3, 20.7))) == Point((10.0, 21.0))
 
     @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
-    def test_center_in_a_tile_is_where_the_footprint_centers(self, footprint: Footprint) -> None:
-        center = footprint.center_in(Tile(10, 20))
+    def test_center_in_tile_is_where_the_footprint_centers(self, footprint: Footprint) -> None:
+        center = footprint.center_in_tile(Tile(10, 20))
         assert Tile.containing(center) == Tile(10, 20)
-        assert footprint.snapped_center(center) == center
+        assert footprint.snapped_center(at=center) == center
 
 
 class TestTiles:
@@ -131,7 +132,7 @@ class TestTiles:
     @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
     def test_they_are_the_masks_tiles_in_its_bounding_box(self, footprint: Footprint) -> None:
         center = Point((10.5, 20.5))
-        box = footprint.bounding_box(center)
+        box = footprint.bounding_box(at=center)
         tiles = footprint.tiles(at=center)
         assert len(tiles) == numpy.count_nonzero(footprint.mask)
         assert all(footprint.mask[tile.x - int(box.x), tile.y - int(box.y)] for tile in tiles)

@@ -11,10 +11,10 @@ from sc2nachos.units import Unit, UnitType
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator
 
-    from sc2nachos.gamedata import AbilityData, GameData
+    from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
-    from sc2nachos.orders import OrderBook
-    from sc2nachos.units import OwnUnit, Units
+    from sc2nachos.orders import Order, OrderBook
+    from sc2nachos.units import OwnUnit, UnitOrder, Units
 
 # An add-on stands 2.5 right of its host's center and 0.5 below (#37).
 _ADD_ON_OFFSET = (2.5, -0.5)
@@ -43,21 +43,19 @@ class _BuildSites:
         standing = {_placement_key(unit.type_id, unit.position) for unit in own_units}
         for unit in own_units:
             if unit.type_id in self._builder_types:
-                for row, target in self._builds_ordered_to(unit):
-                    self._reserve_site(reserved, row, target, unit, standing)
+                for build in self._builds_ordered_to(unit):
+                    self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
-    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[tuple[AbilityData, Point | Unit[Any] | None]]:
-        """Each build `unit` was ordered, by its ability's row and its target: held, issued this turn, sent and maybe
-        not shown yet, or shown by the unit."""
-        ordered = [(order.ability, order.target) for order in self._order_book.issued_to(unit, until_shown=True)]
+    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order[Any] | UnitOrder]:
+        """Each build `unit` was ordered: held, issued this turn, sent and maybe not shown yet, or shown by the
+        unit."""
+        ordered: list[Order[Any] | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):
-            ordered += [(unit_order.ability, unit_order.target) for unit_order in unit.orders]
-        for ability, target in ordered:
-            if self._ability_places_structure(ability):
-                yield self._game_data.abilities[ability], target
+            ordered += unit.orders
+        yield from (order for order in ordered if self._ability_places_structure(order.ability))
 
     def _ability_places_structure(self, ability: AbilityId) -> bool:
         """Whether the tables know `ability` as one that places a structure."""
@@ -67,22 +65,21 @@ class _BuildSites:
     def _reserve_site(
         self,
         reserved: Grid[bool],
-        row: AbilityData,
-        target: Point | Unit[Any] | None,
+        build: Order[Any] | UnitOrder,
         builder: OwnUnit[Any],
         standing: Collection[tuple[UnitTypeId, int, int]],
     ) -> None:
-        """Mark on `reserved` the ground that `builder`'s build by `row`'s ability, aimed at `target`, takes, unless
-        what it builds stands there already, `standing` being this player's units by `_placement_key`: begun, or
-        finished while its worker still shows the build, as an SCV did the observation its depot finished (in
-        game)."""
-        product = row.products.get(builder.type_id)
+        """Mark on `reserved` the ground that `build`, ordered to `builder`, takes, unless what it builds stands there
+        already, `standing` being this player's units by `_placement_key`: begun, or finished while its worker still
+        shows the build, as an SCV did the observation its depot finished (in game)."""
+        product = self._game_data.abilities[build.ability].products.get(builder.type_id)
         if not isinstance(product, UnitTypeId) or (footprint := self._game_data.units[product].footprint) is None:
             return
+        target = build.target
         site = target.position if isinstance(target, Unit) else target
         if product in UnitType.AnyAddOn._type_ids:
             self._reserve_add_on(reserved, product, footprint, site, builder, standing)
-        elif site is not None and _placement_key(product, footprint.snapped_center(site)) not in standing:
+        elif site is not None and _placement_key(product, footprint.snapped_center(at=site)) not in standing:
             reserved.fill_footprint(footprint, at=site, value=True)
 
     def _reserve_add_on(
@@ -100,7 +97,7 @@ class _BuildSites:
         host_footprint = self._landed_footprint(host.type_id)
         if host_footprint is None:
             return
-        host_center = host_footprint.snapped_center(landing_site if landing_site is not None else host.position)
+        host_center = host_footprint.snapped_center(at=landing_site if landing_site is not None else host.position)
         add_on_center = Point((host_center.x + _ADD_ON_OFFSET[0], host_center.y + _ADD_ON_OFFSET[1]))
         if _placement_key(add_on, add_on_center) in standing:
             return

@@ -241,7 +241,7 @@ class Grid[T: float]:
         under its bounding box, clipped to the grid, then those of its mask over the same tiles. A 3x3 footprint
         centered on the grid's lower left tile meets the values in `[0:2, 0:2]` with its mask's `[1:3, 1:3]`. Both are
         empty where it lies wholly beyond the grid."""
-        box = footprint.bounding_box(center)
+        box = footprint.bounding_box(at=center)
         grid_xs, grid_ys = self._slices(box)
         box_x, box_y = int(box.x) - self._origin[0], int(box.y) - self._origin[1]
         mask_slices = (
@@ -290,13 +290,13 @@ class Grid[T: float]:
 
     def where_footprint_fits(self: Grid[bool], footprint: Footprint) -> Grid[bool]:
         """Where `footprint` fits, by the tile holding its center: true where every tile it covers, centered as
-        `footprint.center_in` says, is true, which is this grid eroded by the footprint. A tile beyond the grid reads
-        `outside`, or false if that is `None`. The result covers the same tiles as this grid and reads false beyond
-        them."""
+        `footprint.center_in_tile` says, is true, which is this grid eroded by the footprint. A tile beyond the grid
+        reads `outside`, or false if that is `None`. The result covers the same tiles as this grid and reads false
+        beyond them."""
         values = self._data.astype(bool, copy=False)
         if not footprint.mask.any():
             return Grid(numpy.ones_like(values), origin=self._origin, outside=False)
-        # The structure's own center, index `side // 2` along each axis, is where `center_in` centers a footprint.
+        # The structure's own center, index `side // 2` along each axis, is where `center_in_tile` centers a footprint.
         fitting = scipy.ndimage.binary_erosion(values, structure=footprint.mask, border_value=int(bool(self._outside)))
         return Grid(fitting, origin=self._origin, outside=False)
 

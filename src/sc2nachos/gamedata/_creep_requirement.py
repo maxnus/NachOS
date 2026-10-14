@@ -10,5 +10,6 @@ class CreepRequirement(ReadableIntEnum):
     """Only on creep, under every tile: a zerg structure but a hatchery or a nydus worm, and a creep tumor."""
     OFF_CREEP = 2
     """Only off creep: a terran or protoss structure but a raven's auto turret or an oracle's stasis ward."""
-    EITHER = 3
-    """On creep or off it: a hatchery, a nydus worm, a raven's auto turret and an oracle's stasis ward."""
+    NONE = 3
+    """On creep or off it, as either comes: a hatchery, a nydus worm, a raven's auto turret and an oracle's stasis
+    ward."""

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1867 tests on the placement grids' branch; `uv run pytest
+- nachOS `main` has every PR to #122. `uv run pytest` passes 1878 tests on the placement grids' branch; `uv run pytest
   -m integration` passes 28 against a real game (run 2026-10-13).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
@@ -503,7 +503,9 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
   player's builds ordered and not standing yet, held, issued this turn or on their way, since "what is blocked" and
   "what is reserved" answer two questions (the owner, against one grid holding both). `free` combines the three, and
   `free_for(unit_type)` keeps to creep or off it by `UnitTypeData.creep_requirement` (`CreepRequirement`), measured
-  by the sweep for every structure type a unit places at a point, a raven's auto turret included (the owner: both).
+  by the sweep for every structure type a unit places at a point, a raven's auto turret included (the owner: both),
+  and a townhall off the ground around resources, which the expansions share (the owner, third review). For one
+  structure, `is_free(t, at=p)` and `nearest_free(t, near=p, max_distance=d)` (the owner, third review).
   Power waits for a pull request of its own, which measures what the game requires; `needs_power` stays a bool (the
   owner, second review). `api.map.placement` stays the game's grid from the start.
 - **Structures only**: a unit that moves blocks nothing, nor one in the air.
@@ -513,7 +515,7 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
   it, which the game would not create to be measured. A force field, a neutral unit of a protoss type, covers nothing
   (the owner, review of #123).
 - **`Footprint` is a value type in `sc2nachos.geometry`**: a mask, made by `square` and `rectangle` (corners cut or
-  not) or drawn `from_rows`, with its `bounding_box`, `snapped_center`, `center_in` and `tiles`. A grid says where
+  not) or drawn `from_rows`, with its `bounding_box`, `snapped_center`, `center_in_tile` and `tiles`. A grid says where
   one fits: `Grid.fits_footprint`, `Grid.where_footprint_fits`, a binary erosion, and `Grid.fill_footprint` (the
   owner, reviews of #123). The expansions block their other neutral units by it, which leaves no disagreement with the
   game around them.

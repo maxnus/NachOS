@@ -603,7 +603,7 @@ class TestFootprints:
         for x in range(ground.width):
             for y in range(ground.height):
                 tile = ground.tile_at((x, y))
-                assert fitting[tile] == ground.fits_footprint(footprint, at=footprint.center_in(tile)), tile
+                assert fitting[tile] == ground.fits_footprint(footprint, at=footprint.center_in_tile(tile)), tile
 
     def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:
         ground = _ground(".##.", "####", "####", ".##.")
@@ -626,8 +626,8 @@ class TestFootprints:
 
     def test_covering_nothing_fits_everywhere(self) -> None:
         ground = _ground("...", "...")
-        assert ground.fits_footprint(Footprint.from_rows(), at=Point((11.5, 20.5)))
-        assert ground.where_footprint_fits(Footprint.from_rows()).all()
+        assert ground.fits_footprint(Footprint.empty(), at=Point((11.5, 20.5)))
+        assert ground.where_footprint_fits(Footprint.empty()).all()
 
     def test_fill_footprint_sets_the_tiles_covered(self) -> None:
         ground = _ground("....", "....", "....", "....")

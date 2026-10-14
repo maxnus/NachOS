@@ -1,6 +1,5 @@
 """Where a structure may stand, as this player knows the map in one observation."""
 
-import math
 from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
@@ -53,6 +52,7 @@ _TABLES = make_tables(
     _row(UnitTypeId.REACTOR_BARRACKS, minerals=50, alias=(UnitTypeId.REACTOR,)),
     _row(UnitTypeId.SPAWNING_POOL, minerals=200),
     _row(UnitTypeId.HATCHERY, minerals=300),
+    _row(UnitTypeId.COMMAND_CENTER, minerals=400),
     _row(UnitTypeId.MINERAL_FIELD),
     _row(UnitTypeId.VESPENE_GEYSER),
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
@@ -268,7 +268,7 @@ class TestTheReservedGrid:
         assert game.book.issued_to(game.own(1))
         assert grids.reserved[Point((12.0, 12.0))]
 
-    def test_a_build_sent_and_not_shown_yet_reserves_its_site(self) -> None:
+    def test_a_build_sent_and_not_observed_yet_reserves_its_site(self) -> None:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game()
         game.observe(0, _scv(1, at=(9.5, 8.5)))
@@ -367,6 +367,58 @@ class TestTheFreeGrids:
         assert grids.free_for(UnitTypeId.MARINE).equals(grids.free)
 
 
+class TestPlacingOneStructure:
+    def test_is_free_asks_every_tile_of_the_footprint_where_the_game_snaps_it(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
+        assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
+        assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((12.3, 13.4)))
+        assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((2.0, 8.0)))
+        assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((0.0, 0.0)))
+        assert not grids.is_free(UnitTypeId.SPAWNING_POOL, at=Point((8.5, 8.5)))
+
+    def test_a_type_with_no_footprint_raises(self) -> None:
+        with pytest.raises(ValueError, match="MARINE has no footprint"):
+            _Game().observe(0).is_free(UnitTypeId.MARINE, at=Point((8.0, 8.0)))
+
+    def test_nearest_free_finds_the_nearest_site_beside_a_structure(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
+        site = grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.2, 8.3)), max_distance=5.0)
+        assert site == Point((8.0, 10.0))
+
+    @pytest.mark.parametrize("unit_type", [UnitTypeId.SUPPLY_DEPOT, UnitTypeId.BARRACKS], ids=lambda t: t.name)
+    @pytest.mark.parametrize("near", [Point((6.3, 9.8)), Point((3.0, 3.0)), Point((14.6, 0.4))], ids=str)
+    def test_nearest_free_is_the_nearest_center_is_free_takes(self, unit_type: UnitTypeId, near: Point) -> None:
+        grids = _Game().observe(
+            0,
+            make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(6.0, 10.0)),
+            make_unit(2, UnitTypeId.BARRACKS, at=(4.5, 4.5)),
+            make_unit(3, UnitTypeId.MINERAL_FIELD, at=(13.0, 2.5), alliance=_NEUTRAL),
+        )
+        footprint = _TABLES.units[unit_type].footprint
+        assert footprint is not None
+        centers = [footprint.center_in_tile(Tile(x, y)) for x in range(16) for y in range(16)]
+        taken = [c for c in centers if c.distance_to(near) <= 4.0 and grids.is_free(unit_type, at=c)]
+        expected = min(taken, key=lambda c: c.distance_to(near), default=None)
+        found = grids.nearest_free(unit_type, near=near, max_distance=4.0)
+        assert (found is None) == (expected is None)
+        if found is not None and expected is not None:
+            assert found.distance_to(near) == pytest.approx(expected.distance_to(near))
+            assert grids.is_free(unit_type, at=found)
+
+    def test_nearest_free_is_none_where_nothing_fits_within_reach(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
+        assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=1.0) is None
+        assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((100.0, 100.0)), max_distance=3.0) is None
+
+    def test_a_townhall_keeps_off_the_ground_around_a_mineral_field(self) -> None:
+        """A mineral field keeps a townhall off its 2x1 grown by 3 tiles (tool `sweep_townhall_placement`)."""
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.MINERAL_FIELD, at=(8.0, 2.5), alliance=_NEUTRAL))
+        assert not grids.free_for(UnitTypeId.COMMAND_CENTER)[Point((8.5, 5.5))]
+        assert grids.free_for(UnitTypeId.SUPPLY_DEPOT)[Point((8.5, 5.5))]
+        assert grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 8.5)))
+        assert not grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 7.5)))
+
+
 def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_pb2.ResponseObservation]:
     """The map of a recorded game, its first observation, and a tracker that has taken it in."""
     info: sc2api_pb2.ResponseGameInfo | None = None
@@ -424,11 +476,10 @@ class TestARecordedGamesStart:
 
 def _depot_site(api: Api) -> Point:
     """Where a supply depot fits on the grids, nearest the point 10 from this player's start toward the middle."""
-    depot = api.data.units[UnitTypeId.SUPPLY_DEPOT].footprint
-    assert depot is not None
-    fitting = api.placement.free_for(UnitTypeId.SUPPLY_DEPOT).where_footprint_fits(depot)
     toward = api.map.start_location.towards(api.map.playable_area.center, 10.0)
-    return depot.center_in(fitting.distance_from(toward).where(fitting, math.inf).argmin())
+    site = api.placement.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=toward, max_distance=8.0)
+    assert site is not None
+    return site
 
 
 def _game_takes_a_sensor_tower(transport: WebSocketTransport, tiles: Sequence[Tile]) -> list[bool]:

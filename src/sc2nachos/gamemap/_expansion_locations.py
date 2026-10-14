@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, final
 import numpy
 
 from sc2nachos.geometry import Footprint, Grid, Point
+from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -19,11 +20,6 @@ if TYPE_CHECKING:
 _TOWNHALL_FOOTPRINT = Footprint.square(5)
 # A base's townhall stands at most 5.86 from its resources' mean along an axis (corpus).
 _MAX_TOWNHALL_OFFSET_FROM_RESOURCES = 8
-# The tiles a resource keeps townhalls off, laid around its center: its footprint, a mineral field's 2x1 and a geyser's
-# 3x3, grown by 3 tiles on every side, less one tile at each corner of a mineral field's and three at a geyser's (tool
-# `sweep_townhall_placement`).
-_MINERAL_FIELD_TOWNHALL_BLOCKING_ZONE = Footprint.rectangle(8, 7, cut_corners=1)
-_GEYSER_TOWNHALL_BLOCKING_ZONE = Footprint.square(9, cut_corners=2)
 
 
 @final
@@ -53,10 +49,7 @@ class _ExpansionLocations:
         for unit in blockers:
             if (footprint := unit.footprint) is not None:
                 townhall_may_cover.fill_footprint(footprint, at=unit.position, value=False)
-        for unit in mineral_fields:
-            townhall_may_cover.fill_footprint(_MINERAL_FIELD_TOWNHALL_BLOCKING_ZONE, at=unit.position, value=False)
-        for unit in geysers:
-            townhall_may_cover.fill_footprint(_GEYSER_TOWNHALL_BLOCKING_ZONE, at=unit.position, value=False)
+        _keep_townhalls_off_resources(townhall_may_cover, mineral_fields=mineral_fields, geysers=geysers)
         self._allowed = townhall_may_cover.where_footprint_fits(_TOWNHALL_FOOTPRINT)
 
     def allows(self, center: PointLike) -> bool:

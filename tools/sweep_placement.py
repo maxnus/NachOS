@@ -288,7 +288,7 @@ def _centers_where_it_stands(measured: MeasuredFootprint) -> bool:
     """Whether the tiles `measured` covered center on where the unit stood, as a footprint centers."""
     if measured.lower_left is None:
         return True
-    box = Footprint.from_rows(*measured.rows).bounding_box(Point(measured.position))
+    box = Footprint.from_rows(*measured.rows).bounding_box(at=Point(measured.position))
     return (int(box.x), int(box.y)) == tuple(measured.lower_left)
 
 
