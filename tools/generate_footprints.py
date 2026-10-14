@@ -1,9 +1,9 @@
 """Generate `sc2nachos/gamedata/_footprints.py` from `data/footprints.json`, written by `tools/sweep_placement.py`.
 
 Keeps the types that stand, under their curated ids, and refuses a footprint whose measured position and tiles
-disagree with how a footprint centers. Writes a footprint as a square or a rectangle where it is one, corners cut or
-not, and a shape that several types share once, as a constant named for the words their names share. With them goes
-whether each structure type a unit places at a point may stand on creep. Runs without StarCraft II::
+disagree with how a footprint centers. Writes each footprint once, as a constant: a square or a rectangle by its
+factory, corners cut or not, and any other shape by its rows, named for the words the names of its types share. With
+them goes whether each structure type a unit places at a point may stand on creep. Runs without StarCraft II::
 
     uv run python tools/generate_footprints.py
 """
@@ -77,63 +77,78 @@ def read_creep_requirements(findings: Mapping[str, Any]) -> dict[UnitTypeId, Cre
 def render(
     footprints: Mapping[UnitTypeId, Footprint], requirements: Mapping[UnitTypeId, CreepRequirement], base_build: int
 ) -> str:
-    """The module source for `footprints` and the creep `requirements`, one entry a type, sorted by name."""
-    shared = _shared_shapes(footprints)
-    constants = "".join(f"{name} = {_source(footprint, indent='')}\n" for footprint, name in shared.items())
-    entries = []
-    for unit_type in sorted(footprints, key=lambda unit_type: unit_type.name):
-        footprint = footprints[unit_type]
-        entries.append(
-            f"        UnitTypeId.{unit_type.name}: {shared.get(footprint) or _source(footprint, indent=' ' * 8)},\n"
-        )
+    """The module source for `footprints` and the creep `requirements`: each footprint made once, as a constant, then
+    one entry a type, sorted by name."""
+    names = _constant_names(footprints)
+    constants = "".join(
+        f"{name} = {_source(footprint)}\n"
+        for footprint, name in sorted(names.items(), key=lambda item: _in_order(item[1]))
+    )
+    entries = "".join(
+        f"        UnitTypeId.{unit_type.name}: {names[footprints[unit_type]]},\n"
+        for unit_type in sorted(footprints, key=lambda unit_type: unit_type.name)
+    )
     rules = "".join(
         f"        UnitTypeId.{unit_type.name}: CreepRequirement.{requirements[unit_type].name},\n"
         for unit_type in sorted(requirements, key=lambda unit_type: unit_type.name)
     )
     return (
         HEADER.format(base_build=base_build)
-        + ("\n" + constants if constants else "")
-        + f"\nFOOTPRINTS: Final = MappingProxyType(\n    {{\n{''.join(entries)}    }}\n)\n"
+        + "\n"
+        + constants
+        + f"\nFOOTPRINTS: Final = MappingProxyType(\n    {{\n{entries}    }}\n)\n"
         + f"\nCREEP_REQUIREMENTS: Final = MappingProxyType(\n    {{\n{rules}    }}\n)\n"
     )
 
 
-def _shared_shapes(footprints: Mapping[UnitTypeId, Footprint]) -> dict[Footprint, str]:
-    """A constant's name for each footprint that is no square or rectangle and that several types share: the words of
-    their names that all of them have, in the order of the first."""
-    sharing: dict[Footprint, list[UnitTypeId]] = defaultdict(list)
+def _constant_names(footprints: Mapping[UnitTypeId, Footprint]) -> dict[Footprint, str]:
+    """A constant's name for each footprint of `footprints`: a square, a rectangle or the empty one by what its factory
+    takes, as `_SQUARE_7_CUT_2`, and any other by the words of the names of the types covering it that all of them
+    have, in the order of the first."""
+    covering: dict[Footprint, list[str]] = defaultdict(list)
     for unit_type, footprint in footprints.items():
-        if _drawn(footprint):
-            sharing[footprint].append(unit_type)
+        covering[footprint].append(unit_type.name)
     names = {}
-    for footprint, unit_types in sharing.items():
-        if len(unit_types) < 2:
-            continue
-        first, *others = sorted(unit_type.name for unit_type in unit_types)
-        common = [word for word in first.split("_") if all(word in other.split("_") for other in others)]
-        if not common:
-            raise ValueError(f"{first} and {', '.join(others)} share a footprint, but no word to name it by")
-        names[footprint] = "_" + "_".join(common)
+    for footprint, type_names in covering.items():
+        if (name := _factory_name(footprint)) is None:
+            first, *others = sorted(type_names)
+            common = [word for word in first.split("_") if all(word in other.split("_") for other in others)]
+            if not common:
+                raise ValueError(f"{first} and {', '.join(others)} share a footprint, but no word to name it by")
+            name = "_" + "_".join(common)
+        names[footprint] = name
     if len(set(names.values())) < len(names):
-        raise ValueError(f"two shared footprints would take one name: {sorted(names.values())}")
+        raise ValueError(f"two footprints would take one name: {sorted(names.values())}")
     return names
 
 
-def _drawn(footprint: Footprint) -> bool:
-    """Whether `footprint` is no square or rectangle, corners cut or not, so its rows draw it."""
-    return repr(footprint).startswith("Footprint(")
+def _factory_name(footprint: Footprint) -> str | None:
+    """The name of the constant for `footprint` if `Footprint.empty`, `square` or `rectangle` makes it, as
+    `_SQUARE_7_CUT_2` for `Footprint.square(7, cut_corners=2)`; `None` for any other."""
+    width, height = footprint.width, footprint.height
+    if not footprint.mask.size:
+        return "_EMPTY"
+    for cut_corners in range(min(width, height)):
+        if footprint == Footprint.rectangle(width, height, cut_corners=cut_corners):
+            shape = f"_SQUARE_{width}" if width == height else f"_RECTANGLE_{width}_{height}"
+            return f"{shape}_CUT_{cut_corners}" if cut_corners else shape
+    return None
 
 
-def _source(footprint: Footprint, *, indent: str) -> str:
-    """The source that makes `footprint`: its factory, or its rows one to a line, indented by `indent`."""
-    if not _drawn(footprint):
+def _in_order(name: str) -> list[tuple[int, int | str]]:
+    """A key that sorts constants' names by their words, the numbers in them by value."""
+    return [(0, int(word)) if word.isdigit() else (1, word) for word in name.split("_")]
+
+
+def _source(footprint: Footprint) -> str:
+    """The source that makes `footprint`: its factory, or its rows one to a line."""
+    if _factory_name(footprint) is not None:
         return repr(footprint)
     rows = (
         '"' + "".join("#" if footprint.mask[x, y] else "." for x in range(footprint.width)) + '"'
         for y in reversed(range(footprint.height))
     )
-    lines = "".join(f"{indent}    {row},\n" for row in rows)
-    return f"Footprint.from_rows(\n{lines}{indent})"
+    return "Footprint.from_rows(\n" + "".join(f"    {row},\n" for row in rows) + ")"
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1878 tests on the placement grids' branch; `uv run pytest
+- nachOS `main` has every PR to #122. `uv run pytest` passes 1879 tests on the placement grids' branch; `uv run pytest
   -m integration` passes 28 against a real game (run 2026-10-13).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
@@ -517,7 +517,8 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
 - **`Footprint` is a value type in `sc2nachos.geometry`**: a mask, made by `square` and `rectangle` (corners cut or
   not) or drawn `from_rows`, with its `bounding_box`, `snapped_center`, `center_in_tile` and `tiles`. A grid says where
   one fits: `Grid.fits_footprint`, `Grid.where_footprint_fits`, a binary erosion, and `Grid.fill_footprint` (the
-  owner, reviews of #123). The expansions block their other neutral units by it, which leaves no disagreement with the
+  owner, reviews of #123). The generated table makes each shape once, as a constant, so types of one shape share one
+  instance (the owner: constants rather than an enum, whose members would not be footprints). The expansions block their other neutral units by it, which leaves no disagreement with the
   game around them.
 - **No up-to-date pathing grid yet**: it waits until something needs it.
 

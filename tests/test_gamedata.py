@@ -292,6 +292,12 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type)]))
         assert data.units[unit_type].footprint == footprint
 
+    def test_types_of_one_shape_share_one_footprint(self) -> None:
+        ids = (UnitTypeId.BARRACKS, UnitTypeId.ARMORY, UnitTypeId.SUPPLY_DEPOT)
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type) for unit_type in ids]))
+        assert data.units[UnitTypeId.BARRACKS].footprint is data.units[UnitTypeId.ARMORY].footprint
+        assert data.units[UnitTypeId.BARRACKS].footprint is not data.units[UnitTypeId.SUPPLY_DEPOT].footprint
+
     @pytest.mark.parametrize(
         ("unit_type", "requirement"),
         [
