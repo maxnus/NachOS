@@ -36,7 +36,7 @@ class PlacementGrids:
         "_build_sites",
         "_dynamic",
         "_game_data",
-        "_ground_by_type",
+        "_ground_by_needs",
         "_present_units",
         "_state",
         "_static",
@@ -61,7 +61,7 @@ class PlacementGrids:
         self._game_data = game_data
         self._dynamic: Grid[bool] | None = None
         self._townhall_ground: Grid[bool] | None = None
-        self._ground_by_type: dict[UnitTypeId, Grid[bool]] = {}
+        self._ground_by_needs: dict[tuple[bool, CreepRequirement | None], Grid[bool]] = {}
 
     @classmethod
     def _build_at_start(
@@ -93,7 +93,7 @@ class PlacementGrids:
         self._state = state
         self._dynamic = None
         self._townhall_ground = None
-        self._ground_by_type = {}
+        self._ground_by_needs = {}
 
     @property
     def static(self) -> Grid[bool]:
@@ -174,19 +174,21 @@ class PlacementGrids:
         return footprint.center_in_tile(candidates.argmin())
 
     def _ground_for(self, unit_type: UnitTypeId) -> Grid[bool]:
-        """`free_for(unit_type)` before `reserved` is taken off, which no order changes. Built once an observation for
-        each type."""
-        if (ground := self._ground_by_type.get(unit_type)) is None:
+        """`free_for(unit_type)` before `reserved` is taken off, which no order changes: one grid for the types that
+        are townhalls or not alike and keep to creep or off it alike, built once an observation."""
+        row = self._game_data.units.get(unit_type)
+        requirement = None if row is None else row.creep_requirement
+        keeps_to = requirement if requirement in (CreepRequirement.ON_CREEP, CreepRequirement.OFF_CREEP) else None
+        needs = (unit_type in UnitType.Townhall._type_ids, keeps_to)
+        if (ground := self._ground_by_needs.get(needs)) is None:
             ground = self._static & self.dynamic
-            if unit_type in UnitType.Townhall._type_ids:
+            if needs[0]:
                 ground = ground & self._ground_townhalls_may_cover()
-            row = self._game_data.units.get(unit_type)
-            requirement = None if row is None else row.creep_requirement
-            if requirement is CreepRequirement.ON_CREEP:
+            if keeps_to is CreepRequirement.ON_CREEP:
                 ground = ground & self._state.creep
-            elif requirement is CreepRequirement.OFF_CREEP:
+            elif keeps_to is CreepRequirement.OFF_CREEP:
                 ground = ground & ~self._state.creep
-            ground = self._ground_by_type[unit_type] = ground.as_readonly()
+            ground = self._ground_by_needs[needs] = ground.as_readonly()
         return ground
 
     def _footprint_of(self, unit_type: UnitTypeId) -> Footprint:

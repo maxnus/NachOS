@@ -115,22 +115,5 @@ class Footprint:
     def __hash__(self) -> int:
         return hash((self._mask.shape, self._mask.tobytes()))
 
-    def _made_by(self) -> tuple[str, tuple[int, ...], int] | None:
-        """The factory that makes this footprint, `empty`, `square` or `rectangle`, with the sides it takes and the
-        corners it cuts; `None` if none does."""
-        if not self._mask.size:
-            return "empty", (), 0
-        width, height = self.width, self.height
-        # A cut deeper than the middle tile's steps from the corners leaves no tile.
-        for cut_corners in range((width - 1) // 2 + (height - 1) // 2 + 1):
-            if self == Footprint.rectangle(width, height, cut_corners=cut_corners):
-                sides = (width,) if width == height else (width, height)
-                return ("square" if width == height else "rectangle"), sides, cut_corners
-        return None
-
     def __repr__(self) -> str:
-        if (made_by := self._made_by()) is None:
-            return f"Footprint({self.width}x{self.height}, {numpy.count_nonzero(self._mask)} tiles)"
-        factory, sides, cut_corners = made_by
-        arguments = [str(side) for side in sides] + ([f"cut_corners={cut_corners}"] if cut_corners else [])
-        return f"Footprint.{factory}({', '.join(arguments)})"
+        return f"Footprint({self.width}x{self.height}, {numpy.count_nonzero(self._mask)} tiles)"

@@ -132,11 +132,25 @@ def _constant_names(footprints: Mapping[UnitTypeId, Footprint]) -> dict[Footprin
 def _factory_name(footprint: Footprint) -> str | None:
     """The name of the constant for `footprint` if `Footprint.empty`, `square` or `rectangle` makes it, as
     `_SQUARE_7_CUT_2` for `Footprint.square(7, cut_corners=2)`; `None` for any other."""
-    if (made_by := footprint._made_by()) is None:
+    if (made_by := _made_by(footprint)) is None:
         return None
     factory, sides, cut_corners = made_by
     words = [factory.upper(), *map(str, sides), *(["CUT", str(cut_corners)] if cut_corners else [])]
     return "_" + "_".join(words)
+
+
+def _made_by(footprint: Footprint) -> tuple[str, tuple[int, ...], int] | None:
+    """The factory that makes `footprint`, `empty`, `square` or `rectangle`, with the sides it takes and the corners it
+    cuts; `None` if none does."""
+    if not footprint.mask.size:
+        return "empty", (), 0
+    width, height = footprint.width, footprint.height
+    # A cut deeper than the middle tile's steps from the corners leaves no tile.
+    for cut_corners in range((width - 1) // 2 + (height - 1) // 2 + 1):
+        if footprint == Footprint.rectangle(width, height, cut_corners=cut_corners):
+            sides = (width,) if width == height else (width, height)
+            return ("square" if width == height else "rectangle"), sides, cut_corners
+    return None
 
 
 def _in_order(name: str) -> list[tuple[int, int | str]]:
@@ -146,8 +160,10 @@ def _in_order(name: str) -> list[tuple[int, int | str]]:
 
 def _source(footprint: Footprint) -> str:
     """The source that makes `footprint`: its factory, or its rows one to a line."""
-    if footprint._made_by() is not None:
-        return repr(footprint)
+    if (made_by := _made_by(footprint)) is not None:
+        factory, sides, cut_corners = made_by
+        arguments = [str(side) for side in sides] + ([f"cut_corners={cut_corners}"] if cut_corners else [])
+        return f"Footprint.{factory}({', '.join(arguments)})"
     rows = (
         '"' + "".join("#" if footprint.mask[x, y] else "." for x in range(footprint.width)) + '"'
         for y in reversed(range(footprint.height))

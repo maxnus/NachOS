@@ -90,22 +90,9 @@ class TestConstruction:
         assert hash(Footprint.from_rows("##", "##")) == hash(Footprint.square(2))
         assert Footprint.square(2) != Footprint.rectangle(2, 1)
 
-    @pytest.mark.parametrize(
-        ("footprint", "shown"),
-        [
-            (Footprint.square(3), "Footprint.square(3)"),
-            (Footprint.from_rows("####", "####"), "Footprint.rectangle(4, 2)"),
-            (Footprint.from_rows(".##.", "####", "####", ".##."), "Footprint.square(4, cut_corners=1)"),
-            # The deepest cut that leaves a tile, past the shorter side.
-            (Footprint.rectangle(9, 3, cut_corners=5), "Footprint.rectangle(9, 3, cut_corners=5)"),
-            (DIAGONAL, "Footprint(4x4, 10 tiles)"),
-            (Footprint.from_rows(), "Footprint.empty()"),
-        ],
-    )
-    def test_repr_names_a_rectangle_by_its_size_and_any_other_shape_by_its_tiles(
-        self, footprint: Footprint, shown: str
-    ) -> None:
-        assert repr(footprint) == shown
+    def test_repr_gives_the_size_and_the_tiles_covered(self) -> None:
+        assert repr(Footprint.square(4, cut_corners=1)) == "Footprint(4x4, 12 tiles)"
+        assert repr(Footprint.empty()) == "Footprint(0x0, 0 tiles)"
 
 
 class TestCentering:
