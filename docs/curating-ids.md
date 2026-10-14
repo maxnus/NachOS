@@ -203,6 +203,20 @@ armor plus the armor it reports from upgrades has to equal its row's armor.
 The `god` cheat multiplies every weapon's damage in the rows (`docs/cheats.md`), so this sweep never turns it on,
 and reads the baseline rows before any cheat.
 
+## Refreshing `data/footprints.json`
+
+The tiles a unit covers where it stands are measured in game, since `RequestData` gives a structure only its
+building ability's `footprint_radius` and the map's own units nothing. `tools/sweep_placement.py footprints` makes
+every curated structure type and neutral type in turn and asks which tiles around it would take a one-tile structure;
+the generator writes them to `sc2nachos/gamedata/_footprints.py`, which `UnitTypeData.footprint` reads. After a patch,
+or after curating a new neutral type, run both:
+
+    uv run python tools/sweep_placement.py footprints
+    uv run python tools/generate_footprints.py
+
+The generator refuses a footprint that reaches the edge of the tiles the sweep asked about, or whose tiles do not
+center on where the unit stood as a footprint centers.
+
 ## Refreshing `data/stableid.json`
 
 **The file depends on the map.** The game rewrites it on every launch from the loaded map's mod dependencies:

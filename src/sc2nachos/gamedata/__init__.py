@@ -2,6 +2,7 @@
 
 from sc2nachos.gamedata._ability_data import AbilityData, OrderBehavior, TargetType
 from sc2nachos.gamedata._cost import Cost
+from sc2nachos.gamedata._creep_requirement import CreepRequirement
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._game_data import GameData
 from sc2nachos.gamedata._resources import Resources
@@ -14,6 +15,7 @@ __all__ = [
     "AbilityData",
     "Attribute",
     "Cost",
+    "CreepRequirement",
     "EffectData",
     "GameData",
     "OrderBehavior",

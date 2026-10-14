@@ -1,0 +1,3130 @@
+{
+ "base_build": 75689,
+ "unit_types": {
+  "Armory": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Assimilator": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "AssimilatorRich": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "AutoTurret": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "BanelingNest": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Barracks": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "BarracksReactor": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "BarracksTechLab": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Bunker": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "CommandCenter": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CreepTumorBurrowed": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "CyberneticsCore": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "DarkShrine": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "EngineeringBay": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "EvolutionChamber": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Extractor": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "ExtractorRich": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Factory": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "FactoryReactor": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "FactoryTechLab": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "FleetBeacon": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Forge": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "FusionCore": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Gateway": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "GhostAcademy": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "GreaterSpire": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Hatchery": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "Hive": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "HydraliskDen": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "InfestationPit": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "KD8Charge": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "Lair": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "LurkerDenMP": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "MissileTurret": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Nexus": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "NydusCanal": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "NydusNetwork": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "OracleStasisTrap": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "OrbitalCommand": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "PhotonCannon": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "PlanetaryFortress": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "Pylon": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Reactor": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Refinery": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "RefineryRich": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "RoachWarren": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "RoboticsBay": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "RoboticsFacility": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "SensorTower": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "ShieldBattery": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "SpawningPool": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "SpineCrawler": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Spire": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "SporeCrawler": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "Stargate": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Starport": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "StarportReactor": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "StarportTechLab": {
+   "position": [
+    116.0,
+    66.0
+   ],
+   "lower_left": [
+    115,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "SupplyDepot": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "SupplyDepotLowered": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "TechLab": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "TemplarArchive": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "TwilightCouncil": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "UltraliskCavern": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "WarpGate": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "BattleStationMineralField": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "BattleStationMineralField750": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "BraxisAlphaDestructible1x1": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "BraxisAlphaDestructible2x2": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "CollapsiblePurifierTowerDebris": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsiblePurifierTowerDiagonal": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsiblePurifierTowerPushUnit": {
+   "position": [
+    133.5,
+    182.5
+   ],
+   "lower_left": [
+    130,
+    179
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTower": {
+   "position": [
+    133.5,
+    182.5
+   ],
+   "lower_left": [
+    131,
+    180
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDebris": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDebrisRampLeft": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDebrisRampLeftGreen": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDebrisRampRight": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDebrisRampRightGreen": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerDiagonal": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    176,
+    181
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerPushUnit": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    66,
+    61
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerPushUnitRampLeft": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    66,
+    61
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerPushUnitRampLeftGreen": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    66,
+    61
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerPushUnitRampRight": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    66,
+    61
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerPushUnitRampRightGreen": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    66,
+    61
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerRampLeft": {
+   "position": [
+    69.5,
+    64.5
+   ],
+   "lower_left": [
+    67,
+    62
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerRampLeftGreen": {
+   "position": [
+    144.5,
+    107.5
+   ],
+   "lower_left": [
+    142,
+    105
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerRampRight": {
+   "position": [
+    90.5,
+    138.5
+   ],
+   "lower_left": [
+    88,
+    136
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleRockTowerRampRightGreen": {
+   "position": [
+    179.5,
+    118.5
+   ],
+   "lower_left": [
+    177,
+    116
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTower": {
+   "position": [
+    66.5,
+    125.5
+   ],
+   "lower_left": [
+    64,
+    123
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerDebris": {
+   "position": [
+    134.5,
+    84.5
+   ],
+   "lower_left": [
+    132,
+    82
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerDiagonal": {
+   "position": [
+    134.5,
+    84.5
+   ],
+   "lower_left": [
+    132,
+    82
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnit": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnitRampLeft": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerPushUnitRampRight": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    110,
+    160
+   ],
+   "rows": [
+    "..###..",
+    ".#####.",
+    "#######",
+    "#######",
+    "#######",
+    ".#####.",
+    "..###.."
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerRampLeft": {
+   "position": [
+    113.5,
+    163.5
+   ],
+   "lower_left": [
+    111,
+    161
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "CollapsibleTerranTowerRampRight": {
+   "position": [
+    137.5,
+    124.5
+   ],
+   "lower_left": [
+    135,
+    122
+   ],
+   "rows": [
+    "#####",
+    "#####",
+    "#####",
+    "#####",
+    "#####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris2x4Horizontal": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    107,
+    125
+   ],
+   "rows": [
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris2x4Vertical": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    108,
+    124
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris2x6Horizontal": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    106,
+    125
+   ],
+   "rows": [
+    "######",
+    "######"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris2x6Vertical": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    108,
+    123
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris4x4": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    107,
+    124
+   ],
+   "rows": [
+    ".##.",
+    "####",
+    "####",
+    ".##."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebris6x6": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    106,
+    123
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebrisHugeDiagonalBLUR": {
+   "position": [
+    93.0,
+    97.0
+   ],
+   "lower_left": [
+    88,
+    92
+   ],
+   "rows": [
+    ".......#..",
+    "......###.",
+    ".....#####",
+    "....#####.",
+    "...#####..",
+    "..#####...",
+    ".#####....",
+    "#####.....",
+    ".###......",
+    "..#......."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleCityDebrisHugeDiagonalULBR": {
+   "position": [
+    93.0,
+    97.0
+   ],
+   "lower_left": [
+    88,
+    92
+   ],
+   "rows": [
+    "..#.......",
+    ".###......",
+    "#####.....",
+    ".#####....",
+    "..#####...",
+    "...#####..",
+    "....#####.",
+    ".....#####",
+    "......###.",
+    ".......#.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleDebris4x4": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    107,
+    124
+   ],
+   "rows": [
+    ".##.",
+    "####",
+    "####",
+    ".##."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleDebris6x6": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    106,
+    123
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleDebrisRampDiagonalHugeBLUR": {
+   "position": [
+    93.0,
+    97.0
+   ],
+   "lower_left": [
+    88,
+    92
+   ],
+   "rows": [
+    ".......#..",
+    "......###.",
+    ".....#####",
+    "....#####.",
+    "...#####..",
+    "..#####...",
+    ".#####....",
+    "#####.....",
+    ".###......",
+    "..#......."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleDebrisRampDiagonalHugeULBR": {
+   "position": [
+    93.0,
+    97.0
+   ],
+   "lower_left": [
+    88,
+    92
+   ],
+   "rows": [
+    "..#.......",
+    ".###......",
+    "#####.....",
+    ".#####....",
+    "..#####...",
+    "...#####..",
+    "....#####.",
+    ".....#####",
+    "......###.",
+    ".......#.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleExpeditionGate6x6": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    106,
+    123
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce2x4Horizontal": {
+   "position": [
+    109.0,
+    126.0
+   ],
+   "lower_left": [
+    107,
+    125
+   ],
+   "rows": [
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce2x4Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    64
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce2x6Horizontal": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    65
+   ],
+   "rows": [
+    "######",
+    "######"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce2x6Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    63
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce4x4": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    ".##.",
+    "####",
+    "####",
+    ".##."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIce6x6": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIceDiagonalHugeBLUR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    ".......#..",
+    "......###.",
+    ".....#####",
+    "....#####.",
+    "...#####..",
+    "..#####...",
+    ".#####....",
+    "#####.....",
+    ".###......",
+    "..#......."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIceDiagonalHugeULBR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    "..#.......",
+    ".###......",
+    "#####.....",
+    ".#####....",
+    "..#####...",
+    "...#####..",
+    "....#####.",
+    ".....#####",
+    "......###.",
+    ".......#.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIceHorizontalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    126,
+    177
+   ],
+   "rows": [
+    "############",
+    "############",
+    "############",
+    "############"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleIceVerticalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    130,
+    173
+   ],
+   "rows": [
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRampDiagonalHugeBLUR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    ".......#..",
+    "......###.",
+    ".....#####",
+    "....#####.",
+    "...#####..",
+    "..#####...",
+    ".#####....",
+    "#####.....",
+    ".###......",
+    "..#......."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRampDiagonalHugeULBR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    "..#.......",
+    ".###......",
+    "#####.....",
+    ".#####....",
+    "..#####...",
+    "...#####..",
+    "....#####.",
+    ".....#####",
+    "......###.",
+    ".......#.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRampHorizontalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    126,
+    177
+   ],
+   "rows": [
+    "############",
+    "############",
+    "############",
+    "############"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRampVerticalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    130,
+    173
+   ],
+   "rows": [
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock2x4Horizontal": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    113,
+    65
+   ],
+   "rows": [
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock2x4Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    64
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock2x6Horizontal": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    65
+   ],
+   "rows": [
+    "######",
+    "######"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock2x6Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    63
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock4x4": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    ".##.",
+    "####",
+    "####",
+    ".##."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock6x6": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRock6x6Weak": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx12x4Horizontal": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    113,
+    65
+   ],
+   "rows": [
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx12x4Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    64
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx12x6Horizontal": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    65
+   ],
+   "rows": [
+    "######",
+    "######"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx12x6Vertical": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    63
+   ],
+   "rows": [
+    "##",
+    "##",
+    "##",
+    "##",
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx14x4": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    ".##.",
+    "####",
+    "####",
+    ".##."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx16x6": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx1DiagonalHugeBLUR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    ".......#..",
+    "......###.",
+    ".....#####",
+    "....#####.",
+    "...#####..",
+    "..#####...",
+    ".#####....",
+    "#####.....",
+    ".###......",
+    "..#......."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx1DiagonalHugeULBR": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    127,
+    174
+   ],
+   "rows": [
+    "..#.......",
+    ".###......",
+    "#####.....",
+    ".#####....",
+    "..#####...",
+    "...#####..",
+    "....#####.",
+    ".....#####",
+    "......###.",
+    ".......#.."
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx1HorizontalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    126,
+    177
+   ],
+   "rows": [
+    "############",
+    "############",
+    "############",
+    "############"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleRockEx1VerticalHuge": {
+   "position": [
+    132.0,
+    179.0
+   ],
+   "lower_left": [
+    130,
+    173
+   ],
+   "rows": [
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####",
+    "####"
+   ],
+   "touches_edge": false
+  },
+  "DestructibleZergInfestation3x3": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    112,
+    63
+   ],
+   "rows": [
+    "..##..",
+    ".####.",
+    "######",
+    "######",
+    ".####.",
+    "..##.."
+   ],
+   "touches_edge": false
+  },
+  "InhibitorZoneLarge": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "InhibitorZoneMedium": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "InhibitorZoneSmall": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "LabMineralField": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "LabMineralField750": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "MineralField": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "MineralField450": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "MineralField750": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "MineralFieldOpaque": {
+   "position": [
+    115.0,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "MineralFieldOpaque900": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "ProtossVespeneGeyser": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    177,
+    182
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "PurifierMineralField": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "PurifierMineralField750": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "PurifierRichMineralField": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "PurifierRichMineralField750": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "PurifierVespeneGeyser": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    177,
+    182
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "RichMineralField": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "RichMineralField750": {
+   "position": [
+    179.0,
+    183.5
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "RichVespeneGeyser": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    177,
+    182
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "Rocks2x2NonConjoined": {
+   "position": [
+    179.0,
+    184.0
+   ],
+   "lower_left": [
+    178,
+    183
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "ShakurasVespeneGeyser": {
+   "position": [
+    178.5,
+    183.5
+   ],
+   "lower_left": [
+    177,
+    182
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "SpacePlatformGeyser": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "UnbuildableBricksDestructible": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "UnbuildablePlatesDestructible": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "UnbuildableRocksDestructible": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "VespeneGeyser": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    113,
+    64
+   ],
+   "rows": [
+    "###",
+    "###",
+    "###"
+   ],
+   "touches_edge": false
+  },
+  "XelNagaHealingShrine": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "XelNagaTower": {
+   "position": [
+    115.0,
+    66.0
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "##",
+    "##"
+   ],
+   "touches_edge": false
+  },
+  "CreepTumor": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  },
+  "CreepTumorQueen": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": [
+    114,
+    65
+   ],
+   "rows": [
+    "#"
+   ],
+   "touches_edge": false
+  }
+ },
+ "moving": {
+  "BarracksFlying": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "CommandCenterFlying": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "FactoryFlying": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "OrbitalCommandFlying": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "SpineCrawlerUprooted": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "SporeCrawlerUprooted": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  },
+  "StarportFlying": {
+   "position": [
+    114.5,
+    65.5
+   ],
+   "lower_left": null,
+   "rows": [],
+   "touches_edge": false
+  }
+ },
+ "not_made": [
+  "AccelerationZoneSmall",
+  "AccelerationZoneMedium",
+  "AccelerationZoneLarge",
+  "AccelerationZoneFlyingSmall",
+  "AccelerationZoneFlyingMedium",
+  "AccelerationZoneFlyingLarge",
+  "InhibitorZoneFlyingSmall",
+  "InhibitorZoneFlyingMedium",
+  "InhibitorZoneFlyingLarge"
+ ],
+ "creep": {
+  "Armory": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "AutoTurret": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "BanelingNest": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Barracks": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Bunker": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "CommandCenter": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "CyberneticsCore": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "DarkShrine": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "EngineeringBay": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "EvolutionChamber": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Factory": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "FleetBeacon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Forge": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "FusionCore": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Gateway": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "GhostAcademy": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Hatchery": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "HydraliskDen": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "InfestationPit": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "LurkerDenMP": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "MissileTurret": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Nexus": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "NydusCanal": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "NydusNetwork": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "OracleStasisTrap": {
+   "on_creep": "Success",
+   "off_creep": "Success"
+  },
+  "PhotonCannon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Pylon": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "RoachWarren": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "RoboticsBay": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "RoboticsFacility": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SensorTower": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "ShieldBattery": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SpawningPool": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "SpineCrawler": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Spire": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "SporeCrawler": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "Stargate": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "Starport": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "SupplyDepot": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "TemplarArchive": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "TwilightCouncil": {
+   "on_creep": "CantBuildTooCloseToCreepSource",
+   "off_creep": "Success"
+  },
+  "UltraliskCavern": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "CreepTumor": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  },
+  "CreepTumorQueen": {
+   "on_creep": "Success",
+   "off_creep": "CantBuildTooFarFromCreepSource"
+  }
+ }
+}

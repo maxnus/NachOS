@@ -105,7 +105,9 @@ Each entry ends with how it was seen:
   and no structure on ground it cannot stand on; a photon cannon ordered onto this player's creep was never made
   (tool `sweep_alerts`, #37).
 - A unit made for player 0 is reported as owner 16 (tool `_sandbox`).
-- Debug commands can make a larva but not a plain creep tumor, and a queen's tumor only on creep (#28).
+- Debug commands make a larva only on creep: off it, none appeared, and none was reported dead (in game, build 75689).
+- Debug commands make a creep tumor, plain or a queen's, only on creep, and not at every spot on it (#28; tool
+  `sweep_placement`, build 75689).
 - A debug-made force field belongs to its player and is offered Shatter; one a sentry casts is neutral, owner 16,
   and offered nothing, and Shatter ordered on it is refused (#23, #33).
 - A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
@@ -739,10 +741,43 @@ Each entry ends with how it was seen:
   bridges (#17, #22; corpus).
 - Nothing pathable or placeable lies outside the playable area, which is 29% of Pylon and 53% of a map on average,
   and no unit can leave it. Grid images are 1 or 8 bits per pixel, one row per y, from the bottom up (#17; corpus).
-- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers;
-  the placement grid blocks rocks but no resource or townhall, in sight or not (#17; corpus). It leaves open the
-  ground under Xel'Naga towers and unbuildable plates and bricks, and most of it under some 6x6 debris and gates,
-  though the game takes no townhall there (tool `sweep_townhall_placement`; corpus).
+- At step 0 the pathing grid blocks rocks and only this player's own starting townhall, mineral fields and geysers (#17;
+  corpus). The placement grid reads the ground beneath every unit, and blocks none: no resource, townhall, rock or
+  tower, in sight or not. On the 7 maps of the corpus each neutral unit but a resource was killed in turn, and of the
+  tiles under each that went (a collapsible tower stays; see below), every one the start's grid leaves open took a
+  structure once it was gone, and none the grid blocks did, but one under a collapsible tower beside a rock. Rocks on a
+  ramp, as on LeyLinesAIE_v3 and PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689;
+  corpus).
+- A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the game
+  snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure morphs
+  into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive 5x5, a warp
+  gate 3x3, a greater spire 2x2. An add-on covers 2x2 beside its host. A creep tumor, plain, a queen's or burrowed, and
+  an oracle's stasis ward cover one tile. Nothing that flies covers any, nor an uprooted crawler, a KD8 charge or a
+  Xel'Naga healing shrine (tool `sweep_placement`, build 75689).
+- A mineral field covers 2x1 and a geyser 3x3; a Xel'Naga tower and unbuildable plates and bricks 2x2; an inhibitor
+  zone one tile; a collapsible tower and its debris 5x5; and the unit that pushes units from under a falling tower a
+  7x7 square less three tiles at each corner. Rocks and debris cover the size their name gives, but a 4x4 one loses a
+  tile at each corner and a 6x6 one three, and a huge diagonal one covers a band five tiles wide across a 10x10
+  square (tool `sweep_placement`, build 75689).
+- The footprints were measured one unit at a time on open ground, by asking whether a sensor tower, refused on creep,
+  or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
+  refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone and a
+  flying inhibitor zone the game does not create at all (tool `sweep_placement`, build 75689).
+- Whether a structure may stand on creep was asked of each structure type a unit places at a point, on open ground
+  and on a hatchery's creep, with a pylon's power over both. A zerg structure but a hatchery and a nydus worm, and a
+  creep tumor, is taken only on creep, and refused off it `CantBuildTooFarFromCreepSource`; a terran or protoss
+  structure but a raven's auto turret and an oracle's stasis ward only off it, and refused on it
+  `CantBuildTooCloseToCreepSource`; a hatchery, a nydus worm, an auto turret and a stasis ward either way. A zerg structure needs creep under every tile of its footprint: beside a
+  hatchery, a spawning pool was refused while the creep had not yet reached one corner of its 3x3 (tool
+  `sweep_placement`, build 75689).
+- An add-on is its host's own type only while attached: created alone by a debug command, a barracks', factory's or
+  starport's tech lab or reactor comes out plain, and a barracks lifting off leaves its reactor plain. The sweep
+  measures each beside a host told to build it (tool `sweep_placement`; local game, build 75689).
+- A collapsible tower stands mostly on ground no structure takes: of the 825 tiles under the corpus's 33, the start's
+  grid blocks 712. Destroyed, by attack as by a debug kill, it falls: its health drops to 0, and its debris, units of
+  their own with 2000 health, lands about 5 tiles off where it falls. The game goes on listing the tower at 0 health,
+  and it still covers its 5x5: the other 113 tiles stayed refused, as did all 25 under one felled on open ground (tool
+  `sweep_placement`; thors attacking one on MagannathaAIE_v2, build 75689).
 - Each mineral field and geyser keeps townhalls off a zone around it: its footprint grown by 3 tiles on every side,
   with each corner cut, by one tile at a mineral field and by three at a geyser (the corner tile and the tile beside
   it on each side). The game refuses a townhall whose footprint covers any tile of a zone. All 15 kinds of field and 6
@@ -750,10 +785,14 @@ Each entry ends with how it was seen:
   `sweep_townhall_placement`).
 - NachOS's rule for where a townhall may stand was checked against the game on the 7 maps of the corpus. Around each
   expansion NachOS finds, the game was asked whether it would take a townhall at every tile center within 7 tiles:
-  21,315 centers in all. NachOS gives the game's answer at all but 26. At those 26 the game would take a townhall and
-  NachOS refuses it: they lie beside diagonal collapsible towers and some 6x6 rocks and debris, where NachOS blocks
-  the whole square a unit's radius spans and the game less. None of them would give an expansion a better spot
-  (tool `sweep_townhall_placement`).
+  21,315 centers in all. NachOS gives the game's answer at every one, blocking each of the map's other units by its
+  measured footprint. Blocking the square a unit's radius spans instead, it refused 26 the game takes, beside diagonal
+  collapsible towers and some 6x6 rocks and debris, though none would have given an expansion a better spot (tool
+  `sweep_townhall_placement`, build 75689).
+- `api.placement.free` was checked against the game on the 7 maps of the corpus, with every unit but a structure
+  killed: asked whether a one-tile structure could stand on each tile of the playable area, 127,020 tiles in all, the
+  game gives the grid's answer at all but 14, on UltraloveAIE_v2, beside its two unbuildable plates, as "Not
+  understood yet" says (tool `sweep_placement`, build 75689).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
 - A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
@@ -796,5 +835,10 @@ Each entry ends with how it was seen:
 - **What an ability a busy structure refuses would do to what it is making** is still open: a lift, a morph and an
   add-on are answered `NotSupported`, so what they would do to a queue was never seen. Every ability a producer does
   take leaves what it is making alone (tool `sweep_orders`).
-- **Why the start's placement grid leaves open the ground under Xel'Naga towers and unbuildable plates and bricks**,
-  where no townhall can stand (tool `sweep_townhall_placement`).
+- **Why UltraloveAIE_v2's two unbuildable plates keep a structure off more than their 2x2.** Each stands at a
+  natural, and also keeps a structure off the 7 tiles beside its 2x2 that are not cliff: a 4x4 with its corners cut,
+  as a 4x4 rock covers. Those tiles take a structure once the plate is killed. Every other plate covers its 2x2: those
+  the other maps place, and on Ultralove one created by a debug command on the very spot of one killed, and 16 more at
+  offsets from the tile grid and at facings from 15° to 351°, which the game snaps to tile corners. The API reports
+  nothing that sets the two apart, so `api.placement.dynamic` closes only their 2x2 and leaves those 14 tiles open (tool
+  `sweep_placement`; local game, build 75689).

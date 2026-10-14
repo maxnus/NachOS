@@ -16,6 +16,7 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
@@ -211,6 +212,12 @@ class Api:
     def explored(self) -> Grid[bool]:
         """Where this player has seen at any point in the game, over the playable area."""
         return self._current_game().state.explored
+
+    @property
+    def placement(self) -> PlacementGrids:
+        """Where a structure may stand: on the map whatever happens in the game, and now as far as this player knows;
+        and the ground this player's ordered builds are to stand on."""
+        return self._current_game().placement
 
     @property
     def creep(self) -> Grid[bool]:

@@ -14,7 +14,7 @@ from s2clientprotocol import common_pb2, debug_pb2, error_pb2, query_pb2, raw_pb
 
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
-from sc2nachos.ids import UnitTypeId
+from sc2nachos.ids import UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.launch import GameProcess, Installation, MapFile, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race
@@ -27,6 +27,7 @@ NEUTRAL = 0
 NEUTRAL_REPORTED = 16
 
 SUCCESS = error_pb2.ActionResult.Success
+_REMOVAL_WAIT_STEPS = 64
 
 
 def reported(owner: int) -> int:
@@ -136,6 +137,16 @@ class Sandbox:
         if tags := list(tags):
             self.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=tags)))
 
+    def remove(self, tags: Iterable[int]) -> None:
+        """Kill the units under `tags` and wait until the game lists none of them."""
+        tags = set(tags)
+        self.kill(tags)
+        for _ in range(_REMOVAL_WAIT_STEPS):
+            self.client.step(1)
+            if not tags & {unit.tag for unit in self.units()}:
+                return
+        raise RuntimeError(f"{len(tags)} units were not removed")
+
     def set_value(
         self, kind: debug_pb2.DebugSetUnitValue.UnitValue.ValueType, value: float, tags: Iterable[int]
     ) -> None:
@@ -157,12 +168,16 @@ class Sandbox:
 
     def placeable(self, ability: int, points: Sequence[Point]) -> list[bool]:
         """Whether the structure `ability` builds could go up at each of `points` right now."""
+        return [answer == SUCCESS for answer in self.placement_answers(ability, points)]
+
+    def placement_answers(self, ability: int, points: Sequence[Point]) -> list[error_pb2.ActionResult.ValueType]:
+        """The game's answer, success or why not, to the structure `ability` builds going up at each of `points`."""
         placements = [
             query_pb2.RequestQueryBuildingPlacement(ability_id=ability, target_pos=common_pb2.Point2D(x=p.x, y=p.y))
             for p in points
         ]
         response = self.transport.request(sc2api_pb2.Request(query=query_pb2.RequestQuery(placements=placements)))
-        return [answer.result == SUCCESS for answer in response.query.placements]
+        return [answer.result for answer in response.query.placements]
 
     def order(self, ability: int, tag: int, target: Point | int | None = None) -> error_pb2.ActionResult.ValueType:
         """Order `ability` on the unit `tag`, aimed at a point, a unit's tag or nothing, and return the verdict."""
@@ -173,6 +188,23 @@ class Sandbox:
             command.target_unit_tag = target
         action = sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
         return self.client.act([action]).result[0]
+
+
+def without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[str]]:
+    """`raw` without the units whose type `UnitTypeId` leaves out, such as a map's critters, and those types' raw
+    names."""
+    kept = raw_pb2.ObservationRaw()
+    kept.CopyFrom(raw)
+    del kept.units[:]
+    left_out = set()
+    for unit in raw.units:
+        try:
+            UnitTypeId.read(unit.unit_type)
+        except UncuratedIdError:
+            left_out.add(RawUnitTypeId(unit.unit_type).name)
+        else:
+            kept.units.append(unit)
+    return kept, sorted(left_out)
 
 
 def join_with(transport: WebSocketTransport, race: Race, interface: sc2api_pb2.InterfaceOptions) -> int:

@@ -8,8 +8,9 @@ from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Attribute
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
+from sc2nachos.match import Race
 from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
@@ -62,6 +63,7 @@ class Unit[K: UnitType.AnyType]:
         "_previous_position",
         "_previous_step",
         "_raw_type",
+        "_radius_footprint",
         "_stale",
         "_step",
         "_tag",
@@ -84,6 +86,8 @@ class Unit[K: UnitType.AnyType]:
     _previous_step: int
     _stale: bool
     _dead: bool
+    # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
+    _radius_footprint: Footprint | None
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -100,6 +104,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_step = step
         self._stale = False
         self._dead = False
+        self._radius_footprint = None
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
@@ -540,3 +545,19 @@ class Unit[K: UnitType.AnyType]:
     def is_structure(self) -> bool:
         """Whether the game's tables give the unit's type the structure attribute."""
         return Attribute.STRUCTURE in self.type_data.attributes
+
+    @property
+    def footprint(self) -> Footprint | None:
+        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, with
+        none measured, the square its radius spans. `None` for a unit that covers none, a force field among them."""
+        row = self._tracker.game_data.units.get(self.type_id)
+        if row is None:
+            return None
+        if row.footprint is None and row.race is Race.NONE:
+            side = round(2 * self.radius)
+            if not side:
+                return None
+            if self._radius_footprint is None or self._radius_footprint.width != side:
+                self._radius_footprint = Footprint.square(side)
+            return self._radius_footprint
+        return row.footprint

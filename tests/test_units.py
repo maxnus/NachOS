@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.enemy import Enemy
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
@@ -39,6 +39,9 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -380,6 +383,31 @@ def _drone_building(tag: int, ability: AbilityId, **target: Any) -> raw_pb2.Unit
 
 def _spine(tag: int, progress: float) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.SPINE_CRAWLER, at=(24.0, 20.0), build_progress=progress)
+
+
+class TestFootprint:
+    def test_a_unit_covers_its_types_footprint(self) -> None:
+        assert _one(_depot(1)).footprint == Footprint.square(2)
+
+    def test_a_unit_that_is_no_structure_has_no_footprint(self) -> None:
+        assert _one(make_unit(1, UnitTypeId.MARINE)).footprint is None
+
+    def test_a_force_field_covers_nothing_though_no_player_owns_it(self) -> None:
+        """A sentry's force field is a neutral unit (in game), of a protoss type the sweep did not measure."""
+        force_field = make_unit(1, UnitTypeId.FORCE_FIELD, alliance=Alliance.NEUTRAL, radius=1.0)
+        assert _one(force_field).footprint is None
+
+    def test_one_of_the_maps_units_with_no_footprint_measured_covers_the_square_its_radius_spans(self) -> None:
+        zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6)
+        assert _one(zone).footprint == Footprint.square(5)
+
+    def test_one_of_the_maps_units_keeps_the_square_its_radius_spans(self) -> None:
+        zone = _one(make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6))
+        assert zone.footprint is zone.footprint
+
+    def test_one_of_the_maps_units_spanning_no_tile_covers_nothing(self) -> None:
+        zone = make_unit(1, UnitTypeId.ACCELERATION_ZONE_LARGE, alliance=Alliance.NEUTRAL, radius=0.0)
+        assert _one(zone).footprint is None
 
 
 class TestUnitsThatBecomeStructures:

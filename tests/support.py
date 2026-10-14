@@ -46,6 +46,7 @@ from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
@@ -263,17 +264,27 @@ def played(
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
+        present_units = tracker.unit_tracker.present
+        order_book = OrderBook(tracker.game_data, build_reach=2.5)
+        state = _State(observation, tracker, game_map)
         game = _Game(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, tracker.unit_tracker.present.neutral),
+            expansions=Expansion._find_all(game_map, present_units.neutral),
             game_data=tracker.game_data,
             enemy=tracker.enemy,
             enemy_upgrade_inference=infer,
             tracker=tracker,
-            orders=OrderBook(tracker.game_data, build_reach=2.5),
+            orders=order_book,
             observation=observation,
-            state=_State(observation, tracker, game_map),
+            state=state,
+            placement=PlacementGrids._build_at_start(
+                game_map.placement,
+                present_units=present_units,
+                state=state,
+                game_data=tracker.game_data,
+                order_book=order_book,
+            ),
             step=step,
         )
         game._read(observation, step)

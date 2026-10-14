@@ -1,9 +1,10 @@
 """Generate `sc2nachos/units/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group.
 
 A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
-field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a worker
-and a townhall are curated here. All are read from a corpus game's tables, so this runs without StarCraft II. Run it
-again after changing `UnitTypeId`::
+field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab
+or a reactor is a plain one or what the tables say counts as one; a worker, a townhall and a collapsible tower are
+curated here. All are read from a corpus game's tables, so this runs without StarCraft II. Run it again after changing
+`UnitTypeId`::
 
     uv run python tools/generate_unit_types.py
 """
@@ -40,7 +41,8 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the mineral fields, the vespene geysers or the gas buildings.
+    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
+    or the add-ons, tech labs and reactors.
     """
 
     class AnyType:
@@ -97,6 +99,24 @@ TOWNHALLS = frozenset(
         UnitTypeId.HIVE,
     }
 )
+# The towers that fall across a path once destroyed, and stay: the game goes on listing one felled, at 0 health, and
+# it still covers its ground (tool `sweep_placement`). Their debris and the units that push units from under them are
+# none.
+COLLAPSIBLE_TOWERS = frozenset(
+    {
+        UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_PURIFIER,
+        UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_TERRAN,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK_GREEN,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_TERRAN,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK_GREEN,
+        UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_TERRAN,
+        UnitTypeId.COLLAPSIBLE_TOWER_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_TERRAN,
+    }
+)
 # The groups of what a type is for, beside its race's, with their docstrings.
 ROLES = {
     "Worker": "A worker: an SCV, a probe or a drone, burrowed or not. A MULE is none.",
@@ -104,7 +124,15 @@ ROLES = {
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
+    "CollapsibleTower": "A collapsible tower, which falls across a path once destroyed and stays there.",
+    "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
+    "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
+    "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
 }
+# The groups whose types are all in another group, by the group they are in.
+ROLE_BASES = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}
+# Each kind of add-on, by the plain type that a host's own counts as in the game's tables.
+ADD_ONS = {"AnyTechLab": UnitTypeId.TECH_LAB, "AnyReactor": UnitTypeId.REACTOR}
 
 
 def class_name(unit_type: UnitTypeId) -> str:
@@ -114,11 +142,13 @@ def class_name(unit_type: UnitTypeId) -> str:
 
 def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
     """The groups of what `unit_type`, whose row is `row`, is for."""
-    found = [role for role, members in (("Worker", WORKERS), ("Townhall", TOWNHALLS)) if unit_type in members]
+    curated = (("Worker", WORKERS), ("Townhall", TOWNHALLS), ("CollapsibleTower", COLLAPSIBLE_TOWERS))
+    found = [role for role, members in curated if unit_type in members]
     if row.has_minerals:
         found.append("AnyMineralField")
     if row.has_vespene:
         found.append("GasBuilding" if row.race in RACES else "AnyVespeneGeyser")
+    found += [group for group, plain in ADD_ONS.items() if unit_type is plain or plain in row.tech_aliases]
     return found
 
 
@@ -128,7 +158,7 @@ def render(tables: GameData) -> str:
         "Structure": ("AnyType", "A type the game's tables give the structure attribute."),
         **{name: ("AnyType", f"A {name} type.") for name in RACES.values()},
         **{f"{name}Structure": (f"{name}, Structure", f"A {name} structure.") for name in RACES.values()},
-        **{role: ("AnyType", docstring) for role, docstring in ROLES.items()},
+        **{role: (ROLE_BASES.get(role, "AnyType"), docstring) for role, docstring in ROLES.items()},
     }
     blocks = [HEADER]
     for name, (bases, docstring) in groups.items():

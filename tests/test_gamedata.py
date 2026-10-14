@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 from sc2nachos.gamedata import (
     Attribute,
     Cost,
+    CreepRequirement,
     GameData,
     OrderBehavior,
     Resources,
@@ -23,6 +24,7 @@ from sc2nachos.gamedata._techtree import (
     MISNAMED_RESEARCH_ABILITIES,
     UNNAMED_CREATION_ABILITIES,
 )
+from sc2nachos.geometry import Footprint
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
@@ -267,6 +269,53 @@ class TestReadingTheTables:
         assert row.footprint_radius == 1.0
         assert row.target_type is TargetType.POINT
 
+    @pytest.mark.parametrize(
+        ("unit_type", "footprint"),
+        [
+            (UnitTypeId.SUPPLY_DEPOT, Footprint.square(2)),
+            (UnitTypeId.SUPPLY_DEPOT_LOWERED, Footprint.square(2)),
+            (UnitTypeId.ORBITAL_COMMAND, Footprint.square(5)),
+            (UnitTypeId.REFINERY, Footprint.square(3)),
+            (UnitTypeId.TECH_LAB_BARRACKS, Footprint.square(2)),
+            (UnitTypeId.MINERAL_FIELD, Footprint.from_rows("##")),
+            (UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1, Footprint.from_rows(".##.", "####", "####", ".##.")),
+            (UnitTypeId.HEALING_SHRINE_XEL_NAGA, Footprint.empty()),
+            (UnitTypeId.MARINE, None),
+            (UnitTypeId.BARRACKS_FLYING, None),
+            (UnitTypeId.ACCELERATION_ZONE_LARGE, None),
+        ],
+        ids=lambda value: value.name if isinstance(value, UnitTypeId) else None,
+    )
+    def test_a_unit_type_covers_the_tiles_measured_in_game(
+        self, unit_type: UnitTypeId, footprint: Footprint | None
+    ) -> None:
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type)]))
+        assert data.units[unit_type].footprint == footprint
+
+    def test_types_of_one_shape_share_one_footprint(self) -> None:
+        ids = (UnitTypeId.BARRACKS, UnitTypeId.ARMORY, UnitTypeId.SUPPLY_DEPOT)
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type) for unit_type in ids]))
+        assert data.units[UnitTypeId.BARRACKS].footprint is data.units[UnitTypeId.ARMORY].footprint
+        assert data.units[UnitTypeId.BARRACKS].footprint is not data.units[UnitTypeId.SUPPLY_DEPOT].footprint
+
+    @pytest.mark.parametrize(
+        ("unit_type", "requirement"),
+        [
+            (UnitTypeId.SUPPLY_DEPOT, CreepRequirement.OFF_CREEP),
+            (UnitTypeId.SPAWNING_POOL, CreepRequirement.ON_CREEP),
+            (UnitTypeId.HATCHERY, CreepRequirement.NONE),
+            (UnitTypeId.AUTO_TURRET, CreepRequirement.NONE),
+            (UnitTypeId.REFINERY, None),
+            (UnitTypeId.MARINE, None),
+        ],
+        ids=lambda value: value.name if isinstance(value, UnitTypeId) else None,
+    )
+    def test_a_structure_placed_at_a_point_keeps_to_creep_or_off_it_as_measured_in_game(
+        self, unit_type: UnitTypeId, requirement: CreepRequirement | None
+    ) -> None:
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=unit_type)]))
+        assert data.units[unit_type].creep_requirement is requirement
+
     def test_an_ability_that_is_aimed_at_nothing_has_no_footprint(self) -> None:
         stim = data_pb2.AbilityData(ability_id=AbilityId.STIM, target=data_pb2.AbilityData.Target.Value("None"))
         data = GameData(sc2api_pb2.ResponseData(abilities=[stim]))
@@ -363,6 +412,18 @@ class TestARecordedGamesTables:
             offered = ability if not ability.name.endswith("_OFF") else AbilityId[f"{ability.name[:-4]}_ON"]
             assert data.abilities[offered].performers, f"{offered.name} is offered to nobody"
             assert row.order_behavior is OrderBehavior.KEEPS_ORDERS
+
+    def test_a_structure_covers_the_square_its_creation_ability_places_it_in(self, path: Path) -> None:
+        """An add-on's ability reads 3.5, its reach past its host's far side, and the add-on itself 2x2."""
+        data = _tables(path)
+        for unit_type, row in data.units.items():
+            if row.footprint is None or row.creation_ability is None:
+                continue
+            maker = data.abilities[row.creation_ability]
+            if maker.footprint_radius is None:
+                continue
+            side = 2 if maker.footprint_radius == 3.5 else round(2 * maker.footprint_radius)
+            assert row.footprint == Footprint.square(side), unit_type.name
 
     def test_every_row_can_be_kept_in_a_set(self, path: Path) -> None:
         abilities = _tables(path).abilities

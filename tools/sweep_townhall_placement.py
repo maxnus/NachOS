@@ -25,7 +25,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy
-from _sandbox import NEUTRAL, Cheat, Sandbox, playing
+from _sandbox import NEUTRAL, Cheat, Sandbox, playing, without_uncurated_units
 from loguru import logger
 from numpy.lib.stride_tricks import sliding_window_view
 from record_corpus import GAMES
@@ -36,8 +36,7 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
-from sc2nachos.ids.raw import RawUnitTypeId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.units._tracking import _Tracker
@@ -48,7 +47,6 @@ from sc2nachos.units._unit_type import UnitType
 _ASKED_REACH = 7
 _OPEN_GROUND_HALF_WIDTH = _ASKED_REACH + 2
 _OPEN_GROUND_TRIES = 64
-_REMOVAL_WAIT_STEPS = 64
 _TOWNHALLS = {
     "command center": AbilityId.SCV_BUILD_COMMAND_CENTER,
     "nexus": AbilityId.PROBE_BUILD_NEXUS,
@@ -161,16 +159,6 @@ def _clear_open_ground(game: Sandbox, game_map: GameMap, units: Sequence[raw_pb2
     raise RuntimeError(f"no open ground {size} tiles across takes every townhall")
 
 
-def _remove_and_wait(game: Sandbox, tags: Sequence[int]) -> None:
-    """Remove the units under `tags` and wait until they are gone."""
-    game.kill(tags)
-    for _ in range(_REMOVAL_WAIT_STEPS):
-        game.client.step(1)
-        if not {unit.tag for unit in game.units()} & set(tags):
-            return
-    raise RuntimeError(f"{len(tags)} units were not removed")
-
-
 def _measure_refusals(
     game: Sandbox, at: Point, unit_type: UnitTypeId, size: tuple[int, int]
 ) -> ResourceRefusals | None:
@@ -187,7 +175,7 @@ def _measure_refusals(
     for townhall, ability in _TOWNHALLS.items():
         refusals.refused[townhall] = sorted(offsets[center] for center in _refused_centers(game, centers, ability))
     refusals.as_stated = all(refused == stated_refusals for refused in refusals.refused.values())
-    _remove_and_wait(game, [unit.tag])
+    game.remove([unit.tag])
     return refusals
 
 
@@ -204,7 +192,7 @@ def measure_resource_refusals(installation: Installation) -> list[ResourceRefusa
         game.client.step(4)
         # Workers wander onto the ground asked about, and the only open ground wide enough is beside resources.
         resources = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
-        _remove_and_wait(game, [unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV}])
+        game.remove(unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV})
         game_map = GameMap._of_game(game.client.game_info(), game.client.observation())
         at = _clear_open_ground(game, game_map, game.units())
         for unit_type, size in resource_kinds:
@@ -234,22 +222,6 @@ class ExpansionCheck:
     """The raw names of the unit types `show_map` revealed that `UnitTypeId` leaves out, set aside unread."""
 
 
-def _without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[str]]:
-    """`raw` without the units whose type `UnitTypeId` leaves out, and those types' raw names."""
-    kept = raw_pb2.ObservationRaw()
-    kept.CopyFrom(raw)
-    del kept.units[:]
-    left_out = set()
-    for unit in raw.units:
-        try:
-            UnitTypeId.read(unit.unit_type)
-        except UncuratedIdError:
-            left_out.add(RawUnitTypeId(unit.unit_type).name)
-        else:
-            kept.units.append(unit)
-    return kept, sorted(left_out)
-
-
 def _check_expansions_on(installation: Installation, map_name: str) -> ExpansionCheck:
     """Ask the game about every center around each expansion NachOS finds on `map_name`, but the two starts, where
     the townhalls stand."""
@@ -259,7 +231,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         observation = game.client.observation()
         game_map = GameMap._of_game(game.client.game_info(), observation)
         tracker = _Tracker(GameData(game.client.game_data()), Enemy())
-        raw, uncurated = _without_uncurated_units(observation.observation.raw_data)
+        raw, uncurated = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral
         expansions = Expansion._find_all(game_map, neutral_units)

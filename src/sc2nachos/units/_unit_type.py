@@ -19,7 +19,8 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the mineral fields, the vespene geysers or the gas buildings.
+    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
+    or the add-ons, tech labs and reactors.
     """
 
     class AnyType:
@@ -93,6 +94,18 @@ class UnitType:
 
     class GasBuilding(AnyType):
         """A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race."""
+
+    class CollapsibleTower(AnyType):
+        """A collapsible tower, which falls across a path once destroyed and stays there."""
+
+    class AnyAddOn(AnyType):
+        """An add-on of any kind: a tech lab or a reactor, attached to its host or plain."""
+
+    class AnyTechLab(AnyAddOn):
+        """A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one."""
+
+    class AnyReactor(AnyAddOn):
+        """A reactor of any kind: a barracks', a factory's or a starport's, or a plain one."""
 
     class AccelerationZoneFlyingLarge(Structure):
         id = UnitTypeId.ACCELERATION_ZONE_FLYING_LARGE
@@ -211,13 +224,13 @@ class UnitType:
     class CollapsibleTowerDebrisTerran(Structure):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_TERRAN
 
-    class CollapsibleTowerDiagonalPurifier(Structure):
+    class CollapsibleTowerDiagonalPurifier(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_PURIFIER
 
-    class CollapsibleTowerDiagonalRock(Structure):
+    class CollapsibleTowerDiagonalRock(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK
 
-    class CollapsibleTowerDiagonalTerran(Structure):
+    class CollapsibleTowerDiagonalTerran(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_TERRAN
 
     class CollapsibleTowerPushUnitPurifier(Structure):
@@ -247,28 +260,28 @@ class UnitType:
     class CollapsibleTowerPushUnitTerran(Structure):
         id = UnitTypeId.COLLAPSIBLE_TOWER_PUSH_UNIT_TERRAN
 
-    class CollapsibleTowerRampLeftRock(Structure):
+    class CollapsibleTowerRampLeftRock(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK
 
-    class CollapsibleTowerRampLeftRockGreen(Structure):
+    class CollapsibleTowerRampLeftRockGreen(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK_GREEN
 
-    class CollapsibleTowerRampLeftTerran(Structure):
+    class CollapsibleTowerRampLeftTerran(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_TERRAN
 
-    class CollapsibleTowerRampRightRock(Structure):
+    class CollapsibleTowerRampRightRock(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK
 
-    class CollapsibleTowerRampRightRockGreen(Structure):
+    class CollapsibleTowerRampRightRockGreen(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK_GREEN
 
-    class CollapsibleTowerRampRightTerran(Structure):
+    class CollapsibleTowerRampRightTerran(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_TERRAN
 
-    class CollapsibleTowerRock(Structure):
+    class CollapsibleTowerRock(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_ROCK
 
-    class CollapsibleTowerTerran(Structure):
+    class CollapsibleTowerTerran(Structure, CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_TERRAN
 
     class Colossus(Protoss):
@@ -745,16 +758,16 @@ class UnitType:
     class Raven(Terran):
         id = UnitTypeId.RAVEN
 
-    class Reactor(TerranStructure):
+    class Reactor(TerranStructure, AnyReactor):
         id = UnitTypeId.REACTOR
 
-    class ReactorBarracks(TerranStructure):
+    class ReactorBarracks(TerranStructure, AnyReactor):
         id = UnitTypeId.REACTOR_BARRACKS
 
-    class ReactorFactory(TerranStructure):
+    class ReactorFactory(TerranStructure, AnyReactor):
         id = UnitTypeId.REACTOR_FACTORY
 
-    class ReactorStarport(TerranStructure):
+    class ReactorStarport(TerranStructure, AnyReactor):
         id = UnitTypeId.REACTOR_STARPORT
 
     class Reaper(Terran):
@@ -850,16 +863,16 @@ class UnitType:
     class SwarmHostBurrowed(Zerg):
         id = UnitTypeId.SWARM_HOST_BURROWED
 
-    class TechLab(TerranStructure):
+    class TechLab(TerranStructure, AnyTechLab):
         id = UnitTypeId.TECH_LAB
 
-    class TechLabBarracks(TerranStructure):
+    class TechLabBarracks(TerranStructure, AnyTechLab):
         id = UnitTypeId.TECH_LAB_BARRACKS
 
-    class TechLabFactory(TerranStructure):
+    class TechLabFactory(TerranStructure, AnyTechLab):
         id = UnitTypeId.TECH_LAB_FACTORY
 
-    class TechLabStarport(TerranStructure):
+    class TechLabStarport(TerranStructure, AnyTechLab):
         id = UnitTypeId.TECH_LAB_STARPORT
 
     class Tempest(Protoss):

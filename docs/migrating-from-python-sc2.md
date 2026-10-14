@@ -405,7 +405,9 @@ it.
 |---|---|
 | `game_info.map_name` | `api.map.name` |
 | `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` |
-| `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` |
+| `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` as the game began; `api.placement.free` now |
+| `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
+| `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |
@@ -452,6 +454,14 @@ it.
   and debris in the way ([game behavior](game-behavior.md#terrain-placement-and-pathing)). Each expansion says
   whether a player starts there, `is_start_location`, and its pathing distance from this player's start,
   `pathing_distance_from_start`.
+- **Where a structure may stand is read, not asked.** python-sc2's `can_place` and `find_placement` ask the game each
+  time. `api.placement` reads it from what NachOS knows, in three layers: `static`, the map's buildable ground less its
+  geysers and collapsible towers; `dynamic`, true where no structure in sight or remembered in the fog stands, and no
+  mineral field; and `reserved`, the ground under this player's builds not standing yet. `free` combines them, and
+  `free_for(unit_type)` keeps to creep or off it as the type needs, and a townhall off the ground around resources.
+  `is_free` and `nearest_free` answer for one structure, by the `footprint` each type was measured to cover in game;
+  a grid's `fits_footprint` and `where_footprint_fits` do it for any grid. Power and units in the way are the bot's to
+  add.
 - **No wall-in placements.** python-sc2's `Ramp` also says where to put supply depots and a barracks to wall off a
   ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 
