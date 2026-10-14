@@ -10,7 +10,7 @@ them goes whether each structure type a unit places at a point may stand on cree
 
 import json
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -48,15 +48,22 @@ def read(findings: Mapping[str, Any]) -> dict[UnitTypeId, Footprint]:
         footprint = Footprint.from_rows(*measured["rows"])
         if measured["touches_edge"]:
             raise ValueError(f"{name} may reach past the tiles the sweep asked about")
-        if measured["rows"]:
-            box = footprint.bounding_box(at=Point(tuple(measured["position"])))
-            if Tile(int(box.x), int(box.y)) != Tile(*measured["lower_left"]):
-                raise ValueError(
-                    f"{name} at {measured['position']} covered tiles from {measured['lower_left']}, but its footprint"
-                    f" centers on tiles from {(box.x, box.y)}"
-                )
+        if not centers_where_it_stood(measured["rows"], measured["position"], measured["lower_left"]):
+            raise ValueError(
+                f"{name} at {measured['position']} covered tiles from {measured['lower_left']}, which a footprint"
+                " standing there does not center on"
+            )
         footprints[UnitTypeId.read(RawUnitTypeId[name])] = footprint
     return footprints
+
+
+def centers_where_it_stood(rows: Sequence[str], position: Sequence[float], lower_left: Sequence[int] | None) -> bool:
+    """Whether the tiles a unit standing at `position` was measured to cover, drawn as `rows` from the tile
+    `lower_left`, center on where it stood as a footprint centers. Covering none, they do."""
+    if not rows or lower_left is None:
+        return True
+    box = Footprint.from_rows(*rows).bounding_box(at=Point(tuple(position)))
+    return Tile(int(box.x), int(box.y)) == Tile(*lower_left)
 
 
 def read_creep_requirements(findings: Mapping[str, Any]) -> dict[UnitTypeId, CreepRequirement]:
@@ -125,14 +132,11 @@ def _constant_names(footprints: Mapping[UnitTypeId, Footprint]) -> dict[Footprin
 def _factory_name(footprint: Footprint) -> str | None:
     """The name of the constant for `footprint` if `Footprint.empty`, `square` or `rectangle` makes it, as
     `_SQUARE_7_CUT_2` for `Footprint.square(7, cut_corners=2)`; `None` for any other."""
-    width, height = footprint.width, footprint.height
-    if not footprint.mask.size:
-        return "_EMPTY"
-    for cut_corners in range(min(width, height)):
-        if footprint == Footprint.rectangle(width, height, cut_corners=cut_corners):
-            shape = f"_SQUARE_{width}" if width == height else f"_RECTANGLE_{width}_{height}"
-            return f"{shape}_CUT_{cut_corners}" if cut_corners else shape
-    return None
+    if (made_by := footprint._made_by()) is None:
+        return None
+    factory, sides, cut_corners = made_by
+    words = [factory.upper(), *map(str, sides), *(["CUT", str(cut_corners)] if cut_corners else [])]
+    return "_" + "_".join(words)
 
 
 def _in_order(name: str) -> list[tuple[int, int | str]]:
@@ -142,7 +146,7 @@ def _in_order(name: str) -> list[tuple[int, int | str]]:
 
 def _source(footprint: Footprint) -> str:
     """The source that makes `footprint`: its factory, or its rows one to a line."""
-    if _factory_name(footprint) is not None:
+    if footprint._made_by() is not None:
         return repr(footprint)
     rows = (
         '"' + "".join("#" if footprint.mask[x, y] else "." for x in range(footprint.width)) + '"'

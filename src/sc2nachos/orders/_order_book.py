@@ -103,6 +103,7 @@ class OrderBook:
         "_last_sent",
         "_observations",
         "_present",
+        "_queued_sent",
         "_refusals",
         "_step",
     )
@@ -122,6 +123,9 @@ class OrderBook:
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
+        # By unit id, each queued order the game took that was not held, with the number of the observation its turn
+        # read, until the observations must show it or an order replaces the unit's orders.
+        self._queued_sent: dict[int, list[tuple[Order[Any], int]]] = {}
         self._camera_location: Point | None = None
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
@@ -236,7 +240,7 @@ class OrderBook:
         """What `unit` was ordered that has not gone out: what is held for it, head first, then the turn's orders to
         it so far, in the order they were issued. Withdrawn orders are left out. With `include_sent`, first come the
         orders that went out to it lately and that the observations may not show yet: the last one sent that replaced
-        its orders, and those released from what was held for it.
+        its orders, those sent queued since, and those released from what was held for it.
 
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
         order a unit is given goes out, or that has a build or a train waiting.
@@ -287,6 +291,9 @@ class OrderBook:
                     out.queue.drop()
             elif not out.queued:
                 self._remember_sent(out.order, units)
+            elif out.queue is None:
+                for unit in units:
+                    self._queued_sent.setdefault(unit.id, []).append((out.order, self._observations))
         self._refusals = tuple(refusals)
 
     def _observe(self, step: int, lost: Iterable[Unit[Any]], present: Units[Unit[Any]]) -> None:
@@ -297,8 +304,14 @@ class OrderBook:
         self._observations += 1
         for unit in lost:
             self._last_sent.pop(unit.id, None)
+            self._queued_sent.pop(unit.id, None)
             self._held.pop(unit.id, None)
         recent = self._observations - _SHOWN_WITHIN + 1
+        for unit_id, queued in list(self._queued_sent.items()):
+            if not (queued := [(order, sent_at) for order, sent_at in queued if sent_at >= recent]):
+                del self._queued_sent[unit_id]
+            else:
+                self._queued_sent[unit_id] = queued
         for unit_id, queue in list(self._held.items()):
             queue.forget_released_before(recent)
             if queue.is_empty():
@@ -583,6 +596,7 @@ class OrderBook:
         for unit in units:
             if _behavior_for(row, unit) is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = (order, self._observations)
+                self._queued_sent.pop(unit.id, None)
 
     def _units_not_carrying_it_out(
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
@@ -616,10 +630,12 @@ class OrderBook:
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
-        replaced its orders, and those released from what was held for it."""
+        replaced its orders, those sent queued since, and those released from what was held for it."""
         orders = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             orders.append(sent)
+        recent = self._observations - _SHOWN_WITHIN + 1
+        orders += [order for order, sent_at in self._queued_sent.get(unit.id, ()) if sent_at >= recent]
         if (queue := self._held.get(unit.id)) is not None:
             orders += self._in_flight(queue)
         return orders

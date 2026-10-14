@@ -401,6 +401,10 @@ class TestFootprint:
         zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6)
         assert _one(zone).footprint == Footprint.square(5)
 
+    def test_one_of_the_maps_units_keeps_the_square_its_radius_spans(self) -> None:
+        zone = _one(make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6))
+        assert zone.footprint is zone.footprint
+
     def test_one_of_the_maps_units_spanning_no_tile_covers_nothing(self) -> None:
         zone = make_unit(1, UnitTypeId.ACCELERATION_ZONE_LARGE, alliance=Alliance.NEUTRAL, radius=0.0)
         assert _one(zone).footprint is None

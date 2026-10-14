@@ -50,7 +50,7 @@ class _ExpansionLocations:
             if (footprint := unit.footprint) is not None:
                 townhall_may_cover.fill_footprint(footprint, at=unit.position, value=False)
         _keep_townhalls_off_resources(townhall_may_cover, mineral_fields=mineral_fields, geysers=geysers)
-        self._allowed = townhall_may_cover.where_footprint_fits(_TOWNHALL_FOOTPRINT)
+        self._allowed = townhall_may_cover.where_footprint_fits(_TOWNHALL_FOOTPRINT).as_readonly()
 
     def allows(self, center: PointLike) -> bool:
         """Whether the game takes a townhall centered on the tile holding `center`."""

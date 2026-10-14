@@ -36,6 +36,7 @@ class PlacementGrids:
         "_build_sites",
         "_dynamic",
         "_game_data",
+        "_ground_by_type",
         "_present_units",
         "_state",
         "_static",
@@ -60,6 +61,7 @@ class PlacementGrids:
         self._game_data = game_data
         self._dynamic: Grid[bool] | None = None
         self._townhall_ground: Grid[bool] | None = None
+        self._ground_by_type: dict[UnitTypeId, Grid[bool]] = {}
 
     @classmethod
     def _build_at_start(
@@ -91,6 +93,7 @@ class PlacementGrids:
         self._state = state
         self._dynamic = None
         self._townhall_ground = None
+        self._ground_by_type = {}
 
     @property
     def static(self) -> Grid[bool]:
@@ -132,32 +135,35 @@ class PlacementGrids:
         (`UnitTypeData.creep_requirement`), and for a townhall, off the ground around each mineral field and geyser
         this player knows of that keeps one off, as `api.expansions` heeds it. A gas building stands on a geyser,
         which `static` closes, so it fits nowhere on any of them."""
-        free = self.free
-        if unit_type in UnitType.Townhall._type_ids:
-            free = free & self._ground_townhalls_may_cover()
-        row = self._game_data.units.get(unit_type)
-        requirement = None if row is None else row.creep_requirement
-        if requirement is CreepRequirement.ON_CREEP:
-            return free & self._state.creep
-        if requirement is CreepRequirement.OFF_CREEP:
-            return free & ~self._state.creep
-        return free
+        return self._ground_for(unit_type) & ~self.reserved
 
     def is_free(self, unit_type: UnitTypeId, *, at: PointLike) -> bool:
         """Whether a structure of `unit_type` may stand at `at` now, placed as the game snaps it: whether every tile
-        its footprint covers is true on `free_for(unit_type)`. Raises `ValueError` for a type with no footprint."""
-        return self.free_for(unit_type).fits_footprint(self._footprint_of(unit_type), at=at)
+        its footprint covers is true on `free_for(unit_type)`. Raises `ValueError` for a type with no footprint, and
+        for a gas building, which stands on a geyser."""
+        footprint = self._footprint_of(unit_type)
+        if not self._ground_for(unit_type).fits_footprint(footprint, at=at):
+            return False
+        return not self.reserved[footprint.tiles(at=at)].any()
 
     def nearest_free(self, unit_type: UnitTypeId, *, near: PointLike, max_distance: float) -> Point | None:
         """The center nearest `near`, at most `max_distance` from it, where a structure of `unit_type` may stand now,
         as `is_free` says, and as the game snaps a structure; the first in tile order of those as near. `None` if
-        there is none. Raises `ValueError` for a type with no footprint."""
+        there is none; an infinite `max_distance` reaches the whole map. Raises `ValueError` for a type with no
+        footprint, for a gas building, which stands on a geyser, and for a `max_distance` that is negative or not a
+        number."""
+        if not max_distance >= 0:
+            raise ValueError(f"max_distance is a distance, at least 0, not {max_distance}")
         footprint = self._footprint_of(unit_type)
         x, y = coordinates(near)[:2]
-        # Wide enough that every footprint centered within `max_distance` lies wholly inside.
-        reach = math.ceil(max_distance) + max(footprint.width, footprint.height)
-        window = Rectangle(math.floor(x) - reach, math.floor(y) - reach, 2 * reach + 1, 2 * reach + 1)
-        fitting = self.free_for(unit_type).cropped(window).where_footprint_fits(footprint)
+        if math.isinf(max_distance):
+            window = self._static.bounds
+        else:
+            # Wide enough that every footprint centered within `max_distance` lies wholly inside.
+            reach = math.ceil(max_distance) + max(footprint.width, footprint.height)
+            window = Rectangle(math.floor(x) - reach, math.floor(y) - reach, 2 * reach + 1, 2 * reach + 1)
+        free = self._ground_for(unit_type).cropped(window) & ~self.reserved.cropped(window)
+        fitting = free.where_footprint_fits(footprint)
         # `distance_from` measures from each tile's center, which along an even side lies half a tile off the center
         # of the footprint centered in that tile, so `near` moves by as much.
         shift_x, shift_y = 0.5 - 0.5 * (footprint.width % 2), 0.5 - 0.5 * (footprint.height % 2)
@@ -167,8 +173,27 @@ class PlacementGrids:
             return None
         return footprint.center_in_tile(candidates.argmin())
 
+    def _ground_for(self, unit_type: UnitTypeId) -> Grid[bool]:
+        """`free_for(unit_type)` before `reserved` is taken off, which no order changes. Built once an observation for
+        each type."""
+        if (ground := self._ground_by_type.get(unit_type)) is None:
+            ground = self._static & self.dynamic
+            if unit_type in UnitType.Townhall._type_ids:
+                ground = ground & self._ground_townhalls_may_cover()
+            row = self._game_data.units.get(unit_type)
+            requirement = None if row is None else row.creep_requirement
+            if requirement is CreepRequirement.ON_CREEP:
+                ground = ground & self._state.creep
+            elif requirement is CreepRequirement.OFF_CREEP:
+                ground = ground & ~self._state.creep
+            ground = self._ground_by_type[unit_type] = ground.as_readonly()
+        return ground
+
     def _footprint_of(self, unit_type: UnitTypeId) -> Footprint:
-        """The footprint a structure of `unit_type` covers; raises `ValueError` for a type with none."""
+        """The footprint a structure of `unit_type` covers; raises `ValueError` for a type with none, and for a gas
+        building, since `static` closes the geysers it stands on."""
+        if unit_type in UnitType.GasBuilding._type_ids:
+            raise ValueError(f"{unit_type.name} stands on a geyser, which no placement grid leaves free")
         row = self._game_data.units.get(unit_type)
         if row is None or row.footprint is None:
             raise ValueError(f"{unit_type.name} has no footprint, so it stands nowhere")

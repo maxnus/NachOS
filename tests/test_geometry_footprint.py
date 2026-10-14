@@ -1,5 +1,7 @@
 """The tiles a structure covers around its center."""
 
+from collections.abc import Callable
+
 import numpy
 import pytest
 
@@ -60,6 +62,28 @@ class TestConstruction:
     ) -> None:
         assert footprint == Footprint.from_rows(*rows)
 
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda: Footprint.square(-3),
+            lambda: Footprint.square(0),
+            lambda: Footprint.rectangle(2, 0),
+            lambda: Footprint.square(3, cut_corners=-1),
+        ],
+        ids=["negative side", "no side", "no height", "negative cut"],
+    )
+    def test_a_rectangle_needs_a_tile_and_a_cut_of_no_fewer_than_no_steps(self, make: Callable[[], Footprint]) -> None:
+        with pytest.raises(ValueError, match="at least 1x1"):
+            make()
+
+    def test_rows_hold_only_covered_and_open_tiles(self) -> None:
+        with pytest.raises(ValueError, match="only '#' and '.'"):
+            Footprint.from_rows("#X", "##")
+
+    def test_rows_with_no_tiles_are_the_empty_footprint(self) -> None:
+        assert Footprint.from_rows("", "") == Footprint.empty()
+        assert hash(Footprint.from_rows("", "")) == hash(Footprint.empty())
+
     def test_equal_masks_are_equal_footprints(self) -> None:
         assert Footprint.from_rows() == Footprint.empty()
         assert Footprint.from_rows("##", "##") == Footprint.square(2)
@@ -72,6 +96,8 @@ class TestConstruction:
             (Footprint.square(3), "Footprint.square(3)"),
             (Footprint.from_rows("####", "####"), "Footprint.rectangle(4, 2)"),
             (Footprint.from_rows(".##.", "####", "####", ".##."), "Footprint.square(4, cut_corners=1)"),
+            # The deepest cut that leaves a tile, past the shorter side.
+            (Footprint.rectangle(9, 3, cut_corners=5), "Footprint.rectangle(9, 3, cut_corners=5)"),
             (DIAGONAL, "Footprint(4x4, 10 tiles)"),
             (Footprint.from_rows(), "Footprint.empty()"),
         ],

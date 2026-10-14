@@ -40,10 +40,12 @@ class _BuildSites:
         """A read-only grid over the tiles `like` covers, true under each build site of `own_units`, this player's
         units. An add-on reserves the ground beside its host, and a lifted host's landing site too."""
         reserved = Grid.like(like, dtype=bool, outside=False)
-        standing = {_placement_key(unit.type_id, unit.position) for unit in own_units}
+        standing: set[tuple[int, int]] | None = None
         for unit in own_units:
             if unit.type_id in self._builder_types:
                 for build in self._builds_ordered_to(unit):
+                    if standing is None:
+                        standing = {_placement_key(own.position) for own in own_units if own.footprint is not None}
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
@@ -67,10 +69,11 @@ class _BuildSites:
         reserved: Grid[bool],
         build: Order[Any] | UnitOrder,
         builder: OwnUnit[Any],
-        standing: Collection[tuple[UnitTypeId, int, int]],
+        standing: Collection[tuple[int, int]],
     ) -> None:
-        """Mark on `reserved` the ground that `build`, ordered to `builder`, takes, unless what it builds stands there
-        already, `standing` being this player's units by `_placement_key`: begun, or finished while its worker still
+        """Mark on `reserved` the ground that `build`, ordered to `builder`, takes, unless one of this player's
+        structures stands centered on its site already, `standing` being their centers by `_placement_key`: the build
+        begun, whatever type it stands as, a rich geyser's refinery among them, or finished while its worker still
         shows the build, as an SCV did the observation its depot finished (in game)."""
         product = self._game_data.abilities[build.ability].products.get(builder.type_id)
         if not isinstance(product, UnitTypeId) or (footprint := self._game_data.units[product].footprint) is None:
@@ -78,28 +81,27 @@ class _BuildSites:
         target = build.target
         site = target.position if isinstance(target, Unit) else target
         if product in UnitType.AnyAddOn._type_ids:
-            self._reserve_add_on(reserved, product, footprint, site, builder, standing)
-        elif site is not None and _placement_key(product, footprint.snapped_center(at=site)) not in standing:
+            self._reserve_add_on(reserved, footprint, site, builder, standing)
+        elif site is not None and _placement_key(footprint.snapped_center(at=site)) not in standing:
             reserved.fill_footprint(footprint, at=site, value=True)
 
     def _reserve_add_on(
         self,
         reserved: Grid[bool],
-        add_on: UnitTypeId,
         footprint: Footprint,
         landing_site: Point | None,
         host: OwnUnit[Any],
-        standing: Collection[tuple[UnitTypeId, int, int]],
+        standing: Collection[tuple[int, int]],
     ) -> None:
-        """Mark on `reserved` the ground the add-on `add_on`, covering `footprint`, takes beside `host`: beside where
-        the host stands, or, for a lifted host, beside `landing_site`, which it reserves too. Nothing, if the add-on
-        stands there already, `standing` being as `_reserve_site` says."""
+        """Mark on `reserved` the ground an add-on covering `footprint` takes beside `host`: beside where the host
+        stands, or, for a lifted host, beside `landing_site`, which it reserves too. Nothing, if a structure stands
+        there already, `standing` being as `_reserve_site` says."""
         host_footprint = self._landed_footprint(host.type_id)
         if host_footprint is None:
             return
         host_center = host_footprint.snapped_center(at=landing_site if landing_site is not None else host.position)
         add_on_center = Point((host_center.x + _ADD_ON_OFFSET[0], host_center.y + _ADD_ON_OFFSET[1]))
-        if _placement_key(add_on, add_on_center) in standing:
+        if _placement_key(add_on_center) in standing:
             return
         reserved.fill_footprint(footprint, at=add_on_center, value=True)
         if landing_site is not None:
@@ -113,7 +115,7 @@ class _BuildSites:
         return row.footprint
 
 
-def _placement_key(unit_type: UnitTypeId, center: Point) -> tuple[UnitTypeId, int, int]:
-    """`unit_type` centered at `center`, in half tiles, where a structure stands snapped: the same for a structure
-    standing there and the site its build was ordered at."""
-    return unit_type, round(2 * center.x), round(2 * center.y)
+def _placement_key(center: Point) -> tuple[int, int]:
+    """`center` in half tiles, where a structure stands snapped: the same for a structure standing there and the site
+    its build was ordered at."""
+    return round(2 * center.x), round(2 * center.y)

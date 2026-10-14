@@ -1,5 +1,6 @@
 """Where a structure may stand, as this player knows the map in one observation."""
 
+import math
 from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
@@ -47,6 +48,7 @@ _TABLES = make_tables(
     _row(UnitTypeId.MARINE, minerals=50, speed=2.25),
     _row(UnitTypeId.SUPPLY_DEPOT, minerals=100),
     _row(UnitTypeId.REFINERY, minerals=75),
+    _row(UnitTypeId.REFINERY_RICH, minerals=75),
     _row(UnitTypeId.BARRACKS, minerals=150),
     _row(UnitTypeId.BARRACKS_FLYING, minerals=150, speed=0.9375),
     _row(UnitTypeId.REACTOR_BARRACKS, minerals=50, alias=(UnitTypeId.REACTOR,)),
@@ -55,6 +57,7 @@ _TABLES = make_tables(
     _row(UnitTypeId.COMMAND_CENTER, minerals=400),
     _row(UnitTypeId.MINERAL_FIELD),
     _row(UnitTypeId.VESPENE_GEYSER),
+    _row(UnitTypeId.VESPENE_GEYSER_RICH),
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
     _row(UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
     _row(UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
@@ -300,6 +303,16 @@ class TestTheReservedGrid:
             ".....",
         ]
 
+    def test_a_rich_geysers_refinery_frees_its_site_once_it_stands_though_it_is_another_type(self) -> None:
+        """The SCV shows the build while the refinery goes up, as `REFINERY_RICH` rather than the `REFINERY` its
+        ability makes."""
+        game = _Game()
+        geyser = make_unit(2, UnitTypeId.VESPENE_GEYSER_RICH, at=(8.5, 8.5), alliance=_NEUTRAL)
+        building = raw_pb2.UnitOrder(ability_id=_BUILD_REFINERY, target_unit_tag=2)
+        assert game.observe(0, _scv(1, building), geyser).reserved[Point((8.5, 8.5))]
+        refinery = make_unit(3, UnitTypeId.REFINERY_RICH, at=(8.5, 8.5), build_progress=0.05)
+        assert not game.observe(8, _scv(1, building, at=(6.5, 8.5)), geyser, refinery).reserved.any()
+
     def test_an_add_on_reserves_the_ground_beside_its_host(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
@@ -380,6 +393,13 @@ class TestPlacingOneStructure:
         with pytest.raises(ValueError, match="MARINE has no footprint"):
             _Game().observe(0).is_free(UnitTypeId.MARINE, at=Point((8.0, 8.0)))
 
+    def test_a_gas_building_raises(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL))
+        with pytest.raises(ValueError, match="REFINERY stands on a geyser"):
+            grids.is_free(UnitTypeId.REFINERY, at=Point((8.5, 8.5)))
+        with pytest.raises(ValueError, match="REFINERY stands on a geyser"):
+            grids.nearest_free(UnitTypeId.REFINERY, near=Point((8.5, 8.5)), max_distance=3.0)
+
     def test_nearest_free_finds_the_nearest_site_beside_a_structure(self) -> None:
         grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
         site = grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.2, 8.3)), max_distance=5.0)
@@ -405,6 +425,27 @@ class TestPlacingOneStructure:
             assert found.distance_to(near) == pytest.approx(expected.distance_to(near))
             assert grids.is_free(unit_type, at=found)
 
+    def test_a_build_issued_earlier_in_the_turn_takes_its_site(self) -> None:
+        game = _Game()
+        grids = game.observe(0, _scv(1))
+        assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
+        assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((9.0, 9.0)))
+        assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=1.0) is None
+
+    def test_nearest_free_with_no_limit_searches_the_whole_map(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
+        unlimited = grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.2, 8.3)), max_distance=math.inf)
+        assert unlimited == grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.2, 8.3)), max_distance=40.0)
+        far = grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((200.0, 200.0)), max_distance=math.inf)
+        assert far == Point((15.0, 15.0))
+
+    @pytest.mark.parametrize("max_distance", [-1.0, math.nan], ids=str)
+    def test_nearest_free_refuses_a_distance_that_is_none(self, max_distance: float) -> None:
+        with pytest.raises(ValueError, match="max_distance"):
+            _Game().observe(0).nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=max_distance)
+
     def test_nearest_free_is_none_where_nothing_fits_within_reach(self) -> None:
         grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(8.0, 8.0)))
         assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=1.0) is None
@@ -417,6 +458,16 @@ class TestPlacingOneStructure:
         assert grids.free_for(UnitTypeId.SUPPLY_DEPOT)[Point((8.5, 5.5))]
         assert grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 8.5)))
         assert not grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 7.5)))
+
+    def test_a_townhall_keeps_off_the_ground_around_a_geyser(self) -> None:
+        """A geyser keeps a townhall off its 3x3 grown by 3 tiles, less three at each corner (tool
+        `sweep_townhall_placement`)."""
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.VESPENE_GEYSER, at=(8.5, 3.5), alliance=_NEUTRAL))
+        assert not grids.free_for(UnitTypeId.COMMAND_CENTER)[Point((8.5, 6.5))]
+        assert grids.free_for(UnitTypeId.SUPPLY_DEPOT)[Point((8.5, 6.5))]
+        assert grids.free_for(UnitTypeId.COMMAND_CENTER)[Point((4.5, 7.5))]
+        assert grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 10.5)))
+        assert not grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 9.5)))
 
 
 def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_pb2.ResponseObservation]:

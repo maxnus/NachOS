@@ -30,17 +30,21 @@ class Footprint:
     _mask: ndarray
 
     def __init__(self, mask: ndarray) -> None:
-        """A footprint covering the true entries of `mask`, indexed `[x, y]` from its lower left tile."""
+        """A footprint covering the true entries of `mask`, indexed `[x, y]` from its lower left tile. A mask with no
+        entries is the empty footprint, whatever its shape."""
         if mask.ndim != 2:
             raise ValueError(f"a footprint is two-dimensional, got {mask.ndim} dimensions")
-        self._mask = numpy.array(mask, dtype=bool)
+        self._mask = numpy.array(mask, dtype=bool) if mask.size else numpy.zeros((0, 0), dtype=bool)
         self._mask.flags.writeable = False
 
     @classmethod
     def from_rows(cls, *rows: str) -> Footprint:
-        """The footprint `rows` draw, the top row first: `#` covered, `.` not. No rows cover nothing."""
+        """The footprint `rows` draw, the top row first: `#` covered, `.` not. No rows cover nothing. Raises
+        `ValueError` for rows of different lengths, or with any other character."""
         if len({len(row) for row in rows}) > 1:
             raise ValueError(f"the rows of a footprint are all as long, got {rows}")
+        if set("".join(rows)) - {"#", "."}:
+            raise ValueError(f"a footprint's rows hold only '#' and '.', got {rows}")
         width = len(rows[0]) if rows else 0
         mask = numpy.array([[row[x] == "#" for row in reversed(rows)] for x in range(width)], dtype=bool)
         return cls(mask.reshape(width, len(rows)))
@@ -54,7 +58,11 @@ class Footprint:
     def rectangle(cls, width: int, height: int, *, cut_corners: int = 0) -> Footprint:
         """A footprint covering a rectangle `width` tiles across and `height` up, less, at each corner, the tiles
         fewer than `cut_corners` steps from it, counting each step across or up: the corner tile for 1, and the two
-        beside it too for 2."""
+        beside it too for 2. Raises `ValueError` for a side shorter than 1 or a negative `cut_corners`."""
+        if width < 1 or height < 1 or cut_corners < 0:
+            raise ValueError(
+                f"a rectangle is at least 1x1 with no negative corner cut, got {width}x{height}, {cut_corners}"
+            )
         steps_from_side_x = numpy.minimum(numpy.arange(width), numpy.arange(width)[::-1])[:, numpy.newaxis]
         steps_from_side_y = numpy.minimum(numpy.arange(height), numpy.arange(height)[::-1])[numpy.newaxis, :]
         return cls(steps_from_side_x + steps_from_side_y >= cut_corners)
@@ -107,13 +115,22 @@ class Footprint:
     def __hash__(self) -> int:
         return hash((self._mask.shape, self._mask.tobytes()))
 
-    def __repr__(self) -> str:
+    def _made_by(self) -> tuple[str, tuple[int, ...], int] | None:
+        """The factory that makes this footprint, `empty`, `square` or `rectangle`, with the sides it takes and the
+        corners it cuts; `None` if none does."""
         if not self._mask.size:
-            return "Footprint.empty()"
-        for cut_corners in range(min(self.width, self.height)):
-            if self == Footprint.rectangle(self.width, self.height, cut_corners=cut_corners):
-                cut = f", cut_corners={cut_corners}" if cut_corners else ""
-                if self.width == self.height:
-                    return f"Footprint.square({self.width}{cut})"
-                return f"Footprint.rectangle({self.width}, {self.height}{cut})"
-        return f"Footprint({self.width}x{self.height}, {numpy.count_nonzero(self._mask)} tiles)"
+            return "empty", (), 0
+        width, height = self.width, self.height
+        # A cut deeper than the middle tile's steps from the corners leaves no tile.
+        for cut_corners in range((width - 1) // 2 + (height - 1) // 2 + 1):
+            if self == Footprint.rectangle(width, height, cut_corners=cut_corners):
+                sides = (width,) if width == height else (width, height)
+                return ("square" if width == height else "rectangle"), sides, cut_corners
+        return None
+
+    def __repr__(self) -> str:
+        if (made_by := self._made_by()) is None:
+            return f"Footprint({self.width}x{self.height}, {numpy.count_nonzero(self._mask)} tiles)"
+        factory, sides, cut_corners = made_by
+        arguments = [str(side) for side in sides] + ([f"cut_corners={cut_corners}"] if cut_corners else [])
+        return f"Footprint.{factory}({', '.join(arguments)})"

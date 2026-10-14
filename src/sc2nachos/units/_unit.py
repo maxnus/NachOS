@@ -63,6 +63,7 @@ class Unit[K: UnitType.AnyType]:
         "_previous_position",
         "_previous_step",
         "_raw_type",
+        "_radius_footprint",
         "_stale",
         "_step",
         "_tag",
@@ -85,6 +86,8 @@ class Unit[K: UnitType.AnyType]:
     _previous_step: int
     _stale: bool
     _dead: bool
+    # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
+    _radius_footprint: Footprint | None
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -101,6 +104,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_step = step
         self._stale = False
         self._dead = False
+        self._radius_footprint = None
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
@@ -551,5 +555,9 @@ class Unit[K: UnitType.AnyType]:
             return None
         if row.footprint is None and row.race is Race.NONE:
             side = round(2 * self.radius)
-            return Footprint.square(side) if side else None
+            if not side:
+                return None
+            if self._radius_footprint is None or self._radius_footprint.width != side:
+                self._radius_footprint = Footprint.square(side)
+            return self._radius_footprint
         return row.footprint

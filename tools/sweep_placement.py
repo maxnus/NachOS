@@ -40,8 +40,8 @@ from typing import Any
 
 import numpy
 from _sandbox import NEUTRAL, NEUTRAL_REPORTED, Cheat, Sandbox, playing, without_uncurated_units
+from generate_footprints import centers_where_it_stood
 from loguru import logger
-from numpy.lib.stride_tricks import sliding_window_view
 from record_corpus import GAMES
 from s2clientprotocol import data_pb2, error_pb2, raw_pb2
 
@@ -221,10 +221,9 @@ class _MeasuringGround:
         squares with no unit standing in them, the farthest from every unit that qualifies. A collapsible tower
         outlives a kill, so each one measured takes up its ground for the rest of the game."""
         size = 2 * reach + 1
-        placement = self._game_map.placement
-        open_squares = sliding_window_view(numpy.asarray(placement.values), (size, size)).all(axis=(2, 3))
-        xs, ys = numpy.nonzero(open_squares)
-        centers = numpy.stack((xs + placement.origin.x + reach + 0.5, ys + placement.origin.y + reach + 0.5), axis=-1)
+        open_squares = self._game_map.placement.where_footprint_fits(Footprint.square(size))
+        xs, ys = numpy.nonzero(open_squares.values)
+        centers = numpy.stack((xs + open_squares.origin.x + 0.5, ys + open_squares.origin.y + 0.5), axis=-1)
         positions = numpy.array([(unit.pos.x, unit.pos.y) for unit in self._game.units()])
         distance_to_nearest_unit = numpy.linalg.norm(centers[:, numpy.newaxis] - positions[numpy.newaxis], axis=-1).min(
             axis=1
@@ -286,10 +285,7 @@ def _measure(
 
 def _centers_where_it_stands(measured: MeasuredFootprint) -> bool:
     """Whether the tiles `measured` covered center on where the unit stood, as a footprint centers."""
-    if measured.lower_left is None:
-        return True
-    box = Footprint.from_rows(*measured.rows).bounding_box(at=Point(measured.position))
-    return (int(box.x), int(box.y)) == tuple(measured.lower_left)
+    return centers_where_it_stood(measured.rows, measured.position, measured.lower_left)
 
 
 def _measure_once(
