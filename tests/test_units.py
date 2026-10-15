@@ -605,11 +605,30 @@ class TestOwnUnits:
         )
         assert not marine.is_idle
 
-    def test_a_tag_no_unit_was_reported_under_raises(self) -> None:
+    def test_an_order_aimed_by_a_tag_the_game_never_reports_raises_only_once_its_target_is_read(self) -> None:
         marine = _one(make_unit(1, orders=[raw_pb2.UnitOrder(ability_id=AbilityId.ATTACK, target_unit_tag=9)]))
         assert isinstance(marine, OwnUnit)
-        with pytest.raises(UnknownTagError, match="never reported a unit under tag 9"):
-            _ = marine.orders
+        (order,) = marine.orders
+        assert order.ability is AbilityId.ATTACK
+        with pytest.raises(NotReportedError, match="by no tag it reports"):
+            _ = order.target
+
+    def test_a_gather_aimed_by_a_tag_the_game_never_reports_is_aimed_at_the_field_its_last_gather_named(self) -> None:
+        """An SCV walking back to a field out of sight shows its gather under a tag no observation reports, having
+        returned its minerals in between (in game)."""
+        field = make_unit(5, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL)
+        townhall = make_unit(7, UnitTypeId.COMMAND_CENTER)
+
+        def scv(ability: RawAbilityId, target: int) -> raw_pb2.Unit:
+            return make_unit(1, UnitTypeId.SCV, orders=[raw_pb2.UnitOrder(ability_id=ability, target_unit_tag=target)])
+
+        game = _Game()
+        worker, mined, _ = game.observe(0, scv(RawAbilityId.Harvest_Gather_SCV, 5), field, townhall)
+        game.observe(16, scv(RawAbilityId.Harvest_Return_SCV, 7), field, townhall)
+        game.observe(32, scv(RawAbilityId.Harvest_Gather_SCV, 99), field, townhall)
+
+        assert isinstance(worker, OwnUnit)
+        assert worker.orders[0].target is mined
 
     def test_a_rally_names_the_unit_it_is_onto_or_else_the_point(self) -> None:
         """A rally onto a mineral field that is mined out is left holding tag 2**32 (corpus)."""
@@ -625,6 +644,12 @@ class TestOwnUnits:
             RallyTarget(field),
             RallyTarget(Point((3.0, 4.0))),
         )
+
+    def test_a_rally_onto_a_tag_the_game_never_reports_names_its_point(self) -> None:
+        rally = raw_pb2.RallyTarget(point=common_pb2.Point(x=3, y=4), tag=99)
+        center = _one(make_unit(1, rally_targets=[rally]))
+        assert isinstance(center, OwnUnit)
+        assert center.rally_targets == (RallyTarget(Point((3.0, 4.0))),)
 
     def test_passengers_an_add_on_and_a_target_are_the_units_themselves(self) -> None:
         """A passenger is no longer in the observation, so it is the stale unit that boarded."""

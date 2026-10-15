@@ -249,3 +249,8 @@ cannot carry out. The ids do agree: a unit reports its type's own id of an actio
 reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
 `SIEGE`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
+
+The targets need not agree either. An SCV walking back to a mineral field out of sight shows its `GATHER` aimed at a
+tag the game reports for no unit (in game), so NachOS reads it as aimed at the unit the SCV's last `GATHER` named,
+the field it mined: any order aimed so reads as aimed at the unit the unit's last order of the same ability named,
+even one dead since, and its `target` raises `NotReportedError` if there was none. A rally aimed so reads its point.

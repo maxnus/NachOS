@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
+
+if TYPE_CHECKING:
+    from s2clientprotocol import raw_pb2
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -20,8 +23,15 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
         """The unit's current order, then its queued orders."""
-        unit_by_tag = self._tracker.unit_tracker.by_tag
-        return tuple(UnitOrder._from_proto(order, unit_by_tag) for order in self._latest_report.orders)
+        return tuple(UnitOrder._from_proto(order, self._unit_aimed_at) for order in self._latest_report.orders)
+
+    def _unit_aimed_at(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
+        """The unit `order` names: the one the game reported under its tag, or, for a tag the game never reports, the
+        one this unit's last order of the same ability named under a tag it did; `None` if there is none."""
+        unit = self._tracker.unit_tracker.get_by_tag(order.target_unit_tag)
+        if unit is None and self._order_targets is not None:
+            unit = self._order_targets.get(order.ability_id)
+        return unit
 
     @property
     def is_idle(self) -> bool:
@@ -62,8 +72,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where the structure sends what it makes."""
-        unit_by_tag = self._tracker.unit_tracker.by_tag
-        return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
+        get_by_tag = self._tracker.unit_tracker.get_by_tag
+        return tuple(RallyTarget._from_proto(rally, get_by_tag) for rally in self._latest_report.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:

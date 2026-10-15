@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Self, final
+from typing import TYPE_CHECKING, Any, Literal, Self, final
 
 from s2clientprotocol import raw_pb2
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.units._errors import NotReportedError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,13 +79,15 @@ class VitalType(Enum):
         return self.value.endswith("fraction")
 
 
-# The tag a rally holds once the unit it was set on is gone, as a mined-out mineral field is (corpus). No unit is ever
-# reported under it.
-_NO_UNIT = 1 << 32
-
-
 type Target = Point | Unit[Any]
 """What an order or a rally point is aimed at: a position on the ground, or a unit."""
+
+
+class _NotReported(Enum):
+    """What an order holds for the unit it is aimed at when the game names one under a tag it never reports, and no
+    earlier order of the unit's names one in its place."""
+
+    TARGET = 0
 
 
 def _target_point(point: common_pb2.Point) -> Point:
@@ -99,20 +102,34 @@ class UnitOrder:
 
     ability: AbilityId
     """The ability ordered."""
-    target: Target | None
-    """The point or unit the order is aimed at, or `None` for an order that takes neither."""
+    _target: Target | Literal[_NotReported.TARGET] | None
     progress: float
     """The order's progress from 0 to 1 for a train, a research or a larva's morph, and 0 otherwise: any other morph
     and an add-on read 0 until they are done (in game)."""
 
+    @property
+    def target(self) -> Target | None:
+        """The point or unit the order is aimed at, or `None` for an order that takes neither.
+
+        An order aimed at a unit the game names under a tag it never reports, as an SCV's gather is while it walks
+        back to a mineral field out of sight (in game), reads as aimed at the unit the same unit's last order of the
+        same ability named, a unit dead since among them. Raises `NotReportedError` if there was none.
+        """
+        if self._target is _NotReported.TARGET:
+            raise NotReportedError(f"the game names the unit this {self.ability.name} is aimed at by no tag it reports")
+        return self._target
+
     @classmethod
-    def _from_proto(cls, order: raw_pb2.UnitOrder, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read an order a unit reported, looking up a unit target through `unit_by_tag`."""
+    def _from_proto(
+        cls, order: raw_pb2.UnitOrder, unit_aimed_at: Callable[[raw_pb2.UnitOrder], Unit[Any] | None]
+    ) -> Self:
+        """Read an order a unit reported, finding the unit it is aimed at through `unit_aimed_at`."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
-                target: Target | None = _target_point(order.target_world_space_pos)
+                target: Target | Literal[_NotReported.TARGET] | None = _target_point(order.target_world_space_pos)
             case "target_unit_tag":
-                target = unit_by_tag(order.target_unit_tag)
+                unit = unit_aimed_at(order)
+                target = _NotReported.TARGET if unit is None else unit
             case _:
                 target = None
         return cls(AbilityId.read(order.ability_id), target, order.progress)
@@ -124,14 +141,14 @@ class RallyTarget:
     """Where a structure sends what it makes."""
 
     target: Target
-    """The unit rallied to, or the point: a spot on the ground, or where a unit now gone stood."""
+    """The unit rallied to, or the point: a spot on the ground, where a unit now gone stood, or where one stands that
+    the game names under a tag it never reports."""
 
     @classmethod
-    def _from_proto(cls, rally: raw_pb2.RallyTarget, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
-        """Read a rally point a structure reported, looking up a unit target through `unit_by_tag`."""
-        tag = rally.tag
-        if rally.HasField("tag") and tag != _NO_UNIT:
-            return cls(unit_by_tag(tag))
+    def _from_proto(cls, rally: raw_pb2.RallyTarget, get_by_tag: Callable[[int], Unit[Any] | None]) -> Self:
+        """Read a rally point a structure reported, looking up a unit target through `get_by_tag`."""
+        if rally.HasField("tag") and (unit := get_by_tag(rally.tag)) is not None:
+            return cls(unit)
         return cls(_target_point(rally.point))
 
 

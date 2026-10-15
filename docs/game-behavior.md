@@ -168,6 +168,13 @@ Each entry ends with how it was seen:
   cloaked observer reports none (#12; corpus).
 - Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
   tag 2³², which names no unit (#25; corpus).
+- An SCV walking back to a mineral field out of sight, after carrying its minerals off, shows its gather aimed at a
+  tag the observation lists nowhere: neither the field's own tag nor its copy's, in no unit, event or other field of
+  the response, 2,891 times over 1,000 steps. Back in sight of the field, the order names the field's own tag again.
+  Each SCV went back to the field it had mined, also with all 8 of the main's fields killed in the fog meanwhile,
+  and went idle there. An SCV ordered to gather a field in the fog by its copy's tag shows that tag. Seen with the
+  main's command center killed and another standing far off, on PylonAIE_v4 (in game, build 75689); it crashed 9 of
+  84 of the demo bot's games against the harder computers before NachOS read such a target.
 - Order progress runs from 0 to 1 for training and research and is 0 otherwise (#25; corpus). A larva's egg
   counts up like a train, and an SCV's and an egg's run evenly over the build time in the game's table. A
   morph's order reads 0 from start to end, and so does a structure's building an add-on: an orbital command, a

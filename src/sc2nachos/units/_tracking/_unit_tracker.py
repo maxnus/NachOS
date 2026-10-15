@@ -94,6 +94,11 @@ class _UnitTracker:
         except KeyError:
             raise UnknownTagError(f"the game never reported a unit under tag {tag}") from None
 
+    def get_by_tag(self, tag: int) -> Unit[Any] | None:
+        """The unit the game reported under `tag`, dead or alive, or `None` if it never reported one."""
+        unit_id = self._ids.get(tag)
+        return None if unit_id is None else self._units_by_id[unit_id]
+
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
         """Take in the units the observation at `step` reports, and the deaths it reports."""
         dead = observation.event.dead_units
