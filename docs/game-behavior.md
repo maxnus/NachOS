@@ -167,7 +167,9 @@ Each entry ends with how it was seen:
 - Visible enemy units report their armor and shield levels, and armed ones their attack level too; an undetected
   cloaked observer reports none (#12; corpus).
 - Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
-  tag 2³², which names no unit (#25; corpus).
+  tag 2³², which names no unit (#25; corpus). So does a rally onto a mineral field out of sight: a command center
+  rallied onto one in the fog by its copy's tag, or onto one in sight that then went into the fog, held 2³² and the
+  field's point (in game, build 75689).
 - An SCV walking back to a mineral field out of sight, after carrying its minerals off, shows its gather aimed at a
   tag the observation lists nowhere: neither the field's own tag nor its copy's, in no unit, event or other field of
   the response, 2,891 times over 1,000 steps. Back in sight of the field, the order names the field's own tag again.

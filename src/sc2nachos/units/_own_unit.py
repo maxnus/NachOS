@@ -72,8 +72,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
         """Where the structure sends what it makes."""
-        get_by_tag = self._tracker.unit_tracker.get_by_tag
-        return tuple(RallyTarget._from_proto(rally, get_by_tag) for rally in self._latest_report.rally_targets)
+        unit_by_tag = self._tracker.unit_tracker.by_tag
+        return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
 
     @property
     def add_on(self) -> Unit[Any] | None:

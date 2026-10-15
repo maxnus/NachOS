@@ -79,6 +79,11 @@ class VitalType(Enum):
         return self.value.endswith("fraction")
 
 
+# The tag a rally holds once the unit it was set on is gone, as a mined-out mineral field is (corpus), or out of sight
+# (in game). No unit is ever reported under it.
+_NO_UNIT = 1 << 32
+
+
 type Target = Point | Unit[Any]
 """What an order or a rally point is aimed at: a position on the ground, or a unit."""
 
@@ -141,14 +146,15 @@ class RallyTarget:
     """Where a structure sends what it makes."""
 
     target: Target
-    """The unit rallied to, or the point: a spot on the ground, where a unit now gone stood, or where one stands that
-    the game names under a tag it never reports."""
+    """The unit rallied to, or the point: a spot on the ground, or where a unit now gone or out of sight stands or
+    stood."""
 
     @classmethod
-    def _from_proto(cls, rally: raw_pb2.RallyTarget, get_by_tag: Callable[[int], Unit[Any] | None]) -> Self:
-        """Read a rally point a structure reported, looking up a unit target through `get_by_tag`."""
-        if rally.HasField("tag") and (unit := get_by_tag(rally.tag)) is not None:
-            return cls(unit)
+    def _from_proto(cls, rally: raw_pb2.RallyTarget, unit_by_tag: Callable[[int], Unit[Any]]) -> Self:
+        """Read a rally point a structure reported, looking up a unit target through `unit_by_tag`."""
+        tag = rally.tag
+        if rally.HasField("tag") and tag != _NO_UNIT:
+            return cls(unit_by_tag(tag))
         return cls(_target_point(rally.point))
 
 

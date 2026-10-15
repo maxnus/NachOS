@@ -258,10 +258,24 @@ class OrderBook:
 
     @property
     def held(self) -> tuple[Order[Any], ...]:
-        """Every order held until its unit can start it, from earlier turns, each unit's in the order they go out. An
-        order held for several units is in it once. Withdrawn orders are left out, and so are the turn's orders,
-        which are in `pending`."""
-        held = (order for queue in self._held.values() for order in queue.orders if not order._withdrawn)
+        """Every order held until its unit can start it, from earlier turns, each unit's in the order they go out, less
+        what the turn's orders will drop: what is held for a unit given an unqueued order this turn that replaces its
+        orders or needs it idle. An order held for several units is in it once. Withdrawn orders are left out, and so
+        are the turn's orders, which are in `pending`."""
+        dropped = {
+            unit.id
+            for order in self._issued
+            if not order._withdrawn
+            for unit in order.units
+            if self._competes_for(order, unit)
+        }
+        held = (
+            order
+            for unit_id, queue in self._held.items()
+            if unit_id not in dropped
+            for order in queue.orders
+            if not order._withdrawn
+        )
         return tuple(dict.fromkeys(held))
 
     def camera(self, at: PointLike) -> None:
@@ -662,7 +676,7 @@ class OrderBook:
                 point = first.target_world_space_pos
                 return isinstance(target, Point) and same_point(target, point.x, point.y)
             case "target_unit_tag":
-                return isinstance(target, Unit) and target.tag == first.target_unit_tag
+                return isinstance(target, Unit) and unit._unit_aimed_at(first) is target
             case _:
                 return target is None
 

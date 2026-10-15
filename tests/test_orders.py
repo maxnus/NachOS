@@ -552,6 +552,19 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
+    def test_a_unit_aimed_by_a_tag_the_game_never_reports_carries_out_an_order_at_its_last_target(self) -> None:
+        """As an SCV walking back to a field out of sight does (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
+        game.observe(0, _marine(1, attacking), _marine(2, at=(30.0, 30.0)))
+        unreported = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=99)
+        game.observe(16, _marine(1, unreported), _marine(2, at=(30.0, 30.0)))
+        game.observe(32, _marine(1, unreported), _marine(2, at=(30.0, 30.0)))
+
+        game.book.issue(game.own(1), _ATTACK, target=game.own(2))
+
+        assert game.flush() is None
+
     def test_a_dead_unit_s_last_order_is_forgotten(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
@@ -1878,6 +1891,21 @@ class TestReadingHeldOrders:
         game.flush()
 
         assert game.book.held == (first, move, second)
+
+    def test_held_leaves_out_what_the_turn_s_orders_will_drop(self) -> None:
+        """A build repeated every turn replaces the one held, so it would count twice beside `pending`."""
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        again = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        assert game.book.held == (marine,)
+        assert game.book.pending == (again, reaper)
 
     def test_a_withdrawn_order_is_not_held(self) -> None:
         game = _holding([ActionResult.SUCCESS])

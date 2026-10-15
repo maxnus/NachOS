@@ -313,6 +313,10 @@ class TestTheReservedGrid:
         refinery = make_unit(3, UnitTypeId.REFINERY_RICH, at=(8.5, 8.5), build_progress=0.05)
         assert not game.observe(8, _scv(1, building, at=(6.5, 8.5)), geyser, refinery).reserved.any()
 
+    def test_a_build_shown_aimed_by_a_tag_the_game_never_reports_reserves_nothing(self) -> None:
+        building = raw_pb2.UnitOrder(ability_id=_BUILD_REFINERY, target_unit_tag=99)
+        assert not _Game().observe(0, _scv(1, building)).reserved.any()
+
     def test_an_add_on_reserves_the_ground_beside_its_host(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
