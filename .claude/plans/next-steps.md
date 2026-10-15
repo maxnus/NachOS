@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #123. `uv run pytest` passes 1896 tests on the demo bot's branch; `uv run pytest -m
+- nachOS `main` has every PR to #123. `uv run pytest` passes 1898 tests on the demo bot's branch; `uv run pytest -m
   integration` passes 29 against a real game (run 2026-10-15).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
@@ -470,6 +470,11 @@ when each starts.
      `UncuratedIdError`.
    - **`api.orders.held`**, every order NachOS holds, beside `pending`, so a bot can budget for what the bank does not
      show yet (the owner, over one summed cost).
+   - **An order aimed by a tag the game never reports reads as aimed at the unit the unit's last order of the same
+     ability named**, dead since or not, and its `target` raises `NotReportedError` if there was none; a rally aimed
+     so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9
+     of 84 games against the harder computers (the owner, after asking whether NachOS filtered the tag out and
+     whether the reading could be wrong).
 
 ### Before 8: the expansions, done (#122)
 
