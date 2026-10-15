@@ -9,12 +9,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1890 tests on the placement grids' branch; `uv run pytest
-  -m integration` passes 28 against a real game (run 2026-10-13).
+- nachOS `main` has every PR to #123. `uv run pytest` passes 1896 tests on the demo bot's branch; `uv run pytest -m
+  integration` passes 29 against a real game (run 2026-10-15).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
   action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
-  so are the expansions the demo bot needs (#122), and the placement grids are on branch `claude/placement-grids`.
+  so are the expansions (#122) and the placement grids (#123) the demo bot needs, and the demo bot is on branch
+  `claude/demo-bot`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -455,7 +456,20 @@ when each starts.
 6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
-   against `Computer` using only NachOS, and doubles as the library's example for other developers.
+   against `Computer` using only NachOS, and doubles as the library's example for other developers. Decided by the
+   owner, 2026-10-15:
+   - **It beats `Computer` at `MEDIUM` in all 21 games** of the pool's 7 maps against each of the 3 races.
+   - **It plays Terran**: depots, barracks and command centers placed through `api.placement`, and no power, which
+     `free_for` does not know yet.
+   - **It is one file**, `examples/demo_bot.py`, run by `run_from_command_line`, so the match workflow can play it.
+     `examples/run_game.py` stays the bot that does nothing.
+   - **What it needs that NachOS lacks is asked of the owner one gap at a time**, each with a proposed API, and goes
+     into NachOS as its own commit in the same PR before the bot uses it; a big one becomes a PR of its own first.
+   - **The critters are curated** (`CLEANING_BOT`, `LAB_BOT`), since a build over one waits until it has walked off
+     (the owner, who asked for that to be measured with a command center); they cover no ground. Seeing one raised
+     `UncuratedIdError`.
+   - **`api.orders.held`**, every order NachOS holds, beside `pending`, so a bot can budget for what the bank does not
+     show yet (the owner, over one summed cost).
 
 ### Before 8: the expansions, done (#122)
 

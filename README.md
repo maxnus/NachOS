@@ -34,15 +34,19 @@ on = api.events.on
 ```python
 # my_bot/economy.py — anywhere else in your bot
 from sc2nachos.events import TurnEvent
+from sc2nachos.units import UnitType
 
 from my_bot.api import api, on
 
 
 @on(TurnEvent, every_steps=4)
 def manage_workers(event):
-    for worker in api.workers.idle:
+    for worker in api.units.own.of_type(UnitType.Worker).idle:
         ...
 ```
+
+[`examples/demo_bot.py`](examples/demo_bot.py) is a whole bot in one file: a Terran that trains SCVs, expands and
+attacks with marines, and beats the built-in computer at medium difficulty.
 
 [Events](docs/events.md) lists every event a game hands out and how to subscribe to only some of them.
 [Orders](docs/orders.md) covers how a bot orders its units and what it learns about each order.
