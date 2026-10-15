@@ -11,6 +11,7 @@ from scipy.sparse import coo_array
 from scipy.sparse.csgraph import dijkstra
 
 from sc2nachos.geometry._area import Area
+from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.geometry._shapes import Rectangle, Tile
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
-    from sc2nachos.geometry._footprint import Footprint
+    from sc2nachos.geometry._footprint import Footprint, Margin
     from sc2nachos.geometry._point import PointLike
 
 _ORIGIN = Tile(0, 0)
@@ -217,9 +218,17 @@ class Grid[T: float]:
         grid_slices, mask_slices = self._slices_for_footprint(footprint, at)
         self._data[grid_slices][footprint.mask[mask_slices]] = value
 
-    def fits_footprint(self: Grid[bool], footprint: Footprint, *, at: PointLike) -> bool:
-        """Whether every tile `footprint` covers, centered at `at`, is true. A tile beyond the grid reads `outside`,
-        and raises `IndexError` if that is `None`."""
+    def fits_footprint(self: Grid[bool], footprint: Footprint, *, at: PointLike, margin: Margin = 0) -> bool:
+        """Whether every tile `footprint` covers, centered at `at`, is true, and with `margin`, every tile within it of
+        one the footprint covers: as many on every side, or so many on its left, right, bottom and top. A tile beyond
+        the grid reads `outside`, and raises `IndexError` if that is `None`. Raises `ValueError` for a negative
+        margin."""
+        if any(sides := _margin_sides(margin)):
+            left, _, bottom, _ = sides
+            box = footprint.bounding_box(at=at)
+            footprint = footprint._grown(sides)
+            # Centered so that its lower left tile lies `left` and `bottom` beyond the footprint's.
+            at = (box.x - left + footprint.width / 2, box.y - bottom + footprint.height / 2)
         grid_slices, mask_slices = self._slices_for_footprint(footprint, at)
         covered_on_grid = footprint.mask[mask_slices]
         if numpy.count_nonzero(covered_on_grid) < numpy.count_nonzero(footprint.mask):
@@ -288,17 +297,36 @@ class Grid[T: float]:
         """The same grid, refusing writes. It shares the values, so a write to this grid shows in it."""
         return Grid(self.values, origin=self._origin, outside=self._outside, readonly=True)
 
-    def where_footprint_fits(self: Grid[bool], footprint: Footprint) -> Grid[bool]:
-        """Where `footprint` fits, by the tile holding its center: true where every tile it covers, centered as
-        `footprint.center_in_tile` says, is true, which is this grid eroded by the footprint. A tile beyond the grid
-        reads `outside`, or false if that is `None`. The result covers the same tiles as this grid and reads false
-        beyond them."""
+    def where_footprint_fits(self: Grid[bool], footprint: Footprint, *, margin: Margin = 0) -> Grid[bool]:
+        """Where `footprint` fits, with `margin` as `fits_footprint` takes it, by the tile holding its center: true
+        where every tile it covers, centered as `footprint.center_in_tile` says, is true, which is this grid eroded by
+        the footprint. A tile beyond the grid reads `outside`, or false if that is `None`. The result covers the same
+        tiles as this grid and reads false beyond them. Raises `ValueError` for a negative margin."""
         values = self._data.astype(bool, copy=False)
+        if any(sides := _margin_sides(margin)):
+            return Grid(self._where_grown_fits(values, footprint, sides), origin=self._origin, outside=False)
         if not footprint.mask.any():
             return Grid(numpy.ones_like(values), origin=self._origin, outside=False)
         # The structure's own center, index `side // 2` along each axis, is where `center_in_tile` centers a footprint.
         fitting = scipy.ndimage.binary_erosion(values, structure=footprint.mask, border_value=int(bool(self._outside)))
         return Grid(fitting, origin=self._origin, outside=False)
+
+    def _where_grown_fits(self, values: ndarray, footprint: Footprint, sides: tuple[int, int, int, int]) -> ndarray:
+        """Where `footprint` fits on `values` with `sides` free beside it, by the tile holding its center."""
+        left, _, bottom, _ = sides
+        grown = footprint._grown(sides)
+        if not grown.mask.any():
+            return numpy.ones_like(values)
+        # Padded so that every center on the grid has its grown footprint's center on the padding or the grid.
+        pad = max(sides)
+        border = bool(self._outside)
+        padded = numpy.pad(values, pad, constant_values=border)
+        fitting = scipy.ndimage.binary_erosion(padded, structure=grown.mask, border_value=int(border))
+        # The tile holding the footprint's center lies this far from the one holding the grown footprint's.
+        dx = left + footprint.width // 2 - grown.width // 2
+        dy = bottom + footprint.height // 2 - grown.height // 2
+        width, height = values.shape
+        return fitting[pad - dx : pad - dx + width, pad - dy : pad - dy + height]
 
     def where(self, condition: Grid[bool], other: T | Grid[T]) -> Grid[T]:
         """This grid where `condition` holds, and `other` everywhere else."""

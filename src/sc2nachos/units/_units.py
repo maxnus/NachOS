@@ -242,7 +242,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         if not distance >= 0:
             raise ValueError(f"a distance is at least 0, not {distance}")
         centers = _positions(of)
-        limit = distance * distance
+        distance_squared = distance * distance
         kept = []
         for unit in self._units:
             position = unit._position
@@ -250,7 +250,7 @@ class Units[U: Unit[Any]](Sequence[U]):
             for cx, cy in centers:
                 dx = x - cx
                 dy = y - cy
-                if dx * dx + dy * dy <= limit:
+                if dx * dx + dy * dy <= distance_squared:
                     kept.append(unit)
                     break
         return Units(kept)

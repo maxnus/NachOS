@@ -42,8 +42,8 @@ class UnitType:
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
     or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
-    the critters, the add-ons, tech labs and reactors, or the two forms of a structure that changes and changes back,
-    such as a supply depot raised or lowered.
+    the critters, the add-ons, tech labs and reactors, or the two forms of a structure or a unit that changes and
+    changes back, such as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not.
     """
 
     class AnyType:
@@ -120,8 +120,9 @@ COLLAPSIBLE_TOWERS = frozenset(
 )
 # The map's animals and robots, which wander and cover no ground.
 CRITTERS = frozenset({UnitTypeId.CRITTER_CLEANING_BOT, UnitTypeId.CRITTER_LAB_BOT})
-# The structures that change to another form and back, by their group: lowered, lifted or uprooted. A command
-# center's and an orbital command's lifted forms are in `Townhall`.
+# The structures and units that change to another form and back, by their group: lowered, lifted, uprooted, in another
+# mode, or burrowed. A command center's and an orbital command's lifted forms are in `Townhall`; an egg or a cocoon
+# becomes another type and never changes back.
 TWO_FORMS = {
     "AnySupplyDepot": frozenset({UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED}),
     "AnyBarracks": frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
@@ -129,6 +130,62 @@ TWO_FORMS = {
     "AnyStarport": frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
     "AnySpineCrawler": frozenset({UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED}),
     "AnySporeCrawler": frozenset({UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED}),
+    "AnyViking": frozenset({UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED}),
+    "AnySiegeTank": frozenset({UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED}),
+    "AnyWidowMine": frozenset({UnitTypeId.WIDOW_MINE, UnitTypeId.WIDOW_MINE_BURROWED}),
+    "AnyLiberator": frozenset({UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED}),
+    "AnyThor": frozenset({UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT}),
+    "AnyHellion": frozenset({UnitTypeId.HELLION, UnitTypeId.HELLBAT}),
+    "AnyObserver": frozenset({UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED}),
+    "AnyOverseer": frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
+    "AnyWarpPrism": frozenset({UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
+    **{
+        f"Any{''.join(part.capitalize() for part in name.split('_'))}": frozenset(
+            {UnitTypeId[name], UnitTypeId[f"{name}_BURROWED"]}
+        )
+        for name in (
+            "DRONE",
+            "ZERGLING",
+            "BANELING",
+            "ROACH",
+            "RAVAGER",
+            "HYDRALISK",
+            "LURKER",
+            "INFESTOR",
+            "SWARM_HOST",
+            "ULTRALISK",
+            "QUEEN",
+        )
+    },
+}
+# What each of a type's two forms is, by its group, for the group's docstring.
+FORMS = {
+    "AnySupplyDepot": "A supply depot, raised or lowered.",
+    "AnyBarracks": "A barracks, landed or flying.",
+    "AnyFactory": "A factory, landed or flying.",
+    "AnyStarport": "A starport, landed or flying.",
+    "AnySpineCrawler": "A spine crawler, rooted or uprooted.",
+    "AnySporeCrawler": "A spore crawler, rooted or uprooted.",
+    "AnyViking": "A viking, flying or landed.",
+    "AnySiegeTank": "A siege tank, sieged or not.",
+    "AnyWidowMine": "A widow mine, burrowed or not.",
+    "AnyLiberator": "A liberator, sieged or not.",
+    "AnyThor": "A thor, in either mode.",
+    "AnyHellion": "A hellion or a hellbat.",
+    "AnyObserver": "An observer, in surveillance mode or not.",
+    "AnyOverseer": "An overseer, in oversight mode or not.",
+    "AnyWarpPrism": "A warp prism, phasing or not.",
+    "AnyDrone": "A drone, burrowed or not.",
+    "AnyZergling": "A zergling, burrowed or not.",
+    "AnyBaneling": "A baneling, burrowed or not.",
+    "AnyRoach": "A roach, burrowed or not.",
+    "AnyRavager": "A ravager, burrowed or not.",
+    "AnyHydralisk": "A hydralisk, burrowed or not.",
+    "AnyLurker": "A lurker, burrowed or not.",
+    "AnyInfestor": "An infestor, burrowed or not.",
+    "AnySwarmHost": "A swarm host, burrowed or not.",
+    "AnyUltralisk": "An ultralisk, burrowed or not.",
+    "AnyQueen": "A queen, burrowed or not.",
 }
 # The groups of what a type is for, beside its race's, with their docstrings.
 ROLES = {
@@ -142,12 +199,7 @@ ROLES = {
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
-    "AnySupplyDepot": "A supply depot, raised or lowered.",
-    "AnyBarracks": "A barracks, landed or flying.",
-    "AnyFactory": "A factory, landed or flying.",
-    "AnyStarport": "A starport, landed or flying.",
-    "AnySpineCrawler": "A spine crawler, rooted or uprooted.",
-    "AnySporeCrawler": "A spore crawler, rooted or uprooted.",
+    **FORMS,
 }
 # The groups whose types are all in another group, by the group they are in.
 ROLE_BASES = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}

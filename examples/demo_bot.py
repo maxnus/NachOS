@@ -41,7 +41,7 @@ class Budget:
         self.resources_left = api.resources - unpaid.resources
         self.supply_left = api.supply.left - unpaid.supply
 
-    def pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
+    def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
         not, so nothing cheaper spends it first."""
         cost = api.data.abilities[ability].cost
@@ -76,7 +76,7 @@ def train_workers(budget: Budget) -> None:
             return
         if api.orders.issued_to(townhall, include_sent=True):
             continue
-        if budget.pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
+        if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
             api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
@@ -186,7 +186,7 @@ def build_supply(budget: Budget) -> None:
     if supply.left + 8 * in_progress >= 2 + 2 * producers or in_progress >= 3:
         return
     site = api.placement.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=_depot_anchor(), max_distance=25)
-    if site is not None and budget.pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
+    if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
         _build(AbilityId.SCV_BUILD_SUPPLY_DEPOT, site)
 
 
@@ -217,7 +217,7 @@ def expand(budget: Budget) -> None:
     if not api.units.own.of_type(UnitType.Barracks):
         return
     expansion = _next_expansion()
-    if expansion is not None and budget.pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
+    if expansion is not None and budget.try_pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
         _build(AbilityId.SCV_BUILD_COMMAND_CENTER, expansion.center)
 
 
@@ -246,7 +246,7 @@ def build_barracks(budget: Budget) -> None:
         return
     anchor = api.expansions[0].center.towards(api.expansions[1].center, 9)
     site = api.placement.nearest_free(UnitTypeId.BARRACKS, near=anchor, max_distance=math.inf, margin=1)
-    if site is not None and budget.pay_for(AbilityId.SCV_BUILD_BARRACKS):
+    if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_BARRACKS):
         _build(AbilityId.SCV_BUILD_BARRACKS, site)
 
 
@@ -255,7 +255,7 @@ def train_marines(budget: Budget) -> None:
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
         if api.orders.issued_to(barracks, include_sent=True):
             continue
-        if budget.pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
+        if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
             api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 
 

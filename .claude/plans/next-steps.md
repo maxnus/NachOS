@@ -477,9 +477,11 @@ when each starts.
      so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9
      of 84 games against the harder computers (the owner, after asking whether NachOS filtered the tag out and
      whether the reading could be wrong).
-   - **Decided in review of #125** (the owner): a group for each structure with a second form (`AnySupplyDepot`,
-     `AnyBarracks`, `AnyFactory`, `AnyStarport`, `AnySpineCrawler`, `AnySporeCrawler`); `margin` on `is_free` and
-     `nearest_free`, one count of tiles or four (left, right, bottom, top); `Expansion.townhall`, the townhall
+   - **Decided in review of #125** (the owner): a group for each structure and unit with a second form, 26 of them
+     (`AnySupplyDepot`, `AnyBarracks`, `AnySiegeTank`, `AnyViking`, `AnyRoach` burrowed or not...); `margin`, one
+     count of tiles or four (left, right, bottom, top), on `Grid.fits_footprint` and `where_footprint_fits`, kept
+     free around the tiles the footprint covers, so a cut corner stays cut, and passed on by `is_free` and
+     `nearest_free`; `Expansion.townhall`, the townhall
      standing on it, anyone's, over an `OwnedExpansion`; `Unit.distance_to`, center to center; `Units.within(d,
      of=...)`; `in_area` taking several areas; the main nouns importable from `sc2nachos` itself, the events staying
      in `sc2nachos.events`. Not done: a callable target per unit (reconsider with slice 7), `issue` with no units

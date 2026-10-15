@@ -109,6 +109,17 @@ class Footprint:
         length, and its lower left corner along a side of even length."""
         return Point((tile[0] + 0.5 * (self.width % 2), tile[1] + 0.5 * (self.height % 2)))
 
+    def _grown(self, sides: tuple[int, int, int, int]) -> Footprint:
+        """This footprint and every tile within `sides` of a tile it covers: so many to the left and right of one, and
+        so many below and above it. Its own mask lies at `[left:, bottom:]` of the grown one."""
+        left, right, bottom, top = sides
+        width, height = self.width, self.height
+        grown = numpy.zeros((width + left + right, height + bottom + top), dtype=bool)
+        for dx in range(left + right + 1):
+            for dy in range(bottom + top + 1):
+                grown[dx : dx + width, dy : dy + height] |= self._mask
+        return Footprint(grown)
+
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Footprint) and numpy.array_equal(self._mask, other._mask)
 
@@ -117,3 +128,16 @@ class Footprint:
 
     def __repr__(self) -> str:
         return f"Footprint({self.width}x{self.height}, {numpy.count_nonzero(self._mask)} tiles)"
+
+
+type Margin = int | tuple[int, int, int, int]
+"""Tiles kept free beside a footprint: as many on every side, or so many on its left, right, bottom and top."""
+
+
+def _margin_sides(margin: Margin) -> tuple[int, int, int, int]:
+    """`margin` as the tiles kept free on the left, right, bottom and top. Raises `ValueError` for a negative one, and
+    for anything but one count or four."""
+    sides = (margin, margin, margin, margin) if isinstance(margin, int) else margin
+    if len(sides) != 4 or any(side < 0 for side in sides):
+        raise ValueError(f"a margin is a count of tiles, or four of them, none negative, not {margin}")
+    return sides
