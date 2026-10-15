@@ -158,8 +158,8 @@ TWO_FORMS = {
         )
     },
 }
-# What each of a type's two forms is, by its group, for the group's docstring.
-FORMS = {
+# The docstring of each group of `TWO_FORMS`.
+TWO_FORM_DOCSTRINGS = {
     "AnySupplyDepot": "A supply depot, raised or lowered.",
     "AnyBarracks": "A barracks, landed or flying.",
     "AnyFactory": "A factory, landed or flying.",
@@ -199,7 +199,7 @@ ROLES = {
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
-    **FORMS,
+    **TWO_FORM_DOCSTRINGS,
 }
 # The groups whose types are all in another group, by the group they are in.
 ROLE_BASES = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}

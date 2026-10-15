@@ -12,7 +12,8 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData
-from sc2nachos.ids import UncuratedIdError, UnitTypeId
+from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
@@ -43,6 +44,21 @@ def _types() -> list[Any]:
 
 
 class TestUnitType:
+    @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
+    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(self, group: str, tables: GameData) -> None:
+        """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias. The
+        factory trains a hellion and a hellbat both, so neither links them; each performs the morph to the other."""
+        first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
+        if group == "AnyHellion":
+            assert UnitTypeId.HELLION in tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
+            assert UnitTypeId.HELLBAT in tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
+            return
+        linked = [
+            TECH_TREE.morph_sources.get(one) is other or other in tables.units[one].tech_aliases
+            for one, other in ((first, second), (second, first))
+        ]
+        assert any(linked), (first, second)
+
     def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self, tables: GameData) -> None:
         generated = _generator().render(tables)
         written = Path(unit_type_module.__file__).read_text(encoding="utf-8")

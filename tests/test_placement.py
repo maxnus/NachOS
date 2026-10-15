@@ -443,12 +443,25 @@ class TestPlacingOneStructure:
         assert not grids.is_free(depot, at=Point((8.0, 8.0)), margin=(0, 2, 0, 0))
         assert grids.is_free(depot, at=Point((8.0, 8.0)), margin=(2, 1, 2, 2))
 
-    @pytest.mark.parametrize("margin", [-1, (0, 0, -1, 0), (1, 1, 1)], ids=str)
-    def test_a_margin_negative_or_of_the_wrong_length_raises(self, margin: object) -> None:
+    @pytest.mark.parametrize(
+        ("margin", "error", "message"),
+        [
+            (-1, ValueError, "never negative"),
+            ((0, 0, -1, 0), ValueError, "never negative"),
+            ((1, 1, 1), TypeError, "a tuple of four"),
+            ([1, 1, 1, 1], TypeError, "a tuple of four"),
+            (1.5, TypeError, "a tuple of four"),
+            (True, TypeError, "a tuple of four"),
+        ],
+        ids=str,
+    )
+    def test_a_margin_negative_or_not_a_count_or_four_raises(
+        self, margin: object, error: type[Exception], message: str
+    ) -> None:
         grids = _Game().observe(0)
-        with pytest.raises(ValueError, match="a margin is a count of tiles"):
+        with pytest.raises(error, match=message):
             grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)), margin=margin)  # pyright: ignore[reportArgumentType]
-        with pytest.raises(ValueError, match="a margin is a count of tiles"):
+        with pytest.raises(error, match=message):
             grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=3.0, margin=margin)  # pyright: ignore[reportArgumentType]
 
     def test_a_build_issued_earlier_in_the_turn_takes_its_site(self) -> None:

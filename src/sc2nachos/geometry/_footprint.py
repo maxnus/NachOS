@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, final
+from numbers import Integral
+from typing import TYPE_CHECKING, cast, final
 
 import numpy
 
@@ -135,9 +136,17 @@ type Margin = int | tuple[int, int, int, int]
 
 
 def _margin_sides(margin: Margin) -> tuple[int, int, int, int]:
-    """`margin` as the tiles kept free on the left, right, bottom and top. Raises `ValueError` for a negative one, and
-    for anything but one count or four."""
-    sides = (margin, margin, margin, margin) if isinstance(margin, int) else margin
-    if len(sides) != 4 or any(side < 0 for side in sides):
-        raise ValueError(f"a margin is a count of tiles, or four of them, none negative, not {margin}")
-    return sides
+    """`margin` as the tiles kept free on the left, right, bottom and top. Raises `TypeError` for anything but a count
+    of tiles or a tuple of four, and `ValueError` for a negative one."""
+    sides: object = margin if isinstance(margin, tuple) else (margin, margin, margin, margin)
+    if not isinstance(sides, tuple) or len(sides) != 4 or not all(_is_count(side) for side in sides):
+        raise TypeError(f"a margin is a count of tiles, or a tuple of four, not {margin!r}")
+    left, right, bottom, top = (int(cast("int", side)) for side in sides)
+    if min(left, right, bottom, top) < 0:
+        raise ValueError(f"a margin is never negative, not {margin}")
+    return left, right, bottom, top
+
+
+def _is_count(value: object) -> bool:
+    """Whether `value` is a whole number, and not a `bool`."""
+    return isinstance(value, Integral) and not isinstance(value, bool)

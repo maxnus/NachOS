@@ -13,7 +13,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import GameData, OrderBehavior
+from sc2nachos.gamedata import Cost, GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -1920,6 +1920,24 @@ class TestReadingHeldOrders:
         costs = [_HOLDING_TABLES.abilities[ability].cost for ability in (_BUILD_DEPOT, _TRAIN_MARINE, _TRAIN_REAPER)]
         assert game.book.unpaid == costs[0] + costs[1] + costs[2]
         assert game.book.unpaid.minerals == 200
+
+    def test_unpaid_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
+        game = _holding()
+        game.observe(0, _scv(1))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=(35.0, 35.0))
+
+        assert game.book.unpaid == _HOLDING_TABLES.abilities[_BUILD_DEPOT].cost
+
+    def test_unpaid_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
+        """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
+        game = _holding()
+        game.observe(0, _scv(1, _building(), at=(29.0, 29.0)))
+
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+
+        assert game.book.unpaid == Cost(0, 0)
+        assert game.book.pending
 
     def test_a_withdrawn_order_is_not_held(self) -> None:
         game = _holding([ActionResult.SUCCESS])

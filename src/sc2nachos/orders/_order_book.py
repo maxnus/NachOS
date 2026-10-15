@@ -280,13 +280,21 @@ class OrderBook:
 
     @property
     def unpaid(self) -> Cost:
-        """What the bank does not show yet: the cost of every order held and every one the turn has given, for each
-        unit it names, its ability's `cost` in the game's tables."""
+        """What the bank does not show yet: the cost of every order held, and of the turn's orders as they will go
+        out, its ability's `cost` in the game's tables for each unit it goes to. A unit given orders that replace one
+        another pays for the last, and one already carrying an order out pays nothing for it again."""
         total = Cost(0, 0)
-        for order in (*self.held, *self.pending):
-            if (row := self._game_data.abilities.get(order.ability)) is not None:
-                total += row.cost * len(order.units)
+        for order in self.held:
+            total += self._cost_of(order) * len(order.units)
+        for order, units in self._orders_given(self._issued):
+            going = units if order in self._forced else self._units_not_carrying_it_out(order, units)
+            total += self._cost_of(order) * len(going)
         return total
+
+    def _cost_of(self, order: Order[Any]) -> Cost:
+        """What `order` costs each unit it goes to, by its ability's row in the game's tables; nothing without one."""
+        row = self._game_data.abilities.get(order.ability)
+        return Cost(0, 0) if row is None else row.cost
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""

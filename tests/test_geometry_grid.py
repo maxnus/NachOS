@@ -635,12 +635,25 @@ class TestFootprints:
         assert ground.fits_footprint(cut, at=Point((12.5, 22.5)), margin=1)
         assert not ground.fits_footprint(Footprint.square(3), at=Point((12.5, 22.5)), margin=1)
 
-    @pytest.mark.parametrize("margin", [-1, (0, 0, -1, 0), (1, 1, 1)], ids=str)
-    def test_a_margin_negative_or_of_the_wrong_length_raises(self, margin: object) -> None:
+    @pytest.mark.parametrize(
+        ("margin", "error", "message"),
+        [
+            (-1, ValueError, "never negative"),
+            ((0, 0, -1, 0), ValueError, "never negative"),
+            ((1, 1, 1), TypeError, "a tuple of four"),
+            ([1, 1, 1, 1], TypeError, "a tuple of four"),
+            (1.5, TypeError, "a tuple of four"),
+            (True, TypeError, "a tuple of four"),
+        ],
+        ids=str,
+    )
+    def test_a_margin_negative_or_not_a_count_or_four_raises(
+        self, margin: object, error: type[Exception], message: str
+    ) -> None:
         ground = _patchy_ground()
-        with pytest.raises(ValueError, match="a margin is a count of tiles"):
+        with pytest.raises(error, match=message):
             ground.fits_footprint(Footprint.square(2), at=Point((14.0, 24.0)), margin=margin)  # pyright: ignore[reportArgumentType]
-        with pytest.raises(ValueError, match="a margin is a count of tiles"):
+        with pytest.raises(error, match=message):
             ground.where_footprint_fits(Footprint.square(2), margin=margin)  # pyright: ignore[reportArgumentType]
 
     def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:

@@ -408,7 +408,7 @@ it.
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` as the game began; `api.placement.free` now |
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
-| `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of it |
+| `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |
