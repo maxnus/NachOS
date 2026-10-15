@@ -143,9 +143,9 @@ a unit's micro are unchanged. Whatever is queued behind a held order waits with 
 the same request.
 
 A held order shows in `issued_to(unit)`, ahead of the turn's orders to the unit, so a handler that leaves alone a
-unit already ordered leaves alone a worker on its way to build and a structure with a train waiting. `api.orders.held`
-lists what is held for every unit, an order held for several once. `withdraw()`
-takes it back; the move or the landing already sent stays. Nothing is checked as it goes out: what the bank or the
+unit already ordered leaves alone a worker on its way to build and a structure with a train waiting, and
+`api.orders.held` lists what is held for every unit, an order held for several once. `withdraw()` takes a held order
+back; the move or the landing already sent stays. Nothing is checked as it goes out: what the bank or the
 supply cap lacks then, the game refuses or stalls, as it would have when the order was given.
 `issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
 in its orders yet: on the ladder an order can show two observations after it went out.
@@ -200,16 +200,18 @@ if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
 ```
 
 `api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, so a bot
-giving several orders in one turn keeps its own tally. Nor do they show what NachOS holds: a build is charged once
-its worker reaches the site, so a bot takes off what it will cost while the worker walks:
+giving several orders in one turn keeps its own tally. `cost` is what the game charges when the ability is ordered:
+the difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the
+ability takes of the cap as it starts.
+
+Nor does the bank show what NachOS holds: a build is charged once its worker reaches the site, so a bot takes off what
+the held orders and the turn's will cost while the worker walks:
 
 ```python
 unpaid = (*api.orders.held, *api.orders.pending)
 cost = sum((api.data.abilities[order.ability].cost.resources for order in unpaid), Resources(0, 0))
 budget = api.resources - cost
-``` `cost` is what the game charges when the ability is ordered:
-the difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the
-ability takes of the cap as it starts.
+```
 
 To take back an order NachOS still holds, withdraw it: only what the game already has needs a cancel. A cancel is
 an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a

@@ -42,7 +42,7 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
-    # Their speeds, as the corpus's tables give them.
+    # The critters, at the speeds the corpus's tables give them.
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CLEANING_BOT, movement_speed=2.0),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.LAB_BOT, movement_speed=2.25),
 )
