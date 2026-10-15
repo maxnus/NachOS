@@ -8,6 +8,7 @@ It takes the options of `run_from_command_line`, so the match workflow can play 
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from sc2nachos import Api, ApiBot, Race, run_from_command_line
@@ -88,7 +89,7 @@ def train_workers(budget: Budget) -> None:
     for townhall in townhalls().complete.idle:
         if count >= wanted:
             return
-        if api.orders.issued_to(townhall):
+        if api.orders.issued_to(townhall, include_sent=True):
             continue
         if budget.take(AbilityId.COMMAND_CENTER_TRAIN_SCV):
             api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
@@ -122,14 +123,16 @@ def balance_workers(event: TurnEvent) -> None:
 
 
 def _mineral_field_with_room(near: Point) -> Unit[UnitType.AnyMineralField] | None:
-    """A mineral field of the townhall nearest `near` that needs more SCVs, or of the nearest one at all."""
+    """The mineral field nearest `near` of the townhall nearest it that needs more SCVs, or of the nearest one at
+    all."""
     bases = townhalls().complete
     if not bases:
         return None
     with_room = bases.filter(lambda townhall: townhall.assigned_harvesters < townhall.ideal_harvesters)
     base = (with_room or bases).closest_to(near)
-    fields = api.units.of_type(UnitType.AnyMineralField).in_area(Circle(base.position, 10))
-    return fields.closest_to(base.position) if fields else None
+    expansion = min(api.expansions, key=lambda expansion: expansion.center.distance_to(base.position))
+    fields = expansion.mineral_fields.filter(lambda field: not field.is_dead)
+    return fields.closest_to(near) if fields else None
 
 
 @on(OwnConstructionFinishedEvent.only(UnitType.Townhall))
@@ -175,8 +178,14 @@ def _build(ability: AbilityId, site: Point) -> bool:
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many builds of `ability` NachOS holds or the turn has ordered: those not yet in `api.in_production`."""
-    return sum(1 for order in (*api.orders.held, *api.orders.pending) if order.ability is ability)
+    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: held, ordered this
+    turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
+    return sum(
+        1
+        for scv in api.units.own.of_type(UnitType.Scv)
+        for order in api.orders.issued_to(scv, include_sent=True)
+        if order.ability is ability
+    )
 
 
 def build_supply(budget: Budget) -> None:
@@ -224,8 +233,11 @@ def expand(budget: Budget) -> None:
 
 
 def _next_expansion() -> Expansion | None:
-    """The expansion nearest this player's start where a command center may stand now and no enemy is in sight."""
+    """The expansion nearest this player's start, and reachable from it, where a command center may stand now and no
+    enemy is in sight."""
     for expansion in api.expansions:
+        if math.isinf(expansion.pathing_distance_from_start):
+            break
         if not api.placement.is_free(UnitTypeId.COMMAND_CENTER, at=expansion.center):
             continue
         if api.units.enemy.in_area(Circle(expansion.center, 12)):
@@ -267,7 +279,7 @@ def _barracks_site() -> Point | None:
 def train_marines(budget: Budget) -> None:
     """Train a marine at each idle barracks."""
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
-        if api.orders.issued_to(barracks):
+        if api.orders.issued_to(barracks, include_sent=True):
             continue
         if budget.take(AbilityId.BARRACKS_TRAIN_MARINE):
             api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
@@ -308,17 +320,9 @@ class Army:
                 api.orders.issue(idle, AbilityId.ATTACK, target=front)
 
     def _threats(self) -> Units[Unit[Any]]:
-        """Enemy units in sight near this player's structures."""
-        structures = api.units.own.structures
-        if not structures:
-            return Units()
-        return api.units.enemy.filter(
-            lambda enemy: (
-                not enemy.is_structure
-                and not enemy.is_stale
-                and structures.closest_distance_to(enemy.position) < DEFEND_WITHIN
-            )
-        )
+        """Enemy units other than structures near this player's townhalls."""
+        near = (api.units.enemy.in_area(Circle(townhall.position, DEFEND_WITHIN)) for townhall in townhalls())
+        return Units.combined(*near).filter(lambda enemy: not enemy.is_structure)
 
     def _front(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""
@@ -331,15 +335,19 @@ class Army:
         structures = api.units.enemy.structures
         if structures:
             return structures.closest_to(marines.center).position
-        places = [*api.map.opponent_start_locations, *(expansion.center for expansion in api.expansions)]
-        return min(places, key=lambda place: self.last_seen.get(place, -1))
+        return min(_places_to_look(), key=lambda place: self.last_seen.get(place, -1))
 
     def _remember_what_is_seen(self) -> None:
-        """Note the step at which each start location and expansion is in sight."""
-        places = [*api.map.opponent_start_locations, *(expansion.center for expansion in api.expansions)]
-        for place in places:
+        """Note the step at which each place to look is in sight."""
+        for place in _places_to_look():
             if api.vision[place]:
                 self.last_seen[place] = api.step
+
+
+def _places_to_look() -> list[Point]:
+    """The opponents' start locations and every expansion this player's units can walk to."""
+    reachable = [expansion for expansion in api.expansions if not math.isinf(expansion.pathing_distance_from_start)]
+    return [*api.map.opponent_start_locations, *(expansion.center for expansion in reachable)]
 
 
 army = Army()
