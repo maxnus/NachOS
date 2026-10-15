@@ -191,8 +191,7 @@ class Sandbox:
 
 
 def without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.ObservationRaw, list[str]]:
-    """`raw` without the units whose type `UnitTypeId` leaves out, such as a map's critters, and those types' raw
-    names."""
+    """`raw` without the units whose type `UnitTypeId` leaves out, and those types' raw names."""
     kept = raw_pb2.ObservationRaw()
     kept.CopyFrom(raw)
     del kept.units[:]

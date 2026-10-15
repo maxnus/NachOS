@@ -42,6 +42,9 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
+    # Their speeds, as the corpus's tables give them.
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CLEANING_BOT, movement_speed=2.0),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.LAB_BOT, movement_speed=2.25),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -396,6 +399,11 @@ class TestFootprint:
         """A sentry's force field is a neutral unit (in game), of a protoss type the sweep did not measure."""
         force_field = make_unit(1, UnitTypeId.FORCE_FIELD, alliance=Alliance.NEUTRAL, radius=1.0)
         assert _one(force_field).footprint is None
+
+    @pytest.mark.parametrize("critter", [UnitTypeId.CLEANING_BOT, UnitTypeId.LAB_BOT])
+    def test_a_critter_covers_nothing_since_it_moves(self, critter: UnitTypeId) -> None:
+        """A structure ordered over a critter goes up once the critter has walked off its site (in game)."""
+        assert _one(make_unit(1, critter, alliance=Alliance.NEUTRAL, radius=0.375)).footprint is None
 
     def test_one_of_the_maps_units_with_no_footprint_measured_covers_the_square_its_radius_spans(self) -> None:
         zone = make_unit(1, UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE, alliance=Alliance.NEUTRAL, radius=2.6)

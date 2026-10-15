@@ -203,6 +203,9 @@ class UnitType:
     class ChangelingZerglingWings(Zerg):
         id = UnitTypeId.CHANGELING_ZERGLING_WINGS
 
+    class CleaningBot(AnyType):
+        id = UnitTypeId.CLEANING_BOT
+
     class CollapsibleTowerDebrisPurifier(Structure):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_PURIFIER
 
@@ -580,6 +583,9 @@ class UnitType:
 
     class Interceptor(Protoss):
         id = UnitTypeId.INTERCEPTOR
+
+    class LabBot(AnyType):
+        id = UnitTypeId.LAB_BOT
 
     class Lair(ZergStructure, Townhall):
         id = UnitTypeId.LAIR

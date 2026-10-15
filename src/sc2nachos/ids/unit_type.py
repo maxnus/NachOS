@@ -43,6 +43,7 @@ class UnitTypeId(IdEnum):
     CHANGELING_ZEALOT = RawUnitTypeId.ChangelingZealot
     CHANGELING_ZERGLING = RawUnitTypeId.ChangelingZergling
     CHANGELING_ZERGLING_WINGS = RawUnitTypeId.ChangelingZerglingWings
+    CLEANING_BOT = RawUnitTypeId.CleaningBot
     COLLAPSIBLE_TOWER_DEBRIS_PURIFIER = RawUnitTypeId.CollapsiblePurifierTowerDebris
     COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK = RawUnitTypeId.CollapsibleRockTowerDebrisRampLeft
     COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK_GREEN = RawUnitTypeId.CollapsibleRockTowerDebrisRampLeftGreen
@@ -170,6 +171,7 @@ class UnitTypeId(IdEnum):
     INHIBITOR_ZONE_MEDIUM = RawUnitTypeId.InhibitorZoneMedium
     INHIBITOR_ZONE_SMALL = RawUnitTypeId.InhibitorZoneSmall
     INTERCEPTOR = RawUnitTypeId.Interceptor
+    LAB_BOT = RawUnitTypeId.LabBot
     LAIR = RawUnitTypeId.Lair
     LARVA = RawUnitTypeId.Larva
     LIBERATOR = RawUnitTypeId.Liberator

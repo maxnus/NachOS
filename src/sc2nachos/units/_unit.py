@@ -548,12 +548,13 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def footprint(self) -> Footprint | None:
-        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, with
-        none measured, the square its radius spans. `None` for a unit that covers none, a force field among them."""
+        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, that
+        does not move and has none measured, the square its radius spans. `None` for a unit that covers none, a force
+        field and a critter among them."""
         row = self._tracker.game_data.units.get(self.type_id)
         if row is None:
             return None
-        if row.footprint is None and row.race is Race.NONE:
+        if row.footprint is None and row.race is Race.NONE and not row.speed:
             side = round(2 * self.radius)
             if not side:
                 return None

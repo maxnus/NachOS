@@ -802,7 +802,11 @@ Each entry ends with how it was seen:
   `sweep_alerts`).
 - PylonAIE_v4 has two rich geysers, each the one geyser of a base, and neither in sight from a start (corpus).
 - UltraloveAIE_v2 has neutral critters, `CleaningBot` and `LabBot`, which `show_map` brings into sight (tool
-  `sweep_townhall_placement`).
+  `sweep_townhall_placement`): two of each, ground units of radius 0.375 and 10 health that wander. The placement query
+  answers a structure over one as over clear ground, and as over an own marine, but a build over one starts only once
+  it has walked off: a command center ordered with its SCV at the site's center started 1 step after the order on clear
+  ground, 3 times in 3, and 24 to 32 steps after with a `LabBot` at the center, which the game pushed out of the 5x5
+  (in game, build 75689).
 
 ## Score and supply
 
