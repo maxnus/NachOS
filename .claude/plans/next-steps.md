@@ -441,9 +441,10 @@ From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is 
 when each starts.
 
 5. **The derived reads**, done (#121). Decided by the owner, 2026-10-07:
-   - **The unit sets are `UnitType` groups only**, read through `of_type`, with no second spelling on `Units` or
-     `Api`: `Worker` (no MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and
-     `GasBuilding`. The last three are what the tables say holds minerals or vespene; `MineralField` and
+   - **The unit sets are `UnitType` groups**, read through `of_type`, with no second spelling on `Api`: `Worker` (no
+     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`. `Units` reads them
+     as `workers`, `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`, beside `structures` (reversed for
+     `Units` in review of #125, the owner). The last three are what the tables say holds minerals or vespene; `MineralField` and
      `VespeneGeyser` already name the plain types, hence `Any`.
    - **`api.map.start_location`**, beside `opponent_start_locations`, read once off the first observation's own
      townhall.
@@ -465,16 +466,24 @@ when each starts.
      `examples/run_game.py` stays the bot that does nothing.
    - **What it needs that NachOS lacks is asked of the owner one gap at a time**, each with a proposed API, and goes
      into NachOS as its own commit in the same PR before the bot uses it; a big one becomes a PR of its own first.
-   - **The critters are curated** (`CLEANING_BOT`, `LAB_BOT`), since a build over one waits until it has walked off
-     (the owner, who asked for that to be measured with a command center); they cover no ground. Seeing one raised
-     `UncuratedIdError`.
-   - **`api.orders.held`**, every order NachOS holds, beside `pending`, so a bot can budget for what the bank does not
-     show yet (the owner, over one summed cost).
+   - **The critters are curated** (`CRITTER_CLEANING_BOT`, `CRITTER_LAB_BOT`, in `UnitType.Critter`), since a build
+     over one waits until it has walked off (the owner, who asked for that to be measured with a command center); they
+     cover no ground. Seeing one raised `UncuratedIdError`.
+   - **`api.orders.held`**, every order NachOS holds, beside `pending`, less what the turn's orders will drop, and
+     **`api.orders.unpaid`**, the `Cost` of both, so a bot can budget for what the bank does not show yet (the owner:
+     `held` first, `unpaid` in review of #125).
    - **An order aimed by a tag the game never reports reads as aimed at the unit the unit's last order of the same
      ability named**, dead since or not, and its `target` raises `NotReportedError` if there was none; a rally aimed
      so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9
      of 84 games against the harder computers (the owner, after asking whether NachOS filtered the tag out and
      whether the reading could be wrong).
+   - **Decided in review of #125** (the owner): a group for each structure with a second form (`AnySupplyDepot`,
+     `AnyBarracks`, `AnyFactory`, `AnyStarport`, `AnySpineCrawler`, `AnySporeCrawler`); `margin` on `is_free` and
+     `nearest_free`, one count of tiles or four (left, right, bottom, top); `Expansion.townhall`, the townhall
+     standing on it, anyone's, over an `OwnedExpansion`; `Unit.distance_to`, center to center; `Units.within(d,
+     of=...)`; `in_area` taking several areas; the main nouns importable from `sc2nachos` itself, the events staying
+     in `sc2nachos.events`. Not done: a callable target per unit (reconsider with slice 7), `issue` with no units
+     (it keeps raising), and `UnitOrder`'s `_target` field and its `_NotReported` marker stay.
 
 ### Before 8: the expansions, done (#122)
 

@@ -11,16 +11,11 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from sc2nachos import Api, ApiBot, Race, run_from_command_line
+from sc2nachos import AbilityId, Api, ApiBot, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
 from sc2nachos.events import EventPriority, OwnConstructionFinishedEvent, TurnEvent
-from sc2nachos.gamedata import Resources
-from sc2nachos.geometry import Circle, Footprint, Point
-from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.units import Units, UnitType
 
 if TYPE_CHECKING:
-    from sc2nachos.gamemap import Expansion
-    from sc2nachos.units import OwnUnit, Unit
+    from sc2nachos import Expansion, Point, Unit, Units
 
 api = Api()
 on = api.events.on
@@ -38,28 +33,23 @@ DEFEND_WITHIN = 15.0
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what the builds NachOS holds will cost once their SCVs reach
-    their sites, less what this turn's orders cost so far."""
+    """What is left to spend this turn: the bank, less what the orders NachOS holds and this turn's orders will cost
+    once they go out."""
 
     def __init__(self) -> None:
-        self.left = api.resources - _unpaid()
-        self.supply_left = api.supply.left
+        unpaid = api.orders.unpaid
+        self.resources_left = api.resources - unpaid.resources
+        self.supply_left = api.supply.left - unpaid.supply
 
-    def take(self, ability: AbilityId, *, save: bool = False) -> bool:
-        """Whether `ability` can be paid for now, taking its cost if so. With `save`, its cost is set aside even if
+    def pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
+        """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
         not, so nothing cheaper spends it first."""
         cost = api.data.abilities[ability].cost
-        affordable = self.left.covers(cost.resources) and self.supply_left >= cost.supply
+        affordable = self.resources_left.covers(cost.resources) and self.supply_left >= cost.supply
         if affordable or save:
-            self.left -= cost.resources
+            self.resources_left -= cost.resources
             self.supply_left -= cost.supply
         return affordable
-
-
-def _unpaid() -> Resources:
-    """What the orders NachOS holds and the turn's orders so far will cost, which the bank does not show yet."""
-    orders = (*api.orders.held, *api.orders.pending)
-    return sum((api.data.abilities[order.ability].cost.resources for order in orders), Resources(0, 0))
 
 
 @on(TurnEvent)
@@ -76,22 +66,17 @@ def macro(event: TurnEvent) -> None:
 # --- Workers
 
 
-def townhalls() -> Units[OwnUnit[UnitType.Townhall]]:
-    """This player's command centers, finished or not."""
-    return api.units.own.of_type(UnitType.Townhall)
-
-
 def train_workers(budget: Budget) -> None:
     """Train an SCV at each idle townhall, up to what the bases can use and a few to build with."""
-    ideal = sum(townhall.ideal_harvesters for townhall in townhalls().complete)
-    wanted = min(ideal + 6, MAX_WORKERS)
-    count = len(api.units.own.of_type(UnitType.Scv)) + len(api.in_production(UnitTypeId.SCV))
-    for townhall in townhalls().complete.idle:
+    townhalls = api.units.own.townhalls.complete
+    wanted = min(sum(townhall.ideal_harvesters for townhall in townhalls) + 6, MAX_WORKERS)
+    count = len(api.units.own.workers) + len(api.in_production(UnitTypeId.SCV))
+    for townhall in townhalls.idle:
         if count >= wanted:
             return
         if api.orders.issued_to(townhall, include_sent=True):
             continue
-        if budget.take(AbilityId.COMMAND_CENTER_TRAIN_SCV):
+        if budget.pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
             api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
@@ -100,7 +85,7 @@ def train_workers(budget: Budget) -> None:
 @on(TurnEvent, every_steps=8, priority=EventPriority.LOW)
 def send_idle_workers_to_mine(event: TurnEvent) -> None:
     """Send each idle SCV that has not been ordered this turn to mine at the townhall with the most room."""
-    for scv in api.units.own.of_type(UnitType.Scv).idle:
+    for scv in api.units.own.workers.idle:
         if api.orders.issued_to(scv, include_sent=True):
             continue
         field = _mineral_field_with_room(scv.position)
@@ -111,26 +96,28 @@ def send_idle_workers_to_mine(event: TurnEvent) -> None:
 @on(TurnEvent, every_steps=64, priority=EventPriority.LOW)
 def balance_workers(event: TurnEvent) -> None:
     """Move SCVs from a townhall with more than it needs to one with room."""
-    for townhall in townhalls().complete:
+    for townhall in api.units.own.townhalls.complete:
         extra = townhall.assigned_harvesters - townhall.ideal_harvesters
         if extra <= 0:
             continue
-        miners = _scvs_free_to_build().in_area(Circle(townhall.position, 10))
+        miners = _free_scvs().within(10, of=townhall)
         for scv in miners.closest_n_to(extra, townhall.position):
             field = _mineral_field_with_room(scv.position)
-            if field is not None and field.position.distance_to(townhall.position) > 10:
+            if field is not None and field.distance_to(townhall) > 10:
                 api.orders.issue(scv, AbilityId.GATHER, target=field)
 
 
 def _mineral_field_with_room(near: Point) -> Unit[UnitType.AnyMineralField] | None:
-    """The mineral field nearest `near` of the townhall nearest it that needs more SCVs, or of the nearest one at
+    """The mineral field nearest `near` at the townhall nearest it that needs more SCVs, or at the nearest one at
     all."""
-    bases = townhalls().complete
+    bases = api.units.own.townhalls.complete
     if not bases:
         return None
     with_room = bases.filter(lambda townhall: townhall.assigned_harvesters < townhall.ideal_harvesters)
     base = (with_room or bases).closest_to(near)
-    expansion = min(api.expansions, key=lambda expansion: expansion.center.distance_to(base.position))
+    expansion = next((expansion for expansion in api.expansions if expansion.townhall is base), None)
+    if expansion is None:
+        return None
     fields = expansion.mineral_fields.filter(lambda field: not field.is_dead)
     return fields.closest_to(near) if fields else None
 
@@ -146,7 +133,7 @@ def rally_new_workers(event: OwnConstructionFinishedEvent) -> None:
 @on(TurnEvent, once=True)
 def rally_first_workers(event: TurnEvent) -> None:
     """Have the first townhall send the SCVs it trains to its nearest mineral field."""
-    for townhall in townhalls():
+    for townhall in api.units.own.townhalls:
         field = _mineral_field_with_room(townhall.position)
         if field is not None:
             api.orders.issue(townhall, AbilityId.RALLY_WORKERS, target=field)
@@ -155,22 +142,22 @@ def rally_first_workers(event: TurnEvent) -> None:
 # --- Building
 
 
-def _is_free_to_build(scv: OwnUnit[UnitType.Scv]) -> bool:
-    """Whether `scv` is mining or idle, and not on its way to build or building."""
+def _is_scv_free(scv: OwnUnit[Any]) -> bool:
+    """Whether `scv` is mining or idle: not on its way to build or building, and given nothing lately."""
     if scv.construction is not None or api.orders.issued_to(scv, include_sent=True):
         return False
     return all(order.ability in (AbilityId.GATHER, AbilityId.RETURN) for order in scv.orders)
 
 
-def _scvs_free_to_build() -> Units[OwnUnit[UnitType.Scv]]:
+def _free_scvs() -> Units[OwnUnit[Any]]:
     """The SCVs mining or idle."""
-    return api.units.own.of_type(UnitType.Scv).filter(_is_free_to_build)
+    return api.units.own.workers.filter(_is_scv_free)
 
 
 def _build(ability: AbilityId, site: Point) -> bool:
-    """Order the SCV nearest `site` that is free to build it there. NachOS holds the build and sends the SCV on its
-    way, and the game charges it once the SCV arrives."""
-    scvs = _scvs_free_to_build()
+    """Order the free SCV nearest `site` to build there. NachOS holds the build and sends the SCV on its way, and the
+    game charges it once the SCV arrives."""
+    scvs = _free_scvs()
     if not scvs:
         return False
     api.orders.issue(scvs.closest_to(site), ability, target=site)
@@ -182,28 +169,29 @@ def _ordered_count(ability: AbilityId) -> int:
     turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
     return sum(
         1
-        for scv in api.units.own.of_type(UnitType.Scv)
+        for scv in api.units.own.workers
         for order in api.orders.issued_to(scv, include_sent=True)
         if order.ability is ability
     )
 
 
 def build_supply(budget: Budget) -> None:
-    """Build a depot behind the main base's minerals before supply runs out, saving for it first."""
+    """Build a depot on the far side of the main's townhall from its minerals before supply runs out, saving for it
+    first."""
     supply = api.supply
     if supply.cap >= 200:
         return
-    producers = len(townhalls()) + len(api.units.own.of_type(UnitType.Barracks))
+    producers = len(api.units.own.townhalls) + len(api.units.own.of_type(UnitType.AnyBarracks))
     in_progress = len(api.in_production(UnitTypeId.SUPPLY_DEPOT)) + _ordered_count(AbilityId.SCV_BUILD_SUPPLY_DEPOT)
     if supply.left + 8 * in_progress >= 2 + 2 * producers or in_progress >= 3:
         return
     site = api.placement.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=_depot_anchor(), max_distance=25)
-    if site is not None and budget.take(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
+    if site is not None and budget.pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
         _build(AbilityId.SCV_BUILD_SUPPLY_DEPOT, site)
 
 
 def _depot_anchor() -> Point:
-    """Behind the main base's minerals, away from where the army walks."""
+    """8 tiles from the main's townhall on the side away from its minerals, out of the miners' way."""
     main = api.expansions[0]
     return main.center.towards(main.mineral_fields.center, -8)
 
@@ -217,18 +205,19 @@ def lower_depot(event: OwnConstructionFinishedEvent) -> None:
 def expand(budget: Budget) -> None:
     """Build a command center at the next free expansion once the bases have nearly all the SCVs they can use, or the
     bank is full, saving for it first."""
-    if len(townhalls()) >= MAX_TOWNHALLS or not townhalls().complete:
+    townhalls = api.units.own.townhalls
+    if len(townhalls) >= MAX_TOWNHALLS or not townhalls.complete:
         return
     building = len(api.in_production(UnitTypeId.COMMAND_CENTER)) + _ordered_count(AbilityId.SCV_BUILD_COMMAND_CENTER)
     if building:
         return
-    ideal = sum(townhall.ideal_harvesters for townhall in townhalls().complete)
-    if len(api.units.own.of_type(UnitType.Scv)) < ideal - 4 and api.resources.minerals < 600:
+    ideal = sum(townhall.ideal_harvesters for townhall in townhalls.complete)
+    if len(api.units.own.workers) < ideal - 4 and api.resources.minerals < 600:
         return
     if not api.units.own.of_type(UnitType.Barracks):
         return
     expansion = _next_expansion()
-    if expansion is not None and budget.take(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
+    if expansion is not None and budget.pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
         _build(AbilityId.SCV_BUILD_COMMAND_CENTER, expansion.center)
 
 
@@ -240,40 +229,25 @@ def _next_expansion() -> Expansion | None:
             break
         if not api.placement.is_free(UnitTypeId.COMMAND_CENTER, at=expansion.center):
             continue
-        if api.units.enemy.in_area(Circle(expansion.center, 12)):
+        if api.units.enemy.within(12, of=expansion.center):
             continue
         return expansion
     return None
 
 
-# A barracks covers 3x3, so this is one with a tile free on every side. Both center on the same point.
-_BARRACKS_WITH_ROOM = Footprint.square(5)
-
-
 def build_barracks(budget: Budget) -> None:
-    """Build one barracks before the first expansion, and then more as the bases grow."""
-    if not api.units.own.of_type(UnitType.SupplyDepot, UnitType.SupplyDepotLowered).complete:
+    """Build one barracks before the first expansion, and then more as the bases grow, each with a tile free all
+    around it, so the units it trains can always walk out."""
+    if not api.units.own.of_type(UnitType.AnySupplyDepot).complete:
         return
-    count = len(api.units.own.of_type(UnitType.Barracks, UnitType.BarracksFlying))
-    count += _ordered_count(AbilityId.SCV_BUILD_BARRACKS)
-    wanted = min(BARRACKS_PER_TOWNHALL * len(townhalls()), MAX_BARRACKS)
-    if count >= wanted or (count >= 1 and len(townhalls()) < 2):
+    count = len(api.units.own.of_type(UnitType.AnyBarracks)) + _ordered_count(AbilityId.SCV_BUILD_BARRACKS)
+    townhalls = len(api.units.own.townhalls)
+    if count >= min(BARRACKS_PER_TOWNHALL * townhalls, MAX_BARRACKS) or (count >= 1 and townhalls < 2):
         return
-    site = _barracks_site()
-    if site is not None and budget.take(AbilityId.SCV_BUILD_BARRACKS):
-        _build(AbilityId.SCV_BUILD_BARRACKS, site)
-
-
-def _barracks_site() -> Point | None:
-    """The spot nearest the main base's front where a barracks may stand with a tile free all around it, so the units
-    it trains can always walk out."""
-    room = api.placement.free_for(UnitTypeId.BARRACKS).where_footprint_fits(_BARRACKS_WITH_ROOM)
-    if not room.any():
-        return None
     anchor = api.expansions[0].center.towards(api.expansions[1].center, 9)
-    distance = room.distance_from(anchor)
-    best = distance.where(room, float("inf")).argmin()
-    return _BARRACKS_WITH_ROOM.center_in_tile(best)
+    site = api.placement.nearest_free(UnitTypeId.BARRACKS, near=anchor, max_distance=math.inf, margin=1)
+    if site is not None and budget.pay_for(AbilityId.SCV_BUILD_BARRACKS):
+        _build(AbilityId.SCV_BUILD_BARRACKS, site)
 
 
 def train_marines(budget: Budget) -> None:
@@ -281,7 +255,7 @@ def train_marines(budget: Budget) -> None:
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
         if api.orders.issued_to(barracks, include_sent=True):
             continue
-        if budget.take(AbilityId.BARRACKS_TRAIN_MARINE):
+        if budget.pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
             api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 
 
@@ -289,7 +263,7 @@ def train_marines(budget: Budget) -> None:
 
 
 class Army:
-    """The marines: they gather at the front, defend the bases, and attack once there are enough of them."""
+    """The marines: they wait at the defense location, defend the bases, and attack once there are enough of them."""
 
     def __init__(self) -> None:
         self.attacking = False
@@ -302,7 +276,8 @@ class Army:
         are left."""
         marines = api.units.own.of_type(UnitType.Marine)
         self._remember_what_is_seen()
-        threats = self._threats()
+        near_bases = api.units.enemy.within(DEFEND_WITHIN, of=api.units.own.townhalls)
+        threats = near_bases.filter(lambda enemy: not enemy.is_structure)
         if len(marines) >= ATTACK_WITH:
             self.attacking = True
         elif len(marines) < RETREAT_BELOW:
@@ -311,22 +286,16 @@ class Army:
             for marine in marines:
                 api.orders.issue(marine, AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
         elif self.attacking:
-            target = self._attack_target(marines)
-            api.orders.issue(marines, AbilityId.ATTACK, target=target)
+            api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
         else:
-            front = self._front()
-            idle = marines.filter(lambda marine: marine.is_idle and marine.position.distance_to(front) > 4)
+            defense_location = self._defense_location()
+            idle = marines.filter(lambda marine: marine.is_idle and marine.distance_to(defense_location) > 4)
             if idle:
-                api.orders.issue(idle, AbilityId.ATTACK, target=front)
+                api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
 
-    def _threats(self) -> Units[Unit[Any]]:
-        """Enemy units other than structures near this player's townhalls."""
-        near = (api.units.enemy.in_area(Circle(townhall.position, DEFEND_WITHIN)) for townhall in townhalls())
-        return Units.combined(*near).filter(lambda enemy: not enemy.is_structure)
-
-    def _front(self) -> Point:
+    def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""
-        taken = [expansion for expansion in api.expansions if townhalls().in_area(Circle(expansion.center, 3))]
+        taken = [expansion for expansion in api.expansions if isinstance(expansion.townhall, OwnUnit)]
         base = taken[-1].center if taken else api.map.start_location
         return base.towards(api.map.playable_area.center, 7)
 
