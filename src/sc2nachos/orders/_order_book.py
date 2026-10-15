@@ -256,6 +256,14 @@ class OrderBook:
         """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
         return tuple(order for order in self._issued if not order._withdrawn)
 
+    @property
+    def held(self) -> tuple[Order[Any], ...]:
+        """Every order held until its unit can start it, from earlier turns, each unit's in the order they go out. An
+        order held for several units is in it once. Withdrawn orders are left out, and so are the turn's orders,
+        which are in `pending`."""
+        held = (order for queue in self._held.values() for order in queue.orders if not order._withdrawn)
+        return tuple(dict.fromkeys(held))
+
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
         aimed = coordinates(at)

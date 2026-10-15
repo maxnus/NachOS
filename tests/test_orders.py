@@ -1854,6 +1854,42 @@ class TestReadingHeldOrders:
         assert game.book.issued_to(game.own(1)) == (held, new)
         assert game.book.pending == (new,)
 
+    def test_held_is_what_every_unit_holds_and_not_the_turn_s_orders(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        depot = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        assert game.book.held == (depot, marine)
+        assert game.book.pending == (reaper,)
+
+    def test_an_order_held_for_several_units_is_held_once(self) -> None:
+        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
+        first = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        second = game.book.issue(game.own(2), _BUILD_DEPOT, target=(35.0, 35.0))
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _scv(2, _moving((35.0, 35.0)), at=(38.0, 38.0)))
+        move = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(10.0, 10.0), queued=True)
+        game.flush()
+
+        assert game.book.held == (first, move, second)
+
+    def test_a_withdrawn_order_is_not_held(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1))
+        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
+
+        build.withdraw()
+
+        assert game.book.held == ()
+
 
 class TestPickingOneUnitForACostlyOrder:
     """One command naming several units has one of them carry out a build, a train or a research (in game); NachOS
