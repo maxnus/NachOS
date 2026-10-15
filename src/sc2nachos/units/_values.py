@@ -89,8 +89,8 @@ type Target = Point | Unit[Any]
 
 
 class _NotReported(Enum):
-    """What an order holds for the unit it is aimed at when the game names one under a tag it never reports, and no
-    earlier order of the unit's names one in its place."""
+    """The marker an order holds as its target when it is aimed at a unit the game names by no tag it reports, and no
+    earlier order of the unit's names one in its place: apart from `None`, which is an order that takes no target."""
 
     TARGET = 0
 
@@ -126,14 +126,14 @@ class UnitOrder:
 
     @classmethod
     def _from_proto(
-        cls, order: raw_pb2.UnitOrder, unit_aimed_at: Callable[[raw_pb2.UnitOrder], Unit[Any] | None]
+        cls, order: raw_pb2.UnitOrder, unit_target_of_order: Callable[[raw_pb2.UnitOrder], Unit[Any] | None]
     ) -> Self:
-        """Read an order a unit reported, finding the unit it is aimed at through `unit_aimed_at`."""
+        """Read an order a unit reported, finding the unit it is aimed at through `unit_target_of_order`."""
         match order.WhichOneof("target"):
             case "target_world_space_pos":
                 target: Target | Literal[_NotReported.TARGET] | None = _target_point(order.target_world_space_pos)
             case "target_unit_tag":
-                unit = unit_aimed_at(order)
+                unit = unit_target_of_order(order)
                 target = _NotReported.TARGET if unit is None else unit
             case _:
                 target = None

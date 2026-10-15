@@ -234,7 +234,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         raw, uncurated = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral
-        expansions = Expansion._find_all(game_map, neutral_units)
+        expansions = Expansion._find_all(game_map, tracker.unit_tracker)
         expansion_locations = _ExpansionLocations(
             game_map.placement,
             mineral_fields=neutral_units.of_type(UnitType.AnyMineralField),

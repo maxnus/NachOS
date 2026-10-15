@@ -20,7 +20,8 @@ class UnitType:
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
     or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
-    or the add-ons, tech labs and reactors.
+    the critters, the add-ons, tech labs and reactors, or the two forms of a structure that changes and changes back,
+    such as a supply depot raised or lowered.
     """
 
     class AnyType:
@@ -98,6 +99,9 @@ class UnitType:
     class CollapsibleTower(AnyType):
         """A collapsible tower, which falls across a path once destroyed and stays there."""
 
+    class Critter(AnyType):
+        """One of a map's critters: an animal or a robot that wanders and covers no ground."""
+
     class AnyAddOn(AnyType):
         """An add-on of any kind: a tech lab or a reactor, attached to its host or plain."""
 
@@ -106,6 +110,24 @@ class UnitType:
 
     class AnyReactor(AnyAddOn):
         """A reactor of any kind: a barracks', a factory's or a starport's, or a plain one."""
+
+    class AnySupplyDepot(AnyType):
+        """A supply depot, raised or lowered."""
+
+    class AnyBarracks(AnyType):
+        """A barracks, landed or flying."""
+
+    class AnyFactory(AnyType):
+        """A factory, landed or flying."""
+
+    class AnyStarport(AnyType):
+        """A starport, landed or flying."""
+
+    class AnySpineCrawler(AnyType):
+        """A spine crawler, rooted or uprooted."""
+
+    class AnySporeCrawler(AnyType):
+        """A spore crawler, rooted or uprooted."""
 
     class AccelerationZoneFlyingLarge(Structure):
         id = UnitTypeId.ACCELERATION_ZONE_FLYING_LARGE
@@ -161,10 +183,10 @@ class UnitType:
     class Banshee(Terran):
         id = UnitTypeId.BANSHEE
 
-    class Barracks(TerranStructure):
+    class Barracks(TerranStructure, AnyBarracks):
         id = UnitTypeId.BARRACKS
 
-    class BarracksFlying(TerranStructure):
+    class BarracksFlying(TerranStructure, AnyBarracks):
         id = UnitTypeId.BARRACKS_FLYING
 
     class Battlecruiser(Terran):
@@ -202,9 +224,6 @@ class UnitType:
 
     class ChangelingZerglingWings(Zerg):
         id = UnitTypeId.CHANGELING_ZERGLING_WINGS
-
-    class CleaningBot(AnyType):
-        id = UnitTypeId.CLEANING_BOT
 
     class CollapsibleTowerDebrisPurifier(Structure):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_PURIFIER
@@ -307,6 +326,12 @@ class UnitType:
 
     class CreepTumorQueen(ZergStructure):
         id = UnitTypeId.CREEP_TUMOR_QUEEN
+
+    class CritterCleaningBot(Critter):
+        id = UnitTypeId.CRITTER_CLEANING_BOT
+
+    class CritterLabBot(Critter):
+        id = UnitTypeId.CRITTER_LAB_BOT
 
     class CyberneticsCore(ProtossStructure):
         id = UnitTypeId.CYBERNETICS_CORE
@@ -494,10 +519,10 @@ class UnitType:
     class ExtractorRich(ZergStructure, GasBuilding):
         id = UnitTypeId.EXTRACTOR_RICH
 
-    class Factory(TerranStructure):
+    class Factory(TerranStructure, AnyFactory):
         id = UnitTypeId.FACTORY
 
-    class FactoryFlying(TerranStructure):
+    class FactoryFlying(TerranStructure, AnyFactory):
         id = UnitTypeId.FACTORY_FLYING
 
     class FleetBeacon(ProtossStructure):
@@ -583,9 +608,6 @@ class UnitType:
 
     class Interceptor(Protoss):
         id = UnitTypeId.INTERCEPTOR
-
-    class LabBot(AnyType):
-        id = UnitTypeId.LAB_BOT
 
     class Lair(ZergStructure, Townhall):
         id = UnitTypeId.LAIR
@@ -827,19 +849,19 @@ class UnitType:
     class SpawningPool(ZergStructure):
         id = UnitTypeId.SPAWNING_POOL
 
-    class SpineCrawler(ZergStructure):
+    class SpineCrawler(ZergStructure, AnySpineCrawler):
         id = UnitTypeId.SPINE_CRAWLER
 
-    class SpineCrawlerUprooted(ZergStructure):
+    class SpineCrawlerUprooted(ZergStructure, AnySpineCrawler):
         id = UnitTypeId.SPINE_CRAWLER_UPROOTED
 
     class Spire(ZergStructure):
         id = UnitTypeId.SPIRE
 
-    class SporeCrawler(ZergStructure):
+    class SporeCrawler(ZergStructure, AnySporeCrawler):
         id = UnitTypeId.SPORE_CRAWLER
 
-    class SporeCrawlerUprooted(ZergStructure):
+    class SporeCrawlerUprooted(ZergStructure, AnySporeCrawler):
         id = UnitTypeId.SPORE_CRAWLER_UPROOTED
 
     class Stalker(Protoss):
@@ -848,19 +870,19 @@ class UnitType:
     class Stargate(ProtossStructure):
         id = UnitTypeId.STARGATE
 
-    class Starport(TerranStructure):
+    class Starport(TerranStructure, AnyStarport):
         id = UnitTypeId.STARPORT
 
-    class StarportFlying(TerranStructure):
+    class StarportFlying(TerranStructure, AnyStarport):
         id = UnitTypeId.STARPORT_FLYING
 
     class StasisWard(ProtossStructure):
         id = UnitTypeId.STASIS_WARD
 
-    class SupplyDepot(TerranStructure):
+    class SupplyDepot(TerranStructure, AnySupplyDepot):
         id = UnitTypeId.SUPPLY_DEPOT
 
-    class SupplyDepotLowered(TerranStructure):
+    class SupplyDepotLowered(TerranStructure, AnySupplyDepot):
         id = UnitTypeId.SUPPLY_DEPOT_LOWERED
 
     class SwarmHost(Zerg):

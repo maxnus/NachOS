@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from sc2nachos.gamedata import UnitTypeData, Weapon
+    from sc2nachos.geometry import PointLike
     from sc2nachos.units._tracking import _Tracker
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -91,8 +92,9 @@ class Unit[K: UnitType.AnyType]:
     _dead: bool
     # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
     _radius_footprint: Footprint | None
-    # By the raw id of each ability its orders have named a unit by, the unit its last such order named under a tag
-    # the game reported; `None` until one has.
+    # For each ability, the unit this unit's latest order of that ability was aimed at, kept while the game names
+    # that unit by a tag it reports. Read when an order names a tag the game never reports. Keyed by the ability's raw
+    # id; `None` until an order is aimed at a unit.
     _order_targets: dict[int, Unit[Any]] | None
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
@@ -570,6 +572,10 @@ class Unit[K: UnitType.AnyType]:
     def is_structure(self) -> bool:
         """Whether the game's tables give the unit's type the structure attribute."""
         return Attribute.STRUCTURE in self.type_data.attributes
+
+    def distance_to(self, other: PointLike | Unit[Any]) -> float:
+        """The distance from this unit's position to `other`, a point or another unit's position."""
+        return self._position.distance_to(other._position if isinstance(other, Unit) else other)
 
     @property
     def footprint(self) -> Footprint | None:

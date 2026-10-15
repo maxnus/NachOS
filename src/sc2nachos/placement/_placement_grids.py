@@ -6,7 +6,7 @@ import math
 from typing import TYPE_CHECKING, Any, Self, final
 
 from sc2nachos.gamedata import CreepRequirement
-from sc2nachos.geometry import Grid, Point, Rectangle
+from sc2nachos.geometry import Footprint, Grid, Point, Rectangle, Tile
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.placement._build_sites import _BuildSites
 from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
@@ -14,7 +14,7 @@ from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
-    from sc2nachos.geometry import Footprint, PointLike
+    from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId
     from sc2nachos.orders import OrderBook
     from sc2nachos.state._state import _State
@@ -137,33 +137,39 @@ class PlacementGrids:
         which `static` closes, so it fits nowhere on any of them."""
         return self._ground_for(unit_type) & ~self.reserved
 
-    def is_free(self, unit_type: UnitTypeId, *, at: PointLike) -> bool:
+    def is_free(self, unit_type: UnitTypeId, *, at: PointLike, margin: Margin = 0) -> bool:
         """Whether a structure of `unit_type` may stand at `at` now, placed as the game snaps it: whether every tile
-        its footprint covers is true on `free_for(unit_type)`. Raises `ValueError` for a type with no footprint, and
-        for a gas building, which stands on a geyser."""
+        its footprint covers is true on `free_for(unit_type)`. With `margin`, so must the tiles beside its footprint's
+        bounding box be, as many on every side, or so many on its left, right, bottom and top. Raises `ValueError` for
+        a type with no footprint, for a gas building, which stands on a geyser, and for a negative margin."""
         footprint = self._footprint_of(unit_type)
+        if any(sides := _sides(margin)):
+            footprint, at = _with_margin(footprint, sides, at=at)
         if not self._ground_for(unit_type).fits_footprint(footprint, at=at):
             return False
         return not self.reserved[footprint.tiles(at=at)].any()
 
-    def nearest_free(self, unit_type: UnitTypeId, *, near: PointLike, max_distance: float) -> Point | None:
-        """The center nearest `near`, at most `max_distance` from it, where a structure of `unit_type` may stand now,
-        as `is_free` says, and as the game snaps a structure; the first in tile order of those as near. `None` if
-        there is none; an infinite `max_distance` reaches the whole map. Raises `ValueError` for a type with no
-        footprint, for a gas building, which stands on a geyser, and for a `max_distance` that is negative or not a
-        number."""
+    def nearest_free(
+        self, unit_type: UnitTypeId, *, near: PointLike, max_distance: float, margin: Margin = 0
+    ) -> Point | None:
+        """The center nearest `near`, at most `max_distance` from it, where a structure of `unit_type` may stand now
+        with `margin` free beside it, as `is_free` says, and as the game snaps a structure; the first in tile order of
+        those as near. `None` if there is none; an infinite `max_distance` reaches the whole map. Raises `ValueError`
+        for a type with no footprint, for a gas building, which stands on a geyser, for a `max_distance` that is
+        negative or not a number, and for a negative margin."""
         if not max_distance >= 0:
             raise ValueError(f"max_distance is a distance, at least 0, not {max_distance}")
         footprint = self._footprint_of(unit_type)
+        sides = _sides(margin)
         x, y = coordinates(near)[:2]
         if math.isinf(max_distance):
             window = self._static.bounds
         else:
-            # Wide enough that every footprint centered within `max_distance` lies wholly inside.
-            reach = math.ceil(max_distance) + max(footprint.width, footprint.height)
+            # Wide enough that every footprint centered within `max_distance` lies wholly inside, margin and all.
+            reach = math.ceil(max_distance) + max(footprint.width, footprint.height) + max(sides)
             window = Rectangle(math.floor(x) - reach, math.floor(y) - reach, 2 * reach + 1, 2 * reach + 1)
         free = self._ground_for(unit_type).cropped(window) & ~self.reserved.cropped(window)
-        fitting = free.where_footprint_fits(footprint)
+        fitting = _where_fits(free, footprint, sides)
         # `distance_from` measures from each tile's center, which along an even side lies half a tile off the center
         # of the footprint centered in that tile, so `near` moves by as much.
         shift_x, shift_y = 0.5 - 0.5 * (footprint.width % 2), 0.5 - 0.5 * (footprint.height % 2)
@@ -214,3 +220,40 @@ class PlacementGrids:
             )
             self._townhall_ground = ground.as_readonly()
         return self._townhall_ground
+
+
+type Margin = int | tuple[int, int, int, int]
+"""Tiles kept free beside a structure: as many on every side, or so many on its left, right, bottom and top."""
+
+
+def _sides(margin: Margin) -> tuple[int, int, int, int]:
+    """`margin` as the tiles kept free on the left, right, bottom and top. Raises `ValueError` for a negative one."""
+    sides = (margin, margin, margin, margin) if isinstance(margin, int) else tuple(margin)
+    if len(sides) != 4 or any(side < 0 for side in sides):
+        raise ValueError(f"a margin is a count of tiles, or four of them, none negative, not {margin}")
+    left, right, bottom, top = sides
+    return left, right, bottom, top
+
+
+def _with_margin(footprint: Footprint, sides: tuple[int, int, int, int], *, at: PointLike) -> tuple[Footprint, Point]:
+    """The rectangle covering `footprint`'s bounding box at `at` and `sides` more tiles beside it, and the point to
+    place it at."""
+    left, right, bottom, top = sides
+    box = footprint.bounding_box(at=at)
+    grown = Footprint.rectangle(footprint.width + left + right, footprint.height + bottom + top)
+    center = box.center
+    return grown, Point((center.x + (right - left) / 2, center.y + (top - bottom) / 2))
+
+
+def _where_fits(free: Grid[bool], footprint: Footprint, sides: tuple[int, int, int, int]) -> Grid[bool]:
+    """Where `footprint` fits on `free` with `sides` free beside its bounding box, by the tile holding its center."""
+    if not any(sides):
+        return free.where_footprint_fits(footprint)
+    left, _, bottom, _ = sides
+    grown, _ = _with_margin(footprint, sides, at=Point((0.0, 0.0)))
+    fitting = free.where_footprint_fits(grown)
+    # The tile holding the footprint's center lies this far from the one holding the grown rectangle's.
+    dx = left + footprint.width // 2 - grown.width // 2
+    dy = bottom + footprint.height // 2 - grown.height // 2
+    origin = fitting.origin
+    return Grid(fitting.values, origin=Tile(origin[0] + dx, origin[1] + dy), outside=False)

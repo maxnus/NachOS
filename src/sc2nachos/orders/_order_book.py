@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, final, overload
 
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._sent_as import Aim
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.geometry import Point
@@ -277,6 +277,16 @@ class OrderBook:
             if not order._withdrawn
         )
         return tuple(dict.fromkeys(held))
+
+    @property
+    def unpaid(self) -> Cost:
+        """What the bank does not show yet: the cost of every order held and every one the turn has given, for each
+        unit it names, its ability's `cost` in the game's tables."""
+        total = Cost(0, 0)
+        for order in (*self.held, *self.pending):
+            if (row := self._game_data.abilities.get(order.ability)) is not None:
+                total += row.cost * len(order.units)
+        return total
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
@@ -676,7 +686,7 @@ class OrderBook:
                 point = first.target_world_space_pos
                 return isinstance(target, Point) and same_point(target, point.x, point.y)
             case "target_unit_tag":
-                return isinstance(target, Unit) and unit._unit_aimed_at(first) is target
+                return isinstance(target, Unit) and unit._unit_target_of_order(first) is target
             case _:
                 return target is None
 

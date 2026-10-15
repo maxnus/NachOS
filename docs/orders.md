@@ -206,12 +206,10 @@ the difference for a morph, 150 for an orbital command rather than its type's 55
 ability takes of the cap as it starts.
 
 Nor does the bank show what NachOS holds: a build is charged once its worker reaches the site, so a bot takes off what
-the held orders and the turn's will cost while the worker walks:
+the held orders and the turn's will cost, `api.orders.unpaid`, while the worker walks:
 
 ```python
-unpaid = (*api.orders.held, *api.orders.pending)
-cost = sum((api.data.abilities[order.ability].cost.resources for order in unpaid), Resources(0, 0))
-budget = api.resources - cost
+budget = api.resources - api.orders.unpaid.resources
 ```
 
 To take back an order NachOS still holds, withdraw it: only what the game already has needs a cancel. A cancel is

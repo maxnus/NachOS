@@ -1907,6 +1907,20 @@ class TestReadingHeldOrders:
         assert game.book.held == (marine,)
         assert game.book.pending == (again, reaper)
 
+    def test_unpaid_is_what_the_held_orders_and_the_turn_s_cost(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        costs = [_HOLDING_TABLES.abilities[ability].cost for ability in (_BUILD_DEPOT, _TRAIN_MARINE, _TRAIN_REAPER)]
+        assert game.book.unpaid == costs[0] + costs[1] + costs[2]
+        assert game.book.unpaid.minerals == 200
+
     def test_a_withdrawn_order_is_not_held(self) -> None:
         game = _holding([ActionResult.SUCCESS])
         game.observe(0, _scv(1))

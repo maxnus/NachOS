@@ -17,6 +17,7 @@ from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import Recording
 from sc2nachos.units import Alliance, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
+from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 from support import make_game_info, make_observation, make_tables, make_unit
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -25,6 +26,9 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.WATCHTOWER),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.COMMAND_CENTER),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.COMMAND_CENTER_FLYING),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.HATCHERY),
 )
 
 # Pylon's main base, by each resource's offset from where its townhall stands: 8 fields and 2 geysers (corpus).
@@ -90,7 +94,7 @@ class _MapAtStart:
         return self.tracker.unit_tracker.present.neutral
 
     def expansions(self) -> tuple[Expansion, ...]:
-        return Expansion._find_all(self.map, self.neutral_units)
+        return Expansion._find_all(self.map, self.tracker.unit_tracker)
 
     def townhall_refusals_around(self, resource: tuple[float, float]) -> list[str]:
         """The townhall centers within 7 tiles of `resource` along each axis, the top row first: `#` refused."""
@@ -269,6 +273,42 @@ class TestWhatIsAnExpansion:
         assert field in map_at_start.tracker.unit_tracker.present
 
 
+class TestTheTownhallStandingOnIt:
+    def _expansion_with(self, *townhalls: raw_pb2.Unit) -> tuple[Expansion, _UnitTracker]:
+        """The one expansion of a drawn base, seen in an observation that also lists `townhalls`."""
+        neutral_units = _NeutralUnits()
+        neutral_units.base((24.5, 24.5))
+        map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
+        (expansion,) = map_at_start.expansions()
+        observation = make_observation(16, units=[*neutral_units.units, *townhalls]).observation.raw_data
+        map_at_start.tracker.update(observation, 16)
+        return expansion, map_at_start.tracker.unit_tracker
+
+    def test_it_is_the_townhall_whose_footprint_covers_the_center(self) -> None:
+        expansion, units = self._expansion_with(make_unit(200, UnitTypeId.COMMAND_CENTER, at=(25.5, 23.5)))
+        assert expansion.townhall is units.by_tag(200)
+
+    def test_it_can_be_an_enemy_s_remembered_in_the_fog(self) -> None:
+        hatchery = make_unit(
+            200, UnitTypeId.HATCHERY, at=(24.5, 24.5), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
+        )
+        expansion, units = self._expansion_with(hatchery)
+        assert expansion.townhall is units.by_tag(200)
+
+    @pytest.mark.parametrize(
+        "townhall",
+        [
+            make_unit(200, UnitTypeId.COMMAND_CENTER_FLYING, at=(24.5, 24.5)),
+            make_unit(200, UnitTypeId.COMMAND_CENTER, at=(27.5, 24.5)),
+            None,
+        ],
+        ids=["in the air", "off the center", "none"],
+    )
+    def test_there_is_none_unless_one_stands_on_the_center(self, townhall: raw_pb2.Unit | None) -> None:
+        expansion, _ = self._expansion_with(*(() if townhall is None else (townhall,)))
+        assert expansion.townhall is None
+
+
 class TestTheOrder:
     # A wall at x = 25 and 26 up to y = 50, and a wall at x = 48 and 49 the whole way up, beyond which nothing walks.
     _ROWS = _map_rows(80, 60, lambda x, y: (x in (25, 26) and y <= 50) or x in (48, 49))
@@ -295,8 +335,8 @@ class TestTheOrder:
         assert expansions[-1].pathing_distance_from_start == math.inf
 
 
-def _recorded_map_and_neutral_units(path: Path) -> tuple[GameMap, Units[Unit[Any]]]:
-    """The map of a recorded game, and the neutral units of its first observation."""
+def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
+    """The map of a recorded game, and the units of its first observation."""
     info: sc2api_pb2.ResponseGameInfo | None = None
     data: sc2api_pb2.ResponseData | None = None
     for exchange in Recording(path):
@@ -310,7 +350,7 @@ def _recorded_map_and_neutral_units(path: Path) -> tuple[GameMap, Units[Unit[Any
             observation = response.observation
             tracker = _Tracker(GameData(data), Enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker.unit_tracker.present.neutral
+            return GameMap._of_game(info, observation), tracker.unit_tracker
     raise AssertionError(f"{path.name} holds no observation")
 
 
@@ -329,18 +369,18 @@ _COUNTS = {
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedMap:
     def test_this_player_starts_at_the_first_expansion_holding_the_fields_it_sees(self, path: Path) -> None:
-        game_map, neutral_units = _recorded_map_and_neutral_units(path)
-        first = Expansion._find_all(game_map, neutral_units)[0]
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        first = Expansion._find_all(game_map, unit_tracker)[0]
         assert first.center == game_map.start_location
         assert len(first.mineral_fields) == 8
         assert all(field.visibility is Visibility.IN_VISION for field in first.mineral_fields)
 
     def test_the_start_locations_are_the_expansions_marked_as_one(self, path: Path) -> None:
-        game_map, neutral_units = _recorded_map_and_neutral_units(path)
-        expansions = Expansion._find_all(game_map, neutral_units)
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        expansions = Expansion._find_all(game_map, unit_tracker)
         marked = {expansion.center for expansion in expansions if expansion.is_start_location}
         assert marked == {game_map.start_location, *game_map.opponent_start_locations}
 
     def test_the_map_has_as_many_expansions_as_counted(self, path: Path) -> None:
-        game_map, neutral_units = _recorded_map_and_neutral_units(path)
-        assert len(Expansion._find_all(game_map, neutral_units)) == _COUNTS[path.stem.split("-")[0]]
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        assert len(Expansion._find_all(game_map, unit_tracker)) == _COUNTS[path.stem.split("-")[0]]

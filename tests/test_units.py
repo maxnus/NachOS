@@ -43,8 +43,8 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
     # The critters, at the speeds the corpus's tables give them.
-    data_pb2.UnitTypeData(unit_id=UnitTypeId.CLEANING_BOT, movement_speed=2.0),
-    data_pb2.UnitTypeData(unit_id=UnitTypeId.LAB_BOT, movement_speed=2.25),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CRITTER_CLEANING_BOT, movement_speed=2.0),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.CRITTER_LAB_BOT, movement_speed=2.25),
 )
 _ENEMY = Alliance.ENEMY
 _IN_FOG = Visibility.IN_FOG
@@ -388,6 +388,14 @@ def _spine(tag: int, progress: float) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.SPINE_CRAWLER, at=(24.0, 20.0), build_progress=progress)
 
 
+def test_a_unit_measures_its_distance_to_a_point_or_another_unit_between_positions() -> None:
+    game = _Game()
+    first, second = game.observe(0, make_unit(1, at=(3.0, 4.0)), make_unit(2, at=(6.0, 8.0), radius=2.0))
+    assert first.distance_to(second) == pytest.approx(5.0)
+    assert first.distance_to(Point((0.0, 0.0))) == pytest.approx(5.0)
+    assert first.distance_to((3.0, 1.0)) == pytest.approx(3.0)
+
+
 class TestFootprint:
     def test_a_unit_covers_its_types_footprint(self) -> None:
         assert _one(_depot(1)).footprint == Footprint.square(2)
@@ -400,7 +408,7 @@ class TestFootprint:
         force_field = make_unit(1, UnitTypeId.FORCE_FIELD, alliance=Alliance.NEUTRAL, radius=1.0)
         assert _one(force_field).footprint is None
 
-    @pytest.mark.parametrize("critter", [UnitTypeId.CLEANING_BOT, UnitTypeId.LAB_BOT])
+    @pytest.mark.parametrize("critter", [UnitTypeId.CRITTER_CLEANING_BOT, UnitTypeId.CRITTER_LAB_BOT])
     def test_a_critter_covers_nothing_since_it_moves(self, critter: UnitTypeId) -> None:
         """A structure ordered over a critter goes up once the critter has walked off its site (in game)."""
         assert _one(make_unit(1, critter, alliance=Alliance.NEUTRAL, radius=0.375)).footprint is None

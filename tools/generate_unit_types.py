@@ -42,7 +42,8 @@ class UnitType:
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
     or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
-    or the add-ons, tech labs and reactors.
+    the critters, the add-ons, tech labs and reactors, or the two forms of a structure that changes and changes back,
+    such as a supply depot raised or lowered.
     """
 
     class AnyType:
@@ -117,6 +118,18 @@ COLLAPSIBLE_TOWERS = frozenset(
         UnitTypeId.COLLAPSIBLE_TOWER_TERRAN,
     }
 )
+# The map's animals and robots, which wander and cover no ground.
+CRITTERS = frozenset({UnitTypeId.CRITTER_CLEANING_BOT, UnitTypeId.CRITTER_LAB_BOT})
+# The structures that change to another form and back, by their group: lowered, lifted or uprooted. A command
+# center's and an orbital command's lifted forms are in `Townhall`.
+TWO_FORMS = {
+    "AnySupplyDepot": frozenset({UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED}),
+    "AnyBarracks": frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
+    "AnyFactory": frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
+    "AnyStarport": frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+    "AnySpineCrawler": frozenset({UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED}),
+    "AnySporeCrawler": frozenset({UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED}),
+}
 # The groups of what a type is for, beside its race's, with their docstrings.
 ROLES = {
     "Worker": "A worker: an SCV, a probe or a drone, burrowed or not. A MULE is none.",
@@ -125,9 +138,16 @@ ROLES = {
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
     "CollapsibleTower": "A collapsible tower, which falls across a path once destroyed and stays there.",
+    "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
+    "AnySupplyDepot": "A supply depot, raised or lowered.",
+    "AnyBarracks": "A barracks, landed or flying.",
+    "AnyFactory": "A factory, landed or flying.",
+    "AnyStarport": "A starport, landed or flying.",
+    "AnySpineCrawler": "A spine crawler, rooted or uprooted.",
+    "AnySporeCrawler": "A spore crawler, rooted or uprooted.",
 }
 # The groups whose types are all in another group, by the group they are in.
 ROLE_BASES = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}
@@ -142,7 +162,13 @@ def class_name(unit_type: UnitTypeId) -> str:
 
 def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
     """The groups of what `unit_type`, whose row is `row`, is for."""
-    curated = (("Worker", WORKERS), ("Townhall", TOWNHALLS), ("CollapsibleTower", COLLAPSIBLE_TOWERS))
+    curated = (
+        ("Worker", WORKERS),
+        ("Townhall", TOWNHALLS),
+        ("CollapsibleTower", COLLAPSIBLE_TOWERS),
+        ("Critter", CRITTERS),
+        *TWO_FORMS.items(),
+    )
     found = [role for role, members in curated if unit_type in members]
     if row.has_minerals:
         found.append("AnyMineralField")
@@ -173,7 +199,9 @@ def render(tables: GameData) -> str:
         race = RACES.get(row.race)
         structure = Attribute.STRUCTURE in row.attributes
         base = f"{race}Structure" if race and structure else race or ("Structure" if structure else "AnyType")
-        bases = ", ".join((base, *roles(unit_type, row)))
+        found = roles(unit_type, row)
+        # Every group is an `AnyType` already, and naming it before one of its subclasses has no consistent order.
+        bases = ", ".join(found if base == "AnyType" and found else (base, *found))
         blocks.append(f"    class {name}({bases}):\n        id = UnitTypeId.{unit_type.name}\n")
     return "\n".join(blocks)
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, final, overload
+from typing import TYPE_CHECKING, Any, cast, final, overload
 
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Area, Point
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
@@ -15,7 +15,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance
 
 if TYPE_CHECKING:
-    from sc2nachos.geometry import Area, PointLike
+    from sc2nachos.geometry import PointLike
 
 
 @final
@@ -186,6 +186,36 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if unit.is_structure)
 
     @property
+    def workers(self) -> Units[U]:
+        """The workers: SCVs, probes and drones, burrowed or not, as `UnitType.Worker` has them. A MULE is none."""
+        return self._in_group(UnitType.Worker)
+
+    @property
+    def townhalls(self) -> Units[U]:
+        """The townhalls, a lifted command center among them, as `UnitType.Townhall` has them."""
+        return self._in_group(UnitType.Townhall)
+
+    @property
+    def mineral_fields(self) -> Units[U]:
+        """The mineral fields of every kind, as `UnitType.AnyMineralField` has them."""
+        return self._in_group(UnitType.AnyMineralField)
+
+    @property
+    def geysers(self) -> Units[U]:
+        """The vespene geysers of every kind, as `UnitType.AnyVespeneGeyser` has them."""
+        return self._in_group(UnitType.AnyVespeneGeyser)
+
+    @property
+    def gas_buildings(self) -> Units[U]:
+        """The refineries, assimilators and extractors, as `UnitType.GasBuilding` has them."""
+        return self._in_group(UnitType.GasBuilding)
+
+    def _in_group(self, group: type[UnitType.AnyType]) -> Units[U]:
+        """The units of a type in `group`."""
+        wanted = group._type_ids
+        return Units(unit for unit in self._units if unit.type_id in wanted)
+
+    @property
     def complete(self) -> Units[U]:
         """The units that have finished building or warping in. Raises `NotReportedError` for a unit never in sight."""
         return Units(unit for unit in self._units if unit.is_complete)
@@ -199,9 +229,31 @@ class Units[U: Unit[Any]](Sequence[U]):
     # with a key, and faster than building an array of positions, which would have to be rebuilt on every query
     # since the units move.
 
-    def in_area(self, area: Area) -> Units[U]:
-        """The units standing in `area`."""
-        return Units(unit for unit in self._units if unit._position in area)
+    def in_area(self, areas: Area | Iterable[Area]) -> Units[U]:
+        """The units standing in `areas`: in one area, or in any of several."""
+        if isinstance(areas, Area):
+            return Units(unit for unit in self._units if unit._position in areas)
+        regions = tuple(areas)
+        return Units(unit for unit in self._units if any(unit._position in region for region in regions))
+
+    def within(self, distance: float, *, of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> Units[U]:
+        """The units at most `distance` from `of`, a point or a unit, or from any of several, measured between
+        positions. Raises `ValueError` for a distance that is negative or not a number."""
+        if not distance >= 0:
+            raise ValueError(f"a distance is at least 0, not {distance}")
+        centers = _positions(of)
+        limit = distance * distance
+        kept = []
+        for unit in self._units:
+            position = unit._position
+            x, y = position[0], position[1]
+            for cx, cy in centers:
+                dx = x - cx
+                dy = y - cy
+                if dx * dx + dy * dy <= limit:
+                    kept.append(unit)
+                    break
+        return Units(kept)
 
     def sorted_by_distance_to(self, point: PointLike) -> Units[U]:
         """The units from nearest to `point` to furthest. Units at equal distance keep their order."""
@@ -276,6 +328,17 @@ def _type_ids(
     if not unit_types:
         return types._type_ids
     return types._type_ids.union(*(unit_type._type_ids for unit_type in unit_types))
+
+
+def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> list[tuple[float, float]]:
+    """The ground positions of `of`: a point, a unit, or several of either."""
+    if isinstance(of, Unit):
+        return [(of._position[0], of._position[1])]
+    # A point is a tuple of numbers; several are anything else that iterates.
+    if isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit)):
+        return [_ground(cast("PointLike", of))]
+    several = cast("Iterable[PointLike | Unit[Any]]", of)
+    return [_ground(item._position if isinstance(item, Unit) else item) for item in several]
 
 
 def _ground(point: PointLike) -> tuple[float, float]:

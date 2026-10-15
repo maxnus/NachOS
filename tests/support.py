@@ -270,7 +270,7 @@ def played(
         game = _Game(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, present_units.neutral),
+            expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=tracker.game_data,
             enemy=tracker.enemy,
             enemy_upgrade_inference=infer,

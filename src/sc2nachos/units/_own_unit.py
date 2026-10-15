@@ -23,9 +23,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
         """The unit's current order, then its queued orders."""
-        return tuple(UnitOrder._from_proto(order, self._unit_aimed_at) for order in self._latest_report.orders)
+        return tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in self._latest_report.orders)
 
-    def _unit_aimed_at(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
+    def _unit_target_of_order(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
         """The unit `order` names: the one the game reported under its tag, or, for a tag the game never reports, the
         one this unit's last order of the same ability named under a tag it did; `None` if there is none."""
         unit = self._tracker.unit_tracker.get_by_tag(order.target_unit_tag)
