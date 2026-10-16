@@ -1299,16 +1299,16 @@ class TestAnOrderToSeveralUnits:
 
 
 class TestWhatTheTurnsOrdersCost:
-    def test_unpaid_is_what_the_turn_s_orders_cost(self) -> None:
+    def test_pending_cost_is_what_the_turn_s_orders_cost(self) -> None:
         game = _costing()
         game.observe(0, _scv(1), _barracks(2))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.issue(game.own(2), _TRAIN_REAPER)
 
-        assert game.book.unpaid == Cost(150, 50)
+        assert game.book.pending_cost == Cost(150, 50)
 
-    def test_unpaid_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
+    def test_pending_cost_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
         game = _costing()
         game.observe(0, _scv(1), _barracks(2))
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
@@ -1316,37 +1316,37 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(2), _TRAIN_REAPER)
         game.book.issue(game.own(2), _TRAIN_MARINE)
 
-        assert game.book.unpaid == Cost(150, 0)
+        assert game.book.pending_cost == Cost(150, 0)
 
-    def test_unpaid_counts_each_queued_train(self) -> None:
+    def test_pending_cost_counts_each_queued_train(self) -> None:
         game = _costing()
         game.observe(0, _barracks(1))
         game.book.issue(game.own(1), _TRAIN_MARINE)
         game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
 
-        assert game.book.unpaid == Cost(100, 0)
+        assert game.book.pending_cost == Cost(100, 0)
 
-    def test_unpaid_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
+    def test_pending_cost_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
         """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
         game = _costing()
         game.observe(0, _scv(1, _building(), at=(29.0, 29.0)))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
 
-        assert game.book.unpaid == Cost(0, 0)
+        assert game.book.pending_cost == Cost(0, 0)
         assert game.book.pending
 
-    def test_unpaid_leaves_out_a_withdrawn_order_and_what_went_out(self) -> None:
+    def test_pending_cost_leaves_out_a_withdrawn_order_and_what_went_out(self) -> None:
         game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1), _barracks(2))
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.issue(game.own(2), _TRAIN_MARINE).withdraw()
 
-        assert game.book.unpaid == Cost(100, 0)
+        assert game.book.pending_cost == Cost(100, 0)
 
         game.flush()
 
-        assert game.book.unpaid == Cost(0, 0)
+        assert game.book.pending_cost == Cost(0, 0)
 
 
 class TestAVerdictNachosCannotName:

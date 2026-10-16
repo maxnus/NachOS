@@ -29,7 +29,7 @@ api.orders.camera(base)
   group around the target point; ordering each separately stacks them on the point instead. What the game has only
   one unit of a command carry out names one unit: a build, an add-on, a train, a research, a morph that costs,
   every spell but a toggle, and a few more, a landing, a load, a halt, a corrosive bile or a liberator's siege
-  (`AbilityData.carried_out_by_one`, from what the game was seen to do). Given to several such units, `issue`
+  (`AbilityData.single_unit`, from what the game was seen to do). Given to several such units, `issue`
   raises `ValueError`, so the bot picks the unit: the nearest worker, the barracks with room beside it, the caster
   with the energy. A move, a burrow, a siege of tanks, a stim or an unload goes to every unit named.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
@@ -152,16 +152,16 @@ if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
 
 `api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
 stepped game it charges the turn's orders by the next observation (in game), so a bot giving several in one turn
-takes off what they will cost, `api.orders.unpaid`:
+takes off what they will cost, `api.orders.pending_cost`:
 
 ```python
-budget = api.resources - api.orders.unpaid.resources
+budget = api.resources - api.orders.pending_cost.resources
 ```
 
-`unpaid` counts the turn's orders as they will go out: the last of a unit's orders that replace one another, and nothing
-for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the difference
-for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the ability takes of the
-cap as it starts.
+`pending_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,
+and nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the
+difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the ability
+takes of the cap as it starts.
 
 A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted
 structure, which lands first (in game). A bot that would rather pay on arrival moves the worker itself and orders the

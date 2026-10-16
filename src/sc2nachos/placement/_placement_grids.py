@@ -155,23 +155,30 @@ class PlacementGrids:
         """Every reservation `reserve` made that has not ended, oldest first."""
         return tuple(reservation for reservation in self._reservations if not reservation._withdrawn)
 
-    def reserve(self, unit_type: UnitTypeId, *, at: PointLike, max_steps: int | None = None) -> PlacementReservation:
-        """Keep the ground a structure of `unit_type` would cover at `at`, placed as the game snaps it, out of
-        `free`, `free_for`, `is_free` and `nearest_free` from now, the rest of this turn included, until the
-        reservation is withdrawn, until `max_steps` steps have passed if given, or until an observation shows one of
-        this player's structures standing on its site, whatever type it stands as. `max_steps=1` keeps it for this turn
-        alone. Reservations may overlap, and each game starts with none.
+    def reserve(
+        self, unit_type: UnitTypeId, *, at: PointLike, margin: Margin = 0, max_steps: int | None = None
+    ) -> PlacementReservation:
+        """Keep the ground a structure of `unit_type` would cover at `at`, placed as the game snaps it, and with
+        `margin`, every tile within it of one the footprint covers, as `is_free` takes it, out of `free`, `free_for`,
+        `is_free` and `nearest_free` from now, the rest of this turn included, until the reservation is withdrawn, until
+        `max_steps` steps have passed if given, or until an observation shows one of this player's structures standing
+        on its site, whatever type it stands as. `max_steps=1` keeps it for this turn alone. Reservations may overlap,
+        and each game starts with none.
 
-        Raises `TypeError` for a `max_steps` that is not a whole number, and `ValueError` for a type with no footprint,
-        for a gas building, which stands on a geyser, and for a `max_steps` below 1."""
+        Raises `TypeError` for a `max_steps` that is not a whole number or a margin that is neither a count of tiles nor
+        a tuple of four, and `ValueError` for a type with no footprint, for a gas building, which stands on a geyser,
+        for a negative margin and for a `max_steps` below 1."""
         footprint = self._footprint_of(unit_type)
+        _margin_sides(margin)
         if max_steps is not None:
             if not _is_count(max_steps):
                 raise TypeError(f"max_steps is a whole number of steps, not {max_steps!r}")
             if max_steps < 1:
                 raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
         center = footprint.snapped_center(at=at)
-        reservation = PlacementReservation(unit_type, footprint, at=center, step=self._step, max_steps=max_steps)
+        reservation = PlacementReservation(
+            unit_type, footprint, at=center, margin=margin, step=self._step, max_steps=max_steps
+        )
         self._reservations.append(reservation)
         return reservation
 

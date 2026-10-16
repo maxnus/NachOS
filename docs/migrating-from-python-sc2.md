@@ -147,12 +147,12 @@ it.
   `api.units.own.of_type(UnitType.Larva)`.
 - **What only one unit of a command carries out is given to one unit.** A build, an add-on, a train, a research, a
   morph that costs, a spell but a toggle, and a few more such as a landing or a load, given to several units, raises
-  `ValueError` (`AbilityData.carried_out_by_one`) where the game would quietly have one of them carry it out:
+  `ValueError` (`AbilityData.single_unit`) where the game would quietly have one of them carry it out:
   pick the unit.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
-  `api.action_failures` lists what the game refused. Within a turn, `api.orders.unpaid` is what the turn's orders
+  `api.action_failures` lists what the game refused. Within a turn, `api.orders.pending_cost` is what the turn's orders
   will cost ([orders](orders.md#what-an-order-needs)).
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
@@ -410,7 +410,7 @@ it.
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
-| nothing | `api.placement.reserve(t, at=p)`, ground kept out of the grids for a build not ordered yet |
+| nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not ordered yet, with `margin` as `is_free` takes it |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |

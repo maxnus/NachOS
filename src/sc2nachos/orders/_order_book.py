@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Cost, OrderBehavior
-from sc2nachos.gamedata._sent_as import Aim
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.geometry import Point
 from sc2nachos.geometry._point import coordinates
@@ -41,7 +40,7 @@ _IS_AIMED_AT_ITSELF = MappingProxyType(
         sending.ability: ability
         for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
         for sending in sent_as.values()
-        if sending.aim is Aim.ITSELF
+        if sending.aimed_at_itself
     }
 )
 # What an ability goes out as where no type is sent another.
@@ -144,13 +143,13 @@ class OrderBook:
         one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a custom
         ability given to a type it has nothing to be sent as for, or which this game's tables lack an ability it is
         sent as for, and for an ability only one unit of a command carries out, given to several
-        (`AbilityData.carried_out_by_one`).
+        (`AbilityData.single_unit`).
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        if len(given) > 1 and row is not None and row.carried_out_by_one:
+        if len(given) > 1 and row is not None and row.single_unit:
             raise ValueError(
                 f"{ability.name} is carried out by one unit of a command; give it to one, not {len(given)}"
             )
@@ -197,10 +196,10 @@ class OrderBook:
         return tuple(order for order in self._issued if not order._withdrawn)
 
     @property
-    def unpaid(self) -> Cost:
-        """What the bank does not show yet: the cost of the turn's orders as they will go out, each its ability's `cost`
-        in the game's tables. A unit given orders that replace one another pays for the last, and one already carrying
-        an order out pays nothing for it again."""
+    def pending_cost(self) -> Cost:
+        """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
+        `cost` in the game's tables. A unit given orders that replace one another pays for the last, and one already
+        carrying an order out pays nothing for it again."""
         total = Cost(0, 0)
         for order, _ in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)

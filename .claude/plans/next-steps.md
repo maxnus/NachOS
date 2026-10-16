@@ -83,16 +83,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Every unqueued order competes, a structure's train included, so a unit takes the last one a turn gives it; a second
     train needs `queued=True`.
   - What only one unit of a command carries out is given to one unit: `issue` raises `ValueError` for a build, an
-    add-on, a train, a research, a morph that costs, every spell but a toggle, or one of `CARRIED_OUT_BY_ONE_ABILITIES`,
-    given to several (`AbilityData.carried_out_by_one`, measured by the `group-abilities` sweeps), and a bot picks the
+    add-on, a train, a research, a morph that costs, every spell but a toggle, or one of `SINGLE_UNIT_ABILITIES`,
+    given to several (`AbilityData.single_unit`, measured by the `group-abilities` sweeps), and a bot picks the
     unit. Anything else goes out as one command naming them all.
   - A larva's morph given to a hatchery goes out as given, and the game refuses it `NotSupported`.
-  - `api.orders.unpaid` stays under `api.orders`, as the cost of the turn's orders as they will go out, which only the
-    order book knows.
-  - `api.placement.reserve(type_id, *, at, max_steps=None)`, a `PlacementReservation`, keeps a site out of the placement
-    grids for a build not ordered yet, against my recommendation of no new API. It lasts until withdrawn, until
-    `max_steps` have passed, or until one of this player's structures stands on its site, and is named for placement so
-    as not to read as money.
+  - `api.orders.pending_cost`, first named `unpaid` (renamed in the owner's review of #126), stays under `api.orders`,
+    as the cost of the turn's orders as they will go out, which only the order book knows.
+  - `api.placement.reserve(type_id, *, at, margin=0, max_steps=None)`, a `PlacementReservation`, keeps a site, and a
+    margin around it as `is_free` takes one (the owner, review of #126), out of the placement grids for a build not
+    ordered yet, against my recommendation of no new API. It lasts until withdrawn, until `max_steps` have passed, or
+    until one of this player's structures stands on its site, and is named for placement so as not to read as money.
   - A liberator's siege is `LIBERATOR_SIEGE_AT`, the game's defender mode at a point, out of the custom `SIEGE`:
     abilities that behave differently are not one id. `UNSIEGE` stays one for all four. `RECALL` is refused for any
     group, since two motherships never stand.

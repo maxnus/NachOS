@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Final
 
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 
@@ -147,7 +147,7 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 # A medivac, a warp prism and a transport overlord given their unload at a point aimed at themselves unload where they
 # are and leave a move going; aimed at a point, they fly there first. Each answers UnloadAll `Error`, which a bunker, a
 # command center, a planetary fortress and a nydus take (tool `sweep_orders`, `held-orders`).
-_UNLOADS_IN_PLACE = SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
+_UNLOADS_IN_PLACE = SentAs(AbilityId.UNLOAD_AT, aimed_at_itself=True)
 _TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.OVERLORD_TRANSPORT)
 
 ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
@@ -159,15 +159,15 @@ ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED),
-                    SentAs(RawAbilityId.SiegeMode_SiegeMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.SiegeMode_SiegeMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED),
-                    SentAs(RawAbilityId.Morph_SurveillanceMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_SurveillanceMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED),
-                    SentAs(RawAbilityId.Morph_OversightMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_OversightMode),
                 ),
             }
         ),
@@ -175,19 +175,19 @@ ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
-                    SentAs(RawAbilityId.Unsiege_Unsiege, Aim.NOTHING),
+                    SentAs(RawAbilityId.Unsiege_Unsiege),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LIBERATOR),
-                    SentAs(RawAbilityId.Morph_LiberatorAAMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_LiberatorAAMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OBSERVER_SIEGED, UnitTypeId.OBSERVER),
-                    SentAs(RawAbilityId.Morph_ObserverMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_ObserverMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OVERSEER_SIEGED, UnitTypeId.OVERSEER),
-                    SentAs(RawAbilityId.Morph_OverseerMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_OverseerMode),
                 ),
             }
         ),
@@ -226,16 +226,10 @@ giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. 
 to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
 
-# What one unit of a command naming several carries out among the abilities that cost no minerals or vespene, as
-# `AbilityData.carried_out_by_one` reads it beside what costs. Two units of each type, in each of its forms, were given
-# each such ability they are offered in one command, and one of them carried it out: it spent or gained the energy, or
-# changed type, or made the effect, or its orders changed while its partner kept the move it had been given (tool
-# `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`). Every spell is here but the toggles, both of whose
-# casters took a cloak and the oracle's pulsar beam; and so are a landing, a rooting, a liberator's siege and a load,
-# which take one place or one passenger, a salvage, a halt, a cancel of the last item, and the warp prism's and the warp
-# gate's changes of mode. A load is here though both of two nydus showed the passenger, since they hold one cargo
-# between them, and a recall though two motherships both recalled, since two never stand.
-CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
+# The abilities that cost no minerals or vespene which one unit of a command naming several carries out, as
+# `AbilityData.single_unit` reads them beside every ability that costs (tool `sweep_orders`, `group-abilities-terran`,
+# `-protoss` and `-zerg`).
+SINGLE_UNIT_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
         AbilityId.BATTLECRUISER_YAMATO,
         AbilityId.BUILD_CREEP_TUMOR,

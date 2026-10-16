@@ -350,11 +350,26 @@ class TestReservingASite:
         reservation = grids.reserve(_DEPOT, at=Point((8.3, 7.8)))
 
         assert reservation.at == Point((8.0, 8.0))
-        assert (reservation.type_id, reservation.step, reservation.max_steps) == (_DEPOT, 0, None)
+        assert (reservation.type_id, reservation.margin, reservation.step, reservation.max_steps) == (
+            _DEPOT,
+            0,
+            0,
+            None,
+        )
         assert grids.reservations == (reservation,)
         assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
         assert not grids.is_free(_DEPOT, at=(8.0, 8.0))
         assert not grids.free[Point((8.0, 8.0))]
+
+    def test_a_margin_reserves_the_tiles_within_it_too(self) -> None:
+        """Two tiles on a depot's right, as a barracks keeps them for its add-on."""
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(_DEPOT, at=(8.0, 8.0), margin=(0, 2, 0, 0))
+
+        assert reservation.margin == (0, 2, 0, 0)
+        assert _picture(grids.reserved, x0=6, y0=6, x1=11, y1=9) == ["......", ".####.", ".####.", "......"]
+        assert not grids.is_free(_DEPOT, at=(10.0, 8.0))
 
     def test_nearest_free_keeps_off_a_reservation(self) -> None:
         grids = _Game().observe(0, _scv(1))
@@ -428,6 +443,15 @@ class TestReservingASite:
 
         with pytest.raises(ValueError, match=message):
             grids.reserve(unit_type, at=(8.0, 8.0), max_steps=max_steps)
+
+        assert grids.reservations == ()
+
+    @pytest.mark.parametrize(("margin", "error"), [(-1, ValueError), ((1, 1, 1), TypeError)], ids=["negative", "three"])
+    def test_a_margin_negative_or_not_a_count_or_four_raises(self, margin: Any, error: type[Exception]) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(error, match="a margin"):
+            grids.reserve(_DEPOT, at=(8.0, 8.0), margin=margin)
 
         assert grids.reservations == ()
 

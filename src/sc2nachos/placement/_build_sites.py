@@ -45,7 +45,7 @@ class _BuildSites:
         landing site too."""
         reserved = Grid.like(like, dtype=bool, outside=False)
         for reservation in reservations:
-            reserved.fill_footprint(reservation._footprint, at=reservation.at, value=True)
+            reserved.fill_footprint(reservation._footprint, at=reservation.at, value=True, margin=reservation.margin)
         standing: set[tuple[int, int]] | None = None
         for unit in own_units:
             if unit.type_id in self._builder_types:

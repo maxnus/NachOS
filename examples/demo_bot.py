@@ -37,9 +37,9 @@ class Budget:
     once they go out."""
 
     def __init__(self) -> None:
-        unpaid = api.orders.unpaid
-        self.resources_left = api.resources - unpaid.resources
-        self.supply_left = api.supply.left - unpaid.supply
+        pending_cost = api.orders.pending_cost
+        self.resources_left = api.resources - pending_cost.resources
+        self.supply_left = api.supply.left - pending_cost.supply
 
     def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if

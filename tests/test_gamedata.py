@@ -17,12 +17,12 @@ from sc2nachos.gamedata import (
     TargetType,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
-    CARRIED_OUT_BY_ONE_ABILITIES,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
+    SINGLE_UNIT_ABILITIES,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.geometry import Footprint
@@ -496,7 +496,7 @@ class TestARecordedGamesTables:
     ) -> None:
         data = _tables(path)
         row = data.abilities[AbilityId.UNLOAD]
-        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
+        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, aimed_at_itself=True)
         assert UnitTypeId.BUNKER not in row.sent_as
         assert row.target_type is TargetType.NOTHING
         assert {UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.OVERLORD_TRANSPORT} <= (
@@ -710,7 +710,7 @@ class TestARecordedGamesTables:
         data = _tables(path)
         for row in data.abilities.values():
             costs = bool(row.cost.minerals or row.cost.vespene)
-            assert row.carried_out_by_one == (costs or row.id in CARRIED_OUT_BY_ONE_ABILITIES), row.id.name
+            assert row.single_unit == (costs or row.id in SINGLE_UNIT_ABILITIES), row.id.name
         for ability in (
             AbilityId.SCV_BUILD_SUPPLY_DEPOT,
             AbilityId.BARRACKS_TRAIN_MARINE,
@@ -723,7 +723,7 @@ class TestARecordedGamesTables:
             AbilityId.LIBERATOR_SIEGE_AT,
             AbilityId.RECALL,
         ):
-            assert data.abilities[ability].carried_out_by_one, ability.name
+            assert data.abilities[ability].single_unit, ability.name
         for ability in (
             AbilityId.MOVE,
             AbilityId.STIM,
@@ -736,12 +736,12 @@ class TestARecordedGamesTables:
             AbilityId.SIEGE,
             AbilityId.UNSIEGE,
         ):
-            assert not data.abilities[ability].carried_out_by_one, ability.name
+            assert not data.abilities[ability].single_unit, ability.name
 
     def test_what_one_unit_carries_out_is_written_down_only_where_it_costs_nothing(self, path: Path) -> None:
         """Once the game charges for an ability, its cost says it is carried out by one, and the entry can go."""
         data = _tables(path)
-        for ability in CARRIED_OUT_BY_ONE_ABILITIES:
+        for ability in SINGLE_UNIT_ABILITIES:
             cost = data.abilities[ability].cost
             assert not (cost.minerals or cost.vespene), f"the tables now charge {ability.name} {cost}"
 
