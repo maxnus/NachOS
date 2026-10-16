@@ -22,7 +22,6 @@ from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
-    SINGLE_UNIT_ABILITIES,
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.geometry import Footprint
@@ -704,13 +703,14 @@ class TestARecordedGamesTables:
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
 
-    def test_what_one_unit_of_a_command_carries_out_is_what_costs_and_what_the_sweep_saw(self, path: Path) -> None:
+    def test_what_every_unit_of_a_command_carries_out_is_what_the_sweep_saw_and_costs_nothing(self, path: Path) -> None:
         """One unit of a command carries out a build, a train, a research or a morph (in game), and every spell but a
-        toggle, with a few more (tool `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`)."""
+        toggle, with a few more; every unit the rest (tool `sweep_orders`, `group-abilities-terran`, `-protoss` and
+        `-zerg`). Once the game charges for an entry of `MULTI_UNIT_ABILITIES`, the entry is wrong."""
         data = _tables(path)
         for row in data.abilities.values():
-            costs = bool(row.cost.minerals or row.cost.vespene)
-            assert row.single_unit == (costs or row.id in SINGLE_UNIT_ABILITIES), row.id.name
+            if row.cost.minerals or row.cost.vespene:
+                assert not row.multi_unit, f"the tables now charge {row.id.name} {row.cost}"
         for ability in (
             AbilityId.SCV_BUILD_SUPPLY_DEPOT,
             AbilityId.BARRACKS_TRAIN_MARINE,
@@ -722,8 +722,9 @@ class TestARecordedGamesTables:
             AbilityId.LAND,
             AbilityId.LIBERATOR_SIEGE_AT,
             AbilityId.RECALL,
+            AbilityId.GHOST_TACTICAL_NUKE,
         ):
-            assert data.abilities[ability].single_unit, ability.name
+            assert not data.abilities[ability].multi_unit, ability.name
         for ability in (
             AbilityId.MOVE,
             AbilityId.STIM,
@@ -736,14 +737,7 @@ class TestARecordedGamesTables:
             AbilityId.SIEGE,
             AbilityId.UNSIEGE,
         ):
-            assert not data.abilities[ability].single_unit, ability.name
-
-    def test_what_one_unit_carries_out_is_written_down_only_where_it_costs_nothing(self, path: Path) -> None:
-        """Once the game charges for an ability, its cost says it is carried out by one, and the entry can go."""
-        data = _tables(path)
-        for ability in SINGLE_UNIT_ABILITIES:
-            cost = data.abilities[ability].cost
-            assert not (cost.minerals or cost.vespene), f"the tables now charge {ability.name} {cost}"
+            assert data.abilities[ability].multi_unit, ability.name
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

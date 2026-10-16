@@ -653,7 +653,7 @@ class TestSieging:
             *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)),
         )
 
-        with pytest.raises(ValueError, match="LIBERATOR_SIEGE_AT is carried out by one unit of a command"):
+        with pytest.raises(ValueError, match="give LIBERATOR_SIEGE_AT to one unit, not 2"):
             game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))
         game.book.issue([game.own(3), game.own(4)], _SIEGE)
 
@@ -1274,7 +1274,7 @@ class TestAnOrderToSeveralUnits:
         game = _costing()
         game.observe(0, make(1), make(2))
 
-        with pytest.raises(ValueError, match=f"{ability.name} is carried out by one unit of a command"):
+        with pytest.raises(ValueError, match=f"give {ability.name} to one unit, not 2"):
             game.book.issue([game.own(1), game.own(2)], ability, target=target)
 
         assert game.book.pending == ()

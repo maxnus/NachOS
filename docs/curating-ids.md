@@ -137,10 +137,11 @@ game, and the generator refuses to write the tech tree unless the sweep saw it m
 `tests/test_gamedata.py` fails once the game's table names an entry's ability for its type, and the entry can go.
 Add an entry only with an in-game trial behind it, never to paper over something the sweep cannot reach.
 
-**What one unit of a command carries out, of what costs nothing, is `SINGLE_UNIT_ABILITIES` in the same file**,
-which `AbilityData.single_unit` reads. After a patch, `uv run python tools/sweep_orders.py group-abilities-terran
-group-abilities-protoss group-abilities-zerg` gives each such ability to two units at once: one it classes `one` belongs
-there, one it classes `both` does not, and one it classes `no trace` or differently from run to run needs a closer look.
+**What every unit of a command carries out is `MULTI_UNIT_ABILITIES` in the same file**, which `AbilityData.multi_unit`
+reads; any other ability goes to one unit at a time. After a patch, `uv run python tools/sweep_orders.py
+group-abilities-terran group-abilities-protoss group-abilities-zerg` gives each ability that costs nothing to two units
+at once: one it classes `both` belongs there, one it classes `one` does not, and one it classes `no trace` or
+differently from run to run needs a closer look. A new ability is refused for a group until it is listed.
 
 The sweep reads everything off `RequestQueryAvailableAbilities`, which answers as follows:
 

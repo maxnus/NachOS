@@ -17,7 +17,7 @@ from sc2nachos.gamedata._techtree._overrides import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     KEEPS_ORDERS_BY_TYPE,
-    SINGLE_UNIT_ABILITIES,
+    MULTI_UNIT_ABILITIES,
 )
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
@@ -203,11 +203,6 @@ def _derived_cost(
     return None if used is None else made.cost - used.cost
 
 
-def _is_single_unit(ability: AbilityId, cost: Cost) -> bool:
-    """Whether one command naming several units has only one of them carry out `ability`, which costs `cost`."""
-    return bool(cost.minerals or cost.vespene) or ability in SINGLE_UNIT_ABILITIES
-
-
 def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[UnitTypeId]) -> frozenset[UnitTypeId]:
     """The unit types that hold an order of their own, which an order can take them off: those the game offers a
     move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
@@ -252,11 +247,12 @@ class AbilityData:
     not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less what the
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
-    single_unit: bool
-    """Whether one command naming several units has only one of them carry it out, which `api.orders.issue` refuses
-    to give several units: every ability that costs minerals or vespene, a build, an add-on, a train, a research or a
-    morph; every spell but a toggle, a storm or an inject, not a cloak; and a few more, a corrosive bile, a landing, a
-    liberator's siege, a load or a halt (in game)."""
+    multi_unit: bool
+    """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several at once: a
+    move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`). Any other
+    ability goes to one unit at a time: what costs minerals or vespene, a build, an add-on, a train, a research or a
+    morph (in game); every spell but a toggle; a landing, a load or a liberator's siege; and an ability no one has
+    seen a group carry out."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -292,7 +288,6 @@ class AbilityData:
         it."""
         ability = AbilityId(data.ability_id)
         behavior = behaviors.get(ability, _REPLACES)
-        cost = costs.get(ability, _FREE)
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -302,8 +297,8 @@ class AbilityData:
             allows_autocast=data.allow_autocast,
             performers=_performers(ability, tech_tree),
             products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
-            cost=cost,
-            single_unit=_is_single_unit(ability, cost),
+            cost=costs.get(ability, _FREE),
+            multi_unit=ability in MULTI_UNIT_ABILITIES,
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED),
@@ -323,7 +318,6 @@ class AbilityData:
         `tech_tree`, `behaviors`, `costs` and `cancels` say about it. It takes no target and has no range."""
         sent_as = ABILITIES_SENT_AS_ANOTHER[ability]
         behavior = behaviors.get(ability, _REPLACES)
-        cost = costs.get(ability, _FREE)
         return cls(
             id=ability,
             target_type=TargetType.NOTHING,
@@ -333,8 +327,8 @@ class AbilityData:
             allows_autocast=False,
             performers=_performers(ability, tech_tree),
             products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
-            cost=cost,
-            single_unit=_is_single_unit(ability, cost),
+            cost=costs.get(ability, _FREE),
+            multi_unit=ability in MULTI_UNIT_ABILITIES,
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
             sent_as=sent_as,

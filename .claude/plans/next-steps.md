@@ -82,10 +82,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   question at a time:
   - Every unqueued order competes, a structure's train included, so a unit takes the last one a turn gives it; a second
     train needs `queued=True`.
-  - What only one unit of a command carries out is given to one unit: `issue` raises `ValueError` for a build, an
-    add-on, a train, a research, a morph that costs, every spell but a toggle, or one of `SINGLE_UNIT_ABILITIES`,
-    given to several (`AbilityData.single_unit`, measured by the `group-abilities` sweeps), and a bot picks the
-    unit. Anything else goes out as one command naming them all.
+  - Only what every unit of a command carries out goes to several: `issue` raises `ValueError` for an ability not in
+    `MULTI_UNIT_ABILITIES` given to several units (`AbilityData.multi_unit`, from the `group-abilities` sweeps; the
+    owner, review of #126, over a list of what one unit carries out), so a build, a train, a spell but a toggle, a
+    landing or an ability never seen given to a group goes to one unit, which the bot picks. The rest goes out as one
+    command naming them all.
   - A larva's morph given to a hatchery goes out as given, and the game refuses it `NotSupported`.
   - `api.orders.pending_cost`, first named `unpaid` (renamed in the owner's review of #126), stays under `api.orders`,
     as the cost of the turn's orders as they will go out, which only the order book knows.
