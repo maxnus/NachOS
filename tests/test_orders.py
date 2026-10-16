@@ -1124,6 +1124,7 @@ class TestTellingAStructureToMakeTwo:
 _BUILD_DEPOT = AbilityId.SCV_BUILD_SUPPLY_DEPOT
 _BUILD_REACTOR = AbilityId.BUILD_REACTOR
 _DRONE = AbilityId.LARVA_MORPH_DRONE
+_STORM = AbilityId.HIGH_TEMPLAR_STORM
 _SITE = (30.0, 30.0)
 
 
@@ -1155,6 +1156,7 @@ _COSTING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_DRONE),
+        data_pb2.AbilityData(ability_id=_STORM, target=_AT_A_POINT),
     ],
 )
 
@@ -1172,6 +1174,11 @@ def _scv(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (10.0, 
 def _building(site: tuple[float, float] = _SITE) -> raw_pb2.UnitOrder:
     """The order an SCV shows while it goes to build a depot at `site`, or builds it."""
     return raw_pb2.UnitOrder(ability_id=_BUILD_DEPOT, target_world_space_pos=common_pb2.Point(x=site[0], y=site[1]))
+
+
+def _templar(tag: int) -> raw_pb2.Unit:
+    """One of this player's high templar."""
+    return make_unit(tag, UnitTypeId.HIGH_TEMPLAR, at=(15.0, 15.0))
 
 
 def _flying_barracks(tag: int, at: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.Unit:
@@ -1244,30 +1251,24 @@ class TestAnOrderThatCosts:
 
 
 class TestAnOrderToSeveralUnits:
-    """One command naming several units has one of them carry out a build, a train, a research or a morph (in game),
-    which the game picks."""
+    """One command naming several units has only one of them carry out a build, a train, a research or a morph (in
+    game), so such an order is given to one unit; any other goes out as one command naming them all."""
 
-    def test_a_build_goes_out_as_one_command_naming_every_worker_given(self) -> None:
-        game = _costing([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
+    @pytest.mark.parametrize(
+        ("make", "ability", "target"),
+        [(_scv, _BUILD_DEPOT, _SITE), (_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE)],
+        ids=["a build", "a train", "a spell"],
+    )
+    def test_an_order_one_unit_carries_out_given_to_several_raises(
+        self, make: Any, ability: AbilityId, target: tuple[float, float] | None
+    ) -> None:
+        game = _costing()
+        game.observe(0, make(1), make(2))
 
-        build = game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
+        with pytest.raises(ValueError, match=f"{ability.name} is carried out by one unit of a command"):
+            game.book.issue([game.own(1), game.own(2)], ability, target=target)
 
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1, 2], _SITE, False)]
-        assert build.units == (game.own(1), game.own(2))
-
-    def test_a_build_repeated_to_them_is_not_sent_while_one_of_them_carries_it_out(self) -> None:
-        """Sent to the one not building, it would order and charge a second build at the same site (in game)."""
-        game = _costing([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
-        game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        for step in (16, 32):
-            game.observe(step, _scv(1, _building(), at=(20.0, 20.0)), _scv(2, at=(40.0, 40.0)))
-            game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
-
-            assert game.book.unpaid == Cost(0, 0)
-            assert game.flush() is None
+        assert game.book.pending == ()
 
     def test_an_order_that_costs_nothing_still_goes_to_the_one_not_doing_it(self) -> None:
         game = _costing([ActionResult.SUCCESS])
@@ -1315,14 +1316,6 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
 
         assert game.book.unpaid == Cost(100, 0)
-
-    def test_an_order_to_several_units_is_paid_once(self) -> None:
-        game = _costing()
-        game.observe(0, _barracks(1), _barracks(2))
-
-        game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
-
-        assert game.book.unpaid == Cost(50, 0)
 
     def test_unpaid_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
         """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""

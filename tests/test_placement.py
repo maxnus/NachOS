@@ -701,7 +701,8 @@ class _DepotBot:
         if self.site is None:
             if api.resources.minerals >= 100:
                 self.site = _depot_site(api)
-                api.orders.issue(api.units.own.of_type(UnitTypeId.SCV), _BUILD_DEPOT, target=self.site)
+                scv = api.units.own.of_type(UnitTypeId.SCV).closest_to(self.site)
+                api.orders.issue(scv, _BUILD_DEPOT, target=self.site)
             return
         placement = api.placement
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))

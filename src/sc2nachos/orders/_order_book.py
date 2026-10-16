@@ -126,10 +126,9 @@ class OrderBook:
     ) -> Order[Any]:
         """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Order`.
 
-        The order goes out as one command, so units ordered together keep their spacing where the game spreads them,
-        and a build, an add-on, a train, a research or a morph given to several is carried out by one of them, which
-        the game picks (in game). `queued` puts the order behind each unit's current orders. `data` is the bot's own;
-        NachOS carries it and never reads it. Nothing is sent until the turn's handlers have all run.
+        The order goes out as one command, so units ordered together keep their spacing where the game spreads them.
+        `queued` puts the order behind each unit's current orders. `data` is the bot's own; NachOS carries it and never
+        reads it. Nothing is sent until the turn's handlers have all run.
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
@@ -144,12 +143,17 @@ class OrderBook:
         out aimed at it, as a liberator's siege does, or to a flying structure given an add-on, and for a transport's
         unload at a point aimed at one of `units` itself, which is `UNLOAD` for that one: a group given an unload at
         one of its own transports is two orders. Raises `ValueError` for a custom ability given to a type it has
-        nothing to be sent as for, or which this game's tables lack an ability it is sent as for.
+        nothing to be sent as for, or which this game's tables lack an ability it is sent as for, and for an ability
+        only one unit of a command carries out, given to several (`AbilityData.carried_out_by_one`).
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
+        if len(given) > 1 and row is not None and row.carried_out_by_one:
+            raise ValueError(
+                f"{ability.name} is carried out by one unit of a command; give it to one, not {len(given)}"
+            )
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:
             if row is None:
@@ -197,9 +201,8 @@ class OrderBook:
     @property
     def unpaid(self) -> Cost:
         """What the bank does not show yet: the cost of the turn's orders as they will go out, each its ability's `cost`
-        in the game's tables, once: of the units an order names, one carries out a build, a train, a research or a
-        morph (in game). A unit given orders that replace one another pays for the last, and one already carrying an
-        order out pays nothing for it again, nor do the others an order that costs names."""
+        in the game's tables. A unit given orders that replace one another pays for the last, and one already carrying
+        an order out pays nothing for it again."""
         total = Cost(0, 0)
         for order, _ in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)
@@ -316,19 +319,16 @@ class OrderBook:
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
     ) -> tuple[OwnUnit[Any], ...]:
         """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
-        those whose orders it replaces and which are already doing it, and none for an order that costs while one of
-        them is doing it, since the game had only one of them carry it out (in game)."""
+        those whose orders it replaces and which are already doing it."""
         if order.queued:
             return units
         row = self._game_data.abilities.get(order.ability)
-        doing = {
-            unit.id
+        return tuple(
+            unit
             for unit in units
-            if _behavior_for(row, unit) is OrderBehavior.REPLACES and self._is_doing(unit, order.ability, order.target)
-        }
-        if doing and row is not None and (row.cost.minerals or row.cost.vespene):
-            return ()
-        return tuple(unit for unit in units if unit.id not in doing)
+            if _behavior_for(row, unit) is not OrderBehavior.REPLACES
+            or not self._is_doing(unit, order.ability, order.target)
+        )
 
     def _is_doing(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
         """Whether `unit` is doing `ability` at `target`: the last order sent to it says, while it may not show yet,

@@ -79,6 +79,9 @@ and runs its trials in turn::
   offered the warp-in by the abilities query, ignoring costs and counting them.
 - `larvae` gives a hatchery a drone's morph itself, then raises three more hatcheries, one beside the first and two
   across the map, injects one, and reads where every larva stands from its own hatchery and from the others.
+- `group-casts-terran`, `-protoss` and `-zerg` play without `free`, make two of each unit type and structure with
+  energy, and give both, in one command, each ability they are offered that neither makes nor moves them, to find
+  from the energy each spends whether one of them carries it out or both.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -94,6 +97,9 @@ the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in g
 - A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built ahead of its move,
   so a unit's move is read from its orders rather than assumed.
 - The `gas` cheat hands out no vespene, so `refunds` pays for an SCV and an orbital command, not a research.
+- Under `free` a spell spends no energy, so `group-casts` plays without it and tells a cast by the energy spent; under
+  `tech_tree` a medivac regains energy twice as fast as a ghost, so a cast is a drop, not any change, and a viper's
+  consume is the one gain.
 - `Sandbox.spawn` observes the game itself, not through `_Game`, so what a sweep spawns before its first trial is
   turned over once more first; otherwise the trial takes it for its own and kills it when done.
 """
@@ -3894,8 +3900,169 @@ def _inject_read(game: _Game, trial: Trial) -> None:
     trial.notes["step, buffs, buff_duration_remain, buff_duration_max, larvae beside"] = reads
 
 
+# --- What one command naming two casters does with a spell: whether one of them casts it or both
+
+# Where the two casters stand, around the sweep's pad, apart enough for two structures of 5x5, and the pylon between
+# them that powers a caster needing power.
+_CASTER_SPOTS = ((-3.0, 2.0), (3.0, 2.0))
+_PYLON_SPOT = (0.0, 3.0)
+# The energy each caster starts with: enough for every spell, and short of full, which a consume needs.
+_CASTER_ENERGY = 150.0
+# The targets a group's spell may ask for, each where it stands from the pad: enemies of every kind a spell takes, one
+# with energy to feed back, an enemy structure, and this player's units and structures, for what heals, injects,
+# boosts, consumes, recharges or calls down supply.
+_GROUP_ENEMY_AIMS = (
+    (UnitTypeId.MARAUDER, (7.0, -1.0)),
+    (UnitTypeId.SIEGE_TANK, (7.0, 1.5)),
+    (UnitTypeId.VIKING, (7.0, 4.0)),
+    (UnitTypeId.GHOST, (7.0, 6.5)),
+    (UnitTypeId.BARRACKS, (6.5, -5.5)),
+)
+_GROUP_OWN_AIMS = (
+    (UnitTypeId.MARINE, (-7.0, 6.0)),
+    (UnitTypeId.SIEGE_TANK, (-7.0, 3.0)),
+    (UnitTypeId.SENTRY, (-7.0, 0.0)),
+    (UnitTypeId.SUPPLY_DEPOT, (0.0, 7.0)),
+    (UnitTypeId.HATCHERY, (-5.5, -5.5)),
+    (UnitTypeId.GATEWAY, (0.5, -5.5)),
+)
+# Where a group's spell at a point is aimed: clear of every target, among this player's units, for a recall, and on
+# the hatchery's creep, for a creep tumor.
+_GROUP_POINTS = ((0.0, -1.0), (-7.0, 4.5), (-2.0, -5.5))
+# What a group cast does not try: what makes, moves, attacks, gathers, carries, cancels, lands or lifts.
+_NOT_CAST = ("Train", "Research", "Move", "Patrol", "Attack", "attack", "Smart", "Rally", "Harvest", "Load")
+_NOT_CAST += ("Unload", "Cancel", "Halt", "Land", "Lift", "Stop", "HoldPosition")
+# How much a caster's energy must drop for it to have cast, since it only regains energy otherwise, and how much it
+# must rise: more than a medivac regains over the reads under `tech_tree`, 5, less than a consume gives, 10.
+_SPENT = 2.0
+_GAINED = 8.0
+# The steps at which the casters are read after the command.
+_CAST_READS = (2, 24, 72)
+
+
+def _group_casts(game: _Game, race: Race) -> list[Trial]:
+    trials: list[Trial] = []
+    makers = {row.creation_ability for row in game.data.units.values() if row.base_type is None}
+    performers = [
+        row.id
+        for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
+        if row.race is race and row.base_type is None and row.id not in _NOT_PERFORMERS
+    ]
+    pad = game.spot(game.toward(14), 9)
+    for performer in performers:
+        pylons = _power(game, performer, pad)
+        made = game.create(performer, pad + _CASTER_SPOTS[0])
+        if not made:
+            game.kill(pylons)
+            continue
+        game.turn(8)
+        energy_max = made[0].energy_max
+        offered = game.sandbox.offered([made[0].tag]).get(made[0].tag, [])
+        game.kill([*made, *pylons])
+        logger.info("{}: energy {}, offered {}", performer.name, energy_max, [_name(each) for each in offered])
+        if not energy_max:
+            continue
+        for ability in offered:
+            name = _raw_name(ability)
+            curated = AbilityId.get(ability)
+            # A unit made with energy alone, a creep tumor or a stasis ward, is a spell's; one paid for is not.
+            row = None if curated is None else game.data.abilities.get(curated)
+            paid = row is not None and bool(row.cost.minerals or row.cost.vespene)
+            if any(fragment in name for fragment in _NOT_CAST) or (curated in makers and paid):
+                continue
+            label = f"two {performer.name} given {_name(ability)} in one command"
+            trials.append(game.trial(label, partial(_group_cast, game, performer, ability, pad)))
+    return trials
+
+
+def _group_cast(game: _Game, performer: UnitTypeId, ability: int, pad: Point, trial: Trial) -> None:
+    aim_kind = game.aims.get(ability, _NOTHING)
+    wants_unit = aim_kind in (_UNIT, _POINT_OR_UNIT)
+    _power(game, performer, pad)
+    requests = [(performer, game.player, pad + spot) for spot in _CASTER_SPOTS]
+    if wants_unit:
+        requests += [(target, game.enemy, pad + spot) for target, spot in _GROUP_ENEMY_AIMS]
+        requests += [(target, game.player, pad + spot) for target, spot in _GROUP_OWN_AIMS]
+    made = game.sandbox.spawn(requests)
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    casters = [unit for unit in made if unit.unit_type == performer and unit.owner == game.player][:2]
+    if len(casters) < 2:
+        trial.notes["class"] = "not made"
+        return
+    tags = [caster.tag for caster in casters]
+    game.set_energy(_CASTER_ENERGY, casters)
+    # This player's target units are hurt, so what heals or repairs has something to do; its structures are left whole,
+    # as a consume needs them.
+    whole = {target for target, _ in _GROUP_OWN_AIMS if Attribute.STRUCTURE in game.data.units[target].attributes}
+    helped = [
+        unit.tag for unit in made if unit.owner == game.player and unit.tag not in tags and unit.unit_type not in whole
+    ]
+    game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Life, 20, helped)
+    # Not 0, which a debug command reads as the maximum.
+    game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Shields, 1, helped)
+    game.turn(2)
+    game.read("before", casters)
+    before = [game.units[tag].energy for tag in tags]
+    aims: list[Target] = []
+    if aim_kind in (_NOTHING, _POINT_OR_NOTHING):
+        aims.append(None)
+    if wants_unit:
+        aims += [unit.tag for unit in made if unit.tag not in tags]
+    if aim_kind in (_POINT, _POINT_OR_UNIT, _POINT_OR_NOTHING):
+        aims += [pad + point for point in _GROUP_POINTS]
+    verdict = "no aim"
+    for aim in aims:
+        verdict = game.order(ability, tags, aim)
+        if verdict == "Success":
+            trial.notes["aim"] = _aim_label(game, aim)
+            break
+    trial.notes["verdict"] = verdict
+    # Each caster's change in energy at the read furthest from the start, either way.
+    changes = [0.0, 0.0]
+    orders: list[list[list[str]]] = []
+    last = 0
+    for at in _CAST_READS:
+        game.turn(at - last)
+        last = at
+        game.read(f"{at} after", casters)
+        shown: list[list[str]] = []
+        for index, tag in enumerate(tags):
+            unit = game.units.get(tag)
+            if unit is not None and abs(change := unit.energy - before[index]) > abs(changes[index]):
+                changes[index] = change
+            shown.append([] if unit is None else [_name(order.ability_id) for order in unit.orders])
+        orders.append(shown)
+    cast = sum(1 for change in changes if change < -_SPENT or change > _GAINED)
+    trial.notes["energy changed"] = [round(change, 1) for change in changes]
+    trial.notes["orders each"] = orders
+    trial.notes["class"] = {0: "none", 1: "one", 2: "both"}[cast] if verdict == "Success" else "refused"
+
+
+def _power(game: _Game, performer: UnitTypeId, pad: Point) -> list[raw_pb2.Unit]:
+    """Put up a pylon between the casters' spots if `performer` needs power, and return what was made."""
+    if not game.data.units[performer].needs_power:
+        return []
+    return game.create(UnitTypeId.PYLON, pad + _PYLON_SPOT)
+
+
+def _aim_label(game: _Game, aim: Target) -> str:
+    """What `aim` is: "nothing", "point", or the unit it names and whose, "enemy MARAUDER" or "own SUPPLY_DEPOT"."""
+    if aim is None:
+        return "nothing"
+    if isinstance(aim, Point):
+        return "point"
+    unit = game.units.get(aim if isinstance(aim, int) else aim.tag)
+    if unit is None:
+        return "a unit gone"
+    whose = "own" if unit.owner == game.player else "enemy"
+    return f"{whose} {_type_name(unit.unit_type)}"
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
+# Not `free`, under which a spell spends no energy, and so leaves no trace of who cast it.
+_GROUP_CAST_CHEATS = (Cheat.FOOD, Cheat.ALL_RESOURCES, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4232,6 +4399,9 @@ _SWEEPS: dict[str, _Sweep] = {
     "research-after": _Sweep(Race.TERRAN, _research_after),
     "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "larvae": _Sweep(Race.ZERG, _larvae),
+    "group-casts-terran": _Sweep(Race.TERRAN, lambda g: _group_casts(g, Race.TERRAN), _GROUP_CAST_CHEATS),
+    "group-casts-protoss": _Sweep(Race.PROTOSS, lambda g: _group_casts(g, Race.PROTOSS), _GROUP_CAST_CHEATS),
+    "group-casts-zerg": _Sweep(Race.ZERG, lambda g: _group_casts(g, Race.ZERG), _GROUP_CAST_CHEATS),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

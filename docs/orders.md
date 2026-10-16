@@ -26,9 +26,11 @@ api.orders.camera(base)
 ```
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a
-  group around the target point; ordering each separately stacks them on the point instead. A build, an add-on, a
-  train, a research, a morph or a spell given to several is carried out by one of them, which the game picks (in
-  game): an add-on goes to a barracks with room beside it. `order.units` is still every unit given.
+  group around the target point; ordering each separately stacks them on the point instead. What the game has only
+  one unit of a command carry out names one unit: a build, an add-on, a train, a research, a morph that costs, and
+  every spell but a toggle, a cloak or the oracle's pulsar beam (`AbilityData.carried_out_by_one`). Given to several,
+  `issue` raises `ValueError`, so the bot picks the unit: the nearest worker, the barracks with room beside it, the
+  caster with the energy.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
@@ -123,9 +125,8 @@ the game dropped, within one turn still counts on the next: repeating it then go
 A bot that gives the same order every turn gets a new `Order` each time: the first is sent, and the rest are left
 out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
-sent the order for the newcomer alone, but an order that costs, a build or a morph, is left out for the whole group
-while one of them carries it out, since the game had only that one take it. To drop a unit's queue on purpose, issue
-its current order with `force=True`, which goes out regardless.
+sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
+which goes out regardless.
 
 **What a structure makes is not left out that way.** A train or a research goes behind what the structure is making
 (in game), so one given every turn goes out every turn, and the game queues each and charges it then, up to 5, or 8
@@ -157,9 +158,8 @@ takes off what they will cost, `api.orders.unpaid`:
 budget = api.resources - api.orders.unpaid.resources
 ```
 
-`unpaid` counts the turn's orders as they will go out: the last of a unit's orders that replace one another, nothing
-for a unit already carrying an order out, and an order given to several units once, since one of them carries it
-out. `cost` is what the game charges when the ability is ordered: the difference for a morph, 150 for an orbital
+`unpaid` counts the turn's orders as they will go out: the last of a unit's orders that replace one another, and
+nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the difference for a morph, 150 for an orbital
 command rather than its type's 550; and `cost.supply` is what the ability takes of the cap as it starts.
 
 A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted

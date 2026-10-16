@@ -137,6 +137,11 @@ game, and the generator refuses to write the tech tree unless the sweep saw it m
 `tests/test_gamedata.py` fails once the game's table names an entry's ability for its type, and the entry can go.
 Add an entry only with an in-game trial behind it, never to paper over something the sweep cannot reach.
 
+**The spells one caster of a command casts are `CARRIED_OUT_BY_ONE_ABILITIES` in the same file**, which
+`AbilityData.carried_out_by_one` reads. After a patch, `uv run python tools/sweep_orders.py group-casts-terran
+group-casts-protoss group-casts-zerg` gives each spell to two casters at once: a spell it classes `one` belongs there,
+and one it classes `both` does not.
+
 The sweep reads everything off `RequestQueryAvailableAbilities`, which answers as follows:
 
 - **It leaves out what a unit lacks the tech for**, and an add-on counts only for the structure it is attached to:

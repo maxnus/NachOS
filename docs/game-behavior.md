@@ -619,6 +619,17 @@ Each entry ends with how it was seen:
   `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a loaded and an empty
   medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty medivacs, one or
   two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
+- Every spell but a toggle is cast by one caster of a command. Two of each unit type and structure with energy, given
+  each spell they are offered in one command, 45 spells over 16 casters, at 200 energy, at 150 or both (a recall
+  found its units only at 200, and a consume and a battery's recharge went out only at 150): one of the two spent the
+  spell's energy and the other none, for a storm, a feedback, an EMP, a snipe, a MULE, a scan, a supply
+  drop, a heal, a chrono boost, an energy recharge, a recall, a shield battery's recharge, every hallucination, a
+  force field, a guardian shield, an inject, a transfuse, a creep tumor, a changeling, a fungal, an abduct and the
+  rest; a consume gave one viper energy and not the other. Both took a banshee's or a ghost's cloak and an oracle's
+  pulsar beam, each spending its energy. A burrow, a medivac's boost, a ghost's hold fire and an overseer's oversight
+  mode spend no energy, so these trials tell nothing of them. A mothership has no energy, and only one can stand.
+  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps (tool `sweep_orders`,
+  `group-casts-terran`, `-protoss` and `-zerg`; local game, Linux build 75689).
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it

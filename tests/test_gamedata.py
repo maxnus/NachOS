@@ -19,6 +19,7 @@ from sc2nachos.gamedata import (
 from sc2nachos.gamedata._ability_data import _derived_cost
 from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.gamedata._techtree import (
+    CARRIED_OUT_BY_ONE_ABILITIES,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
@@ -699,6 +700,31 @@ class TestARecordedGamesTables:
         warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
+
+    def test_what_one_unit_of_a_command_carries_out_is_what_costs_and_the_spells_cast_by_one(self, path: Path) -> None:
+        """One unit of a command carries out a build, a train, a research or a morph (in game), and a spell but a
+        toggle (tool `sweep_orders`, `group-casts-terran`, `-protoss` and `-zerg`)."""
+        data = _tables(path)
+        for row in data.abilities.values():
+            costs = bool(row.cost.minerals or row.cost.vespene)
+            assert row.carried_out_by_one == (costs or row.id in CARRIED_OUT_BY_ONE_ABILITIES), row.id.name
+        for ability in (
+            AbilityId.SCV_BUILD_SUPPLY_DEPOT,
+            AbilityId.BARRACKS_TRAIN_MARINE,
+            AbilityId.ZERGLING_MORPH_BANELING,
+            AbilityId.HIGH_TEMPLAR_STORM,
+            AbilityId.QUEEN_INJECT,
+            AbilityId.BUILD_CREEP_TUMOR,
+        ):
+            assert data.abilities[ability].carried_out_by_one, ability.name
+        for ability in (
+            AbilityId.MOVE,
+            AbilityId.STIM,
+            AbilityId.SIEGE,
+            AbilityId.CLOAK_ON,
+            AbilityId.ORACLE_PULSAR_BEAM_ON,
+        ):
+            assert not data.abilities[ability].carried_out_by_one, ability.name
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

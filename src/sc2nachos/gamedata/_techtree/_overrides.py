@@ -229,3 +229,57 @@ less its source type's, which is right for every other morph: an orbital command
 giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke and an interceptor have no row
 to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
+
+# The spells one unit of a command casts, as `AbilityData.carried_out_by_one` reads them beside what costs minerals or
+# vespene. Two casters of each unit type and structure with energy were given each spell they are offered in one
+# command, and one of them spent or gained energy for every spell here (tool `sweep_orders`, `group-casts-terran`,
+# `-protoss` and `-zerg`). The toggles are not: both casters took a cloak and the oracle's pulsar beam.
+CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
+    {
+        AbilityId.BUILD_CREEP_TUMOR,
+        AbilityId.GHOST_EMP,
+        AbilityId.GHOST_SNIPE,
+        AbilityId.HIGH_TEMPLAR_FEEDBACK,
+        AbilityId.HIGH_TEMPLAR_STORM,
+        AbilityId.INFESTOR_FUNGAL_GROWTH,
+        AbilityId.INFESTOR_MICROBIAL_SHROUD,
+        AbilityId.INFESTOR_NEURAL_PARASITE,
+        AbilityId.MEDIVAC_HEAL,
+        AbilityId.NEXUS_CHRONO_BOOST,
+        AbilityId.NEXUS_ENERGY_RECHARGE,
+        AbilityId.ORACLE_BUILD_STASIS_WARD,
+        AbilityId.ORACLE_REVELATION,
+        AbilityId.ORBITAL_COMMAND_CALLDOWN_MULE,
+        AbilityId.ORBITAL_COMMAND_SCAN,
+        AbilityId.ORBITAL_COMMAND_SUPPLY_DROP,
+        AbilityId.OVERSEER_CONTAMINATE,
+        AbilityId.OVERSEER_SPAWN_CHANGELING,
+        AbilityId.PHOENIX_GRAVITON_BEAM,
+        AbilityId.QUEEN_INJECT,
+        AbilityId.QUEEN_TRANSFUSE,
+        AbilityId.RAVEN_ANTI_ARMOR_MISSILE,
+        AbilityId.RAVEN_INTERFERENCE_MATRIX,
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET,
+        AbilityId.RECALL,
+        AbilityId.SENTRY_FORCE_FIELD,
+        AbilityId.SENTRY_GUARDIAN_SHIELD,
+        AbilityId.SENTRY_HALLUCINATE_ADEPT,
+        AbilityId.SENTRY_HALLUCINATE_ARCHON,
+        AbilityId.SENTRY_HALLUCINATE_COLOSSUS,
+        AbilityId.SENTRY_HALLUCINATE_DISRUPTOR,
+        AbilityId.SENTRY_HALLUCINATE_HIGH_TEMPLAR,
+        AbilityId.SENTRY_HALLUCINATE_IMMORTAL,
+        AbilityId.SENTRY_HALLUCINATE_ORACLE,
+        AbilityId.SENTRY_HALLUCINATE_PHOENIX,
+        AbilityId.SENTRY_HALLUCINATE_PROBE,
+        AbilityId.SENTRY_HALLUCINATE_STALKER,
+        AbilityId.SENTRY_HALLUCINATE_VOID_RAY,
+        AbilityId.SENTRY_HALLUCINATE_WARP_PRISM,
+        AbilityId.SENTRY_HALLUCINATE_ZEALOT,
+        AbilityId.SHIELD_BATTERY_RECHARGE,
+        AbilityId.VIPER_ABDUCT,
+        AbilityId.VIPER_BLINDING_CLOUD,
+        AbilityId.VIPER_CONSUME,
+        AbilityId.VIPER_PARASITIC_BOMB,
+    }
+)

@@ -14,6 +14,7 @@ from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.gamedata._techtree._overrides import (
     ABILITIES_SENT_AS_ANOTHER,
+    CARRIED_OUT_BY_ONE_ABILITIES,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     KEEPS_ORDERS_BY_TYPE,
@@ -202,6 +203,11 @@ def _derived_cost(
     return None if used is None else made.cost - used.cost
 
 
+def _is_carried_out_by_one(ability: AbilityId, cost: Cost) -> bool:
+    """Whether one command naming several units has only one of them carry out `ability`, which costs `cost`."""
+    return bool(cost.minerals or cost.vespene) or ability in CARRIED_OUT_BY_ONE_ABILITIES
+
+
 def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[UnitTypeId]) -> frozenset[UnitTypeId]:
     """The unit types that hold an order of their own, which an order can take them off: those the game offers a
     move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
@@ -246,6 +252,11 @@ class AbilityData:
     not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less what the
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
+    carried_out_by_one: bool
+    """Whether one command naming several units has only one of them carry it out, which `api.orders.issue` refuses
+    to give several units: every ability that costs minerals or vespene, a build, an add-on, a train, a research or a
+    morph, and every spell but the toggles, a storm, an inject or a MULE, not a cloak or the oracle's pulsar beam (in
+    game)."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -281,6 +292,7 @@ class AbilityData:
         it."""
         ability = AbilityId(data.ability_id)
         behavior = behaviors.get(ability, _REPLACES)
+        cost = costs.get(ability, _FREE)
         return cls(
             id=ability,
             target_type=TargetType(data.target),
@@ -290,7 +302,8 @@ class AbilityData:
             allows_autocast=data.allow_autocast,
             performers=_performers(ability, tech_tree),
             products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
-            cost=costs.get(ability, _FREE),
+            cost=cost,
+            carried_out_by_one=_is_carried_out_by_one(ability, cost),
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED),
@@ -313,6 +326,7 @@ class AbilityData:
         sent_as = ABILITIES_SENT_AS_ANOTHER[ability]
         aimed = [game_rows[sending.ability] for sending in sent_as.values() if sending.aim is Aim.TARGET]
         behavior = behaviors.get(ability, _REPLACES)
+        cost = costs.get(ability, _FREE)
         return cls(
             id=ability,
             target_type=_target_type({TargetType(row.target) for row in aimed}, untargeted=len(aimed) < len(sent_as)),
@@ -322,7 +336,8 @@ class AbilityData:
             allows_autocast=False,
             performers=_performers(ability, tech_tree),
             products=tech_tree.ability_products.get(ability, _MAKES_NOTHING),
-            cost=costs.get(ability, _FREE),
+            cost=cost,
+            carried_out_by_one=_is_carried_out_by_one(ability, cost),
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
             sent_as=sent_as,
