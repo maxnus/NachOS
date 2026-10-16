@@ -488,7 +488,11 @@ when each starts.
      (it keeps raising), and `UnitOrder`'s `_target` field and its `_NotReported` marker stay. Later in the same
      review: the groups `AnyChangeling`, `AnyCreepTumor` and `CollapsibleTowerDebris`, and each group in every race
      and structure group all its types are in, so `CollapsibleTower` is a `Structure` and `AnySupplyDepot` a
-     `TerranStructure`.
+     `TerranStructure`. Then, asked for `AnyOrbitalCommand` and any more (2026-10-16): the two forms
+     `AnyOrbitalCommand`, `AnyCommandCenter` (the plain one only), `AnyGateway` and `AnyLocust`; `AnySpire` and
+     `AnyOverlord`, overseers included, as the tables count them, but no `AnyHatchery` or `AnyLair`; the map's
+     `Destructible`, `InhibitorZone` and `AccelerationZone`, without `ROCKS_2X2_NON_CONJOINED`; `AnyTerranTownhall`
+     and `AnyZergTownhall`; and each group in every group that holds all its types, so `AnyDrone` is a `Worker`.
 
 ### Before 8: the expansions, done (#122)
 

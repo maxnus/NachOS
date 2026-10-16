@@ -1,10 +1,10 @@
 """Generate `sc2nachos/units/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group.
 
 A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
-field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab
-or a reactor is a plain one or what the tables say counts as one; the other groups are curated here. Each group is in
-every race and structure group all its types are in. All are read from a corpus game's tables, so this runs without
-StarCraft II. Run it again after changing `UnitTypeId`::
+field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab,
+a reactor, a spire or an overlord is a plain one or what the tables count as one; a map object is named for its kind;
+the other groups are curated here. Each group is in every group that holds all its types. All are read from a corpus
+game's tables, so this runs without StarCraft II. Run it again after changing `UnitTypeId`::
 
     uv run python tools/generate_unit_types.py
 """
@@ -41,11 +41,12 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers
-    and their debris, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, or the two
-    forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege
-    tank sieged or not, or a roach burrowed or not. Each group is in every race and structure group all its types are
-    in: `AnySupplyDepot` is a `TerranStructure`, and `Townhall` a `Structure`.
+    or the workers, the townhalls, the Terran and the Zerg townhalls, the mineral fields, the vespene geysers, the gas
+    buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and acceleration zones,
+    the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the spires, the overlords,
+    or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
+    a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
+    `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
     """
 
     class AnyType:
@@ -102,6 +103,8 @@ TOWNHALLS = frozenset(
         UnitTypeId.HIVE,
     }
 )
+# The groups of the townhalls of a race, by race.
+RACE_TOWNHALLS = {Race.TERRAN: "AnyTerranTownhall", Race.ZERG: "AnyZergTownhall"}
 # The towers that fall across a path once destroyed, and stay: the game goes on listing one felled, at 0 health, and
 # it still covers its ground (tool `sweep_placement`). The units that push units from under them are none, and their
 # debris is in `COLLAPSIBLE_TOWER_DEBRIS`.
@@ -148,13 +151,15 @@ CHANGELINGS = frozenset(
 # The creep tumors, a queen's or another tumor's, growing or burrowed.
 CREEP_TUMORS = frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CREEP_TUMOR_QUEEN})
 # The structures and units that change to another form and back, by their group: lowered, lifted, uprooted, in another
-# mode, or burrowed. A command center's and an orbital command's lifted forms are in `Townhall`; an egg or a cocoon
-# becomes another type and never changes back.
+# mode, or burrowed. An egg or a cocoon becomes another type and never changes back.
 TWO_FORMS = {
     "AnySupplyDepot": frozenset({UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED}),
     "AnyBarracks": frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
     "AnyFactory": frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
     "AnyStarport": frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+    "AnyCommandCenter": frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING}),
+    "AnyOrbitalCommand": frozenset({UnitTypeId.ORBITAL_COMMAND, UnitTypeId.ORBITAL_COMMAND_FLYING}),
+    "AnyGateway": frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
     "AnySpineCrawler": frozenset({UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED}),
     "AnySporeCrawler": frozenset({UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED}),
     "AnyViking": frozenset({UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED}),
@@ -166,6 +171,7 @@ TWO_FORMS = {
     "AnyObserver": frozenset({UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED}),
     "AnyOverseer": frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
     "AnyWarpPrism": frozenset({UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
+    "AnyLocust": frozenset({UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING}),
     **{
         f"Any{''.join(part.capitalize() for part in name.split('_'))}": frozenset(
             {UnitTypeId[name], UnitTypeId[f"{name}_BURROWED"]}
@@ -191,6 +197,9 @@ TWO_FORM_DOCSTRINGS = {
     "AnyBarracks": "A barracks, landed or flying.",
     "AnyFactory": "A factory, landed or flying.",
     "AnyStarport": "A starport, landed or flying.",
+    "AnyCommandCenter": "A command center, landed or flying. An orbital command and a planetary fortress are none.",
+    "AnyOrbitalCommand": "An orbital command, landed or flying.",
+    "AnyGateway": "A gateway or a warp gate.",
     "AnySpineCrawler": "A spine crawler, rooted or uprooted.",
     "AnySporeCrawler": "A spore crawler, rooted or uprooted.",
     "AnyViking": "A viking, flying or landed.",
@@ -202,6 +211,7 @@ TWO_FORM_DOCSTRINGS = {
     "AnyObserver": "An observer, in surveillance mode or not.",
     "AnyOverseer": "An overseer, in oversight mode or not.",
     "AnyWarpPrism": "A warp prism, phasing or not.",
+    "AnyLocust": "A locust, on the ground or flying.",
     "AnyDrone": "A drone, burrowed or not.",
     "AnyZergling": "A zergling, burrowed or not.",
     "AnyBaneling": "A baneling, burrowed or not.",
@@ -214,27 +224,46 @@ TWO_FORM_DOCSTRINGS = {
     "AnyUltralisk": "An ultralisk, burrowed or not.",
     "AnyQueen": "A queen, burrowed or not.",
 }
-# The groups of what a type is for, beside its race's, with their docstrings.
+# The groups of what a type is for, beside its race's, with their docstrings, each after every group holding all its
+# types.
 ROLES = {
     "Worker": "A worker: an SCV, a probe or a drone, burrowed or not. A MULE is none.",
     "Townhall": "A townhall: a command center or what it becomes, lifted or not, a nexus, a hatchery, lair or hive.",
+    "AnyTerranTownhall": "A command center or an orbital command, lifted or not, or a planetary fortress.",
+    "AnyZergTownhall": "A Zerg townhall: a hatchery, a lair or a hive.",
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
     "CollapsibleTower": "A collapsible tower, which falls across a path once destroyed and stays there.",
     "CollapsibleTowerDebris": "The debris a collapsible tower leaves where it lands once felled.",
+    "Destructible": "A destructible rock, debris, ice, or unbuildable bricks, plates or rocks.",
+    "InhibitorZone": "An inhibitor zone generator, of any size, plain or flying.",
+    "AccelerationZone": "An acceleration zone generator, of any size, plain or flying.",
     "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
     "AnyChangeling": "A changeling, plain or in the shape of a marine, a zealot or a zergling.",
     "AnyCreepTumor": "A creep tumor, a queen's or another tumor's, growing or burrowed.",
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
+    "AnySpire": "A spire or a greater spire.",
+    "AnyOverlord": "An overlord, a transport overlord, or an overseer in either mode, which the tables count as one.",
     **TWO_FORM_DOCSTRINGS,
 }
-# The groups whose types are all in another group, by the group they are in.
-ROLE_BASES = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}
-# Each kind of add-on, by the plain type that a host's own counts as in the game's tables.
-ADD_ONS = {"AnyTechLab": UnitTypeId.TECH_LAB, "AnyReactor": UnitTypeId.REACTOR}
+# The groups that hold every type of another group, by that other group.
+HOLDING_GROUPS = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}
+# The groups of a plain type and every type the game's tables count as it, by group, with that type.
+COUNTED_AS = {
+    "AnyTechLab": UnitTypeId.TECH_LAB,
+    "AnyReactor": UnitTypeId.REACTOR,
+    "AnySpire": UnitTypeId.SPIRE,
+    "AnyOverlord": UnitTypeId.OVERLORD,
+}
+# The groups of the map's objects of a kind, by group, with the start of the curated names of its types.
+MAP_OBJECTS = {
+    "Destructible": "DESTRUCTIBLE_",
+    "InhibitorZone": "INHIBITOR_ZONE_",
+    "AccelerationZone": "ACCELERATION_ZONE_",
+}
 
 
 def class_name(unit_type: UnitTypeId) -> str:
@@ -255,12 +284,15 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
         *TWO_FORMS.items(),
     )
     found = [role for role, members in curated if unit_type in members]
+    if unit_type in TOWNHALLS and row.race in RACE_TOWNHALLS:
+        found.append(RACE_TOWNHALLS[row.race])
     if row.has_minerals:
         found.append("AnyMineralField")
     if row.has_vespene:
         found.append("GasBuilding" if row.race in RACES else "AnyVespeneGeyser")
-    found += [group for group, plain in ADD_ONS.items() if unit_type is plain or plain in row.tech_aliases]
-    return found + [ROLE_BASES[role] for role in found if role in ROLE_BASES]
+    found += [group for group, plain in COUNTED_AS.items() if unit_type is plain or plain in row.tech_aliases]
+    found += [group for group, prefix in MAP_OBJECTS.items() if unit_type.name.startswith(prefix)]
+    return found + [HOLDING_GROUPS[role] for role in found if role in HOLDING_GROUPS]
 
 
 def table_group(row: UnitTypeData) -> str:
@@ -297,12 +329,16 @@ def render(tables: GameData) -> str:
         **{f"{name}Structure": f"A {name} structure." for name in RACES.values()},
         **ROLES,
     }
+    members = {role: {unit_type for unit_type in UnitTypeId if role in found[unit_type]} for role in ROLES}
     for role in ROLES:
-        members = [table_groups[unit_type] for unit_type in UnitTypeId if role in found[unit_type]]
+        holding = [other for other in ROLES if other != role and members[role] <= members[other]]
+        for other in holding:
+            if members[other] == members[role]:
+                raise ValueError(f"{role} and {other} hold the same types")
         # The race and structure groups every type of the role is in.
-        shared = set.intersection(*({group} | ancestors(group, bases) for group in members))
-        parents = [ROLE_BASES[role]] if role in ROLE_BASES else []
-        bases[role] = narrowest([*parents, *sorted(shared)], bases)
+        role_table_groups = {table_groups[unit_type] for unit_type in members[role]}
+        shared = set.intersection(*({group} | ancestors(group, bases) for group in role_table_groups))
+        bases[role] = narrowest([*holding, *sorted(shared)], bases)
     blocks = [HEADER]
     for name, docstring in docstrings.items():
         blocks.append(f'    class {name}({", ".join(bases[name])}):\n        """{docstring}"""\n')
