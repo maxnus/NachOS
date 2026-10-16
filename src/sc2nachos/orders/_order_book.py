@@ -195,9 +195,9 @@ class OrderBook:
     @property
     def unpaid(self) -> Cost:
         """What the bank does not show yet: the cost of the turn's orders as they will go out, each its ability's `cost`
-        in the game's tables, once, since only one of the units an order names carries out what costs. A unit given
-        orders that replace one another pays for the last, and one already carrying an order out pays nothing for it
-        again."""
+        in the game's tables, once, as only one of the units an order names carries out what costs (in game). A unit
+        given orders that replace one another pays for the last, and one already carrying an order out pays nothing
+        for it again."""
         total = Cost(0, 0)
         for order, _ in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)
@@ -283,15 +283,11 @@ class OrderBook:
                 yield order, units
 
     def _competes_for(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
-        """Whether `order` competes with the turn's other orders for `unit`.
+        """Whether `order` competes with the turn's other orders for `unit`, which then takes the last of them.
 
-        Every unqueued order does, whatever it would do to the unit. A unit takes the last order it was given, and so
-        does a structure: the game would queue a second train behind the first instead of replacing it, and pay for
-        it from the step it was ordered, so NachOS sends only the last thing the turn asked a structure to make.
-
-        A queued order competes with nothing, since the bot is asking for a place in the queue. This is how a
-        structure with a reactor is told to make two at once. An ability the unit's type carries out at once competes
-        with nothing either: the unit does both (in game). Each unit of a group is judged by its own type.
+        Every unqueued order does, a structure's train included, whatever it would do to the unit. A queued order
+        competes with nothing, and nor does an ability the unit's type carries out at once: the unit does both (in
+        game). Each unit of a group is judged by its own type.
         """
         if order.queued:
             return False

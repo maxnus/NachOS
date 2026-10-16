@@ -138,21 +138,18 @@ it.
   `data` and can be withdrawn while the turn's handlers run; python-sc2 returns nothing. What the game refused shows
   in `api.action_failures` on the next turn, and what a unit then did, in its orders and in events.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
-  is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game.
-- **A worker's build, and a structure's train, research, add-on and morph, wait in NachOS until the unit can start
-  them**, so nothing is charged before ([orders](orders.md#orders-nachos-holds)). python-sc2 sends each at once, and
-  the game charges a build as it is ordered. A worker is sent to the site and given the build once within
-  `Api(build_reach=2.5)` of it. A structure is given only what it runs at once, so a reactor's second marine needs no
-  `queue=True`, and a train is never overridden by another: two given in a turn are two. Given to several units, such
-  an order goes to the one NachOS picks, where python-sc2 leaves the choice to the game.
-- **A drone is given to a hatchery, not found a larva for.** python-sc2's `train` picks a larva itself; in NachOS a
-  larva's morph given to a hatchery, a lair or a hive waits there until one of its larvae is free and goes to that
-  larva ([orders](orders.md#orders-nachos-holds)). Given to a larva, it goes out as given, as in python-sc2.
+  is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game. A
+  structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine
+  needs `queued=True` ([orders](orders.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
+  charges both.
+- **A drone's morph is given to a larva.** python-sc2's `train` picks a larva itself. In NachOS, as in the game, a
+  larva's morph given to a hatchery is refused `NotSupported` (in game), so pick a larva from
+  `api.units.own.of_type(UnitType.Larva)`.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior.md#abilities-and-orders)). It sends every order as given, whatever it costs, and
-  `api.action_failures` lists what the game refused. A bot keeps its own budget within a turn
-  ([orders](orders.md#what-an-order-needs)).
+  `api.action_failures` lists what the game refused. Within a turn, `api.orders.unpaid` is what the turn's orders
+  will cost ([orders](orders.md#what-an-order-needs)).
 - **`prevent_double_actions` compares only a unit's first order, and keeps what is queued behind it.** In game, an
   unqueued order identical to a unit's first is answered `SUCCESS`, carries nothing out, and drops what the unit had
   queued behind it, so re-sending one is not free. NachOS does the same when the turn is sent: an order a unit is
@@ -375,7 +372,7 @@ it.
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the orders NachOS holds, which are in `api.orders.issued_to` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
 | `bot.already_pending_upgrade(u)` | `api.research_progress(u)`, `None` when nothing researches it; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
@@ -409,6 +406,7 @@ it.
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
+| nothing | `api.placement.reserve(t, at=p)`, ground kept out of the grids for a build not ordered yet |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |

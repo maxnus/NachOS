@@ -9,13 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #123. `uv run pytest` passes 1898 tests on the demo bot's branch; `uv run pytest -m
-  integration` passes 29 against a real game (run 2026-10-15).
-- **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
-  sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
-  action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
-  so are the expansions (#122) and the placement grids (#123) the demo bot needs, and the demo bot is on branch
-  `claude/demo-bot`.
+- nachOS `main` has every PR to #125. `uv run pytest` passes 2053 tests on branch `claude/remove-hold`; `uv run
+  pytest -m integration` passes 26 against a real game (run 2026-10-16).
+- **Step 1, a queue per unit, was done and is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16): NachOS
+  holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived
+  reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot (#125), are done; slices
+  6 and 7 are left.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -89,194 +88,38 @@ Keep this file current: when a step is done, say so here in the same pull reques
   special-cased. A field that varies by performer is a mapping from unit type on every row (`row.products[unit_type]`).
   `GENERAL_` goes from every name. The owner's choices, in conversation, after asking *"why is there a `LIBERATOR_SIEGE`
   and a `LIBERATOR_SIEGE_EXACT`"*.
-- **Reversed on 2026-09-21: NachOS will keep a queue per unit** (step 1 below). Until then it sent every order in
-  the turn it was given and kept nothing across turns; that was a decision of 2026-09-19, which the owner has
-  overturned.
+- **Reversed on 2026-10-16: NachOS holds no order** (step 1 below). It sends every order in the turn it was given,
+  as it did until the queue per unit of 2026-09-21 (#115 to #120), which made the order book much more complicated
+  for what it bought. The owner: a build paid on the worker's arrival can be the bot's own doing, or part of a more
+  general sequence of actions over several units and conditions; that belongs in the bot, or in a layer above the
+  order book, and would reverse #46 if it budgeted in NachOS.
 
-## 1. A queue per unit, kept in NachOS
+## 1. A queue per unit, kept in NachOS: done, then reversed
 
-The owner's words (2026-09-21): *"we want a custom queue for every unit within nachos. There is never a point to
-queue anything in game (exception: terran production with reactor) for a bot, so we move the queue system into the
-library."* And earlier the same day: *"a worker walking to a location to build something but the build is not yet
-sent to the game to avoid paying upfront. The intention to build is known to nachos however (i.e. unit type and
-location) and as soon as the worker is close enough, they will start the build. Similar for the flying barracks +
-build add-on."*
+From 2026-09-21 NachOS held a worker's build, a structure's train, research, add-on and morph, and a larva's morph
+given to a hatchery, until the unit could start it, so nothing was paid early: #115 (an order without state), #116
+(the queue), #117, #118 (the timing sweeps) and #120 (the larva hold). The design and its decisions are in those PRs
+and in this file's history. What the game was seen to do while it was built stays in `docs/game-behavior.md`, under
+"Abilities and orders" and "Units coming, changing and going".
 
-**Status: done with the larva hold.** The money cases are #115 and #116; the timing cases (2026-10-07, "The timing
-cases" below) are #117, #118 and the larva hold. The decisions and the design follow the cases below.
+**Reversed on branch `claude/remove-hold`**, decided with the owner one question at a time (2026-10-16):
 
-### Why: what the game does with an order it cannot carry out yet
+1. **Every unqueued order competes again**, so a unit, a structure included, takes the last one a turn gives it, as
+   before #116. A second train needs `queued=True`, as a reactor's does.
+2. **An order given to several units goes out as one command naming them all**, and the game has one carry out a
+   build, an add-on, a train, a research or a morph (in game). NachOS picks no unit.
+3. **A larva's morph given to a hatchery goes out as given**, and the game refuses it `NotSupported`.
+4. **`api.orders.unpaid` stays where it is**, as the cost of the turn's orders as they will go out, each once: only
+   the order book knows what of the turn goes out.
+5. **`api.placement.reserve(type_id, *, at, max_steps=None)`**, a `PlacementReservation`, keeps a site out of the
+   placement grids for a build not ordered yet, against my recommendation of no new API. It lasts until withdrawn,
+   until `max_steps` have passed, or until one of this player's structures stands on its site, and is named for
+   placement so as not to read as money (the owner, refining it twice).
+6. **The demo bot pays up front**: an SCV is given its build at once, and the game charges it then. It beat the
+   computer at Medium in all 21 games of the pool again.
 
-All measured, in `docs/game-behavior.md` under "Abilities and orders" and "Units coming, changing and going":
-
-- **A build is charged when ordered**, not when the builder arrives: a depot ordered 35 away took its 100 minerals
-  by the next observation. A build queued behind a move is charged when given too, while the worker is still on
-  its first leg.
-- **A flying barracks given an add-on** needs a point (where to land), queues `BARRACKS_LAND` and the build, and is
-  charged at once: the reactor's 50/50 was gone 430 steps before it landed. Given a point whose add-on spot is
-  blocked, it answers `CantFindPlacementLocation`. A factory and a starport were not tried.
-- **A train or research queued behind what a structure is making** is paid from the step it is ordered. With the
-  supply cap full, a train is taken and charged, then sits at no progress as long as the cap stays full.
-- **Refused now, allowed later**: a morph or add-on on a busy structure is `NotSupported`; a structure researching
-  is offered no research at all; a warp gate and a larva keep no queue; a spell queued behind a move is dropped
-  silently if the energy is gone by then.
-
-### Cases, as the previous agent grouped them for the owner
-
-1. **Charged when given, carried out later (the money case)**: a worker walking to build; a build behind any number
-   of moves (scouting worker, proxy); a flying barracks, factory or starport and its add-on; a train or research
-   queued behind what a structure is making (give the next item when a slot frees; on a reactor, two slots); a train
-   with the supply cap full.
-2. **Refused now, allowed later (the timing case)**: an orbital as soon as the SCV being trained finishes; +2 as soon
-   as +1 finishes; a warp-in when the gate is ready; a larva morph when a larva is free; a spell on arrival; something
-   whose tech requirement is still going up.
-3. **Sequences the game may not queue at all (not measured)**: a flying command center that lands at an expansion
-   and then becomes an orbital or planetary fortress; a lifted barracks that lands and then trains.
-
-### Decided for the queue (the owner, 2026-10-07)
-
-Settled one question at a time, each with the previous agent's recommendation unless it says otherwise.
-
-1. **An item waits on its unit alone.** It goes out once its unit can start it (the worker within reach of its site,
-   the structure landed, a free slot), whatever the bank, the supply cap or the tech say. #46 stands: what the bank
-   lacks, the game refuses, and the refusal shows in `api.action_failures`.
-2. **NachOS holds only an item that costs and that its unit cannot start yet**: a worker's build, a train, a
-   research, an add-on, a structure's morph. Everything else goes to the game as now, queued or not, so speed mining
-   and micro are unchanged. A free item queued behind a held one is held too and goes out right behind it, queued, in
-   the same request. A held build sends a move to its site ahead of it (its lead-in); a flying structure's add-on
-   sends a `LAND` at its point, and goes out with no target once the structure has landed and is idle. A structure's
-   game queue holds only what it runs at once, one item or two with a finished reactor, so the reactor is the same
-   rule with two slots, not an exception.
-3. **A held order is read through `issued_to(unit)`**: the held items in queue order, then the turn's pending ones.
-   `pending` stays the turn's own. `withdraw()` takes a held order back. No reorder. Withdrawing a held build leaves
-   its lead-in.
-4. **`queued` follows the ability's `OrderBehavior`** (first decided as "every unqueued order replaces the held
-   items", then reconsidered with the owner, since the hold removes both reasons a structure made the last thing a
-   turn told it: the money, and the reactor's `queued=True`):
-   - `REPLACES` (move, attack, build): unqueued replaces the held items and the game's queue; queued goes behind.
-   - `QUEUES` (train, research): always goes behind the held items, and never overrides another, in its turn or
-     across turns. Two trains given in one turn are two items. This reverses the in-turn override for structures. A
-     handler that trains every turn piles up held trains, uncharged, and checks `issued_to` itself.
-   - `NEEDS_IDLE` (add-on, morph): unqueued replaces the held items and waits until the structure is idle; queued
-     goes behind.
-   - `KEEPS_ORDERS`: touches nothing.
-5. **A refused release drops everything held behind it** (the owner, against the recommendation to let each item
-   stand alone). A train the game answers `SUCCESS` and silently never makes is no refusal, so a broke structure
-   still loses its held trains one by one.
-6. **NachOS lets go of a unit's whole held queue** when an item ahead is refused, the unit dies (reported or found
-   dead), the unit changes hands, or a lead-in fails: the worker idle out of reach after its move, the structure idle
-   and still flying after its land. The order last sent stands for what the unit is doing for `_SHOWN_WITHIN`
-   observations. The items just leave `issued_to`; nothing else reports them.
-7. **A held kind given to several units is held for one unit, which NachOS picks at `issue`** (the owner's
-   direction, after an item shared by several units' queues was ruled out as too complicated). `order.units` is the
-   unit picked. The pick counts the turn's earlier orders, uses the last observation, is never revised, and breaks
-   ties by lowest id. It ranks by the steps until the unit could start the item: a structure 0 with a free slot,
-   else the steps until a slot frees, from what it runs (`1 - progress` of the product's time; a morph or add-on
-   reports 0 progress) and the full time of what NachOS holds for it, over its slots; a worker by straight-line travel
-   steps at its speed, a busy one (holding items, or its first order a build) only if all are, then the nearest,
-   behind its items. A picked order never drops held items. Larva trains and unit morphs are not held kinds, so they
-   go to every unit as today.
-8. **A held build goes out within 2.5 of its site** (the owner: 4 is too far; AvocaDOS uses 2.5), configurable as
-   `Api(build_reach=2.5)`, fixed per api. For a site that is a unit, a geyser, from its edge.
-9. **Nothing in NachOS's queue is redundant.** The owner: *"the redundant machinery is about game orders. It's
-   explicitly to reduce unnecessary traffic and APM."* An override applies before the redundancy check, which then
-   decides only what goes to the game. A build repeated every turn replaces the held one and restarts its lead-in.
-10. **An add-on or morph given to a busy grounded structure is held too**, by the same "until idle" rule: an orbital
-    as soon as the SCV being trained is done. +2 after +1 is a research behind a research.
-11. **A queued order to several units, some holding items, is split**: it goes out at once to the units holding
-    nothing, in one command, and to each other unit when its queue reaches it. Possible because an order has no state.
-
-Known consequences, for the docs: held trains have no cap (the game capped a queue at 5, 8 with a reactor); a slot
-that frees within `_SHOWN_WITHIN` observations of a release waits up to a turn; an add-on given to several barracks no
-longer goes, by the game's pick, to one with room beside it.
-
-### PR B, the design
-
-- `orders/_held_queue.py`, `HeldQueue`: one unit's held items, head first, each an `(order, unit)` pair so a split
-  group order sits in several queues; its lead-in record (the item it serves, the observation it was sent); what it
-  released within `_SHOWN_WITHIN` observations. `_SHOWN_WITHIN` moves here.
-- `orders/_starting.py`, plain functions: `site_of`, `within_reach`, `slots` (2 for a finished add-on whose
-  `tech_aliases` hold `REACTOR`, 0 while flying, else 1), `travel_steps`, `product_steps`,
-  `steps_until_a_slot_frees`.
-- `OrderBook`: `_held: dict[int, HeldQueue]` and `_build_reach`. `issue` picks (7) and raises `TypeError` for an
-  ability that `needs_placement` given no target while a unit is flying. `_competes_for` is
-  `not queued and behavior in (REPLACES, NEEDS_IDLE)`. `_send`: the turn's orders through the competition; the
-  overrides (4); each order joins a queue (when its unit holds items and it is queued or `QUEUES`, or when it is a held
-  kind) or goes out as given; then each queue releases what can start (after a lead-in unqueued, after a `LAND` with no
-  target), drops itself if its lead-in failed, or sends the head's lead-in unless `_is_doing` says the unit is on it;
-  one request, the turn's orders first; a refusal drops the rest of its queue. `_observe` drops the queues of the
-  dead and of units that changed hands (`units_alliance_changed`, passed by `_game.py`); a change of type drops
-  nothing, so a barracks that lands keeps its add-on. A stale unit is neither started nor given up on.
-- When an item can start: `QUEUES` with a free slot, counting reported and in-flight production, a `NEEDS_IDLE` order
-  filling every slot (the add-on order a barracks still shows a step after); `NEEDS_IDLE` when idle and not flying; a
-  build within reach, and a queued one only after its own turn with the unit idle or on its lead-in; anything else at
-  once.
-- Tests: `_HOLDING_TABLES` with costs, times and speeds beside the free `_TABLES`; an integration test where a held
-  depot takes no minerals until its SCV is within 2.5, and a refinery to check a worker's reach of a geyser.
-
-### Measurements it needs (`tools/sweep_orders.py`, findings into `docs/game-behavior.md`)
-
-- **"Close enough" for a build**: measured, and anything up to the site itself will do. A worker moved to its site
-  and sent the build within 8 down to 0.5 of it put the structure up 4 to 7 steps sooner than one sent the build from
-  30 away; none stopped and waited (docs/game-behavior.md).
-
-Measured since (docs/game-behavior.md): a drone and a probe are charged at the order as an SCV is; a build whose
-site is taken before the worker arrives fails with `CouldntReachTarget` and is refunded then; a lifted factory and
-starport take an add-on as a barracks does; and a morph or a train queued behind land is refused `NotSupported` as
-given, so the game holds none of those sequences and a queue in NachOS would have to. And PR B's integration test:
-an SCV sent toward a geyser's center comes within 1.2 of its edge while walking and takes the refinery there.
-
-Still to measure: what a flying command center's load-all does to its move. It reads `REPLACES`; the landed command center's and the
-planetary fortress's, which keep their training, were measured (docs/game-behavior.md).
-
-### The timing cases (the owner, 2026-10-07)
-
-Orders the game refuses now and would take later, settled one question at a time after #116:
-
-1. **A bug in #116, fixed first on its own.** A lifted command center given `LAND` and a queued orbital in one turn
-   had the orbital released in the same request, refused `NotSupported` (`queue-cases`), since "on the ground" was
-   checked only for an add-on with a point. An add-on or a morph now waits until the structure is on the ground,
-   whatever its target; a lifted command center given a morph holds it until the bot lands it.
-2. **Tech stays out**, as Q1 decided: an order never waits on a requirement. +2 behind +1 on one bay is held by the
-   bay's own state. To measure: how soon the game takes +2 after +1 finishes; the queue changes only if the bay's
-   first idle observation is too early.
-3. **Warp-ins: measure first, decide after**: the game's answer to a warp-in during the cooldown and whether anything
-   is charged, the cooldown per unit type, and whether `is_active`, a buff or the available-abilities query shows a
-   gate ready. A warp-in goes out as given until then.
-4. **A larva morph given to a hatchery is held there until one of its larvae is free**: `issue(hatchery,
-   LARVA_MORPH_DRONE)` goes to a larva of the hatchery showing no order and given none this turn. To measure first:
-   how far a hatchery's larvae stand from it, and what the game answers to a larva morph given to the hatchery.
-5. **Spells stay with the game**: the game walks a caster into reach itself, no money is at stake, and a hold would
-   cost micro up to a turn.
-6. **Warp-ins are not held** (the owner, after #118, against the recommendation to time each gate's wait): a warp-in
-   goes out as given; during the gate's wait the game refuses it `NotEnoughCharges` at no cost, and the bot retries.
-7. **A larva is its hatchery's whose larva spot is nearest** (the owner's idea, after #118): larvae gather south of a
-   hatchery, so its center moved 2.85 south, as measured, tells two close hatcheries' larvae apart where a plain
-   nearest center would not. A held morph goes to a free larva, one per larva a turn; two given in a turn are two;
-   given to several hatcheries it goes to the one with the most free larvae, less what it holds.
-
-### Pull requests
-
-1. **PR A, an order without state**: #115, branch `claude/order-without-state`.
-2. **PR B, the queue**: #116, branch `claude/per-unit-queue`. The money cases (a worker's build, alone or behind
-   moves; a flying structure's add-on; a train or research behind production), the pick, and an add-on or morph on a
-   busy structure. Where it settles what the design left open: a refused lead-in is listed in `api.action_failures`
-   under `MOVE` or `LAND`, the ability that went out; an order whose picked unit is busy reads `queued`; each order
-   released goes out as a command of its own, so a split group order's later parts keep no spacing; and a train or a
-   research is held only for a structure offered `CANCEL_LAST`, or its lifted form, so a warp-in is not held (review
-   of #116).
-3. **The #116 fix** (timing case 1): #117, branch `claude/held-morph-on-the-ground`.
-4. **The timing sweeps**: `research-after`, `warp-gate-cooldown` and `larvae` in `tools/sweep_orders.py`, findings in
-   `docs/game-behavior.md`. Branch `claude/timing-sweeps`. What they found:
-   - **+2 needs nothing**: a bay takes level 2 the step it is done with level 1, as the queue already gives it.
-   - **A warp gate's wait shows only to the abilities query counting costs**: 448 steps after a zealot or an adept,
-     512 after a stalker or a sentry, 720 after a templar; a warp-in given meanwhile is answered `NotEnoughCharges` and
-     charged nothing, and the gate reads no different.
-   - **A larva stands within 3.6 of its own hatchery's center**, an inject's too, and a morph given to a hatchery is
-     refused `NotSupported`.
-5. **The larva hold**: #120, branch `claude/larva-hold`. The `larvae` sweep measures where larvae stand from each of
-   four hatcheries in two games; a larva's morph given to a hatchery, a lair or a hive is held as a train is and goes
-   to a free larva by its larva spot.
+Kept from the queue's time: an order without state (#115), `issued_to(include_sent=True)`, the `TypeError` for a
+flying structure's add-on given no point, and the timing sweeps in `tools/sweep_orders.py`.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 
@@ -449,7 +292,7 @@ when each starts.
    - **`api.map.start_location`**, beside `opponent_start_locations`, read once off the first observation's own
      townhall.
    - **`api.in_production(types)`** gives what the game has started or charged for, one `InProduction` per unit,
-     with the unit it is read from and its progress, and not what NachOS holds, which is in `issued_to`; a count is
+     with the unit it is read from and its progress, and not the turn's orders, which are in `issued_to`; a count is
      its `len` (the owner, review of #121). A morph other than a larva's reads progress `None`, since the game reports
      0 from start to end. **`api.research_progress(upgrade)`** is from 0 to 1, or `None`.
    - **No `api.enemy.units`**: the enemy's units stay `api.units.enemy`, and the migration guide maps python-sc2's
@@ -471,7 +314,7 @@ when each starts.
      cover no ground. Seeing one raised `UncuratedIdError`.
    - **`api.orders.held`**, every order NachOS holds, beside `pending`, less what the turn's orders will drop, and
      **`api.orders.unpaid`**, the `Cost` of both, so a bot can budget for what the bank does not show yet (the owner:
-     `held` first, `unpaid` in review of #125).
+     `held` first, `unpaid` in review of #125). `held` went with the hold, and `unpaid` is the turn's alone (step 1).
    - **An order aimed by a tag the game never reports reads as aimed at the unit the unit's last order of the same
      ability named**, dead since or not, and its `target` raises `NotReportedError` if there was none; a rally aimed
      so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9
@@ -539,8 +382,9 @@ branch `claude/placement-grids`. Decided by the owner, 2026-10-13, one question 
   cannot change during a game: the ground the map lets a structure stand on, less its geysers and its collapsible
   towers, which stay where they fall (`UnitType.CollapsibleTower`). `dynamic` holds only what can go: true where no
   structure, in sight or remembered in the fog, and no mineral field stands. `reserved` is only the ground under this
-  player's builds ordered and not standing yet, held, issued this turn or on their way, since "what is blocked" and
-  "what is reserved" answer two questions (the owner, against one grid holding both). `free` combines the three, and
+  player's builds ordered and not standing yet, issued this turn or on their way, and, since step 1's reversal, what
+  `api.placement.reserve` keeps: "what is blocked" and "what is reserved" answer two questions (the owner, against
+  one grid holding both). `free` combines the three, and
   `free_for(unit_type)` keeps to creep or off it by `UnitTypeData.creep_requirement` (`CreepRequirement`), measured
   by the sweep for every structure type a unit places at a point, a raven's auto turret included (the owner: both),
   and a townhall off the ground around resources, which the expansions share (the owner, third review). For one

@@ -242,7 +242,7 @@ Each entry ends with how it was seen:
   2.0 to 3.6 south of their hatchery's center and 2.2 west to 1.6 east of it: on average 2.85 south, and never more
   than 2.3 from that spot. None stood nearer another hatchery. A hatchery grew a larva every 240 steps while it had
   fewer than three. A drone's morph given to a hatchery itself is answered `NotSupported`, and no larva takes it
-  (tool `sweep_orders`, `larvae`; `tests/test_orders.py`, the larva hold test; local game, Linux build 75689).
+  (tool `sweep_orders`, `larvae`; nachOS #120's larva hold test, since removed; local game, Linux build 75689).
 - Only one mothership can stand at a time, arming a nuke needs a factory, and a game starts with 50 minerals (tool
   `sweep_tech_tree`, tool `sweep_alerts`).
 - The game itself disguises a changeling, collapses a tower, lifts a locust into the air and burrows a creep tumor
@@ -683,7 +683,7 @@ Each entry ends with how it was seen:
 - A worker can be sent to a geyser by a move to the geyser's center and given the refinery on the way. An SCV 2.5 from
   a geyser's edge, sent to its center, was 1.2 from the edge 8 steps later and still walking; a refinery ordered then
   went up, and its 75 minerals were taken by the next observation. A depot ordered once its SCV was 1.7 from the site,
-  walking there, went up too (`tests/test_orders.py`, the held build test; local game, Linux build 75689).
+  walking there, went up too (nachOS #116's held build test, since removed; local game, Linux build 75689).
 
 ## Alerts and the camera
 
