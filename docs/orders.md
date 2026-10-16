@@ -44,7 +44,8 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
   reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
 
 The turn's request also carries `api.camera.move_to(point)`, which centers this player's camera on a point after the
-turn's orders, only the last move of a turn being sent. `api.camera.center` is where the turn's observation has it.
+turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
+`api.camera.center` is where the turn's observation has the camera.
 
 ## One order a unit a turn
 

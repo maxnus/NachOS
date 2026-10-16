@@ -9,11 +9,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #125. `uv run pytest` passes 2073 tests on branch `claude/remove-hold`; `uv run
-  pytest -m integration` passes 26 against a real game (run 2026-10-16).
-- **The queue per unit (#115 to #120) is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16):
-  NachOS holds no order.
-- **M4 is done but for slices 6 and 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
+- nachOS `main` has every PR to #126. `uv run pytest` passes 2126 tests on branch `claude/debug-and-chat`, slice 6;
+  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-17).
+- **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
+- **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
   slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot
   (#125).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
@@ -97,6 +96,20 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A liberator's siege is `LIBERATOR_SIEGE_AT`, the game's defender mode at a point, out of the custom `SIEGE`:
     abilities that behave differently are not one id. `UNSIEGE` stays one for all four. `RECALL` is refused for any
     group, since two motherships never stand.
+- **Debug, chat, the camera, pathing distances and leaving** (slice 6, the owner, 2026-10-16, one question at a time):
+  - `api.debug` is one `DebugCommands` for the api's life. A drawing lasts `steps=`, chosen over one turn and over until
+    cleared; `refresh_steps` sends it at most that often, and only when it changed. Everything goes out after the turn's
+    `RequestAction`, in one `RequestDebug`.
+  - Cheats are on and off, tracked (`cheats`, `turn_on`, `turn_off`), over a raw toggle. The givers are `give_minerals`,
+    `give_resources` and `give_upgrades`; `gas`, which gives nothing, is left out.
+  - `api.chat(text, team_only=False)` is on the api itself, over `api.orders.chat`, and goes in the turn's
+    `RequestAction`. A text of 1040 bytes or more raises `ValueError`, since it kills the game client.
+  - `api.leave_game()` leaves at the end of the turn, always at once, over waiting for the turn's chat to arrive: a
+    goodbye goes two steps before.
+  - `sc2nachos.pathing.Pathing`, as `api.pathing.distance` and `distances`, is a package of its own, which an up-to-date
+    pathing grid may join.
+  - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
+    `Unit.is_selected` is read, both for a bot's debug tools.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three
@@ -171,7 +184,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
 
-6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
+6. **Debug and chat**: done on branch `claude/debug-and-chat`.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 
 Waiting until something needs them:
