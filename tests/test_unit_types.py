@@ -43,6 +43,34 @@ def _types() -> list[Any]:
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
 
 
+# The groups the tables give a type: a race, the structures, or a race's structures.
+_TABLE_GROUPS = [
+    UnitType.Structure,
+    UnitType.Terran,
+    UnitType.Zerg,
+    UnitType.Protoss,
+    UnitType.TerranStructure,
+    UnitType.ZergStructure,
+    UnitType.ProtossStructure,
+]
+
+
+def _curated_groups() -> list[Any]:
+    """The classes in `UnitType` that name a group, less `AnyType` and the groups the tables give."""
+    return [
+        member
+        for member in vars(UnitType).values()
+        if isinstance(member, type)
+        and "id" not in vars(member)
+        and member is not UnitType.AnyType
+        and member not in _TABLE_GROUPS
+    ]
+
+
+def _named(prefix: str) -> set[UnitTypeId]:
+    return {unit_type for unit_type in UnitTypeId if unit_type.name.startswith(prefix)}
+
+
 class TestUnitType:
     @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
     def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(self, group: str, tables: GameData) -> None:
@@ -85,6 +113,22 @@ class TestUnitType:
         assert group._type_ids == {row.id for row in rows if row.race is race}
         assert structures._type_ids == group._type_ids & UnitType.Structure._type_ids
         assert UnitType.Structure._type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
+
+    @pytest.mark.parametrize("group", _curated_groups(), ids=lambda group: group.__name__)
+    def test_a_group_is_in_a_race_or_structure_group_when_all_its_types_are(self, group: Any) -> None:
+        for table_group in _TABLE_GROUPS:
+            assert issubclass(group, table_group) == (group._type_ids <= table_group._type_ids), table_group
+
+    def test_the_curated_groups_hold_every_type_named_for_them(self) -> None:
+        towers = _named("COLLAPSIBLE_TOWER_") - _named("COLLAPSIBLE_TOWER_DEBRIS") - _named("COLLAPSIBLE_TOWER_PUSH")
+        assert UnitType.CollapsibleTower._type_ids == towers
+        assert UnitType.CollapsibleTowerDebris._type_ids == _named("COLLAPSIBLE_TOWER_DEBRIS")
+        assert len(UnitType.CollapsibleTowerDebris._type_ids) == 7
+        assert UnitType.Critter._type_ids == _named("CRITTER_")
+        assert UnitType.AnyChangeling._type_ids == _named("CHANGELING")
+        assert len(UnitType.AnyChangeling._type_ids) == 6
+        assert UnitType.AnyCreepTumor._type_ids == _named("CREEP_TUMOR")
+        assert len(UnitType.AnyCreepTumor._type_ids) == 3
 
     def test_any_type_is_every_type(self) -> None:
         assert UnitType.AnyType._type_ids == set(UnitTypeId)
@@ -184,6 +228,14 @@ def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], ot
         assert_type(other, OwnUnit[UnitType.Marine] | OwnUnit[UnitType.Marauder])
     assert_type(UnitType.Marine.id, UnitTypeId)
     _ = UnitType.Terran.id  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _a_group_is_typed_as_in_the_groups_all_its_types_are_in(depot: Unit[UnitType.AnySupplyDepot]) -> None:
+    """What the type checker makes of a group's race and structure groups. Never run."""
+    structure: Unit[UnitType.TerranStructure] = depot
+    structures: type[UnitType.Structure] = UnitType.CollapsibleTower
+    workers: type[UnitType.Structure] = UnitType.Worker  # pyright: ignore[reportAssignmentType]
+    del structure, structures, workers
 
 
 def _a_read_is_limited_by_unit_type(

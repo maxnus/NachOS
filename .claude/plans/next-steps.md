@@ -485,7 +485,10 @@ when each starts.
      standing on it, anyone's, over an `OwnedExpansion`; `Unit.distance_to`, center to center; `Units.within(d,
      of=...)`; `in_area` taking several areas; the main nouns importable from `sc2nachos` itself, the events staying
      in `sc2nachos.events`. Not done: a callable target per unit (reconsider with slice 7), `issue` with no units
-     (it keeps raising), and `UnitOrder`'s `_target` field and its `_NotReported` marker stay.
+     (it keeps raising), and `UnitOrder`'s `_target` field and its `_NotReported` marker stay. Later in the same
+     review: the groups `AnyChangeling`, `AnyCreepTumor` and `CollapsibleTowerDebris`, and each group in every race
+     and structure group all its types are in, so `CollapsibleTower` is a `Structure` and `AnySupplyDepot` a
+     `TerranStructure`.
 
 ### Before 8: the expansions, done (#122)
 

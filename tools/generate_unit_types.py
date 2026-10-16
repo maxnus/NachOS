@@ -2,9 +2,9 @@
 
 A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
 field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab
-or a reactor is a plain one or what the tables say counts as one; a worker, a townhall and a collapsible tower are
-curated here. All are read from a corpus game's tables, so this runs without StarCraft II. Run it again after changing
-`UnitTypeId`::
+or a reactor is a plain one or what the tables say counts as one; the other groups are curated here. Each group is in
+every race and structure group all its types are in. All are read from a corpus game's tables, so this runs without
+StarCraft II. Run it again after changing `UnitTypeId`::
 
     uv run python tools/generate_unit_types.py
 """
@@ -41,9 +41,11 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
-    the critters, the add-ons, tech labs and reactors, or the two forms of a structure or a unit that changes and
-    changes back, such as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not.
+    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers
+    and their debris, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, or the two
+    forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege
+    tank sieged or not, or a roach burrowed or not. Each group is in every race and structure group all its types are
+    in: `AnySupplyDepot` is a `TerranStructure`, and `Townhall` a `Structure`.
     """
 
     class AnyType:
@@ -101,8 +103,8 @@ TOWNHALLS = frozenset(
     }
 )
 # The towers that fall across a path once destroyed, and stay: the game goes on listing one felled, at 0 health, and
-# it still covers its ground (tool `sweep_placement`). Their debris and the units that push units from under them are
-# none.
+# it still covers its ground (tool `sweep_placement`). The units that push units from under them are none, and their
+# debris is in `COLLAPSIBLE_TOWER_DEBRIS`.
 COLLAPSIBLE_TOWERS = frozenset(
     {
         UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_PURIFIER,
@@ -118,8 +120,33 @@ COLLAPSIBLE_TOWERS = frozenset(
         UnitTypeId.COLLAPSIBLE_TOWER_TERRAN,
     }
 )
+# The debris a collapsible tower leaves where it lands once felled.
+COLLAPSIBLE_TOWER_DEBRIS = frozenset(
+    {
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_PURIFIER,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK_GREEN,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_RIGHT_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_RIGHT_ROCK_GREEN,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_ROCK,
+        UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_TERRAN,
+    }
+)
 # The map's animals and robots, which wander and cover no ground.
 CRITTERS = frozenset({UnitTypeId.CRITTER_CLEANING_BOT, UnitTypeId.CRITTER_LAB_BOT})
+# The changelings, plain or disguised.
+CHANGELINGS = frozenset(
+    {
+        UnitTypeId.CHANGELING,
+        UnitTypeId.CHANGELING_MARINE,
+        UnitTypeId.CHANGELING_MARINE_SHIELD,
+        UnitTypeId.CHANGELING_ZEALOT,
+        UnitTypeId.CHANGELING_ZERGLING,
+        UnitTypeId.CHANGELING_ZERGLING_WINGS,
+    }
+)
+# The creep tumors, a queen's or another tumor's, growing or burrowed.
+CREEP_TUMORS = frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CREEP_TUMOR_QUEEN})
 # The structures and units that change to another form and back, by their group: lowered, lifted, uprooted, in another
 # mode, or burrowed. A command center's and an orbital command's lifted forms are in `Townhall`; an egg or a cocoon
 # becomes another type and never changes back.
@@ -195,7 +222,10 @@ ROLES = {
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
     "CollapsibleTower": "A collapsible tower, which falls across a path once destroyed and stays there.",
+    "CollapsibleTowerDebris": "The debris a collapsible tower leaves where it lands once felled.",
     "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
+    "AnyChangeling": "A changeling, plain or in the shape of a marine, a zealot or a zergling.",
+    "AnyCreepTumor": "A creep tumor, a queen's or another tumor's, growing or burrowed.",
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
@@ -218,7 +248,10 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
         ("Worker", WORKERS),
         ("Townhall", TOWNHALLS),
         ("CollapsibleTower", COLLAPSIBLE_TOWERS),
+        ("CollapsibleTowerDebris", COLLAPSIBLE_TOWER_DEBRIS),
         ("Critter", CRITTERS),
+        ("AnyChangeling", CHANGELINGS),
+        ("AnyCreepTumor", CREEP_TUMORS),
         *TWO_FORMS.items(),
     )
     found = [role for role, members in curated if unit_type in members]
@@ -227,34 +260,61 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
     if row.has_vespene:
         found.append("GasBuilding" if row.race in RACES else "AnyVespeneGeyser")
     found += [group for group, plain in ADD_ONS.items() if unit_type is plain or plain in row.tech_aliases]
-    return found
+    return found + [ROLE_BASES[role] for role in found if role in ROLE_BASES]
+
+
+def table_group(row: UnitTypeData) -> str:
+    """The race or structure group the tables put the type of `row` in, the narrowest: `TerranStructure`, `Terran`,
+    `Structure`, or `AnyType` for a type of no race that is no structure."""
+    race = RACES.get(row.race)
+    structure = Attribute.STRUCTURE in row.attributes
+    return f"{race}Structure" if race and structure else race or ("Structure" if structure else "AnyType")
+
+
+def ancestors(group: str, bases: dict[str, tuple[str, ...]]) -> set[str]:
+    """Every group `group` is in, by the bases of each group in `bases`."""
+    return set().union(*({base} | ancestors(base, bases) for base in bases.get(group, ())))
+
+
+def narrowest(groups: list[str], bases: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """`groups` in order, each once, less each one another of them is in."""
+    inner = set().union(*(ancestors(group, bases) for group in groups))
+    return tuple(dict.fromkeys(group for group in groups if group not in inner))
 
 
 def render(tables: GameData) -> str:
     """The module source for the types in `tables`."""
-    groups = {
-        "Structure": ("AnyType", "A type the game's tables give the structure attribute."),
-        **{name: ("AnyType", f"A {name} type.") for name in RACES.values()},
-        **{f"{name}Structure": (f"{name}, Structure", f"A {name} structure.") for name in RACES.values()},
-        **{role: (ROLE_BASES.get(role, "AnyType"), docstring) for role, docstring in ROLES.items()},
+    table_groups = {unit_type: table_group(tables.units[unit_type]) for unit_type in UnitTypeId}
+    found = {unit_type: roles(unit_type, tables.units[unit_type]) for unit_type in UnitTypeId}
+    bases: dict[str, tuple[str, ...]] = {
+        "Structure": ("AnyType",),
+        **{name: ("AnyType",) for name in RACES.values()},
+        **{f"{name}Structure": (name, "Structure") for name in RACES.values()},
     }
+    docstrings = {
+        "Structure": "A type the game's tables give the structure attribute.",
+        **{name: f"A {name} type." for name in RACES.values()},
+        **{f"{name}Structure": f"A {name} structure." for name in RACES.values()},
+        **ROLES,
+    }
+    for role in ROLES:
+        members = [table_groups[unit_type] for unit_type in UnitTypeId if role in found[unit_type]]
+        # The race and structure groups every type of the role is in.
+        shared = set.intersection(*({group} | ancestors(group, bases) for group in members))
+        parents = [ROLE_BASES[role]] if role in ROLE_BASES else []
+        bases[role] = narrowest([*parents, *sorted(shared)], bases)
     blocks = [HEADER]
-    for name, (bases, docstring) in groups.items():
-        blocks.append(f'    class {name}({bases}):\n        """{docstring}"""\n')
-    names = set(groups)
+    for name, docstring in docstrings.items():
+        blocks.append(f'    class {name}({", ".join(bases[name])}):\n        """{docstring}"""\n')
+    names = set(docstrings)
     for unit_type in sorted(UnitTypeId, key=class_name):
-        row = tables.units[unit_type]
         name = class_name(unit_type)
         if name in names:
             raise ValueError(f"{unit_type!r} would be named {name}, which is already taken")
         names.add(name)
-        race = RACES.get(row.race)
-        structure = Attribute.STRUCTURE in row.attributes
-        base = f"{race}Structure" if race and structure else race or ("Structure" if structure else "AnyType")
-        found = roles(unit_type, row)
-        # Every group is an `AnyType` already, and naming it before one of its subclasses has no consistent order.
-        bases = ", ".join(found if base == "AnyType" and found else (base, *found))
-        blocks.append(f"    class {name}({bases}):\n        id = UnitTypeId.{unit_type.name}\n")
+        # A base named before a subclass of it has no consistent method resolution order.
+        type_bases = ", ".join(narrowest([table_groups[unit_type], *found[unit_type]], bases))
+        blocks.append(f"    class {name}({type_bases}):\n        id = UnitTypeId.{unit_type.name}\n")
     return "\n".join(blocks)
 
 
