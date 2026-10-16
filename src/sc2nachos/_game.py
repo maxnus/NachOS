@@ -10,6 +10,7 @@ from typing import Any, Final, Self, cast
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
+from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
@@ -85,6 +86,7 @@ class _Game:
     state: _State
     placement: Final[PlacementGrids]
     pathing: Final[Pathing]
+    camera: Final[Camera]
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -124,6 +126,7 @@ class _Game:
                 order_book=order_book,
             ),
             pathing=Pathing(client),
+            camera=Camera._of_player(observation.observation.raw_data.player),
             step=step,
         )
         game._read(observation, step)
@@ -146,6 +149,7 @@ class _Game:
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
         self.placement._update(self.tracker.unit_tracker.present, self.state, step)
+        self.camera._observe(observation.observation.raw_data.player)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
@@ -301,6 +305,10 @@ class _Game:
         """Whether the game's tables give the type of `unit` the structure attribute."""
         row = self.game_data.units.get(unit.type_id)
         return row is not None and Attribute.STRUCTURE in row.attributes
+
+    def send_turn(self) -> None:
+        """Send what the turn's handlers asked for: the orders, then the camera's move, in one request."""
+        self.orders._send(self.client, then=self.camera._take_moves())
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, or `None` while it goes on. Ending it settles the result."""

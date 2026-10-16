@@ -328,6 +328,11 @@ class Unit[K: UnitType.AnyType]:
         return _CLOAKS[self._latest_report.cloak]
 
     @property
+    def is_selected(self) -> bool:
+        """Whether a human has the unit selected in the game window."""
+        return self._latest_report.is_selected
+
+    @property
     def is_flying(self) -> bool:
         """Whether the unit is in the air, including one held up by a phoenix's graviton beam."""
         now = self._latest_report

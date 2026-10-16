@@ -129,7 +129,9 @@ it.
 | `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
-| `bot.client.move_camera(p)` | `api.orders.camera(p)` |
+| `bot.client.move_camera(p)` | `api.camera.move_to(p)` |
+| `state.observation_raw.player.camera` | `api.camera.center` |
+| `unit.is_selected` | `unit.is_selected` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
 | nothing | `order.data`, `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |

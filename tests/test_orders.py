@@ -3,6 +3,7 @@
 # Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
+from collections.abc import Sequence
 from contextlib import closing
 from typing import Any
 
@@ -33,6 +34,8 @@ _ATTACK = AbilityId.ATTACK
 _STIM = AbilityId.STIM
 _HOLD_FIRE = AbilityId.HOLD_FIRE_ON
 _CREEP_TUMOR = AbilityId.BUILD_CREEP_TUMOR
+# An action that goes out with the turn's orders and belongs to none of them.
+_CHAT = sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(message="gg"))
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
 _RALLY = AbilityId.RALLY_UNITS
@@ -116,10 +119,11 @@ class _Game:
         lost = [*changes.units_died, *changes.units_found_dead, *changed_hands]
         self.book._observe(step, lost)
 
-    def flush(self) -> sc2api_pb2.RequestAction | None:
-        """Send the turn's orders and return the request that went out, or `None` if none did."""
+    def flush(self, *, then: Sequence[sc2api_pb2.Action] = ()) -> sc2api_pb2.RequestAction | None:
+        """Send the turn's orders, and `then` after them, and return the request that went out, or `None` if none
+        did."""
         before = len(self.transport.requests)
-        self.book._send(self.client)
+        self.book._send(self.client, then=then)
         sent = self.transport.requests[before:]
         return sent[0].action if sent else None
 
@@ -258,37 +262,24 @@ class TestGivingAnOrder:
         assert game.flush() is None
         assert game.transport.requests == []
 
-    def test_the_camera_goes_out_with_the_turns_orders_and_only_its_last_move(self) -> None:
+    def test_actions_of_no_order_go_out_after_the_turns_commands(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        game.book.camera((5.0, 6.0))
-        game.book.camera((7.0, 8.0))
 
-        request = game.flush()
+        request = game.flush(then=[_CHAT])
 
         assert request is not None
-        raw = [action.action_raw for action in request.actions]
-        moves = [action.camera_move for action in raw if action.HasField("camera_move")]
-        assert [(move.center_world_space.x, move.center_world_space.y) for move in moves] == [(7.0, 8.0)]
+        assert [(action.HasField("action_raw"), action.HasField("action_chat")) for action in request.actions] == [
+            (True, False),
+            (False, True),
+        ]
 
-    def test_a_camera_move_is_kept_as_the_protocol_carries_it(self) -> None:
+    def test_actions_of_no_order_go_out_with_no_command_too(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
-        game.book.camera((157.123288015625, 3.0))
 
-        request = game.flush()
-
-        assert request is not None
-        (move,) = [action.action_raw.camera_move for action in request.actions]
-        assert move.center_world_space.x == 157.123291015625
-
-    def test_a_camera_move_alone_is_sent_too(self) -> None:
-        game = _Game([ActionResult.SUCCESS])
-        game.observe(0, _marine(1))
-        game.book.camera((5.0, 6.0))
-
-        request = game.flush()
+        request = game.flush(then=[_CHAT])
 
         assert request is not None
         assert len(request.actions) == 1
@@ -942,12 +933,11 @@ class TestWhatTheGameRefused:
         assert game.flush() is None
         assert game.refused() == []
 
-    def test_a_camera_move_the_game_refuses_is_no_order_s_refusal(self) -> None:
+    def test_an_action_of_no_order_the_game_refuses_is_no_order_s_refusal(self) -> None:
         game = _Game([ActionResult.ERROR])
         game.observe(0, _marine(1))
-        game.book.camera((5.0, 6.0))
 
-        game.flush()
+        game.flush(then=[_CHAT])
 
         assert game.refused() == []
 

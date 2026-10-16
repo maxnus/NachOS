@@ -215,7 +215,7 @@ class TestPlaying:
 
         @api.events.on(TurnEvent)
         def look(event: TurnEvent) -> None:
-            api.orders.camera((4, 4))
+            api.camera.move_to((4, 4))
 
         @api.events.on(GameEndEvent)
         def end(event: GameEndEvent) -> None:

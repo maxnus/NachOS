@@ -7,6 +7,7 @@ from loguru import logger
 
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
+from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
@@ -213,6 +214,11 @@ class Api:
         return self._current_game().placement
 
     @property
+    def camera(self) -> Camera:
+        """This player's camera: where it is centered, and moving it."""
+        return self._current_game().camera
+
+    @property
     def pathing(self) -> Pathing:
         """How units get around the map as it stands now, as the game answers."""
         return self._current_game().pathing
@@ -267,8 +273,8 @@ class Api:
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
             try:
-                # The turn's handlers have all returned, so their orders go out now as one request.
-                game.orders._send(client)
+                # The turn's handlers have all returned, so what they asked for goes out now.
+                game.send_turn()
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:

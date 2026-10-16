@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos._game import _Game
+from sc2nachos.camera import Camera
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
@@ -161,11 +162,12 @@ def make_observation(
     actions: Iterable[sc2api_pb2.Action] = (),
     action_errors: Iterable[sc2api_pb2.ActionError] = (),
     alerts: Iterable[sc2api_pb2.Alert.ValueType] = (),
+    camera: tuple[float, float] = (0.0, 0.0),
 ) -> sc2api_pb2.ResponseObservation:
     """An observation at `game_loop` with `units`, the tags of the `dead`, the `results` if the game is over, and the
     rest of what an observation reports. `chat` holds each message as the sender's player id and the text."""
     raw = raw_pb2.ObservationRaw(
-        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades),
+        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades, camera=common_pb2.Point(x=camera[0], y=camera[1])),
         units=units,
         map_state=raw_pb2.MapState(visibility=visibility, creep=creep),
         event=raw_pb2.Event(dead_units=dead),
@@ -288,6 +290,7 @@ def played(
                 order_book=order_book,
             ),
             pathing=Pathing(client),
+            camera=Camera._of_player(observation.observation.raw_data.player),
             step=step,
         )
         game._read(observation, step)

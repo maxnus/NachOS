@@ -411,6 +411,7 @@ class TestThroughTheApi:
         "creep",
         "placement",
         "pathing",
+        "camera",
         "effects",
     )
 
