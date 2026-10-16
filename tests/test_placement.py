@@ -431,6 +431,13 @@ class TestReservingASite:
 
         assert grids.reservations == ()
 
+    @pytest.mark.parametrize("max_steps", [True, 1.5], ids=["a bool", "a fraction"])
+    def test_max_steps_that_is_not_a_whole_number_raises(self, max_steps: Any) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(TypeError, match="max_steps is a whole number of steps"):
+            grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=max_steps)
+
 
 # Creep over the right half of the drawn map, top row first.
 _CREEP_ON_THE_RIGHT = tuple("." * 8 + "#" * 8 for _ in range(16))

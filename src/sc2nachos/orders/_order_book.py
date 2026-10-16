@@ -65,7 +65,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
-        "_sent_behind",
+        "_sent_not_replacing",
         "_refusals",
         "_step",
     )
@@ -84,7 +84,7 @@ class OrderBook:
         # By unit id, each order the game took that does not replace the unit's orders, one queued, a train, a
         # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
         # show it or an order replaces the unit's orders.
-        self._sent_behind: dict[int, list[tuple[Order[Any], int]]] = {}
+        self._sent_not_replacing: dict[int, list[tuple[Order[Any], int]]] = {}
         self._camera_location: Point | None = None
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
@@ -197,9 +197,9 @@ class OrderBook:
     @property
     def unpaid(self) -> Cost:
         """What the bank does not show yet: the cost of the turn's orders as they will go out, each its ability's `cost`
-        in the game's tables, once, as only one of the units an order names carries out what costs (in game). A unit
-        given orders that replace one another pays for the last, and one already carrying an order out pays nothing
-        for it again."""
+        in the game's tables, once: of the units an order names, one carries out a build, a train, a research or a
+        morph (in game). A unit given orders that replace one another pays for the last, and one already carrying an
+        order out pays nothing for it again, nor do the others an order that costs names."""
         total = Cost(0, 0)
         for order, _ in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)
@@ -247,13 +247,13 @@ class OrderBook:
         self._observations += 1
         for unit in lost:
             self._last_sent.pop(unit.id, None)
-            self._sent_behind.pop(unit.id, None)
+            self._sent_not_replacing.pop(unit.id, None)
         recent = self._observations - _SHOWN_WITHIN + 1
-        for unit_id, behind in list(self._sent_behind.items()):
-            if not (behind := [(order, sent_at) for order, sent_at in behind if sent_at >= recent]):
-                del self._sent_behind[unit_id]
+        for unit_id, sent in list(self._sent_not_replacing.items()):
+            if not (sent := [(order, sent_at) for order, sent_at in sent if sent_at >= recent]):
+                del self._sent_not_replacing[unit_id]
             else:
-                self._sent_behind[unit_id] = behind
+                self._sent_not_replacing[unit_id] = sent
 
     def _orders_to_send(
         self, issued: Sequence[Order[Any]], forced: Collection[Order[Any]]
@@ -301,30 +301,34 @@ class OrderBook:
 
     def _remember_sent(self, order: Order[Any], units: Sequence[OwnUnit[Any]]) -> None:
         """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
-        replaces, unqueued, and otherwise one sent behind them, unless the unit carries it out at once."""
+        replaces, unqueued, and otherwise one sent that does not replace them, unless the unit carries it out at
+        once."""
         row = self._game_data.abilities.get(order.ability)
         for unit in units:
             behavior = _behavior_for(row, unit)
             if not order.queued and behavior is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = (order, self._observations)
-                self._sent_behind.pop(unit.id, None)
+                self._sent_not_replacing.pop(unit.id, None)
             elif order.queued or behavior is not OrderBehavior.KEEPS_ORDERS:
-                self._sent_behind.setdefault(unit.id, []).append((order, self._observations))
+                self._sent_not_replacing.setdefault(unit.id, []).append((order, self._observations))
 
     def _units_not_carrying_it_out(
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
     ) -> tuple[OwnUnit[Any], ...]:
         """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
-        those whose orders it replaces and which are already doing it."""
+        those whose orders it replaces and which are already doing it, and none for an order that costs while one of
+        them is doing it, since the game had only one of them carry it out (in game)."""
         if order.queued:
             return units
         row = self._game_data.abilities.get(order.ability)
-        return tuple(
-            unit
+        doing = {
+            unit.id
             for unit in units
-            if _behavior_for(row, unit) is not OrderBehavior.REPLACES
-            or not self._is_doing(unit, order.ability, order.target)
-        )
+            if _behavior_for(row, unit) is OrderBehavior.REPLACES and self._is_doing(unit, order.ability, order.target)
+        }
+        if doing and row is not None and (row.cost.minerals or row.cost.vespene):
+            return ()
+        return tuple(unit for unit in units if unit.id not in doing)
 
     def _is_doing(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
         """Whether `unit` is doing `ability` at `target`: the last order sent to it says, while it may not show yet,
@@ -343,12 +347,12 @@ class OrderBook:
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
-        replaced its orders, and those sent behind them since."""
+        replaced its orders, and those sent since that did not."""
         orders = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             orders.append(sent)
         recent = self._observations - _SHOWN_WITHIN + 1
-        orders += [order for order, sent_at in self._sent_behind.get(unit.id, ()) if sent_at >= recent]
+        orders += [order for order, sent_at in self._sent_not_replacing.get(unit.id, ()) if sent_at >= recent]
         return orders
 
     def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:

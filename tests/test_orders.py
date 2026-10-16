@@ -1256,6 +1256,27 @@ class TestAnOrderToSeveralUnits:
         assert _sent(game.flush()) == [(_BUILD_DEPOT, [1, 2], _SITE, False)]
         assert build.units == (game.own(1), game.own(2))
 
+    def test_a_build_repeated_to_them_is_not_sent_while_one_of_them_carries_it_out(self) -> None:
+        """Sent to the one not building, it would order and charge a second build at the same site (in game)."""
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
+        game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
+        game.flush()
+        for step in (16, 32):
+            game.observe(step, _scv(1, _building(), at=(20.0, 20.0)), _scv(2, at=(40.0, 40.0)))
+            game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
+
+            assert game.book.unpaid == Cost(0, 0)
+            assert game.flush() is None
+
+    def test_an_order_that_costs_nothing_still_goes_to_the_one_not_doing_it(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _scv(1, _moving(_SITE)), _scv(2, at=(40.0, 40.0)))
+
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
+
+        assert _sent(game.flush()) == [(_MOVE, [2], _SITE, False)]
+
     def test_a_larva_morph_given_to_a_hatchery_goes_out_as_given(self) -> None:
         """The game refuses it `NotSupported` (in game); NachOS passes it to no larva."""
         game = _costing([ActionResult.NOT_SUPPORTED])

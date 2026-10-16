@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, Self, final
 
 from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid, Point, Rectangle
-from sc2nachos.geometry._footprint import _margin_sides
+from sc2nachos.geometry._footprint import _is_count, _margin_sides
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.placement._build_sites import _BuildSites, _placement_key
+from sc2nachos.placement._build_sites import _BuildSites, _placement_key, _standing_centers
 from sc2nachos.placement._placement_reservation import PlacementReservation
 from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
 from sc2nachos.units import UnitType
@@ -108,7 +108,7 @@ class PlacementGrids:
         self._state = state
         self._step = step
         if self._reservations:
-            standing = {_placement_key(own.position) for own in present_units.own if own.footprint is not None}
+            standing = _standing_centers(present_units.own)
             self._reservations = [
                 reservation
                 for reservation in self._reservations
@@ -162,11 +162,14 @@ class PlacementGrids:
         this player's structures standing on its site, whatever type it stands as. `max_steps=1` keeps it for this turn
         alone. Reservations may overlap, and each game starts with none.
 
-        Raises `ValueError` for a type with no footprint, for a gas building, which stands on a geyser, and for a
-        `max_steps` below 1."""
+        Raises `TypeError` for a `max_steps` that is not a whole number, and `ValueError` for a type with no footprint,
+        for a gas building, which stands on a geyser, and for a `max_steps` below 1."""
         footprint = self._footprint_of(unit_type)
-        if max_steps is not None and not max_steps >= 1:
-            raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
+        if max_steps is not None:
+            if not _is_count(max_steps):
+                raise TypeError(f"max_steps is a whole number of steps, not {max_steps!r}")
+            if max_steps < 1:
+                raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
         center = footprint.snapped_center(at=at)
         reservation = PlacementReservation(unit_type, footprint, at=center, step=self._step, max_steps=max_steps)
         self._reservations.append(reservation)

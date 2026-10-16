@@ -123,8 +123,16 @@ the game dropped, within one turn still counts on the next: repeating it then go
 A bot that gives the same order every turn gets a new `Order` each time: the first is sent, and the rest are left
 out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
-sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
-which goes out regardless.
+sent the order for the newcomer alone, but an order that costs, a build or a morph, is left out for the whole group
+while one of them carries it out, since the game had only that one take it. To drop a unit's queue on purpose, issue
+its current order with `force=True`, which goes out regardless.
+
+**What a structure makes is not left out that way.** A train or a research goes behind what the structure is making
+(in game), so one given every turn goes out every turn, and the game queues each and charges it then, up to 5, or 8
+with a reactor, answering the rest `QueueIsFull`. A bot that wants one at a time trains at a structure that is idle
+and that `issued_to(unit, include_sent=True)` shows nothing sent to. A morph or an add-on given to a structure making
+something is refused `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in
+game): give it again once the structure is idle on the ground.
 
 ## What an order needs
 

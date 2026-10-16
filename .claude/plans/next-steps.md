@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #125. `uv run pytest` passes 2053 tests on branch `claude/remove-hold`; `uv run
+- nachOS `main` has every PR to #125. `uv run pytest` passes 2059 tests on branch `claude/remove-hold`; `uv run
   pytest -m integration` passes 26 against a real game (run 2026-10-16).
 - **Step 1, a queue per unit, was done and is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16): NachOS
   holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived

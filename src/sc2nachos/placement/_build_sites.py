@@ -51,7 +51,7 @@ class _BuildSites:
             if unit.type_id in self._builder_types:
                 for build in self._builds_ordered_to(unit):
                     if standing is None:
-                        standing = {_placement_key(own.position) for own in own_units if own.footprint is not None}
+                        standing = _standing_centers(own_units)
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
@@ -122,6 +122,12 @@ class _BuildSites:
         if row.footprint is None and row.morphed_from is not None:
             return self._game_data.units[row.morphed_from].footprint
         return row.footprint
+
+
+def _standing_centers(own_units: Iterable[OwnUnit[Any]]) -> set[tuple[int, int]]:
+    """Where this player's structures in `own_units` stand, by `_placement_key`: a build or a reservation whose site is
+    among them has begun, whatever type stands there."""
+    return {_placement_key(own.position) for own in own_units if own.footprint is not None}
 
 
 def _placement_key(center: Point) -> tuple[int, int]:
