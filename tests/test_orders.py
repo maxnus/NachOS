@@ -12,7 +12,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import Cost, GameData, OrderBehavior
+from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -292,13 +292,6 @@ class TestGivingAnOrder:
 
         assert request is not None
         assert len(request.actions) == 1
-
-    def test_an_order_knows_what_its_ability_does_to_a_unit(self) -> None:
-        game = _Game()
-        game.observe(0, _marine(1))
-
-        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)).order_behavior is OrderBehavior.REPLACES
-        assert game.book.issue(game.own(1), _STIM).order_behavior is OrderBehavior.KEEPS_ORDERS
 
 
 class TestOneOrderAUnitATurn:
@@ -720,11 +713,10 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        hold = game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
 
         sent_move, sent_hold = _commands(game.flush())
 
-        assert hold.order_behavior is OrderBehavior.REPLACES
         assert list(sent_move.unit_tags) == [1]
         assert list(sent_hold.unit_tags) == [1, 2]
 
@@ -753,12 +745,11 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.QUEEN))
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        tumor = game.book.issue(game.own(1), _CREEP_TUMOR, target=(30.0, 31.0))
+        game.book.issue(game.own(1), _CREEP_TUMOR, target=(30.0, 31.0))
 
         (sent,) = _commands(game.flush())
 
         assert sent.ability_id == _CREEP_TUMOR
-        assert tumor.order_behavior is OrderBehavior.REPLACES
 
 
 def _medivac(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
@@ -993,11 +984,10 @@ class TestOrdersThatQueue:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1, _training()))
 
-        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE)
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _TRAIN_MARINE
-        assert order.order_behavior is OrderBehavior.QUEUES
 
 
 class TestATargetOffTheGround:
@@ -1021,12 +1011,11 @@ class TestWhatAStructureDoesBesidesMaking:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.COMMAND_CENTER, at=(12.0, 12.0)))
         game.book.issue(game.own(1), _TRAIN_SCV)
-        unload = game.book.issue(game.own(1), _UNLOAD)
+        game.book.issue(game.own(1), _UNLOAD)
 
         sent = [command.ability_id for command in _commands(game.flush())]
 
         assert sent == [_TRAIN_SCV, _UNLOAD]
-        assert unload.order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_rally_does_not_take_the_turn_from_a_train(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])

@@ -171,7 +171,6 @@ class OrderBook:
             aimed,
             queued=queued,
             data=data,
-            order_behavior=_order_behavior(row, given),
             step=self._step,
         )
         self._add(order)
@@ -371,12 +370,6 @@ class OrderBook:
                 return isinstance(target, Unit) and unit._unit_target_of_order(first) is target
             case _:
                 return target is None
-
-
-def _order_behavior(row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> OrderBehavior:
-    """What an ability does to the current orders of `units`: the behavior their types share, or `REPLACES`."""
-    behaviors = {_behavior_for(row, unit) for unit in units}
-    return behaviors.pop() if len(behaviors) == 1 else OrderBehavior.REPLACES
 
 
 def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:

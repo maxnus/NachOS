@@ -11,8 +11,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 - nachOS `main` has every PR to #125. `uv run pytest` passes 2074 tests on branch `claude/remove-hold`; `uv run
   pytest -m integration` passes 26 against a real game (run 2026-10-16).
-- **Step 1, a queue per unit, was done and is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16): NachOS
-  holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived
+- **The queue per unit (#115 to #120) is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16):
+  NachOS holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived
   reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot (#125), are done; slices
   6 and 7 are left.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
@@ -50,14 +50,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   need to know if the order went through successfully. Could we leave it to the user to check?"* A bot reads its
   units, events and `api.action_failures`, as with python-sc2. This reverses part of #44 and #46. Reversed again on
   2026-10-07: an order has no state at all (below).
-- **Reversed on 2026-10-07: an order has no state** (step 1's PR A, #115). `order.state`, `order.action_result` and
+- **Reversed on 2026-10-07: an order has no state** (#115). `order.state`, `order.action_result` and
   `OrderState` went. A command the game refuses is listed in `api.action_failures` on the next turn, once for each
   unit it named, under the id ordered, ahead of what the game gave up on. The `Order` stays as a handle: its `data`,
   `withdraw()`, and what `issued_to` and `pending` list. The owner, while the queue was being planned: *"why do we
   need order state at all? In python-sc2 I believe issuing an order doesn't return anything. What do we get by having
   this object with a state?"* The state's one job nothing else did was to carry the game's refusal; `OVERRIDDEN`,
-  `WITHDRAWN` and `REDUNDANT` a bot rarely needs, and the `HELD` and `DROPPED` the queue would have needed,
-  `issued_to` already says. It also spares a group order split by the queue a state per unit.
+  `WITHDRAWN` and `REDUNDANT` a bot rarely needs, and `issued_to` already says.
 - **Every call to `issue` is an order of its own; one a unit is already carrying out is not sent to it** (#68).
   With nothing followed across turns, a repeated order costs one small object a turn. The owner first had a repeat
   hand back the order already sent, then reversed that in the review of #77, since the one object could describe
@@ -70,9 +69,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   exact id the tables offer to no type has no say in its general's own behavior, so a command center's and a
   medivac's unload keep orders as a bunker's does (review of #77, reversing "a medivac falls back to `REPLACES`").
 - **No `clear_queue`; `issue(..., force=True)` instead** (review of #77, 2026-10-06). The owner asked why it was
-  needed at all, with a queue in NachOS coming that leaves the game's queue little to do, and had it removed on
-  condition that an order can still be sent though a unit is carrying it out. A forced order is never `REDUNDANT`,
-  and re-sending a unit's current order that way drops its queue as `clear_queue` did.
+  needed at all, and had it removed on condition that an order can still be sent though a unit is carrying it out.
+  Re-sending a unit's current order that way drops its queue as `clear_queue` did.
 - **An ability whose behavior depends on its target is split into custom ids, one per behavior** (review of #77,
   2026-10-06), so that a behavior stays one per ability and type. The owner's idea. Done for the unload in #101: one
   `GENERAL_UNLOAD_IN_PLACE` for every transport, drawn from a counter in `AbilityId` that starts at 1,000,000, and an
@@ -88,47 +86,28 @@ Keep this file current: when a step is done, say so here in the same pull reques
   special-cased. A field that varies by performer is a mapping from unit type on every row (`row.products[unit_type]`).
   `GENERAL_` goes from every name. The owner's choices, in conversation, after asking *"why is there a `LIBERATOR_SIEGE`
   and a `LIBERATOR_SIEGE_EXACT`"*.
-- **Reversed on 2026-10-16: NachOS holds no order** (step 1 below). It sends every order in the turn it was given,
-  as it did until the queue per unit of 2026-09-21 (#115 to #120), which made the order book much more complicated
-  for what it bought. The owner: a build paid on the worker's arrival can be the bot's own doing, or part of a more
-  general sequence of actions over several units and conditions; that belongs in the bot, or in a layer above the
-  order book, and would reverse #46 if it budgeted in NachOS.
-
-## 1. A queue per unit, kept in NachOS: done, then reversed
-
-From 2026-09-21 NachOS held a worker's build, a structure's train, research, add-on and morph, and a larva's morph
-given to a hatchery, until the unit could start it, so nothing was paid early: #115 (an order without state), #116
-(the queue), #117, #118 (the timing sweeps) and #120 (the larva hold). The design and its decisions are in those PRs
-and in this file's history. What the game was seen to do while it was built stays in `docs/game-behavior.md`, under
-"Abilities and orders" and "Units coming, changing and going".
-
-**Reversed on branch `claude/remove-hold`**, decided with the owner one question at a time (2026-10-16):
-
-1. **Every unqueued order competes again**, so a unit, a structure included, takes the last one a turn gives it, as
-   before #116. A second train needs `queued=True`, as a reactor's does.
-2. **An order given to several units goes out as one command naming them all**, and the game has one carry out a
-   build, an add-on, a train, a research or a morph (in game). NachOS picks no unit.
-3. **A larva's morph given to a hatchery goes out as given**, and the game refuses it `NotSupported`.
-4. **`api.orders.unpaid` stays where it is**, as the cost of the turn's orders as they will go out, each once: only
-   the order book knows what of the turn goes out.
-5. **`api.placement.reserve(type_id, *, at, max_steps=None)`**, a `PlacementReservation`, keeps a site out of the
-   placement grids for a build not ordered yet, against my recommendation of no new API. It lasts until withdrawn,
-   until `max_steps` have passed, or until one of this player's structures stands on its site, and is named for
-   placement so as not to read as money (the owner, refining it twice).
-6. **The demo bot pays up front**: an SCV is given its build at once, and the game charges it then. It beat the
-   computer at Medium in all 21 games of the pool again.
-7. **An order only one unit of a command carries out names one unit** (the owner, after the code review of #126):
-   `issue` raises `ValueError` for one given to several, a build, a train, a research, a morph that costs, every
-   spell but a toggle, and the free abilities the new `group-abilities` sweeps saw one unit carry out, a landing or a
-   load among them (`AbilityData.carried_out_by_one`, `CARRIED_OUT_BY_ONE_ABILITIES`). The owner asked for every
-   ability with no known rule to be swept. This keeps every order exact per unit, and a bot picks the unit.
-8. **A liberator's siege is `LIBERATOR_SIEGE_AT`**, the game's defender mode at a point, out of the custom `SIEGE`,
-   which the tank, the observer and the overseer keep, aimed at nothing; `UNSIEGE` stays one for all four (the owner:
-   abilities that behave differently are not one id; the name by the ids' convention). `RECALL` is refused for any
-   group, since two motherships never stand, so the rule is one bool with no per-type exceptions.
-
-Kept from the queue's time: an order without state (#115), `issued_to(include_sent=True)`, the `TypeError` for a
-flying structure's add-on given no point, and the timing sweeps in `tools/sweep_orders.py`.
+- **Reversed on 2026-10-16: NachOS holds no order** (branch `claude/remove-hold`). From 2026-09-21 it held a worker's
+  build and a structure's train, research, add-on and morph until the unit could start it (#115 to #120), which made the
+  order book much more complicated for what it bought. The owner: a build paid on the worker's arrival can be the bot's
+  own doing, or part of a more general sequence of actions over several units and conditions; that belongs in the bot,
+  or in a layer above the order book, and would reverse #46 if it budgeted in NachOS. Decided with the owner, one
+  question at a time:
+  - Every unqueued order competes, a structure's train included, so a unit takes the last one a turn gives it; a second
+    train needs `queued=True`.
+  - What only one unit of a command carries out is given to one unit: `issue` raises `ValueError` for a build, an
+    add-on, a train, a research, a morph that costs, every spell but a toggle, or one of `CARRIED_OUT_BY_ONE_ABILITIES`,
+    given to several (`AbilityData.carried_out_by_one`, measured by the `group-abilities` sweeps), and a bot picks the
+    unit. Anything else goes out as one command naming them all.
+  - A larva's morph given to a hatchery goes out as given, and the game refuses it `NotSupported`.
+  - `api.orders.unpaid` stays under `api.orders`, as the cost of the turn's orders as they will go out, which only the
+    order book knows.
+  - `api.placement.reserve(type_id, *, at, max_steps=None)`, a `PlacementReservation`, keeps a site out of the placement
+    grids for a build not ordered yet, against my recommendation of no new API. It lasts until withdrawn, until
+    `max_steps` have passed, or until one of this player's structures stands on its site, and is named for placement so
+    as not to read as money.
+  - A liberator's siege is `LIBERATOR_SIEGE_AT`, the game's defender mode at a point, out of the custom `SIEGE`:
+    abilities that behave differently are not one id. `UNSIEGE` stays one for all four. `RECALL` is refused for any
+    group, since two motherships never stand.
 
 ## 2. One id per action: the families and the `_EXACT` ids
 
@@ -321,9 +300,8 @@ when each starts.
    - **The critters are curated** (`CRITTER_CLEANING_BOT`, `CRITTER_LAB_BOT`, in `UnitType.Critter`), since a build
      over one waits until it has walked off (the owner, who asked for that to be measured with a command center); they
      cover no ground. Seeing one raised `UncuratedIdError`.
-   - **`api.orders.held`**, every order NachOS holds, beside `pending`, less what the turn's orders will drop, and
-     **`api.orders.unpaid`**, the `Cost` of both, so a bot can budget for what the bank does not show yet (the owner:
-     `held` first, `unpaid` in review of #125). `held` went with the hold, and `unpaid` is the turn's alone (step 1).
+   - **`api.orders.unpaid`**, the `Cost` of the turn's orders as they will go out, so a bot can budget for what the
+     bank does not show yet (the owner, review of #125).
    - **An order aimed by a tag the game never reports reads as aimed at the unit the unit's last order of the same
      ability named**, dead since or not, and its `target` raises `NotReportedError` if there was none; a rally aimed
      so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9

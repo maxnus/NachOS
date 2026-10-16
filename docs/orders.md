@@ -63,9 +63,7 @@ several types is judged unit by unit. Hold fire keeps a ghost's orders and takes
 Given to both, it leaves the ghost the move it was given earlier in the turn and takes the lurker from its attack. A
 planetary fortress attacks and stops with the ids every unit does, yet trains on through both, and every structure
 that trains does so through a smart, which sets its rally (in game), so for those types those keep their orders.
-`api.data.abilities[ability].order_behavior_for(unit.type_id)` says what an ability does to a unit of that type, and
-`order.order_behavior` what it does to the order's units: the behavior their types share, or `REPLACES` where they
-differ.
+`api.data.abilities[ability].order_behavior_for(unit.type_id)` says what an ability does to a unit of that type.
 
 **Some ids go out as another of the game's abilities for some unit types.** `api.data.abilities[ability].sent_as`
 says which, and what each is aimed at. `UNLOAD` puts everyone down where the transport is: a bunker, a command

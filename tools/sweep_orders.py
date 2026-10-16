@@ -72,13 +72,10 @@ and runs its trials in turn::
 - `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
   done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
   come.
-- `research-after` has an engineering bay research infantry weapons 1, and gives it level 2 at the first observation
-  it shows nothing, and then each step until the game takes it.
 - `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
   reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
   offered the warp-in by the abilities query, ignoring costs and counting them.
-- `larvae` gives a hatchery a drone's morph itself, then raises three more hatcheries, one beside the first and two
-  across the map, injects one, and reads where every larva stands from its own hatchery and from the others.
+- `larvae` gives a hatchery a drone's morph itself, and reads what it and its larvae do.
 - `group-abilities-terran`, `-protoss` and `-zerg` play without `free`, make two of each unit type and structure, in
   each of its forms, and give both, in one command, each ability they are offered that costs no minerals or vespene,
   moving ones sent off first, to find whether one of them carries it out or both: by the energy each spends, else a
@@ -260,7 +257,6 @@ class _Game:
         self.minerals = 0
         self.vespene = 0
         self.supply = (0, 0)
-        self.upgrades: set[int] = set()
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
@@ -292,7 +288,6 @@ class _Game:
         self.minerals = common.minerals
         self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
-        self.upgrades = set(observation.raw_data.player.upgrade_ids)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
             self.running.errors.extend(_error(error, self.step) for error in response.action_errors)
@@ -2306,51 +2301,7 @@ def _protoss_slots(game: _Game) -> list[Trial]:
     return trials
 
 
-# --- The timing cases: the next level after a research, a warp gate's wait, a hatchery's larvae
-
-
-def _research_after(game: _Game) -> list[Trial]:
-    """How soon an engineering bay that has finished infantry weapons 1 takes level 2."""
-    level_1, level_2 = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
-
-    def after(trial: Trial) -> None:
-        pad = game.spot(game.toward(8), 4)
-        made = game.sandbox.spawn(
-            [(UnitTypeId.ENGINEERING_BAY, game.player, pad), (UnitTypeId.ARMORY, game.player, pad + (0, 5))]
-        )
-        game.made.update(unit.tag for unit in made)
-        game.turn(4)
-        bay = next((unit for unit in made if unit.unit_type == UnitTypeId.ENGINEERING_BAY), None)
-        if bay is None:
-            trial.notes["class"] = "not made"
-            return
-        trial.notes["level 1"] = game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, [bay])
-
-        def researching() -> raw_pb2.UnitOrder | None:
-            unit = game.unit(bay.tag)
-            return unit.orders[0] if unit is not None and unit.orders else None
-
-        # The research shows from the observation after the order.
-        game.until(lambda: researching() is not None, limit=64)
-        game.until(lambda: (order := researching()) is None or order.progress > 0.98, steps=16, limit=4000)
-        last: list[list[object]] = []
-        while (order := researching()) is not None and len(last) < 200:
-            last.append([game.step, round(order.progress, 4), level_1 in game.upgrades])
-            game.turn(1)
-        trial.notes["last steps researching (step, progress, level 1 done)"] = last[-6:]
-        trial.notes["bay first idle at"] = game.step
-        answers: list[list[object]] = []
-        while len(answers) < 64:
-            verdict = game.order(level_2, [bay])
-            answers.append([game.step, verdict, level_1 in game.upgrades])
-            if verdict == "Success":
-                break
-            game.turn(1)
-        trial.notes["level 2 given (step, verdict, level 1 done)"] = answers
-        game.turn(4)
-        game.read("after level 2 was given", [bay])
-
-    return [game.trial("an engineering bay given infantry weapons 2 from its first idle observation", after)]
+# --- A warp gate's wait, and a larva's morph given to its hatchery
 
 
 _WARP_INS = (
@@ -2428,7 +2379,7 @@ def _warping(game: _Game, ability: AbilityId, unit_type: UnitTypeId, trial: Tria
 
 
 def _larvae(game: _Game) -> list[Trial]:
-    """What the game does with a larva's morph given to the hatchery itself, and where each hatchery's larvae stand."""
+    """What the game does with a larva's morph given to the hatchery itself."""
     (home,) = game.own(UnitTypeId.HATCHERY)[:1]
 
     def to_the_hatchery(trial: Trial) -> None:
@@ -2439,41 +2390,7 @@ def _larvae(game: _Game) -> list[Trial]:
         game.read("the hatchery and its larvae after", [home, *larvae])
         trial.notes["eggs after"] = len(game.own(UnitTypeId.EGG))
 
-    def spread(trial: Trial) -> None:
-        game.create(UnitTypeId.SPAWNING_POOL, game.spot(game.toward(6), 2))
-        # Beside the first, and two more across the map, so that where a larva stands is seen at several places.
-        across = game.map.playable_area
-        places = (game.toward(11), across.center, Point((across.center.x, (across.center.y + game.home.y) / 2)))
-        others = [game.create(UnitTypeId.HATCHERY, game.spot(place, 3))[0] for place in places]
-        (queen,) = game.create(UnitTypeId.QUEEN, _at(others[0]) + (3, 0))
-        game.set_energy(200, [queen])
-        game.turn(2)
-        hatcheries = {each.tag: _at(each) for each in (home, *others)}
-        trial.notes["hatcheries at"] = {str(tag): [at.x, at.y] for tag, at in hatcheries.items()}
-        trial.notes["inject"] = game.order(AbilityId.QUEEN_INJECT, [queen], others[0])
-        # Each larva's own hatchery is the one it stood nearest when first seen.
-        owners: dict[int, int] = {}
-        rows: list[list[object]] = []
-        for _ in range(150):
-            game.turn(8)
-            for larva in game.own(UnitTypeId.LARVA):
-                at = _at(larva)
-                own = owners.setdefault(larva.tag, min(hatcheries, key=lambda tag: at.distance_to(hatcheries[tag])))
-                offset = at - hatcheries[own]
-                others_away = [at.distance_to(spot) for tag, spot in hatcheries.items() if tag != own]
-                rows.append(
-                    [game.step, larva.tag, own, round(offset.x, 3), round(offset.y, 3), round(min(others_away), 2)]
-                )
-        trial.notes["larvae seen by hatchery"] = {
-            str(tag): sum(1 for each in owners.values() if each == tag) for tag in hatcheries
-        }
-        trial.notes["rows (step, larva, its hatchery, offset x, offset y, from the nearest other)"] = rows
-
-    # Before the hatchery's larvae are spent.
-    return [
-        game.trial("a drone's morph given to a hatchery", to_the_hatchery),
-        game.trial("hatcheries in four places, one injected, and where their larvae stand", spread),
-    ]
+    return [game.trial("a drone's morph given to a hatchery", to_the_hatchery)]
 
 
 # --- 14. Which cancel a structure part way through something is offered
@@ -4653,7 +4570,6 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
     # instead.
     "progress": _Sweep(Race.ZERG, _progress),
-    "research-after": _Sweep(Race.TERRAN, _research_after),
     "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "larvae": _Sweep(Race.ZERG, _larvae),
     "group-abilities-terran": _Sweep(Race.TERRAN, lambda g: _group_abilities(g, Race.TERRAN), _GROUP_ABILITY_CHEATS),
