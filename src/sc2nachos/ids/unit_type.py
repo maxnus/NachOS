@@ -77,6 +77,8 @@ class UnitTypeId(IdEnum):
     CREEP_TUMOR = RawUnitTypeId.CreepTumor
     CREEP_TUMOR_BURROWED = RawUnitTypeId.CreepTumorBurrowed
     CREEP_TUMOR_QUEEN = RawUnitTypeId.CreepTumorQueen
+    CRITTER_CLEANING_BOT = RawUnitTypeId.CleaningBot
+    CRITTER_LAB_BOT = RawUnitTypeId.LabBot
     CYBERNETICS_CORE = RawUnitTypeId.CyberneticsCore
     CYCLONE = RawUnitTypeId.Cyclone
     DARK_SHRINE = RawUnitTypeId.DarkShrine

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from s2clientprotocol import raw_pb2
 
@@ -16,7 +16,10 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from sc2nachos.gamedata import UnitTypeData, Weapon
+    from sc2nachos.geometry import PointLike
     from sc2nachos.units._tracking import _Tracker
 
 _IN_VISION = raw_pb2.DisplayType.Visible
@@ -58,6 +61,7 @@ class Unit[K: UnitType.AnyType]:
         "_latest_report",
         "_last_seen",
         "_latest_report_in_vision",
+        "_order_targets",
         "_own",
         "_position",
         "_previous_position",
@@ -88,6 +92,10 @@ class Unit[K: UnitType.AnyType]:
     _dead: bool
     # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
     _radius_footprint: Footprint | None
+    # For each ability, the unit this unit's latest order of that ability was aimed at, kept while the game names
+    # that unit by a tag it reports. Read when an order names a tag the game never reports. Keyed by the ability's raw
+    # id; `None` until an order is aimed at a unit.
+    _order_targets: dict[int, Unit[Any]] | None
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -105,6 +113,7 @@ class Unit[K: UnitType.AnyType]:
         self._stale = False
         self._dead = False
         self._radius_footprint = None
+        self._order_targets = None
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
@@ -137,11 +146,29 @@ class Unit[K: UnitType.AnyType]:
             # The old alliance is read before the new report replaces the old one.
             self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._latest_report.alliance]))
             self._update_alliance()
+        # The game reports orders for this player's units alone.
+        if self._own and (orders := self._latest_report.orders):
+            self._remember_order_targets(orders)
         self._latest_report = report
         if report.unit_type != self._raw_type:
             previous = self._type_id
             self._update_unit_type(report.unit_type)
             self._tracker.last_changes.units_type_changed.append((self, previous))
+
+    def _remember_order_targets(self, orders: Iterable[raw_pb2.UnitOrder]) -> None:
+        """Keep, by ability, the unit each of `orders`, the latest report's, names under a tag the game has reported."""
+        targets = self._order_targets
+        for order in orders:
+            tag = order.target_unit_tag
+            if not tag:
+                continue
+            # Most orders name the unit the last one did, under the tag it still has.
+            if targets is not None and (known := targets.get(order.ability_id)) is not None and known._tag == tag:
+                continue
+            if (unit := self._tracker.unit_tracker.get_by_tag(tag)) is not None:
+                if targets is None:
+                    targets = self._order_targets = {}
+                targets[order.ability_id] = unit
 
     def _mark_stale(self) -> None:
         """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
@@ -546,14 +573,19 @@ class Unit[K: UnitType.AnyType]:
         """Whether the game's tables give the unit's type the structure attribute."""
         return Attribute.STRUCTURE in self.type_data.attributes
 
+    def distance_to(self, other: PointLike | Unit[Any]) -> float:
+        """The distance from this unit's position to `other`, a point or another unit's position."""
+        return self._position.distance_to(other._position if isinstance(other, Unit) else other)
+
     @property
     def footprint(self) -> Footprint | None:
-        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, with
-        none measured, the square its radius spans. `None` for a unit that covers none, a force field among them."""
+        """The tiles it covers where it stands: its type's footprint, or for a type of the map's own, of no race, that
+        does not move and has none measured, the square its radius spans. `None` for a unit that covers none, a force
+        field and a critter among them."""
         row = self._tracker.game_data.units.get(self.type_id)
         if row is None:
             return None
-        if row.footprint is None and row.race is Race.NONE:
+        if row.footprint is None and row.race is Race.NONE and not row.speed:
             side = round(2 * self.radius)
             if not side:
                 return None

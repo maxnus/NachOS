@@ -13,7 +13,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import GameData, OrderBehavior
+from sc2nachos.gamedata import Cost, GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -547,6 +547,19 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         game.observe(16, _marine(1, _moving((20.0, 21.0))), _marine(2, at=(30.0, 30.0)))
         attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
         game.observe(32, _marine(1, attacking), _marine(2, at=(30.0, 30.0)))
+
+        game.book.issue(game.own(1), _ATTACK, target=game.own(2))
+
+        assert game.flush() is None
+
+    def test_a_unit_aimed_by_a_tag_the_game_never_reports_carries_out_an_order_at_its_last_target(self) -> None:
+        """As an SCV walking back to a field out of sight does (in game)."""
+        game = _Game([ActionResult.SUCCESS])
+        attacking = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=2)
+        game.observe(0, _marine(1, attacking), _marine(2, at=(30.0, 30.0)))
+        unreported = raw_pb2.UnitOrder(ability_id=_ATTACK, target_unit_tag=99)
+        game.observe(16, _marine(1, unreported), _marine(2, at=(30.0, 30.0)))
+        game.observe(32, _marine(1, unreported), _marine(2, at=(30.0, 30.0)))
 
         game.book.issue(game.own(1), _ATTACK, target=game.own(2))
 
@@ -1853,6 +1866,89 @@ class TestReadingHeldOrders:
 
         assert game.book.issued_to(game.own(1)) == (held, new)
         assert game.book.pending == (new,)
+
+    def test_held_is_what_every_unit_holds_and_not_the_turn_s_orders(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        depot = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        assert game.book.held == (depot, marine)
+        assert game.book.pending == (reaper,)
+
+    def test_an_order_held_for_several_units_is_held_once(self) -> None:
+        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
+        first = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        second = game.book.issue(game.own(2), _BUILD_DEPOT, target=(35.0, 35.0))
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _scv(2, _moving((35.0, 35.0)), at=(38.0, 38.0)))
+        move = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(10.0, 10.0), queued=True)
+        game.flush()
+
+        assert game.book.held == (first, move, second)
+
+    def test_held_leaves_out_what_the_turn_s_orders_will_drop(self) -> None:
+        """A build repeated every turn replaces the one held, so it would count twice beside `pending`."""
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        again = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        assert game.book.held == (marine,)
+        assert game.book.pending == (again, reaper)
+
+    def test_unpaid_is_what_the_held_orders_and_the_turn_s_cost(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2, _training()))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.book.issue(game.own(2), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
+
+        game.book.issue(game.own(2), _TRAIN_REAPER)
+
+        costs = [_HOLDING_TABLES.abilities[ability].cost for ability in (_BUILD_DEPOT, _TRAIN_MARINE, _TRAIN_REAPER)]
+        assert game.book.unpaid == costs[0] + costs[1] + costs[2]
+        assert game.book.unpaid.minerals == 200
+
+    def test_unpaid_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
+        game = _holding()
+        game.observe(0, _scv(1))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=(35.0, 35.0))
+
+        assert game.book.unpaid == _HOLDING_TABLES.abilities[_BUILD_DEPOT].cost
+
+    def test_unpaid_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
+        """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
+        game = _holding()
+        game.observe(0, _scv(1, _building(), at=(29.0, 29.0)))
+
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+
+        assert game.book.unpaid == Cost(0, 0)
+        assert game.book.pending
+
+    def test_a_withdrawn_order_is_not_held(self) -> None:
+        game = _holding([ActionResult.SUCCESS])
+        game.observe(0, _scv(1))
+        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.flush()
+        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
+
+        build.withdraw()
+
+        assert game.book.held == ()
 
 
 class TestPickingOneUnitForACostlyOrder:

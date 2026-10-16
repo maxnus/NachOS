@@ -12,7 +12,8 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData
-from sc2nachos.ids import UncuratedIdError, UnitTypeId
+from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
@@ -42,7 +43,53 @@ def _types() -> list[Any]:
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
 
 
+# The groups the tables give a type: a race, the structures, or a race's structures.
+_TABLE_GROUPS = [
+    UnitType.Structure,
+    UnitType.Terran,
+    UnitType.Zerg,
+    UnitType.Protoss,
+    UnitType.TerranStructure,
+    UnitType.ZergStructure,
+    UnitType.ProtossStructure,
+]
+
+
+def _curated_groups() -> list[Any]:
+    """The classes in `UnitType` that name a group, less `AnyType` and the groups the tables give."""
+    return [
+        member
+        for member in vars(UnitType).values()
+        if isinstance(member, type)
+        and "id" not in vars(member)
+        and member is not UnitType.AnyType
+        and member not in _TABLE_GROUPS
+    ]
+
+
+def _named(prefix: str) -> set[UnitTypeId]:
+    return {unit_type for unit_type in UnitTypeId if unit_type.name.startswith(prefix)}
+
+
 class TestUnitType:
+    @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
+    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(self, group: str, tables: GameData) -> None:
+        """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
+        base type. The factory trains a hellion and a hellbat both, so neither links them; each performs the morph to
+        the other."""
+        first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
+        if group == "AnyHellion":
+            assert UnitTypeId.HELLION in tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
+            assert UnitTypeId.HELLBAT in tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
+            return
+        linked = [
+            TECH_TREE.morph_sources.get(one) is other
+            or other in tables.units[one].tech_aliases
+            or tables.units[one].base_type is other
+            for one, other in ((first, second), (second, first))
+        ]
+        assert any(linked), (first, second)
+
     def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self, tables: GameData) -> None:
         generated = _generator().render(tables)
         written = Path(unit_type_module.__file__).read_text(encoding="utf-8")
@@ -70,6 +117,47 @@ class TestUnitType:
         assert structures._type_ids == group._type_ids & UnitType.Structure._type_ids
         assert UnitType.Structure._type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
 
+    @pytest.mark.parametrize("group", _curated_groups(), ids=lambda group: group.__name__)
+    def test_a_group_is_in_another_when_all_its_types_are(self, group: Any) -> None:
+        for other in [*_TABLE_GROUPS, *_curated_groups()]:
+            if other is not group:
+                assert issubclass(group, other) == (group._type_ids <= other._type_ids), other
+
+    def test_the_curated_groups_hold_every_type_named_for_them(self) -> None:
+        towers = _named("COLLAPSIBLE_TOWER_") - _named("COLLAPSIBLE_TOWER_DEBRIS") - _named("COLLAPSIBLE_TOWER_PUSH")
+        assert UnitType.CollapsibleTower._type_ids == towers
+        assert UnitType.CollapsibleTowerDebris._type_ids == _named("COLLAPSIBLE_TOWER_DEBRIS")
+        assert len(UnitType.CollapsibleTowerDebris._type_ids) == 7
+        assert UnitType.Critter._type_ids == _named("CRITTER_")
+        assert UnitType.AnyChangeling._type_ids == _named("CHANGELING")
+        assert len(UnitType.AnyChangeling._type_ids) == 6
+        assert UnitType.AnyCreepTumor._type_ids == _named("CREEP_TUMOR")
+        assert len(UnitType.AnyCreepTumor._type_ids) == 3
+        counts = [
+            len(group._type_ids) for group in (UnitType.Destructible, UnitType.InhibitorZone, UnitType.AccelerationZone)
+        ]
+        assert counts == [68, 6, 6]
+        towers_and_debris = UnitType.CollapsibleTower._type_ids | UnitType.CollapsibleTowerDebris._type_ids
+        assert UnitType.Destructible._type_ids == _named("DESTRUCTIBLE_") | towers_and_debris
+
+    def test_a_spire_and_an_overlord_are_a_plain_one_or_what_the_tables_count_as_one(self) -> None:
+        assert UnitType.AnySpire._type_ids == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
+        assert UnitType.AnyOverlord._type_ids == {
+            UnitTypeId.OVERLORD,
+            UnitTypeId.OVERLORD_TRANSPORT,
+            UnitTypeId.OVERSEER,
+            UnitTypeId.OVERSEER_SIEGED,
+        }
+
+    def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(self, tables: GameData) -> None:
+        """Its base type and its tech aliases. An adept's shade has the adept as its base type, but is a unit of its
+        own beside the adept."""
+        for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
+            row = tables.units[unit_type]
+            for linked in {*row.tech_aliases, *filter(None, [row.base_type])}:
+                shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
+                assert shared, (unit_type, linked)
+
     def test_any_type_is_every_type(self) -> None:
         assert UnitType.AnyType._type_ids == set(UnitTypeId)
 
@@ -91,6 +179,8 @@ class TestUnitType:
             UnitTypeId.LAIR,
             UnitTypeId.HIVE,
         }
+        assert UnitType.AnyTerranTownhall._type_ids == UnitType.Townhall._type_ids & UnitType.Terran._type_ids
+        assert UnitType.AnyZergTownhall._type_ids == {UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE}
 
     def test_mineral_fields_geysers_and_gas_buildings_are_what_the_tables_say_holds_minerals_or_vespene(
         self, tables: GameData
@@ -168,6 +258,17 @@ def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], ot
         assert_type(other, OwnUnit[UnitType.Marine] | OwnUnit[UnitType.Marauder])
     assert_type(UnitType.Marine.id, UnitTypeId)
     _ = UnitType.Terran.id  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _a_group_is_typed_as_in_the_groups_all_its_types_are_in(
+    depot: Unit[UnitType.AnySupplyDepot], drone: Unit[UnitType.AnyDrone]
+) -> None:
+    """What the type checker makes of the groups a group is in. Never run."""
+    structure: Unit[UnitType.TerranStructure] = depot
+    worker: Unit[UnitType.Worker] = drone
+    structures: type[UnitType.Structure] = UnitType.CollapsibleTower
+    workers: type[UnitType.Structure] = UnitType.Worker  # pyright: ignore[reportAssignmentType]
+    del structure, worker, structures, workers
 
 
 def _a_read_is_limited_by_unit_type(

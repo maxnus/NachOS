@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, final, overload
 
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._sent_as import Aim
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.geometry import Point
@@ -255,6 +255,46 @@ class OrderBook:
     def pending(self) -> tuple[Order[Any], ...]:
         """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
         return tuple(order for order in self._issued if not order._withdrawn)
+
+    @property
+    def held(self) -> tuple[Order[Any], ...]:
+        """Every order held until its unit can start it, from earlier turns, each unit's in the order they go out, less
+        what the turn's orders will drop: what is held for a unit given an unqueued order this turn that replaces its
+        orders or needs it idle. An order held for several units is in it once. Withdrawn orders are left out, and so
+        are the turn's orders, which are in `pending`."""
+        dropped = {
+            unit.id
+            for order in self._issued
+            if not order._withdrawn
+            for unit in order.units
+            if self._competes_for(order, unit)
+        }
+        held = (
+            order
+            for unit_id, queue in self._held.items()
+            if unit_id not in dropped
+            for order in queue.orders
+            if not order._withdrawn
+        )
+        return tuple(dict.fromkeys(held))
+
+    @property
+    def unpaid(self) -> Cost:
+        """What the bank does not show yet: the cost of every order held, and of the turn's orders as they will go
+        out, its ability's `cost` in the game's tables for each unit it goes to. A unit given orders that replace one
+        another pays for the last, and one already carrying an order out pays nothing for it again."""
+        total = Cost(0, 0)
+        for order in self.held:
+            total += self._cost_of(order) * len(order.units)
+        for order, units in self._orders_given(self._issued):
+            going = units if order in self._forced else self._units_not_carrying_it_out(order, units)
+            total += self._cost_of(order) * len(going)
+        return total
+
+    def _cost_of(self, order: Order[Any]) -> Cost:
+        """What `order` costs each unit it goes to, by its ability's row in the game's tables; nothing without one."""
+        row = self._game_data.abilities.get(order.ability)
+        return Cost(0, 0) if row is None else row.cost
 
     def camera(self, at: PointLike) -> None:
         """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
@@ -654,7 +694,7 @@ class OrderBook:
                 point = first.target_world_space_pos
                 return isinstance(target, Point) and same_point(target, point.x, point.y)
             case "target_unit_tag":
-                return isinstance(target, Unit) and target.tag == first.target_unit_tag
+                return isinstance(target, Unit) and unit._unit_target_of_order(first) is target
             case _:
                 return target is None
 

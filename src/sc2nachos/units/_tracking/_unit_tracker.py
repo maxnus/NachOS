@@ -13,6 +13,7 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.units._errors import UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
+from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
 
 if TYPE_CHECKING:
@@ -44,6 +45,7 @@ class _UnitTracker:
         "_ignored_tags",
         "_in_fog_tags",
         "_known_units",
+        "_present_townhalls",
         "_present_units",
         "_present_units_by_tag",
         "_stale_units",
@@ -70,6 +72,7 @@ class _UnitTracker:
         # The living units out of the observation, by id.
         self._stale_units: dict[int, Unit[Any]] = {}
         self._known_units: Units[Unit[Any]] | None = None
+        self._present_townhalls: Units[Unit[UnitType.Townhall]] | None = None
         # This player's units first seen unfinished and not finished since, by id.
         self._unfinished: dict[int, OwnUnit[Any]] = {}
         # How many units of each alliance have been seen, indexed by alliance value. Ids are made from these.
@@ -79,6 +82,13 @@ class _UnitTracker:
     def present(self) -> Units[Unit[Any]]:
         """Every unit in the last observation, in the order the game listed them."""
         return self._present_units
+
+    @property
+    def present_townhalls(self) -> Units[Unit[UnitType.Townhall]]:
+        """The townhalls in the last observation, kept until the next."""
+        if self._present_townhalls is None:
+            self._present_townhalls = self._present_units.of_type(UnitType.Townhall)
+        return self._present_townhalls
 
     @property
     def known(self) -> Units[Unit[Any]]:
@@ -93,6 +103,11 @@ class _UnitTracker:
             return self._units_by_id[self._ids[tag]]
         except KeyError:
             raise UnknownTagError(f"the game never reported a unit under tag {tag}") from None
+
+    def get_by_tag(self, tag: int) -> Unit[Any] | None:
+        """The unit the game reported under `tag`, dead or alive, or `None` if it never reported one."""
+        unit_id = self._ids.get(tag)
+        return None if unit_id is None else self._units_by_id[unit_id]
 
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
         """Take in the units the observation at `step` reports, and the deaths it reports."""
@@ -134,6 +149,7 @@ class _UnitTracker:
         self._present_units_by_tag = present
         self._present_units = Units(present.values())
         self._known_units = None
+        self._present_townhalls = None
         self._tracker.builder_tracker.forget_observation()
 
     def _update_known_tags(

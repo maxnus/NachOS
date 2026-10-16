@@ -605,6 +605,57 @@ class TestFootprints:
                 tile = ground.tile_at((x, y))
                 assert fitting[tile] == ground.fits_footprint(footprint, at=footprint.center_in_tile(tile)), tile
 
+    @pytest.mark.parametrize("outside", [False, True])
+    @pytest.mark.parametrize("margin", [1, (0, 2, 0, 0), (1, 0, 2, 0), (2, 1, 0, 3)], ids=str)
+    @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
+    def test_with_a_margin_where_it_fits_agrees_with_fits_footprint_at_every_tile(
+        self, footprint: Footprint, margin: int | tuple[int, int, int, int], outside: bool
+    ) -> None:
+        ground = _patchy_ground().with_outside(outside)
+        fitting = ground.where_footprint_fits(footprint, margin=margin)
+        for x in range(ground.width):
+            for y in range(ground.height):
+                tile = ground.tile_at((x, y))
+                at = footprint.center_in_tile(tile)
+                assert fitting[tile] == ground.fits_footprint(footprint, at=at, margin=margin), tile
+
+    def test_a_margin_keeps_free_the_tiles_beside_those_covered_on_the_sides_it_names(self) -> None:
+        """A 2x2 centered at (12, 22) covers x 11 and 12; the false tile at x 14 is two beyond it, on the right."""
+        ground = _ground("######", "######", "####.#", "######").with_outside(False)
+        depot = Footprint.square(2)
+        assert ground.fits_footprint(depot, at=Point((12.0, 22.0)), margin=1)
+        assert not ground.fits_footprint(depot, at=Point((12.0, 22.0)), margin=(0, 2, 0, 0))
+        assert ground.fits_footprint(depot, at=Point((12.0, 22.0)), margin=(1, 1, 1, 1))
+
+    def test_a_margin_keeps_a_cut_corner_cut(self) -> None:
+        """The tile diagonally past a cut corner lies two steps from every tile the footprint covers."""
+        cut = Footprint.square(3, cut_corners=1)
+        assert cut._grown((1, 1, 1, 1)) == Footprint.square(5, cut_corners=1)
+        ground = _ground("#####", "#####", "#####", "#####", ".####").with_outside(False)
+        assert ground.fits_footprint(cut, at=Point((12.5, 22.5)), margin=1)
+        assert not ground.fits_footprint(Footprint.square(3), at=Point((12.5, 22.5)), margin=1)
+
+    @pytest.mark.parametrize(
+        ("margin", "error", "message"),
+        [
+            (-1, ValueError, "never negative"),
+            ((0, 0, -1, 0), ValueError, "never negative"),
+            ((1, 1, 1), TypeError, "a tuple of four"),
+            ([1, 1, 1, 1], TypeError, "a tuple of four"),
+            (1.5, TypeError, "a tuple of four"),
+            (True, TypeError, "a tuple of four"),
+        ],
+        ids=str,
+    )
+    def test_a_margin_negative_or_not_a_count_or_four_raises(
+        self, margin: object, error: type[Exception], message: str
+    ) -> None:
+        ground = _patchy_ground()
+        with pytest.raises(error, match=message):
+            ground.fits_footprint(Footprint.square(2), at=Point((14.0, 24.0)), margin=margin)  # pyright: ignore[reportArgumentType]
+        with pytest.raises(error, match=message):
+            ground.where_footprint_fits(Footprint.square(2), margin=margin)  # pyright: ignore[reportArgumentType]
+
     def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:
         ground = _ground(".##.", "####", "####", ".##.")
         assert not ground.fits_footprint(Footprint.square(4), at=Point((12.0, 22.0)))

@@ -167,7 +167,16 @@ Each entry ends with how it was seen:
 - Visible enemy units report their armor and shield levels, and armed ones their attack level too; an undetected
   cloaked observer reports none (#12; corpus).
 - Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
-  tag 2³², which names no unit (#25; corpus).
+  tag 2³², which names no unit (#25; corpus). So does a rally onto a mineral field out of sight: a command center
+  rallied onto one in the fog by its copy's tag, or onto one in sight that then went into the fog, held 2³² and the
+  field's point (in game, build 75689).
+- An SCV walking back to a mineral field out of sight, after carrying its minerals off, shows its gather aimed at a
+  tag the observation lists nowhere: neither the field's own tag nor its copy's, in no unit, event or other field of
+  the response, 2,891 times over 1,000 steps. Back in sight of the field, the order names the field's own tag again.
+  Each SCV went back to the field it had mined, also with all 8 of the main's fields killed in the fog meanwhile,
+  and went idle there. An SCV ordered to gather a field in the fog by its copy's tag shows that tag. Seen with the
+  main's command center killed and another standing far off, on PylonAIE_v4 (in game, build 75689); it crashed 9 of
+  84 of the demo bot's games against the harder computers before NachOS read such a target.
 - Order progress runs from 0 to 1 for training and research and is 0 otherwise (#25; corpus). A larva's egg
   counts up like a train, and an SCV's and an egg's run evenly over the build time in the game's table. A
   morph's order reads 0 from start to end, and so does a structure's building an add-on: an orbital command, a
@@ -802,7 +811,11 @@ Each entry ends with how it was seen:
   `sweep_alerts`).
 - PylonAIE_v4 has two rich geysers, each the one geyser of a base, and neither in sight from a start (corpus).
 - UltraloveAIE_v2 has neutral critters, `CleaningBot` and `LabBot`, which `show_map` brings into sight (tool
-  `sweep_townhall_placement`).
+  `sweep_townhall_placement`): two of each, ground units of radius 0.375 and 10 health that wander. The placement query
+  answers a structure over one as over clear ground, and as over an own marine, but a build over one starts only once
+  it has walked off: a command center ordered with its SCV at the site's center started 1 step after the order on clear
+  ground, 3 times in 3, and 24 to 32 steps after with a `LabBot` at the center, which the game pushed out of the 5x5
+  (in game, build 75689).
 
 ## Score and supply
 

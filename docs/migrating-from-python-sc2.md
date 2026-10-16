@@ -254,8 +254,8 @@ it.
 | python-sc2 | NachOS |
 |---|---|
 | `bot.all_units` | `api.units`, and `api.known_units` with the units out of sight |
-| `bot.workers`, `townhalls`, `gas_buildings` | `api.units.own.of_type(UnitType.Worker)`, `UnitType.Townhall`, `UnitType.GasBuilding` |
-| `bot.mineral_field`, `vespene_geyser` | `api.units.of_type(UnitType.AnyMineralField)`, `UnitType.AnyVespeneGeyser` |
+| `bot.workers`, `townhalls`, `gas_buildings` | `api.units.own.workers`, `townhalls`, `gas_buildings` |
+| `bot.mineral_field`, `vespene_geyser` | `api.units.mineral_fields`, `geysers` |
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.excluding_type(UnitType.Structure)`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
@@ -266,7 +266,7 @@ it.
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
-| `unit.distance_to(p)` | `unit.position.distance_to(p)` |
+| `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
 | `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them |
@@ -277,7 +277,7 @@ it.
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
 | `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
-| `units.closer_than(d, p)` | `units.in_area(Circle(p, d))`, which counts a unit at exactly `d` |
+| `units.closer_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d` |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
 | `units.random` | `random.choice(units)` |
@@ -320,10 +320,10 @@ it.
   the others, as `is_powered` is on anything but a Protoss structure. A unit typed `Unit[Any]` reads as any type;
   on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
   it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
-- **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, read through `of_type`
-  like any other: `UnitType.Worker`, `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`. A MULE is
-  not a worker, and a lifted command center is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are
-  the plain kinds alone.
+- **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, `UnitType.Worker`,
+  `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, which `Units` also reads as `workers`,
+  `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`. A MULE is not a worker, and a lifted command center
+  is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are the plain kinds alone.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **A unit's weapons, speed and armor include its owner's upgrades.** Yours come from the observation, the enemy's
   from `api.enemy.upgrades`. python-sc2's `real_speed` includes only your own upgrades and needs
@@ -408,6 +408,7 @@ it.
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` as the game began; `api.placement.free` now |
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
+| `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |
@@ -418,8 +419,8 @@ it.
 | `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
 | `expansion_locations_list` | `[expansion.center for expansion in api.expansions]` |
 | `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
-| `get_next_expansion()` | the first of `api.expansions` with no townhall near it |
-| `owned_expansions` | nothing; a bot looks for its townhalls at each expansion's `center` |
+| `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
+| `owned_expansions` | `[expansion for expansion in api.expansions if isinstance(expansion.townhall, OwnUnit)]` |
 
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.

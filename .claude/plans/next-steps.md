@@ -9,12 +9,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #122. `uv run pytest` passes 1890 tests on the placement grids' branch; `uv run pytest
-  -m integration` passes 28 against a real game (run 2026-10-13).
+- nachOS `main` has every PR to #123. `uv run pytest` passes 1898 tests on the demo bot's branch; `uv run pytest -m
+  integration` passes 29 against a real game (run 2026-10-15).
 - **Step 1, a queue per unit, is done**: the money cases (#115, #116), the lifted command center (#117), the timing
   sweeps (#118), and the larva hold (#120). Warp-ins are not held, and spells stay with the game. Step 2, one id per
   action, is done (#103 to #107). Step 3, the rest of M4, is under way: slice 5, the derived reads, is done (#121),
-  so are the expansions the demo bot needs (#122), and the placement grids are on branch `claude/placement-grids`.
+  so are the expansions (#122) and the placement grids (#123) the demo bot needs, and the demo bot is on branch
+  `claude/demo-bot`.
 - **M4 slice 4, orders, is done**: PRs #42, #43 and #45 swept how the game takes orders, cancels and production;
   #44 is the order machinery (`api.orders`); #46 added `Cost`, `AbilityData.cost`, `AbilityData.cancelled_by` and
   `OrderState.LOST`, since removed. User docs: `docs/orders.md`. What the game was seen to do:
@@ -440,9 +441,10 @@ From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is 
 when each starts.
 
 5. **The derived reads**, done (#121). Decided by the owner, 2026-10-07:
-   - **The unit sets are `UnitType` groups only**, read through `of_type`, with no second spelling on `Units` or
-     `Api`: `Worker` (no MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and
-     `GasBuilding`. The last three are what the tables say holds minerals or vespene; `MineralField` and
+   - **The unit sets are `UnitType` groups**, read through `of_type`, with no second spelling on `Api`: `Worker` (no
+     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`. `Units` reads them
+     as `workers`, `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`, beside `structures` (reversed for
+     `Units` in review of #125, the owner). The last three are what the tables say holds minerals or vespene; `MineralField` and
      `VespeneGeyser` already name the plain types, hence `Any`.
    - **`api.map.start_location`**, beside `opponent_start_locations`, read once off the first observation's own
      townhall.
@@ -455,7 +457,44 @@ when each starts.
 6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 8. **The demo bot**, M4's exit gate: a small bot in this repo (build workers, expand, attack) that plays a full game
-   against `Computer` using only NachOS, and doubles as the library's example for other developers.
+   against `Computer` using only NachOS, and doubles as the library's example for other developers. Decided by the
+   owner, 2026-10-15:
+   - **It beats `Computer` at `MEDIUM` in all 21 games** of the pool's 7 maps against each of the 3 races.
+   - **It plays Terran**: depots, barracks and command centers placed through `api.placement`, and no power, which
+     `free_for` does not know yet.
+   - **It is one file**, `examples/demo_bot.py`, run by `run_from_command_line`, so the match workflow can play it.
+     `examples/run_game.py` stays the bot that does nothing.
+   - **What it needs that NachOS lacks is asked of the owner one gap at a time**, each with a proposed API, and goes
+     into NachOS as its own commit in the same PR before the bot uses it; a big one becomes a PR of its own first.
+   - **The critters are curated** (`CRITTER_CLEANING_BOT`, `CRITTER_LAB_BOT`, in `UnitType.Critter`), since a build
+     over one waits until it has walked off (the owner, who asked for that to be measured with a command center); they
+     cover no ground. Seeing one raised `UncuratedIdError`.
+   - **`api.orders.held`**, every order NachOS holds, beside `pending`, less what the turn's orders will drop, and
+     **`api.orders.unpaid`**, the `Cost` of both, so a bot can budget for what the bank does not show yet (the owner:
+     `held` first, `unpaid` in review of #125).
+   - **An order aimed by a tag the game never reports reads as aimed at the unit the unit's last order of the same
+     ability named**, dead since or not, and its `target` raises `NotReportedError` if there was none; a rally aimed
+     so reads its point. An SCV walking back to a field in the fog shows such a tag, and reading `orders` crashed 9
+     of 84 games against the harder computers (the owner, after asking whether NachOS filtered the tag out and
+     whether the reading could be wrong).
+   - **Decided in review of #125** (the owner): a group for each structure and unit with a second form, 26 of them
+     (`AnySupplyDepot`, `AnyBarracks`, `AnySiegeTank`, `AnyViking`, `AnyRoach` burrowed or not...); `margin`, one
+     count of tiles or four (left, right, bottom, top), on `Grid.fits_footprint` and `where_footprint_fits`, kept
+     free around the tiles the footprint covers, so a cut corner stays cut, and passed on by `is_free` and
+     `nearest_free`; `Expansion.townhall`, the townhall
+     standing on it, anyone's, over an `OwnedExpansion`; `Unit.distance_to`, center to center; `Units.within(d,
+     of=...)`; `in_area` taking several areas; the main nouns importable from `sc2nachos` itself, the events staying
+     in `sc2nachos.events`. Not done: a callable target per unit (reconsider with slice 7), `issue` with no units
+     (it keeps raising), and `UnitOrder`'s `_target` field and its `_NotReported` marker stay. Later in the same
+     review: the groups `AnyChangeling`, `AnyCreepTumor` and `CollapsibleTowerDebris`, and each group in every race
+     and structure group all its types are in, so `CollapsibleTower` is a `Structure` and `AnySupplyDepot` a
+     `TerranStructure`. Then, asked for `AnyOrbitalCommand` and any more (2026-10-16): the two forms
+     `AnyOrbitalCommand`, `AnyCommandCenter` (the plain one only), `AnyGateway` and `AnyLocust`; `AnySpire` and
+     `AnyOverlord`, overseers included, as the tables count them, but no `AnyHatchery` or `AnyLair`; the map's
+     `Destructible`, with the collapsible towers and their debris, `InhibitorZone` and `AccelerationZone`, without
+     `ROCKS_2X2_NON_CONJOINED`; `AnyTerranTownhall` and `AnyZergTownhall`; and each group in every group that holds
+     all its types, so `AnyDrone` is a `Worker`. A tower is `Destructible` though it falls and stays (the owner,
+     over my proposal of the debris alone).
 
 ### Before 8: the expansions, done (#122)
 

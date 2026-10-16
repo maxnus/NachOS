@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Self, final
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Self, final
 
 import numpy
 from scipy.sparse import coo_array
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamemap._game_map import GameMap
     from sc2nachos.units import Unit
+    from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 
 # Within a base each mineral field lies at most 3.16 from another, and a geyser at most 5.66 from another resource
 # (the base's other geyser); two bases are at least 6.5 apart (corpus).
@@ -54,15 +55,28 @@ class Expansion:
     pathing_distance_from_start: float
     """The pathing distance from this player's start to `center`, over the ground as the game began: `inf` where no
     path reaches."""
+    _unit_tracker: _UnitTracker = field(repr=False, compare=False)
+
+    @property
+    def townhall(self) -> Unit[UnitType.Townhall] | None:
+        """The townhall standing on it now, this player's or another's, in sight or remembered in the fog: the one whose
+        footprint's bounding box holds `center`. `None` if there is none; a townhall in the air stands nowhere."""
+        for townhall in self._unit_tracker.present_townhalls:
+            footprint = townhall.footprint
+            if footprint is not None and self.center in footprint.bounding_box(at=townhall.position):
+                return townhall
+        return None
 
     @classmethod
-    def _find_all(cls, game_map: GameMap, neutral_units: Units[Unit[Any]]) -> tuple[Self, ...]:
-        """The expansions of `game_map` with `neutral_units` on it at the start, by pathing distance from this player's
-        start, nearest first. Those no path reaches come last, sorted by increasing straight-line distance from this
-        player's start.
+    def _find_all(cls, game_map: GameMap, unit_tracker: _UnitTracker) -> tuple[Self, ...]:
+        """The expansions of `game_map` with the neutral units `unit_tracker` holds on it at the start, by pathing
+        distance from this player's start, nearest first. Those no path reaches come last, sorted by increasing
+        straight-line distance from this player's start. Each finds its townhall among the units `unit_tracker` holds
+        then.
 
         The mineral fields and geysers make the expansions; every other neutral unit blocks the ground under it.
         """
+        neutral_units = unit_tracker.present.neutral
         mineral_fields = neutral_units.of_type(UnitType.AnyMineralField)
         geysers = neutral_units.of_type(UnitType.AnyVespeneGeyser)
         blockers = neutral_units.excluding_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
@@ -79,6 +93,7 @@ class Expansion:
                 geysers=center_geysers.sorted_by_distance_to(center),
                 is_start_location=center in start_locations,
                 pathing_distance_from_start=pathing_distance[center],
+                _unit_tracker=unit_tracker,
             )
             for base_fields, base_geysers in _resources_of_each_base(mineral_fields, geysers)
             for center, center_geysers in _townhall_centers_of_base(expansion_locations, base_fields, base_geysers)

@@ -19,8 +19,12 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
     its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the mineral fields, the vespene geysers, the gas buildings, the collapsible towers,
-    or the add-ons, tech labs and reactors.
+    or the workers, the townhalls, the Terran and the Zerg townhalls, the mineral fields, the vespene geysers, the gas
+    buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and acceleration zones,
+    the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the spires, the overlords,
+    or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
+    a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
+    `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
     """
 
     class AnyType:
@@ -83,22 +87,49 @@ class UnitType:
     class Worker(AnyType):
         """A worker: an SCV, a probe or a drone, burrowed or not. A MULE is none."""
 
-    class Townhall(AnyType):
+    class Townhall(Structure):
         """A townhall: a command center or what it becomes, lifted or not, a nexus, a hatchery, lair or hive."""
 
-    class AnyMineralField(AnyType):
+    class AnyTerranTownhall(Townhall, TerranStructure):
+        """A command center or an orbital command, lifted or not, or a planetary fortress."""
+
+    class AnyZergTownhall(Townhall, ZergStructure):
+        """A Zerg townhall: a hatchery, a lair or a hive."""
+
+    class AnyMineralField(Structure):
         """A mineral field of any kind: one the game's tables say holds minerals."""
 
-    class AnyVespeneGeyser(AnyType):
+    class AnyVespeneGeyser(Structure):
         """A vespene geyser of any kind: one the game's tables say holds vespene, of no race."""
 
-    class GasBuilding(AnyType):
+    class GasBuilding(Structure):
         """A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race."""
 
-    class CollapsibleTower(AnyType):
+    class Destructible(Structure):
+        """A destructible rock, debris, ice, unbuildable brick, plate or rock, or a collapsible tower or its debris."""
+
+    class CollapsibleTower(Destructible):
         """A collapsible tower, which falls across a path once destroyed and stays there."""
 
-    class AnyAddOn(AnyType):
+    class CollapsibleTowerDebris(Destructible):
+        """The debris a collapsible tower leaves where it lands once felled."""
+
+    class InhibitorZone(Structure):
+        """An inhibitor zone generator, of any size, plain or flying."""
+
+    class AccelerationZone(Structure):
+        """An acceleration zone generator, of any size, plain or flying."""
+
+    class Critter(AnyType):
+        """One of a map's critters: an animal or a robot that wanders and covers no ground."""
+
+    class AnyChangeling(Zerg):
+        """A changeling, plain or in the shape of a marine, a zealot or a zergling."""
+
+    class AnyCreepTumor(ZergStructure):
+        """A creep tumor, a queen's or another tumor's, growing or burrowed."""
+
+    class AnyAddOn(TerranStructure):
         """An add-on of any kind: a tech lab or a reactor, attached to its host or plain."""
 
     class AnyTechLab(AnyAddOn):
@@ -107,22 +138,118 @@ class UnitType:
     class AnyReactor(AnyAddOn):
         """A reactor of any kind: a barracks', a factory's or a starport's, or a plain one."""
 
-    class AccelerationZoneFlyingLarge(Structure):
+    class AnySpire(ZergStructure):
+        """A spire or a greater spire."""
+
+    class AnyOverlord(Zerg):
+        """An overlord, a transport overlord, or an overseer in either mode, which the tables count as one."""
+
+    class AnySupplyDepot(TerranStructure):
+        """A supply depot, raised or lowered."""
+
+    class AnyBarracks(TerranStructure):
+        """A barracks, landed or flying."""
+
+    class AnyFactory(TerranStructure):
+        """A factory, landed or flying."""
+
+    class AnyStarport(TerranStructure):
+        """A starport, landed or flying."""
+
+    class AnyCommandCenter(AnyTerranTownhall):
+        """A command center, landed or flying. An orbital command and a planetary fortress are none."""
+
+    class AnyOrbitalCommand(AnyTerranTownhall):
+        """An orbital command, landed or flying."""
+
+    class AnyGateway(ProtossStructure):
+        """A gateway or a warp gate."""
+
+    class AnySpineCrawler(ZergStructure):
+        """A spine crawler, rooted or uprooted."""
+
+    class AnySporeCrawler(ZergStructure):
+        """A spore crawler, rooted or uprooted."""
+
+    class AnyViking(Terran):
+        """A viking, flying or landed."""
+
+    class AnySiegeTank(Terran):
+        """A siege tank, sieged or not."""
+
+    class AnyWidowMine(Terran):
+        """A widow mine, burrowed or not."""
+
+    class AnyLiberator(Terran):
+        """A liberator, sieged or not."""
+
+    class AnyThor(Terran):
+        """A thor, in either mode."""
+
+    class AnyHellion(Terran):
+        """A hellion or a hellbat."""
+
+    class AnyObserver(Protoss):
+        """An observer, in surveillance mode or not."""
+
+    class AnyOverseer(AnyOverlord):
+        """An overseer, in oversight mode or not."""
+
+    class AnyWarpPrism(Protoss):
+        """A warp prism, phasing or not."""
+
+    class AnyLocust(Zerg):
+        """A locust, on the ground or flying."""
+
+    class AnyDrone(Worker, Zerg):
+        """A drone, burrowed or not."""
+
+    class AnyZergling(Zerg):
+        """A zergling, burrowed or not."""
+
+    class AnyBaneling(Zerg):
+        """A baneling, burrowed or not."""
+
+    class AnyRoach(Zerg):
+        """A roach, burrowed or not."""
+
+    class AnyRavager(Zerg):
+        """A ravager, burrowed or not."""
+
+    class AnyHydralisk(Zerg):
+        """A hydralisk, burrowed or not."""
+
+    class AnyLurker(Zerg):
+        """A lurker, burrowed or not."""
+
+    class AnyInfestor(Zerg):
+        """An infestor, burrowed or not."""
+
+    class AnySwarmHost(Zerg):
+        """A swarm host, burrowed or not."""
+
+    class AnyUltralisk(Zerg):
+        """An ultralisk, burrowed or not."""
+
+    class AnyQueen(Zerg):
+        """A queen, burrowed or not."""
+
+    class AccelerationZoneFlyingLarge(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_FLYING_LARGE
 
-    class AccelerationZoneFlyingMedium(Structure):
+    class AccelerationZoneFlyingMedium(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_FLYING_MEDIUM
 
-    class AccelerationZoneFlyingSmall(Structure):
+    class AccelerationZoneFlyingSmall(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_FLYING_SMALL
 
-    class AccelerationZoneLarge(Structure):
+    class AccelerationZoneLarge(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_LARGE
 
-    class AccelerationZoneMedium(Structure):
+    class AccelerationZoneMedium(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_MEDIUM
 
-    class AccelerationZoneSmall(Structure):
+    class AccelerationZoneSmall(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_SMALL
 
     class Adept(Protoss):
@@ -146,10 +273,10 @@ class UnitType:
     class AutoTurret(TerranStructure):
         id = UnitTypeId.AUTO_TURRET
 
-    class Baneling(Zerg):
+    class Baneling(AnyBaneling):
         id = UnitTypeId.BANELING
 
-    class BanelingBurrowed(Zerg):
+    class BanelingBurrowed(AnyBaneling):
         id = UnitTypeId.BANELING_BURROWED
 
     class BanelingCocoon(Zerg):
@@ -161,10 +288,10 @@ class UnitType:
     class Banshee(Terran):
         id = UnitTypeId.BANSHEE
 
-    class Barracks(TerranStructure):
+    class Barracks(AnyBarracks):
         id = UnitTypeId.BARRACKS
 
-    class BarracksFlying(TerranStructure):
+    class BarracksFlying(AnyBarracks):
         id = UnitTypeId.BARRACKS_FLYING
 
     class Battlecruiser(Terran):
@@ -185,52 +312,52 @@ class UnitType:
     class Carrier(Protoss):
         id = UnitTypeId.CARRIER
 
-    class Changeling(Zerg):
+    class Changeling(AnyChangeling):
         id = UnitTypeId.CHANGELING
 
-    class ChangelingMarine(Zerg):
+    class ChangelingMarine(AnyChangeling):
         id = UnitTypeId.CHANGELING_MARINE
 
-    class ChangelingMarineShield(Zerg):
+    class ChangelingMarineShield(AnyChangeling):
         id = UnitTypeId.CHANGELING_MARINE_SHIELD
 
-    class ChangelingZealot(Zerg):
+    class ChangelingZealot(AnyChangeling):
         id = UnitTypeId.CHANGELING_ZEALOT
 
-    class ChangelingZergling(Zerg):
+    class ChangelingZergling(AnyChangeling):
         id = UnitTypeId.CHANGELING_ZERGLING
 
-    class ChangelingZerglingWings(Zerg):
+    class ChangelingZerglingWings(AnyChangeling):
         id = UnitTypeId.CHANGELING_ZERGLING_WINGS
 
-    class CollapsibleTowerDebrisPurifier(Structure):
+    class CollapsibleTowerDebrisPurifier(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_PURIFIER
 
-    class CollapsibleTowerDebrisRampLeftRock(Structure):
+    class CollapsibleTowerDebrisRampLeftRock(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK
 
-    class CollapsibleTowerDebrisRampLeftRockGreen(Structure):
+    class CollapsibleTowerDebrisRampLeftRockGreen(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK_GREEN
 
-    class CollapsibleTowerDebrisRampRightRock(Structure):
+    class CollapsibleTowerDebrisRampRightRock(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_RIGHT_ROCK
 
-    class CollapsibleTowerDebrisRampRightRockGreen(Structure):
+    class CollapsibleTowerDebrisRampRightRockGreen(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_RIGHT_ROCK_GREEN
 
-    class CollapsibleTowerDebrisRock(Structure):
+    class CollapsibleTowerDebrisRock(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_ROCK
 
-    class CollapsibleTowerDebrisTerran(Structure):
+    class CollapsibleTowerDebrisTerran(CollapsibleTowerDebris):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_TERRAN
 
-    class CollapsibleTowerDiagonalPurifier(Structure, CollapsibleTower):
+    class CollapsibleTowerDiagonalPurifier(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_PURIFIER
 
-    class CollapsibleTowerDiagonalRock(Structure, CollapsibleTower):
+    class CollapsibleTowerDiagonalRock(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK
 
-    class CollapsibleTowerDiagonalTerran(Structure, CollapsibleTower):
+    class CollapsibleTowerDiagonalTerran(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_TERRAN
 
     class CollapsibleTowerPushUnitPurifier(Structure):
@@ -260,50 +387,56 @@ class UnitType:
     class CollapsibleTowerPushUnitTerran(Structure):
         id = UnitTypeId.COLLAPSIBLE_TOWER_PUSH_UNIT_TERRAN
 
-    class CollapsibleTowerRampLeftRock(Structure, CollapsibleTower):
+    class CollapsibleTowerRampLeftRock(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK
 
-    class CollapsibleTowerRampLeftRockGreen(Structure, CollapsibleTower):
+    class CollapsibleTowerRampLeftRockGreen(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_ROCK_GREEN
 
-    class CollapsibleTowerRampLeftTerran(Structure, CollapsibleTower):
+    class CollapsibleTowerRampLeftTerran(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_LEFT_TERRAN
 
-    class CollapsibleTowerRampRightRock(Structure, CollapsibleTower):
+    class CollapsibleTowerRampRightRock(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK
 
-    class CollapsibleTowerRampRightRockGreen(Structure, CollapsibleTower):
+    class CollapsibleTowerRampRightRockGreen(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_ROCK_GREEN
 
-    class CollapsibleTowerRampRightTerran(Structure, CollapsibleTower):
+    class CollapsibleTowerRampRightTerran(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_RAMP_RIGHT_TERRAN
 
-    class CollapsibleTowerRock(Structure, CollapsibleTower):
+    class CollapsibleTowerRock(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_ROCK
 
-    class CollapsibleTowerTerran(Structure, CollapsibleTower):
+    class CollapsibleTowerTerran(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_TERRAN
 
     class Colossus(Protoss):
         id = UnitTypeId.COLOSSUS
 
-    class CommandCenter(TerranStructure, Townhall):
+    class CommandCenter(AnyCommandCenter):
         id = UnitTypeId.COMMAND_CENTER
 
-    class CommandCenterFlying(TerranStructure, Townhall):
+    class CommandCenterFlying(AnyCommandCenter):
         id = UnitTypeId.COMMAND_CENTER_FLYING
 
     class Corruptor(Zerg):
         id = UnitTypeId.CORRUPTOR
 
-    class CreepTumor(ZergStructure):
+    class CreepTumor(AnyCreepTumor):
         id = UnitTypeId.CREEP_TUMOR
 
-    class CreepTumorBurrowed(ZergStructure):
+    class CreepTumorBurrowed(AnyCreepTumor):
         id = UnitTypeId.CREEP_TUMOR_BURROWED
 
-    class CreepTumorQueen(ZergStructure):
+    class CreepTumorQueen(AnyCreepTumor):
         id = UnitTypeId.CREEP_TUMOR_QUEEN
+
+    class CritterCleaningBot(Critter):
+        id = UnitTypeId.CRITTER_CLEANING_BOT
+
+    class CritterLabBot(Critter):
+        id = UnitTypeId.CRITTER_LAB_BOT
 
     class CyberneticsCore(ProtossStructure):
         id = UnitTypeId.CYBERNETICS_CORE
@@ -317,163 +450,163 @@ class UnitType:
     class DarkTemplar(Protoss):
         id = UnitTypeId.DARK_TEMPLAR
 
-    class Destructible1x1BraxisAlpha(Structure):
+    class Destructible1x1BraxisAlpha(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_1X1_BRAXIS_ALPHA
 
-    class Destructible2x2BraxisAlpha(Structure):
+    class Destructible2x2BraxisAlpha(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X2_BRAXIS_ALPHA
 
-    class Destructible2x4HorizontalCityDebris(Structure):
+    class Destructible2x4HorizontalCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_CITY_DEBRIS
 
-    class Destructible2x4HorizontalIce(Structure):
+    class Destructible2x4HorizontalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ICE
 
-    class Destructible2x4HorizontalRock(Structure):
+    class Destructible2x4HorizontalRock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ROCK
 
-    class Destructible2x4HorizontalRockEx1(Structure):
+    class Destructible2x4HorizontalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ROCK_EX1
 
-    class Destructible2x4VerticalCityDebris(Structure):
+    class Destructible2x4VerticalCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_VERTICAL_CITY_DEBRIS
 
-    class Destructible2x4VerticalIce(Structure):
+    class Destructible2x4VerticalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_VERTICAL_ICE
 
-    class Destructible2x4VerticalRock(Structure):
+    class Destructible2x4VerticalRock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_VERTICAL_ROCK
 
-    class Destructible2x4VerticalRockEx1(Structure):
+    class Destructible2x4VerticalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X4_VERTICAL_ROCK_EX1
 
-    class Destructible2x6HorizontalCityDebris(Structure):
+    class Destructible2x6HorizontalCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_HORIZONTAL_CITY_DEBRIS
 
-    class Destructible2x6HorizontalIce(Structure):
+    class Destructible2x6HorizontalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_HORIZONTAL_ICE
 
-    class Destructible2x6HorizontalRock(Structure):
+    class Destructible2x6HorizontalRock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_HORIZONTAL_ROCK
 
-    class Destructible2x6HorizontalRockEx1(Structure):
+    class Destructible2x6HorizontalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_HORIZONTAL_ROCK_EX1
 
-    class Destructible2x6VerticalCityDebris(Structure):
+    class Destructible2x6VerticalCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_VERTICAL_CITY_DEBRIS
 
-    class Destructible2x6VerticalIce(Structure):
+    class Destructible2x6VerticalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_VERTICAL_ICE
 
-    class Destructible2x6VerticalRock(Structure):
+    class Destructible2x6VerticalRock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_VERTICAL_ROCK
 
-    class Destructible2x6VerticalRockEx1(Structure):
+    class Destructible2x6VerticalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_2X6_VERTICAL_ROCK_EX1
 
-    class Destructible3x3ZergInfestation(Structure):
+    class Destructible3x3ZergInfestation(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_3X3_ZERG_INFESTATION
 
-    class Destructible4x4CityDebris(Structure):
+    class Destructible4x4CityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_4X4_CITY_DEBRIS
 
-    class Destructible4x4Debris(Structure):
+    class Destructible4x4Debris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_4X4_DEBRIS
 
-    class Destructible4x4Ice(Structure):
+    class Destructible4x4Ice(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_4X4_ICE
 
-    class Destructible4x4Rock(Structure):
+    class Destructible4x4Rock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_4X4_ROCK
 
-    class Destructible4x4RockEx1(Structure):
+    class Destructible4x4RockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1
 
-    class Destructible6x6CityDebris(Structure):
+    class Destructible6x6CityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_CITY_DEBRIS
 
-    class Destructible6x6Debris(Structure):
+    class Destructible6x6Debris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_DEBRIS
 
-    class Destructible6x6ExpeditionGate(Structure):
+    class Destructible6x6ExpeditionGate(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_EXPEDITION_GATE
 
-    class Destructible6x6Ice(Structure):
+    class Destructible6x6Ice(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_ICE
 
-    class Destructible6x6Rock(Structure):
+    class Destructible6x6Rock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_ROCK
 
-    class Destructible6x6RockEx1(Structure):
+    class Destructible6x6RockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_ROCK_EX1
 
-    class Destructible6x6WeakRock(Structure):
+    class Destructible6x6WeakRock(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_6X6_WEAK_ROCK
 
-    class DestructibleHugeDiagonalBlurCityDebris(Structure):
+    class DestructibleHugeDiagonalBlurCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_BLUR_CITY_DEBRIS
 
-    class DestructibleHugeDiagonalBlurDebrisRamp(Structure):
+    class DestructibleHugeDiagonalBlurDebrisRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_BLUR_DEBRIS_RAMP
 
-    class DestructibleHugeDiagonalBlurIce(Structure):
+    class DestructibleHugeDiagonalBlurIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_BLUR_ICE
 
-    class DestructibleHugeDiagonalBlurRamp(Structure):
+    class DestructibleHugeDiagonalBlurRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_BLUR_RAMP
 
-    class DestructibleHugeDiagonalBlurRockEx1(Structure):
+    class DestructibleHugeDiagonalBlurRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_BLUR_ROCK_EX1
 
-    class DestructibleHugeDiagonalUlbrCityDebris(Structure):
+    class DestructibleHugeDiagonalUlbrCityDebris(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_ULBR_CITY_DEBRIS
 
-    class DestructibleHugeDiagonalUlbrDebrisRamp(Structure):
+    class DestructibleHugeDiagonalUlbrDebrisRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_ULBR_DEBRIS_RAMP
 
-    class DestructibleHugeDiagonalUlbrIce(Structure):
+    class DestructibleHugeDiagonalUlbrIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_ULBR_ICE
 
-    class DestructibleHugeDiagonalUlbrRamp(Structure):
+    class DestructibleHugeDiagonalUlbrRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_ULBR_RAMP
 
-    class DestructibleHugeDiagonalUlbrRockEx1(Structure):
+    class DestructibleHugeDiagonalUlbrRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_DIAGONAL_ULBR_ROCK_EX1
 
-    class DestructibleHugeHorizontalIce(Structure):
+    class DestructibleHugeHorizontalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_HORIZONTAL_ICE
 
-    class DestructibleHugeHorizontalRamp(Structure):
+    class DestructibleHugeHorizontalRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_HORIZONTAL_RAMP
 
-    class DestructibleHugeHorizontalRockEx1(Structure):
+    class DestructibleHugeHorizontalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_HORIZONTAL_ROCK_EX1
 
-    class DestructibleHugeVerticalIce(Structure):
+    class DestructibleHugeVerticalIce(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_VERTICAL_ICE
 
-    class DestructibleHugeVerticalRamp(Structure):
+    class DestructibleHugeVerticalRamp(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_VERTICAL_RAMP
 
-    class DestructibleHugeVerticalRockEx1(Structure):
+    class DestructibleHugeVerticalRockEx1(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_HUGE_VERTICAL_ROCK_EX1
 
-    class DestructibleUnbuildableBricks(Structure):
+    class DestructibleUnbuildableBricks(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_UNBUILDABLE_BRICKS
 
-    class DestructibleUnbuildablePlates(Structure):
+    class DestructibleUnbuildablePlates(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_UNBUILDABLE_PLATES
 
-    class DestructibleUnbuildableRocks(Structure):
+    class DestructibleUnbuildableRocks(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_UNBUILDABLE_ROCKS
 
     class Disruptor(Protoss):
         id = UnitTypeId.DISRUPTOR
 
-    class Drone(Zerg, Worker):
+    class Drone(AnyDrone):
         id = UnitTypeId.DRONE
 
-    class DroneBurrowed(Zerg, Worker):
+    class DroneBurrowed(AnyDrone):
         id = UnitTypeId.DRONE_BURROWED
 
     class Egg(Zerg):
@@ -491,10 +624,10 @@ class UnitType:
     class ExtractorRich(ZergStructure, GasBuilding):
         id = UnitTypeId.EXTRACTOR_RICH
 
-    class Factory(TerranStructure):
+    class Factory(AnyFactory):
         id = UnitTypeId.FACTORY
 
-    class FactoryFlying(TerranStructure):
+    class FactoryFlying(AnyFactory):
         id = UnitTypeId.FACTORY_FLYING
 
     class FleetBeacon(ProtossStructure):
@@ -509,7 +642,7 @@ class UnitType:
     class FusionCore(TerranStructure):
         id = UnitTypeId.FUSION_CORE
 
-    class Gateway(ProtossStructure):
+    class Gateway(AnyGateway):
         id = UnitTypeId.GATEWAY
 
     class Ghost(Terran):
@@ -518,31 +651,31 @@ class UnitType:
     class GhostAcademy(TerranStructure):
         id = UnitTypeId.GHOST_ACADEMY
 
-    class GreaterSpire(ZergStructure):
+    class GreaterSpire(AnySpire):
         id = UnitTypeId.GREATER_SPIRE
 
-    class Hatchery(ZergStructure, Townhall):
+    class Hatchery(AnyZergTownhall):
         id = UnitTypeId.HATCHERY
 
     class HealingShrineXelNaga(AnyType):
         id = UnitTypeId.HEALING_SHRINE_XEL_NAGA
 
-    class Hellbat(Terran):
+    class Hellbat(AnyHellion):
         id = UnitTypeId.HELLBAT
 
-    class Hellion(Terran):
+    class Hellion(AnyHellion):
         id = UnitTypeId.HELLION
 
     class HighTemplar(Protoss):
         id = UnitTypeId.HIGH_TEMPLAR
 
-    class Hive(ZergStructure, Townhall):
+    class Hive(AnyZergTownhall):
         id = UnitTypeId.HIVE
 
-    class Hydralisk(Zerg):
+    class Hydralisk(AnyHydralisk):
         id = UnitTypeId.HYDRALISK
 
-    class HydraliskBurrowed(Zerg):
+    class HydraliskBurrowed(AnyHydralisk):
         id = UnitTypeId.HYDRALISK_BURROWED
 
     class HydraliskDen(ZergStructure):
@@ -554,55 +687,55 @@ class UnitType:
     class InfestationPit(ZergStructure):
         id = UnitTypeId.INFESTATION_PIT
 
-    class Infestor(Zerg):
+    class Infestor(AnyInfestor):
         id = UnitTypeId.INFESTOR
 
-    class InfestorBurrowed(Zerg):
+    class InfestorBurrowed(AnyInfestor):
         id = UnitTypeId.INFESTOR_BURROWED
 
-    class InhibitorZoneFlyingLarge(Structure):
+    class InhibitorZoneFlyingLarge(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE
 
-    class InhibitorZoneFlyingMedium(Structure):
+    class InhibitorZoneFlyingMedium(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_MEDIUM
 
-    class InhibitorZoneFlyingSmall(Structure):
+    class InhibitorZoneFlyingSmall(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_SMALL
 
-    class InhibitorZoneLarge(Structure):
+    class InhibitorZoneLarge(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_LARGE
 
-    class InhibitorZoneMedium(Structure):
+    class InhibitorZoneMedium(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_MEDIUM
 
-    class InhibitorZoneSmall(Structure):
+    class InhibitorZoneSmall(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_SMALL
 
     class Interceptor(Protoss):
         id = UnitTypeId.INTERCEPTOR
 
-    class Lair(ZergStructure, Townhall):
+    class Lair(AnyZergTownhall):
         id = UnitTypeId.LAIR
 
     class Larva(Zerg):
         id = UnitTypeId.LARVA
 
-    class Liberator(Terran):
+    class Liberator(AnyLiberator):
         id = UnitTypeId.LIBERATOR
 
-    class LiberatorSieged(Terran):
+    class LiberatorSieged(AnyLiberator):
         id = UnitTypeId.LIBERATOR_SIEGED
 
-    class Locust(Zerg):
+    class Locust(AnyLocust):
         id = UnitTypeId.LOCUST
 
-    class LocustFlying(Zerg):
+    class LocustFlying(AnyLocust):
         id = UnitTypeId.LOCUST_FLYING
 
-    class Lurker(Zerg):
+    class Lurker(AnyLurker):
         id = UnitTypeId.LURKER
 
-    class LurkerBurrowed(Zerg):
+    class LurkerBurrowed(AnyLurker):
         id = UnitTypeId.LURKER_BURROWED
 
     class LurkerDen(ZergStructure):
@@ -620,49 +753,49 @@ class UnitType:
     class Medivac(Terran):
         id = UnitTypeId.MEDIVAC
 
-    class MineralField(Structure, AnyMineralField):
+    class MineralField(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD
 
-    class MineralField450(Structure, AnyMineralField):
+    class MineralField450(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_450
 
-    class MineralField750(Structure, AnyMineralField):
+    class MineralField750(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_750
 
-    class MineralField750BattleStation(Structure, AnyMineralField):
+    class MineralField750BattleStation(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_750_BATTLE_STATION
 
-    class MineralField750Lab(Structure, AnyMineralField):
+    class MineralField750Lab(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_750_LAB
 
-    class MineralField750Purifier(Structure, AnyMineralField):
+    class MineralField750Purifier(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_750_PURIFIER
 
-    class MineralField900Opaque(Structure, AnyMineralField):
+    class MineralField900Opaque(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_900_OPAQUE
 
-    class MineralFieldBattleStation(Structure, AnyMineralField):
+    class MineralFieldBattleStation(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_BATTLE_STATION
 
-    class MineralFieldLab(Structure, AnyMineralField):
+    class MineralFieldLab(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_LAB
 
-    class MineralFieldOpaque(Structure, AnyMineralField):
+    class MineralFieldOpaque(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_OPAQUE
 
-    class MineralFieldPurifier(Structure, AnyMineralField):
+    class MineralFieldPurifier(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_PURIFIER
 
-    class MineralFieldRich(Structure, AnyMineralField):
+    class MineralFieldRich(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_RICH
 
-    class MineralFieldRich750(Structure, AnyMineralField):
+    class MineralFieldRich750(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_RICH_750
 
-    class MineralFieldRich750Purifier(Structure, AnyMineralField):
+    class MineralFieldRich750Purifier(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_RICH_750_PURIFIER
 
-    class MineralFieldRichPurifier(Structure, AnyMineralField):
+    class MineralFieldRichPurifier(AnyMineralField):
         id = UnitTypeId.MINERAL_FIELD_RICH_PURIFIER
 
     class MissileTurret(TerranStructure):
@@ -689,37 +822,37 @@ class UnitType:
     class NydusWorm(ZergStructure):
         id = UnitTypeId.NYDUS_WORM
 
-    class Observer(Protoss):
+    class Observer(AnyObserver):
         id = UnitTypeId.OBSERVER
 
-    class ObserverSieged(Protoss):
+    class ObserverSieged(AnyObserver):
         id = UnitTypeId.OBSERVER_SIEGED
 
     class Oracle(Protoss):
         id = UnitTypeId.ORACLE
 
-    class OrbitalCommand(TerranStructure, Townhall):
+    class OrbitalCommand(AnyOrbitalCommand):
         id = UnitTypeId.ORBITAL_COMMAND
 
-    class OrbitalCommandFlying(TerranStructure, Townhall):
+    class OrbitalCommandFlying(AnyOrbitalCommand):
         id = UnitTypeId.ORBITAL_COMMAND_FLYING
 
-    class Overlord(Zerg):
+    class Overlord(AnyOverlord):
         id = UnitTypeId.OVERLORD
 
     class OverlordCocoon(Zerg):
         id = UnitTypeId.OVERLORD_COCOON
 
-    class OverlordTransport(Zerg):
+    class OverlordTransport(AnyOverlord):
         id = UnitTypeId.OVERLORD_TRANSPORT
 
     class OverlordTransportCocoon(Zerg):
         id = UnitTypeId.OVERLORD_TRANSPORT_COCOON
 
-    class Overseer(Zerg):
+    class Overseer(AnyOverseer):
         id = UnitTypeId.OVERSEER
 
-    class OverseerSieged(Zerg):
+    class OverseerSieged(AnyOverseer):
         id = UnitTypeId.OVERSEER_SIEGED
 
     class Phoenix(Protoss):
@@ -728,7 +861,7 @@ class UnitType:
     class PhotonCannon(ProtossStructure):
         id = UnitTypeId.PHOTON_CANNON
 
-    class PlanetaryFortress(TerranStructure, Townhall):
+    class PlanetaryFortress(AnyTerranTownhall):
         id = UnitTypeId.PLANETARY_FORTRESS
 
     class Probe(Protoss, Worker):
@@ -740,16 +873,16 @@ class UnitType:
     class Pylon(ProtossStructure):
         id = UnitTypeId.PYLON
 
-    class Queen(Zerg):
+    class Queen(AnyQueen):
         id = UnitTypeId.QUEEN
 
-    class QueenBurrowed(Zerg):
+    class QueenBurrowed(AnyQueen):
         id = UnitTypeId.QUEEN_BURROWED
 
-    class Ravager(Zerg):
+    class Ravager(AnyRavager):
         id = UnitTypeId.RAVAGER
 
-    class RavagerBurrowed(Zerg):
+    class RavagerBurrowed(AnyRavager):
         id = UnitTypeId.RAVAGER_BURROWED
 
     class RavagerCocoon(Zerg):
@@ -758,16 +891,16 @@ class UnitType:
     class Raven(Terran):
         id = UnitTypeId.RAVEN
 
-    class Reactor(TerranStructure, AnyReactor):
+    class Reactor(AnyReactor):
         id = UnitTypeId.REACTOR
 
-    class ReactorBarracks(TerranStructure, AnyReactor):
+    class ReactorBarracks(AnyReactor):
         id = UnitTypeId.REACTOR_BARRACKS
 
-    class ReactorFactory(TerranStructure, AnyReactor):
+    class ReactorFactory(AnyReactor):
         id = UnitTypeId.REACTOR_FACTORY
 
-    class ReactorStarport(TerranStructure, AnyReactor):
+    class ReactorStarport(AnyReactor):
         id = UnitTypeId.REACTOR_STARPORT
 
     class Reaper(Terran):
@@ -782,10 +915,10 @@ class UnitType:
     class RefineryRich(TerranStructure, GasBuilding):
         id = UnitTypeId.REFINERY_RICH
 
-    class Roach(Zerg):
+    class Roach(AnyRoach):
         id = UnitTypeId.ROACH
 
-    class RoachBurrowed(Zerg):
+    class RoachBurrowed(AnyRoach):
         id = UnitTypeId.ROACH_BURROWED
 
     class RoachWarren(ZergStructure):
@@ -812,28 +945,28 @@ class UnitType:
     class ShieldBattery(ProtossStructure):
         id = UnitTypeId.SHIELD_BATTERY
 
-    class SiegeTank(Terran):
+    class SiegeTank(AnySiegeTank):
         id = UnitTypeId.SIEGE_TANK
 
-    class SiegeTankSieged(Terran):
+    class SiegeTankSieged(AnySiegeTank):
         id = UnitTypeId.SIEGE_TANK_SIEGED
 
     class SpawningPool(ZergStructure):
         id = UnitTypeId.SPAWNING_POOL
 
-    class SpineCrawler(ZergStructure):
+    class SpineCrawler(AnySpineCrawler):
         id = UnitTypeId.SPINE_CRAWLER
 
-    class SpineCrawlerUprooted(ZergStructure):
+    class SpineCrawlerUprooted(AnySpineCrawler):
         id = UnitTypeId.SPINE_CRAWLER_UPROOTED
 
-    class Spire(ZergStructure):
+    class Spire(AnySpire):
         id = UnitTypeId.SPIRE
 
-    class SporeCrawler(ZergStructure):
+    class SporeCrawler(AnySporeCrawler):
         id = UnitTypeId.SPORE_CRAWLER
 
-    class SporeCrawlerUprooted(ZergStructure):
+    class SporeCrawlerUprooted(AnySporeCrawler):
         id = UnitTypeId.SPORE_CRAWLER_UPROOTED
 
     class Stalker(Protoss):
@@ -842,37 +975,37 @@ class UnitType:
     class Stargate(ProtossStructure):
         id = UnitTypeId.STARGATE
 
-    class Starport(TerranStructure):
+    class Starport(AnyStarport):
         id = UnitTypeId.STARPORT
 
-    class StarportFlying(TerranStructure):
+    class StarportFlying(AnyStarport):
         id = UnitTypeId.STARPORT_FLYING
 
     class StasisWard(ProtossStructure):
         id = UnitTypeId.STASIS_WARD
 
-    class SupplyDepot(TerranStructure):
+    class SupplyDepot(AnySupplyDepot):
         id = UnitTypeId.SUPPLY_DEPOT
 
-    class SupplyDepotLowered(TerranStructure):
+    class SupplyDepotLowered(AnySupplyDepot):
         id = UnitTypeId.SUPPLY_DEPOT_LOWERED
 
-    class SwarmHost(Zerg):
+    class SwarmHost(AnySwarmHost):
         id = UnitTypeId.SWARM_HOST
 
-    class SwarmHostBurrowed(Zerg):
+    class SwarmHostBurrowed(AnySwarmHost):
         id = UnitTypeId.SWARM_HOST_BURROWED
 
-    class TechLab(TerranStructure, AnyTechLab):
+    class TechLab(AnyTechLab):
         id = UnitTypeId.TECH_LAB
 
-    class TechLabBarracks(TerranStructure, AnyTechLab):
+    class TechLabBarracks(AnyTechLab):
         id = UnitTypeId.TECH_LAB_BARRACKS
 
-    class TechLabFactory(TerranStructure, AnyTechLab):
+    class TechLabFactory(AnyTechLab):
         id = UnitTypeId.TECH_LAB_FACTORY
 
-    class TechLabStarport(TerranStructure, AnyTechLab):
+    class TechLabStarport(AnyTechLab):
         id = UnitTypeId.TECH_LAB_STARPORT
 
     class Tempest(Protoss):
@@ -881,46 +1014,46 @@ class UnitType:
     class TemplarArchive(ProtossStructure):
         id = UnitTypeId.TEMPLAR_ARCHIVE
 
-    class Thor(Terran):
+    class Thor(AnyThor):
         id = UnitTypeId.THOR
 
-    class ThorHighImpact(Terran):
+    class ThorHighImpact(AnyThor):
         id = UnitTypeId.THOR_HIGH_IMPACT
 
     class TwilightCouncil(ProtossStructure):
         id = UnitTypeId.TWILIGHT_COUNCIL
 
-    class Ultralisk(Zerg):
+    class Ultralisk(AnyUltralisk):
         id = UnitTypeId.ULTRALISK
 
-    class UltraliskBurrowed(Zerg):
+    class UltraliskBurrowed(AnyUltralisk):
         id = UnitTypeId.ULTRALISK_BURROWED
 
     class UltraliskCavern(ZergStructure):
         id = UnitTypeId.ULTRALISK_CAVERN
 
-    class VespeneGeyser(Structure, AnyVespeneGeyser):
+    class VespeneGeyser(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER
 
-    class VespeneGeyserProtoss(Structure, AnyVespeneGeyser):
+    class VespeneGeyserProtoss(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER_PROTOSS
 
-    class VespeneGeyserPurifier(Structure, AnyVespeneGeyser):
+    class VespeneGeyserPurifier(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER_PURIFIER
 
-    class VespeneGeyserRich(Structure, AnyVespeneGeyser):
+    class VespeneGeyserRich(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER_RICH
 
-    class VespeneGeyserShakuras(Structure, AnyVespeneGeyser):
+    class VespeneGeyserShakuras(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER_SHAKURAS
 
-    class VespeneGeyserSpacePlatform(Structure, AnyVespeneGeyser):
+    class VespeneGeyserSpacePlatform(AnyVespeneGeyser):
         id = UnitTypeId.VESPENE_GEYSER_SPACE_PLATFORM
 
-    class Viking(Terran):
+    class Viking(AnyViking):
         id = UnitTypeId.VIKING
 
-    class VikingLanded(Terran):
+    class VikingLanded(AnyViking):
         id = UnitTypeId.VIKING_LANDED
 
     class Viper(Zerg):
@@ -929,29 +1062,29 @@ class UnitType:
     class VoidRay(Protoss):
         id = UnitTypeId.VOID_RAY
 
-    class WarpGate(ProtossStructure):
+    class WarpGate(AnyGateway):
         id = UnitTypeId.WARP_GATE
 
-    class WarpPrism(Protoss):
+    class WarpPrism(AnyWarpPrism):
         id = UnitTypeId.WARP_PRISM
 
-    class WarpPrismPhasing(Protoss):
+    class WarpPrismPhasing(AnyWarpPrism):
         id = UnitTypeId.WARP_PRISM_PHASING
 
     class Watchtower(Structure):
         id = UnitTypeId.WATCHTOWER
 
-    class WidowMine(Terran):
+    class WidowMine(AnyWidowMine):
         id = UnitTypeId.WIDOW_MINE
 
-    class WidowMineBurrowed(Terran):
+    class WidowMineBurrowed(AnyWidowMine):
         id = UnitTypeId.WIDOW_MINE_BURROWED
 
     class Zealot(Protoss):
         id = UnitTypeId.ZEALOT
 
-    class Zergling(Zerg):
+    class Zergling(AnyZergling):
         id = UnitTypeId.ZERGLING
 
-    class ZerglingBurrowed(Zerg):
+    class ZerglingBurrowed(AnyZergling):
         id = UnitTypeId.ZERGLING_BURROWED

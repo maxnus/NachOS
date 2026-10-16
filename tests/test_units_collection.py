@@ -173,6 +173,24 @@ class TestFilters:
         assert _tags(units.complete) == [unit.tag for unit in units if unit.build_progress == 1.0]
         assert _tags(units.idle) == [unit.tag for unit in units if not unit.orders]
 
+    def test_the_groups_a_bot_reads_most(self) -> None:
+        neutral = Alliance.NEUTRAL
+        units = _units(
+            make_unit(1, UnitTypeId.SCV),
+            make_unit(2, UnitTypeId.MULE),
+            make_unit(3, UnitTypeId.COMMAND_CENTER_FLYING),
+            make_unit(4, UnitTypeId.MINERAL_FIELD_750, alliance=neutral),
+            make_unit(5, UnitTypeId.VESPENE_GEYSER_RICH, alliance=neutral),
+            make_unit(6, UnitTypeId.EXTRACTOR, alliance=Alliance.ENEMY),
+            make_unit(7, UnitTypeId.MARINE),
+        )
+        assert _tags(units.workers) == [1]
+        assert _tags(units.townhalls) == [3]
+        assert _tags(units.mineral_fields) == [4]
+        assert _tags(units.geysers) == [5]
+        assert _tags(units.gas_buildings) == [6]
+        assert _tags(units.own.workers) == [1]
+
     def test_a_filter_over_what_was_never_shown_in_sight_raises(self) -> None:
         """The hidden enemy was never in sight, so its build progress was never reported."""
         with pytest.raises(NotReportedError):
@@ -200,6 +218,33 @@ class TestWhereTheyAre:
         assert _tags(units.closest_n_to(5, point)) == [unit.tag for unit in by_distance[:5]]
         assert units.closest_to(point) is by_distance[0]
         assert units.closest_distance_to(point) == pytest.approx(by_distance[0].position.distance_to(point))
+
+    def test_in_any_of_several_areas(self) -> None:
+        units = _mine(60)
+        areas = [Circle((10, 10), 5), Rectangle(25, 25, 10, 10)]
+        assert _tags(units.in_area(areas)) == [unit.tag for unit in units if any(unit.position in a for a in areas)]
+        assert _tags(units.in_area([])) == []
+
+    @pytest.mark.parametrize("distance", [0.0, 6.5, 30.0])
+    def test_within_a_distance_of_a_point_a_unit_or_several(self, distance: float) -> None:
+        units = _mine(60, seed=5)
+        anchor = units[0]
+        points = [Point((5.0, 5.0)), (30.0, 12.0)]
+
+        def near(*centers: Point | tuple[float, float]) -> list[int]:
+            return [unit.tag for unit in units if any(unit.position.distance_to(c) <= distance for c in centers)]
+
+        assert _tags(units.within(distance, of=points[0])) == near(points[0])
+        assert _tags(units.within(distance, of=(30.0, 12.0))) == near((30.0, 12.0))
+        assert _tags(units.within(distance, of=anchor)) == near(anchor.position)
+        assert _tags(units.within(distance, of=points)) == near(*points)
+        assert _tags(units.within(distance, of=[anchor, points[1]])) == near(anchor.position, points[1])
+        assert _tags(units.within(distance, of=units[:3])) == near(*(unit.position for unit in units[:3]))
+
+    @pytest.mark.parametrize("distance", [-1.0, math.nan])
+    def test_within_a_negative_distance_raises(self, distance: float) -> None:
+        with pytest.raises(ValueError, match="a distance is at least 0"):
+            _mine(3).within(distance, of=(0.0, 0.0))
 
     def test_asking_for_more_than_there_are_answers_them_all(self) -> None:
         units = _mine(3)

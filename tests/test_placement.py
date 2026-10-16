@@ -313,6 +313,10 @@ class TestTheReservedGrid:
         refinery = make_unit(3, UnitTypeId.REFINERY_RICH, at=(8.5, 8.5), build_progress=0.05)
         assert not game.observe(8, _scv(1, building, at=(6.5, 8.5)), geyser, refinery).reserved.any()
 
+    def test_a_build_shown_aimed_by_a_tag_the_game_never_reports_reserves_nothing(self) -> None:
+        building = raw_pb2.UnitOrder(ability_id=_BUILD_REFINERY, target_unit_tag=99)
+        assert not _Game().observe(0, _scv(1, building)).reserved.any()
+
     def test_an_add_on_reserves_the_ground_beside_its_host(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
@@ -405,9 +409,12 @@ class TestPlacingOneStructure:
         site = grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.2, 8.3)), max_distance=5.0)
         assert site == Point((8.0, 10.0))
 
+    @pytest.mark.parametrize("margin", [0, 1, (0, 2, 0, 0), (1, 0, 2, 0)], ids=str)
     @pytest.mark.parametrize("unit_type", [UnitTypeId.SUPPLY_DEPOT, UnitTypeId.BARRACKS], ids=lambda t: t.name)
     @pytest.mark.parametrize("near", [Point((6.3, 9.8)), Point((3.0, 3.0)), Point((14.6, 0.4))], ids=str)
-    def test_nearest_free_is_the_nearest_center_is_free_takes(self, unit_type: UnitTypeId, near: Point) -> None:
+    def test_nearest_free_is_the_nearest_center_is_free_takes(
+        self, unit_type: UnitTypeId, near: Point, margin: int | tuple[int, int, int, int]
+    ) -> None:
         grids = _Game().observe(
             0,
             make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(6.0, 10.0)),
@@ -417,13 +424,45 @@ class TestPlacingOneStructure:
         footprint = _TABLES.units[unit_type].footprint
         assert footprint is not None
         centers = [footprint.center_in_tile(Tile(x, y)) for x in range(16) for y in range(16)]
-        taken = [c for c in centers if c.distance_to(near) <= 4.0 and grids.is_free(unit_type, at=c)]
+        taken = [c for c in centers if c.distance_to(near) <= 4.0 and grids.is_free(unit_type, at=c, margin=margin)]
         expected = min(taken, key=lambda c: c.distance_to(near), default=None)
-        found = grids.nearest_free(unit_type, near=near, max_distance=4.0)
+        found = grids.nearest_free(unit_type, near=near, max_distance=4.0, margin=margin)
         assert (found is None) == (expected is None)
         if found is not None and expected is not None:
             assert found.distance_to(near) == pytest.approx(expected.distance_to(near))
-            assert grids.is_free(unit_type, at=found)
+            assert grids.is_free(unit_type, at=found, margin=margin)
+
+    def test_a_margin_keeps_the_tiles_beside_the_footprint_free_on_the_sides_it_names(self) -> None:
+        """A depot at (8, 8) covers x 7 to 8; a depot at (11, 8) covers x 10 to 11, one tile clear of it on the
+        right."""
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(11.0, 8.0)))
+        depot = UnitTypeId.SUPPLY_DEPOT
+        assert grids.is_free(depot, at=Point((8.0, 8.0)))
+        assert grids.is_free(depot, at=Point((8.0, 8.0)), margin=1)
+        assert not grids.is_free(depot, at=Point((8.0, 8.0)), margin=2)
+        assert not grids.is_free(depot, at=Point((8.0, 8.0)), margin=(0, 2, 0, 0))
+        assert grids.is_free(depot, at=Point((8.0, 8.0)), margin=(2, 1, 2, 2))
+
+    @pytest.mark.parametrize(
+        ("margin", "error", "message"),
+        [
+            (-1, ValueError, "never negative"),
+            ((0, 0, -1, 0), ValueError, "never negative"),
+            ((1, 1, 1), TypeError, "a tuple of four"),
+            ([1, 1, 1, 1], TypeError, "a tuple of four"),
+            (1.5, TypeError, "a tuple of four"),
+            (True, TypeError, "a tuple of four"),
+        ],
+        ids=str,
+    )
+    def test_a_margin_negative_or_not_a_count_or_four_raises(
+        self, margin: object, error: type[Exception], message: str
+    ) -> None:
+        grids = _Game().observe(0)
+        with pytest.raises(error, match=message):
+            grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)), margin=margin)  # pyright: ignore[reportArgumentType]
+        with pytest.raises(error, match=message):
+            grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=3.0, margin=margin)  # pyright: ignore[reportArgumentType]
 
     def test_a_build_issued_earlier_in_the_turn_takes_its_site(self) -> None:
         game = _Game()

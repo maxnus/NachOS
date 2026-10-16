@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.geometry import Grid, Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.units import Unit, UnitType
+from sc2nachos.units import NotReportedError, Unit, UnitType
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator
@@ -78,7 +78,11 @@ class _BuildSites:
         product = self._game_data.abilities[build.ability].products.get(builder.type_id)
         if not isinstance(product, UnitTypeId) or (footprint := self._game_data.units[product].footprint) is None:
             return
-        target = build.target
+        try:
+            target = build.target
+        except NotReportedError:
+            # Shown aimed at a unit the game names by no tag it reports: no site to reserve.
+            return
         site = target.position if isinstance(target, Unit) else target
         if product in UnitType.AnyAddOn._type_ids:
             self._reserve_add_on(reserved, footprint, site, builder, standing)

@@ -143,9 +143,11 @@ a unit's micro are unchanged. Whatever is queued behind a held order waits with 
 the same request.
 
 A held order shows in `issued_to(unit)`, ahead of the turn's orders to the unit, so a handler that leaves alone a
-unit already ordered leaves alone a worker on its way to build and a structure with a train waiting. `withdraw()`
-takes it back; the move or the landing already sent stays. Nothing is checked as it goes out: what the bank or the
-supply cap lacks then, the game refuses or stalls, as it would have when the order was given.
+unit already ordered leaves alone a worker on its way to build and a structure with a train waiting, and
+`api.orders.held` lists what is held for every unit, an order held for several once, less what the turn's orders will
+drop. `withdraw()` takes a held order back; the move or the landing already sent stays. Nothing is checked as it goes
+out: what the bank or the supply cap lacks then, the game refuses or stalls, as it would have when the order was
+given.
 `issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
 in its orders yet: on the ladder an order can show two observations after it went out.
 
@@ -203,6 +205,13 @@ giving several orders in one turn keeps its own tally. `cost` is what the game c
 the difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the
 ability takes of the cap as it starts.
 
+Nor does the bank show what NachOS holds: a build is charged once its worker reaches the site, so a bot takes off what
+the held orders and the turn's will cost, `api.orders.unpaid`, while the worker walks:
+
+```python
+budget = api.resources - api.orders.unpaid.resources
+```
+
 To take back an order NachOS still holds, withdraw it: only what the game already has needs a cancel. A cancel is
 an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
 structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
@@ -239,3 +248,9 @@ cannot carry out. The ids do agree: a unit reports its type's own id of an actio
 reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
 `SIEGE`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
+
+The targets need not agree either. An SCV walking back to a mineral field out of sight shows its `GATHER` aimed at a
+tag the game reports for no unit (in game), so NachOS reads it as aimed at the unit the SCV's last `GATHER` named,
+the field it mined: any order aimed so reads as aimed at the unit the unit's last order of the same ability named,
+even one dead since, and its `target` raises `NotReportedError` if there was none. A rally onto a unit out of sight
+names no unit at all, so it reads as its point (in game).
