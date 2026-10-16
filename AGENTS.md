@@ -154,5 +154,6 @@ buildings.
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
 | Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |
+| Find what the game does with debug commands, chat, leaving and the pathing query | `uv run python tools/sweep_requests.py`, which starts the game |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py`, which starts the game |
 | Measure every structure's footprint, and what lies under the map's rocks | `uv run python tools/sweep_placement.py footprints` or `ground-under-rocks`, which start the game, then `uv run python tools/generate_footprints.py` |

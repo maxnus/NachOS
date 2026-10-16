@@ -225,10 +225,10 @@ class Client:
         return response.action
 
     def debug(self, commands: Sequence[debug_pb2.DebugCommand]) -> None:
-        """Send debug `commands`. Only a game the client created itself accepts them.
+        """Send debug `commands`, which the game answers with nothing to read, from a client that joined the game as
+        from the one that created it (in game).
 
-        The game answers nothing. A drawing lasts until the next debug request, so one that should stay on screen
-        must be sent again every turn.
+        A drawing lasts until the next debug request, so one that should stay on screen goes with every request.
         """
         self._send(sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug(debug=commands)))
 
