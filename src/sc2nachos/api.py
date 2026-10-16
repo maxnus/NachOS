@@ -208,7 +208,7 @@ class Api:
     @property
     def placement(self) -> PlacementGrids:
         """Where a structure may stand: on the map whatever happens in the game, and now as far as this player knows;
-        and the ground this player's ordered builds are to stand on."""
+        and the ground this player's ordered builds are to stand on, and what it has reserved."""
         return self._current_game().placement
 
     @property
