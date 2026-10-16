@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any, overload
 
 from loguru import logger
+from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
@@ -23,6 +24,9 @@ from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
+
+# The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
+_LONGEST_CHAT = 1039
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -232,6 +236,25 @@ class Api:
     def effects(self) -> tuple[Effect, ...]:
         """Every effect this player can see. Raises `UncuratedIdError` if one is an effect the curated ids leave out."""
         return self._current_game().state.effects
+
+    def chat(self, text: str, *, team_only: bool = False) -> None:
+        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's orders: after
+        them and the camera's move, each message of the turn in the order given. The game drops chat that comes too
+        fast without a word, once some 500 bytes have gone out in a row, counting by the clock rather than in steps
+        (in game).
+
+        Raises `ValueError` for an empty text, and for one of 1040 bytes or more in UTF-8, which kills the game client
+        (in game).
+        """
+        game = self._current_game()
+        if not text:
+            raise ValueError("a chat message cannot be empty")
+        if (size := len(text.encode())) > _LONGEST_CHAT:
+            raise ValueError(
+                f"a chat message of {_LONGEST_CHAT + 1} bytes or more kills the game client, and this one is {size}"
+            )
+        channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
+        game.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
     def play(
         self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None

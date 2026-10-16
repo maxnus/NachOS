@@ -3,7 +3,7 @@
 import functools
 import itertools
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Final, Self, cast
 
@@ -87,6 +87,8 @@ class _Game:
     placement: Final[PlacementGrids]
     pathing: Final[Pathing]
     camera: Final[Camera]
+    # The turn's chat, in the order given, as the actions that send it.
+    chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -307,8 +309,9 @@ class _Game:
         return row is not None and Attribute.STRUCTURE in row.attributes
 
     def send_turn(self) -> None:
-        """Send what the turn's handlers asked for: the orders, then the camera's move, in one request."""
-        self.orders._send(self.client, then=self.camera._take_moves())
+        """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request."""
+        chat, self.chat_to_send = self.chat_to_send, []
+        self.orders._send(self.client, then=[*self.camera._take_moves(), *chat])
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, or `None` while it goes on. Ending it settles the result."""
