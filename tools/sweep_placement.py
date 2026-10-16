@@ -646,7 +646,12 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
         order_book = OrderBook(data)
         present_units = tracker.unit_tracker.present
         placement = PlacementGrids._build_at_start(
-            game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book
+            game_map.placement,
+            present_units=present_units,
+            state=state,
+            step=observation.observation.game_loop,
+            game_data=data,
+            order_book=order_book,
         )
         free = placement.free
         tiles = sorted(game_map.playable_area.tiles())

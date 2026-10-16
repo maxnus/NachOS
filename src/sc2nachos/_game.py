@@ -117,6 +117,7 @@ class _Game:
                 game_map.placement,
                 present_units=present_units,
                 state=state,
+                step=step,
                 game_data=game_data,
                 order_book=order_book,
             ),
@@ -141,7 +142,7 @@ class _Game:
         self.observation = observation
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
-        self.placement._update(self.tracker.unit_tracker.present, self.state)
+        self.placement._update(self.tracker.unit_tracker.present, self.state, step)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)

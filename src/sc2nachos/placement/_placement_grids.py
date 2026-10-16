@@ -9,7 +9,8 @@ from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid, Point, Rectangle
 from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.placement._build_sites import _BuildSites
+from sc2nachos.placement._build_sites import _BuildSites, _placement_key
+from sc2nachos.placement._placement_reservation import PlacementReservation
 from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
 from sc2nachos.units import UnitType
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 class PlacementGrids:
     """Where a structure may stand, as this player knows the map in the current observation, in layers: `static`, the
     ground the map lets a structure stand on all game; `dynamic`, where nothing stands now that can go; and
-    `reserved`, where this player's ordered builds will stand.
+    `reserved`, where this player's ordered builds will stand, and what it has reserved with `reserve`.
 
     `free` combines them, and `free_for` adds what a structure type needs: the creep, and for a townhall, the ground
     resources leave it. `is_free` says whether one may stand at a point, and `nearest_free` finds the nearest site where
@@ -39,8 +40,10 @@ class PlacementGrids:
         "_game_data",
         "_ground_by_needs",
         "_present_units",
+        "_reservations",
         "_state",
         "_static",
+        "_step",
         "_townhall_ground",
     )
 
@@ -51,15 +54,19 @@ class PlacementGrids:
         build_sites: _BuildSites,
         present_units: Units[Unit[Any]],
         state: _State,
+        step: int,
         game_data: GameData,
     ) -> None:
-        """The grids of the observation `state` reads, in which this player knows of `present_units`, in sight or
-        remembered, from the game's `static_placement_grid` and its `build_sites`."""
+        """The grids of the observation `state` reads, made at `step`, in which this player knows of `present_units`,
+        in sight or remembered, from the game's `static_placement_grid` and its `build_sites`."""
         self._static = static_placement_grid
         self._build_sites = build_sites
         self._present_units = present_units
         self._state = state
+        self._step = step
         self._game_data = game_data
+        # What `reserve` made that has not ended, withdrawn ones until the next observation.
+        self._reservations: list[PlacementReservation] = []
         self._dynamic: Grid[bool] | None = None
         self._townhall_ground: Grid[bool] | None = None
         self._ground_by_needs: dict[tuple[bool, CreepRequirement | None], Grid[bool]] = {}
@@ -71,27 +78,44 @@ class PlacementGrids:
         *,
         present_units: Units[Unit[Any]],
         state: _State,
+        step: int,
         game_data: GameData,
         order_book: OrderBook,
     ) -> Self:
-        """The grids of a game's first observation, which `state` reads and in which this player knows of
-        `present_units`, from the game's `placement_grid` at the start, and with this player's builds as `order_book`
-        holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral fields in
-        sight included; it is the pathing grid that blocks those."""
+        """The grids of a game's first observation, which `state` reads, made at `step`, and in which this player knows
+        of `present_units`, from the game's `placement_grid` at the start, and with this player's builds as
+        `order_book` holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral
+        fields in sight included; it is the pathing grid that blocks those."""
         static = placement_grid.copy()
         for unit in present_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             if (footprint := unit.footprint) is not None:
                 static.fill_footprint(footprint, at=unit.position, value=False)
         build_sites = _BuildSites(game_data, order_book)
         return cls(
-            static.as_readonly(), build_sites=build_sites, present_units=present_units, state=state, game_data=game_data
+            static.as_readonly(),
+            build_sites=build_sites,
+            present_units=present_units,
+            state=state,
+            step=step,
+            game_data=game_data,
         )
 
-    def _update(self, present_units: Units[Unit[Any]], state: _State) -> None:
-        """Move on to a later observation of the same game, which `state` reads and in which this player knows of
-        `present_units`."""
+    def _update(self, present_units: Units[Unit[Any]], state: _State, step: int) -> None:
+        """Move on to a later observation of the same game, which `state` reads, made at `step`, and in which this
+        player knows of `present_units`. A reservation ends here if it has run its steps or one of this player's
+        structures stands on its site."""
         self._present_units = present_units
         self._state = state
+        self._step = step
+        if self._reservations:
+            standing = {_placement_key(own.position) for own in present_units.own if own.footprint is not None}
+            self._reservations = [
+                reservation
+                for reservation in self._reservations
+                if not reservation._withdrawn
+                and (reservation.max_steps is None or step < reservation.step + reservation.max_steps)
+                and _placement_key(reservation.at) not in standing
+            ]
         self._dynamic = None
         self._townhall_ground = None
         self._ground_by_needs = {}
@@ -121,10 +145,32 @@ class PlacementGrids:
 
     @property
     def reserved(self) -> Grid[bool]:
-        """The tiles under this player's builds that are ordered and not standing yet: issued this turn, or sent and
-        not yet begun. A build issued or withdrawn earlier in the turn shows. An add-on reserves the ground beside its
-        host, and a lifted host's landing site too."""
-        return self._build_sites.reserved_grid(self._static, self._present_units.own)
+        """The tiles under this player's builds that are ordered and not standing yet, issued this turn or sent and not
+        yet begun, and under each of `reservations`. A build or a reservation made or withdrawn earlier in the turn
+        shows. An add-on reserves the ground beside its host, and a lifted host's landing site too."""
+        return self._build_sites.reserved_grid(self._static, self._present_units.own, self.reservations)
+
+    @property
+    def reservations(self) -> tuple[PlacementReservation, ...]:
+        """Every reservation `reserve` made that has not ended, oldest first."""
+        return tuple(reservation for reservation in self._reservations if not reservation._withdrawn)
+
+    def reserve(self, unit_type: UnitTypeId, *, at: PointLike, max_steps: int | None = None) -> PlacementReservation:
+        """Keep the ground a structure of `unit_type` would cover at `at`, placed as the game snaps it, out of
+        `free`, `free_for`, `is_free` and `nearest_free` from now, the rest of this turn included, until the
+        reservation is withdrawn, until `max_steps` steps have passed if given, or until an observation shows one of
+        this player's structures standing on its site, whatever type it stands as. `max_steps=1` keeps it for this turn
+        alone. Reservations may overlap, and each game starts with none.
+
+        Raises `ValueError` for a type with no footprint, for a gas building, which stands on a geyser, and for a
+        `max_steps` below 1."""
+        footprint = self._footprint_of(unit_type)
+        if max_steps is not None and not max_steps >= 1:
+            raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
+        center = footprint.snapped_center(at=at)
+        reservation = PlacementReservation(unit_type, footprint, at=center, step=self._step, max_steps=max_steps)
+        self._reservations.append(reservation)
+        return reservation
 
     @property
     def free(self) -> Grid[bool]:

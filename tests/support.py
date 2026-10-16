@@ -282,6 +282,7 @@ def played(
                 game_map.placement,
                 present_units=present_units,
                 state=state,
+                step=step,
                 game_data=tracker.game_data,
                 order_book=order_book,
             ),

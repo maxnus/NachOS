@@ -100,10 +100,15 @@ class _Game:
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
-                self.map.placement, present_units=present, state=state, game_data=_TABLES, order_book=self.book
+                self.map.placement,
+                present_units=present,
+                state=state,
+                step=step,
+                game_data=_TABLES,
+                order_book=self.book,
             )
         else:
-            self.grids._update(present, state)
+            self.grids._update(present, state, step)
         return self.grids
 
     def own(self, tag: int) -> OwnUnit[Any]:
@@ -335,6 +340,98 @@ class TestTheReservedGrid:
         ]
 
 
+_DEPOT = UnitTypeId.SUPPLY_DEPOT
+
+
+class TestReservingASite:
+    def test_a_reservation_reserves_its_footprint_where_the_game_snaps_it_from_the_moment_it_is_made(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(_DEPOT, at=Point((8.3, 7.8)))
+
+        assert reservation.at == Point((8.0, 8.0))
+        assert (reservation.type_id, reservation.step, reservation.max_steps) == (_DEPOT, 0, None)
+        assert grids.reservations == (reservation,)
+        assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
+        assert not grids.is_free(_DEPOT, at=(8.0, 8.0))
+        assert not grids.free[Point((8.0, 8.0))]
+
+    def test_nearest_free_keeps_off_a_reservation(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+        nearest = grids.nearest_free(_DEPOT, near=(8.0, 8.0), max_distance=8.0)
+
+        grids.reserve(_DEPOT, at=(8.0, 8.0))
+
+        assert nearest == Point((8.0, 8.0))
+        assert grids.nearest_free(_DEPOT, near=(8.0, 8.0), max_distance=8.0) != nearest
+
+    def test_a_withdrawn_reservation_frees_its_site_at_once(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+        reservation = grids.reserve(_DEPOT, at=(8.0, 8.0))
+
+        reservation.withdraw()
+        reservation.withdraw()
+
+        assert grids.reservations == ()
+        assert not grids.reserved.any()
+
+    def test_it_lasts_until_withdrawn(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+
+        assert game.observe(1000, _scv(1)).reserved[Point((8.0, 8.0))]
+
+    def test_it_ends_once_max_steps_steps_have_passed(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_steps=8)
+
+        assert game.observe(7, _scv(1)).reservations
+        assert not game.observe(8, _scv(1)).reservations
+
+    def test_one_step_keeps_it_for_its_own_turn_alone(self) -> None:
+        game = _Game()
+        grids = game.observe(16, _scv(1))
+        grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=1)
+
+        assert grids.reserved.any()
+        assert not game.observe(17, _scv(1)).reserved.any()
+
+    def test_it_ends_once_one_of_this_players_structures_stands_on_its_site_and_never_comes_back(self) -> None:
+        """Whatever type it stands as, as the reserved grid frees the site of a build begun."""
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+        barracks = make_unit(2, UnitTypeId.BARRACKS, at=(8.5, 8.5), build_progress=0.05)
+
+        assert game.observe(8, _scv(1)).reservations
+        assert not game.observe(16, _scv(1), make_unit(2, _DEPOT, at=(8.0, 8.0), build_progress=0.05)).reservations
+        assert not game.observe(24, _scv(1), dead=(2,)).reserved.any()
+        assert not game.observe(32, _scv(1), barracks).reservations
+
+    def test_another_players_structure_on_its_site_does_not_end_it(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+        theirs = make_unit(2, _DEPOT, at=(8.0, 8.0), alliance=Alliance.ENEMY)
+
+        assert game.observe(8, _scv(1), theirs).reservations
+
+    @pytest.mark.parametrize(
+        ("unit_type", "max_steps", "message"),
+        [
+            (UnitTypeId.MARINE, None, "MARINE has no footprint"),
+            (UnitTypeId.REFINERY, None, "REFINERY stands on a geyser"),
+            (_DEPOT, 0, "max_steps is a number of steps, at least 1, not 0"),
+        ],
+        ids=["no footprint", "gas building", "no steps"],
+    )
+    def test_what_cannot_be_reserved_raises(self, unit_type: UnitTypeId, max_steps: int | None, message: str) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(ValueError, match=message):
+            grids.reserve(unit_type, at=(8.0, 8.0), max_steps=max_steps)
+
+        assert grids.reservations == ()
+
+
 # Creep over the right half of the drawn map, top row first.
 _CREEP_ON_THE_RIGHT = tuple("." * 8 + "#" * 8 for _ in range(16))
 
@@ -526,7 +623,12 @@ class TestARecordedGamesStart:
         order_book = OrderBook(data)
         present_units = tracker.unit_tracker.present
         grids = PlacementGrids._build_at_start(
-            game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book
+            game_map.placement,
+            present_units=present_units,
+            state=state,
+            step=observation.observation.game_loop,
+            game_data=data,
+            order_book=order_book,
         )
         return game_map, tracker, grids
 

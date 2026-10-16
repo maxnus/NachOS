@@ -9,11 +9,12 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import NotReportedError, Unit, UnitType
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterator
+    from collections.abc import Collection, Iterable, Iterator
 
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
     from sc2nachos.orders import Order, OrderBook
+    from sc2nachos.placement._placement_reservation import PlacementReservation
     from sc2nachos.units import OwnUnit, UnitOrder, Units
 
 # An add-on stands 2.5 right of its host's center and 0.5 below (#37).
@@ -36,10 +37,15 @@ class _BuildSites:
         # The types that perform an ability that places a structure: workers, add-on hosts, queens and the like.
         self._builder_types = frozenset(type_id for row in builds for type_id in row.performers)
 
-    def reserved_grid(self, like: Grid[bool], own_units: Units[OwnUnit[Any]]) -> Grid[bool]:
+    def reserved_grid(
+        self, like: Grid[bool], own_units: Units[OwnUnit[Any]], reservations: Iterable[PlacementReservation]
+    ) -> Grid[bool]:
         """A read-only grid over the tiles `like` covers, true under each build site of `own_units`, this player's
-        units. An add-on reserves the ground beside its host, and a lifted host's landing site too."""
+        units, and under each of `reservations`. An add-on reserves the ground beside its host, and a lifted host's
+        landing site too."""
         reserved = Grid.like(like, dtype=bool, outside=False)
+        for reservation in reservations:
+            reserved.fill_footprint(reservation._footprint, at=reservation.at, value=True)
         standing: set[tuple[int, int]] | None = None
         for unit in own_units:
             if unit.type_id in self._builder_types:
