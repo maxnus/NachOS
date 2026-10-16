@@ -234,9 +234,11 @@ ROLES = {
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
+    "Destructible": (
+        "A destructible rock, debris, ice, unbuildable brick, plate or rock, or a collapsible tower or its debris."
+    ),
     "CollapsibleTower": "A collapsible tower, which falls across a path once destroyed and stays there.",
     "CollapsibleTowerDebris": "The debris a collapsible tower leaves where it lands once felled.",
-    "Destructible": "A destructible rock, debris, ice, or unbuildable bricks, plates or rocks.",
     "InhibitorZone": "An inhibitor zone generator, of any size, plain or flying.",
     "AccelerationZone": "An acceleration zone generator, of any size, plain or flying.",
     "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
@@ -250,7 +252,12 @@ ROLES = {
     **TWO_FORM_DOCSTRINGS,
 }
 # The groups that hold every type of another group, by that other group.
-HOLDING_GROUPS = {"AnyTechLab": "AnyAddOn", "AnyReactor": "AnyAddOn"}
+HOLDING_GROUPS = {
+    "AnyTechLab": "AnyAddOn",
+    "AnyReactor": "AnyAddOn",
+    "CollapsibleTower": "Destructible",
+    "CollapsibleTowerDebris": "Destructible",
+}
 # The groups of a plain type and every type the game's tables count as it, by group, with that type.
 COUNTED_AS = {
     "AnyTechLab": UnitTypeId.TECH_LAB,

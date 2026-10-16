@@ -136,7 +136,9 @@ class TestUnitType:
         counts = [
             len(group._type_ids) for group in (UnitType.Destructible, UnitType.InhibitorZone, UnitType.AccelerationZone)
         ]
-        assert counts == [50, 6, 6]
+        assert counts == [68, 6, 6]
+        towers_and_debris = UnitType.CollapsibleTower._type_ids | UnitType.CollapsibleTowerDebris._type_ids
+        assert UnitType.Destructible._type_ids == _named("DESTRUCTIBLE_") | towers_and_debris
 
     def test_a_spire_and_an_overlord_are_a_plain_one_or_what_the_tables_count_as_one(self) -> None:
         assert UnitType.AnySpire._type_ids == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}

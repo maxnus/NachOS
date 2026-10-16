@@ -105,14 +105,14 @@ class UnitType:
     class GasBuilding(Structure):
         """A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race."""
 
-    class CollapsibleTower(Structure):
+    class Destructible(Structure):
+        """A destructible rock, debris, ice, unbuildable brick, plate or rock, or a collapsible tower or its debris."""
+
+    class CollapsibleTower(Destructible):
         """A collapsible tower, which falls across a path once destroyed and stays there."""
 
-    class CollapsibleTowerDebris(Structure):
+    class CollapsibleTowerDebris(Destructible):
         """The debris a collapsible tower leaves where it lands once felled."""
-
-    class Destructible(Structure):
-        """A destructible rock, debris, ice, or unbuildable bricks, plates or rocks."""
 
     class InhibitorZone(Structure):
         """An inhibitor zone generator, of any size, plain or flying."""
