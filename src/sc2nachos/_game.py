@@ -57,6 +57,7 @@ from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
@@ -83,6 +84,7 @@ class _Game:
     observation: sc2api_pb2.ResponseObservation
     state: _State
     placement: Final[PlacementGrids]
+    pathing: Final[Pathing]
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -121,6 +123,7 @@ class _Game:
                 game_data=game_data,
                 order_book=order_book,
             ),
+            pathing=Pathing(client),
             step=step,
         )
         game._read(observation, step)

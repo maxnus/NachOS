@@ -410,6 +410,7 @@ class TestThroughTheApi:
         "explored",
         "creep",
         "placement",
+        "pathing",
         "effects",
     )
 

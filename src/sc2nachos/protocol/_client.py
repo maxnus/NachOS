@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from loguru import logger
-from s2clientprotocol import debug_pb2, sc2api_pb2
+from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.match import Computer, Participant, Player, Race, Result
 from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, GameNotStartedError, ProtocolError
@@ -23,7 +23,7 @@ _NOT_STARTED_ERRORS = frozenset({"A game has not been started yet"})
 # The answers this client reads. A `Literal` rather than `str`, so pyright checks each name against the response
 # fields the stubs declare.
 type _Answer = Literal[
-    "action", "create_game", "data", "game_info", "join_game", "observation", "ping", "save_replay", "step"
+    "action", "create_game", "data", "game_info", "join_game", "observation", "ping", "query", "save_replay", "step"
 ]
 
 
@@ -231,6 +231,10 @@ class Client:
         A drawing lasts until the next debug request, so one that should stay on screen goes with every request.
         """
         self._send(sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug(debug=commands)))
+
+    def query(self, request: query_pb2.RequestQuery) -> query_pb2.ResponseQuery:
+        """Ask the game `request`'s questions, and return its answers, each list in the order asked."""
+        return self._send(sc2api_pb2.Request(query=request), "query").query
 
     def save_replay(self) -> bytes:
         """The replay of the game so far, as the bytes of a `.SC2Replay` file."""

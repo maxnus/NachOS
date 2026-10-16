@@ -46,6 +46,7 @@ from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
@@ -286,6 +287,7 @@ def played(
                 game_data=tracker.game_data,
                 order_book=order_book,
             ),
+            pathing=Pathing(client),
             step=step,
         )
         game._read(observation, step)
