@@ -654,8 +654,11 @@ class TestSieging:
         """One of two liberators given one siege at a point sieges, and both of two tanks (tool `sweep_orders`,
         `group-abilities-terran`)."""
         game = _Game([ActionResult.SUCCESS])
-        game.observe(0, *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)))
-        game.observe(0, *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)))
+        game.observe(
+            0,
+            *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)),
+            *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)),
+        )
 
         with pytest.raises(ValueError, match="LIBERATOR_SIEGE_AT is carried out by one unit of a command"):
             game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))

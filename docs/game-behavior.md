@@ -634,18 +634,21 @@ Each entry ends with how it was seen:
     load of one passenger; a salvage, a halt, a cancel of the last item; a warp gate's turn back into a gateway and a
     warp prism's change of mode either way; a spray. A liberator's siege at a point, and a nexus's recall.
   - Both: a move, an attack, a patrol, a stop, a hold, a smart, a gather, a repair, a rally; every burrow and
-    unburrow, lift, lowering and raising, uprooting, a tank's, an observer's and an overseer's siege and unsiege, a
-    viking's, a hellion's and a thor's change of mode; a cloak, a pulsar beam, a cloaking field, a stim, a blink, a
-    charge, a lunge, a hold fire, a boost, a prismatic alignment, a tactical jump; an adept's shade, a swarm host's
-    locusts, a baneling's explosion; a cancel of a morph or of a structure going up; an unload, at a point or not.
+    unburrow, lift, lowering and raising, uprooting, a tank's, an observer's and an overseer's siege, their unsiege
+    and a liberator's, a viking's, a hellion's and a thor's change of mode; a cloak, a pulsar beam, a cloaking field,
+    a stim, a blink, a charge, a lunge, a hold fire, a boost, a prismatic alignment, a tactical jump; an adept's
+    shade, a swarm host's locusts, a baneling's explosion; a cancel of a morph or of a structure going up; an unload,
+    at a point or not.
   - Not read: a baneling's attack on structures and an overlord's creep leave nothing to see; a load-all took the
-    workers of one command center and of both planetary fortresses; and two nydus hold one cargo between them, so
-    which of them took or gave a passenger does not show. A mothership has no energy, and two never stand. A nexus's
-    recall found units to take in two of four runs, one nexus recalling each time.
+    workers of one command center in one run and of both in the next, and of both flying command centers and both
+    planetary fortresses; and two nydus hold one cargo between them, so which of them took or gave a passenger does not
+    show. Both of two motherships took a recall, but a mothership has no energy, and two never stand. A nexus's recall
+    found units to take in two of four runs, one nexus recalling each time.
 
-  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps, so a cast is told by
-  the energy spent. (Tool `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`; local game, Linux build
-  75689.)
+  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps, so a cast is told by the
+  energy spent. A medivac heals hurt units by itself, which spends energy too: of two given a load, one spent 3.6 with
+  its heal on autocast, and neither with it off, so the sweep turns it off first. (Tool `sweep_orders`,
+  `group-abilities-terran`, `-protoss` and `-zerg`; local game, Linux build 75689.)
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it

@@ -160,9 +160,10 @@ takes off what they will cost, `api.orders.unpaid`:
 budget = api.resources - api.orders.unpaid.resources
 ```
 
-`unpaid` counts the turn's orders as they will go out: the last of a unit's orders that replace one another, and
-nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the difference for a morph, 150 for an orbital
-command rather than its type's 550; and `cost.supply` is what the ability takes of the cap as it starts.
+`unpaid` counts the turn's orders as they will go out: the last of a unit's orders that replace one another, and nothing
+for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the difference
+for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the ability takes of the
+cap as it starts.
 
 A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted
 structure, which lands first (in game). A bot that would rather pay on arrival moves the worker itself and orders the

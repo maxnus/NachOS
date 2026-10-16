@@ -296,8 +296,8 @@ class AbilityId(IdEnum):
     SENTRY_HALLUCINATE_WARP_PRISM = RawAbilityId.Hallucination_WarpPrism
     SENTRY_HALLUCINATE_ZEALOT = RawAbilityId.Hallucination_Zealot
     SHIELD_BATTERY_RECHARGE = RawAbilityId.ShieldBatteryRechargeEx5_ShieldBatteryRecharge
-    # A tank's siege mode, an observer's surveillance mode and an overseer's oversight mode, and leaving each, a
-    # liberator's defender mode included. The game has no id for either across them.
+    # A tank's siege mode, an observer's surveillance mode and an overseer's oversight mode, which the game has no id
+    # for across them.
     SIEGE = auto()
     SMART = RawAbilityId.Smart  # the right-click order
     SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS = RawAbilityId.Research_ZerglingAdrenalGlands
@@ -343,6 +343,8 @@ class AbilityId(IdEnum):
     # which answer UnloadAll `Error` (in game).
     UNLOAD = RawAbilityId.UnloadAll
     UNLOAD_AT = RawAbilityId.UnloadAllAt
+    # Leaving a tank's siege mode, a liberator's defender mode, an observer's surveillance mode or an overseer's
+    # oversight mode, which the game has no id for across them.
     UNSIEGE = auto()
     UPROOT = RawAbilityId.Morph_Uproot
     VIKING_LAND = RawAbilityId.Morph_VikingAssaultMode  # "Assault Mode" in game

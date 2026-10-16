@@ -100,7 +100,8 @@ the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in g
 - The `gas` cheat hands out no vespene, so `refunds` pays for an SCV and an orbital command, not a research.
 - Under `free` a spell spends no energy, so `group-abilities` plays without it and tells a cast by the energy spent;
   under `tech_tree` a medivac regains energy twice as fast as a ghost, so a cast is a drop, not any change, and a
-  viper's consume is the one gain.
+  viper's consume is the one gain. A medivac heals hurt units by itself, spending energy, so its heal is taken off
+  autocast first.
 - `Sandbox.spawn` observes the game itself, not through `_Game`, so what a sweep spawns before its first trial is
   turned over once more first; otherwise the trial takes it for its own and kills it when done.
 """
@@ -3914,7 +3915,8 @@ def _inject_read(game: _Game, trial: Trial) -> None:
 # them that powers a type needing power.
 _PAIR_SPOTS = ((-3.0, 2.0), (3.0, 2.0))
 _PYLON_SPOT = (0.0, 3.0)
-# The energy each unit with energy starts with: enough for every spell, and short of full, which a consume needs.
+# The energy each unit with energy starts with: enough for every spell, and short of full, which a consume needs; a
+# shield battery, which holds 100, starts full.
 _PAIR_ENERGY = 150.0
 # The targets an ability may ask for, each where it stands from the pad: enemies of every kind a spell takes, one with
 # energy to feed back, an enemy structure, this player's units and structures, for what heals, injects, boosts,
@@ -4172,6 +4174,10 @@ def _group_ability(
     tags = [unit.tag for unit in pair]
     if pair[0].energy_max:
         game.set_energy(_PAIR_ENERGY, pair)
+    # A medivac heals the hurt targets by itself, which spends energy as a cast does.
+    if performer is UnitTypeId.MEDIVAC:
+        toggle = raw_pb2.ActionRawToggleAutocast(ability_id=RawAbilityId.MedivacHeal_Heal, unit_tags=tags)
+        game.act(sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(toggle_autocast=toggle)))
     # This player's target units are hurt, so what heals or repairs has something to do; its structures are left whole,
     # as a consume needs them.
     owned = (*_GROUP_OWN_AIMS, _QUEENS_AIM)

@@ -738,6 +738,13 @@ class TestARecordedGamesTables:
         ):
             assert not data.abilities[ability].carried_out_by_one, ability.name
 
+    def test_what_one_unit_carries_out_is_written_down_only_where_it_costs_nothing(self, path: Path) -> None:
+        """Once the game charges for an ability, its cost says it is carried out by one, and the entry can go."""
+        data = _tables(path)
+        for ability in CARRIED_OUT_BY_ONE_ABILITIES:
+            cost = data.abilities[ability].cost
+            assert not (cost.minerals or cost.vespene), f"the tables now charge {ability.name} {cost}"
+
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
         for upgrade in UpgradeId:
