@@ -41,6 +41,7 @@ _UNLOAD = AbilityId.UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _UNLOAD_AT = AbilityId.UNLOAD_AT
 _SIEGE = AbilityId.SIEGE
+_SIEGE_AT = AbilityId.LIBERATOR_SIEGE_AT
 _UNSIEGE = AbilityId.UNSIEGE
 _SIEGED = {UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED}
 _SIEGE_FORMS = [UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR, *_SIEGED]
@@ -612,53 +613,56 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
 
 class TestSieging:
-    """`SIEGE` goes out as each type's own siege: a tank's siege mode aimed at nothing, a liberator's defender
-    mode aimed at its zone. A liberator ordered it at a point is a sieged liberator by the next observation, and reports
-    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered the siege again, it is refused
-    `NotSupported` (in game)."""
+    """`SIEGE` goes out as each type's own siege, aimed at nothing: a tank's siege mode, an observer's surveillance
+    mode, an overseer's oversight mode. A liberator's is `LIBERATOR_SIEGE_AT`, its defender mode aimed at its zone:
+    ordered it at a point, it is a sieged liberator by the next observation, and reports
+    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered it again, it is refused
+    `NotSupported` (in game). `UNSIEGE` goes out as each of the four's own."""
 
-    def test_a_sieged_liberator_reads_as_carrying_out_the_siege(self) -> None:
+    def test_a_sieged_liberator_reads_as_carrying_out_its_siege(self) -> None:
         game = _Game()
         game.observe(0, _sieged_liberator(1))
 
         (order,) = game.own(1).orders
 
-        assert order.ability is _SIEGE
+        assert order.ability is _SIEGE_AT
         assert order.target is game.own(1)
 
     def test_the_siege_again_is_sent_since_it_was_aimed_at_a_point_and_shows_aimed_at_the_liberator(self) -> None:
         game = _Game([ActionResult.NOT_SUPPORTED])
         game.observe(0, _sieged_liberator(1))
 
-        game.book.issue(game.own(1), _SIEGE, target=(20.0, 21.0))
+        game.book.issue(game.own(1), _SIEGE_AT, target=(20.0, 21.0))
 
         (command,) = _commands(game.flush())
         assert command.ability_id == RawAbilityId.Morph_LiberatorAGMode
-        assert game.refused() == [(1, _SIEGE, ActionResult.NOT_SUPPORTED)]
+        assert game.refused() == [(1, _SIEGE_AT, ActionResult.NOT_SUPPORTED)]
 
-    def test_a_tank_and_a_liberator_go_out_each_as_its_own_siege(self) -> None:
-        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+    def test_a_liberator_takes_its_own_siege_at_a_point_and_not_the_siege(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
 
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        with pytest.raises(ValueError, match="SIEGE has nothing to be sent as for LIBERATOR"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE)
+        game.book.issue(game.own(2), _SIEGE_AT, target=(20.0, 21.0))
 
-        tank, liberator = _commands(game.flush())
-        assert (tank.ability_id, list(tank.unit_tags)) == (RawAbilityId.SiegeMode_SiegeMode, [1])
-        assert not tank.HasField("target_world_space_pos")
-        assert (liberator.ability_id, list(liberator.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
-        assert (liberator.target_world_space_pos.x, liberator.target_world_space_pos.y) == (20.0, 21.0)
+        (command,) = _commands(game.flush())
+        assert (command.ability_id, list(command.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
+        assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
 
     def test_two_liberators_are_not_given_one_siege_and_two_tanks_are(self) -> None:
         """One of two liberators given one siege at a point sieges, and both of two tanks (tool `sweep_orders`,
         `group-abilities-terran`)."""
-        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)), make_unit(3, UnitTypeId.SIEGE_TANK))
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)))
+        game.observe(0, *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)))
 
-        with pytest.raises(ValueError, match="SIEGE is carried out by one unit of a command; give it to one, not 2"):
-            game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
-        game.book.issue([game.own(1), game.own(3)], _SIEGE, target=(20.0, 21.0))
+        with pytest.raises(ValueError, match="LIBERATOR_SIEGE_AT is carried out by one unit of a command"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))
+        game.book.issue([game.own(3), game.own(4)], _SIEGE)
 
-        assert len(_commands(game.flush())) == 2
+        (command,) = _commands(game.flush())
+        assert list(command.unit_tags) == [3, 4]
 
     def test_a_tank_alone_needs_no_point(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -669,12 +673,12 @@ class TestSieging:
         (command,) = _commands(game.flush())
         assert command.ability_id == RawAbilityId.SiegeMode_SiegeMode
 
-    def test_a_liberator_needs_a_point(self) -> None:
+    def test_a_liberator_s_siege_needs_a_point(self) -> None:
         game = _Game()
-        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+        game.observe(0, make_unit(1, UnitTypeId.LIBERATOR))
 
-        with pytest.raises(TypeError, match="SIEGE takes a point for LIBERATOR"):
-            game.book.issue([game.own(1), game.own(2)], _SIEGE)
+        with pytest.raises(TypeError, match="LIBERATOR_SIEGE_AT"):
+            game.book.issue(game.own(1), _SIEGE_AT)
 
     def test_a_type_with_no_siege_is_refused_at_the_call(self) -> None:
         game = _Game()
@@ -965,14 +969,15 @@ class TestWhatTheGameRefused:
         assert len(_commands(game.flush())) == 1
 
     def test_only_the_units_of_a_command_taken_are_doing_it(self) -> None:
-        """A tank and a liberator are each sent their own siege, and here the game takes only the tank's."""
+        """A sieged tank and a sieged liberator are each sent their own unsiege, and here the game takes only the
+        tank's."""
         game = _Game([ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED], [ActionResult.SUCCESS])
-        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
+        game.book.issue([game.own(1), game.own(2)], _UNSIEGE)
         game.flush()
-        game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+        game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
 
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(2)], _UNSIEGE)
 
         (command,) = _commands(game.flush())
         assert list(command.unit_tags) == [2]
@@ -1470,7 +1475,7 @@ class _SiegingBot:
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
         if self._siege_due(event.step):
-            self.sieges.append(api.orders.issue(liberator, _SIEGE, target=self.zone))
+            self.sieges.append(api.orders.issue(liberator, _SIEGE_AT, target=self.zone))
 
     def _siege_due(self, step: int) -> bool:
         """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
@@ -1479,7 +1484,7 @@ class _SiegingBot:
 
 
 class _GroupSiegingBot:
-    """A bot that sieges a tank and a liberator in one order aimed at the liberator's zone, and once both are sieged,
+    """A bot that sieges a tank, and a liberator at its zone, each by its own siege, and once both are sieged,
     unsieges them in one order."""
 
     def __init__(self, api: Api, player: int) -> None:
@@ -1503,8 +1508,10 @@ class _GroupSiegingBot:
                 )
             return
         if self.siege is None:
+            tank = next(unit for unit in units if unit.type_id is UnitTypeId.SIEGE_TANK)
             liberator = next(unit for unit in units if unit.type_id is UnitTypeId.LIBERATOR)
-            self.siege = api.orders.issue(units, _SIEGE, target=liberator.position + (4.0, 0.0))
+            self.siege = api.orders.issue(tank, _SIEGE)
+            api.orders.issue(liberator, _SIEGE_AT, target=liberator.position + (4.0, 0.0))
         elif self.unsiege is None and {unit.type_id for unit in units} == _SIEGED:
             self.sieged = sorted(unit.type_id for unit in units)
             self.unsiege = api.orders.issue(units, _UNSIEGE)
@@ -1637,18 +1644,18 @@ class TestAgainstTheRealGame:
         print("the liberator, turn by turn:", bot.reported[:12])
         print("sieges:", [order.issued_step for order in bot.sieges], "refused or given up:", failures)
         refused = [(failure.step, failure.ability, failure.action_result) for failure in failures]
-        assert refused == [(order.issued_step, _SIEGE, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
+        assert refused == [(order.issued_step, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
         # Each order as its ability and whether it is aimed at the liberator itself.
         (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
-        assert first == [(_SIEGE, True)]
+        assert first == [(_SIEGE_AT, True)]
 
-    def test_a_tank_and_a_liberator_siege_and_unsiege_in_one_order_each(self) -> None:
+    def test_a_tank_and_a_liberator_siege_by_their_own_orders_and_unsiege_in_one(self) -> None:
         bot, failures = _play_a_minute(_GroupSiegingBot)
 
         assert bot.siege is not None and bot.unsiege is not None
         print("refused or given up:", failures)
         assert bot.sieged == sorted(_SIEGED)
-        assert not [failure for failure in failures if failure.ability in (_SIEGE, _UNSIEGE)]
+        assert not [failure for failure in failures if failure.ability in (_SIEGE, _SIEGE_AT, _UNSIEGE)]
         units = bot.api.units.own.of_type(_SIEGE_FORMS)
         assert {unit.type_id for unit in units} == {UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR}
 

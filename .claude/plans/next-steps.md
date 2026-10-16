@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #125. `uv run pytest` passes 2074 tests on branch `claude/remove-hold`; `uv run
+- nachOS `main` has every PR to #125. `uv run pytest` passes 2067 tests on branch `claude/remove-hold`; `uv run
   pytest -m integration` passes 26 against a real game (run 2026-10-16).
 - **Step 1, a queue per unit, was done and is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16): NachOS
   holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived
@@ -120,9 +120,12 @@ and in this file's history. What the game was seen to do while it was built stay
 7. **An order only one unit of a command carries out names one unit** (the owner, after the code review of #126):
    `issue` raises `ValueError` for one given to several, a build, a train, a research, a morph that costs, every
    spell but a toggle, and the free abilities the new `group-abilities` sweeps saw one unit carry out, a landing or a
-   load among them (`AbilityData.carried_out_by_one_for`, `CARRIED_OUT_BY_ONE_ABILITIES`, `..._BY_TYPE`). The owner
-   asked for every ability with no known rule to be swept. This keeps every order exact per unit, and a bot picks the
-   unit.
+   load among them (`AbilityData.carried_out_by_one`, `CARRIED_OUT_BY_ONE_ABILITIES`). The owner asked for every
+   ability with no known rule to be swept. This keeps every order exact per unit, and a bot picks the unit.
+8. **A liberator's siege is `LIBERATOR_SIEGE_AT`**, the game's defender mode at a point, out of the custom `SIEGE`,
+   which the tank, the observer and the overseer keep, aimed at nothing; `UNSIEGE` stays one for all four (the owner:
+   abilities that behave differently are not one id; the name by the ids' convention). `RECALL` is refused for any
+   group, since two motherships never stand, so the rule is one bool with no per-type exceptions.
 
 Kept from the queue's time: an order without state (#115), `issued_to(include_sent=True)`, the `TypeError` for a
 flying structure's add-on given no point, and the timing sweeps in `tools/sweep_orders.py`.

@@ -39,8 +39,6 @@ def create_unit_command_actions(
         match sending.aim:
             case Aim.ITSELF:
                 commands += [_naming(sending.ability, [unit], unit, queued=queued) for unit in group]
-            case Aim.TARGET:
-                commands.append(_naming(sending.ability, group, target, queued=queued))
             case Aim.NOTHING:
                 commands.append(_naming(sending.ability, group, None, queued=queued))
     return commands

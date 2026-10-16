@@ -29,7 +29,7 @@ api.orders.camera(base)
   group around the target point; ordering each separately stacks them on the point instead. What the game has only
   one unit of a command carry out names one unit: a build, an add-on, a train, a research, a morph that costs,
   every spell but a toggle, and a few more, a landing, a load, a halt, a corrosive bile or a liberator's siege
-  (`AbilityData.carried_out_by_one_for`, from what the game was seen to do). Given to several such units, `issue`
+  (`AbilityData.carried_out_by_one`, from what the game was seen to do). Given to several such units, `issue`
   raises `ValueError`, so the bot picks the unit: the nearest worker, the barracks with room beside it, the caster
   with the energy. A move, a burrow, a siege of tanks, a stim or an unload goes to every unit named.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
@@ -79,10 +79,11 @@ api.orders.issue(medivac, AbilityId.MOVE, target=retreat)
 api.orders.issue([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
 ```
 
-`SIEGE` and `UNSIEGE` are custom ids, which the game has no ability for: each goes out as the tank's,
-the liberator's, the observer's or the overseer's own. The siege takes a point, which only the liberator's is aimed at,
-for its zone, so an order naming a liberator needs one and the rest ignore it. A custom id given a type it has nothing
-to be sent as for raises `ValueError`; `AbilityId.is_custom` tells one from the game's.
+`SIEGE` and `UNSIEGE` are custom ids, which the game has no ability for: `SIEGE` goes out as the tank's, the
+observer's or the overseer's own, aimed at nothing, and `UNSIEGE` as theirs or the liberator's. A liberator's siege
+takes a point, its zone, and only one of two liberators given one carries it out, so it is an id of its own,
+`LIBERATOR_SIEGE_AT`, the game's. A custom id given a type it has nothing to be sent as for raises `ValueError`;
+`AbilityId.is_custom` tells one from the game's.
 
 An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
 itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
@@ -214,7 +215,7 @@ current order and one for each queued. The two need not agree: the game snaps a 
 cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
 reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
-`SIEGE`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
+`LIBERATOR_SIEGE_AT`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
 
 The targets need not agree either. An SCV walking back to a mineral field out of sight shows its `GATHER` aimed at a
 tag the game reports for no unit (in game), so NachOS reads it as aimed at the unit the SCV's last `GATHER` named,

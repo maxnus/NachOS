@@ -139,21 +139,20 @@ class OrderBook:
         An ability that goes out as another for some types (`AbilityData.sent_as`) is sent as one command per ability
         it goes out as. A command the game refuses is listed in `api.action_failures` once for each unit it names.
 
-        Raises `TypeError` for a target the ability cannot be aimed at, for an order without one to a type that goes
-        out aimed at it, as a liberator's siege does, or to a flying structure given an add-on, and for a transport's
-        unload at a point aimed at one of `units` itself, which is `UNLOAD` for that one: a group given an unload at
-        one of its own transports is two orders. Raises `ValueError` for a custom ability given to a type it has
-        nothing to be sent as for, or which this game's tables lack an ability it is sent as for, and for an ability
-        only one unit of a command carries out, given to several units of the types it is so for
-        (`AbilityData.carried_out_by_one_for`).
+        Raises `TypeError` for a target the ability cannot be aimed at, for an add-on with no point given to a flying
+        structure, and for a transport's unload at a point aimed at one of `units` itself, which is `UNLOAD` for that
+        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a custom
+        ability given to a type it has nothing to be sent as for, or which this game's tables lack an ability it is
+        sent as for, and for an ability only one unit of a command carries out, given to several
+        (`AbilityData.carried_out_by_one`).
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        if row is not None and len(alone := [unit for unit in given if row.carried_out_by_one_for(unit.type_id)]) > 1:
+        if len(given) > 1 and row is not None and row.carried_out_by_one:
             raise ValueError(
-                f"{ability.name} is carried out by one unit of a command; give it to one, not {len(alone)}"
+                f"{ability.name} is carried out by one unit of a command; give it to one, not {len(given)}"
             )
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:
@@ -163,7 +162,6 @@ class OrderBook:
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
         if aimed is None:
-            _check_aimed_where_needed(ability, sent_as, given)
             _check_placed_where_flying(ability, row, given)
         if isinstance(aimed, Unit):
             _check_not_aimed_at_itself(ability, aimed, given)
@@ -397,15 +395,6 @@ def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], uni
     """Raise `ValueError` if the custom `ability` has nothing to be sent as for one of `units`."""
     if missing := sorted({unit.type_id.name for unit in units if unit.type_id not in sent_as}):
         raise ValueError(f"{ability.name} has nothing to be sent as for {', '.join(missing)}")
-
-
-def _check_aimed_where_needed(
-    ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], units: Sequence[OwnUnit[Any]]
-) -> None:
-    """Raise `TypeError` if `ability`, given no target, goes out at the order's target for one of `units`."""
-    aiming = {unit.type_id: sending for unit in units if (sending := sent_as.get(unit.type_id)) is not None}
-    if needing := sorted(unit_type.name for unit_type, sending in aiming.items() if sending.aim is Aim.TARGET):
-        raise TypeError(f"{ability.name} takes a point for {', '.join(needing)}, and was given no target")
 
 
 def _check_placed_where_flying(ability: AbilityId, row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> None:

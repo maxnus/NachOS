@@ -48,7 +48,7 @@ class GameData:
         )
         game_rows = {row.ability_id: row for row in data.abilities}
         custom = {
-            ability: AbilityData._custom(ability, game_rows, TECH_TREE, behaviors, costs, cancels)
+            ability: AbilityData._custom(ability, TECH_TREE, behaviors, costs, cancels)
             for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }

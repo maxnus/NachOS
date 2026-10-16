@@ -508,26 +508,29 @@ class TestARecordedGamesTables:
         unload_at = data.abilities[AbilityId.UNLOAD_AT]
         assert unload_at.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
 
-    def test_the_siege_is_a_custom_id_taking_a_point_for_the_liberator_alone(self, path: Path) -> None:
-        """Each type's own siege makes its sieged form, and the liberator's is aimed at its zone."""
+    def test_the_siege_is_a_custom_id_taking_nothing_and_the_liberator_s_its_own_at_a_point(self, path: Path) -> None:
+        """Each type's own siege makes its sieged form; the liberator's is aimed at its zone, so it is an id of its own,
+        and the unsiege is one for all four."""
         data = _tables(path)
         siege = data.abilities[AbilityId.SIEGE]
-        assert siege.target_type is TargetType.POINT_OR_NOTHING
-        liberator = data.abilities[AbilityId.SIEGE].sent_as[UnitTypeId.LIBERATOR]
-        assert liberator == SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET)
-        assert siege.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
-        assert siege.performers == {
-            UnitTypeId.SIEGE_TANK,
-            UnitTypeId.LIBERATOR,
-            UnitTypeId.OBSERVER,
-            UnitTypeId.OVERSEER,
-        }
+        assert siege.target_type is TargetType.NOTHING
+        assert siege.cast_range == 0.0
+        assert UnitTypeId.LIBERATOR not in siege.sent_as
+        assert siege.performers == {UnitTypeId.SIEGE_TANK, UnitTypeId.OBSERVER, UnitTypeId.OVERSEER}
         assert siege.products[UnitTypeId.SIEGE_TANK] is UnitTypeId.SIEGE_TANK_SIEGED
-        assert siege.products[UnitTypeId.LIBERATOR] is UnitTypeId.LIBERATOR_SIEGED
         assert siege.order_behavior is OrderBehavior.REPLACES
+        at = data.abilities[AbilityId.LIBERATOR_SIEGE_AT]
+        assert at.target_type is TargetType.POINT
+        assert at.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
+        assert (at.performers, dict(at.products)) == (
+            {UnitTypeId.LIBERATOR},
+            {UnitTypeId.LIBERATOR: UnitTypeId.LIBERATOR_SIEGED},
+        )
         unsiege = data.abilities[AbilityId.UNSIEGE]
         assert unsiege.target_type is TargetType.NOTHING
+        assert UnitTypeId.LIBERATOR_SIEGED in unsiege.sent_as
         assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.SIEGE
+        assert data.units[UnitTypeId.LIBERATOR_SIEGED].creation_ability is AbilityId.LIBERATOR_SIEGE_AT
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.SMART]
@@ -717,6 +720,8 @@ class TestARecordedGamesTables:
             AbilityId.BUILD_CREEP_TUMOR,
             AbilityId.RAVAGER_CORROSIVE_BILE,
             AbilityId.LAND,
+            AbilityId.LIBERATOR_SIEGE_AT,
+            AbilityId.RECALL,
         ):
             assert data.abilities[ability].carried_out_by_one, ability.name
         for ability in (
@@ -728,20 +733,10 @@ class TestARecordedGamesTables:
             AbilityId.ORACLE_PULSAR_BEAM_ON,
             AbilityId.UNLOAD_AT,
             AbilityId.MORPH_ARCHON,
+            AbilityId.SIEGE,
+            AbilityId.UNSIEGE,
         ):
             assert not data.abilities[ability].carried_out_by_one, ability.name
-
-    def test_a_liberator_s_siege_and_a_nexus_s_recall_are_carried_out_by_one_where_another_type_s_are_not(
-        self, path: Path
-    ) -> None:
-        data = _tables(path)
-        siege, recall = data.abilities[AbilityId.SIEGE], data.abilities[AbilityId.RECALL]
-        assert (siege.carried_out_by_one, recall.carried_out_by_one) == (False, False)
-        assert siege.carried_out_by_one_for(UnitTypeId.LIBERATOR)
-        assert not siege.carried_out_by_one_for(UnitTypeId.SIEGE_TANK)
-        assert recall.carried_out_by_one_for(UnitTypeId.NEXUS)
-        assert not recall.carried_out_by_one_for(UnitTypeId.MOTHERSHIP)
-        assert data.abilities[AbilityId.HIGH_TEMPLAR_STORM].carried_out_by_one_for(UnitTypeId.HIGH_TEMPLAR)
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

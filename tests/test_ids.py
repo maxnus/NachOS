@@ -110,7 +110,7 @@ def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
 @pytest.mark.parametrize(
     ("reported", "ordered"),
     [
-        (RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, AbilityId.SIEGE),
+        (RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode, AbilityId.LIBERATOR_SIEGE_AT),
         (RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode, AbilityId.UNSIEGE),
         (RawAbilityId.SiegeMode_SiegeMode, AbilityId.SIEGE),
         (RawAbilityId.Morph_ObserverMode, AbilityId.UNSIEGE),

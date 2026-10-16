@@ -612,9 +612,9 @@ TECH_TREE: Final = TechTree(
         UnitTypeId.LIBERATOR: MappingProxyType({
             AbilityId.ATTACK: TechRequirements(),
             AbilityId.HOLD_POSITION: TechRequirements(),
+            AbilityId.LIBERATOR_SIEGE_AT: TechRequirements(),
             AbilityId.MOVE: TechRequirements(),
             AbilityId.PATROL: TechRequirements(),
-            AbilityId.SIEGE: TechRequirements(),
             AbilityId.SMART: TechRequirements(),
             AbilityId.STOP: TechRequirements(),
         }),
@@ -1464,7 +1464,7 @@ TECH_TREE: Final = TechTree(
         UnitTypeId.INFESTOR_BURROWED: AbilityId.BURROW,
         UnitTypeId.LAIR: AbilityId.HATCHERY_MORPH_LAIR,
         UnitTypeId.LIBERATOR: AbilityId.STARPORT_TRAIN_LIBERATOR,
-        UnitTypeId.LIBERATOR_SIEGED: AbilityId.SIEGE,
+        UnitTypeId.LIBERATOR_SIEGED: AbilityId.LIBERATOR_SIEGE_AT,
         UnitTypeId.LOCUST: AbilityId.SWARM_HOST_SPAWN_LOCUST,
         UnitTypeId.LURKER: AbilityId.HYDRALISK_MORPH_LURKER,
         UnitTypeId.LURKER_BURROWED: AbilityId.BURROW,
@@ -1942,6 +1942,9 @@ TECH_TREE: Final = TechTree(
         AbilityId.LARVA_MORPH_ZERGLING: MappingProxyType({
             UnitTypeId.LARVA: UnitTypeId.ZERGLING,
         }),
+        AbilityId.LIBERATOR_SIEGE_AT: MappingProxyType({
+            UnitTypeId.LIBERATOR: UnitTypeId.LIBERATOR_SIEGED,
+        }),
         AbilityId.LIFT: MappingProxyType({
             UnitTypeId.BARRACKS: UnitTypeId.BARRACKS_FLYING,
             UnitTypeId.COMMAND_CENTER: UnitTypeId.COMMAND_CENTER_FLYING,
@@ -2095,7 +2098,6 @@ TECH_TREE: Final = TechTree(
             UnitTypeId.SCV: UnitTypeId.SUPPLY_DEPOT,
         }),
         AbilityId.SIEGE: MappingProxyType({
-            UnitTypeId.LIBERATOR: UnitTypeId.LIBERATOR_SIEGED,
             UnitTypeId.OBSERVER: UnitTypeId.OBSERVER_SIEGED,
             UnitTypeId.OVERSEER: UnitTypeId.OVERSEER_SIEGED,
             UnitTypeId.SIEGE_TANK: UnitTypeId.SIEGE_TANK_SIEGED,

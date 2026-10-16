@@ -153,17 +153,13 @@ _TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_
 ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
     {
         AbilityId.UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
-        # A liberator's siege is aimed at the zone it guards; the others' at nothing. A form given its own siege again
-        # is sent it too, and the game answers as it does: a sieged liberator `NotSupported` (in game).
+        # A liberator's siege is `LIBERATOR_SIEGE_AT`, aimed at the zone it guards. A form given its own siege again is
+        # sent it too, and the game answers as it does.
         AbilityId.SIEGE: MappingProxyType(
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED),
                     SentAs(RawAbilityId.SiegeMode_SiegeMode, Aim.NOTHING),
-                ),
-                **dict.fromkeys(
-                    (UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED),
-                    SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED),
@@ -235,10 +231,10 @@ entry differs from what the tables derive, so an entry goes as soon as a patch m
 # each such ability they are offered in one command, and one of them carried it out: it spent or gained the energy, or
 # changed type, or made the effect, or its orders changed while its partner kept the move it had been given (tool
 # `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`). Every spell is here but the toggles, both of whose
-# casters took a cloak and the oracle's pulsar beam, and a recall, which is below; and so are a landing, a rooting and a
-# load, which take one place or one passenger, a salvage, a halt, a cancel of the last item, and the warp prism's and
-# the warp gate's changes of mode. A load is here though both of two nydus showed the passenger, since they hold one
-# cargo between them.
+# casters took a cloak and the oracle's pulsar beam; and so are a landing, a rooting, a liberator's siege and a load,
+# which take one place or one passenger, a salvage, a halt, a cancel of the last item, and the warp prism's and the warp
+# gate's changes of mode. A load is here though both of two nydus showed the passenger, since they hold one cargo
+# between them, and a recall though two motherships both recalled, since two never stand.
 CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
         AbilityId.BATTLECRUISER_YAMATO,
@@ -256,6 +252,7 @@ CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.INFESTOR_MICROBIAL_SHROUD,
         AbilityId.INFESTOR_NEURAL_PARASITE,
         AbilityId.LAND,
+        AbilityId.LIBERATOR_SIEGE_AT,
         AbilityId.LOAD,
         AbilityId.MEDIVAC_HEAL,
         AbilityId.MOTHERSHIP_TIME_WARP,
@@ -276,6 +273,7 @@ CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.RAVEN_INTERFERENCE_MATRIX,
         AbilityId.RAVEN_SPAWN_AUTO_TURRET,
         AbilityId.REAPER_GRENADE,
+        AbilityId.RECALL,
         AbilityId.ROOT,
         AbilityId.SALVAGE,
         AbilityId.SENTRY_FORCE_FIELD,
@@ -303,14 +301,5 @@ CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.WARP_PRISM_PHASING_MODE,
         AbilityId.WARP_PRISM_TRANSPORT_MODE,
         AbilityId.WIDOW_MINE_ATTACK,
-    }
-)
-# What one unit of a command carries out for some of the types offered it alone: a liberator's siege takes a point, and
-# two sieged at one; a nexus's recall took its units, and two motherships both recalled theirs, though only one can
-# ever stand.
-CARRIED_OUT_BY_ONE_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
-    {
-        AbilityId.RECALL: frozenset({UnitTypeId.NEXUS}),
-        AbilityId.SIEGE: frozenset({UnitTypeId.LIBERATOR}),
     }
 )

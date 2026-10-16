@@ -147,7 +147,7 @@ it.
   `api.units.own.of_type(UnitType.Larva)`.
 - **What only one unit of a command carries out is given to one unit.** A build, an add-on, a train, a research, a
   morph that costs, a spell but a toggle, and a few more such as a landing or a load, given to several units, raises
-  `ValueError` (`AbilityData.carried_out_by_one_for`) where the game would quietly have one of them carry it out:
+  `ValueError` (`AbilityData.carried_out_by_one`) where the game would quietly have one of them carry it out:
   pick the unit.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
@@ -166,9 +166,9 @@ it.
   write `medivac(AbilityId.UNLOADALLAT_MEDIVAC, medivac)`, which keeps the medivac's move in game but shares its id
   with the unload at a point, which replaces it, and `bunker(AbilityId.UNLOADALL_BUNKER)`. NachOS raises `TypeError`
   for the first and sends `UNLOAD` to a medivac, a warp prism and a transport overlord the same way
-  ([orders](orders.md#one-order-a-unit-a-turn)). Likewise `SIEGE` and `UNSIEGE` stand for
-  `SIEGEMODE_SIEGEMODE`, `MORPH_LIBERATORAGMODE`, `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and their ways
-  back.
+  ([orders](orders.md#one-order-a-unit-a-turn)). Likewise `SIEGE` stands for `SIEGEMODE_SIEGEMODE`,
+  `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and `UNSIEGE` for their ways back and the liberator's, whose siege
+  at a point is `LIBERATOR_SIEGE_AT`, python-sc2's `MORPH_LIBERATORAGMODE`.
 - **Only a structure's last item can be cancelled, in either library, and for the same reason.** The game cancels an
   item in the middle of a queue through the UI action `ActionProductionPanelRemoveFromQueue`, which names a slot and
   needs the structure selected and a game joined with a feature layer. A raw unit command carries no slot, and the

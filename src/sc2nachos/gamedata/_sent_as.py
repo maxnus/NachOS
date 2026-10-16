@@ -8,10 +8,8 @@ from typing import final
 class Aim(Enum):
     """What an ability sent as another is aimed at."""
 
-    TARGET = "target"
-    """The order's target. The order must have one."""
     NOTHING = "nothing"
-    """Nothing, whatever the order is aimed at: a tank's siege in an order aimed at a liberator's zone."""
+    """Nothing: a tank's siege mode."""
     ITSELF = "itself"
     """The unit itself, one command per unit: a medivac's unload at a point, aimed at the medivac, unloads where it is
     (in game)."""

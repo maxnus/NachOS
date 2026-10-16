@@ -11,11 +11,10 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree._overrides import (
     ABILITIES_SENT_AS_ANOTHER,
     CARRIED_OUT_BY_ONE_ABILITIES,
-    CARRIED_OUT_BY_ONE_BY_TYPE,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     KEEPS_ORDERS_BY_TYPE,
@@ -254,11 +253,10 @@ class AbilityData:
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     carried_out_by_one: bool
-    """Whether one command naming several units has only one of them carry it out, whatever their type, which
-    `api.orders.issue` refuses to give several units: every ability that costs minerals or vespene, a build, an
-    add-on, a train, a research or a morph; every spell but a toggle, a storm or an inject, not a cloak; and a few
-    more, a corrosive bile, a landing, a load or a halt (in game). `carried_out_by_one_for` adds a liberator's siege
-    and a nexus's recall."""
+    """Whether one command naming several units has only one of them carry it out, which `api.orders.issue` refuses
+    to give several units: every ability that costs minerals or vespene, a build, an add-on, a train, a research or a
+    morph; every spell but a toggle, a storm or an inject, not a cloak; and a few more, a corrosive bile, a landing, a
+    liberator's siege, a load or a halt (in game)."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -271,15 +269,9 @@ class AbilityData:
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
     the ability itself. `UNLOAD` goes out to a medivac as its unload at a point aimed at the medivac, and a
-    custom id names every type it can be given to: `SIEGE` a tank's siege mode and a liberator's defender
-    mode, aimed at the order's point. Empty for most abilities."""
+    custom id names every type it can be given to: `SIEGE` a tank's siege mode and an observer's surveillance mode,
+    aimed at nothing. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
-    _carried_out_by_one_types: frozenset[UnitTypeId] = field(repr=False, compare=False)
-
-    def carried_out_by_one_for(self, unit_type: UnitTypeId) -> bool:
-        """Whether one command naming several units of `unit_type` has only one of them carry it out: always where
-        `carried_out_by_one`, and for some types alone where not, as two liberators given one siege (in game)."""
-        return self.carried_out_by_one or unit_type in self._carried_out_by_one_types
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a
@@ -316,30 +308,26 @@ class AbilityData:
             order_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED),
             _behaviors_by_performer=behavior.by_type,
-            _carried_out_by_one_types=CARRIED_OUT_BY_ONE_BY_TYPE.get(ability, frozenset()),
         )
 
     @classmethod
     def _custom(
         cls,
         ability: AbilityId,
-        game_rows: Mapping[int, data_pb2.AbilityData],
         tech_tree: TechTree,
         behaviors: Mapping[AbilityId, OrderBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
         """The custom ability `ability`, sent as `ABILITIES_SENT_AS_ANOTHER` names for each type, with what
-        `tech_tree`, `behaviors`, `costs` and `cancels` say about it. It takes a target where the abilities it goes out
-        as at the order's target take one, and reaches as far as the furthest of them."""
+        `tech_tree`, `behaviors`, `costs` and `cancels` say about it. It takes no target and has no range."""
         sent_as = ABILITIES_SENT_AS_ANOTHER[ability]
-        aimed = [game_rows[sending.ability] for sending in sent_as.values() if sending.aim is Aim.TARGET]
         behavior = behaviors.get(ability, _REPLACES)
         cost = costs.get(ability, _FREE)
         return cls(
             id=ability,
-            target_type=_target_type({TargetType(row.target) for row in aimed}, untargeted=len(aimed) < len(sent_as)),
-            cast_range=max((row.cast_range for row in aimed), default=0.0),
+            target_type=TargetType.NOTHING,
+            cast_range=0.0,
             footprint_radius=None,
             needs_placement=False,
             allows_autocast=False,
@@ -351,7 +339,6 @@ class AbilityData:
             order_behavior=behavior.own,
             sent_as=sent_as,
             _behaviors_by_performer=behavior.by_type,
-            _carried_out_by_one_types=CARRIED_OUT_BY_ONE_BY_TYPE.get(ability, frozenset()),
         )
 
 
@@ -370,18 +357,3 @@ def _performers(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId
         for unit_type, sending in sent_as.items()
         if (sent := AbilityId.get(sending.ability)) is not None and unit_type in performers.get(sent, frozenset())
     }
-
-
-def _target_type(aimed: set[TargetType], *, untargeted: bool) -> TargetType:
-    """What an ability takes that goes out as abilities taking `aimed` at its target, and to other types as one aimed
-    at nothing, if `untargeted`."""
-    if not aimed:
-        return TargetType.NOTHING
-    if len(aimed) > 1:
-        raise ValueError(f"an ability goes out as ones taking {sorted(kind.name for kind in aimed)}")
-    (kind,) = aimed
-    if not untargeted:
-        return kind
-    if kind is not TargetType.POINT:
-        raise ValueError(f"an ability goes out as ones taking {kind.name} and ones taking nothing")
-    return TargetType.POINT_OR_NOTHING
