@@ -47,18 +47,10 @@ class Api:
         *,
         enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC,
         time_handlers: bool = False,
-        build_reach: float = 2.5,
     ) -> None:
-        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, time every handler call if
-        `time_handlers`, and give a worker a held build once it is within `build_reach` of the site. This connects to
-        nothing.
-
-        Raises `ValueError` for a `build_reach` that is not positive.
-        """
-        if not build_reach > 0.0:
-            raise ValueError(f"build_reach must be positive, not {build_reach}")
+        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call if
+        `time_handlers`. This connects to nothing."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
-        self._build_reach = build_reach
         self._events = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
@@ -172,8 +164,8 @@ class Api:
 
         There is one for each unit: a train a structure shows, queued ones included; an egg or a cocoon becoming one; a
         structure going up, a structure morphing into one, a unit warping in; and a build a worker has been sent to
-        make, until the structure stands. A reactor's two marines are two. What NachOS holds and has not sent is not
-        among them; it is in `api.orders.held` and `issued_to`. Takes the types as `Units.of_type` does.
+        make, until the structure stands. A reactor's two marines are two. The turn's orders are not among them; they
+        are in `api.orders.issued_to`. Takes the types as `Units.of_type` does.
         """
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids(types, unit_types)
         return self._current_game().state.production.of_types(wanted)
@@ -243,7 +235,7 @@ class Api:
         """
         if self._game is not None:
             self._game.tracker.end()
-        game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference, build_reach=self._build_reach)
+        game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference)
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._events

@@ -121,9 +121,9 @@ class PlacementGrids:
 
     @property
     def reserved(self) -> Grid[bool]:
-        """The tiles under this player's builds that are ordered and not standing yet: held until the unit can start
-        one, issued this turn, or sent and not yet begun. A build issued or withdrawn earlier in the turn shows. An
-        add-on reserves the ground beside its host, and a lifted host's landing site too."""
+        """The tiles under this player's builds that are ordered and not standing yet: issued this turn, or sent and
+        not yet begun. A build issued or withdrawn earlier in the turn shows. An add-on reserves the ground beside its
+        host, and a lifted host's landing site too."""
         return self._build_sites.reserved_grid(self._static, self._present_units.own)
 
     @property

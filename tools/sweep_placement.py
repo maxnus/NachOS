@@ -643,7 +643,7 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)
-        order_book = OrderBook(data, build_reach=2.5)
+        order_book = OrderBook(data)
         present_units = tracker.unit_tracker.present
         placement = PlacementGrids._build_at_start(
             game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book

@@ -42,7 +42,7 @@ def _row(
     )
 
 
-# The footprints these units cover come from what the sweep measured; a held build needs a cost and a walking speed.
+# The footprints these units cover come from what the sweep measured.
 _TABLES = make_tables(
     _row(UnitTypeId.SCV, minerals=50, speed=2.8125),
     _row(UnitTypeId.MARINE, minerals=50, speed=2.25),
@@ -83,7 +83,7 @@ class _Game:
     def __init__(self) -> None:
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(_TABLES, build_reach=2.5)
+        self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
 
     def observe(
@@ -96,7 +96,7 @@ class _Game:
         self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
         present = self.tracker.unit_tracker.present
-        self.book._observe(step, [*changes.units_died, *changes.units_found_dead], present)
+        self.book._observe(step, [*changes.units_died, *changes.units_found_dead])
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
@@ -260,16 +260,6 @@ class TestTheReservedGrid:
         assert grids.reserved.any()
         order.withdraw()
         assert not grids.reserved.any()
-
-    def test_a_held_build_reserves_its_site_while_the_worker_walks(self) -> None:
-        game = _Game()
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((12.0, 12.0)))
-        game.flush()
-        walking = raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=12, y=12))
-        grids = game.observe(8, _scv(1, walking))
-        assert game.book.issued_to(game.own(1))
-        assert grids.reserved[Point((12.0, 12.0))]
 
     def test_a_build_sent_and_not_observed_yet_reserves_its_site(self) -> None:
         """The game may show an order an observation late, as on the ladder."""
@@ -533,7 +523,7 @@ class TestARecordedGamesStart:
     def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         game_map, tracker, data, observation = _first_observation(path)
         state = _State(observation, tracker, game_map)
-        order_book = OrderBook(data, build_reach=2.5)
+        order_book = OrderBook(data)
         present_units = tracker.unit_tracker.present
         grids = PlacementGrids._build_at_start(
             game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book

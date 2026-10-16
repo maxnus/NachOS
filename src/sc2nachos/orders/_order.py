@@ -60,8 +60,7 @@ class Order[T]:
 
     @property
     def units(self) -> tuple[OwnUnit[Any], ...]:
-        """The units the order was given to. An order NachOS holds until its unit can start it, given to several, is
-        given to the one NachOS picked: the one that can start it soonest."""
+        """The units the order was given to."""
         return self._units
 
     @property
@@ -71,8 +70,7 @@ class Order[T]:
 
     @property
     def queued(self) -> bool:
-        """Whether the order goes behind each unit's current orders, those NachOS holds included, instead of replacing
-        them. An order NachOS picked a unit for reads `True` where that unit had something to do already."""
+        """Whether the order goes behind each unit's current orders instead of replacing them."""
         return self._queued
 
     @property
@@ -92,6 +90,5 @@ class Order[T]:
         return self._issued_step
 
     def withdraw(self) -> None:
-        """Take back whatever of the order has not gone out: all of it while its turn's handlers run, and what NachOS
-        still holds of it after."""
+        """Take the order back while its turn's handlers run, so it never goes out. After its turn it does nothing."""
         self._withdrawn = True

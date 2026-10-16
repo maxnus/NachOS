@@ -22,8 +22,8 @@ _ADD_ON_OFFSET = (2.5, -0.5)
 
 @final
 class _BuildSites:
-    """Where this player's builds will stand that are ordered and not standing yet: each held until its unit can start
-    it, issued this turn, or sent and not yet begun. One for a game."""
+    """Where this player's builds will stand that are ordered and not standing yet: each issued this turn, or sent and
+    not yet begun. One for a game."""
 
     __slots__ = ("_builder_types", "_game_data", "_order_book")
 
@@ -50,8 +50,7 @@ class _BuildSites:
         return reserved.as_readonly()
 
     def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order[Any] | UnitOrder]:
-        """Each build `unit` was ordered: held, issued this turn, sent and maybe not shown yet, or shown by the
-        unit."""
+        """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
         ordered: list[Order[Any] | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)

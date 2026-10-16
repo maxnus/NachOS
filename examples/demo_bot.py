@@ -155,8 +155,7 @@ def _free_scvs() -> Units[OwnUnit[Any]]:
 
 
 def _build(ability: AbilityId, site: Point) -> bool:
-    """Order the free SCV nearest `site` to build there. NachOS holds the build and sends the SCV on its way, and the
-    game charges it once the SCV arrives."""
+    """Order the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
     scvs = _free_scvs()
     if not scvs:
         return False
@@ -165,8 +164,8 @@ def _build(ability: AbilityId, site: Point) -> bool:
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: held, ordered this
-    turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
+    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: ordered this turn, or
+    sent and maybe not shown. One shown already may count in both for an observation or two."""
     return sum(
         1
         for scv in api.units.own.workers
