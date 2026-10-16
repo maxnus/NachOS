@@ -87,6 +87,8 @@ class _Game:
     placement: Final[PlacementGrids]
     pathing: Final[Pathing]
     camera: Final[Camera]
+    # The one other player's id, if the game has exactly one.
+    opponent_id: int | None = None
     # The turn's chat, in the order given, as the actions that send it.
     chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
@@ -130,6 +132,7 @@ class _Game:
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             step=step,
+            opponent_id=_the_other_player(info, client.player_id),
         )
         game._read(observation, step)
         return game
@@ -328,6 +331,12 @@ class _Game:
         seconds = steps_to_seconds(self.step)
         logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
         return result
+
+
+def _the_other_player(info: sc2api_pb2.ResponseGameInfo, player: int | None) -> int | None:
+    """The id of the one player of the game `info` describes who is not `player`, or `None` if there is not one."""
+    others = [entry.player_id for entry in info.player_info if entry.player_id != player]
+    return others[0] if len(others) == 1 else None
 
 
 def _step(observation: sc2api_pb2.ResponseObservation) -> int:

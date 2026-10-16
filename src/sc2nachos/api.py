@@ -10,6 +10,7 @@ from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
 from sc2nachos.gamedata import GameData, Resources
@@ -60,6 +61,7 @@ class Api:
         self._events = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
+        self._debug = DebugCommands(self._current_game)
 
     @property
     def events(self) -> EventBus:
@@ -218,6 +220,14 @@ class Api:
         return self._current_game().placement
 
     @property
+    def debug(self) -> DebugCommands:
+        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders.
+
+        Available before any game, so `refresh_steps` can be set as a module is imported.
+        """
+        return self._debug
+
+    @property
     def camera(self) -> Camera:
         """This player's camera: where it is centered, and moving it."""
         return self._current_game().camera
@@ -298,6 +308,7 @@ class Api:
             try:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
+                self._debug._send(game)
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:
