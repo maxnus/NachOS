@@ -121,6 +121,17 @@ class Footprint:
                 grown[dx : dx + width, dy : dy + height] |= self._mask
         return Footprint(grown)
 
+    def _grown_by(self, margin: Margin, *, at: PointLike) -> tuple[Footprint, PointLike]:
+        """This footprint with every tile within `margin` of one it covers, and where that centers so that this
+        footprint stays centered at `at`. Raises as `_margin_sides` does."""
+        if not any(sides := _margin_sides(margin)):
+            return self, at
+        left, _, bottom, _ = sides
+        box = self.bounding_box(at=at)
+        grown = self._grown(sides)
+        # Centered so that its lower left tile lies `left` and `bottom` beyond this footprint's.
+        return grown, (box.x - left + grown.width / 2, box.y - bottom + grown.height / 2)
+
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Footprint) and numpy.array_equal(self._mask, other._mask)
 
