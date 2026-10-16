@@ -65,7 +65,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
-        "_queued_sent",
+        "_sent_behind",
         "_refusals",
         "_step",
     )
@@ -81,9 +81,10 @@ class OrderBook:
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Order[Any], int]] = {}
-        # By unit id, each queued order the game took, with the number of the observation its turn read, until the
-        # observations must show it or an order replaces the unit's orders.
-        self._queued_sent: dict[int, list[tuple[Order[Any], int]]] = {}
+        # By unit id, each order the game took that does not replace the unit's orders, one queued, a train, a
+        # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
+        # show it or an order replaces the unit's orders.
+        self._sent_behind: dict[int, list[tuple[Order[Any], int]]] = {}
         self._camera_location: Point | None = None
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
@@ -178,7 +179,8 @@ class OrderBook:
     def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[Order[Any], ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
         With `include_sent`, first come the orders that went out to it lately and that the observations may not show
-        yet: the last one sent that replaced its orders, and those sent queued since.
+        yet: the last one sent that replaced its orders, and those sent since that did not, queued ones, trains,
+        researches, add-ons and morphs, but not what it carries out at once.
 
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
         order a unit is given goes out.
@@ -235,11 +237,8 @@ class OrderBook:
             action_result = ActionResult.read(result)
             if action_result is not ActionResult.SUCCESS:
                 refusals += [ActionFailure(self._step, unit, order.ability, action_result) for unit in units]
-            elif not order.queued:
-                self._remember_sent(order, units)
             else:
-                for unit in units:
-                    self._queued_sent.setdefault(unit.id, []).append((order, self._observations))
+                self._remember_sent(order, units)
         self._refusals = tuple(refusals)
 
     def _observe(self, step: int, lost: Iterable[Unit[Any]]) -> None:
@@ -248,13 +247,13 @@ class OrderBook:
         self._observations += 1
         for unit in lost:
             self._last_sent.pop(unit.id, None)
-            self._queued_sent.pop(unit.id, None)
+            self._sent_behind.pop(unit.id, None)
         recent = self._observations - _SHOWN_WITHIN + 1
-        for unit_id, queued in list(self._queued_sent.items()):
-            if not (queued := [(order, sent_at) for order, sent_at in queued if sent_at >= recent]):
-                del self._queued_sent[unit_id]
+        for unit_id, behind in list(self._sent_behind.items()):
+            if not (behind := [(order, sent_at) for order, sent_at in behind if sent_at >= recent]):
+                del self._sent_behind[unit_id]
             else:
-                self._queued_sent[unit_id] = queued
+                self._sent_behind[unit_id] = behind
 
     def _orders_to_send(
         self, issued: Sequence[Order[Any]], forced: Collection[Order[Any]]
@@ -301,12 +300,16 @@ class OrderBook:
             self._issued_by_unit.setdefault(unit_id, []).append(order)
 
     def _remember_sent(self, order: Order[Any], units: Sequence[OwnUnit[Any]]) -> None:
-        """Record `order` as the last sent to each of `units` whose orders it replaces."""
+        """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
+        replaces, unqueued, and otherwise one sent behind them, unless the unit carries it out at once."""
         row = self._game_data.abilities.get(order.ability)
         for unit in units:
-            if _behavior_for(row, unit) is OrderBehavior.REPLACES:
+            behavior = _behavior_for(row, unit)
+            if not order.queued and behavior is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = (order, self._observations)
-                self._queued_sent.pop(unit.id, None)
+                self._sent_behind.pop(unit.id, None)
+            elif order.queued or behavior is not OrderBehavior.KEEPS_ORDERS:
+                self._sent_behind.setdefault(unit.id, []).append((order, self._observations))
 
     def _units_not_carrying_it_out(
         self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
@@ -340,12 +343,12 @@ class OrderBook:
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
-        replaced its orders, and those sent queued since."""
+        replaced its orders, and those sent behind them since."""
         orders = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             orders.append(sent)
         recent = self._observations - _SHOWN_WITHIN + 1
-        orders += [order for order, sent_at in self._queued_sent.get(unit.id, ()) if sent_at >= recent]
+        orders += [order for order, sent_at in self._sent_behind.get(unit.id, ()) if sent_at >= recent]
         return orders
 
     def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:

@@ -384,6 +384,30 @@ class TestOneOrderAUnitATurn:
 
         assert game.book.issued_to(game.own(1), include_sent=True) == ()
 
+    def test_include_sent_keeps_a_train_sent_while_the_observations_may_not_show_it(self) -> None:
+        """A train goes behind what the structure makes, so a handler that trains while `issued_to` and the
+        structure's orders show nothing would pay for a second on the ladder."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+
+        game.observe(32, _barracks(1, _training()))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+
+    def test_include_sent_leaves_out_what_a_unit_carries_out_at_once(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _barracks(1))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+
 
 class TestAnOrderAUnitIsAlreadyCarryingOut:
     """An unqueued order equal to a unit's first is answered `SUCCESS` and carries nothing out, but drops what the

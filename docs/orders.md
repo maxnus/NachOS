@@ -141,9 +141,9 @@ if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
     api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and it
-charges the turn's orders by the next observation (in game), so a bot giving several in one turn takes off what they
-will cost, `api.orders.unpaid`:
+`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
+stepped game it charges the turn's orders by the next observation (in game), so a bot giving several in one turn
+takes off what they will cost, `api.orders.unpaid`:
 
 ```python
 budget = api.resources - api.orders.unpaid.resources
