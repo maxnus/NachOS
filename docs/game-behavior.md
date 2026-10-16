@@ -35,9 +35,9 @@ Each entry ends with how it was seen:
 - A game that dies resets the socket, which shows up as a bare connection error (#16).
 - `ResponseGameInfo` is about 77 KB, and byte-identical at loops 0, 256, 1024 and 3008. An observation is about
   80 KB and barely changes from one step to the next (#10, #11).
-- The game answers a debug request with an empty `debug` and refuses none. In a game of two clients on one machine,
-  the client that joined the game made a marine, took the `minerals` cheat and drew, as the one that created it did
-  (tool `sweep_requests`, build 75689). A drawing lasts until the next debug request (#22).
+- The game answers a debug request with an empty `debug`. In a game of two clients on one machine, the client that
+  joined the game made a marine, took the `minerals` cheat and drew, as the one that created it did, and was refused
+  none of the three (tool `sweep_requests`, build 75689). A drawing lasts until the next debug request (#22).
 - Each connection needs two ports, and every participant must send the same port sets in the same order, or the
   join fails. From a ladder start port N, N is unused, the server gets N+2 and N+3 and the client N+4 and N+5. A
   python-sc2 bot given the same start port joined NachOS's game and played in lockstep (#14).

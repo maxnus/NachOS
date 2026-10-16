@@ -127,7 +127,11 @@ def test_in_a_real_game_the_camera_is_centered_where_it_was_moved() -> None:
         middle = game.map.playable_area.center
         game.game.camera.move_to(middle)
         game.game.send_turn()
-        game.turn(2)
+        # A move can show an observation late, so it is waited for.
+        for _ in range(8):
+            game.turn(2)
+            if math.dist(game.game.camera.center, middle) < 0.01:
+                break
         assert math.dist(game.game.camera.center, middle) < 0.01
         assert not any(unit.is_selected for unit in game.tracker.unit_tracker.present)
 

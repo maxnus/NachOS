@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from s2clientprotocol import common_pb2, query_pb2
 
-from sc2nachos.geometry._point import coordinates
-from sc2nachos.orders._targets import as_sent
+from sc2nachos.orders._targets import point_as_sent
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.units import Unit
 
@@ -47,18 +46,16 @@ class Pathing:
         requests: list[query_pb2.RequestQueryPathing] = []
         coinciding: list[bool] = []
         for start, end in pairs:
-            to = coordinates(end)
-            end_point = (as_sent(to[0]), as_sent(to[1]))
-            request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point[0], y=end_point[1]))
+            end_point = point_as_sent(end)
+            request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point.x, y=end_point.y))
             if isinstance(start, Unit):
                 if start.is_stale:
                     raise ValueError(f"the last observation did not report {start!r}, so the game cannot path from it")
                 request.unit_tag = start.tag
-                start_point = (start.position.x, start.position.y)
+                start_point = start.position
             else:
-                at = coordinates(start)
-                start_point = (as_sent(at[0]), as_sent(at[1]))
-                request.start_pos.x, request.start_pos.y = start_point
+                start_point = point_as_sent(start)
+                request.start_pos.x, request.start_pos.y = start_point.x, start_point.y
             requests.append(request)
             coinciding.append(start_point == end_point)
         if not requests:

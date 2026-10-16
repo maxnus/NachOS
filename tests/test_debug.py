@@ -9,6 +9,7 @@ from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NotPlayingError
 from sc2nachos.debug import Cheat
+from sc2nachos.debug._drawing import _Drawing
 from sc2nachos.events import TurnEvent
 from sc2nachos.geometry import Point, Rectangle
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -170,6 +171,43 @@ class TestDrawing:
         assert list(sent) == [0, 2, 6]
         assert sent[2][0] == debug_pb2.DebugCommand(game_state=debug_pb2.god)
         assert _texts(sent[2]) == ["step 2"]
+
+    def test_an_unchanged_drawing_is_looked_at_once_a_refresh(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        looked_at: list[int] = []
+        spec = _Drawing.spec
+
+        def counted(drawing: _Drawing) -> Any:
+            looked_at.append(drawing.until)
+            return spec(drawing)
+
+        monkeypatch.setattr(_Drawing, "spec", counted)
+        api = Api()
+        api.debug.refresh_steps = 4
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw_text("fixed", at=(1.0, 1.0), steps=100)
+
+        sent = _play(api, turn, turns=9)
+
+        assert list(sent) == [0]
+        assert len(looked_at) == 3
+
+    def test_a_command_with_nothing_drawn_leaves_the_refreshes_to_their_clock(self) -> None:
+        api = Api()
+        api.debug.refresh_steps = 4
+
+        def turn(step: int) -> None:
+            if step == 1:
+                api.debug.give_minerals()
+            if step == 2:
+                api.debug.draw_text("late", at=(1.0, 1.0), steps=10)
+
+        sent = _play(api, turn, turns=6)
+
+        assert list(sent) == [1, 4]
+        assert sent[1] == [debug_pb2.DebugCommand(game_state=debug_pb2.minerals)]
+        assert _texts(sent[4]) == ["late"]
 
     def test_a_drawing_at_a_unit_follows_it(self) -> None:
         api = Api()

@@ -2,8 +2,9 @@
 
 A bot draws on the game's screen, turns cheats on and makes units through `api.debug`. What it asks for in a turn goes
 out after the turn's orders, in one debug request. The game takes it from a client that joined the game as from the one
-that created it (in game); what a ladder's own proxy lets through, NachOS cannot see. The Linux client renders nothing,
-so a drawing shows only in the game's window on Windows or macOS (stated).
+that created it (in game); what a ladder's own proxy lets through, NachOS cannot see, and a debug request the game
+refuses raises `ProtocolError` out of `api.play`, ending the bot's game, so a bot draws only where it is let. The Linux
+client renders nothing, so a drawing shows only in the game's window on Windows or macOS (stated).
 
 ## Drawing
 
@@ -25,9 +26,10 @@ def mark_the_expansions(event: GameStartEvent) -> None:
   where it stands, and a drawing at a unit follows it while the drawing lasts. Text on the screen is placed from 0 to 1
   across and down, whatever the window's size. A box stands over a `Rectangle` from the ground up 1.
 - **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in.
-- **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two drawings sent; meanwhile the
-  screen keeps the last one. A refresh whose drawing is what the screen already shows sends nothing, so a drawing that
-  never changes costs a request when it is made and one when it ends. Set it as the bot's module loads:
+- **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two refreshes of the drawing;
+  meanwhile the screen keeps the last one sent. A refresh whose drawing is what the screen already shows sends nothing,
+  so a drawing that never changes costs a request when it is made and one when it ends. A cheat or a command goes out at
+  once, with the drawing as it stands. Set it as the bot's module loads:
 
   ```python
   api = Api()

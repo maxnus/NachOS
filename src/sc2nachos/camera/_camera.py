@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, final
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.geometry import Point
-from sc2nachos.geometry._point import coordinates
-from sc2nachos.orders._targets import as_sent
+from sc2nachos.orders._targets import point_as_sent
 
 if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
@@ -33,8 +32,7 @@ class Camera:
     def move_to(self, at: PointLike) -> None:
         """Center the camera on `at`, with the turn's orders. Only the last move of a turn is sent, and its point is
         rounded to the protocol's 32-bit floats."""
-        point = coordinates(at)
-        self._move_to = Point((as_sent(point[0]), as_sent(point[1])))
+        self._move_to = point_as_sent(at)
 
     @classmethod
     def _of_player(cls, player: raw_pb2.PlayerRaw) -> Camera:

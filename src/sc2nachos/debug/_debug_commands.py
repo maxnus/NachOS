@@ -31,12 +31,13 @@ class DebugCommands:
     """Drawing on the game's screen, cheats and debug commands, all sent after the turn's orders in one debug request.
     The game takes them from a client that joined the game as from the one that created it (in game).
 
-    A drawing lasts the `steps` it is given from the turn it is made in, at least that turn. It is sent at most once
-    every `refresh_steps` steps, and the screen keeps the last drawing sent meanwhile, so one made between two
+    A drawing lasts the `steps` it is given from the turn it is made in, at least that turn. It is refreshed at most
+    once every `refresh_steps` steps, and the screen keeps the last drawing sent meanwhile, so one made between two
     refreshes waits for the next, and one that ends between them still shows until then. A refresh whose drawing is
     what was last sent sends nothing; a turn with a cheat or a command goes out at once, with the drawing as it
     stands then. A drawing at a unit follows the unit, read where it stands at each refresh.
 
+    A debug request the game refuses, as a ladder's own proxy may, raises `ProtocolError` out of `api.play`.
     Everything starts afresh with each game. Every method raises `NotPlayingError` until the first game starts.
     """
 
@@ -46,7 +47,7 @@ class DebugCommands:
         "_current_game",
         "_drawings",
         "_game",
-        "_last_sent",
+        "_last_refresh",
         "_refresh_steps",
         "_shown",
         "_toggled",
@@ -63,9 +64,10 @@ class DebugCommands:
         """Forget everything of the last game, and keep to `game`."""
         self._game = game
         self._drawings: list[_Drawing] = []
-        # What the screen shows, as last sent, and the step it was sent at.
+        # What the screen shows, as last sent, and the step of the last refresh, which sent the drawing or found it
+        # unchanged.
         self._shown: list[_Spec] = []
-        self._last_sent: int | None = None
+        self._last_refresh: int | None = None
         self._commands: list[debug_pb2.DebugCommand] = []
         self._cheats: set[Cheat] = set()
         # The cheats the turn switched, each sent once.
@@ -80,8 +82,8 @@ class DebugCommands:
 
     @property
     def refresh_steps(self) -> int:
-        """The fewest steps between two drawings sent, 1 unless set, which stays from one game to the next. Set to
-        anything but a whole number of steps, at least 1, it raises `ValueError`."""
+        """The fewest steps between two refreshes of the drawing, 1 unless set, which stays from one game to the next.
+        Set to anything but a whole number of steps, at least 1, it raises `ValueError`."""
         return self._refresh_steps
 
     @refresh_steps.setter
@@ -228,8 +230,7 @@ class DebugCommands:
     def kill(self, units: Unit[Any] | Iterable[Unit[Any]]) -> None:
         """Kill `units`."""
         self._playing()
-        tags = [units.tag] if isinstance(units, Unit) else [unit.tag for unit in units]
-        if tags:
+        if tags := _tags(units):
             self._command(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=tags)))
 
     def set_vitals(
@@ -242,17 +243,18 @@ class DebugCommands:
     ) -> None:
         """Set the life, energy or shields given of each of `units`.
 
-        Raises `ValueError` for a value of 0 or less, which the game would set to the most the unit can have instead
-        (in game): `kill` takes a unit's life.
+        Raises `ValueError` for a value of 0 or less: set to 0, a vital goes to the most the unit can have instead (in
+        game). `kill` takes a unit's life.
         """
         self._playing()
         given = {_VITALS.Life: life, _VITALS.Energy: energy, _VITALS.Shields: shields}
         values = {vital: value for vital, value in given.items() if value is not None}
         for value in values.values():
             if not value > 0:
-                raise ValueError(f"a vital set to {value!r} would be set to its most instead; set it above 0")
-        tags = [units.tag] if isinstance(units, Unit) else [unit.tag for unit in units]
-        for tag in tags:
+                raise ValueError(
+                    f"a vital is set above 0, not {value!r}: set to 0, the game sets it to its most instead"
+                )
+        for tag in _tags(units):
             for vital, value in values.items():
                 set_value = debug_pb2.DebugSetUnitValue(unit_value=vital, value=value, unit_tag=tag)
                 self._command(debug_pb2.DebugCommand(unit_value=set_value))
@@ -287,17 +289,25 @@ class DebugCommands:
         ]
         commands += self._commands
         self._toggled, self._commands = set(), []
-        due = self._last_sent is None or step - self._last_sent >= self._refresh_steps
+        due = self._last_refresh is None or step - self._last_refresh >= self._refresh_steps
         if not commands and not due:
             return
         specs = [drawing.spec() for drawing in self._drawings]
         if not commands and specs == self._shown:
+            self._last_refresh = step
             return
         # Any debug request replaces what the screen shows, so the drawing goes with the commands.
-        if specs or self._shown:
+        drawing = bool(specs or self._shown)
+        if drawing:
             commands.append(_draw_command(specs))
         game.client.debug(commands)
-        self._shown, self._last_sent = specs, step
+        if drawing:
+            self._shown, self._last_refresh = specs, step
+
+
+def _tags(units: Unit[Any] | Iterable[Unit[Any]]) -> list[int]:
+    """The game's current tag of each of `units`, one unit or several."""
+    return [units.tag] if isinstance(units, Unit) else [unit.tag for unit in units]
 
 
 def _checked_color(color: _Color) -> _Color:

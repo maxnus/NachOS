@@ -27,7 +27,7 @@ from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
 
 # The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
-_LONGEST_CHAT = 1039
+_MOST_CHAT_BYTES = 1039
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -259,9 +259,9 @@ class Api:
         game = self._current_game()
         if not text:
             raise ValueError("a chat message cannot be empty")
-        if (size := len(text.encode())) > _LONGEST_CHAT:
+        if (size := len(text.encode())) > _MOST_CHAT_BYTES:
             raise ValueError(
-                f"a chat message of {_LONGEST_CHAT + 1} bytes or more kills the game client, and this one is {size}"
+                f"a chat message of {_MOST_CHAT_BYTES + 1} bytes or more kills the game client, and this one is {size}"
             )
         channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
         game.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
