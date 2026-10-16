@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #125. `uv run pytest` passes 2066 tests on branch `claude/remove-hold`; `uv run
+- nachOS `main` has every PR to #125. `uv run pytest` passes 2074 tests on branch `claude/remove-hold`; `uv run
   pytest -m integration` passes 26 against a real game (run 2026-10-16).
 - **Step 1, a queue per unit, was done and is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16): NachOS
   holds no order. Step 2, one id per action, is done (#103 to #107). Step 3, the rest of M4: slice 5, the derived
@@ -118,9 +118,11 @@ and in this file's history. What the game was seen to do while it was built stay
 6. **The demo bot pays up front**: an SCV is given its build at once, and the game charges it then. It beat the
    computer at Medium in all 21 games of the pool again.
 7. **An order only one unit of a command carries out names one unit** (the owner, after the code review of #126):
-   `issue` raises `ValueError` for one given to several, a build, a train, a research, a morph that costs, and
-   every spell but a toggle, as the new `group-casts` sweeps measured (`AbilityData.carried_out_by_one`,
-   `CARRIED_OUT_BY_ONE_ABILITIES`). This keeps every order exact per unit, and a bot picks the caster or worker.
+   `issue` raises `ValueError` for one given to several, a build, a train, a research, a morph that costs, every
+   spell but a toggle, and the free abilities the new `group-abilities` sweeps saw one unit carry out, a landing or a
+   load among them (`AbilityData.carried_out_by_one_for`, `CARRIED_OUT_BY_ONE_ABILITIES`, `..._BY_TYPE`). The owner
+   asked for every ability with no known rule to be swept. This keeps every order exact per unit, and a bot picks the
+   unit.
 
 Kept from the queue's time: an order without state (#115), `issued_to(include_sent=True)`, the `TypeError` for a
 flying structure's add-on given no point, and the timing sweeps in `tools/sweep_orders.py`.

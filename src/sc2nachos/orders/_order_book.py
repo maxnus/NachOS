@@ -144,15 +144,16 @@ class OrderBook:
         unload at a point aimed at one of `units` itself, which is `UNLOAD` for that one: a group given an unload at
         one of its own transports is two orders. Raises `ValueError` for a custom ability given to a type it has
         nothing to be sent as for, or which this game's tables lack an ability it is sent as for, and for an ability
-        only one unit of a command carries out, given to several (`AbilityData.carried_out_by_one`).
+        only one unit of a command carries out, given to several units of the types it is so for
+        (`AbilityData.carried_out_by_one_for`).
         """
         given = (units,) if isinstance(units, Unit) else tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        if len(given) > 1 and row is not None and row.carried_out_by_one:
+        if row is not None and len(alone := [unit for unit in given if row.carried_out_by_one_for(unit.type_id)]) > 1:
             raise ValueError(
-                f"{ability.name} is carried out by one unit of a command; give it to one, not {len(given)}"
+                f"{ability.name} is carried out by one unit of a command; give it to one, not {len(alone)}"
             )
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:

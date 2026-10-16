@@ -15,6 +15,7 @@ from sc2nachos.gamedata._sent_as import Aim, SentAs
 from sc2nachos.gamedata._techtree._overrides import (
     ABILITIES_SENT_AS_ANOTHER,
     CARRIED_OUT_BY_ONE_ABILITIES,
+    CARRIED_OUT_BY_ONE_BY_TYPE,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     KEEPS_ORDERS_BY_TYPE,
@@ -253,10 +254,11 @@ class AbilityData:
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     carried_out_by_one: bool
-    """Whether one command naming several units has only one of them carry it out, which `api.orders.issue` refuses
-    to give several units: every ability that costs minerals or vespene, a build, an add-on, a train, a research or a
-    morph, and every spell but the toggles, a storm, an inject or a MULE, not a cloak or the oracle's pulsar beam (in
-    game)."""
+    """Whether one command naming several units has only one of them carry it out, whatever their type, which
+    `api.orders.issue` refuses to give several units: every ability that costs minerals or vespene, a build, an
+    add-on, a train, a research or a morph; every spell but a toggle, a storm or an inject, not a cloak; and a few
+    more, a corrosive bile, a landing, a load or a halt (in game). `carried_out_by_one_for` adds a liberator's siege
+    and a nexus's recall."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -272,6 +274,12 @@ class AbilityData:
     custom id names every type it can be given to: `SIEGE` a tank's siege mode and a liberator's defender
     mode, aimed at the order's point. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
+    _carried_out_by_one_types: frozenset[UnitTypeId] = field(repr=False, compare=False)
+
+    def carried_out_by_one_for(self, unit_type: UnitTypeId) -> bool:
+        """Whether one command naming several units of `unit_type` has only one of them carry it out: always where
+        `carried_out_by_one`, and for some types alone where not, as two liberators given one siege (in game)."""
+        return self.carried_out_by_one or unit_type in self._carried_out_by_one_types
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a
@@ -308,6 +316,7 @@ class AbilityData:
             order_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED),
             _behaviors_by_performer=behavior.by_type,
+            _carried_out_by_one_types=CARRIED_OUT_BY_ONE_BY_TYPE.get(ability, frozenset()),
         )
 
     @classmethod
@@ -342,6 +351,7 @@ class AbilityData:
             order_behavior=behavior.own,
             sent_as=sent_as,
             _behaviors_by_performer=behavior.by_type,
+            _carried_out_by_one_types=CARRIED_OUT_BY_ONE_BY_TYPE.get(ability, frozenset()),
         )
 
 

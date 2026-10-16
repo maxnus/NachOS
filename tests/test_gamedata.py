@@ -701,9 +701,9 @@ class TestARecordedGamesTables:
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
 
-    def test_what_one_unit_of_a_command_carries_out_is_what_costs_and_the_spells_cast_by_one(self, path: Path) -> None:
-        """One unit of a command carries out a build, a train, a research or a morph (in game), and a spell but a
-        toggle (tool `sweep_orders`, `group-casts-terran`, `-protoss` and `-zerg`)."""
+    def test_what_one_unit_of_a_command_carries_out_is_what_costs_and_what_the_sweep_saw(self, path: Path) -> None:
+        """One unit of a command carries out a build, a train, a research or a morph (in game), and every spell but a
+        toggle, with a few more (tool `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`)."""
         data = _tables(path)
         for row in data.abilities.values():
             costs = bool(row.cost.minerals or row.cost.vespene)
@@ -715,16 +715,33 @@ class TestARecordedGamesTables:
             AbilityId.HIGH_TEMPLAR_STORM,
             AbilityId.QUEEN_INJECT,
             AbilityId.BUILD_CREEP_TUMOR,
+            AbilityId.RAVAGER_CORROSIVE_BILE,
+            AbilityId.LAND,
         ):
             assert data.abilities[ability].carried_out_by_one, ability.name
         for ability in (
             AbilityId.MOVE,
             AbilityId.STIM,
-            AbilityId.SIEGE,
+            AbilityId.BURROW,
+            AbilityId.LIFT,
             AbilityId.CLOAK_ON,
             AbilityId.ORACLE_PULSAR_BEAM_ON,
+            AbilityId.UNLOAD_AT,
+            AbilityId.MORPH_ARCHON,
         ):
             assert not data.abilities[ability].carried_out_by_one, ability.name
+
+    def test_a_liberator_s_siege_and_a_nexus_s_recall_are_carried_out_by_one_where_another_type_s_are_not(
+        self, path: Path
+    ) -> None:
+        data = _tables(path)
+        siege, recall = data.abilities[AbilityId.SIEGE], data.abilities[AbilityId.RECALL]
+        assert (siege.carried_out_by_one, recall.carried_out_by_one) == (False, False)
+        assert siege.carried_out_by_one_for(UnitTypeId.LIBERATOR)
+        assert not siege.carried_out_by_one_for(UnitTypeId.SIEGE_TANK)
+        assert recall.carried_out_by_one_for(UnitTypeId.NEXUS)
+        assert not recall.carried_out_by_one_for(UnitTypeId.MOTHERSHIP)
+        assert data.abilities[AbilityId.HIGH_TEMPLAR_STORM].carried_out_by_one_for(UnitTypeId.HIGH_TEMPLAR)
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

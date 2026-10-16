@@ -230,21 +230,35 @@ giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. 
 to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
 
-# The spells one unit of a command casts, as `AbilityData.carried_out_by_one` reads them beside what costs minerals or
-# vespene. Two casters of each unit type and structure with energy were given each spell they are offered in one
-# command, and one of them spent or gained energy for every spell here (tool `sweep_orders`, `group-casts-terran`,
-# `-protoss` and `-zerg`). The toggles are not: both casters took a cloak and the oracle's pulsar beam.
+# What one unit of a command naming several carries out among the abilities that cost no minerals or vespene, as
+# `AbilityData.carried_out_by_one` reads it beside what costs. Two units of each type, in each of its forms, were given
+# each such ability they are offered in one command, and one of them carried it out: it spent or gained the energy, or
+# changed type, or made the effect, or its orders changed while its partner kept the move it had been given (tool
+# `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`). Every spell is here but the toggles, both of whose
+# casters took a cloak and the oracle's pulsar beam, and a recall, which is below; and so are a landing, a rooting and a
+# load, which take one place or one passenger, a salvage, a halt, a cancel of the last item, and the warp prism's and
+# the warp gate's changes of mode. A load is here though both of two nydus showed the passenger, since they hold one
+# cargo between them.
 CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     {
+        AbilityId.BATTLECRUISER_YAMATO,
         AbilityId.BUILD_CREEP_TUMOR,
+        AbilityId.CANCEL_LAST,
+        AbilityId.CORRUPTOR_CAUSTIC_SPRAY,
+        AbilityId.CYCLONE_LOCK_ON,
+        AbilityId.DISRUPTOR_PURIFICATION_NOVA,
         AbilityId.GHOST_EMP,
         AbilityId.GHOST_SNIPE,
+        AbilityId.HALT,
         AbilityId.HIGH_TEMPLAR_FEEDBACK,
         AbilityId.HIGH_TEMPLAR_STORM,
         AbilityId.INFESTOR_FUNGAL_GROWTH,
         AbilityId.INFESTOR_MICROBIAL_SHROUD,
         AbilityId.INFESTOR_NEURAL_PARASITE,
+        AbilityId.LAND,
+        AbilityId.LOAD,
         AbilityId.MEDIVAC_HEAL,
+        AbilityId.MOTHERSHIP_TIME_WARP,
         AbilityId.NEXUS_CHRONO_BOOST,
         AbilityId.NEXUS_ENERGY_RECHARGE,
         AbilityId.ORACLE_BUILD_STASIS_WARD,
@@ -257,10 +271,13 @@ CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.PHOENIX_GRAVITON_BEAM,
         AbilityId.QUEEN_INJECT,
         AbilityId.QUEEN_TRANSFUSE,
+        AbilityId.RAVAGER_CORROSIVE_BILE,
         AbilityId.RAVEN_ANTI_ARMOR_MISSILE,
         AbilityId.RAVEN_INTERFERENCE_MATRIX,
         AbilityId.RAVEN_SPAWN_AUTO_TURRET,
-        AbilityId.RECALL,
+        AbilityId.REAPER_GRENADE,
+        AbilityId.ROOT,
+        AbilityId.SALVAGE,
         AbilityId.SENTRY_FORCE_FIELD,
         AbilityId.SENTRY_GUARDIAN_SHIELD,
         AbilityId.SENTRY_HALLUCINATE_ADEPT,
@@ -277,9 +294,23 @@ CARRIED_OUT_BY_ONE_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
         AbilityId.SENTRY_HALLUCINATE_WARP_PRISM,
         AbilityId.SENTRY_HALLUCINATE_ZEALOT,
         AbilityId.SHIELD_BATTERY_RECHARGE,
+        AbilityId.SPRAY,
         AbilityId.VIPER_ABDUCT,
         AbilityId.VIPER_BLINDING_CLOUD,
         AbilityId.VIPER_CONSUME,
         AbilityId.VIPER_PARASITIC_BOMB,
+        AbilityId.WARP_GATE_MORPH_GATEWAY,
+        AbilityId.WARP_PRISM_PHASING_MODE,
+        AbilityId.WARP_PRISM_TRANSPORT_MODE,
+        AbilityId.WIDOW_MINE_ATTACK,
+    }
+)
+# What one unit of a command carries out for some of the types offered it alone: a liberator's siege takes a point, and
+# two sieged at one; a nexus's recall took its units, and two motherships both recalled theirs, though only one can
+# ever stand.
+CARRIED_OUT_BY_ONE_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
+    {
+        AbilityId.RECALL: frozenset({UnitTypeId.NEXUS}),
+        AbilityId.SIEGE: frozenset({UnitTypeId.LIBERATOR}),
     }
 )

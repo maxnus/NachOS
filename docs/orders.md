@@ -27,10 +27,11 @@ api.orders.camera(base)
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a
   group around the target point; ordering each separately stacks them on the point instead. What the game has only
-  one unit of a command carry out names one unit: a build, an add-on, a train, a research, a morph that costs, and
-  every spell but a toggle, a cloak or the oracle's pulsar beam (`AbilityData.carried_out_by_one`). Given to several,
-  `issue` raises `ValueError`, so the bot picks the unit: the nearest worker, the barracks with room beside it, the
-  caster with the energy.
+  one unit of a command carry out names one unit: a build, an add-on, a train, a research, a morph that costs,
+  every spell but a toggle, and a few more, a landing, a load, a halt, a corrosive bile or a liberator's siege
+  (`AbilityData.carried_out_by_one_for`, from what the game was seen to do). Given to several such units, `issue`
+  raises `ValueError`, so the bot picks the unit: the nearest worker, the barracks with room beside it, the caster
+  with the energy. A move, a burrow, a siege of tanks, a stim or an unload goes to every unit named.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`

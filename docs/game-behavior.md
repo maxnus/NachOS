@@ -619,17 +619,32 @@ Each entry ends with how it was seen:
   `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a loaded and an empty
   medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty medivacs, one or
   two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
-- Every spell but a toggle is cast by one caster of a command. Two of each unit type and structure with energy, given
-  each spell they are offered in one command, 45 spells over 16 casters, at 200 energy, at 150 or both (a recall
-  found its units only at 200, and a consume and a battery's recharge went out only at 150): one of the two spent the
-  spell's energy and the other none, for a storm, a feedback, an EMP, a snipe, a MULE, a scan, a supply
-  drop, a heal, a chrono boost, an energy recharge, a recall, a shield battery's recharge, every hallucination, a
-  force field, a guardian shield, an inject, a transfuse, a creep tumor, a changeling, a fungal, an abduct and the
-  rest; a consume gave one viper energy and not the other. Both took a banshee's or a ghost's cloak and an oracle's
-  pulsar beam, each spending its energy. A burrow, a medivac's boost, a ghost's hold fire and an overseer's oversight
-  mode spend no energy, so these trials tell nothing of them. A mothership has no energy, and only one can stand.
-  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps (tool `sweep_orders`,
-  `group-casts-terran`, `-protoss` and `-zerg`; local game, Linux build 75689).
+- One command naming two units of a type has one of them carry out what costs and a few abilities more, and both
+  the rest. Two of each unit type and structure, in each of its forms, were given each ability they are offered that
+  costs no minerals or vespene in one command, those that move sent off first, and read for whose energy changed,
+  whose type, what effects and units appeared, whose orders changed while the other kept its move, and their cloak,
+  buffs, rally and cargo; a transport was loaded first for its unloads, and a structure set to train, morph or go up
+  for its cancels.
+  - One of them: every spell but a toggle, 44 (a storm, a feedback, an EMP, a snipe, a MULE, a scan, a supply drop,
+    a heal, a chrono boost, a recharge, a battery's recharge, every hallucination, a force field, a guardian shield,
+    an inject, a transfuse, a creep tumor, a stasis ward, an auto turret, a changeling, a fungal, an abduct, a
+    consume, which gave one viper energy, and the rest); a Yamato, a corrosive bile, a reaper's grenade, a lock-on,
+    a caustic spray, a purification nova, a widow mine's attack, a time warp; a landing and a rooting at one point; a
+    load of one passenger; a salvage, a halt, a cancel of the last item; a warp gate's turn back into a gateway and a
+    warp prism's change of mode either way; a spray. A liberator's siege at a point, and a nexus's recall.
+  - Both: a move, an attack, a patrol, a stop, a hold, a smart, a gather, a repair, a rally; every burrow and
+    unburrow, lift, lowering and raising, uprooting, a tank's, an observer's and an overseer's siege and unsiege, a
+    viking's, a hellion's and a thor's change of mode; a cloak, a pulsar beam, a cloaking field, a stim, a blink, a
+    charge, a lunge, a hold fire, a boost, a prismatic alignment, a tactical jump; an adept's shade, a swarm host's
+    locusts, a baneling's explosion; a cancel of a morph or of a structure going up; an unload, at a point or not.
+  - Not read: a baneling's attack on structures and an overlord's creep leave nothing to see; a load-all took the
+    workers of one command center and of both planetary fortresses; and two nydus hold one cargo between them, so
+    which of them took or gave a passenger does not show. A mothership has no energy, and two never stand. A nexus's
+    recall found units to take in two of four runs, one nexus recalling each time.
+
+  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps, so a cast is told by
+  the energy spent. (Tool `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`; local game, Linux build
+  75689.)
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it

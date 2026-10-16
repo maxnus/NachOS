@@ -648,6 +648,18 @@ class TestSieging:
         assert (liberator.ability_id, list(liberator.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
         assert (liberator.target_world_space_pos.x, liberator.target_world_space_pos.y) == (20.0, 21.0)
 
+    def test_two_liberators_are_not_given_one_siege_and_two_tanks_are(self) -> None:
+        """One of two liberators given one siege at a point sieges, and both of two tanks (tool `sweep_orders`,
+        `group-abilities-terran`)."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)), make_unit(3, UnitTypeId.SIEGE_TANK))
+
+        with pytest.raises(ValueError, match="SIEGE is carried out by one unit of a command; give it to one, not 2"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(3)], _SIEGE, target=(20.0, 21.0))
+
+        assert len(_commands(game.flush())) == 2
+
     def test_a_tank_alone_needs_no_point(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK))
