@@ -266,6 +266,16 @@ class Api:
         channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
         game.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
+    def leave_game(self) -> None:
+        """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
+        gone out: `play` then returns `Result.DEFEAT`. Asking again in the turn changes nothing.
+
+        Chat sent in the step of the leave never reaches the other player. A message reaches it a step or two after it
+        is sent, and it sees the message only if it observes before the game ends, so a goodbye goes at least two steps
+        before the turn that leaves (in game). Leaving is accepted against the built-in computer too (in game).
+        """
+        self._current_game().leaving = True
+
     def play(
         self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
     ) -> Result:
@@ -309,6 +319,10 @@ class Api:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
                 self._debug._send(game)
+                if game.leaving:
+                    logger.info("Leaving the game, which concedes it")
+                    client.leave_game()
+                    return game.finish(Result.DEFEAT)
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:

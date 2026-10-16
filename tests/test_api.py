@@ -198,6 +198,32 @@ class TestPlaying:
         assert asked == [0, 4, 8]
         assert not any(request.HasField("step") for request in transport.requests)
 
+    def test_a_bot_that_leaves_sends_its_turn_then_leaves_and_loses(self) -> None:
+        client, transport = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0)),
+            make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success])),
+            make_response(Status.LAUNCHED),
+        )
+        api = Api()
+        ended: list[Result] = []
+
+        @api.events.on(TurnEvent)
+        def give_up(event: TurnEvent) -> None:
+            api.chat("gg")
+            api.leave_game()
+            api.leave_game()
+
+        @api.events.on(GameEndEvent)
+        def end(event: GameEndEvent) -> None:
+            ended.append(event.result)
+
+        assert api.play(client) is Result.DEFEAT
+        assert (api.result, ended) == (Result.DEFEAT, [Result.DEFEAT])
+        asked = [request.WhichOneof("request") for request in transport.requests]
+        assert asked == ["join_game", "game_info", "data", "observation", "action", "leave_game"]
+
     @pytest.mark.parametrize("realtime", [True, False])
     def test_a_game_that_ends_while_the_handlers_run_ends_in_its_result(self, realtime: bool) -> None:
         """The orders reach a game that is over, which refuses them (#14): a realtime game runs on while the
@@ -657,3 +683,25 @@ class TestAgainstTheRealGame:
             with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
                 ladder.ping()
                 assert ladder.status is Status.LAUNCHED
+
+
+@pytest.mark.integration
+def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
+    """Run with `pytest -m integration`. Plays a second of a game."""
+    try:
+        MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+
+    api = Api()
+
+    @api.events.on(TurnEvent)
+    def give_up(event: TurnEvent) -> None:
+        if event.step >= 16:
+            api.leave_game()
+
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(_LADDER_MAP, ApiBot(api, Race.TERRAN), opponent, steps_per_turn=8, window=(640, 480))
+
+    assert result is Result.DEFEAT
+    assert api.step == 16

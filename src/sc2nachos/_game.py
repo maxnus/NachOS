@@ -87,6 +87,8 @@ class _Game:
     placement: Final[PlacementGrids]
     pathing: Final[Pathing]
     camera: Final[Camera]
+    # Whether a handler has asked to leave the game once the turn's requests have gone out.
+    leaving: bool = False
     # The one other player's id, if the game has exactly one.
     opponent_id: int | None = None
     # The turn's chat, in the order given, as the actions that send it.
