@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.geometry import Point
 
 if TYPE_CHECKING:
@@ -36,13 +36,10 @@ def create_unit_command_actions(
             sent.setdefault(sending, []).append(unit)
     commands = [_naming(ability, own, target, queued=queued)] if own else []
     for sending, group in sent.items():
-        match sending.aim:
-            case Aim.ITSELF:
-                commands += [_naming(sending.ability, [unit], unit, queued=queued) for unit in group]
-            case Aim.TARGET:
-                commands.append(_naming(sending.ability, group, target, queued=queued))
-            case Aim.NOTHING:
-                commands.append(_naming(sending.ability, group, None, queued=queued))
+        if sending.aimed_at_itself:
+            commands += [_naming(sending.ability, [unit], unit, queued=queued) for unit in group]
+        else:
+            commands.append(_naming(sending.ability, group, None, queued=queued))
     return commands
 
 

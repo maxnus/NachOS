@@ -212,9 +212,12 @@ class Grid[T: float]:
         self._refuse_readonly()
         self._data[:] = value
 
-    def fill_footprint(self, footprint: Footprint, *, at: PointLike, value: T) -> None:
-        """Sets every tile `footprint` covers, centered at `at`, to `value`, skipping those beyond the grid."""
+    def fill_footprint(self, footprint: Footprint, *, at: PointLike, value: T, margin: Margin = 0) -> None:
+        """Sets every tile `footprint` covers, centered at `at`, to `value`, and with `margin`, every tile within it of
+        one the footprint covers, as `fits_footprint` takes it, skipping those beyond the grid. Raises `ValueError` for
+        a negative margin."""
         self._refuse_readonly()
+        footprint, at = footprint._grown_by(margin, at=at)
         grid_slices, mask_slices = self._slices_for_footprint(footprint, at)
         self._data[grid_slices][footprint.mask[mask_slices]] = value
 
@@ -223,12 +226,7 @@ class Grid[T: float]:
         one the footprint covers: as many on every side, or so many on its left, right, bottom and top. A tile beyond
         the grid reads `outside`, and raises `IndexError` if that is `None`. Raises `ValueError` for a negative
         margin."""
-        if any(sides := _margin_sides(margin)):
-            left, _, bottom, _ = sides
-            box = footprint.bounding_box(at=at)
-            footprint = footprint._grown(sides)
-            # Centered so that its lower left tile lies `left` and `bottom` beyond the footprint's.
-            at = (box.x - left + footprint.width / 2, box.y - bottom + footprint.height / 2)
+        footprint, at = footprint._grown_by(margin, at=at)
         grid_slices, mask_slices = self._slices_for_footprint(footprint, at)
         covered_on_grid = footprint.mask[mask_slices]
         if numpy.count_nonzero(covered_on_grid) < numpy.count_nonzero(footprint.mask):

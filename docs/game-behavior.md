@@ -237,12 +237,8 @@ Each entry ends with how it was seen:
   dies (#25, #34; tested).
 - An order to one larva may be carried out by another larva of the same hatchery, and larva die with their
   hatchery. A morph ordered on several units morphs only one of them (tool `sweep_tech_tree`, tool `sweep_alerts`).
-- A larva gathers south of its own hatchery. In two games, one from each start location, with four hatcheries each
-  (the first, one beside it, two across the map, one injected), 28 larvae read every 8 steps for 1200 steps stood
-  2.0 to 3.6 south of their hatchery's center and 2.2 west to 1.6 east of it: on average 2.85 south, and never more
-  than 2.3 from that spot. None stood nearer another hatchery. A hatchery grew a larva every 240 steps while it had
-  fewer than three. A drone's morph given to a hatchery itself is answered `NotSupported`, and no larva takes it
-  (tool `sweep_orders`, `larvae`; `tests/test_orders.py`, the larva hold test; local game, Linux build 75689).
+- A drone's morph given to a hatchery itself is answered `NotSupported`, and no larva takes it (tool `sweep_orders`,
+  `larvae`; local game, Linux build 75689).
 - Only one mothership can stand at a time, arming a nuke needs a factory, and a game starts with 50 minerals (tool
   `sweep_tech_tree`, tool `sweep_alerts`).
 - The game itself disguises a changeling, collapses a tower, lifts a locust into the air and burrows a creep tumor
@@ -378,8 +374,8 @@ Each entry ends with how it was seen:
 - A liberator ordered to siege (2558) reports 2554 running, and unsieging works the same way, though `remaps_to`
   links neither pair (#23). Ordered at a point, it is a sieged liberator by the next observation, and reports 2554
   aimed at itself, not at the point, while its zone forms: 64 steps, after which it reports no order. Ordered the
-  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `SIEGE` and the archon's 1767
-  as `MORPH_ARCHON` (#103; tested).
+  siege again meanwhile, it is refused `NotSupported`. NachOS reads 2554 as `LIBERATOR_SIEGE_AT` and the archon's
+  1767 as `MORPH_ARCHON` (#103; tested).
 - The archon: `Morph_Archon` (1766) given to two templar in one command, high or dark, even 6 apart, walks them to
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
   is refused. 1767 given to both, targeting one of them, merges them too; given to one it does nothing, though it
@@ -544,9 +540,6 @@ Each entry ends with how it was seen:
 - A barracks training marines keeps training when given a rally, or a cancel, which drops the last marine; a lift is
   refused `NotSupported`, and a stop, a move or hold position `Error`. Chrono Boost and an inject leave a structure's
   production as it was, and a carrier keeps building interceptors through a stop (tool `sweep_orders`).
-- A structure takes the next level the step it is done with the last. An engineering bay read infantry weapons 1
-  99.96% done at step 2575; at 2576 it showed no order, level 1 was among this player's upgrades, and level 2 given
-  then was answered `Success` (tool `sweep_orders`, `research-after`; local game, Linux build 75689).
 - A research that another of this player's structures is already doing is answered `Success`, and nothing is
   researched or reported. A level queued behind the previous one, still in research, is refused `NotSupported` (tool
   `sweep_orders`).
@@ -570,7 +563,8 @@ Each entry ends with how it was seen:
   no move (tool `sweep_orders`).
 - A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
   a sieged tank its siege mode, which reads as `SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
-  liberator shows `SIEGE` too (2554, read as the siege ordered) aimed at itself, but only while its zone forms.
+  liberator shows `LIBERATOR_SIEGE_AT` (2554, read as the siege ordered) aimed at itself, but only while its zone
+  forms.
   A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
   the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
   behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
@@ -619,6 +613,35 @@ Each entry ends with how it was seen:
   `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a loaded and an empty
   medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty medivacs, one or
   two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
+- One command naming two units of a type has one of them carry out what costs and a few abilities more, and both
+  the rest. Two of each unit type and structure, in each of its forms, were given each ability they are offered that
+  costs no minerals or vespene in one command, those that move sent off first, and read for whose energy changed,
+  whose type, what effects and units appeared, whose orders changed while the other kept its move, and their cloak,
+  buffs, rally and cargo; a transport was loaded first for its unloads, and a structure set to train, morph or go up
+  for its cancels.
+  - One of them: every spell but a toggle, 44 (a storm, a feedback, an EMP, a snipe, a MULE, a scan, a supply drop,
+    a heal, a chrono boost, a recharge, a battery's recharge, every hallucination, a force field, a guardian shield,
+    an inject, a transfuse, a creep tumor, a stasis ward, an auto turret, a changeling, a fungal, an abduct, a
+    consume, which gave one viper energy, and the rest); a Yamato, a corrosive bile, a reaper's grenade, a lock-on,
+    a caustic spray, a purification nova, a widow mine's attack, a time warp; a landing and a rooting at one point; a
+    load of one passenger; a salvage, a halt, a cancel of the last item; a warp gate's turn back into a gateway and a
+    warp prism's change of mode either way; a spray. A liberator's siege at a point, and a nexus's recall.
+  - Both: a move, an attack, a patrol, a stop, a hold, a smart, a gather, a repair, a rally; every burrow and
+    unburrow, lift, lowering and raising, uprooting, a tank's, an observer's and an overseer's siege, their unsiege
+    and a liberator's, a viking's, a hellion's and a thor's change of mode; a cloak, a pulsar beam, a cloaking field,
+    a stim, a blink, a charge, a lunge, a hold fire, a boost, a prismatic alignment, a tactical jump; an adept's
+    shade, a swarm host's locusts, a baneling's explosion; a cancel of a morph or of a structure going up; an unload,
+    at a point or not.
+  - Not read: a baneling's attack on structures and an overlord's creep leave nothing to see; a load-all took the
+    workers of one command center in one run and of both in the next, and of both flying command centers and both
+    planetary fortresses; and two nydus hold one cargo between them, so which of them took or gave a passenger does not
+    show. Both of two motherships took a recall, but a mothership has no energy, and two never stand. A nexus's recall
+    found units to take in two of four runs, one nexus recalling each time.
+
+  Under `tech_tree` a medivac regains energy twice as fast as a ghost, 5 to 2.6 over 72 steps, so a cast is told by the
+  energy spent. A medivac heals hurt units by itself, which spends energy too: of two given a load, one spent 3.6 with
+  its heal on autocast, and neither with it off, so the sweep turns it off first. (Tool `sweep_orders`,
+  `group-abilities-terran`, `-protoss` and `-zerg`; local game, Linux build 75689.)
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it
@@ -680,10 +703,6 @@ Each entry ends with how it was seen:
   refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
   storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
   and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
-- A worker can be sent to a geyser by a move to the geyser's center and given the refinery on the way. An SCV 2.5 from
-  a geyser's edge, sent to its center, was 1.2 from the edge 8 steps later and still walking; a refinery ordered then
-  went up, and its 75 minerals were taken by the next observation. A depot ordered once its SCV was 1.7 from the site,
-  walking there, went up too (`tests/test_orders.py`, the held build test; local game, Linux build 75689).
 
 ## Alerts and the camera
 

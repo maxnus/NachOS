@@ -65,9 +65,9 @@ upgrade, and its general id is not curated: nothing is offered it. The generic c
 a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
 
 **A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but
-read as the one ordered, from the same table: a liberator ordered `SIEGE` reports
+read as the one ordered, from the same table: a liberator ordered `LIBERATOR_SIEGE_AT` reports
 `LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when ordered, and reads
-`SIEGE`. The only way to find such a pair is to order the ability in game and read the performer's
+`LIBERATOR_SIEGE_AT`. The only way to find such a pair is to order the ability in game and read the performer's
 orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each of the
 raven's and viper's spells show in the caster's orders under the id ordered.
 
@@ -136,6 +136,12 @@ tool writes that file, so a regeneration keeps every entry, and every run checks
 game, and the generator refuses to write the tech tree unless the sweep saw it make its unit type. A test in
 `tests/test_gamedata.py` fails once the game's table names an entry's ability for its type, and the entry can go.
 Add an entry only with an in-game trial behind it, never to paper over something the sweep cannot reach.
+
+**What every unit of a command carries out is `MULTI_UNIT_ABILITIES` in the same file**, which `AbilityData.multi_unit`
+reads; any other ability goes to one unit at a time. After a patch, `uv run python tools/sweep_orders.py
+group-abilities-terran group-abilities-protoss group-abilities-zerg` gives each ability that costs nothing to two units
+at once: one it classes `both` belongs there, one it classes `one` does not, and one it classes `no trace` or
+differently from run to run needs a closer look. A new ability is refused for a group until it is listed.
 
 The sweep reads everything off `RequestQueryAvailableAbilities`, which answers as follows:
 

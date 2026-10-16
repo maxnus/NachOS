@@ -265,7 +265,7 @@ def played(
     if game is None:
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
-        order_book = OrderBook(tracker.game_data, build_reach=2.5)
+        order_book = OrderBook(tracker.game_data)
         state = _State(observation, tracker, game_map)
         game = _Game(
             client=client,
@@ -282,6 +282,7 @@ def played(
                 game_map.placement,
                 present_units=present_units,
                 state=state,
+                step=step,
                 game_data=tracker.game_data,
                 order_book=order_book,
             ),

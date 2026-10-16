@@ -9,11 +9,12 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import NotReportedError, Unit, UnitType
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterator
+    from collections.abc import Collection, Iterable, Iterator
 
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
     from sc2nachos.orders import Order, OrderBook
+    from sc2nachos.placement._placement_reservation import PlacementReservation
     from sc2nachos.units import OwnUnit, UnitOrder, Units
 
 # An add-on stands 2.5 right of its host's center and 0.5 below (#37).
@@ -22,8 +23,8 @@ _ADD_ON_OFFSET = (2.5, -0.5)
 
 @final
 class _BuildSites:
-    """Where this player's builds will stand that are ordered and not standing yet: each held until its unit can start
-    it, issued this turn, or sent and not yet begun. One for a game."""
+    """Where this player's builds will stand that are ordered and not standing yet: each issued this turn, or sent and
+    not yet begun. One for a game."""
 
     __slots__ = ("_builder_types", "_game_data", "_order_book")
 
@@ -36,22 +37,26 @@ class _BuildSites:
         # The types that perform an ability that places a structure: workers, add-on hosts, queens and the like.
         self._builder_types = frozenset(type_id for row in builds for type_id in row.performers)
 
-    def reserved_grid(self, like: Grid[bool], own_units: Units[OwnUnit[Any]]) -> Grid[bool]:
+    def reserved_grid(
+        self, like: Grid[bool], own_units: Units[OwnUnit[Any]], reservations: Iterable[PlacementReservation]
+    ) -> Grid[bool]:
         """A read-only grid over the tiles `like` covers, true under each build site of `own_units`, this player's
-        units. An add-on reserves the ground beside its host, and a lifted host's landing site too."""
+        units, and under each of `reservations`. An add-on reserves the ground beside its host, and a lifted host's
+        landing site too."""
         reserved = Grid.like(like, dtype=bool, outside=False)
+        for reservation in reservations:
+            reserved.fill_footprint(reservation._footprint, at=reservation.at, value=True, margin=reservation.margin)
         standing: set[tuple[int, int]] | None = None
         for unit in own_units:
             if unit.type_id in self._builder_types:
                 for build in self._builds_ordered_to(unit):
                     if standing is None:
-                        standing = {_placement_key(own.position) for own in own_units if own.footprint is not None}
+                        standing = _standing_centers(own_units)
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
     def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order[Any] | UnitOrder]:
-        """Each build `unit` was ordered: held, issued this turn, sent and maybe not shown yet, or shown by the
-        unit."""
+        """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
         ordered: list[Order[Any] | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
@@ -117,6 +122,12 @@ class _BuildSites:
         if row.footprint is None and row.morphed_from is not None:
             return self._game_data.units[row.morphed_from].footprint
         return row.footprint
+
+
+def _standing_centers(own_units: Iterable[OwnUnit[Any]]) -> set[tuple[int, int]]:
+    """Where this player's structures in `own_units` stand, by `_placement_key`: a build or a reservation whose site is
+    among them has begun, whatever type stands there."""
+    return {_placement_key(own.position) for own in own_units if own.footprint is not None}
 
 
 def _placement_key(center: Point) -> tuple[int, int]:

@@ -3,7 +3,6 @@
 # Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
-import itertools
 from contextlib import closing
 from typing import Any
 
@@ -13,7 +12,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import Cost, GameData, OrderBehavior
+from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -23,7 +22,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
-from sc2nachos.units import Alliance, OwnUnit, Unit, UnitType
+from sc2nachos.units import OwnUnit, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
 
@@ -42,6 +41,7 @@ _UNLOAD = AbilityId.UNLOAD
 _TRAIN_SCV = AbilityId.COMMAND_CENTER_TRAIN_SCV
 _UNLOAD_AT = AbilityId.UNLOAD_AT
 _SIEGE = AbilityId.SIEGE
+_SIEGE_AT = AbilityId.LIBERATOR_SIEGE_AT
 _UNSIEGE = AbilityId.UNSIEGE
 _SIEGED = {UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.LIBERATOR_SIEGED}
 _SIEGE_FORMS = [UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR, *_SIEGED]
@@ -96,9 +96,8 @@ def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
 class _Game:
     """An order book over a tracker, fed one observation at a time as `Api.play` feeds it."""
 
-    def __init__(self, *verdicts: list[ActionResult], tables: GameData = _TABLES, build_reach: float = 2.5) -> None:
-        """A game with `tables` that answers each flush with the next of `verdicts`, one result per action sent, and
-        gives a held build once its worker is within `build_reach`."""
+    def __init__(self, *verdicts: list[ActionResult], tables: GameData = _TABLES) -> None:
+        """A game with `tables` that answers each flush with the next of `verdicts`, one result per action sent."""
         responses = [
             make_response(action=sc2api_pb2.ResponseAction(result=[_verdict(result) for result in verdict]))
             for verdict in verdicts
@@ -106,7 +105,7 @@ class _Game:
         self.client, self.transport = make_client(*responses)
         self.tracker = _Tracker(tables, Enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(tables, build_reach=build_reach)
+        self.book = OrderBook(tables)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
         """Take in an observation of `units` at `step`, in which the units under the tags `dead` died."""
@@ -115,7 +114,7 @@ class _Game:
         changes = self.tracker.last_changes
         changed_hands = [unit for unit, _ in changes.units_alliance_changed]
         lost = [*changes.units_died, *changes.units_found_dead, *changed_hands]
-        self.book._observe(step, lost, self.tracker.unit_tracker.present)
+        self.book._observe(step, lost)
 
     def flush(self) -> sc2api_pb2.RequestAction | None:
         """Send the turn's orders and return the request that went out, or `None` if none did."""
@@ -294,13 +293,6 @@ class TestGivingAnOrder:
         assert request is not None
         assert len(request.actions) == 1
 
-    def test_an_order_knows_what_its_ability_does_to_a_unit(self) -> None:
-        game = _Game()
-        game.observe(0, _marine(1))
-
-        assert game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0)).order_behavior is OrderBehavior.REPLACES
-        assert game.book.issue(game.own(1), _STIM).order_behavior is OrderBehavior.KEEPS_ORDERS
-
 
 class TestOneOrderAUnitATurn:
     def test_the_last_order_a_unit_was_given_is_the_one_sent(self) -> None:
@@ -383,6 +375,30 @@ class TestOneOrderAUnitATurn:
         assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
 
         game.observe(32, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+
+    def test_include_sent_keeps_a_train_sent_while_the_observations_may_not_show_it(self) -> None:
+        """A train goes behind what the structure makes, so a handler that trains while `issued_to` and the
+        structure's orders show nothing would pay for a second on the ladder."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+
+        game.observe(32, _barracks(1, _training()))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+
+    def test_include_sent_leaves_out_what_a_unit_carries_out_at_once(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _barracks(1))
 
         assert game.book.issued_to(game.own(1), include_sent=True) == ()
 
@@ -590,41 +606,59 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
 
 class TestSieging:
-    """`SIEGE` goes out as each type's own siege: a tank's siege mode aimed at nothing, a liberator's defender
-    mode aimed at its zone. A liberator ordered it at a point is a sieged liberator by the next observation, and reports
-    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered the siege again, it is refused
-    `NotSupported` (in game)."""
+    """`SIEGE` goes out as each type's own siege, aimed at nothing: a tank's siege mode, an observer's surveillance
+    mode, an overseer's oversight mode. A liberator's is `LIBERATOR_SIEGE_AT`, its defender mode aimed at its zone:
+    ordered it at a point, it is a sieged liberator by the next observation, and reports
+    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered it again, it is refused
+    `NotSupported` (in game). `UNSIEGE` goes out as each of the four's own."""
 
-    def test_a_sieged_liberator_reads_as_carrying_out_the_siege(self) -> None:
+    def test_a_sieged_liberator_reads_as_carrying_out_its_siege(self) -> None:
         game = _Game()
         game.observe(0, _sieged_liberator(1))
 
         (order,) = game.own(1).orders
 
-        assert order.ability is _SIEGE
+        assert order.ability is _SIEGE_AT
         assert order.target is game.own(1)
 
     def test_the_siege_again_is_sent_since_it_was_aimed_at_a_point_and_shows_aimed_at_the_liberator(self) -> None:
         game = _Game([ActionResult.NOT_SUPPORTED])
         game.observe(0, _sieged_liberator(1))
 
-        game.book.issue(game.own(1), _SIEGE, target=(20.0, 21.0))
+        game.book.issue(game.own(1), _SIEGE_AT, target=(20.0, 21.0))
 
         (command,) = _commands(game.flush())
         assert command.ability_id == RawAbilityId.Morph_LiberatorAGMode
-        assert game.refused() == [(1, _SIEGE, ActionResult.NOT_SUPPORTED)]
+        assert game.refused() == [(1, _SIEGE_AT, ActionResult.NOT_SUPPORTED)]
 
-    def test_a_tank_and_a_liberator_go_out_each_as_its_own_siege(self) -> None:
-        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+    def test_a_liberator_takes_its_own_siege_at_a_point_and_not_the_siege(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
 
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        with pytest.raises(ValueError, match="SIEGE has nothing to be sent as for LIBERATOR"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE)
+        game.book.issue(game.own(2), _SIEGE_AT, target=(20.0, 21.0))
 
-        tank, liberator = _commands(game.flush())
-        assert (tank.ability_id, list(tank.unit_tags)) == (RawAbilityId.SiegeMode_SiegeMode, [1])
-        assert not tank.HasField("target_world_space_pos")
-        assert (liberator.ability_id, list(liberator.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
-        assert (liberator.target_world_space_pos.x, liberator.target_world_space_pos.y) == (20.0, 21.0)
+        (command,) = _commands(game.flush())
+        assert (command.ability_id, list(command.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
+        assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
+
+    def test_two_liberators_are_not_given_one_siege_and_two_tanks_are(self) -> None:
+        """One of two liberators given one siege at a point sieges, and both of two tanks (tool `sweep_orders`,
+        `group-abilities-terran`)."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(
+            0,
+            *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)),
+            *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)),
+        )
+
+        with pytest.raises(ValueError, match="give LIBERATOR_SIEGE_AT to one unit, not 2"):
+            game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))
+        game.book.issue([game.own(3), game.own(4)], _SIEGE)
+
+        (command,) = _commands(game.flush())
+        assert list(command.unit_tags) == [3, 4]
 
     def test_a_tank_alone_needs_no_point(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -635,12 +669,12 @@ class TestSieging:
         (command,) = _commands(game.flush())
         assert command.ability_id == RawAbilityId.SiegeMode_SiegeMode
 
-    def test_a_liberator_needs_a_point(self) -> None:
+    def test_a_liberator_s_siege_needs_a_point(self) -> None:
         game = _Game()
-        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+        game.observe(0, make_unit(1, UnitTypeId.LIBERATOR))
 
-        with pytest.raises(TypeError, match="SIEGE takes a point for LIBERATOR"):
-            game.book.issue([game.own(1), game.own(2)], _SIEGE)
+        with pytest.raises(TypeError, match="LIBERATOR_SIEGE_AT"):
+            game.book.issue(game.own(1), _SIEGE_AT)
 
     def test_a_type_with_no_siege_is_refused_at_the_call(self) -> None:
         game = _Game()
@@ -679,11 +713,10 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        hold = game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
+        game.book.issue([game.own(1), game.own(2)], _HOLD_FIRE)
 
         sent_move, sent_hold = _commands(game.flush())
 
-        assert hold.order_behavior is OrderBehavior.REPLACES
         assert list(sent_move.unit_tags) == [1]
         assert list(sent_hold.unit_tags) == [1, 2]
 
@@ -712,12 +745,11 @@ class TestAGroupOfSeveralTypes:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.QUEEN))
         game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
-        tumor = game.book.issue(game.own(1), _CREEP_TUMOR, target=(30.0, 31.0))
+        game.book.issue(game.own(1), _CREEP_TUMOR, target=(30.0, 31.0))
 
         (sent,) = _commands(game.flush())
 
         assert sent.ability_id == _CREEP_TUMOR
-        assert tumor.order_behavior is OrderBehavior.REPLACES
 
 
 def _medivac(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
@@ -931,14 +963,15 @@ class TestWhatTheGameRefused:
         assert len(_commands(game.flush())) == 1
 
     def test_only_the_units_of_a_command_taken_are_doing_it(self) -> None:
-        """A tank and a liberator are each sent their own siege, and here the game takes only the tank's."""
+        """A sieged tank and a sieged liberator are each sent their own unsiege, and here the game takes only the
+        tank's."""
         game = _Game([ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED], [ActionResult.SUCCESS])
-        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
+        game.book.issue([game.own(1), game.own(2)], _UNSIEGE)
         game.flush()
-        game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.LIBERATOR))
+        game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
 
-        game.book.issue([game.own(1), game.own(2)], _SIEGE, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(2)], _UNSIEGE)
 
         (command,) = _commands(game.flush())
         assert list(command.unit_tags) == [2]
@@ -951,11 +984,10 @@ class TestOrdersThatQueue:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1, _training()))
 
-        order = game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE)
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _TRAIN_MARINE
-        assert order.order_behavior is OrderBehavior.QUEUES
 
 
 class TestATargetOffTheGround:
@@ -979,12 +1011,11 @@ class TestWhatAStructureDoesBesidesMaking:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.COMMAND_CENTER, at=(12.0, 12.0)))
         game.book.issue(game.own(1), _TRAIN_SCV)
-        unload = game.book.issue(game.own(1), _UNLOAD)
+        game.book.issue(game.own(1), _UNLOAD)
 
         sent = [command.ability_id for command in _commands(game.flush())]
 
         assert sent == [_TRAIN_SCV, _UNLOAD]
-        assert unload.order_behavior is OrderBehavior.KEEPS_ORDERS
 
     def test_a_rally_does_not_take_the_turn_from_a_train(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
@@ -1073,11 +1104,9 @@ class TestWhatAnOrderStopsCountingFor:
         assert game.book.pending == ()
 
 
-class TestTwoTrainsInOneTurn:
-    """A train goes behind what a structure is making, queued or not (in game), so it competes with nothing. These
-    trains cost nothing, so none is held."""
-
-    def test_a_queued_second_train_goes_out_queued(self) -> None:
+class TestTellingAStructureToMakeTwo:
+    def test_a_second_train_is_sent_when_the_bot_asks_for_a_place_in_the_queue(self) -> None:
+        """This is how a structure with a reactor is told to make two at once (in game)."""
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         game.book.issue(game.own(1), _TRAIN_MARINE)
@@ -1088,104 +1117,62 @@ class TestTwoTrainsInOneTurn:
         assert (one.ability_id, one.queue_command) == (_TRAIN_MARINE, False)
         assert (two.ability_id, two.queue_command) == (_TRAIN_MARINE, True)
 
-    def test_an_unqueued_second_train_goes_out_too(self) -> None:
-        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+    def test_a_second_unqueued_train_takes_the_structure_from_the_first(self) -> None:
+        """The game would queue it and pay for it from the step it was ordered."""
+        game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         game.book.issue(game.own(1), _TRAIN_MARINE)
         game.book.issue(game.own(1), _TRAIN_REAPER)
 
-        assert [command.ability_id for command in _commands(game.flush())] == [_TRAIN_MARINE, _TRAIN_REAPER]
+        (command,) = _commands(game.flush())
+
+        assert command.ability_id == _TRAIN_REAPER
 
 
-# Orders NachOS holds until a unit can start them. These tables give what is held a cost and a time, as the game's do.
+# Orders that cost. These tables give them a cost, as the game's do.
 _BUILD_DEPOT = AbilityId.SCV_BUILD_SUPPLY_DEPOT
-_BUILD_REFINERY = AbilityId.SCV_BUILD_REFINERY
 _BUILD_REACTOR = AbilityId.BUILD_REACTOR
-_LAND = AbilityId.LAND
-_ORBITAL = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
-_WEAPONS_1 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
-_WEAPONS_2 = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
-_WARP_IN_ADEPT = AbilityId.WARP_GATE_WARP_IN_ADEPT
 _DRONE = AbilityId.LARVA_MORPH_DRONE
-_OVERLORD = AbilityId.LARVA_MORPH_OVERLORD
+_STORM = AbilityId.HIGH_TEMPLAR_STORM
 _SITE = (30.0, 30.0)
 
 
 def _row(
-    unit_type: UnitTypeId,
-    *,
-    structure: bool = False,
-    minerals: int = 0,
-    vespene: int = 0,
-    steps: float = 0.0,
-    speed: float = 0.0,
-    alias: tuple[UnitTypeId, ...] = (),
+    unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0, vespene: int = 0
 ) -> data_pb2.UnitTypeData:
-    """A unit type's row: what it costs, the steps it takes to make, and its speed at Normal, as the game gives it."""
+    """A unit type's row, with what it costs."""
     attribute = data_pb2.Attribute.Structure if structure else data_pb2.Attribute.Mechanical
-    return data_pb2.UnitTypeData(
-        unit_id=unit_type,
-        attributes=[attribute],
-        mineral_cost=minerals,
-        vespene_cost=vespene,
-        build_time=steps,
-        movement_speed=speed,
-        tech_alias=alias,
-    )
+    return data_pb2.UnitTypeData(unit_id=unit_type, attributes=[attribute], mineral_cost=minerals, vespene_cost=vespene)
 
 
-_HOLDING_TABLES = make_tables(
-    _row(UnitTypeId.SCV, minerals=50, steps=272.0, speed=2.8125),
-    _row(UnitTypeId.MARINE, minerals=50, steps=403.0),
-    _row(UnitTypeId.REAPER, minerals=50, vespene=50, steps=716.0),
-    _row(UnitTypeId.ADEPT, minerals=100, vespene=25, steps=448.0),
-    _row(UnitTypeId.WARP_GATE, structure=True, minerals=150),
+_COSTING_TABLES = make_tables(
+    _row(UnitTypeId.SCV, minerals=50),
+    _row(UnitTypeId.MARINE, minerals=50),
+    _row(UnitTypeId.REAPER, minerals=50, vespene=50),
     _row(UnitTypeId.LARVA),
-    _row(UnitTypeId.DRONE, minerals=50, steps=272.0),
-    _row(UnitTypeId.OVERLORD, minerals=100, steps=400.0),
-    _row(UnitTypeId.HATCHERY, structure=True, minerals=300, steps=1590.0),
-    _row(UnitTypeId.LAIR, structure=True, minerals=450, steps=1790.0),
-    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, steps=470.0),
-    _row(UnitTypeId.REFINERY, structure=True, minerals=75, steps=470.0),
-    _row(UnitTypeId.BARRACKS, structure=True, minerals=150, steps=1030.0),
-    _row(UnitTypeId.BARRACKS_FLYING, structure=True, minerals=150, speed=0.9375),
-    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400, steps=1590.0),
-    _row(UnitTypeId.COMMAND_CENTER_FLYING, structure=True, minerals=400, speed=0.9375),
-    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550, steps=560.0),
-    _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125, steps=560.0),
-    *(
-        _row(reactor, structure=True, minerals=50, vespene=50, steps=806.0, alias=(UnitTypeId.REACTOR,))
-        for reactor in (UnitTypeId.REACTOR_BARRACKS, UnitTypeId.REACTOR_FACTORY, UnitTypeId.REACTOR_STARPORT)
-    ),
+    _row(UnitTypeId.DRONE, minerals=50),
+    _row(UnitTypeId.HATCHERY, structure=True, minerals=300),
+    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100),
+    _row(UnitTypeId.BARRACKS, structure=True, minerals=150),
+    _row(UnitTypeId.BARRACKS_FLYING, structure=True, minerals=150),
+    _row(UnitTypeId.REACTOR_BARRACKS, structure=True, minerals=50, vespene=50),
     abilities=[
         data_pb2.AbilityData(ability_id=_MOVE, target=_AT_A_POINT_OR_UNIT),
-        data_pb2.AbilityData(ability_id=_LAND, target=_AT_A_POINT),
-        data_pb2.AbilityData(ability_id=_RALLY, target=_AT_A_POINT_OR_UNIT),
         data_pb2.AbilityData(ability_id=_BUILD_DEPOT, target=_AT_A_POINT, is_building=True),
-        data_pb2.AbilityData(ability_id=_BUILD_REFINERY, target=data_pb2.AbilityData.Target.Unit, is_building=True),
         data_pb2.AbilityData(
             ability_id=_BUILD_REACTOR, target=data_pb2.AbilityData.Target.PointOrNone, is_building=True
         ),
         data_pb2.AbilityData(ability_id=_TRAIN_MARINE),
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
-        data_pb2.AbilityData(ability_id=_TRAIN_SCV),
-        data_pb2.AbilityData(ability_id=_ORBITAL),
-        data_pb2.AbilityData(ability_id=_WEAPONS_1),
-        data_pb2.AbilityData(ability_id=_WEAPONS_2),
-        data_pb2.AbilityData(ability_id=_WARP_IN_ADEPT, target=_AT_A_POINT),
         data_pb2.AbilityData(ability_id=_DRONE),
-        data_pb2.AbilityData(ability_id=_OVERLORD),
-    ],
-    upgrades=[
-        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
-        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_2, mineral_cost=175, vespene_cost=175),
+        data_pb2.AbilityData(ability_id=_STORM, target=_AT_A_POINT),
     ],
 )
 
 
-def _holding(*verdicts: list[ActionResult], build_reach: float = 2.5) -> _Game:
-    """A game whose tables give what is held a cost and a time."""
-    return _Game(*verdicts, tables=_HOLDING_TABLES, build_reach=build_reach)
+def _costing(*verdicts: list[ActionResult]) -> _Game:
+    """A game whose tables give what is ordered a cost."""
+    return _Game(*verdicts, tables=_COSTING_TABLES)
 
 
 def _scv(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (10.0, 10.0)) -> raw_pb2.Unit:
@@ -1198,49 +1185,14 @@ def _building(site: tuple[float, float] = _SITE) -> raw_pb2.UnitOrder:
     return raw_pb2.UnitOrder(ability_id=_BUILD_DEPOT, target_world_space_pos=common_pb2.Point(x=site[0], y=site[1]))
 
 
-def _flying_barracks(tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.Unit:
-    """One of this player's barracks, lifted, carrying out `orders`."""
-    return make_unit(tag, UnitTypeId.BARRACKS_FLYING, at=at, is_flying=True, orders=orders)
+def _templar(tag: int) -> raw_pb2.Unit:
+    """One of this player's high templar."""
+    return make_unit(tag, UnitTypeId.HIGH_TEMPLAR, at=(15.0, 15.0))
 
 
-def _landing(at: tuple[float, float] = _SITE) -> raw_pb2.UnitOrder:
-    """The order a lifted barracks shows while it goes to land at `at`."""
-    return raw_pb2.UnitOrder(ability_id=_LAND, target_world_space_pos=common_pb2.Point(x=at[0], y=at[1]))
-
-
-def _with_reactor(tag: int, reactor: int, *orders: raw_pb2.UnitOrder, progress: float = 1.0) -> list[raw_pb2.Unit]:
-    """One of this player's barracks with a reactor `progress` built, carrying out `orders`, and the reactor."""
-    barracks = make_unit(tag, UnitTypeId.BARRACKS, at=(12.0, 12.0), orders=orders, add_on_tag=reactor)
-    return [barracks, make_unit(reactor, UnitTypeId.REACTOR_BARRACKS, at=(14.5, 11.5), build_progress=progress)]
-
-
-def _command_center(tag: int, *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
-    """One of this player's command centers, carrying out `orders`."""
-    return make_unit(tag, UnitTypeId.COMMAND_CENTER, at=(40.0, 40.0), orders=orders)
-
-
-def _flying_command_center(
-    tag: int, *orders: raw_pb2.UnitOrder, at: tuple[float, float] = (40.0, 40.0)
-) -> raw_pb2.Unit:
-    """One of this player's command centers, lifted, carrying out `orders`."""
-    return make_unit(tag, UnitTypeId.COMMAND_CENTER_FLYING, at=at, is_flying=True, orders=orders)
-
-
-def _hatchery(
-    tag: int, at: tuple[float, float] = (50.0, 50.0), unit_type: UnitTypeId = UnitTypeId.HATCHERY
-) -> raw_pb2.Unit:
-    """One of this player's hatcheries, or a lair or a hive, at `at`."""
-    return make_unit(tag, unit_type, at=at)
-
-
-def _larva(tag: int, at: tuple[float, float] = (50.0, 47.2), *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
-    """One of this player's larvae at `at`, where the larvae of a hatchery at (50, 50) gather (in game)."""
-    return make_unit(tag, UnitTypeId.LARVA, at=at, orders=orders)
-
-
-def _making(ability: AbilityId, progress: float = 0.5) -> raw_pb2.UnitOrder:
-    """The order a structure shows while it makes what `ability` makes."""
-    return raw_pb2.UnitOrder(ability_id=ability, progress=progress)
+def _flying_barracks(tag: int, at: tuple[float, float] = (20.0, 20.0)) -> raw_pb2.Unit:
+    """One of this player's barracks, lifted."""
+    return make_unit(tag, UnitTypeId.BARRACKS_FLYING, at=at, is_flying=True)
 
 
 def _sent(request: sc2api_pb2.RequestAction | None) -> list[tuple[int, list[int], tuple[float, float] | None, bool]]:
@@ -1254,129 +1206,52 @@ def _sent(request: sc2api_pb2.RequestAction | None) -> list[tuple[int, list[int]
     return sent
 
 
-class TestHoldingABuild:
-    """A build is charged when ordered, not when the builder arrives (in game), so NachOS sends the worker to the site
-    and gives it the build once it is within reach."""
+class TestAnOrderThatCosts:
+    """Every order goes out in the turn it was given, as given, though the game charges it then (in game)."""
 
-    def test_a_build_out_of_reach_is_held_and_its_worker_sent_to_the_site(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
+    def test_a_build_goes_out_at_once_however_far_its_worker_is_from_the_site(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1))
-
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-
-        assert _sent(game.flush()) == [(_MOVE, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == (build,)
-
-    def test_a_build_within_reach_goes_out_at_once(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1, at=(28.0, 30.0)))
-
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_held_build_goes_out_in_place_of_the_move_once_its_worker_is_within_reach(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-
-        assert game.flush() is None
-
-        game.observe(32, _scv(1, _moving(_SITE), at=(28.0, 29.0)))
-
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_the_reach_is_the_one_the_book_was_given(self) -> None:
-        game = _holding([ActionResult.SUCCESS], build_reach=4.0)
-        game.observe(0, _scv(1, at=(26.5, 30.0)))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
 
         assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
 
-    def test_a_geyser_is_reached_from_its_edge(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        geyser = make_unit(2, UnitTypeId.VESPENE_GEYSER, at=_SITE, alliance=Alliance.NEUTRAL, radius=2.0)
-        game.observe(0, _scv(1, at=(25.6, 30.0)), geyser)
+    def test_a_flying_barracks_given_an_add_on_at_a_point_is_sent_it_as_given(self) -> None:
+        """The game lands it there and builds the add-on (in game)."""
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _flying_barracks(1))
 
-        game.book.issue(game.own(1), _BUILD_REFINERY, target=game.tracker.unit_tracker.by_tag(2))
+        game.book.issue(game.own(1), _BUILD_REACTOR, target=_SITE)
 
-        (command,) = _commands(game.flush())
-        assert (command.ability_id, command.target_unit_tag) == (_BUILD_REFINERY, 2)
+        assert _sent(game.flush()) == [(_BUILD_REACTOR, [1], _SITE, False)]
 
-    def test_a_build_queued_behind_a_move_has_its_move_queued_behind_that_one(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
+    def test_an_add_on_with_no_point_to_a_flying_barracks_is_a_mistake(self) -> None:
+        game = _costing()
+        game.observe(0, _flying_barracks(1))
 
-        game.book.issue(game.own(1), _MOVE, target=(50.0, 50.0))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE, queued=True)
+        with pytest.raises(TypeError, match="BUILD_REACTOR takes a point for a flying BARRACKS_FLYING"):
+            game.book.issue(game.own(1), _BUILD_REACTOR)
 
-        assert _sent(game.flush()) == [(_MOVE, [1], (50.0, 50.0), False), (_MOVE, [1], _SITE, True)]
+    def test_a_train_goes_out_to_a_structure_making_one(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _barracks(1, _training()))
 
-    def test_a_worker_passing_its_site_on_an_earlier_leg_does_not_start_it(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _MOVE, target=(50.0, 50.0))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE, queued=True)
-        game.flush()
+        game.book.issue(game.own(1), _TRAIN_MARINE)
 
-        game.observe(16, _scv(1, _moving((50.0, 50.0)), _moving(_SITE), at=(29.0, 29.0)))
-
-        assert game.flush() is None
-
-    def test_a_queued_build_starts_once_its_worker_is_on_its_way_to_the_site(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _MOVE, target=(50.0, 50.0))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE, queued=True)
-        game.flush()
-        game.observe(16, _scv(1, _moving((50.0, 50.0)), _moving(_SITE), at=(40.0, 40.0)))
-        game.observe(32, _scv(1, _moving(_SITE), at=(29.0, 29.0)))
-
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
-
-    def test_a_free_order_queued_behind_a_held_build_goes_out_right_behind_it(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        hide = game.book.issue(game.own(1), _MOVE, target=(5.0, 5.0), queued=True)
-
-        assert _sent(game.flush()) == [(_MOVE, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == (build, hide)
-
-        game.observe(16, _scv(1, _moving(_SITE), at=(29.0, 29.0)))
-
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False), (_MOVE, [1], (5.0, 5.0), True)]
-
-    def test_a_build_repeated_every_turn_replaces_the_held_one_and_its_worker_is_not_sent_again(self) -> None:
-        """Nothing NachOS holds is redundant; the move to the site is a game order, and the worker is on it."""
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-
-        again = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (again,)
+        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
 
     def test_a_build_its_worker_is_already_carrying_out_is_not_sent_again(self) -> None:
         """Sending it again would drop what the worker has queued behind it (in game)."""
-        game = _holding()
+        game = _costing()
         game.observe(0, _scv(1, _building(), _moving((5.0, 5.0)), at=(29.0, 29.0)))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
 
         assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == ()
 
     def test_a_forced_build_is_sent_though_its_worker_is_carrying_it_out(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
+        game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1, _building(), _moving((5.0, 5.0)), at=(29.0, 29.0)))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE, force=True)
@@ -1384,649 +1259,94 @@ class TestHoldingABuild:
         assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
 
 
-class TestHoldingAnAddOnOrAMorph:
-    """A lifted barracks given an add-on lands at the point and is charged at once, and a structure making something
-    refuses a morph or an add-on (in game), so NachOS holds either until the structure is idle on the ground."""
-
-    def test_a_flying_barracks_given_an_add_on_is_sent_to_land_at_its_point(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _flying_barracks(1))
-
-        add_on = game.book.issue(game.own(1), _BUILD_REACTOR, target=_SITE)
-
-        assert _sent(game.flush()) == [(_LAND, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == (add_on,)
-
-    def test_the_add_on_goes_out_with_no_point_once_the_barracks_has_landed_and_is_idle(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _flying_barracks(1))
-        game.book.issue(game.own(1), _BUILD_REACTOR, target=_SITE)
-        game.flush()
-        game.observe(16, _flying_barracks(1, _landing(), at=(25.0, 25.0)))
-
-        assert game.flush() is None
-
-        game.observe(32, make_unit(1, UnitTypeId.BARRACKS, at=_SITE))
-
-        assert _sent(game.flush()) == [(_BUILD_REACTOR, [1], None, False)]
-
-    def test_an_add_on_with_no_point_to_a_flying_barracks_is_a_mistake(self) -> None:
-        game = _holding()
-        game.observe(0, _flying_barracks(1))
-
-        with pytest.raises(TypeError, match="BUILD_REACTOR takes a point for a flying BARRACKS_FLYING"):
-            game.book.issue(game.own(1), _BUILD_REACTOR)
-
-    def test_a_morph_waits_until_the_structure_is_idle(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _command_center(1, _making(_TRAIN_SCV)))
-        orbital = game.book.issue(game.own(1), _ORBITAL)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (orbital,)
-
-        game.observe(16, _command_center(1))
-
-        assert _sent(game.flush()) == [(_ORBITAL, [1], None, False)]
-
-    def test_an_unqueued_morph_drops_the_trains_held_and_a_queued_one_goes_behind_them(self) -> None:
-        game = _holding()
-        game.observe(0, _command_center(1, _making(_TRAIN_SCV)))
-        game.book.issue(game.own(1), _TRAIN_SCV)
-        game.flush()
-        game.observe(16, _command_center(1, _making(_TRAIN_SCV, 0.6)))
-
-        orbital = game.book.issue(game.own(1), _ORBITAL)
-        game.flush()
-
-        assert game.book.issued_to(game.own(1)) == (orbital,)
-
-        train = game.book.issue(game.own(1), _TRAIN_SCV)
-        queued = game.book.issue(game.own(1), _ORBITAL, queued=True)
-
-        assert game.book.issued_to(game.own(1)) == (orbital, train, queued)
-
-    def test_a_lifted_command_center_given_a_landing_and_an_orbital_lands_first(self) -> None:
-        """The game refuses a morph queued behind a landing `NotSupported` as it is given (in game)."""
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _flying_command_center(1))
-        game.book.issue(game.own(1), _LAND, target=_SITE)
-        orbital = game.book.issue(game.own(1), _ORBITAL, queued=True)
-
-        assert _sent(game.flush()) == [(_LAND, [1], _SITE, False)]
-        assert game.book.issued_to(game.own(1)) == (orbital,)
-
-        game.observe(16, _flying_command_center(1, _landing(), at=(35.0, 35.0)))
-        assert game.flush() is None
-        game.observe(32, make_unit(1, UnitTypeId.COMMAND_CENTER, at=_SITE))
-
-        assert _sent(game.flush()) == [(_ORBITAL, [1], None, True)]
-
-    def test_a_lifted_command_center_holds_an_orbital_until_it_lands(self) -> None:
-        game = _holding()
-        game.observe(0, _flying_command_center(1))
-        orbital = game.book.issue(game.own(1), _ORBITAL)
-
-        assert game.flush() is None
-        game.observe(16, _flying_command_center(1))
-        game.observe(32, _flying_command_center(1))
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (orbital,)
-
-    def test_the_add_on_order_a_structure_still_shows_fills_every_slot(self) -> None:
-        """A barracks stays busy one step longer than its add-on takes (in game)."""
-        game = _holding()
-        game.observe(0, *_with_reactor(1, 2, _making(_BUILD_REACTOR, 0.0)))
-
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert game.flush() is None
-
-
-class TestHoldingProduction:
-    """A train or a research queued behind what a structure is making is paid from the step it is ordered (in game),
-    so NachOS gives a structure only what it runs at once: one item, or two with a finished reactor."""
-
-    def test_a_train_to_a_structure_making_one_is_held(self) -> None:
-        game = _holding()
-        game.observe(0, _barracks(1, _training()))
-
-        train = game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (train,)
-
-    def test_a_train_to_an_idle_structure_goes_out_at_once(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1))
-
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-
-    def test_a_held_train_goes_out_once_the_structure_has_a_slot_free(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1, _training()))
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.flush()
-
-        game.observe(16, _barracks(1))
-
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-
-    def test_two_trains_given_in_one_turn_are_two_items(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1))
-
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-        second = game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-        assert game.book.issued_to(game.own(1)) == (second,)
-
-    def test_a_train_sent_counts_though_the_observation_after_does_not_show_it(self) -> None:
-        """On the ladder the observation after an order can still show the structure idle (in game)."""
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _barracks(1))
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.flush()
-
-        game.observe(16, _barracks(1))
-        assert game.flush() is None
-        game.observe(32, _barracks(1, _training(0.1)))
-        assert game.flush() is None
-        game.observe(48, _barracks(1))
-
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-
-    def test_a_finished_reactor_runs_two_at_once(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, *_with_reactor(1, 2))
-
-        for _ in range(3):
-            game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert len(_sent(game.flush())) == 2
-        assert len(game.book.issued_to(game.own(1))) == 1
-
-    def test_an_unfinished_reactor_runs_one(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, *_with_reactor(1, 2, progress=0.5))
-
-        for _ in range(2):
-            game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert len(_sent(game.flush())) == 1
-
-    def test_a_research_waits_behind_a_research(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, make_unit(1, UnitTypeId.ENGINEERING_BAY, at=(12.0, 12.0), orders=[_making(_WEAPONS_1)]))
-        game.book.issue(game.own(1), _WEAPONS_2)
-
-        assert game.flush() is None
-
-        game.observe(16, make_unit(1, UnitTypeId.ENGINEERING_BAY, at=(12.0, 12.0)))
-
-        assert _sent(game.flush()) == [(_WEAPONS_2, [1], None, False)]
-
-    def test_a_train_to_a_lifted_barracks_waits_until_it_lands(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _flying_barracks(1))
-        train = game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (train,)
-
-        game.observe(16, make_unit(1, UnitTypeId.BARRACKS, at=_SITE))
-
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-
-    def test_a_warp_in_is_not_held_since_a_warp_gate_keeps_no_queue(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, make_unit(1, UnitTypeId.WARP_GATE, at=(12.0, 12.0)))
-
-        game.book.issue(game.own(1), _WARP_IN_ADEPT, target=(20.0, 20.0))
-        game.book.issue(game.own(1), _WARP_IN_ADEPT, target=(21.0, 20.0))
-
-        assert len(_sent(game.flush())) == 2
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_what_costs_nothing_is_never_held(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1, _training()))
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
-
-        assert _sent(game.flush()) == [(_RALLY, [1], (20.0, 21.0), False)]
-
-
-class TestHoldingALarvaMorph:
-    """A morph given to a hatchery is refused (in game), so NachOS holds it there and gives it to a larva of the
-    hatchery once one is free. A hatchery's larvae gather south of it, within 2.3 of a spot 2.85 below its center (in
-    game)."""
-
-    def test_it_goes_to_a_free_larva_of_the_hatchery(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1), _larva(2))
-
-        order = game.book.issue(game.own(1), _DRONE)
-
-        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
-        assert order.units == (game.own(1),)
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_with_no_free_larva_it_is_held_until_one_appears(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1))
-        drone = game.book.issue(game.own(1), _DRONE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (drone,)
-
-        game.observe(16, _hatchery(1), _larva(2))
-
-        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
-
-    def test_two_morphs_go_to_two_larvae_in_one_turn_and_neither_overrides_the_other(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1), _larva(2), _larva(3, (49.5, 47.0)))
+class TestAnOrderToSeveralUnits:
+    """One command naming several units has only one of them carry out a build, a train, a research or a morph (in
+    game), so such an order is given to one unit; any other goes out as one command naming them all."""
+
+    @pytest.mark.parametrize(
+        ("make", "ability", "target"),
+        [(_scv, _BUILD_DEPOT, _SITE), (_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE)],
+        ids=["a build", "a train", "a spell"],
+    )
+    def test_an_order_one_unit_carries_out_given_to_several_raises(
+        self, make: Any, ability: AbilityId, target: tuple[float, float] | None
+    ) -> None:
+        game = _costing()
+        game.observe(0, make(1), make(2))
+
+        with pytest.raises(ValueError, match=f"give {ability.name} to one unit, not 2"):
+            game.book.issue([game.own(1), game.own(2)], ability, target=target)
+
+        assert game.book.pending == ()
+
+    def test_an_order_that_costs_nothing_still_goes_to_the_one_not_doing_it(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _scv(1, _moving(_SITE)), _scv(2, at=(40.0, 40.0)))
+
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
+
+        assert _sent(game.flush()) == [(_MOVE, [2], _SITE, False)]
+
+    def test_a_larva_morph_given_to_a_hatchery_goes_out_as_given(self) -> None:
+        """The game refuses it `NotSupported` (in game); NachOS passes it to no larva."""
+        game = _costing([ActionResult.NOT_SUPPORTED])
+        game.observe(0, make_unit(1, UnitTypeId.HATCHERY, at=(50.0, 50.0)), make_unit(2, UnitTypeId.LARVA))
 
         game.book.issue(game.own(1), _DRONE)
-        game.book.issue(game.own(1), _OVERLORD)
 
-        assert _sent(game.flush()) == [(_DRONE, [2], None, False), (_OVERLORD, [3], None, False)]
-
-    def test_a_larva_sent_a_morph_is_not_used_again_while_that_may_not_show(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1), _larva(2))
-        game.book.issue(game.own(1), _DRONE)
-        second = game.book.issue(game.own(1), _DRONE)
-        game.flush()
-
-        game.observe(16, _hatchery(1), _larva(2))
-        assert game.flush() is None
-        game.observe(32, _hatchery(1), _larva(4))
-
-        assert _sent(game.flush()) == [(_DRONE, [4], None, False)]
-        assert game.book.issued_to(game.own(1)) == ()
-        assert second.units == (game.own(1),)
-
-    def test_a_larva_by_another_hatcherys_spot_is_not_this_ones(self) -> None:
-        """Nearer the other hatchery's center, but nearer this one's spot: a hatchery 5 below this one."""
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1), _hatchery(2, at=(50.0, 45.0)), _larva(3, (50.0, 46.4)))
-        below = game.book.issue(game.own(2), _DRONE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(2)) == (below,)
-
-        below.withdraw()
-        game.book.issue(game.own(1), _DRONE)
-
-        assert _sent(game.flush()) == [(_DRONE, [3], None, False)]
-
-    def test_given_to_several_it_goes_to_the_one_with_the_most_free_larvae(self) -> None:
-        game = _holding()
-        game.observe(
-            0,
-            _hatchery(1),
-            _larva(3),
-            _hatchery(2, at=(70.0, 50.0)),
-            _larva(4, (70.0, 47.2)),
-            _larva(5, (69.5, 47.0)),
-        )
-
-        order = game.book.issue([game.own(1), game.own(2)], _DRONE)
-
-        assert order.units == (game.own(2),)
-
-    def test_a_refused_morph_drops_what_is_held_behind_it(self) -> None:
-        game = _holding([ActionResult.NOT_ENOUGH_FOOD])
-        game.observe(0, _hatchery(1), _larva(2))
-        game.book.issue(game.own(1), _DRONE)
-        game.book.issue(game.own(1), _DRONE)
-
-        game.flush()
-
-        assert game.refused() == [(2, _DRONE, ActionResult.NOT_ENOUGH_FOOD)]
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_lair_holds_one_too(self) -> None:
-        game = _holding()
-        game.observe(0, _hatchery(1, unit_type=UnitTypeId.LAIR))
-        drone = game.book.issue(game.own(1), _DRONE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (drone,)
-
-    def test_a_morph_given_to_a_larva_goes_out_as_given(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _hatchery(1), _larva(2))
-
-        game.book.issue(game.own(2), _DRONE)
-
-        assert _sent(game.flush()) == [(_DRONE, [2], None, False)]
-        assert game.book._held == {}
+        assert _sent(game.flush()) == [(_DRONE, [1], None, False)]
+        assert [failure.action_result for failure in game.book._refusals] == [ActionResult.NOT_SUPPORTED]
 
 
-class TestWhatReplacesHeldItems:
-    def test_an_unqueued_move_drops_a_held_build(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
+class TestWhatTheTurnsOrdersCost:
+    def test_pending_cost_is_what_the_turn_s_orders_cost(self) -> None:
+        game = _costing()
+        game.observe(0, _scv(1), _barracks(2))
+
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-
-        game.book.issue(game.own(1), _MOVE, target=(5.0, 5.0))
-
-        assert _sent(game.flush()) == [(_MOVE, [1], (5.0, 5.0), False)]
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_move_to_where_the_worker_already_walks_drops_the_build_and_is_not_sent(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-
-        game.book.issue(game.own(1), _MOVE, target=_SITE)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_queued_move_goes_behind_a_held_build(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-
-        behind = game.book.issue(game.own(1), _MOVE, target=(5.0, 5.0), queued=True)
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (build, behind)
-
-    def test_withdrawing_a_held_order_lets_the_next_move_up(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1, _training()))
-        first = game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.book.issue(game.own(1), _TRAIN_REAPER)
-        game.flush()
-
-        first.withdraw()
-        game.observe(16, _barracks(1))
-
-        assert _sent(game.flush()) == [(_TRAIN_REAPER, [1], None, False)]
-
-    def test_withdrawing_a_held_build_leaves_its_worker_walking(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(29.0, 29.0)))
-
-        build.withdraw()
-
-        assert game.book.issued_to(game.own(1)) == ()
-        assert game.flush() is None
-
-
-class TestWhatEndsAHeldQueue:
-    def test_a_refused_release_drops_everything_held_behind_it(self) -> None:
-        game = _holding([ActionResult.NOT_ENOUGH_MINERALS])
-        game.observe(0, _barracks(1))
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.book.issue(game.own(1), _TRAIN_MARINE)
-
-        game.flush()
-
-        assert game.refused() == [(1, _TRAIN_MARINE, ActionResult.NOT_ENOUGH_MINERALS)]
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_unit_that_dies_drops_what_is_held_for_it(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _marine(2))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        scv = game.own(1)
-
-        game.observe(16, _marine(2), dead=(1,))
-
-        assert game.book.issued_to(scv) == ()
-
-    def test_a_unit_that_changes_hands_drops_what_is_held_for_it(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-
-        game.observe(16, make_unit(1, UnitTypeId.SCV, at=(12.0, 12.0), alliance=Alliance.ENEMY))
-
-        assert game.book._held == {}
-
-    def test_a_worker_idle_out_of_reach_after_its_move_drops_the_build(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
-        game.observe(32, _scv(1, at=(24.0, 24.0)))
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_worker_is_not_given_up_on_while_its_move_may_not_show(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-
-        game.observe(16, _scv(1))
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == (build,)
-
-    def test_a_barracks_idle_and_still_flying_after_its_landing_drops_its_add_on(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _flying_barracks(1))
-        game.book.issue(game.own(1), _BUILD_REACTOR, target=_SITE)
-        game.flush()
-        game.observe(16, _flying_barracks(1, _landing(), at=(25.0, 25.0)))
-        game.observe(32, _flying_barracks(1, at=(28.0, 28.0)))
-
-        assert game.flush() is None
-        assert game.book.issued_to(game.own(1)) == ()
-
-    def test_a_worker_the_observation_leaves_out_is_neither_given_its_build_nor_given_up_on(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _marine(2))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        scv = game.own(1)
-
-        game.observe(16, _marine(2))
-        game.observe(32, _marine(2))
-
-        assert game.flush() is None
-        assert game.book.issued_to(scv) == (build,)
-
-
-class TestReadingHeldOrders:
-    def test_what_is_held_comes_ahead_of_the_turn_s_orders_and_pending_is_the_turn_s_alone(self) -> None:
-        game = _holding()
-        game.observe(0, _barracks(1, _training()))
-        held = game.book.issue(game.own(1), _TRAIN_MARINE)
-        game.flush()
-        game.observe(16, _barracks(1, _training(0.6)))
-
-        new = game.book.issue(game.own(1), _TRAIN_REAPER)
-
-        assert game.book.issued_to(game.own(1)) == (held, new)
-        assert game.book.pending == (new,)
-
-    def test_held_is_what_every_unit_holds_and_not_the_turn_s_orders(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _barracks(2, _training()))
-        depot = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
-
-        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
-
-        assert game.book.held == (depot, marine)
-        assert game.book.pending == (reaper,)
-
-    def test_an_order_held_for_several_units_is_held_once(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _scv(2, at=(40.0, 40.0)))
-        first = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        second = game.book.issue(game.own(2), _BUILD_DEPOT, target=(35.0, 35.0))
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _scv(2, _moving((35.0, 35.0)), at=(38.0, 38.0)))
-        move = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(10.0, 10.0), queued=True)
-        game.flush()
-
-        assert game.book.held == (first, move, second)
-
-    def test_held_leaves_out_what_the_turn_s_orders_will_drop(self) -> None:
-        """A build repeated every turn replaces the one held, so it would count twice beside `pending`."""
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _barracks(2, _training()))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        marine = game.book.issue(game.own(2), _TRAIN_MARINE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
-
-        again = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        reaper = game.book.issue(game.own(2), _TRAIN_REAPER)
-
-        assert game.book.held == (marine,)
-        assert game.book.pending == (again, reaper)
-
-    def test_unpaid_is_what_the_held_orders_and_the_turn_s_cost(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _barracks(2, _training()))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.book.issue(game.own(2), _TRAIN_MARINE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _barracks(2, _training(0.6)))
-
         game.book.issue(game.own(2), _TRAIN_REAPER)
 
-        costs = [_HOLDING_TABLES.abilities[ability].cost for ability in (_BUILD_DEPOT, _TRAIN_MARINE, _TRAIN_REAPER)]
-        assert game.book.unpaid == costs[0] + costs[1] + costs[2]
-        assert game.book.unpaid.minerals == 200
+        assert game.book.pending_cost == Cost(150, 50)
 
-    def test_unpaid_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
-        game = _holding()
-        game.observe(0, _scv(1))
+    def test_pending_cost_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
+        game = _costing()
+        game.observe(0, _scv(1), _barracks(2))
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.issue(game.own(1), _BUILD_DEPOT, target=(35.0, 35.0))
+        game.book.issue(game.own(2), _TRAIN_REAPER)
+        game.book.issue(game.own(2), _TRAIN_MARINE)
 
-        assert game.book.unpaid == _HOLDING_TABLES.abilities[_BUILD_DEPOT].cost
+        assert game.book.pending_cost == Cost(150, 0)
 
-    def test_unpaid_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
+    def test_pending_cost_counts_each_queued_train(self) -> None:
+        game = _costing()
+        game.observe(0, _barracks(1))
+        game.book.issue(game.own(1), _TRAIN_MARINE)
+        game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
+
+        assert game.book.pending_cost == Cost(100, 0)
+
+    def test_pending_cost_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
         """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
-        game = _holding()
+        game = _costing()
         game.observe(0, _scv(1, _building(), at=(29.0, 29.0)))
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
 
-        assert game.book.unpaid == Cost(0, 0)
+        assert game.book.pending_cost == Cost(0, 0)
         assert game.book.pending
 
-    def test_a_withdrawn_order_is_not_held(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+    def test_pending_cost_leaves_out_a_withdrawn_order_and_what_went_out(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _barracks(2))
+        game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
+        game.book.issue(game.own(2), _TRAIN_MARINE).withdraw()
+
+        assert game.book.pending_cost == Cost(100, 0)
+
         game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)))
 
-        build.withdraw()
-
-        assert game.book.held == ()
-
-
-class TestPickingOneUnitForACostlyOrder:
-    """One command naming several units has one of them carry out a build, a train or a research (in game); NachOS
-    picks it, so that what it holds belongs to one unit."""
-
-    def test_a_train_to_several_structures_is_given_to_one(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1), _barracks(2))
-
-        order = game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
-
-        assert order.units == (game.own(1),)
-        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False)]
-
-    def test_the_structure_with_a_slot_free_first_is_picked(self) -> None:
-        game = _holding()
-        game.observe(0, _barracks(1, _training(0.1)), _barracks(2, _training(0.9)))
-
-        order = game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
-
-        assert order.units == (game.own(2),)
-
-    def test_the_turn_s_earlier_orders_count(self) -> None:
-        game = _holding([ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _barracks(1), _barracks(2))
-
-        first = game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
-        second = game.book.issue([game.own(1), game.own(2)], _TRAIN_MARINE)
-
-        assert (first.units, second.units) == ((game.own(1),), (game.own(2),))
-
-    def test_the_nearest_worker_is_picked(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1, at=(10.0, 30.0)), _scv(2, at=(24.0, 30.0)))
-
-        order = game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE)
-
-        assert order.units == (game.own(2),)
-        assert _sent(game.flush()) == [(_MOVE, [2], _SITE, False)]
-
-    def test_a_busy_worker_is_picked_only_if_all_are_and_then_goes_on_with_what_it_has(self) -> None:
-        game = _holding()
-        game.observe(0, _scv(1, _building((26.0, 30.0)), at=(26.0, 30.0)), _scv(2, at=(10.0, 30.0)))
-
-        assert game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=_SITE).units == (game.own(2),)
-
-        game.book.issue(game.own(2), _BUILD_DEPOT, target=(5.0, 5.0))
-        last = game.book.issue([game.own(1), game.own(2)], _BUILD_DEPOT, target=(40.0, 40.0))
-
-        assert last.units == (game.own(1),)
-        assert last.queued
-
-    def test_an_order_that_costs_nothing_still_goes_to_every_unit(self) -> None:
-        game = _holding([ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _scv(2))
-
-        order = game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
-
-        assert order.units == (game.own(1), game.own(2))
-
-
-class TestSplittingAQueuedGroupOrder:
-    def test_it_goes_now_to_the_units_holding_nothing_and_to_the_rest_behind_what_they_hold(self) -> None:
-        game = _holding([ActionResult.SUCCESS], [ActionResult.SUCCESS], [ActionResult.SUCCESS, ActionResult.SUCCESS])
-        game.observe(0, _scv(1), _scv(2, at=(12.0, 10.0)))
-        build = game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
-        game.flush()
-        game.observe(16, _scv(1, _moving(_SITE), at=(20.0, 20.0)), _scv(2, at=(12.0, 10.0)))
-
-        rally = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(5.0, 5.0), queued=True)
-
-        assert _sent(game.flush()) == [(_MOVE, [2], (5.0, 5.0), True)]
-        assert game.book.issued_to(game.own(1)) == (build, rally)
-
-        game.observe(32, _scv(1, _moving(_SITE), at=(29.0, 29.0)), _scv(2, _moving((5.0, 5.0))))
-
-        assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False), (_MOVE, [1], (5.0, 5.0), True)]
+        assert game.book.pending_cost == Cost(0, 0)
 
 
 class TestAVerdictNachosCannotName:
@@ -2147,7 +1467,7 @@ class _SiegingBot:
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
         if self._siege_due(event.step):
-            self.sieges.append(api.orders.issue(liberator, _SIEGE, target=self.zone))
+            self.sieges.append(api.orders.issue(liberator, _SIEGE_AT, target=self.zone))
 
     def _siege_due(self, step: int) -> bool:
         """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
@@ -2156,7 +1476,7 @@ class _SiegingBot:
 
 
 class _GroupSiegingBot:
-    """A bot that sieges a tank and a liberator in one order aimed at the liberator's zone, and once both are sieged,
+    """A bot that sieges a tank, and a liberator at its zone, each by its own siege, and once both are sieged,
     unsieges them in one order."""
 
     def __init__(self, api: Api, player: int) -> None:
@@ -2180,8 +1500,10 @@ class _GroupSiegingBot:
                 )
             return
         if self.siege is None:
+            tank = next(unit for unit in units if unit.type_id is UnitTypeId.SIEGE_TANK)
             liberator = next(unit for unit in units if unit.type_id is UnitTypeId.LIBERATOR)
-            self.siege = api.orders.issue(units, _SIEGE, target=liberator.position + (4.0, 0.0))
+            self.siege = api.orders.issue(tank, _SIEGE)
+            api.orders.issue(liberator, _SIEGE_AT, target=liberator.position + (4.0, 0.0))
         elif self.unsiege is None and {unit.type_id for unit in units} == _SIEGED:
             self.sieged = sorted(unit.type_id for unit in units)
             self.unsiege = api.orders.issue(units, _UNSIEGE)
@@ -2225,46 +1547,10 @@ class _GroupUnloadingBot:
             self.unload = api.orders.issue(transports, _UNLOAD)
 
 
-class _HeldBuildBot:
-    """A bot that, once it has the minerals, gives every SCV one build, and records each turn after: the step, the
-    minerals, how far the SCV picked stands from the site, its edge for a geyser, and whether the build is still held.
-    It builds a supply depot on open ground toward the middle of the map, or with `refinery` a refinery on the geyser
-    nearest its command center."""
-
-    refinery = False
-
-    def __init__(self, api: Api, player: int) -> None:
-        self.api = api
-        self.player = player
-        self.build: Order[None] | None = None
-        self.site: Point | Unit[Any] | None = None
-        self.turns: list[tuple[int, float, float, bool]] = []
-
-    def turn(self, event: TurnEvent) -> None:
-        api = self.api
-        if self.build is None or self.site is None:
-            ability = _BUILD_REFINERY if self.refinery else _BUILD_DEPOT
-            if api.resources.minerals >= api.data.abilities[ability].cost.minerals:
-                self.site = _geyser(api) if self.refinery else _depot_site(api)
-                self.build = api.orders.issue(api.units.own.of_type(UnitTypeId.SCV), ability, target=self.site)
-            return
-        (scv,) = self.build.units
-        if isinstance(self.site, Unit):
-            distance = scv.position.distance_to(self.site.position) - self.site.radius
-        else:
-            distance = scv.position.distance_to(self.site)
-        held = self.build in api.orders.issued_to(scv)
-        self.turns.append((event.step, api.resources.minerals, distance, held))
-
-
-class _HeldRefineryBot(_HeldBuildBot):
-    refinery = True
-
-
 class _ProductionBot:
     """A terran bot that raises a barracks and an engineering bay by debug command under cheats for supply and
-    resources, gives the barracks two marines and the bay infantry weapons 1, and records each turn after what is in
-    production: the marines made and held, the research's progress, and the first marine's."""
+    resources, gives the barracks a marine and a second queued behind it and the bay infantry weapons 1, and records
+    each turn after what is in production: the marines, the research's progress, and the first marine's."""
 
     race = Race.TERRAN
 
@@ -2273,7 +1559,7 @@ class _ProductionBot:
         self.player = player
         self.made = False
         self.ordered = False
-        self.reads: list[tuple[int, int, float | None, float | None]] = []
+        self.reads: list[tuple[int, float | None, float | None]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -2290,63 +1576,14 @@ class _ProductionBot:
             api.client.debug([*(debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats), *creates])
             self.made = True
         elif not self.ordered and barracks and bays:
-            for _ in range(2):
-                api.orders.issue(barracks[0], _TRAIN_MARINE)
+            api.orders.issue(barracks[0], _TRAIN_MARINE)
+            api.orders.issue(barracks[0], _TRAIN_MARINE, queued=True)
             api.orders.issue(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
             self.ordered = True
         elif self.ordered:
-            held = len(api.orders.issued_to(barracks[0]))
             progress = api.research_progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
             marines = api.in_production(UnitType.Marine)
-            self.reads.append((len(marines), held, progress, marines[0].progress if marines else None))
-
-
-class _LarvaBot:
-    """A zerg bot that gives its hatchery five drones at once, more than it has larvae, under cheats for supply and
-    resources, and records each turn after how many are still held."""
-
-    race = Race.ZERG
-
-    def __init__(self, api: Api, player: int) -> None:
-        self.api = api
-        self.player = player
-        self.cheated = False
-        self.drones: list[Order[None]] = []
-        self.held: list[int] = []
-
-    def turn(self, event: TurnEvent) -> None:
-        api = self.api
-        hatchery = api.units.own.of_type(UnitTypeId.HATCHERY)[0]
-        if not self.cheated:
-            cheats = (debug_pb2.DebugGameState.Value(name) for name in ("food", "all_resources"))
-            api.client.debug([debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats])
-            self.cheated = True
-        elif not self.drones:
-            self.drones = [api.orders.issue(hatchery, _DRONE) for _ in range(5)]
-        else:
-            self.held.append(len(api.orders.issued_to(hatchery)))
-
-
-def _command_center_at(api: Api) -> Point:
-    """Where this player's command center stands."""
-    return api.units.own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
-
-
-def _depot_site(api: Api) -> Point:
-    """A supply depot's site on open ground, 8 to 16 from the command center toward the middle of the map."""
-    start, middle = _command_center_at(api), api.map.playable_area.center
-    for distance in range(8, 17):
-        ahead = start.towards(middle, float(distance))
-        site = Point((float(round(ahead.x)), float(round(ahead.y))))
-        tiles = [site + (dx, dy) for dx in (-0.5, 0.5) for dy in (-0.5, 0.5)]
-        if all(api.map.placement[tile] and api.map.pathing[tile] for tile in tiles):
-            return site
-    raise AssertionError(f"no open ground for a depot toward the middle from {start}")
-
-
-def _geyser(api: Api) -> Unit[Any]:
-    """The geyser nearest this player's command center."""
-    return api.units.neutral.filter(lambda unit: unit.type_data.has_vespene).closest_to(_command_center_at(api))
+            self.reads.append((len(marines), progress, marines[0].progress if marines else None))
 
 
 class _UnloadingBotUnloadingFirst(_UnloadingBot):
@@ -2399,18 +1636,18 @@ class TestAgainstTheRealGame:
         print("the liberator, turn by turn:", bot.reported[:12])
         print("sieges:", [order.issued_step for order in bot.sieges], "refused or given up:", failures)
         refused = [(failure.step, failure.ability, failure.action_result) for failure in failures]
-        assert refused == [(order.issued_step, _SIEGE, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
+        assert refused == [(order.issued_step, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
         # Each order as its ability and whether it is aimed at the liberator itself.
         (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
-        assert first == [(_SIEGE, True)]
+        assert first == [(_SIEGE_AT, True)]
 
-    def test_a_tank_and_a_liberator_siege_and_unsiege_in_one_order_each(self) -> None:
+    def test_a_tank_and_a_liberator_siege_by_their_own_orders_and_unsiege_in_one(self) -> None:
         bot, failures = _play_a_minute(_GroupSiegingBot)
 
         assert bot.siege is not None and bot.unsiege is not None
         print("refused or given up:", failures)
         assert bot.sieged == sorted(_SIEGED)
-        assert not [failure for failure in failures if failure.ability in (_SIEGE, _UNSIEGE)]
+        assert not [failure for failure in failures if failure.ability in (_SIEGE, _SIEGE_AT, _UNSIEGE)]
         units = bot.api.units.own.of_type(_SIEGE_FORMS)
         assert {unit.type_id for unit in units} == {UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR}
 
@@ -2424,55 +1661,20 @@ class TestAgainstTheRealGame:
         assert [transport.cargo_used for transport in transports] == [0, 0]
         assert len(bot.api.units.own.of_type(UnitTypeId.MARINE)) == bot.marines_left_out + 2
 
-    def test_what_is_in_production_is_what_the_game_makes_and_not_what_is_held(self) -> None:
+    def test_what_is_in_production_is_what_the_game_makes(self) -> None:
         bot, failures = _play_a_minute(_ProductionBot)
 
-        print("(marines in production, held, research progress, marine progress), turn by turn:", bot.reads)
-        print("refused or given up:", failures)
+        print("(marines in production, research progress, marine progress), turn by turn:", bot.reads)
+        print("refused:", failures)
         assert bot.reads
-        assert (1, 1) in {(count, held) for count, held, _, _ in bot.reads}
-        assert (1, 0) in {(count, held) for count, held, _, _ in bot.reads}
-        assert all(count <= 1 for count, _, _, _ in bot.reads)
-        progress = [each for _, _, each, _ in bot.reads if each is not None]
+        assert max(count for count, _, _ in bot.reads) == 2
+        progress = [each for _, each, _ in bot.reads if each is not None]
         assert progress == sorted(progress)
         assert 0.0 < progress[-1] < 1.0
-        assert all(marine is not None for count, _, _, marine in bot.reads if count)
-        for still_held in (1, 0):
-            marine = [each for count, held, _, each in bot.reads if count and held == still_held and each is not None]
-            assert marine == sorted(marine)
-            assert marine[-1] > marine[0]
-
-    def test_drones_given_to_a_hatchery_wait_for_larvae(self) -> None:
-        bot, failures = _play_a_minute(_LarvaBot)
-
-        print("held, turn by turn:", bot.held)
-        print("refused or given up:", failures)
-        assert not [failure for failure in failures if failure.ability is _DRONE]
-        assert max(bot.held) == 2
-        assert bot.held[-1] == 0
-        made = bot.api.units.own.of_type([UnitTypeId.DRONE, UnitTypeId.EGG])
-        assert len(made) >= 12 + 5
-
-    @pytest.mark.parametrize("make_bot", [_HeldBuildBot, _HeldRefineryBot], ids=["depot", "refinery"])
-    def test_a_held_build_takes_no_minerals_until_its_worker_is_within_reach(
-        self, make_bot: type[_HeldBuildBot]
-    ) -> None:
-        bot, failures = _play_a_minute(make_bot)
-
-        print("the build, turn by turn (step, minerals, distance, held):", bot.turns)
-        print("refused or given up:", failures)
-        assert bot.build is not None
-        assert len(bot.build.units) == 1
-        held = [turn for turn in bot.turns if turn[3]]
-        after = bot.turns[len(held) : len(held) + 3]
-        assert held
-        assert all(turn[3] for turn in bot.turns[: len(held)])
-        assert all(later[1] >= earlier[1] for earlier, later in itertools.pairwise(held))
-        assert held[-1][2] <= 2.5
-        assert min(minerals for _, minerals, _, _ in after) <= held[-1][1] - 50
-        assert not failures
-        built = UnitTypeId.REFINERY if make_bot.refinery else UnitTypeId.SUPPLY_DEPOT
-        assert bot.api.units.own.of_type(built)
+        assert all(marine is not None for count, _, marine in bot.reads if count)
+        marine = [each for count, _, each in bot.reads if count == 2 and each is not None]
+        assert marine == sorted(marine)
+        assert marine[-1] > marine[0]
 
 
 def _play_a_minute[
@@ -2482,8 +1684,6 @@ def _play_a_minute[
         _SiegingBot,
         _GroupSiegingBot,
         _GroupUnloadingBot,
-        _HeldBuildBot,
-        _LarvaBot,
         _ProductionBot,
     )
 ](

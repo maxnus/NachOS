@@ -2,7 +2,7 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, except a custom id: one the game has no ability for, which goes out as each unit
-type's own game ability (`AbilityData.sent_as`): SIEGE as a tank's siege mode and a liberator's defender mode.
+type's own game ability (`AbilityData.sent_as`): SIEGE as a tank's siege mode and an observer's surveillance mode.
 A custom id is assigned `auto()`, which numbers it above every game id; what the game reports for it reads as it.
 Unknown ids raise.
 
@@ -14,8 +14,8 @@ game's own id for each unit reads as it (`_REMAPPED_IDS`). A leveled research ha
 next level, as the upgrade it makes does.
 
 Where a unit reports running another id than the one it was ordered, and the game links neither to the other, that id
-reads as the one ordered too: a liberator ordered SIEGE reports LiberatorMorphtoAG_LiberatorAGMode, which
-reads as SIEGE.
+reads as the one ordered too: a liberator ordered LIBERATOR_SIEGE_AT reports LiberatorMorphtoAG_LiberatorAGMode,
+which reads as LIBERATOR_SIEGE_AT.
 """
 
 from enum import auto, nonmember
@@ -189,6 +189,8 @@ class AbilityId(IdEnum):
     LARVA_MORPH_ULTRALISK = RawAbilityId.LarvaTrain_Ultralisk
     LARVA_MORPH_VIPER = RawAbilityId.LarvaTrain_Viper
     LARVA_MORPH_ZERGLING = RawAbilityId.LarvaTrain_Zergling
+    # A liberator's defender mode, aimed at the zone it guards.
+    LIBERATOR_SIEGE_AT = RawAbilityId.Morph_LiberatorAGMode
     LIFT = RawAbilityId.Lift
     LOAD = RawAbilityId.Load
     LOAD_ALL = RawAbilityId.LoadAll
@@ -294,8 +296,8 @@ class AbilityId(IdEnum):
     SENTRY_HALLUCINATE_WARP_PRISM = RawAbilityId.Hallucination_WarpPrism
     SENTRY_HALLUCINATE_ZEALOT = RawAbilityId.Hallucination_Zealot
     SHIELD_BATTERY_RECHARGE = RawAbilityId.ShieldBatteryRechargeEx5_ShieldBatteryRecharge
-    # A tank's siege mode, a liberator's defender mode aimed at its zone, an observer's surveillance mode and an
-    # overseer's oversight mode, and leaving each. The game has no id for either across the four.
+    # A tank's siege mode, an observer's surveillance mode and an overseer's oversight mode, which the game has no id
+    # for across them.
     SIEGE = auto()
     SMART = RawAbilityId.Smart  # the right-click order
     SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS = RawAbilityId.Research_ZerglingAdrenalGlands
@@ -341,6 +343,8 @@ class AbilityId(IdEnum):
     # which answer UnloadAll `Error` (in game).
     UNLOAD = RawAbilityId.UnloadAll
     UNLOAD_AT = RawAbilityId.UnloadAllAt
+    # Leaving a tank's siege mode, a liberator's defender mode, an observer's surveillance mode or an overseer's
+    # oversight mode, which the game has no id for across them.
     UNSIEGE = auto()
     UPROOT = RawAbilityId.Morph_Uproot
     VIKING_LAND = RawAbilityId.Morph_VikingAssaultMode  # "Assault Mode" in game
@@ -516,7 +520,6 @@ class AbilityId(IdEnum):
                 RawAbilityId.UnloadAllAt_WarpPrism: UNLOAD_AT,
                 RawAbilityId.SpineCrawlerUproot_SpineCrawlerUproot: UPROOT,
                 RawAbilityId.SporeCrawlerUproot_SporeCrawlerUproot: UPROOT,
-                RawAbilityId.Morph_LiberatorAGMode: SIEGE,
                 RawAbilityId.Morph_OversightMode: SIEGE,
                 RawAbilityId.Morph_SurveillanceMode: SIEGE,
                 RawAbilityId.SiegeMode_SiegeMode: SIEGE,
@@ -524,7 +527,7 @@ class AbilityId(IdEnum):
                 RawAbilityId.Morph_ObserverMode: UNSIEGE,
                 RawAbilityId.Morph_OverseerMode: UNSIEGE,
                 RawAbilityId.Unsiege_Unsiege: UNSIEGE,
-                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: SIEGE,
+                RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode: LIBERATOR_SIEGE_AT,
                 RawAbilityId.LiberatorMorphtoAA_LiberatorAAMode: UNSIEGE,
                 RawAbilityId.Archon_Warp_Target: MORPH_ARCHON,
             }

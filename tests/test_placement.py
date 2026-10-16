@@ -42,7 +42,7 @@ def _row(
     )
 
 
-# The footprints these units cover come from what the sweep measured; a held build needs a cost and a walking speed.
+# The footprints these units cover come from what the sweep measured.
 _TABLES = make_tables(
     _row(UnitTypeId.SCV, minerals=50, speed=2.8125),
     _row(UnitTypeId.MARINE, minerals=50, speed=2.25),
@@ -83,7 +83,7 @@ class _Game:
     def __init__(self) -> None:
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(_TABLES, build_reach=2.5)
+        self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
 
     def observe(
@@ -96,14 +96,19 @@ class _Game:
         self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
         present = self.tracker.unit_tracker.present
-        self.book._observe(step, [*changes.units_died, *changes.units_found_dead], present)
+        self.book._observe(step, [*changes.units_died, *changes.units_found_dead])
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
-                self.map.placement, present_units=present, state=state, game_data=_TABLES, order_book=self.book
+                self.map.placement,
+                present_units=present,
+                state=state,
+                step=step,
+                game_data=_TABLES,
+                order_book=self.book,
             )
         else:
-            self.grids._update(present, state)
+            self.grids._update(present, state, step)
         return self.grids
 
     def own(self, tag: int) -> OwnUnit[Any]:
@@ -261,16 +266,6 @@ class TestTheReservedGrid:
         order.withdraw()
         assert not grids.reserved.any()
 
-    def test_a_held_build_reserves_its_site_while_the_worker_walks(self) -> None:
-        game = _Game()
-        game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((12.0, 12.0)))
-        game.flush()
-        walking = raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=12, y=12))
-        grids = game.observe(8, _scv(1, walking))
-        assert game.book.issued_to(game.own(1))
-        assert grids.reserved[Point((12.0, 12.0))]
-
     def test_a_build_sent_and_not_observed_yet_reserves_its_site(self) -> None:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game()
@@ -343,6 +338,129 @@ class TestTheReservedGrid:
             ".#####.",
             ".......",
         ]
+
+
+_DEPOT = UnitTypeId.SUPPLY_DEPOT
+
+
+class TestReservingASite:
+    def test_a_reservation_reserves_its_footprint_where_the_game_snaps_it_from_the_moment_it_is_made(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(_DEPOT, at=Point((8.3, 7.8)))
+
+        assert reservation.at == Point((8.0, 8.0))
+        assert (reservation.type_id, reservation.margin, reservation.step, reservation.max_steps) == (
+            _DEPOT,
+            0,
+            0,
+            None,
+        )
+        assert grids.reservations == (reservation,)
+        assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
+        assert not grids.is_free(_DEPOT, at=(8.0, 8.0))
+        assert not grids.free[Point((8.0, 8.0))]
+
+    def test_a_margin_reserves_the_tiles_within_it_too(self) -> None:
+        """Two tiles on a depot's right, as a barracks keeps them for its add-on."""
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(_DEPOT, at=(8.0, 8.0), margin=(0, 2, 0, 0))
+
+        assert reservation.margin == (0, 2, 0, 0)
+        assert _picture(grids.reserved, x0=6, y0=6, x1=11, y1=9) == ["......", ".####.", ".####.", "......"]
+        assert not grids.is_free(_DEPOT, at=(10.0, 8.0))
+
+    def test_nearest_free_keeps_off_a_reservation(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+        nearest = grids.nearest_free(_DEPOT, near=(8.0, 8.0), max_distance=8.0)
+
+        grids.reserve(_DEPOT, at=(8.0, 8.0))
+
+        assert nearest == Point((8.0, 8.0))
+        assert grids.nearest_free(_DEPOT, near=(8.0, 8.0), max_distance=8.0) != nearest
+
+    def test_a_withdrawn_reservation_frees_its_site_at_once(self) -> None:
+        grids = _Game().observe(0, _scv(1))
+        reservation = grids.reserve(_DEPOT, at=(8.0, 8.0))
+
+        reservation.withdraw()
+        reservation.withdraw()
+
+        assert grids.reservations == ()
+        assert not grids.reserved.any()
+
+    def test_it_lasts_until_withdrawn(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+
+        assert game.observe(1000, _scv(1)).reserved[Point((8.0, 8.0))]
+
+    def test_it_ends_once_max_steps_steps_have_passed(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_steps=8)
+
+        assert game.observe(7, _scv(1)).reservations
+        assert not game.observe(8, _scv(1)).reservations
+
+    def test_one_step_keeps_it_for_its_own_turn_alone(self) -> None:
+        game = _Game()
+        grids = game.observe(16, _scv(1))
+        grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=1)
+
+        assert grids.reserved.any()
+        assert not game.observe(17, _scv(1)).reserved.any()
+
+    def test_it_ends_once_one_of_this_players_structures_stands_on_its_site_and_never_comes_back(self) -> None:
+        """Whatever type it stands as, as the reserved grid frees the site of a build begun."""
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+        barracks = make_unit(2, UnitTypeId.BARRACKS, at=(8.5, 8.5), build_progress=0.05)
+
+        assert game.observe(8, _scv(1)).reservations
+        assert not game.observe(16, _scv(1), make_unit(2, _DEPOT, at=(8.0, 8.0), build_progress=0.05)).reservations
+        assert not game.observe(24, _scv(1), dead=(2,)).reserved.any()
+        assert not game.observe(32, _scv(1), barracks).reservations
+
+    def test_another_players_structure_on_its_site_does_not_end_it(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0))
+        theirs = make_unit(2, _DEPOT, at=(8.0, 8.0), alliance=Alliance.ENEMY)
+
+        assert game.observe(8, _scv(1), theirs).reservations
+
+    @pytest.mark.parametrize(
+        ("unit_type", "max_steps", "message"),
+        [
+            (UnitTypeId.MARINE, None, "MARINE has no footprint"),
+            (UnitTypeId.REFINERY, None, "REFINERY stands on a geyser"),
+            (_DEPOT, 0, "max_steps is a number of steps, at least 1, not 0"),
+        ],
+        ids=["no footprint", "gas building", "no steps"],
+    )
+    def test_what_cannot_be_reserved_raises(self, unit_type: UnitTypeId, max_steps: int | None, message: str) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(ValueError, match=message):
+            grids.reserve(unit_type, at=(8.0, 8.0), max_steps=max_steps)
+
+        assert grids.reservations == ()
+
+    @pytest.mark.parametrize(("margin", "error"), [(-1, ValueError), ((1, 1, 1), TypeError)], ids=["negative", "three"])
+    def test_a_margin_negative_or_not_a_count_or_four_raises(self, margin: Any, error: type[Exception]) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(error, match="a margin"):
+            grids.reserve(_DEPOT, at=(8.0, 8.0), margin=margin)
+
+        assert grids.reservations == ()
+
+    @pytest.mark.parametrize("max_steps", [True, 1.5], ids=["a bool", "a fraction"])
+    def test_max_steps_that_is_not_a_whole_number_raises(self, max_steps: Any) -> None:
+        grids = _Game().observe(0, _scv(1))
+
+        with pytest.raises(TypeError, match="max_steps is a whole number of steps"):
+            grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=max_steps)
 
 
 # Creep over the right half of the drawn map, top row first.
@@ -533,10 +651,15 @@ class TestARecordedGamesStart:
     def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         game_map, tracker, data, observation = _first_observation(path)
         state = _State(observation, tracker, game_map)
-        order_book = OrderBook(data, build_reach=2.5)
+        order_book = OrderBook(data)
         present_units = tracker.unit_tracker.present
         grids = PlacementGrids._build_at_start(
-            game_map.placement, present_units=present_units, state=state, game_data=data, order_book=order_book
+            game_map.placement,
+            present_units=present_units,
+            state=state,
+            step=observation.observation.game_loop,
+            game_data=data,
+            order_book=order_book,
         )
         return game_map, tracker, grids
 
@@ -602,7 +725,8 @@ class _DepotBot:
         if self.site is None:
             if api.resources.minerals >= 100:
                 self.site = _depot_site(api)
-                api.orders.issue(api.units.own.of_type(UnitTypeId.SCV), _BUILD_DEPOT, target=self.site)
+                scv = api.units.own.of_type(UnitTypeId.SCV).closest_to(self.site)
+                api.orders.issue(scv, _BUILD_DEPOT, target=self.site)
             return
         placement = api.placement
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 if TYPE_CHECKING:
-    from sc2nachos.gamedata import OrderBehavior
     from sc2nachos.ids import AbilityId
     from sc2nachos.units import OwnUnit, Target
 
@@ -19,7 +18,6 @@ class Order[T]:
 
     __slots__ = (
         "_ability",
-        "_order_behavior",
         "_data",
         "_issued_step",
         "_queued",
@@ -36,7 +34,6 @@ class Order[T]:
         *,
         queued: bool,
         data: T,
-        order_behavior: OrderBehavior,
         step: int,
     ) -> None:
         """An order of `ability` to `units`, issued at `step`. Made by the order book, never by a bot."""
@@ -45,7 +42,6 @@ class Order[T]:
         self._target = target
         self._queued = queued
         self._data = data
-        self._order_behavior = order_behavior
         self._issued_step = step
         self._withdrawn = False
 
@@ -60,8 +56,7 @@ class Order[T]:
 
     @property
     def units(self) -> tuple[OwnUnit[Any], ...]:
-        """The units the order was given to. An order NachOS holds until its unit can start it, given to several, is
-        given to the one NachOS picked: the one that can start it soonest."""
+        """The units the order was given to."""
         return self._units
 
     @property
@@ -71,15 +66,8 @@ class Order[T]:
 
     @property
     def queued(self) -> bool:
-        """Whether the order goes behind each unit's current orders, those NachOS holds included, instead of replacing
-        them. An order NachOS picked a unit for reads `True` where that unit had something to do already."""
+        """Whether the order goes behind each unit's current orders instead of replacing them."""
         return self._queued
-
-    @property
-    def order_behavior(self) -> OrderBehavior:
-        """What the ability does to the current orders of the units it was given to: the behavior their types share,
-        or `REPLACES` where they differ."""
-        return self._order_behavior
 
     @property
     def data(self) -> T:
@@ -92,6 +80,5 @@ class Order[T]:
         return self._issued_step
 
     def withdraw(self) -> None:
-        """Take back whatever of the order has not gone out: all of it while its turn's handlers run, and what NachOS
-        still holds of it after."""
+        """Take the order back while its turn's handlers run, so it never goes out. After its turn it does nothing."""
         self._withdrawn = True

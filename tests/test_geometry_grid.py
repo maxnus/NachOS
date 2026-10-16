@@ -655,6 +655,8 @@ class TestFootprints:
             ground.fits_footprint(Footprint.square(2), at=Point((14.0, 24.0)), margin=margin)  # pyright: ignore[reportArgumentType]
         with pytest.raises(error, match=message):
             ground.where_footprint_fits(Footprint.square(2), margin=margin)  # pyright: ignore[reportArgumentType]
+        with pytest.raises(error, match=message):
+            ground.fill_footprint(Footprint.square(2), at=Point((14.0, 24.0)), value=True, margin=margin)  # pyright: ignore[reportArgumentType]
 
     def test_a_tile_the_footprint_leaves_out_may_be_false(self) -> None:
         ground = _ground(".##.", "####", "####", ".##.")
@@ -684,6 +686,12 @@ class TestFootprints:
         ground = _ground("....", "....", "....", "....")
         ground.fill_footprint(DIAGONAL, at=Point((12.0, 22.0)), value=True)
         assert ground.equals(_ground("..##", ".###", "###.", "##.."))
+
+    def test_fill_footprint_with_a_margin_sets_the_tiles_within_it_too(self) -> None:
+        """A 2x2 centered at (12, 22) covers x 11 and 12, and a margin of two on its right 13 and 14."""
+        ground = _ground("......", "......", "......", "......")
+        ground.fill_footprint(Footprint.square(2), at=Point((12.0, 22.0)), value=True, margin=(0, 2, 0, 0))
+        assert ground.equals(_ground("......", ".####.", ".####.", "......"))
 
     def test_fill_footprint_skips_the_tiles_beyond_the_grid(self) -> None:
         ground = _ground("###", "###", "###")

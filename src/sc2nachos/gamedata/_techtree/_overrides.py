@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Final
 
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 
@@ -147,31 +147,27 @@ KEEPS_ORDERS_BY_TYPE: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = Mapping
 # A medivac, a warp prism and a transport overlord given their unload at a point aimed at themselves unload where they
 # are and leave a move going; aimed at a point, they fly there first. Each answers UnloadAll `Error`, which a bunker, a
 # command center, a planetary fortress and a nydus take (tool `sweep_orders`, `held-orders`).
-_UNLOADS_IN_PLACE = SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
+_UNLOADS_IN_PLACE = SentAs(AbilityId.UNLOAD_AT, aimed_at_itself=True)
 _TRANSPORTS = (UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.OVERLORD_TRANSPORT)
 
 ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]] = MappingProxyType(
     {
         AbilityId.UNLOAD: MappingProxyType(dict.fromkeys(_TRANSPORTS, _UNLOADS_IN_PLACE)),
-        # A liberator's siege is aimed at the zone it guards; the others' at nothing. A form given its own siege again
-        # is sent it too, and the game answers as it does: a sieged liberator `NotSupported` (in game).
+        # A liberator's siege is `LIBERATOR_SIEGE_AT`, aimed at the zone it guards. A form given its own siege again is
+        # sent it too, and the game answers as it does.
         AbilityId.SIEGE: MappingProxyType(
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED),
-                    SentAs(RawAbilityId.SiegeMode_SiegeMode, Aim.NOTHING),
-                ),
-                **dict.fromkeys(
-                    (UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED),
-                    SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET),
+                    SentAs(RawAbilityId.SiegeMode_SiegeMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED),
-                    SentAs(RawAbilityId.Morph_SurveillanceMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_SurveillanceMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED),
-                    SentAs(RawAbilityId.Morph_OversightMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_OversightMode),
                 ),
             }
         ),
@@ -179,19 +175,19 @@ ABILITIES_SENT_AS_ANOTHER: Final[Mapping[AbilityId, Mapping[UnitTypeId, SentAs]]
             {
                 **dict.fromkeys(
                     (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
-                    SentAs(RawAbilityId.Unsiege_Unsiege, Aim.NOTHING),
+                    SentAs(RawAbilityId.Unsiege_Unsiege),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LIBERATOR),
-                    SentAs(RawAbilityId.Morph_LiberatorAAMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_LiberatorAAMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OBSERVER_SIEGED, UnitTypeId.OBSERVER),
-                    SentAs(RawAbilityId.Morph_ObserverMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_ObserverMode),
                 ),
                 **dict.fromkeys(
                     (UnitTypeId.OVERSEER_SIEGED, UnitTypeId.OVERSEER),
-                    SentAs(RawAbilityId.Morph_OverseerMode, Aim.NOTHING),
+                    SentAs(RawAbilityId.Morph_OverseerMode),
                 ),
             }
         ),
@@ -229,3 +225,63 @@ less its source type's, which is right for every other morph: an orbital command
 giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke and an interceptor have no row
 to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
+
+# The abilities every unit of a command naming several carries out, as `AbilityData.multi_unit` reads them (tool
+# `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`), with the other half of each toggle, a return,
+# a locust's swoop and an archon's merge, which needs two. None of them costs minerals or vespene.
+MULTI_UNIT_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
+    {
+        AbilityId.ADEPT_SHADE,
+        AbilityId.ATTACK,
+        AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
+        AbilityId.BANELING_ATTACK_STRUCTURES_ON,
+        AbilityId.BANELING_EXPLODE,
+        AbilityId.BATTLECRUISER_TACTICAL_JUMP,
+        AbilityId.BLINK,
+        AbilityId.BURROW,
+        AbilityId.CANCEL,
+        AbilityId.CLOAK_OFF,
+        AbilityId.CLOAK_ON,
+        AbilityId.GATHER,
+        AbilityId.HELLBAT_MORPH_HELLION,
+        AbilityId.HELLION_MORPH_HELLBAT,
+        AbilityId.HOLD_FIRE_OFF,
+        AbilityId.HOLD_FIRE_ON,
+        AbilityId.HOLD_POSITION,
+        AbilityId.HYDRALISK_LUNGE,
+        AbilityId.LIFT,
+        AbilityId.LOAD_ALL,
+        AbilityId.LOCUST_SWOOP,
+        AbilityId.MEDIVAC_BOOST,
+        AbilityId.MORPH_ARCHON,
+        AbilityId.MOTHERSHIP_CLOAK_FIELD,
+        AbilityId.MOVE,
+        AbilityId.ORACLE_PULSAR_BEAM_OFF,
+        AbilityId.ORACLE_PULSAR_BEAM_ON,
+        AbilityId.OVERLORD_CREEP_OFF,
+        AbilityId.OVERLORD_CREEP_ON,
+        AbilityId.PATROL,
+        AbilityId.RALLY_UNITS,
+        AbilityId.RALLY_WORKERS,
+        AbilityId.REPAIR,
+        AbilityId.RETURN,
+        AbilityId.SIEGE,
+        AbilityId.SMART,
+        AbilityId.STIM,
+        AbilityId.STOP,
+        AbilityId.SUPPLY_DEPOT_LOWER,
+        AbilityId.SUPPLY_DEPOT_RAISE,
+        AbilityId.SWARM_HOST_SPAWN_LOCUST,
+        AbilityId.THOR_EXPLOSIVE_MODE,
+        AbilityId.THOR_HIGH_IMPACT_MODE,
+        AbilityId.UNBURROW,
+        AbilityId.UNLOAD,
+        AbilityId.UNLOAD_AT,
+        AbilityId.UNSIEGE,
+        AbilityId.UPROOT,
+        AbilityId.VIKING_LAND,
+        AbilityId.VIKING_LIFT,
+        AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT,
+        AbilityId.ZEALOT_CHARGE,
+    }
+)

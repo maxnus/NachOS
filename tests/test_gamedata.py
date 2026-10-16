@@ -17,7 +17,7 @@ from sc2nachos.gamedata import (
     TargetType,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
-from sc2nachos.gamedata._sent_as import Aim, SentAs
+from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
@@ -495,7 +495,7 @@ class TestARecordedGamesTables:
     ) -> None:
         data = _tables(path)
         row = data.abilities[AbilityId.UNLOAD]
-        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, Aim.ITSELF)
+        assert row.sent_as[UnitTypeId.MEDIVAC] == SentAs(AbilityId.UNLOAD_AT, aimed_at_itself=True)
         assert UnitTypeId.BUNKER not in row.sent_as
         assert row.target_type is TargetType.NOTHING
         assert {UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.WARP_PRISM, UnitTypeId.OVERLORD_TRANSPORT} <= (
@@ -507,26 +507,29 @@ class TestARecordedGamesTables:
         unload_at = data.abilities[AbilityId.UNLOAD_AT]
         assert unload_at.order_behavior_for(UnitTypeId.MEDIVAC) is OrderBehavior.REPLACES
 
-    def test_the_siege_is_a_custom_id_taking_a_point_for_the_liberator_alone(self, path: Path) -> None:
-        """Each type's own siege makes its sieged form, and the liberator's is aimed at its zone."""
+    def test_the_siege_is_a_custom_id_taking_nothing_and_the_liberator_s_its_own_at_a_point(self, path: Path) -> None:
+        """Each type's own siege makes its sieged form; the liberator's is aimed at its zone, so it is an id of its own,
+        and the unsiege is one for all four."""
         data = _tables(path)
         siege = data.abilities[AbilityId.SIEGE]
-        assert siege.target_type is TargetType.POINT_OR_NOTHING
-        liberator = data.abilities[AbilityId.SIEGE].sent_as[UnitTypeId.LIBERATOR]
-        assert liberator == SentAs(RawAbilityId.Morph_LiberatorAGMode, Aim.TARGET)
-        assert siege.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
-        assert siege.performers == {
-            UnitTypeId.SIEGE_TANK,
-            UnitTypeId.LIBERATOR,
-            UnitTypeId.OBSERVER,
-            UnitTypeId.OVERSEER,
-        }
+        assert siege.target_type is TargetType.NOTHING
+        assert siege.cast_range == 0.0
+        assert UnitTypeId.LIBERATOR not in siege.sent_as
+        assert siege.performers == {UnitTypeId.SIEGE_TANK, UnitTypeId.OBSERVER, UnitTypeId.OVERSEER}
         assert siege.products[UnitTypeId.SIEGE_TANK] is UnitTypeId.SIEGE_TANK_SIEGED
-        assert siege.products[UnitTypeId.LIBERATOR] is UnitTypeId.LIBERATOR_SIEGED
         assert siege.order_behavior is OrderBehavior.REPLACES
+        at = data.abilities[AbilityId.LIBERATOR_SIEGE_AT]
+        assert at.target_type is TargetType.POINT
+        assert at.cast_range == _answer_row(path, RawAbilityId.Morph_LiberatorAGMode).cast_range > 0
+        assert (at.performers, dict(at.products)) == (
+            {UnitTypeId.LIBERATOR},
+            {UnitTypeId.LIBERATOR: UnitTypeId.LIBERATOR_SIEGED},
+        )
         unsiege = data.abilities[AbilityId.UNSIEGE]
         assert unsiege.target_type is TargetType.NOTHING
+        assert UnitTypeId.LIBERATOR_SIEGED in unsiege.sent_as
         assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].creation_ability is AbilityId.SIEGE
+        assert data.units[UnitTypeId.LIBERATOR_SIEGED].creation_ability is AbilityId.LIBERATOR_SIEGE_AT
 
     def test_a_smart_sets_a_producer_s_rally_and_takes_a_unit_off_its_orders(self, path: Path) -> None:
         smart = _tables(path).abilities[AbilityId.SMART]
@@ -699,6 +702,42 @@ class TestARecordedGamesTables:
         warp_ins = [ability for ability in AbilityId if ability.name.startswith("WARP_GATE_WARP_IN_")]
         assert warp_ins
         assert all(data.abilities[ability].cancelled_by is None for ability in warp_ins)
+
+    def test_what_every_unit_of_a_command_carries_out_is_what_the_sweep_saw_and_costs_nothing(self, path: Path) -> None:
+        """One unit of a command carries out a build, a train, a research or a morph (in game), and every spell but a
+        toggle, with a few more; every unit the rest (tool `sweep_orders`, `group-abilities-terran`, `-protoss` and
+        `-zerg`). Once the game charges for an entry of `MULTI_UNIT_ABILITIES`, the entry is wrong."""
+        data = _tables(path)
+        for row in data.abilities.values():
+            if row.cost.minerals or row.cost.vespene:
+                assert not row.multi_unit, f"the tables now charge {row.id.name} {row.cost}"
+        for ability in (
+            AbilityId.SCV_BUILD_SUPPLY_DEPOT,
+            AbilityId.BARRACKS_TRAIN_MARINE,
+            AbilityId.ZERGLING_MORPH_BANELING,
+            AbilityId.HIGH_TEMPLAR_STORM,
+            AbilityId.QUEEN_INJECT,
+            AbilityId.BUILD_CREEP_TUMOR,
+            AbilityId.RAVAGER_CORROSIVE_BILE,
+            AbilityId.LAND,
+            AbilityId.LIBERATOR_SIEGE_AT,
+            AbilityId.RECALL,
+            AbilityId.GHOST_TACTICAL_NUKE,
+        ):
+            assert not data.abilities[ability].multi_unit, ability.name
+        for ability in (
+            AbilityId.MOVE,
+            AbilityId.STIM,
+            AbilityId.BURROW,
+            AbilityId.LIFT,
+            AbilityId.CLOAK_ON,
+            AbilityId.ORACLE_PULSAR_BEAM_ON,
+            AbilityId.UNLOAD_AT,
+            AbilityId.MORPH_ARCHON,
+            AbilityId.SIEGE,
+            AbilityId.UNSIEGE,
+        ):
+            assert data.abilities[ability].multi_unit, ability.name
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

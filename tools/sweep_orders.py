@@ -72,13 +72,14 @@ and runs its trials in turn::
 - `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
   done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
   come.
-- `research-after` has an engineering bay research infantry weapons 1, and gives it level 2 at the first observation
-  it shows nothing, and then each step until the game takes it.
 - `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
   reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
   offered the warp-in by the abilities query, ignoring costs and counting them.
-- `larvae` gives a hatchery a drone's morph itself, then raises three more hatcheries, one beside the first and two
-  across the map, injects one, and reads where every larva stands from its own hatchery and from the others.
+- `larvae` gives a hatchery a drone's morph itself, and reads what it and its larvae do.
+- `group-abilities-terran`, `-protoss` and `-zerg` play without `free`, make two of each unit type and structure, in
+  each of its forms, and give both, in one command, each ability they are offered that costs no minerals or vespene,
+  moving ones sent off first, to find whether one of them carries it out or both: by the energy each spends, else a
+  change of type, else the effects made, else each one's orders, cloak, buffs, position, rally and cargo.
 - `cancel-a-middle-item` joins with the interface a player has, and asks the game's own production panel to drop the
   third of five queued, which no raw ability can name. `cancel-a-middle-item-selected` does the same without the
   feature layer, to find whether the selection alone is what the game needs.
@@ -94,25 +95,31 @@ the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in g
 - A battlecruiser moves by an ability of its own, and a carrier shows its interceptors being built ahead of its move,
   so a unit's move is read from its orders rather than assumed.
 - The `gas` cheat hands out no vespene, so `refunds` pays for an SCV and an orbital command, not a research.
+- Under `free` a spell spends no energy, so `group-abilities` plays without it and tells a cast by the energy spent;
+  under `tech_tree` a medivac regains energy twice as fast as a ghost, so a cast is a drop, not any change, and a
+  viper's consume is the one gain. A medivac heals hurt units by itself, spending energy, so its heal is taken off
+  autocast first.
 - `Sandbox.spawn` observes the game itself, not through `_Game`, so what a sweep spawns before its first trial is
   turned over once more first; otherwise the trial takes it for its own and kills it when done.
 """
 
 import argparse
 import json
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Self, cast
 
-from _sandbox import Cheat, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, OrderBehavior
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point
+from sc2nachos.gamemap._image_data import image_tiles
+from sc2nachos.geometry import Grid, Point
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.launch import Installation
@@ -245,10 +252,11 @@ class _Game:
         self.aims = {entry.ability_id: entry.target for entry in raw_data.abilities}
         self.step = 0
         self.units: dict[int, raw_pb2.Unit] = {}
+        self.effects: list[raw_pb2.Effect] = []
+        self.creep: Grid[bool] | None = None
         self.minerals = 0
         self.vespene = 0
         self.supply = (0, 0)
-        self.upgrades: set[int] = set()
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
@@ -273,11 +281,13 @@ class _Game:
         observation = response.observation
         self.step = observation.game_loop
         self.units = {unit.tag: unit for unit in observation.raw_data.units}
+        self.effects = list(observation.raw_data.effects)
+        creep = image_tiles(observation.raw_data.map_state.creep, self.map.playable_area) != 0
+        self.creep = Grid(creep, origin=self.map.pathing.origin, outside=False)
         common = observation.player_common
         self.minerals = common.minerals
         self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
-        self.upgrades = set(observation.raw_data.player.upgrade_ids)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
             self.running.errors.extend(_error(error, self.step) for error in response.action_errors)
@@ -2291,51 +2301,7 @@ def _protoss_slots(game: _Game) -> list[Trial]:
     return trials
 
 
-# --- The timing cases: the next level after a research, a warp gate's wait, a hatchery's larvae
-
-
-def _research_after(game: _Game) -> list[Trial]:
-    """How soon an engineering bay that has finished infantry weapons 1 takes level 2."""
-    level_1, level_2 = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2
-
-    def after(trial: Trial) -> None:
-        pad = game.spot(game.toward(8), 4)
-        made = game.sandbox.spawn(
-            [(UnitTypeId.ENGINEERING_BAY, game.player, pad), (UnitTypeId.ARMORY, game.player, pad + (0, 5))]
-        )
-        game.made.update(unit.tag for unit in made)
-        game.turn(4)
-        bay = next((unit for unit in made if unit.unit_type == UnitTypeId.ENGINEERING_BAY), None)
-        if bay is None:
-            trial.notes["class"] = "not made"
-            return
-        trial.notes["level 1"] = game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, [bay])
-
-        def researching() -> raw_pb2.UnitOrder | None:
-            unit = game.unit(bay.tag)
-            return unit.orders[0] if unit is not None and unit.orders else None
-
-        # The research shows from the observation after the order.
-        game.until(lambda: researching() is not None, limit=64)
-        game.until(lambda: (order := researching()) is None or order.progress > 0.98, steps=16, limit=4000)
-        last: list[list[object]] = []
-        while (order := researching()) is not None and len(last) < 200:
-            last.append([game.step, round(order.progress, 4), level_1 in game.upgrades])
-            game.turn(1)
-        trial.notes["last steps researching (step, progress, level 1 done)"] = last[-6:]
-        trial.notes["bay first idle at"] = game.step
-        answers: list[list[object]] = []
-        while len(answers) < 64:
-            verdict = game.order(level_2, [bay])
-            answers.append([game.step, verdict, level_1 in game.upgrades])
-            if verdict == "Success":
-                break
-            game.turn(1)
-        trial.notes["level 2 given (step, verdict, level 1 done)"] = answers
-        game.turn(4)
-        game.read("after level 2 was given", [bay])
-
-    return [game.trial("an engineering bay given infantry weapons 2 from its first idle observation", after)]
+# --- A warp gate's wait, and a larva's morph given to its hatchery
 
 
 _WARP_INS = (
@@ -2413,7 +2379,7 @@ def _warping(game: _Game, ability: AbilityId, unit_type: UnitTypeId, trial: Tria
 
 
 def _larvae(game: _Game) -> list[Trial]:
-    """What the game does with a larva's morph given to the hatchery itself, and where each hatchery's larvae stand."""
+    """What the game does with a larva's morph given to the hatchery itself."""
     (home,) = game.own(UnitTypeId.HATCHERY)[:1]
 
     def to_the_hatchery(trial: Trial) -> None:
@@ -2424,41 +2390,7 @@ def _larvae(game: _Game) -> list[Trial]:
         game.read("the hatchery and its larvae after", [home, *larvae])
         trial.notes["eggs after"] = len(game.own(UnitTypeId.EGG))
 
-    def spread(trial: Trial) -> None:
-        game.create(UnitTypeId.SPAWNING_POOL, game.spot(game.toward(6), 2))
-        # Beside the first, and two more across the map, so that where a larva stands is seen at several places.
-        across = game.map.playable_area
-        places = (game.toward(11), across.center, Point((across.center.x, (across.center.y + game.home.y) / 2)))
-        others = [game.create(UnitTypeId.HATCHERY, game.spot(place, 3))[0] for place in places]
-        (queen,) = game.create(UnitTypeId.QUEEN, _at(others[0]) + (3, 0))
-        game.set_energy(200, [queen])
-        game.turn(2)
-        hatcheries = {each.tag: _at(each) for each in (home, *others)}
-        trial.notes["hatcheries at"] = {str(tag): [at.x, at.y] for tag, at in hatcheries.items()}
-        trial.notes["inject"] = game.order(AbilityId.QUEEN_INJECT, [queen], others[0])
-        # Each larva's own hatchery is the one it stood nearest when first seen.
-        owners: dict[int, int] = {}
-        rows: list[list[object]] = []
-        for _ in range(150):
-            game.turn(8)
-            for larva in game.own(UnitTypeId.LARVA):
-                at = _at(larva)
-                own = owners.setdefault(larva.tag, min(hatcheries, key=lambda tag: at.distance_to(hatcheries[tag])))
-                offset = at - hatcheries[own]
-                others_away = [at.distance_to(spot) for tag, spot in hatcheries.items() if tag != own]
-                rows.append(
-                    [game.step, larva.tag, own, round(offset.x, 3), round(offset.y, 3), round(min(others_away), 2)]
-                )
-        trial.notes["larvae seen by hatchery"] = {
-            str(tag): sum(1 for each in owners.values() if each == tag) for tag in hatcheries
-        }
-        trial.notes["rows (step, larva, its hatchery, offset x, offset y, from the nearest other)"] = rows
-
-    # Before the hatchery's larvae are spent.
-    return [
-        game.trial("a drone's morph given to a hatchery", to_the_hatchery),
-        game.trial("hatcheries in four places, one injected, and where their larvae stand", spread),
-    ]
+    return [game.trial("a drone's morph given to a hatchery", to_the_hatchery)]
 
 
 # --- 14. Which cancel a structure part way through something is offered
@@ -3894,8 +3826,417 @@ def _inject_read(game: _Game, trial: Trial) -> None:
     trial.notes["step, buffs, buff_duration_remain, buff_duration_max, larvae beside"] = reads
 
 
+# --- What one command naming two units does with an ability: whether one of them carries it out or both
+
+# Where the two units stand, around the sweep's pad, apart enough for two structures of 5x5, and the pylon between
+# them that powers a type needing power.
+_PAIR_SPOTS = ((-3.0, 2.0), (3.0, 2.0))
+_PYLON_SPOT = (0.0, 3.0)
+# The energy each unit with energy starts with: enough for every spell, and short of full, which a consume needs; a
+# shield battery, which holds 100, starts full.
+_PAIR_ENERGY = 150.0
+# The targets an ability may ask for, each where it stands from the pad: enemies of every kind a spell takes, one with
+# energy to feed back, an enemy structure, this player's units and structures, for what heals, injects, boosts,
+# consumes, recharges, loads or calls down supply, and a mineral field to gather from.
+_GROUP_ENEMY_AIMS = (
+    (UnitTypeId.MARAUDER, (7.0, -1.0)),
+    (UnitTypeId.SIEGE_TANK, (7.0, 1.5)),
+    (UnitTypeId.VIKING, (7.0, 4.0)),
+    (UnitTypeId.GHOST, (7.0, 6.5)),
+    (UnitTypeId.BARRACKS, (6.5, -5.5)),
+)
+_GROUP_OWN_AIMS = (
+    (UnitTypeId.MARINE, (-7.0, 6.0)),
+    (UnitTypeId.SIEGE_TANK, (-7.0, 3.0)),
+    (UnitTypeId.SENTRY, (-7.0, 0.0)),
+    (UnitTypeId.SUPPLY_DEPOT, (0.0, 7.0)),
+    (UnitTypeId.GATEWAY, (0.5, -5.5)),
+)
+# A hatchery, for a queen's inject alone: its creep stays a long while, and keeps a terran structure off the pad.
+_QUEENS_AIM = (UnitTypeId.HATCHERY, (-5.5, -5.5))
+_GROUP_NEUTRAL_AIMS = ((UnitTypeId.MINERAL_FIELD, (-7.5, -1.5)),)
+# Where an ability at a point is aimed: clear of every target, among this player's units, for a recall, and on the
+# hatchery's creep, for a creep tumor.
+_GROUP_POINTS = ((0.0, -1.0), (-7.0, 4.5), (-2.0, -5.5))
+# How far a mobile pair is sent first, so that an ability replacing its orders shows by the move it drops.
+_PAIR_MOVE_DISTANCE = 20.0
+# What no pair is given: a cancel and a halt, offered only to a unit in the state they undo.
+_NOT_GIVEN = ("Cancel", "Halt")
+# What every type carries out alike, given once a race, to the first type offered it that moves.
+_GENERIC = frozenset(
+    {
+        AbilityId.MOVE,
+        AbilityId.ATTACK,
+        AbilityId.PATROL,
+        AbilityId.STOP,
+        AbilityId.HOLD_POSITION,
+        AbilityId.SMART,
+        AbilityId.GATHER,
+        AbilityId.RETURN,
+    }
+)
+# How much a unit's energy must drop for it to have cast, since it only regains energy otherwise, and how much more than
+# its partner's it must rise for it to have consumed: a viper's consume gave 7.5 more within 72 steps.
+_SPENT = 2.0
+_GAINED_OVER = 5.0
+# How far a unit must have gone between two reads to have jumped: further than any unit walks in two steps.
+_JUMP = 3.0
+# The steps at which the pair is read after the command, the last for what takes a while, a salvage; and the reads by
+# which a unit's orders must have changed for it to have taken the command, before a fast unit can reach its move's end.
+_PAIR_READS = (2, 24, 72, 160)
+_ORDER_READS = (2, 24)
+
+
+@dataclass(frozen=True, slots=True)
+class _Seen:
+    """What one unit of a pair shows of what it is doing, read before the command and after."""
+
+    unit_type: int
+    energy: float
+    at: Point
+    cloak: int
+    buffs: frozenset[int]
+    orders: frozenset[tuple[AbilityId | None, tuple[float, float] | int | None]]
+    rally: tuple[tuple[float, float, int], ...]
+    cargo: int
+
+    @classmethod
+    def of(cls, unit: raw_pb2.Unit) -> Self:
+        orders = frozenset((AbilityId.get(order.ability_id), _order_target(order)) for order in unit.orders)
+        rally = tuple((round(each.point.x, 1), round(each.point.y, 1), each.tag) for each in unit.rally_targets)
+        return cls(
+            unit.unit_type,
+            unit.energy,
+            _at(unit),
+            unit.cloak,
+            frozenset(unit.buff_ids),
+            orders,
+            rally,
+            unit.cargo_space_taken,
+        )
+
+
+def _order_target(order: raw_pb2.UnitOrder) -> tuple[float, float] | int | None:
+    match order.WhichOneof("target"):
+        case "target_world_space_pos":
+            return round(order.target_world_space_pos.x, 1), round(order.target_world_space_pos.y, 1)
+        case "target_unit_tag":
+            return order.target_unit_tag
+        case _:
+            return None
+
+
+# What a dead hatchery or a swarm host leaves of this player's behind it, killed before each trial so that no medivac
+# heals it and no trial counts it.
+_LEFTOVERS = frozenset({UnitTypeId.BROODLING, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING})
+# How a structure is put to work before a cancel: each of a pair trains, morphs or is built.
+_TRAIN = AbilityId.BARRACKS_TRAIN_MARINE
+_MORPH = AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND
+_DEPOT_SPOTS = ((-3.0, -2.0), (3.0, -2.0))
+
+# Sets a pair to work before the command: returns the pair the command is given to, the same or what they made.
+type _Prepare = Callable[[_Game, list[raw_pb2.Unit], Point], list[raw_pb2.Unit]]
+
+
+def _group_abilities(game: _Game, race: Race) -> list[Trial]:
+    trials: list[Trial] = []
+    performers = [
+        row.id
+        for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
+        if row.race is race and row.id not in _NOT_PERFORMERS
+    ]
+    pad = game.spot(game.toward(14), 9)
+    if race is Race.TERRAN:
+        # What undoes a structure's work, given to two at it; the same ids serve every race. First, while no creep lies
+        # on the pad.
+        for performer, ability, prepare in (
+            (UnitTypeId.BARRACKS, AbilityId.CANCEL_LAST, _train_each),
+            (UnitTypeId.COMMAND_CENTER, AbilityId.CANCEL, _morph_each),
+            (UnitTypeId.SCV, AbilityId.HALT, _build_each),
+            (UnitTypeId.SCV, AbilityId.CANCEL, _being_built),
+        ):
+            label = f"two {performer.name} given {ability.name} in one command, at work"
+            run = partial(_group_ability, game, performer, ability, False, pad, prepare=prepare)
+            trials.append(game.trial(label, run))
+    given_generic: set[AbilityId] = set()
+    for performer in performers:
+        pylons = _power(game, performer, pad)
+        made = game.create(performer, pad + _PAIR_SPOTS[0])
+        if not made or made[0].unit_type != performer:
+            game.kill([*made, *pylons])
+            continue
+        game.turn(8)
+        offered = game.sandbox.offered([made[0].tag]).get(made[0].tag, [])
+        carries = made[0].cargo_space_max > 0
+        unloads: list[int] = []
+        if carries:
+            # A transport is offered its unloads only with something aboard.
+            _load_each(game, made, pad)
+            unloads = [each for each in game.sandbox.offered([made[0].tag]).get(made[0].tag, []) if each not in offered]
+        game.kill([*made, *pylons])
+        logger.info("{}: offered {}, loaded {}", performer.name, [_name(each) for each in offered], unloads)
+        moves = any(AbilityId.get(each) is AbilityId.MOVE for each in offered)
+        tried: set[AbilityId] = set()
+        for ability, prepare in [*((each, None) for each in offered), *((each, _load_each) for each in unloads)]:
+            curated = AbilityId.get(ability)
+            row = None if curated is None else game.data.abilities.get(curated)
+            if curated is None or row is None or curated in tried:
+                continue
+            # What costs is carried out by one unit of a command (in game), and needs no trial.
+            if row.cost.minerals or row.cost.vespene or any(part in _raw_name(ability) for part in _NOT_GIVEN):
+                continue
+            if curated in _GENERIC:
+                if curated in given_generic or not moves:
+                    continue
+                given_generic.add(curated)
+            tried.add(curated)
+            label = f"two {performer.name} given {curated.name} in one command"
+            # A toggle that leaves creep is read where the unit stands, so it is not sent off first.
+            sent_off = moves and prepare is None and "Creep" not in _raw_name(ability)
+            run = partial(_group_ability, game, performer, ability, sent_off, pad, prepare=prepare)
+            trials.append(game.trial(label, run))
+    return trials
+
+
+def _load_each(game: _Game, transports: list[raw_pb2.Unit], pad: Point) -> list[raw_pb2.Unit]:
+    """Put a marine aboard each of `transports`, each loading its own."""
+    marines = game.sandbox.spawn([(UnitTypeId.MARINE, game.player, _at(each) + (0, -1.5)) for each in transports])
+    game.made.update(unit.tag for unit in marines)
+    for transport, marine in zip(transports, marines, strict=False):
+        game.order(AbilityId.LOAD, [transport], marine)
+    game.until(
+        lambda: all(game.units[each.tag].cargo_space_taken for each in transports if each.tag in game.units), limit=200
+    )
+    return transports
+
+
+def _train_each(game: _Game, structures: list[raw_pb2.Unit], pad: Point) -> list[raw_pb2.Unit]:
+    """Have each of `structures` train a marine, each on its own."""
+    for structure in structures:
+        game.order(_TRAIN, [structure])
+    game.turn(4)
+    return structures
+
+
+def _morph_each(game: _Game, structures: list[raw_pb2.Unit], pad: Point) -> list[raw_pb2.Unit]:
+    """Have each of `structures` morph into an orbital command, each on its own."""
+    for structure in structures:
+        game.order(_MORPH, [structure])
+    game.turn(4)
+    return structures
+
+
+def _build_each(game: _Game, workers: list[raw_pb2.Unit], pad: Point) -> list[raw_pb2.Unit]:
+    """Have each of `workers` build a depot of its own beside the pad, and wait until both are going up."""
+    for worker, spot in zip(workers, _DEPOT_SPOTS, strict=True):
+        game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [worker], pad + spot)
+    game.until(lambda: len(game.own(UnitTypeId.SUPPLY_DEPOT)) >= 2, limit=400)
+    game.made.update(unit.tag for unit in game.own(UnitTypeId.SUPPLY_DEPOT))
+    return workers
+
+
+def _being_built(game: _Game, workers: list[raw_pb2.Unit], pad: Point) -> list[raw_pb2.Unit]:
+    """The depots `workers` are building, each of its own."""
+    _build_each(game, workers, pad)
+    return game.own(UnitTypeId.SUPPLY_DEPOT)[:2]
+
+
+def _group_ability(
+    game: _Game,
+    performer: UnitTypeId,
+    ability: int,
+    moves: bool,
+    pad: Point,
+    trial: Trial,
+    *,
+    prepare: _Prepare | None = None,
+) -> None:
+    curated = AbilityId.get(ability)
+    aim_kind = game.aims.get(ability, _NOTHING)
+    wants_unit = aim_kind in (_UNIT, _POINT_OR_UNIT)
+    # What the last trial's dead leave appears a few steps after they die.
+    game.turn(16)
+    leftovers = [tag for tag, unit in game.units.items() if unit.owner == game.player and unit.unit_type in _LEFTOVERS]
+    if leftovers:
+        game.kill(leftovers)
+    _power(game, performer, pad)
+    requests = [(performer, game.player, pad + spot) for spot in _PAIR_SPOTS]
+    if wants_unit:
+        requests += [(target, game.enemy, pad + spot) for target, spot in _GROUP_ENEMY_AIMS]
+        requests += [(target, game.player, pad + spot) for target, spot in _GROUP_OWN_AIMS]
+        requests += [(target, NEUTRAL, pad + spot) for target, spot in _GROUP_NEUTRAL_AIMS]
+        if performer is UnitTypeId.QUEEN:
+            requests.append((_QUEENS_AIM[0], game.player, pad + _QUEENS_AIM[1]))
+    if curated is AbilityId.LOAD_ALL:
+        # Workers on each structure's far side, for it alone to take in.
+        requests += [
+            (UnitTypeId.SCV, game.player, pad + (spot[0] + (4.0 if spot[0] > 0 else -4.0), spot[1]))
+            for spot in _PAIR_SPOTS
+            for _ in range(2)
+        ]
+    made = game.sandbox.spawn(requests)
+    game.made.update(unit.tag for unit in made)
+    game.observe()
+    pair = [unit for unit in made if unit.unit_type == performer and unit.owner == game.player][:2]
+    if len(pair) < 2:
+        trial.notes["class"] = "not made"
+        return
+    if prepare is not None:
+        pair = prepare(game, pair, pad)
+        if len(pair) < 2:
+            trial.notes["class"] = "not prepared"
+            return
+        game.observe()
+        pair = [game.units[unit.tag] for unit in pair if unit.tag in game.units]
+    tags = [unit.tag for unit in pair]
+    if pair[0].energy_max:
+        game.set_energy(_PAIR_ENERGY, pair)
+    # A medivac heals the hurt targets by itself, which spends energy as a cast does.
+    if performer is UnitTypeId.MEDIVAC:
+        toggle = raw_pb2.ActionRawToggleAutocast(ability_id=RawAbilityId.MedivacHeal_Heal, unit_tags=tags)
+        game.act(sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(toggle_autocast=toggle)))
+    # This player's target units are hurt, so what heals or repairs has something to do; its structures are left whole,
+    # as a consume needs them.
+    owned = (*_GROUP_OWN_AIMS, _QUEENS_AIM)
+    whole = {target for target, _ in owned if Attribute.STRUCTURE in game.data.units[target].attributes}
+    helped = [
+        unit.tag for unit in made if unit.owner == game.player and unit.tag not in tags and unit.unit_type not in whole
+    ]
+    game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Life, 20, helped)
+    # Not 0, which a debug command reads as the maximum.
+    game.sandbox.set_value(debug_pb2.DebugSetUnitValue.Shields, 1, helped)
+    if moves:
+        game.order(AbilityId.MOVE, tags, pad.towards(game.middle, _PAIR_MOVE_DISTANCE))
+    game.turn(2)
+    game.read("before", pair)
+    before = {tag: _Seen.of(game.units[tag]) for tag in tags}
+    effects_before = Counter(effect.effect_id for effect in game.effects)
+    units_before = set(game.units)
+    creep_before = game.creep
+    aims: list[Target] = []
+    if aim_kind in (_NOTHING, _POINT_OR_NOTHING):
+        aims.append(None)
+    if wants_unit:
+        aims += [unit.tag for unit in made if unit.tag not in tags]
+    if aim_kind in (_POINT, _POINT_OR_UNIT, _POINT_OR_NOTHING):
+        aims += [pad + point for point in _GROUP_POINTS]
+    verdict = "no aim"
+    for aim in aims:
+        verdict = game.order(ability, tags, aim)
+        if verdict == "Success":
+            trial.notes["aim"] = _aim_label(game, aim)
+            break
+    trial.notes["verdict"] = verdict
+    signs: dict[int, set[str]] = {tag: set() for tag in tags}
+    energy = dict.fromkeys(tags, 0.0)
+    new_effects = 0
+    new_units: Counter[str] = Counter()
+    claimed: set[int] = set()
+    last, previous = 0, before
+    for at in _PAIR_READS:
+        game.turn(at - last)
+        last = at
+        game.read(f"{at} after", pair)
+        now = {tag: _Seen.of(game.units[tag]) for tag in tags if tag in game.units}
+        for tag in tags:
+            if tag not in game.units:
+                signs[tag].add("gone")
+        spawned = [unit for tag, unit in game.units.items() if tag not in units_before and unit.owner == game.player]
+        for unit in spawned:
+            # A unit first seen beside one of the pair, as a shade or a locust is, is that one's.
+            nearest = min(now, key=lambda tag: now[tag].at.distance_to(_at(unit)), default=None)
+            if unit.tag not in claimed and nearest is not None and now[nearest].at.distance_to(_at(unit)) < 4.0:
+                signs[nearest].add("spawned")
+            claimed.add(unit.tag)
+        for tag, seen in now.items():
+            first = before[tag]
+            if at in _ORDER_READS and seen.orders != first.orders:
+                signs[tag].add("orders changed")
+            if abs(change := seen.energy - first.energy) > abs(energy[tag]):
+                energy[tag] = change
+            if seen.unit_type != first.unit_type:
+                signs[tag].add("type")
+            if any(ability_id is curated for ability_id, _ in seen.orders - first.orders):
+                signs[tag].add("order")
+            was_moving = any(ability_id is AbilityId.MOVE for ability_id, _ in first.orders)
+            still_moving = any(ability_id is AbilityId.MOVE for ability_id, _ in seen.orders)
+            if at == _PAIR_READS[0] and was_moving and not still_moving:
+                signs[tag].add("move dropped")
+            if seen.cloak != first.cloak:
+                signs[tag].add("cloak")
+            if seen.buffs - first.buffs:
+                signs[tag].add("buff")
+            if tag in previous and seen.at.distance_to(previous[tag].at) > _JUMP and at == _PAIR_READS[0]:
+                signs[tag].add("jump")
+            if seen.rally != first.rally:
+                signs[tag].add("rally")
+            if seen.cargo != first.cargo:
+                signs[tag].add("cargo")
+            if (
+                creep_before is not None
+                and game.creep is not None
+                and game.creep[seen.at]
+                and not creep_before[seen.at]
+            ):
+                signs[tag].add("creep")
+        previous = {**previous, **now}
+        effects_now = Counter(effect.effect_id for effect in game.effects)
+        new_effects = max(new_effects, sum((effects_now - effects_before).values()))
+        made_now = Counter(_type_name(unit.unit_type) for unit in spawned)
+        new_units = made_now if sum(made_now.values()) > sum(new_units.values()) else new_units
+    # A unit that spent energy cast; with none spent, one that gained more than its partner regained consumed.
+    spent = [tag for tag in tags if energy[tag] < -_SPENT]
+    if not spent:
+        regained = min(energy.values())
+        spent = [tag for tag in tags if energy[tag] > regained + _GAINED_OVER]
+    decided_by, count = "nothing", 0
+    if spent:
+        decided_by, count = "energy", len(spent)
+    elif new_effects:
+        decided_by, count = "effects", min(new_effects, 2)
+    else:
+        # The first sign some unit shows decides, counting the units that show it. A gateway turns into a warp gate by
+        # itself under `tech_tree`, so a rally comes before a type; a unit hit by its partner's ability shows a buff,
+        # two nydus share their cargo, and the creep of a hatchery long gone recedes slowly, so those come last.
+        for sign in ("rally", "type", "orders changed", "gone", "spawned", "jump", "cloak", "cargo", "creep", "buff"):
+            if showing := sum(sign in signs[tag] for tag in tags):
+                decided_by, count = sign, showing
+                break
+    trial.notes["energy changed"] = [round(energy[tag], 1) for tag in tags]
+    trial.notes["signs"] = [sorted(signs[tag]) for tag in tags]
+    trial.notes["new effects"] = new_effects
+    trial.notes["new units"] = dict(new_units)
+    trial.notes["decided by"] = decided_by
+    if verdict != "Success":
+        trial.notes["class"] = "refused"
+    else:
+        trial.notes["class"] = {0: "no trace", 1: "one", 2: "both"}[count]
+
+
+def _power(game: _Game, performer: UnitTypeId, pad: Point) -> list[raw_pb2.Unit]:
+    """Put up a pylon between the pair's spots if `performer` needs power, and return what was made."""
+    if not game.data.units[performer].needs_power:
+        return []
+    return game.create(UnitTypeId.PYLON, pad + _PYLON_SPOT)
+
+
+def _aim_label(game: _Game, aim: Target) -> str:
+    """What `aim` is: "nothing", "point", or the unit it names and whose, "enemy MARAUDER" or "own SUPPLY_DEPOT"."""
+    if aim is None:
+        return "nothing"
+    if isinstance(aim, Point):
+        return "point"
+    unit = game.units.get(aim if isinstance(aim, int) else aim.tag)
+    if unit is None:
+        return "a unit gone"
+    whose = "own" if unit.owner == game.player else "enemy"
+    return f"{whose} {_type_name(unit.unit_type)}"
+
+
 _BASE_CHEATS = (Cheat.FREE, Cheat.FOOD)
 _KEEPS_CHEATS = (*_BASE_CHEATS, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
+# Not `free`, under which a spell spends no energy, and so leaves no trace of who cast it.
+_GROUP_ABILITY_CHEATS = (Cheat.FOOD, Cheat.ALL_RESOURCES, Cheat.GOD, Cheat.COOLDOWN, Cheat.TECH_TREE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -4229,9 +4570,11 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
     # instead.
     "progress": _Sweep(Race.ZERG, _progress),
-    "research-after": _Sweep(Race.TERRAN, _research_after),
     "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "larvae": _Sweep(Race.ZERG, _larvae),
+    "group-abilities-terran": _Sweep(Race.TERRAN, lambda g: _group_abilities(g, Race.TERRAN), _GROUP_ABILITY_CHEATS),
+    "group-abilities-protoss": _Sweep(Race.PROTOSS, lambda g: _group_abilities(g, Race.PROTOSS), _GROUP_ABILITY_CHEATS),
+    "group-abilities-zerg": _Sweep(Race.ZERG, lambda g: _group_abilities(g, Race.ZERG), _GROUP_ABILITY_CHEATS),
     "cancel-a-middle-item": _Sweep(Race.TERRAN, lambda g: _middle_item(g, panels=True), interface=_UI_INTERFACE),
     # The same without the feature layer, to find whether the selection alone is what the game wanted.
     "cancel-a-middle-item-selected": _Sweep(

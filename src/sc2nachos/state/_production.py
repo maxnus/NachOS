@@ -23,7 +23,7 @@ class _Production:
     A unit is in production while it goes up: a structure, an add-on, a unit warping in. So is what each order a unit
     shows makes, if it costs and makes a unit type: a train, queued ones included, an egg's or a cocoon's morph, a
     structure's morph. A build or an add-on is read from its order only until its construction starts, and then from
-    the structure itself. What NachOS holds and has not sent is nowhere.
+    the structure itself. An order not yet sent is nowhere.
     """
 
     __slots__ = ("_items", "_progress")
