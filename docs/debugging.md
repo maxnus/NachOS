@@ -23,13 +23,14 @@ def mark_the_expansions(event: GameStartEvent) -> None:
 ```
 
 - **Where.** A point of two coordinates is drawn on the ground, and one of three at its own height. A unit is drawn
-  where it stands, and a drawing at a unit follows it while the drawing lasts. Text on the screen is placed from 0 to 1
-  across and down, whatever the window's size. A box stands over a `Rectangle` from the ground up 1.
+  where it stands, and a drawing at a unit follows it while the drawing lasts, at where it was last seen when out of
+  sight, and ends once the unit is dead. Text on the screen is placed from 0 to 1 across and down, whatever the window's
+  size. A box stands over a `Rectangle` from the ground up 1.
 - **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in.
 - **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two refreshes of the drawing;
   meanwhile the screen keeps the last one sent. A refresh whose drawing is what the screen already shows sends nothing,
-  so a drawing that never changes costs a request when it is made and one when it ends. A cheat or a command goes out at
-  once, with the drawing as it stands. Set it as the bot's module loads:
+  so a drawing that never changes costs a request at the first refresh after it is made and one at the first after it
+  ends. A cheat or a command goes out at once, with the drawing as it stands. Set it as the bot's module loads:
 
   ```python
   api = Api()

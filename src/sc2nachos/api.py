@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from typing import Any, overload
 
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
@@ -263,8 +262,7 @@ class Api:
             raise ValueError(
                 f"a chat message of {_MOST_CHAT_BYTES + 1} bytes or more kills the game client, and this one is {size}"
             )
-        channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
-        game.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
+        game.queue_chat(text, team_only=team_only)
 
     def leave_game(self) -> None:
         """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have

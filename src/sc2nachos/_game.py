@@ -313,6 +313,11 @@ class _Game:
         row = self.game_data.units.get(unit.type_id)
         return row is not None and Attribute.STRUCTURE in row.attributes
 
+    def queue_chat(self, text: str, *, team_only: bool) -> None:
+        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's request."""
+        channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
+        self.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
+
     def send_turn(self) -> None:
         """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request."""
         chat, self.chat_to_send = self.chat_to_send, []
@@ -336,8 +341,13 @@ class _Game:
 
 
 def _the_other_player(info: sc2api_pb2.ResponseGameInfo, player: int | None) -> int | None:
-    """The id of the one player of the game `info` describes who is not `player`, or `None` if there is not one."""
-    others = [entry.player_id for entry in info.player_info if entry.player_id != player]
+    """The id of the one player of the game `info` describes, observers aside, who is not `player`, or `None` if
+    there is not one."""
+    others = [
+        entry.player_id
+        for entry in info.player_info
+        if entry.player_id != player and entry.type != sc2api_pb2.PlayerType.Observer
+    ]
     return others[0] if len(others) == 1 else None
 
 

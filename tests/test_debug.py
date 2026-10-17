@@ -1,5 +1,6 @@
 """Drawing, cheats and debug commands: what goes out after each turn's orders, and when."""
 
+import math
 from collections import deque
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -29,12 +30,16 @@ class _ScriptedGame:
     """A game that answers every request by its kind: an observation from `observations` in turn, the last ending the
     game in a victory, and success for every action."""
 
-    def __init__(self, observations: Sequence[sc2api_pb2.ResponseObservation], *, players: int) -> None:
+    def __init__(
+        self, observations: Sequence[sc2api_pb2.ResponseObservation], *, players: int, observers: int = 0
+    ) -> None:
         self.observations = deque(observations)
         self.requests: list[sc2api_pb2.Request] = []
         self.info = make_game_info()
         for player in range(1, players + 1):
-            self.info.player_info.add(player_id=player)
+            self.info.player_info.add(player_id=player, type=sc2api_pb2.PlayerType.Participant)
+        for observer in range(players + 1, players + observers + 1):
+            self.info.player_info.add(player_id=observer, type=sc2api_pb2.PlayerType.Observer)
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
         self.requests.append(request)
@@ -69,12 +74,15 @@ def _play(
     *,
     turns: int,
     units: Callable[[int], Sequence[raw_pb2.Unit]] = lambda _: (),
+    dead: Callable[[int], Sequence[int]] = lambda _: (),
     players: int = 2,
+    observers: int = 0,
 ) -> dict[int, list[debug_pb2.DebugCommand]]:
-    """Play `turns` turns of one step with `api`, calling `turn` with each turn's step, and return the debug commands
-    sent, by the step of the turn that sent them."""
-    observations = [make_observation(step, units=units(step)) for step in range(turns + 1)]
-    game = _ScriptedGame(observations, players=players)
+    """Play `turns` turns of one step with `api`, calling `turn` with each turn's step, each step's observation
+    reporting `units` and the tags `dead`, and return the debug commands sent, by the step of the turn that sent
+    them."""
+    observations = [make_observation(step, units=units(step), dead=dead(step)) for step in range(turns + 1)]
+    game = _ScriptedGame(observations, players=players, observers=observers)
     client = Client(game)
     client.join_game(Race.TERRAN)
 
@@ -224,6 +232,36 @@ class TestDrawing:
         }
         assert centers == {0: [(2.0, 2.0, 1.5)], 1: [(3.0, 2.0, 1.5)], 2: [(4.0, 2.0, 1.5)]}
 
+    def test_a_drawing_at_a_unit_ends_once_the_unit_is_dead(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw_text("doomed", at=api.units.own[0], steps=10)
+
+        sent = _play(
+            api,
+            turn,
+            turns=4,
+            units=lambda step: [make_unit(1)] if step < 2 else [],
+            dead=lambda step: (1,) * (step == 2),
+        )
+
+        assert list(sent) == [0, 2]
+        assert sent[2] == [debug_pb2.DebugCommand(draw=debug_pb2.DebugDraw())]
+
+    def test_a_drawing_at_a_unit_out_of_sight_stays_where_it_was_last_seen(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw_text("scouted", at=api.units.enemy[0], steps=10)
+
+        enemy = make_unit(1, alliance=Alliance.ENEMY, at=(3.0, 3.0))
+        sent = _play(api, turn, turns=4, units=lambda step: [enemy] if step < 2 else [])
+
+        assert list(sent) == [0]
+
     def test_a_box_stands_over_its_rectangle_from_the_ground_up_one(self) -> None:
         api = Api()
 
@@ -252,9 +290,18 @@ class TestDrawing:
             lambda api: api.debug.draw_text("x", at=(1.0, 1.0), steps=0),
             lambda api: api.debug.draw_text("x", at=(1.0, 1.0), size=0),
             lambda api: api.debug.draw_text_on_screen("x", at=(1.5, 0.5)),
+            lambda api: api.debug.draw_text_on_screen("x", at=(0.1, 0.1, 0.0)),  # pyright: ignore[reportArgumentType]
             lambda api: api.debug.draw_sphere((1.0, 1.0), 0),
         ],
-        ids=["color over 255", "color not whole", "no steps", "no size", "off the screen", "no radius"],
+        ids=[
+            "color over 255",
+            "color not whole",
+            "no steps",
+            "no size",
+            "off the screen",
+            "three coordinates on the screen",
+            "no radius",
+        ],
     )
     def test_a_drawing_given_what_cannot_be_drawn_raises(self, draw: Callable[[Api], None]) -> None:
         api = Api()
@@ -293,6 +340,23 @@ class TestCheats:
 
         assert sent == {0: [debug_pb2.DebugCommand(game_state=debug_pb2.show_map)]}
         assert seen == [frozenset({Cheat.SHOW_MAP})] * 2
+
+    def test_a_cheat_turned_off_in_a_later_turn_is_switched_again(self) -> None:
+        api = Api()
+        seen: list[frozenset[Cheat]] = []
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.turn_on(Cheat.GOD)
+            if step == 1:
+                api.debug.turn_off(Cheat.GOD)
+            seen.append(api.debug.cheats)
+
+        sent = _play(api, turn, turns=2)
+
+        god = [debug_pb2.DebugCommand(game_state=debug_pb2.god)]
+        assert sent == {0: god, 1: god}
+        assert seen == [frozenset({Cheat.GOD}), frozenset()]
 
     def test_a_cheat_turned_on_and_off_in_one_turn_sends_nothing(self) -> None:
         api = Api()
@@ -374,17 +438,42 @@ class TestCommands:
         assert values == [(7, _VITALS.Life, 10), (7, _VITALS.Energy, 5), (8, _VITALS.Life, 10), (8, _VITALS.Energy, 5)]
         assert list(sent[0][4].kill_unit.tag) == [7]
 
-    def test_a_vital_set_to_0_raises(self) -> None:
+    @pytest.mark.parametrize(
+        ("vitals", "refused"),
+        [
+            ({"shields": 0}, "above 0"),
+            ({"life": -1}, "above 0"),
+            ({"energy": math.inf}, "finite"),
+            ({}, "give the life, the energy or the shields"),
+        ],
+        ids=["0", "below 0", "infinite", "nothing"],
+    )
+    def test_a_vital_set_to_what_cannot_be_raises(self, vitals: dict[str, float], refused: str) -> None:
         api = Api()
         raised: list[bool] = []
 
         def turn(step: int) -> None:
-            with pytest.raises(ValueError, match="above 0"):
-                api.debug.set_vitals(api.units.own, shields=0)
+            with pytest.raises(ValueError, match=refused):
+                api.debug.set_vitals(api.units.own, **vitals)
             raised.append(True)
 
         assert _play(api, turn, turns=1, units=lambda step: [make_unit(7)]) == {}
         assert raised == [True]
+
+    def test_killing_no_units_sends_nothing(self) -> None:
+        api = Api()
+        assert _play(api, lambda step: api.debug.kill([]), turns=2) == {}
+
+    def test_an_observer_is_no_enemy_to_create_units_for(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.create_units(UnitTypeId.MARINE, at=(3.0, 4.0), owner=Alliance.ENEMY)
+
+        sent = _play(api, turn, turns=1, observers=1)
+
+        assert sent[0][0].create_unit.owner == 2
 
     def test_a_game_is_ended_in_a_victory_or_a_surrender(self) -> None:
         api = Api()

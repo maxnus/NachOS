@@ -31,6 +31,10 @@ class _Drawing:
     text: str = ""
     size: float = 0.0
 
+    def is_at_a_dead_unit(self) -> bool:
+        """Whether the drawing stands at a unit that is dead."""
+        return any(isinstance(anchor, Unit) and anchor.is_dead for anchor in self.anchors)
+
     def spec(self) -> _Spec:
         """The drawing as it is sent now, a unit it follows read where it stands."""
         points = tuple(_where(anchor) for anchor in self.anchors)

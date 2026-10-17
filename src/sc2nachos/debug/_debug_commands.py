@@ -35,7 +35,8 @@ class DebugCommands:
     once every `refresh_steps` steps, and the screen keeps the last drawing sent meanwhile, so one made between two
     refreshes waits for the next, and one that ends between them still shows until then. A refresh whose drawing is
     what was last sent sends nothing; a turn with a cheat or a command goes out at once, with the drawing as it
-    stands then. A drawing at a unit follows the unit, read where it stands at each refresh.
+    stands then. A drawing at a unit follows the unit, read where it stands at each refresh, and ends once the unit is
+    dead; out of sight, the unit is drawn at where it was last seen.
 
     A debug request the game refuses, as a ladder's own proxy may, raises `ProtocolError` out of `api.play`.
     Everything starts afresh with each game. Every method raises `NotPlayingError` until the first game starts.
@@ -110,11 +111,11 @@ class DebugCommands:
         self, text: str, *, at: tuple[float, float], color: _Color = _WHITE, size: int = 8, steps: int = 1
     ) -> None:
         """Write `text` on the screen at `at`, from 0 to 1 across and down whatever the window's size, `size` pixels
-        high. Raises `ValueError` for a coordinate outside 0 to 1, and as `draw_text` does."""
+        high. Raises `ValueError` for anything but two coordinates from 0 to 1, and as `draw_text` does."""
         game = self._playing()
+        if len(at) != 2 or not (0 <= at[0] <= 1 and 0 <= at[1] <= 1):
+            raise ValueError(f"a point on the screen is two coordinates, each from 0 to 1, not {at!r}")
         x, y = at
-        if not (0 <= x <= 1 and 0 <= y <= 1):
-            raise ValueError(f"a point on the screen runs from 0 to 1 each way, not {at!r}")
         self._add("screen_text", ((x, y, 0.0),), color, steps, game, text=text, size=_checked_size(size))
 
     def draw_line(
@@ -243,16 +244,18 @@ class DebugCommands:
     ) -> None:
         """Set the life, energy or shields given of each of `units`.
 
-        Raises `ValueError` for a value of 0 or less: set to 0, a vital goes to the most the unit can have instead (in
-        game). `kill` takes a unit's life.
+        Raises `ValueError` if no vital is given, and for a value that is not a finite number above 0: set to 0, a vital
+        goes to the most the unit can have instead (in game). `kill` takes a unit's life.
         """
         self._playing()
         given = {_VITALS.Life: life, _VITALS.Energy: energy, _VITALS.Shields: shields}
         values = {vital: value for vital, value in given.items() if value is not None}
+        if not values:
+            raise ValueError("give the life, the energy or the shields to set")
         for value in values.values():
-            if not value > 0:
+            if not 0 < value < math.inf:
                 raise ValueError(
-                    f"a vital is set above 0, not {value!r}: set to 0, the game sets it to its most instead"
+                    f"a vital is set to a finite number above 0, not {value!r}: set to 0, the game sets it to its most"
                 )
         for tag in _tags(units):
             for vital, value in values.items():
@@ -282,7 +285,9 @@ class DebugCommands:
         if game is not self._game:
             self._start(game)
         step = game.step
-        self._drawings = [drawing for drawing in self._drawings if step < drawing.until]
+        self._drawings = [
+            drawing for drawing in self._drawings if step < drawing.until and not drawing.is_at_a_dead_unit()
+        ]
         commands = [
             debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.ValueType(cheat))
             for cheat in sorted(self._toggled)

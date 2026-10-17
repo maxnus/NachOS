@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, query_pb2
 
@@ -28,11 +28,11 @@ class Pathing:
         """Pathing that asks the game `client` plays."""
         self._client = client
 
-    def distance(self, start: PointLike | Unit, end: PointLike) -> float:
+    def distance(self, start: PointLike | Unit[Any], end: PointLike) -> float:
         """The pathing distance from `start` to `end`, as `distances` gives it for one pair."""
         return self.distances([(start, end)])[0]
 
-    def distances(self, pairs: Iterable[tuple[PointLike | Unit, PointLike]]) -> list[float]:
+    def distances(self, pairs: Iterable[tuple[PointLike | Unit[Any], PointLike]]) -> list[float]:
         """The pathing distance from each start to its end, asked of the game in one request.
 
         The game paths over the map as of the turn's observation: a structure in the way is walked around, and a
