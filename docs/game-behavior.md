@@ -73,7 +73,8 @@ Each entry ends with how it was seen:
   (#14).
 - A game against the built-in computer can be left too, though the protocol calls leaving multiplayer only. The client
   is back at `launched` and answers every request that needs a game "Not in a game", so no result is reported. In a game
-  of two, the other player's game has ended by its next step, a victory for it (tool `sweep_requests`, build 75689).
+  of two, the other player's game has ended by its next step, a victory for it; when both players leave in the same
+  step, each is back at `launched`, and neither is told anything (tool `sweep_requests`, build 75689).
 - `DebugEndGame` ends a game at the next step as any ending does: the observation reads `ended` with the results, a
   defeat for a surrender and a victory for a declared victory, the computer taking the other (tool `sweep_requests`,
   build 75689).

@@ -10,6 +10,7 @@ from websocket import WebSocketConnectionClosedException
 
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
@@ -291,6 +292,7 @@ def played(
             ),
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
+            debug=DebugCommands(client, game_map, opponent_id=None, step=step),
             step=step,
         )
         game._read(observation, step)

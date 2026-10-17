@@ -181,7 +181,8 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `client.debug_text_world(text, p)`, `debug_text_screen`, `debug_line_out`, `debug_box2_out`, `debug_sphere_out` | `api.debug.draw_text(text, at=p)`, `draw_text_on_screen`, `draw_line`, `draw_box`, `draw_sphere`, each lasting `steps=` |
+| `client.debug_text_world(text, p)`, `debug_text_screen`, `debug_line_out`, `debug_box2_out`, `debug_sphere_out` | `api.debug.draw_text(text, at=p)`, `draw_text_on_screen`, `draw_line`, `draw_box`, `draw_sphere`, each lasting `steps=` and returning a `Drawing`, beside `draw_polygon` and `draw_marker` |
+| a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
 | `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_steps` |
 | `client.debug_show_map()`, `debug_god()`, `debug_fast_build()` and the other switches | `api.debug.turn_on(Cheat.SHOW_MAP)`, `turn_off`, and `api.debug.cheats` |
 | `client.debug_minerals()`, `debug_all_resources()`, `debug_upgrade()` | `api.debug.give_minerals()`, `give_resources()`, `give_upgrades()` |
@@ -193,11 +194,13 @@ it.
 | `bot.chat_send(text, team_only)` | `api.chat(text, team_only=...)`, sent with the turn's orders |
 | `client.move_camera(p)`, `state.observation_raw.player.camera` | `api.camera.move_to(p)`, `api.camera.center` |
 | `client.leave()` | `api.leave_game()`, at the end of the turn |
-| `client.query_pathing(a, b)`, `query_pathings(pairs)` | `api.pathing.distance(a, b)`, `api.pathing.distances(pairs)` |
+| `client.query_pathing(a, b)`, `query_pathings(pairs)` | `api.pathing.query_distance(a, b)`, `api.pathing.query_distances(pairs)` |
 
 - **A drawing lasts the steps you give it, and goes out only when it changes.** python-sc2 forgets every drawing
-  after a step, so a bot draws it again each step. NachOS keeps it `steps` steps, follows a unit drawn at, and sends
-  the drawing at most every `refresh_steps`, and not at all when it is what the screen already shows.
+  after a step, so a bot draws it again each step. NachOS keeps it `steps` steps, or with `steps=None` until
+  `drawing.remove()`, follows a unit drawn at until it dies, and sends the drawing at most every `refresh_steps`, and
+  not at all when it is what the screen already shows. `api.debug` belongs to the game, so a `GameStartEvent` handler
+  sets `refresh_steps` for every game.
 - **A cheat is turned on or off.** python-sc2's `debug_show_map()` switches the map, so a bot keeps its own flag; NachOS
   keeps `api.debug.cheats` and sends only a change.
 - **A chat message of 1040 bytes or more raises `ValueError`.** It kills the game client (in game); python-sc2 sends
@@ -262,7 +265,7 @@ it.
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
 | `p.rounded`, which floors | `Tile.containing(p)`, the tile the point is on |
 | `p.snap()` | `Tile.containing(p).center` |
-| `await client.query_pathing(a, b)`, asked of the game | `api.pathing.distance(a, b)`, asked of the game; or `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
+| `await client.query_pathing(a, b)`, asked of the game | `api.pathing.query_distance(a, b)`, asked of the game; or `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
 
 - **Equality is exact.** python-sc2 treats points as equal if every coordinate is within 1e-8, and counts a
   missing coordinate as zero, so `Point3((1, 2, 0)) == Point2((1, 2))`. NachOS points compare as the tuples they

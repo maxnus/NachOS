@@ -8,6 +8,8 @@ import operator
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Self, Union, final
 
+import numpy
+
 # Imported for the check in `coordinates`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
 
@@ -250,6 +252,14 @@ class Point(_PointND, tuple[float, float]):
     def _from_proto(cls, data: common_pb2.Point2D | common_pb2.PointI) -> Self:
         """Read a point from the game's 2D point message."""
         return cls((data.x, data.y))
+
+    @classmethod
+    def _as_sent(cls, point: PointLike) -> Self:
+        """`point` on the ground as the protocol carries it: its height dropped, and each coordinate cut to a 32-bit
+        float. Everything the game reports is a 32-bit float already, so only a point sent unrounded would come back as
+        another number."""
+        at = coordinates(point)
+        return cls((float(numpy.float32(at[0])), float(numpy.float32(at[1]))))
 
     def with_height(self, z: float = 0.0) -> Point3D:
         """The point lifted to height `z`."""

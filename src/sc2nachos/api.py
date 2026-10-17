@@ -60,7 +60,6 @@ class Api:
         self._events = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
-        self._debug = DebugCommands(self._current_game)
 
     @property
     def events(self) -> EventBus:
@@ -220,11 +219,8 @@ class Api:
 
     @property
     def debug(self) -> DebugCommands:
-        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders.
-
-        Available before any game, so `refresh_steps` can be set as a module is imported.
-        """
-        return self._debug
+        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders."""
+        return self._current_game().debug
 
     @property
     def camera(self) -> Camera:
@@ -266,7 +262,9 @@ class Api:
 
     def leave_game(self) -> None:
         """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
-        gone out: `play` then returns `Result.DEFEAT`. Asking again in the turn changes nothing.
+        gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
+        nothing to a client that has left, even when both players leave in the same step (in game). Asking again in
+        the turn changes nothing.
 
         Chat sent in the step of the leave never reaches the other player. A message reaches it a step or two after it
         is sent, and it sees the message only if it observes before the game ends, so a goodbye goes at least two steps
@@ -316,7 +314,6 @@ class Api:
             try:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
-                self._debug._send(game)
                 if game.leaving:
                     logger.info("Leaving the game, which concedes it")
                     client.leave_game()

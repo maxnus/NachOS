@@ -9,35 +9,37 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 ## Drawing
 
 ```python
+@api.events.on(GameStartEvent)
+def set_up(event: GameStartEvent) -> None:
+    api.debug.refresh_steps = 4
+    for expansion in api.expansions:
+        api.debug.draw_polygon(expansion.center, 6, sides=8, color=Color.GREEN, steps=None)
+
+
 @api.events.on(TurnEvent)
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.debug.draw_text(f"{marine.health:.0f}", at=marine)
     api.debug.draw_text_on_screen(f"step {event.step}", at=(0.01, 0.01))
-
-
-@api.events.on(GameStartEvent)
-def mark_the_expansions(event: GameStartEvent) -> None:
-    for expansion in api.expansions:
-        api.debug.draw_sphere(expansion.center, 2, color=(0, 255, 0), steps=22_400)
 ```
 
+`api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. Each draw method returns
+the `Drawing`:
+
+- **What.** Text in the world or on the screen, a line, a box over a `Rectangle` from the ground up 1, a sphere, a
+  regular polygon of `sides` around a point, and a `Marker`, a cross or a plus.
 - **Where.** A point of two coordinates is drawn on the ground, and one of three at its own height. A unit is drawn
-  where it stands, and a drawing at a unit follows it while the drawing lasts, at where it was last seen when out of
-  sight, and ends once the unit is dead. Text on the screen is placed from 0 to 1 across and down, whatever the window's
-  size. A box stands over a `Rectangle` from the ground up 1.
-- **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in.
+  where it stands, and a drawing at a unit follows it: a line between two units keeps joining them. Out of sight, the
+  unit is drawn where it was last seen, and the drawing ends once the unit is dead. Text on the screen is placed from 0
+  to 1 across and down, whatever the window's size.
+- **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in. With
+  `steps=None` it lasts until `drawing.remove()`.
 - **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two refreshes of the drawing;
   meanwhile the screen keeps the last one sent. A refresh whose drawing is what the screen already shows sends nothing,
   so a drawing that never changes costs a request at the first refresh after it is made and one at the first after it
-  ends. A cheat or a command goes out at once, with the drawing as it stands. Set it as the bot's module loads:
-
-  ```python
-  api = Api()
-  api.debug.refresh_steps = 4
-  ```
-
-- **Colors** are red, green and blue, each from 0 to 255, and white unless given.
+  ends. A cheat or a command goes out at once, with the drawing as it stands. Each game starts at 1, so a
+  `GameStartEvent` handler sets it for every game.
+- **Colors** are a `Color`, such as `Color.RED`, or any red, green and blue, each from 0 to 255; white unless given.
 
 ## Cheats
 

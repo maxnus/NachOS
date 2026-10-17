@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, query_pb2
 
-from sc2nachos.orders._targets import point_as_sent
+from sc2nachos.geometry import Point
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.units import Unit
 
@@ -28,11 +28,11 @@ class Pathing:
         """Pathing that asks the game `client` plays."""
         self._client = client
 
-    def distance(self, start: PointLike | Unit[Any], end: PointLike) -> float:
-        """The pathing distance from `start` to `end`, as `distances` gives it for one pair."""
-        return self.distances([(start, end)])[0]
+    def query_distance(self, start: PointLike | Unit[Any], end: PointLike) -> float:
+        """The pathing distance from `start` to `end`, as `query_distances` asks the game for it for one pair."""
+        return self.query_distances([(start, end)])[0]
 
-    def distances(self, pairs: Iterable[tuple[PointLike | Unit[Any], PointLike]]) -> list[float]:
+    def query_distances(self, pairs: Iterable[tuple[PointLike | Unit[Any], PointLike]]) -> list[float]:
         """The pathing distance from each start to its end, asked of the game in one request.
 
         The game paths over the map as of the turn's observation: a structure in the way is walked around, and a
@@ -46,7 +46,7 @@ class Pathing:
         requests: list[query_pb2.RequestQueryPathing] = []
         coinciding: list[bool] = []
         for start, end in pairs:
-            end_point = point_as_sent(end)
+            end_point = Point._as_sent(end)
             request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point.x, y=end_point.y))
             if isinstance(start, Unit):
                 if start.is_stale:
@@ -54,7 +54,7 @@ class Pathing:
                 request.unit_tag = start.tag
                 start_point = start.position
             else:
-                start_point = point_as_sent(start)
+                start_point = Point._as_sent(start)
                 request.start_pos.x, request.start_pos.y = start_point.x, start_point.y
             requests.append(request)
             coinciding.append(start_point == end_point)

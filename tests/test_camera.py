@@ -30,7 +30,8 @@ def _moves(camera: Camera) -> list[tuple[float, float]]:
     """Where the turn's actions from `camera` center it."""
     return [
         (action.action_raw.camera_move.center_world_space.x, action.action_raw.camera_move.center_world_space.y)
-        for action in camera._take_moves()
+        for action in [camera._create_move_action()]
+        if action is not None
     ]
 
 

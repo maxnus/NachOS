@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, final
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.geometry import Point
-from sc2nachos.orders._targets import point_as_sent
 
 if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
@@ -32,21 +31,21 @@ class Camera:
     def move_to(self, at: PointLike) -> None:
         """Center the camera on `at`, with the turn's orders. Only the last move of a turn is sent, and its point is
         rounded to the protocol's 32-bit floats."""
-        self._move_to = point_as_sent(at)
+        self._move_to = Point._as_sent(at)
 
     @classmethod
     def _of_player(cls, player: raw_pb2.PlayerRaw) -> Camera:
         """The camera as `player`, an observation's own player, reports it."""
         return cls(Point((player.camera.x, player.camera.y)))
 
-    def _observe(self, player: raw_pb2.PlayerRaw) -> None:
+    def _update(self, player: raw_pb2.PlayerRaw) -> None:
         """Take in where `player`, the turn's observation's own player, has the camera."""
         self._center = Point((player.camera.x, player.camera.y))
 
-    def _take_moves(self) -> list[sc2api_pb2.Action]:
-        """The action that sends the turn's move, if any, which is then forgotten."""
+    def _create_move_action(self) -> sc2api_pb2.Action | None:
+        """The action that sends the turn's move, which is then forgotten, or `None` if the turn moved nothing."""
         if (at := self._move_to) is None:
-            return []
+            return None
         self._move_to = None
         move = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=at.x, y=at.y))
-        return [sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=move))]
+        return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=move))

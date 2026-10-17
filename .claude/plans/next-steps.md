@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #126. `uv run pytest` passes 2137 tests on branch `claude/debug-and-chat`, slice 6;
+- nachOS `main` has every PR to #126. `uv run pytest` passes 2145 tests on branch `claude/debug-and-chat`, slice 6;
   `uv run pytest -m integration` passes 31 against a real game (run 2026-10-17).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
@@ -96,18 +96,28 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A liberator's siege is `LIBERATOR_SIEGE_AT`, the game's defender mode at a point, out of the custom `SIEGE`:
     abilities that behave differently are not one id. `UNSIEGE` stays one for all four. `RECALL` is refused for any
     group, since two motherships never stand.
-- **Debug, chat, the camera, pathing distances and leaving** (slice 6, the owner, 2026-10-16, one question at a time):
-  - `api.debug` is one `DebugCommands` for the api's life. A drawing lasts `steps=`, chosen over one turn and over until
-    cleared; `refresh_steps` sends it at most that often, and only when it changed. Everything goes out after the turn's
-    `RequestAction`, in one `RequestDebug`.
+- **Debug, chat, the camera, pathing distances and leaving** (slice 6, the owner, 2026-10-16 and the reviews of #127,
+  one question at a time):
+  - `api.debug` is one `DebugCommands` per game, on `_Game` like `Camera` (the owner, review of #127, over one for the
+    api's life). `refresh_steps` is set in a game, a `GameStartEvent` handler setting it for every game; there are no
+    configurable default steps or text size, so that `None` has one meaning.
+  - A drawing lasts `steps=`, 1 by default, chosen over one turn and over until cleared; `steps=None` lasts until the
+    `Drawing` every draw method returns is `remove()`d (review of #127). `refresh_steps` sends it at most that often,
+    and only when it changed. A drawing at a unit follows it, and ends once the unit is dead (the second review).
+    Everything goes out after the turn's `RequestAction`, in one `RequestDebug`, and a request the game refuses raises
+    out of `play` (the code review, over catching it).
+  - Shapes are subclasses of `Drawing`, each building its own proto. Beside text, lines, boxes and spheres:
+    `draw_polygon(center, radius, sides=)` and `draw_marker(at, Marker.CROSS | Marker.PLUS, radius=)`, over a method for
+    each mark. Colors are a `Color` enum, or any red, green and blue.
   - Cheats are on and off, tracked (`cheats`, `turn_on`, `turn_off`), over a raw toggle. The givers are `give_minerals`,
     `give_resources` and `give_upgrades`; `gas`, which gives nothing, is left out.
   - `api.chat(text, team_only=False)` is on the api itself, over `api.orders.chat`, and goes in the turn's
     `RequestAction`. A text of 1040 bytes or more raises `ValueError`, since it kills the game client.
   - `api.leave_game()` leaves at the end of the turn, always at once, over waiting for the turn's chat to arrive: a
-    goodbye goes two steps before.
-  - `sc2nachos.pathing.Pathing`, as `api.pathing.distance` and `distances`, is a package of its own, which an up-to-date
-    pathing grid may join.
+    goodbye goes two steps before. `play` returns `Result.DEFEAT`, since the game tells a client that left nothing
+    (review of #127, over `UNDECIDED`).
+  - `sc2nachos.pathing.Pathing`, as `api.pathing.query_distance` and `query_distances`, named for asking the game
+    (review of #127), is a package of its own, which an up-to-date pathing grid and NachOS's own pathfinding may join.
   - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
     `Unit.is_selected` is read, both for a bot's debug tools.
 - **The derived reads** (#121, the owner, 2026-10-07):

@@ -12,6 +12,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
@@ -87,10 +88,9 @@ class _Game:
     placement: Final[PlacementGrids]
     pathing: Final[Pathing]
     camera: Final[Camera]
+    debug: Final[DebugCommands]
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
-    # The one other player's id, if the game has exactly one.
-    opponent_id: int | None = None
     # The turn's chat, in the order given, as the actions that send it.
     chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
@@ -133,8 +133,8 @@ class _Game:
             ),
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
+            debug=DebugCommands(client, game_map, opponent_id=_the_other_player(info, client.player_id), step=step),
             step=step,
-            opponent_id=_the_other_player(info, client.player_id),
         )
         game._read(observation, step)
         return game
@@ -156,7 +156,8 @@ class _Game:
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
         self.placement._update(self.tracker.unit_tracker.present, self.state, step)
-        self.camera._observe(observation.observation.raw_data.player)
+        self.camera._update(observation.observation.raw_data.player)
+        self.debug._update(step)
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
@@ -319,9 +320,12 @@ class _Game:
         self.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
     def send_turn(self) -> None:
-        """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request."""
+        """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request,
+        and after it the debug commands and drawing."""
         chat, self.chat_to_send = self.chat_to_send, []
-        self.orders._send(self.client, then=[*self.camera._take_moves(), *chat])
+        move = self.camera._create_move_action()
+        self.orders._send(self.client, then=[*([] if move is None else [move]), *chat])
+        self.debug._send()
 
     def outcome(self) -> Result | None:
         """How the game ended as of the last observation, or `None` while it goes on. Ending it settles the result."""

@@ -20,7 +20,8 @@ Needs StarCraft II installed. Each sweep plays its own games on the sandbox's ma
   - in games of two players, has one player send chat and leave in the same step, or 8 steps later with the other
     observing every step or not at all, and reads what the other received, and when.
 - `leave` plays three games against the computer: one it leaves, one it surrenders and one it wins, the last two
-  through `DebugEndGame`. It records what the game answers and the client's status after each.
+  through `DebugEndGame`. In a game of two, both players leave in the same step. It records what the game answers and
+  the client's status after each.
 - `pathing` asks the game for pathing distances:
   - between points the same, 0.1, 0.5, 1 and 2 apart;
   - to a tile no path reaches;
@@ -404,9 +405,22 @@ def _end(installation: Installation, how: str) -> dict[str, Any]:
         return {"how": how, "player": sandbox.player, "answer": answer, "after": after}
 
 
+def _both_leave(installation: Installation) -> dict[str, Any]:
+    """Both players of a game of two leave in the same step: what each is answered, and observes after."""
+    leaving = sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame())
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        rivals.step(_SETTLE)
+        sides = {"created": rivals.me, "joined": rivals.enemy}
+        answers = {name: _response(side.transport.request, leaving) for name, side in sides.items()}
+        after = {name: _observe(side.transport.request) for name, side in sides.items()}
+    return {"how": "both leave", "answer": answers, "after": [after]}
+
+
 def leave(installation: Installation) -> list[dict[str, Any]]:
-    """Leave a game against the computer, surrender one and win one, and what the game answers after each."""
+    """Leave a game against the computer, surrender one and win one, both leave a game of two in the same step, and
+    what the game answers after each."""
     findings = [_end(installation, how) for how in ("leave", "Surrender", "DeclareVictory")]
+    findings.append(_both_leave(installation))
     for finding in findings:
         logger.info("{}: {}", finding["how"], finding)
     return findings

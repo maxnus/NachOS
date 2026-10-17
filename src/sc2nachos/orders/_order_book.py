@@ -17,6 +17,7 @@ from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_t
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
 from sc2nachos.units import OwnUnit, Unit
+from sc2nachos.units._units import _unit_tuple
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
@@ -142,7 +143,7 @@ class OrderBook:
         sent as for, and for an ability given to several units that not every unit of a command is known to carry
         out (`AbilityData.multi_unit`).
         """
-        given = (units,) if isinstance(units, Unit) else tuple(units)
+        given = _unit_tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)

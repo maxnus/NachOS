@@ -9,9 +9,8 @@ import pytest
 from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NotPlayingError
-from sc2nachos.debug import Cheat
-from sc2nachos.debug._drawing import _Drawing
-from sc2nachos.events import TurnEvent
+from sc2nachos.debug import Cheat, Color, Drawing, Marker, _debug_commands
+from sc2nachos.events import GameStartEvent, TurnEvent
 from sc2nachos.geometry import Point, Rectangle
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import MapFile, MapNotFoundError
@@ -70,27 +69,33 @@ class _ScriptedGame:
 
 def _play(
     api: Api,
-    turn: Callable[[int], None],
+    turn: Callable[[int], object],
     *,
     turns: int,
+    refresh_steps: int = 1,
     units: Callable[[int], Sequence[raw_pb2.Unit]] = lambda _: (),
     dead: Callable[[int], Sequence[int]] = lambda _: (),
     players: int = 2,
     observers: int = 0,
 ) -> dict[int, list[debug_pb2.DebugCommand]]:
     """Play `turns` turns of one step with `api`, calling `turn` with each turn's step, each step's observation
-    reporting `units` and the tags `dead`, and return the debug commands sent, by the step of the turn that sent
-    them."""
+    reporting `units` and the tags `dead`, with the drawing refreshed every `refresh_steps`, and return the debug
+    commands sent, by the step of the turn that sent them."""
     observations = [make_observation(step, units=units(step), dead=dead(step)) for step in range(turns + 1)]
     game = _ScriptedGame(observations, players=players, observers=observers)
     client = Client(game)
     client.join_game(Race.TERRAN)
+
+    @api.events.on(GameStartEvent)
+    def on_start(event: GameStartEvent) -> None:
+        api.debug.refresh_steps = refresh_steps
 
     @api.events.on(TurnEvent)
     def on_turn(event: TurnEvent) -> None:
         turn(event.step)
 
     api.play(client)
+    api.events.unsubscribe(on_start)
     api.events.unsubscribe(on_turn)
     # A turn's debug request follows its observation, the steps counting from 0.
     sent: dict[int, list[debug_pb2.DebugCommand]] = {}
@@ -156,8 +161,8 @@ class TestDrawing:
 
     def test_with_a_refresh_every_four_steps_a_drawing_that_changes_every_turn_goes_out_every_fourth_step(self) -> None:
         api = Api()
-        api.debug.refresh_steps = 4
-        sent = _play(api, lambda step: api.debug.draw_text_on_screen(f"step {step}", at=(0.1, 0.1)), turns=9)
+        draw = lambda step: api.debug.draw_text_on_screen(f"step {step}", at=(0.1, 0.1))  # noqa: E731
+        sent = _play(api, draw, turns=9, refresh_steps=4)
         assert {step: _texts(commands) for step, commands in sent.items()} == {
             0: ["step 0"],
             4: ["step 4"],
@@ -166,14 +171,13 @@ class TestDrawing:
 
     def test_a_cheat_between_refreshes_goes_out_at_once_with_the_drawing_as_it_stands(self) -> None:
         api = Api()
-        api.debug.refresh_steps = 4
 
         def turn(step: int) -> None:
             api.debug.draw_text(f"step {step}", at=(1.0, 1.0))
             if step == 2:
                 api.debug.turn_on(Cheat.GOD)
 
-        sent = _play(api, turn, turns=7)
+        sent = _play(api, turn, turns=7, refresh_steps=4)
 
         # The cheat's request is a refresh too, so the next comes 4 steps after it.
         assert list(sent) == [0, 2, 6]
@@ -182,28 +186,26 @@ class TestDrawing:
 
     def test_an_unchanged_drawing_is_looked_at_once_a_refresh(self, monkeypatch: pytest.MonkeyPatch) -> None:
         looked_at: list[int] = []
-        spec = _Drawing.spec
+        draw = _debug_commands._draw
 
-        def counted(drawing: _Drawing) -> Any:
-            looked_at.append(drawing.until)
-            return spec(drawing)
+        def counted(drawings: Sequence[Drawing]) -> debug_pb2.DebugDraw:
+            looked_at.append(len(drawings))
+            return draw(drawings)
 
-        monkeypatch.setattr(_Drawing, "spec", counted)
+        monkeypatch.setattr(_debug_commands, "_draw", counted)
         api = Api()
-        api.debug.refresh_steps = 4
 
         def turn(step: int) -> None:
             if step == 0:
                 api.debug.draw_text("fixed", at=(1.0, 1.0), steps=100)
 
-        sent = _play(api, turn, turns=9)
+        sent = _play(api, turn, turns=9, refresh_steps=4)
 
         assert list(sent) == [0]
         assert len(looked_at) == 3
 
     def test_a_command_with_nothing_drawn_leaves_the_refreshes_to_their_clock(self) -> None:
         api = Api()
-        api.debug.refresh_steps = 4
 
         def turn(step: int) -> None:
             if step == 1:
@@ -211,7 +213,7 @@ class TestDrawing:
             if step == 2:
                 api.debug.draw_text("late", at=(1.0, 1.0), steps=10)
 
-        sent = _play(api, turn, turns=6)
+        sent = _play(api, turn, turns=6, refresh_steps=4)
 
         assert list(sent) == [1, 4]
         assert sent[1] == [debug_pb2.DebugCommand(game_state=debug_pb2.minerals)]
@@ -292,6 +294,8 @@ class TestDrawing:
             lambda api: api.debug.draw_text_on_screen("x", at=(1.5, 0.5)),
             lambda api: api.debug.draw_text_on_screen("x", at=(0.1, 0.1, 0.0)),  # pyright: ignore[reportArgumentType]
             lambda api: api.debug.draw_sphere((1.0, 1.0), 0),
+            lambda api: api.debug.draw_polygon((1.0, 1.0), 1, sides=2),
+            lambda api: api.debug.draw_marker((1.0, 1.0), Marker.CROSS, radius=math.inf),
         ],
         ids=[
             "color over 255",
@@ -301,6 +305,8 @@ class TestDrawing:
             "off the screen",
             "three coordinates on the screen",
             "no radius",
+            "two sides",
+            "an infinite marker",
         ],
     )
     def test_a_drawing_given_what_cannot_be_drawn_raises(self, draw: Callable[[Api], None]) -> None:
@@ -315,12 +321,90 @@ class TestDrawing:
         assert _play(api, turn, turns=1) == {}
         assert raised == [True]
 
-    def test_the_refresh_steps_are_set_before_any_game_and_must_be_at_least_one(self) -> None:
+    def test_the_refresh_steps_are_set_in_a_game_and_must_be_at_least_one(self) -> None:
         api = Api()
-        api.debug.refresh_steps = 4
-        assert api.debug.refresh_steps == 4
-        with pytest.raises(ValueError):
-            api.debug.refresh_steps = 0
+        seen: list[int] = []
+
+        def turn(step: int) -> None:
+            seen.append(api.debug.refresh_steps)
+            with pytest.raises(ValueError):
+                api.debug.refresh_steps = 0
+
+        _play(api, turn, turns=1, refresh_steps=4)
+
+        assert seen == [4]
+
+    def test_each_game_starts_refreshing_every_step(self) -> None:
+        api = Api()
+        _play(api, lambda step: None, turns=1, refresh_steps=4)
+        seen: list[int] = []
+        _play(api, lambda step: seen.append(api.debug.refresh_steps), turns=1)
+        assert seen == [1]
+
+    def test_a_drawing_lasts_until_it_is_removed(self) -> None:
+        api = Api()
+        drawings: list[Drawing] = []
+
+        def turn(step: int) -> None:
+            if step == 0:
+                drawings.append(api.debug.draw_line((1.0, 1.0), (2.0, 2.0), steps=None))
+            if step == 5:
+                drawings[0].remove()
+                drawings[0].remove()
+
+        sent = _play(api, turn, turns=8)
+
+        assert list(sent) == [0, 5]
+        assert sent[5] == [debug_pb2.DebugCommand(draw=debug_pb2.DebugDraw())]
+
+    def test_a_drawing_is_drawn_in_a_standard_color_or_any_other(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            api.debug.draw_text("red", at=(1.0, 1.0), color=Color.RED)
+            api.debug.draw_text("teal", at=(1.0, 1.0), color=(0, 128, 128))
+
+        sent = _play(api, turn, turns=1)
+
+        colors = [(text.color.r, text.color.g, text.color.b) for text in sent[0][0].draw.text]
+        assert colors == [(255, 0, 0), (0, 128, 128)]
+
+    def test_a_polygon_is_its_sides_around_its_center_the_first_corner_due_east(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw_polygon((4.0, 4.0), 2, sides=4)
+
+        sent = _play(api, turn, turns=1)
+
+        lines = [(line.line.p0, line.line.p1) for line in sent[0][0].draw.lines]
+        ends = [((round(a.x, 6), round(a.y, 6)), (round(b.x, 6), round(b.y, 6))) for a, b in lines]
+        assert ends == [((6, 4), (4, 6)), ((4, 6), (2, 4)), ((2, 4), (4, 2)), ((4, 2), (6, 4))]
+        assert {point.z for pair in lines for point in pair} == {_GROUND}
+
+    @pytest.mark.parametrize(
+        ("shape", "ends"),
+        [
+            (Marker.PLUS, [((3, 4), (5, 4)), ((4, 3), (4, 5))]),
+            (
+                Marker.CROSS,
+                [((3.292893, 3.292893), (4.707107, 4.707107)), ((3.292893, 4.707107), (4.707107, 3.292893))],
+            ),
+        ],
+        ids=["plus", "cross"],
+    )
+    def test_a_marker_is_two_arms_reaching_its_radius(self, shape: Marker, ends: list[Any]) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw_marker((4.0, 4.0), shape, radius=1)
+
+        sent = _play(api, turn, turns=1)
+
+        lines = [(line.line.p0, line.line.p1) for line in sent[0][0].draw.lines]
+        assert [((round(a.x, 6), round(a.y, 6)), (round(b.x, 6), round(b.y, 6))) for a, b in lines] == ends
 
 
 class TestCheats:
@@ -380,7 +464,7 @@ class TestCheats:
         states = [debug_pb2.minerals, debug_pb2.all_resources, debug_pb2.upgrade]
         assert sent == {step: [debug_pb2.DebugCommand(game_state=state) for state in states] for step in (0, 1)}
 
-    def test_before_any_game_a_cheat_raises(self) -> None:
+    def test_before_any_game_debug_raises(self) -> None:
         with pytest.raises(NotPlayingError):
             Api().debug.turn_on(Cheat.GOD)
 
