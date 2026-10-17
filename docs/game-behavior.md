@@ -35,8 +35,9 @@ Each entry ends with how it was seen:
 - A game that dies resets the socket, which shows up as a bare connection error (#16).
 - `ResponseGameInfo` is about 77 KB, and byte-identical at loops 0, 256, 1024 and 3008. An observation is about
   80 KB and barely changes from one step to the next (#10, #11).
-- A debug request gets no answer. Debug commands work only in a game the client created, and a drawing lasts until
-  the next debug request (#22).
+- The game answers a debug request with an empty `debug`. In a game of two clients on one machine, the client that
+  joined the game made a marine, took the `minerals` cheat and drew, as the one that created it did, and was refused
+  none of the three (tool `sweep_requests`, build 75689). A drawing lasts until the next debug request (#22).
 - Each connection needs two ports, and every participant must send the same port sets in the same order, or the
   join fails. From a ladder start port N, N is unused, the server gets N+2 and N+3 and the client N+4 and N+5. A
   python-sc2 bot given the same start port joined NachOS's game and played in lockstep (#14).
@@ -70,6 +71,12 @@ Each entry ends with how it was seen:
 - A bot ends a game early only by leaving it, which concedes it. The ladder starts the client, creates the game and
   passes host, port and start port on the command line; a game against the built-in computer has no start port
   (#14).
+- A game against the built-in computer can be left too, though the protocol calls leaving multiplayer only. The client
+  is back at `launched` and answers every request that needs a game "Not in a game", so no result is reported. In a game
+  of two, the other player's game has ended by its next step, a victory for it (tool `sweep_requests`, build 75689).
+- `DebugEndGame` ends a game at the next step as any ending does: the observation reads `ended` with the results, a
+  defeat for a surrender and a victory for a declared victory, the computer taking the other (tool `sweep_requests`,
+  build 75689).
 
 ## Time and steps
 
@@ -88,7 +95,8 @@ Each entry ends with how it was seen:
 [cheats.md](cheats.md) holds the rest.
 
 - Every debug cheat is a toggle for the whole game: sent twice, it is off, and in a game of two only one player
-  sends it (#28, #37).
+  sends it (#28, #37). `minerals`, `all_resources` and `upgrade` are the exceptions, handing something out each time
+  they are sent, and `gas` gives nothing: see [cheats.md](cheats.md) (tool `sweep_requests`, build 75689).
 - The cheats take a few steps to take effect; the in-game tests wait 8 (tested).
 - `free` makes everything cost nothing, a spell's energy included. `all_resources` only hands out resources, which
   run dry after a few hundred add-on rebuilds. `fast_build` makes building, training and research take seconds,
@@ -738,8 +746,20 @@ Each entry ends with how it was seen:
 
 ## Chat and actions
 
-- This player's own chat message comes back once, in the next observation, under its own player id; every player's
-  chat is delivered (#28; tested).
+- This player's own chat message comes back once, in the next observation, under its own player id; every player's chat
+  is delivered (#28; tested). So does a message to the team alone, in a game against the computer (tool
+  `sweep_requests`, build 75689).
+- The game answers each chat action `Success`, one result each, after those of the unit commands and the camera
+  move of the same request (tool `sweep_requests`, build 75689).
+- A chat message of 1040 bytes or more, counted in UTF-8, kills the game client within two steps: the connection
+  drops. One of 1039 bytes comes back whole, of plain letters, of `é` or of `日` (tool `sweep_requests`, build 75689).
+- Chat that comes too fast is dropped without a word once some 500 bytes have gone out in a row. Sent a step apart, ten
+  messages of 20 or 50 bytes all came back, of 100 bytes the first five and of 255 bytes the first two. The game counts
+  by the clock, not in steps: after 5 seconds every message came back again, while 672 steps stepped in a moment brought
+  no message back. Twelve short messages in one request all came back (tool `sweep_requests`, build 75689).
+- In a game of two, chat reaches the other player one or two steps after it is sent, each in 6 games of 12. Sent in the
+  step a player leaves, it never arrives, and an observation made once the game has ended carries no chat, so the other
+  player sees a message only if it observes after it arrives and before the end (tool `sweep_requests`, build 75689).
 - An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `MOVE`, a
   research ordered by its general id as its level (1186) (#28; tested).
 - The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
@@ -828,6 +848,20 @@ Each entry ends with how it was seen:
   onto unbuildable ground was never made (#25, #32).
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
+- The pathing query (`RequestQueryPathing`) answers the distance a ground unit walks over the map as it stood at the
+  last observation asked for: a change of structures shows only once an observation has been asked for since. A ring of
+  eight supply depots made by debug command shut the ground inside off by the first observation after, and lowered
+  opened it 20 steps after the order, observed every 2 steps; with no observation asked for, neither change showed in 48
+  steps, and the next observation brought it at once, in two games each (tool `sweep_requests`, build 75689).
+- It answers 0 when there is no path, for an end inside a structure, the computer's townhall included, for an unknown
+  tag, and from a point to itself; points 0.1 apart read 0.0999. It paths out of the townhall its start lies in, 7.0 to
+  a point 8 away, but never into a structure (tool `sweep_requests`, build 75689).
+- From a unit's tag it answers for that unit: from atop a cliff on PylonAIE_v4, 63.7 for a marine, by the ramp, 3.3
+  for a reaper, which jumps the cliff, 58.0 for a colossus, and the straight line for a medivac. From the marine's
+  position the answer was 61.7 (tool `sweep_requests`, build 75689).
+- Over 100 random pairs of tiles on PylonAIE_v4, its distance was 0.89 to 1.12 times `Grid.path_distance_from`'s,
+  0.95 at the median. The two pairs it answered 0 for, where the grid has a path, ended inside the computer's
+  structures, which the start's grid leaves open (tool `sweep_requests`, build 75689).
 - PylonAIE_v4 has two rich geysers, each the one geyser of a base, and neither in sight from a start (corpus).
 - UltraloveAIE_v2 has neutral critters, `CleaningBot` and `LabBot`, which `show_map` brings into sight (tool
   `sweep_townhall_placement`): two of each, ground units of radius 0.375 and 10 health that wander. The placement query
@@ -861,6 +895,10 @@ Each entry ends with how it was seen:
 
 ## Not understood yet
 
+- **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it answered
+  22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots, with the
+  point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup, build
+  75689).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).

@@ -7,7 +7,9 @@ from loguru import logger
 
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
+from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
 from sc2nachos.gamedata import GameData, Resources
@@ -16,11 +18,15 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
+
+# The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
+_MOST_CHAT_BYTES = 1039
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -54,6 +60,7 @@ class Api:
         self._events = EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
+        self._debug = DebugCommands(self._current_game)
 
     @property
     def events(self) -> EventBus:
@@ -212,6 +219,24 @@ class Api:
         return self._current_game().placement
 
     @property
+    def debug(self) -> DebugCommands:
+        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders.
+
+        Available before any game, so `refresh_steps` can be set as a module is imported.
+        """
+        return self._debug
+
+    @property
+    def camera(self) -> Camera:
+        """This player's camera: where it is centered, and moving it."""
+        return self._current_game().camera
+
+    @property
+    def pathing(self) -> Pathing:
+        """How units get around the map as it stands now, as the game answers."""
+        return self._current_game().pathing
+
+    @property
     def creep(self) -> Grid[bool]:
         """Where creep covers the ground, over the playable area."""
         return self._current_game().state.creep
@@ -220,6 +245,34 @@ class Api:
     def effects(self) -> tuple[Effect, ...]:
         """Every effect this player can see. Raises `UncuratedIdError` if one is an effect the curated ids leave out."""
         return self._current_game().state.effects
+
+    def chat(self, text: str, *, team_only: bool = False) -> None:
+        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's orders: after
+        them and the camera's move, each message of the turn in the order given. The game drops chat that comes too
+        fast without a word, once some 500 bytes have gone out in a row, counting by the clock rather than in steps
+        (in game).
+
+        Raises `ValueError` for an empty text, and for one of 1040 bytes or more in UTF-8, which kills the game client
+        (in game).
+        """
+        game = self._current_game()
+        if not text:
+            raise ValueError("a chat message cannot be empty")
+        if (size := len(text.encode())) > _MOST_CHAT_BYTES:
+            raise ValueError(
+                f"a chat message of {_MOST_CHAT_BYTES + 1} bytes or more kills the game client, and this one is {size}"
+            )
+        game.queue_chat(text, team_only=team_only)
+
+    def leave_game(self) -> None:
+        """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
+        gone out: `play` then returns `Result.DEFEAT`. Asking again in the turn changes nothing.
+
+        Chat sent in the step of the leave never reaches the other player. A message reaches it a step or two after it
+        is sent, and it sees the message only if it observes before the game ends, so a goodbye goes at least two steps
+        before the turn that leaves (in game). Leaving is accepted against the built-in computer too (in game).
+        """
+        self._current_game().leaving = True
 
     def play(
         self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
@@ -261,8 +314,13 @@ class Api:
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
             try:
-                # The turn's handlers have all returned, so their orders go out now as one request.
-                game.orders._send(client)
+                # The turn's handlers have all returned, so what they asked for goes out now.
+                game.send_turn()
+                self._debug._send(game)
+                if game.leaving:
+                    logger.info("Leaving the game, which concedes it")
+                    client.leave_game()
+                    return game.finish(Result.DEFEAT)
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:

@@ -37,8 +37,13 @@ def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
     """
     if target is None or isinstance(target, Unit):
         return target
-    point = coordinates(target)
-    return Point((as_sent(point[0]), as_sent(point[1])))
+    return point_as_sent(target)
+
+
+def point_as_sent(point: PointLike) -> Point:
+    """`point` on the ground as the protocol carries it: its height dropped, and each coordinate a 32-bit float."""
+    at = coordinates(point)
+    return Point((as_sent(at[0]), as_sent(at[1])))
 
 
 def as_sent(coordinate: float) -> float:
