@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #126. `uv run pytest` passes 2158 tests on branch `claude/debug-and-chat`, slice 6;
-  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-17).
+- nachOS `main` has every PR to #126. `uv run pytest` passes 2163 tests on branch `claude/debug-and-chat`, slice 6;
+  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
   slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot
