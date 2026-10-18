@@ -203,6 +203,11 @@ when each starts.
 6. **Debug and chat**: done on branch `claude/debug-and-chat`.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
 
+Next, once slice 6 (#127) has merged, in a pull request of its own (the owner, 2026-10-18):
+
+- `EventBus.on` returns the private `_EventDecorator`, which shows in a bot's type hints: what it returns becomes
+  public, or is typed so that no private name reaches the bot.
+
 Waiting until something needs them:
 
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
