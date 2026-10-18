@@ -86,7 +86,7 @@ and runs its trials in turn::
 
 The findings are written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
 the orders of the units the trial read and when, what the game reported it carried out, every action error, and what
-the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in game while writing this:
+the trial measured. `docs/reference/game-behavior/` holds the conclusions. Measured in game while writing this:
 
 - A unit made out of sight is not found made, so a unit of this player's is made first where it would stand.
 - A vital set to 0 by debug command is set to its maximum instead, so a unit is drained to 1 energy.
@@ -4450,7 +4450,7 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
     """Whether one command naming several structures is carried out by each or by one.
 
     A group move sends every unit; a spell, a structure and a morph are carried out by one of the group
-    (docs/game-behavior.md). A train, a research and an add-on had not been tried.
+    (docs/reference/game-behavior/abilities-and-orders.md). A train, a research and an add-on had not been tried.
     """
     trials: list[Trial] = []
 

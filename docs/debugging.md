@@ -61,7 +61,8 @@ api.debug.give_resources()
 
 A cheat is on for the whole game. `api.debug.cheats` is what this player has turned on, and turning one on that is on
 already, or off that is off, sends nothing. In a game of two the other player can switch a cheat too, which this does
-not see. [cheats.md](cheats.md) says what several do to what the game reports; read it before a test turns one on.
+not see. [cheats.md](reference/game-behavior/cheats.md) says what several do to what the game reports; read it before
+a test turns one on.
 
 Three hand something out each time they are called: `give_minerals()` 5000 minerals, `give_resources()` 5000 minerals
 and 5000 vespene, and `give_upgrades()` the next level of every upgrade of every race (in game).
@@ -78,7 +79,7 @@ api.debug.declare_victory()
 
 - **`create_units`** makes units for this player, the one player it plays against, or the map, whose units read owner
   16. The game can make them a few steps late, beside the point, or not at all: no structure on ground it cannot stand
-  on, and a larva or a creep tumor only on creep ([game behavior](game-behavior.md#cheats-and-debug-commands)).
+  on, and a larva or a creep tumor only on creep ([game behavior](reference/game-behavior/cheats.md)).
 - **`set_vitals`** sets life, energy or shields, and raises `ValueError` for 0, which the game sets to the most a unit
   can have instead. `kill` takes a unit's life.
 - **`declare_victory()` and `surrender()`** end the game by the next step, its result reported as any ending's.

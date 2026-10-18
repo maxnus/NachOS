@@ -7,11 +7,11 @@
 [AvocaDOS](https://github.com/maxnus/AvocaDOS), and is meant to be published for other bot authors.
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
-`docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/curating-ids.md` says how to decide which game ids are real
-and how to refresh them after a patch, `docs/game-behavior.md` what the game has been seen to do, `docs/events.md` every
-event a game hands out, `docs/orders.md` how a bot orders its units, `docs/debugging.md` how it draws, cheats and
-creates units, and `docs/github-actions.md` how a bot repository runs games with the `match.yml` workflow and the
-`setup-sc2` action.
+`docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/maintaining/curating-ids.md` says how to decide which game
+ids are real and how to refresh them after a patch, `docs/reference/game-behavior/` what the game has been seen to do,
+`docs/events.md` every event a game hands out, `docs/orders.md` how a bot orders its units, `docs/debugging.md` how it
+draws, cheats and creates units, and `docs/github-actions.md` how a bot repository runs games with the `match.yml`
+workflow and the `setup-sc2` action.
 
 ## Keep this file small
 
@@ -94,13 +94,14 @@ Carried over from AvocaDOS, so the two codebases read alike:
   layer keeps Blizzard's `game_loop`, since the messages it hands back carry that field, and `Api.play` is the one
   place the two meet. Never write "frame" for either.
 - **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
-  piece of code goes beside that code, in its docstring or a comment. What the game was seen to do goes in
-  `docs/game-behavior.md`, with how it was seen; the code states only the part it relies on, tagged `(in game)` or
-  `(corpus)`. The steps for one kind of task go in `docs/`, and measurements in the commit message or PR.
+  piece of code goes beside that code, in its docstring or a comment. What the game was seen to do goes in its
+  topic's page under `docs/reference/game-behavior/`, with how it was seen; the code states only the part it relies
+  on, tagged `(in game)` or `(corpus)`. The steps for one kind of task go in `docs/`, and measurements in the commit
+  message or PR.
 
 ## Review checklist
 
-`docs/code-review.md` lists what reviews keep finding, each item from a real bug. Read it before writing or
+`docs/maintaining/code-review.md` lists what reviews keep finding, each item from a real bug. Read it before writing or
 reviewing code.
 
 ## Talking to the game
@@ -115,7 +116,7 @@ reviewing code.
   entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
   unit reports its own upgrade levels, visible enemies' included.
 - **Debug cheats change more than their names say**: `god` changes the weapons in `ResponseData`, among other
-  things. Read `docs/cheats.md` before turning one on.
+  things. Read `docs/reference/game-behavior/cheats.md` before turning one on.
 - **`race_actual` in `ResponseGameInfo` is filled only for your own player.**
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
@@ -147,7 +148,7 @@ buildings.
 | Run the tests that start a game | `uv run pytest -m integration` |
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
-| Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/curating-ids.md` says |
+| Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/maintaining/curating-ids.md` says |
 | Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` |
 | Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |

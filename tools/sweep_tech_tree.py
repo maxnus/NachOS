@@ -1,7 +1,7 @@
 """Find what each unit type is offered, what each ability requires, and which abilities use up the unit ordered.
 
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `free`, `fast_build`, `food`
-and `god` cheats, never `tech_tree`, which waives every requirement (`docs/curating-ids.md`)::
+and `god` cheats, never `tech_tree`, which waives every requirement (`docs/maintaining/curating-ids.md`)::
 
     uv run python tools/sweep_tech_tree.py
     uv run python tools/sweep_tech_tree.py zerg --out tech-zerg.json

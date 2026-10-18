@@ -14,10 +14,10 @@ constantly. Answer it from these.
   vehicle and ship plating, and nothing else -- vehicle plating and ship plating are dead halves of a 2012 merge.
 - **Ask without the `tech_tree` cheat on, and research the real prerequisites first.** The cheat waives every
   requirement, so what it offers is not the command card a player has. Under it a hydralisk den is offered
-  `ResearchFrenzy`, which looks like a campaign leftover but is not: 5.0.14 reused the campaign's ids for
-  Nanomuscular Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under
-  `fast_build` a debug-created structure researches in seconds; that is how `tools/sweep_buffs.py` researches
-  everything a race has. `docs/cheats.md` lists what else the cheats and debug-created units get wrong.
+  `ResearchFrenzy`, which looks like a campaign leftover but is not: 5.0.14 reused the campaign's ids for Nanomuscular
+  Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under `fast_build` a
+  debug-created structure researches in seconds; that is how `tools/sweep_buffs.py` researches everything a race has.
+  `docs/reference/game-behavior/cheats.md` lists what else the cheats and debug-created units get wrong.
 - **A price is not evidence.** Dead upgrades keep theirs: vehicle plating still answers ability 852 at 100/100
   after fourteen years. Only an entry with no ability, no cost and no research time (Enhanced Shockwaves) can be
   caught from `RequestData` alone.
@@ -206,8 +206,8 @@ Every run checks its findings two ways, and the generator refuses to write while
 researched, each row has to equal the first row plus every change found; and after each upgrade, every unit's type
 armor plus the armor it reports from upgrades has to equal its row's armor.
 
-The `god` cheat multiplies every weapon's damage in the rows (`docs/cheats.md`), so this sweep never turns it on,
-and reads the baseline rows before any cheat.
+The `god` cheat multiplies every weapon's damage in the rows (`docs/reference/game-behavior/cheats.md`), so this sweep
+never turns it on, and reads the baseline rows before any cheat.
 
 ## Refreshing `data/footprints.json`
 

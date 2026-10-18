@@ -569,7 +569,8 @@ class Unit[K: UnitType.AnyType]:
     def shield_armor(self) -> float:
         """The armor of the unit's shields: the shield upgrade levels its owner has, and 0 for a unit without shields.
 
-        The game's tables do not hold this. `docs/curating-ids.md` has what a level was measured to take off a hit.
+        The game's tables do not hold this. `docs/reference/game-behavior/damage-and-buffs.md` has what a level was
+        measured to take off a hit.
         """
         return self._tracker.upgrade_tracker.shield_armor_of(self)
 

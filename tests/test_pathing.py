@@ -111,7 +111,8 @@ def test_in_a_real_game_a_ring_of_raised_depots_shuts_a_point_off_and_lowered_le
         assert len(depots) == len(sites)
         assert pathing.query_distance(outside, hole) == math.inf
 
-        # The path opens some 20 steps after the order, though the depots read lowered at once (docs/game-behavior.md).
+        # The path opens some 20 steps after the order, though the depots read lowered at once
+        # (docs/reference/game-behavior/map.md).
         for depot in depots:
             game.order(RawAbilityId.Morph_SupplyDepot_Lower, depot)
         distance = pathing.query_distance(outside, hole)

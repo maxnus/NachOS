@@ -61,7 +61,7 @@
   for a bot; that belongs in the user docs, if anywhere. Before adding a line, ask whether an agent that skipped it
   would get something wrong.
 - **Where the game's answer is a matter of perspective, document what the API reports** and move on: a pylon reads
-  unpowered, though it always stands in its own field. Keep "Not understood yet" in `docs/game-behavior.md` for
+  unpowered, though it always stands in its own field. Keep `docs/reference/game-behavior/not-understood-yet.md` for
   readings that contradict each other or could not be observed.
 
 ## Running things

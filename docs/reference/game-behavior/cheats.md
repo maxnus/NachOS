@@ -41,3 +41,36 @@ What debug commands create is not always what a player would have:
   dead. Two made on creep beside a hatchery lived on for 2400 steps (build 75689).
 - **A vital set to 0 is set to its maximum.** `DebugSetUnitValue` with 0 fills a unit's energy or shields instead of
   emptying them, so drain a unit to 1 instead.
+
+## From the catalog
+
+- Every debug cheat is a toggle for the whole game: sent twice, it is off, and in a game of two only one player
+  sends it (#28, #37). `minerals`, `all_resources` and `upgrade` are the exceptions, handing something out each time
+  they are sent, and `gas` gives nothing: see [cheats.md](cheats.md) (tool `sweep_requests`, build 75689).
+- The cheats take a few steps to take effect; the in-game tests wait 8 (tested).
+- `free` makes everything cost nothing, a spell's energy included. `all_resources` only hands out resources, which
+  run dry after a few hundred add-on rebuilds. `fast_build` makes building, training and research take seconds,
+  research on debug-made structures included. Neither `free` nor `fast_build` grants an upgrade (#28, #33, #37).
+- `tech_tree` waives every requirement and grants 42 upgrades within a few steps, campaign ones included; the
+  `upgrade` cheat grants campaign upgrades too. Both only ever add ids: a hydralisk is offered every race's
+  `BurrowDown` (#23, #28). Under `tech_tree` a barracks without an add-on trains two marines at once (tool
+  `sweep_orders`).
+- `god` stops this player's units taking damage and multiplies every weapon's damage in `ResponseData` by 10. Its
+  effect on the tables is absent in a game's first ten steps, shows within 4 steps once 60 have run, and is gone
+  within 16 of turning it off (#30).
+- `food` lifts the supply cap (in game).
+- A debug-made unit can appear a few steps late, and the game does not always make what is asked: not every pylon,
+  and no structure on ground it cannot stand on; a photon cannon ordered onto this player's creep was never made
+  (tool `sweep_alerts`, #37).
+- A unit made for player 0 is reported as owner 16 (tool `_sandbox`).
+- Debug commands make a larva only on creep: off it, none appeared, and none was reported dead (in game, build 75689).
+- Debug commands make a creep tumor, plain or a queen's, only on creep, and not at every spot on it (#28; tool
+  `sweep_placement`, build 75689).
+- A debug-made force field belongs to its player and is offered Shatter; one a sentry casts is neutral, owner 16,
+  and offered nothing, and Shatter ordered on it is refused (#23, #33).
+- A debug-made photon cannon did not detect in its first 4 steps (#37). A debug-made forge researches nothing unless
+  a pylon powers it (#31).
+- Setting a unit's shields by debug command reads as shields lost (tested). Set to 1, they regenerate straight away,
+  2 every 16 steps (#41; tested).
+- A vital set to 0 by debug command goes to its maximum instead: shields stay full, and energy reads 200 (#41, tool
+  `sweep_orders`).
