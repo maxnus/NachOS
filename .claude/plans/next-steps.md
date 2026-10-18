@@ -103,9 +103,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     setting them for every game; there are no default steps, so that `None` has one meaning (the owner's second round:
     defaults for size and color only).
   - Shapes are values with offsets (the owner's second round, over offsets on `draw_*` methods and a group handle):
-    `Text`, `Box`, `Sphere`, `Mark` and `Line(to=)`, each with `offset=` and `color=`, and `Group(*shapes, offset=,
-    color=)`, itself a shape. `api.debug.draw(at, *shapes, color=, steps=)` returns one `Drawing`; the `draw_*` methods
-    went but for `draw_text_on_screen`. A figure made once is drawn at any number of units.
+    `DebugText`, `DebugBox`, `DebugSphere`, `DebugMark` and `DebugLine(to=)`, each with `offset=` and `color=`, and
+    `DebugGroup(*shapes, offset=, color=)`, itself a shape. `api.debug.draw(at, *shapes, color=, steps=)` returns one
+    `Drawing`; the `draw_*` methods went but for `draw_text_on_screen`. A figure made once is drawn at any number of
+    units.
   - A drawing lasts `steps=`, 1 by default, chosen over one turn and over until cleared; `steps=None` lasts until
     `drawing.remove()`. `refresh_steps` sends it at most that often, and only when it changed. A drawing at a unit, or a
     line to one, follows it, and ends once the unit is dead (the second review). Everything goes out after the turn's

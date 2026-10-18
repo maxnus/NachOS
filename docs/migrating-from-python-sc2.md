@@ -181,7 +181,7 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, Text(text))`, `draw(p, Line(to=q))`, `draw(p, Box(1, 1))`, `draw(p, Sphere(r))`, each lasting `steps=` and returning a `Drawing`; shapes compose in a `Group` |
+| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, DebugText(text))`, `draw(p, DebugLine(to=q))`, `draw(p, DebugBox(1, 1))`, `draw(p, DebugSphere(r))`, each lasting `steps=` and returning a `Drawing`; shapes compose in a `DebugGroup` |
 | `client.debug_text_screen(text, pos)` | `api.debug.draw_text_on_screen(text, at=pos)` |
 | a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
 | `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_steps` |

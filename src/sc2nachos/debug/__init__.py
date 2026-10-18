@@ -5,19 +5,27 @@ from sc2nachos.debug._color import Color
 from sc2nachos.debug._debug_commands import DebugCommands
 from sc2nachos.debug._drawing import Drawing
 from sc2nachos.debug._marker import Marker
-from sc2nachos.debug._shapes import Box, Group, Line, Mark, Shape, Sphere, Text
+from sc2nachos.debug._shapes import (
+    DebugBox,
+    DebugGroup,
+    DebugLine,
+    DebugMark,
+    DebugShape,
+    DebugSphere,
+    DebugText,
+)
 
 __all__ = [
-    "Box",
     "Cheat",
     "Color",
+    "DebugBox",
     "DebugCommands",
+    "DebugGroup",
+    "DebugLine",
+    "DebugMark",
+    "DebugShape",
+    "DebugSphere",
+    "DebugText",
     "Drawing",
-    "Group",
-    "Line",
-    "Mark",
     "Marker",
-    "Shape",
-    "Sphere",
-    "Text",
 ]

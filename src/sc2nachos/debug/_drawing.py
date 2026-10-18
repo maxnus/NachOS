@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from sc2nachos.debug._color import _Rgb
-    from sc2nachos.debug._shapes import Box, Line, Mark, Sphere, Text, _ScreenText, _Vector
+    from sc2nachos.debug._shapes import DebugBox, DebugLine, DebugMark, DebugSphere, DebugText, _ScreenText, _Vector
 
 # Where a drawing stands: a point fixed when it was drawn, or a unit, which the drawing follows.
 type _Anchor = tuple[float, float, float] | Unit[Any]
@@ -21,11 +21,11 @@ type _Anchor = tuple[float, float, float] | Unit[Any]
 
 @final
 @dataclass(frozen=True, slots=True)
-class _Placed:
+class _PlacedShape:
     """One shape of a drawing, as it is drawn: its offset from the drawing's place, groups' included, its color and
     text size, and for a line, where it ends."""
 
-    shape: Text | Box | Sphere | Mark | Line | _ScreenText
+    shape: DebugText | DebugBox | DebugSphere | DebugMark | DebugLine | _ScreenText
     offset: _Vector
     rgb: _Rgb
     size: int
@@ -39,7 +39,7 @@ class Drawing:
 
     __slots__ = ("_anchor", "_parts", "_removed", "_until")
 
-    def __init__(self, anchor: _Anchor, parts: tuple[_Placed, ...], *, until: int | None) -> None:
+    def __init__(self, anchor: _Anchor, parts: tuple[_PlacedShape, ...], *, until: int | None) -> None:
         """A drawing of `parts` at `anchor`, shown while the step is before `until`, or until removed if `None`."""
         self._anchor = anchor
         self._parts = parts

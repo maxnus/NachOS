@@ -9,7 +9,7 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 ## Drawing
 
 ```python
-from sc2nachos.debug import Box, Color, Group, Line, Mark, Marker, Text
+from sc2nachos.debug import Color, DebugBox, DebugGroup, DebugLine, DebugMark, DebugText, Marker
 
 
 @api.events.on(GameStartEvent)
@@ -17,23 +17,23 @@ def set_up(event: GameStartEvent) -> None:
     api.debug.refresh_steps = 4
     api.debug.default_color = Color.YELLOW
     for expansion in api.expansions:
-        api.debug.draw(expansion.center, Mark(Marker.HEXAGON, radius=6), steps=None)
+        api.debug.draw(expansion.center, DebugMark(Marker.HEXAGON, radius=6), steps=None)
 
 
 @api.events.on(TurnEvent)
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        api.debug.draw(marine, Box(1, 1), Text(f"{marine.health:.0f}", offset=(0, 0, 1.5)))
+        api.debug.draw(marine, DebugBox(1, 1), DebugText(f"{marine.health:.0f}", offset=(0, 0, 1.5)))
     api.debug.draw_text_on_screen(f"step {event.step}", at=(0.01, 0.01))
 ```
 
 `api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. `api.debug.draw(at,
 *shapes)` draws shapes at a point or a unit as one `Drawing`, which it returns:
 
-- **What.** The shapes are values, made once and drawn anywhere: `Text`, a `Box` centered on its place and standing on
-  it, a `Sphere`, a `Mark` (a cross, a plus, a star, or a triangle, a square, a pentagon or a hexagon with a level
-  base), and a `Line` to another point or unit. A `Group` of shapes is a shape too. Text on the screen is
-  `draw_text_on_screen`, placed from 0 to 1 across and down, whatever the window's size.
+- **What.** The shapes are values, made once and drawn anywhere: `DebugText`, a `DebugBox` centered on its place and
+  standing on it, a `DebugSphere`, a `DebugMark` (a cross, a plus, a star, or a triangle, a square, a pentagon or a
+  hexagon with a level base), and a `DebugLine` to another point or unit. A `DebugGroup` of shapes is a shape too. Text
+  on the screen is `draw_text_on_screen`, placed from 0 to 1 across and down, whatever the window's size.
 - **Where.** A point of two coordinates is drawn on the ground, and one of three at its own height. A unit is drawn
   where it stands, and a drawing at a unit follows it, as does a line to a unit. Out of sight, the unit is drawn where
   it was last seen, and the drawing ends once the unit is dead. Each shape and each group takes an `offset` from where

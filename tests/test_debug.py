@@ -9,7 +9,19 @@ import pytest
 from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NotPlayingError
-from sc2nachos.debug import Box, Cheat, Color, Drawing, Group, Line, Mark, Marker, Sphere, Text, _debug_commands
+from sc2nachos.debug import (
+    Cheat,
+    Color,
+    DebugBox,
+    DebugGroup,
+    DebugLine,
+    DebugMark,
+    DebugSphere,
+    DebugText,
+    Drawing,
+    Marker,
+    _debug_commands,
+)
 from sc2nachos.events import GameStartEvent, TurnEvent
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -121,7 +133,7 @@ class TestDrawing:
         def turn(step: int) -> None:
             if step == 0:
                 api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
-                api.debug.draw((2.0, 3.0), Text("here"))
+                api.debug.draw((2.0, 3.0), DebugText("here"))
 
         observations = [make_observation(step, units=[make_unit(1)]) for step in range(3)]
         game = _ScriptedGame(observations, players=2)
@@ -145,7 +157,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((1.0, 1.0), Line(to=(2.0, 2.0, 5.0)), color=(255, 0, 0), steps=3)
+                api.debug.draw((1.0, 1.0), DebugLine(to=(2.0, 2.0, 5.0)), color=(255, 0, 0), steps=3)
 
         sent = _play(api, turn, turns=6)
 
@@ -156,7 +168,7 @@ class TestDrawing:
 
     def test_a_drawing_made_again_unchanged_every_turn_is_sent_once(self) -> None:
         api = Api()
-        sent = _play(api, lambda step: api.debug.draw((1.0, 1.0), Text("fixed")), turns=5)
+        sent = _play(api, lambda step: api.debug.draw((1.0, 1.0), DebugText("fixed")), turns=5)
         assert list(sent) == [0]
 
     def test_with_a_refresh_every_four_steps_a_drawing_that_changes_every_turn_goes_out_every_fourth_step(self) -> None:
@@ -173,7 +185,7 @@ class TestDrawing:
         api = Api()
 
         def turn(step: int) -> None:
-            api.debug.draw((1.0, 1.0), Text(f"step {step}"))
+            api.debug.draw((1.0, 1.0), DebugText(f"step {step}"))
             if step == 2:
                 api.debug.turn_on(Cheat.GOD)
 
@@ -197,7 +209,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((1.0, 1.0), Text("fixed"), steps=100)
+                api.debug.draw((1.0, 1.0), DebugText("fixed"), steps=100)
 
         sent = _play(api, turn, turns=9, refresh_steps=4)
 
@@ -211,7 +223,7 @@ class TestDrawing:
             if step == 1:
                 api.debug.give_minerals()
             if step == 2:
-                api.debug.draw((1.0, 1.0), Text("late"), steps=10)
+                api.debug.draw((1.0, 1.0), DebugText("late"), steps=10)
 
         sent = _play(api, turn, turns=6, refresh_steps=4)
 
@@ -224,7 +236,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw(api.units.own[0], Sphere(1.5), steps=10)
+                api.debug.draw(api.units.own[0], DebugSphere(1.5), steps=10)
 
         sent = _play(api, turn, turns=3, units=lambda step: [make_unit(1, at=(2.0 + step, 2.0))])
 
@@ -239,7 +251,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw(api.units.own[0], Text("doomed"), steps=10)
+                api.debug.draw(api.units.own[0], DebugText("doomed"), steps=10)
 
         sent = _play(
             api,
@@ -257,7 +269,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw(api.units.enemy[0], Text("scouted"), steps=10)
+                api.debug.draw(api.units.enemy[0], DebugText("scouted"), steps=10)
 
         enemy = make_unit(1, alliance=Alliance.ENEMY, at=(3.0, 3.0))
         sent = _play(api, turn, turns=4, units=lambda step: [enemy] if step < 2 else [])
@@ -269,7 +281,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((2.5, 4.0), Box(3.0, 4.0))
+                api.debug.draw((2.5, 4.0), DebugBox(3.0, 4.0))
 
         sent = _play(api, turn, turns=1)
 
@@ -281,24 +293,24 @@ class TestDrawing:
 
     def test_a_new_game_forgets_the_last_ones_drawing(self) -> None:
         api = Api()
-        _play(api, lambda step: api.debug.draw((1.0, 1.0), Text("first game"), steps=100), turns=2)
+        _play(api, lambda step: api.debug.draw((1.0, 1.0), DebugText("first game"), steps=100), turns=2)
         assert _play(api, lambda step: None, turns=2) == {}
 
     @pytest.mark.parametrize(
         "draw",
         [
-            lambda api: api.debug.draw((1.0, 1.0), Text("x"), color=(256, 0, 0)),
-            lambda api: api.debug.draw((1.0, 1.0), Text("x"), color=(0.5, 0, 0)),
-            lambda api: api.debug.draw((1.0, 1.0), Text("x"), steps=0),
-            lambda api: api.debug.draw((1.0, 1.0), Text("x", size=0)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugText("x"), color=(256, 0, 0)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugText("x"), color=(0.5, 0, 0)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugText("x"), steps=0),
+            lambda api: api.debug.draw((1.0, 1.0), DebugText("x", size=0)),
             lambda api: api.debug.draw_text_on_screen("x", at=(1.5, 0.5)),
             lambda api: api.debug.draw_text_on_screen("x", at=(0.1, 0.1, 0.0)),  # pyright: ignore[reportArgumentType]
-            lambda api: api.debug.draw((1.0, 1.0), Sphere(0)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugSphere(0)),
             lambda api: api.debug.draw((1.0, 1.0)),
-            lambda api: api.debug.draw((1.0, 1.0), Mark(Marker.CROSS, radius=math.inf)),
-            lambda api: api.debug.draw((1.0, 1.0), Text("x", offset=(1.0, 2.0))),  # pyright: ignore[reportArgumentType]
-            lambda api: api.debug.draw((1.0, 1.0), Group()),
-            lambda api: api.debug.draw((1.0, 1.0), Box(1.0, 1.0, -1.0)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugMark(Marker.CROSS, radius=math.inf)),
+            lambda api: api.debug.draw((1.0, 1.0), DebugText("x", offset=(1.0, 2.0))),  # pyright: ignore[reportArgumentType]
+            lambda api: api.debug.draw((1.0, 1.0), DebugGroup()),
+            lambda api: api.debug.draw((1.0, 1.0), DebugBox(1.0, 1.0, -1.0)),
         ],
         ids=[
             "color over 255",
@@ -353,7 +365,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                drawings.append(api.debug.draw((1.0, 1.0), Line(to=(2.0, 2.0)), steps=None))
+                drawings.append(api.debug.draw((1.0, 1.0), DebugLine(to=(2.0, 2.0)), steps=None))
             if step == 5:
                 drawings[0].remove()
                 drawings[0].remove()
@@ -367,8 +379,8 @@ class TestDrawing:
         api = Api()
 
         def turn(step: int) -> None:
-            api.debug.draw((1.0, 1.0), Text("red"), color=Color.RED)
-            api.debug.draw((1.0, 1.0), Text("teal"), color=(0, 128, 128))
+            api.debug.draw((1.0, 1.0), DebugText("red"), color=Color.RED)
+            api.debug.draw((1.0, 1.0), DebugText("teal"), color=(0, 128, 128))
 
         sent = _play(api, turn, turns=1)
 
@@ -380,7 +392,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((4.0, 4.0), Mark(Marker.SQUARE, radius=math.sqrt(2)))
+                api.debug.draw((4.0, 4.0), DebugMark(Marker.SQUARE, radius=math.sqrt(2)))
 
         sent = _play(api, turn, turns=1)
 
@@ -397,7 +409,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((4.0, 4.0), Mark(marker, radius=2))
+                api.debug.draw((4.0, 4.0), DebugMark(marker, radius=2))
 
         sent = _play(api, turn, turns=1)
 
@@ -432,7 +444,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((4.0, 4.0), Mark(shape, radius=1))
+                api.debug.draw((4.0, 4.0), DebugMark(shape, radius=1))
 
         sent = _play(api, turn, turns=1)
 
@@ -447,8 +459,8 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                hp = Text("hp", offset=(0.0, 0.0, 2.0), color=Color.RED)
-                api.debug.draw((4.0, 4.0), Group(Box(1.0, 1.0), hp, offset=(0.0, 0.0, 1.0), color=Color.BLUE))
+                hp = DebugText("hp", offset=(0.0, 0.0, 2.0), color=Color.RED)
+                api.debug.draw((4.0, 4.0), DebugGroup(DebugBox(1.0, 1.0), hp, offset=(0.0, 0.0, 1.0), color=Color.BLUE))
 
         sent = _play(api, turn, turns=1)
 
@@ -460,7 +472,7 @@ class TestDrawing:
 
     def test_one_figure_is_drawn_at_several_units(self) -> None:
         api = Api()
-        figure = Group(Mark(Marker.PLUS), Text("target", offset=(0.0, 0.0, 1.0)))
+        figure = DebugGroup(DebugMark(Marker.PLUS), DebugText("target", offset=(0.0, 0.0, 1.0)))
 
         def turn(step: int) -> None:
             if step == 0:
@@ -477,7 +489,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw((1.0, 1.0), Line(to=api.units.own[0], to_offset=(0.0, 0.0, 1.0)), steps=None)
+                api.debug.draw((1.0, 1.0), DebugLine(to=api.units.own[0], to_offset=(0.0, 0.0, 1.0)), steps=None)
 
         sent = _play(
             api,
@@ -500,7 +512,7 @@ class TestDrawing:
             if step == 0:
                 api.debug.default_color = Color.ORANGE
                 api.debug.default_text_size = 12
-                api.debug.draw((1.0, 1.0), Text("defaults"))
+                api.debug.draw((1.0, 1.0), DebugText("defaults"))
                 with pytest.raises(ValueError):
                     api.debug.default_text_size = 0
                 with pytest.raises(ValueError):
@@ -710,7 +722,7 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
                     UnitTypeId.MARINE, at=townhall.position.towards(api.map.playable_area.center, 6), count=2
                 )
                 api.debug.turn_on(Cheat.SHOW_MAP)
-                api.debug.draw(townhall, Text("NachOS"))
+                api.debug.draw(townhall, DebugText("NachOS"))
             case 2:
                 seen["marines"] = len(marines)
                 seen["enemy_in_sight_shown"] = _in_sight(api)

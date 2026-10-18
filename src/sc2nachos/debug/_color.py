@@ -24,7 +24,7 @@ class Color(Enum):
     PURPLE = (128, 0, 128)
 
 
-def _rgb(color: Color | _Rgb) -> _Rgb:
+def _rgb_of(color: Color | _Rgb) -> _Rgb:
     """`color`'s red, green and blue, checked to be whole numbers from 0 to 255."""
     rgb = color.value if isinstance(color, Color) else color
     if len(rgb) != 3 or not all(is_whole_number(part) and 0 <= part <= 255 for part in rgb):

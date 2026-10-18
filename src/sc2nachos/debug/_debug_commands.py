@@ -9,9 +9,9 @@ from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos._checks import is_whole_number
 from sc2nachos.debug._cheat import Cheat
-from sc2nachos.debug._color import Color, _Rgb, _rgb
-from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _Placed
-from sc2nachos.debug._shapes import Group, Line, Text, _ScreenText
+from sc2nachos.debug._color import Color, _Rgb, _rgb_of
+from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
+from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _ScreenText
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
@@ -19,7 +19,7 @@ from sc2nachos.units._units import _unit_tuple
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from sc2nachos.debug._shapes import Shape, _Vector
+    from sc2nachos.debug._shapes import DebugShape, _Vector
     from sc2nachos.gamemap import GameMap
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId
@@ -72,8 +72,8 @@ class DebugCommands:
         self._opponent_id = opponent_id
         self._step = step
         self._refresh_steps = 1
-        self._default_color: Color | _Rgb = Color.WHITE
-        self._default_rgb = _rgb(Color.WHITE)
+        self._default_color: Color | tuple[int, int, int] = Color.WHITE
+        self._default_rgb = _rgb_of(Color.WHITE)
         self._default_text_size = 8
         self._drawings: list[Drawing] = []
         # What the screen shows of ours as last sent, if anything, and the step of the last refresh, which sent the
@@ -98,14 +98,14 @@ class DebugCommands:
         self._refresh_steps = steps
 
     @property
-    def default_color(self) -> Color | _Rgb:
+    def default_color(self) -> Color | tuple[int, int, int]:
         """The color of a shape drawn with no color given, `Color.WHITE` unless set. Set to what is not a `Color` or
         red, green and blue, each a whole number from 0 to 255, it raises `ValueError`."""
         return self._default_color
 
     @default_color.setter
-    def default_color(self, color: Color | _Rgb) -> None:
-        self._default_rgb = _rgb(color)
+    def default_color(self, color: Color | tuple[int, int, int]) -> None:
+        self._default_rgb = _rgb_of(color)
         self._default_color = color
 
     @property
@@ -125,8 +125,8 @@ class DebugCommands:
     def draw(
         self,
         at: PointLike | Unit[Any],
-        *shapes: Shape,
-        color: Color | _Rgb | None = None,
+        *shapes: DebugShape,
+        color: Color | tuple[int, int, int] | None = None,
         steps: int | None = 1,
     ) -> Drawing:
         """Draw `shapes` at `at`, each offset from it as it says, as one drawing.
@@ -139,7 +139,7 @@ class DebugCommands:
         """
         if not shapes:
             raise ValueError("draw at least one shape")
-        rgb = self._default_rgb if color is None else _rgb(color)
+        rgb = self._default_rgb if color is None else _rgb_of(color)
         parts = tuple(self._placed(shapes, (0.0, 0.0, 0.0), rgb))
         return self._add(Drawing(self._anchor(at), parts, until=self._until(steps)))
 
@@ -148,7 +148,7 @@ class DebugCommands:
         text: str,
         *,
         at: tuple[float, float],
-        color: Color | _Rgb | None = None,
+        color: Color | tuple[int, int, int] | None = None,
         size: int | None = None,
         steps: int | None = 1,
     ) -> Drawing:
@@ -157,28 +157,28 @@ class DebugCommands:
         as `draw` and `Text` do."""
         if len(at) != 2 or not (0 <= at[0] <= 1 and 0 <= at[1] <= 1):
             raise ValueError(f"a point on the screen is two coordinates, each from 0 to 1, not {at!r}")
-        written = Text(text, size, color)
-        rgb = self._default_rgb if color is None else _rgb(color)
-        part = _Placed(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, written.size or self._default_text_size)
+        written = DebugText(text, size, color)
+        rgb = self._default_rgb if color is None else _rgb_of(color)
+        part = _PlacedShape(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, written.size or self._default_text_size)
         return self._add(Drawing((0.0, 0.0, 0.0), (part,), until=self._until(steps)))
 
-    def _placed(self, shapes: Sequence[Shape], offset: _Vector, rgb: _Rgb) -> Iterator[_Placed]:
+    def _placed(self, shapes: Sequence[DebugShape], offset: _Vector, rgb: _Rgb) -> Iterator[_PlacedShape]:
         """`shapes` as drawn `offset` from the drawing's place, those of no color of their own in `rgb`, each group's
         shapes in turn."""
         for shape in shapes:
             x, y, z = offset
             dx, dy, dz = shape.offset
             at = (x + dx, y + dy, z + dz)
-            own = rgb if shape.color is None else _rgb(shape.color)
+            own = rgb if shape._rgb is None else shape._rgb
             match shape:
-                case Group():
+                case DebugGroup():
                     yield from self._placed(shape.shapes, at, own)
-                case Text():
-                    yield _Placed(shape, at, own, shape.size or self._default_text_size)
-                case Line():
-                    yield _Placed(shape, at, own, self._default_text_size, self._anchor(shape.to))
+                case DebugText():
+                    yield _PlacedShape(shape, at, own, shape.size or self._default_text_size)
+                case DebugLine():
+                    yield _PlacedShape(shape, at, own, self._default_text_size, self._anchor(shape.to))
                 case _:
-                    yield _Placed(shape, at, own, self._default_text_size)
+                    yield _PlacedShape(shape, at, own, self._default_text_size)
 
     def _anchor(self, at: PointLike | Unit[Any]) -> _Anchor:
         """Where to draw at `at`: a unit itself, or a point fixed now, on the ground unless it has a height."""
