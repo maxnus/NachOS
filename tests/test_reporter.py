@@ -74,6 +74,7 @@ from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, Visib
 from sc2nachos.units._tracking import _Tracker
 from support import (
     HAPPENINGS,
+    PLAYER_ID,
     RealGame,
     make_client,
     make_game_info,
@@ -107,8 +108,9 @@ _TABLES = make_tables(
 class _Game:
     """A game fed one observation at a time, each taken in and reported as `Api.play` does each turn."""
 
-    def __init__(self, events: _EventBus | None = None) -> None:
+    def __init__(self, events: _EventBus | None = None, *, player_id: int | None = PLAYER_ID) -> None:
         self.events = events or _EventBus()
+        self._player_id = player_id
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
@@ -118,7 +120,9 @@ class _Game:
     def observe(self, step: int, *units: raw_pb2.Unit, **fields: Any) -> dict[int, Unit[Any]]:
         """Take in an observation of `units` and `fields` at `step`, report it, and return the units by tag."""
         observation = make_observation(step, units=units, **fields)
-        self._game = played(self._game, self._client, self.map, self.tracker, observation, self.events)
+        self._game = played(
+            self._game, self._client, self.map, self.tracker, observation, self.events, player_id=self._player_id
+        )
         self.state = self._game.state
         return {unit.tag: unit for unit in self.tracker.unit_tracker.present}
 
@@ -846,6 +850,14 @@ class TestIdle:
         game.observe(32, make_unit(1, build_progress=1.0, orders=[_moving()] if shown else []))
         assert [(event.step, event.unit.tag) for event in seen] == ([] if shown else [(32, 1)])
 
+    def test_a_handler_subscribed_mid_game_hears_of_every_unit_idle_then(self) -> None:
+        game = _Game()
+        game.observe(0, make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0, orders=[_moving()]))
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(16, make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0, orders=[_moving()]))
+        game.observe(32, make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0, orders=[_moving()]))
+        assert [(event.step, event.unit.tag) for event in seen] == [(16, 1)]
+
     def test_a_unit_on_the_enemys_side_is_never_idle(self) -> None:
         game = _Game()
         seen = record(game.events, OwnUnitBecameIdleEvent)
@@ -900,6 +912,28 @@ class TestResearch:
 
 
 class TestSides:
+    def test_only_on_a_sides_kind_selects_that_side_alone(self) -> None:
+        game = _Game()
+        died = record(game.events, OwnUnitDiedEvent.only(UnitTypeId.MARINE, UnitTypeId.ZERGLING))
+        changed = record(game.events, EnemyUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED))
+        _everything(game)
+        assert [(type(event), event.unit.tag) for event in died] == [(OwnUnitDiedEvent, 8)]
+        assert [(type(event), event.unit.tag) for event in changed] == [(EnemyUnitTypeChangedEvent, 4)]
+
+    def test_a_game_with_no_player_of_its_own_hands_out_every_message_as_a_plain_chat_event(self) -> None:
+        game = _Game(player_id=None)
+        seen = record(game.events, ChatEvent)
+        game.observe(0, chat=[(1, "!show"), (2, "gl hf")])
+        assert [type(event) for event in seen] == [ChatEvent, ChatEvent]
+
+    def test_with_no_chat_handler_no_message_is_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        game = _Game()
+        record(game.events, OwnUnitCreatedEvent)
+        game.observe(0)
+        assert game._game is not None
+        monkeypatch.setattr(type(game._game), "_chat_kind", lambda *_: pytest.fail("a message was read"))
+        game.observe(16, chat=[(2, "gl hf")])
+
     def test_a_unit_a_neural_parasite_holds_dies_on_the_holders_side(self) -> None:
         game = _Game()
         seen = record(game.events, UnitDiedEvent)

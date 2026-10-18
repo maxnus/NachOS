@@ -83,6 +83,7 @@ _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in 
 type _BySide = tuple[type[Event], type[Event], type[Event]]
 _TYPE_CHANGED: Final[_BySide] = (OwnUnitTypeChangedEvent, EnemyUnitTypeChangedEvent, UnitTypeChangedEvent)
 _DIED: Final[_BySide] = (OwnUnitDiedEvent, EnemyUnitDiedEvent, UnitDiedEvent)
+_CHAT: Final[_BySide] = (OwnChatEvent, EnemyChatEvent, ChatEvent)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -258,7 +259,7 @@ class _Game:
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
                 add(OwnActionEvent(action, step=step))
-        if observation.chat:
+        if observation.chat and any(subscriptions.wants_every(kind) for kind in _CHAT):
             for message in observation.chat:
                 kind = self._chat_kind(message.player_id)
                 if subscriptions.wants_every(kind):

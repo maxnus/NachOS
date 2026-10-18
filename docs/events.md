@@ -62,12 +62,15 @@ of the type.
 @api.on(AreaEvent.of(Circle(natural, 12)))
 ```
 
-An event is handed to the handlers of its class and of every class it derives from. Four bases each cover a whole
-kind of event, for this player's units and the enemy's alike: `UnitEvent` is every event with a `unit`, which `only`
-selects by the unit's type; `BuffEvent` a buff gained or lost; `VitalEvent` a vital reaching a value or dropping below
-it; and `AreaEvent` the edge of an area crossed either way. The last two are parameterized, so a handler takes them
-through `of` and is handed both directions of the crossing it asked for. A handler of a base is typed as taking it:
-a handler of `UnitEvent` reads `event.unit`, and `event.unit.alliance` for the side.
+An event is handed to the handlers of its class and of every class it derives from. Five bases each cover a whole
+kind of event: `BuffEvent` a buff gained or lost, `VitalEvent` a vital reaching a value or dropping below it, and
+`AreaEvent` the edge of an area crossed either way, each for this player's units and the enemy's alike;
+`UpgradeEvent` a research of this player's started, stopped or finished, which `only` selects by the upgrade; and
+`UnitEvent` every other event about one unit, which `only` selects by the unit's type. `VitalEvent` and `AreaEvent`
+are parameterized, so a handler takes them through `of` and is handed both directions of the crossing it asked for.
+A handler of a base is typed as taking it: a handler of `UnitEvent` reads `event.unit`, and `event.unit.alliance` for
+the side. `UnitTypeChangedEvent`, `UnitDiedEvent` and `ChatEvent` are each also the base of an own and an enemy kind,
+so a handler of one gets both sides.
 
 A handler of `Event` is handed every event, which makes NachOS produce every event type it otherwise would not,
 including comparing every unit with the previous observation. A handler of `Event` is handed parameterized events
@@ -152,7 +155,8 @@ says whose it was. A handler of `UnitTypeChangedEvent` gets all three of its kin
 | `OwnUpgradeFinishedEvent` | `upgrade` | `only(*upgrades)` | this player finishes an upgrade |
 
 A finished research never reads as stopped: its order leaves the structure in the step its upgrade arrives
-([game behavior](reference/game-behavior/abilities-and-orders.md#builds-and-work-lost)).
+([game behavior](reference/game-behavior/abilities-and-orders.md#builds-and-work-lost)). A handler of the research
+events that starts mid-game is handed every research already running as started, on its first turn.
 
 ### What units went through
 

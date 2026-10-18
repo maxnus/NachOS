@@ -293,9 +293,11 @@ def played(
     events: _EventBus,
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
+    player_id: int | None = PLAYER_ID,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
-    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
+    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
+    `player_id`."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
@@ -324,7 +326,7 @@ def played(
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
-            player_id=PLAYER_ID,
+            player_id=player_id,
             observer_ids=frozenset({OBSERVER_ID}),
             step=step,
         )
