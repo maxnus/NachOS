@@ -308,6 +308,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   twice counts once (tool `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a
   loaded and an empty medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty
   medivacs, one or two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
+- Units each given the same order in a command of their own, all in one request, each carry it out where there is
+  room for each: three barracks given a marine trained three, charged 150; two barracks given a reactor built two,
+  100/100; two command centers given the orbital both morphed, 300; two SCVs given a depot at a site each both built,
+  200; and two orbital commands given a MULE at one field both spent 50 energy, and two MULEs landed within 68 steps.
+  Where there is room for one, every command is answered `Success` and the rest come to nothing. Of two engineering
+  bays given the same research, one researched, charged once, 100/100, and the other showed no order, no action error
+  and no reported action. Two SCVs given a depot at one site were both charged at once, 200; one built, and the other's
+  order ended in the action error `CouldntReachTarget` by 64 steps on, and its 100 came back (tool `sweep_orders`,
+  `one-command-each`, twice; local game, build 75689).
 
 ## Larvae and warp gates
 
