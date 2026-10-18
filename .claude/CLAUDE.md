@@ -40,22 +40,7 @@
   code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
   cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
   file; if it is worth keeping, it goes in the commit message. After a round of doc edits, list the multi-line
-  docstrings and check each:
-
-  ```
-  uv run python -c "import ast,pathlib
-  for p in sorted(pathlib.Path('src').rglob('*.py')):
-      t = ast.parse(p.read_text(encoding='utf-8'))
-      for n in ast.walk(t):
-          if isinstance(n, (ast.Module, ast.ClassDef, ast.FunctionDef)):
-              d = ast.get_docstring(n)
-              if d and len(d.splitlines()) > 1: print(p, getattr(n, 'name', ''))
-          if isinstance(n, ast.ClassDef):
-              for a, b in zip(n.body, n.body[1:]):
-                  if isinstance(a, ast.AnnAssign) and isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant):
-                      if isinstance(b.value.value, str) and len(b.value.value.splitlines()) > 1:
-                          print(p, n.name + '.' + ast.unparse(a.target))"
-  ```
+  docstrings with `uv run python tools/list_multiline_docstrings.py` and check each.
 
 - **`AGENTS.md` takes rules for writing code only**, a line or two each, never a statement of what the library does
   for a bot; that belongs in the user docs, if anywhere. Before adding a line, ask whether an agent that skipped it

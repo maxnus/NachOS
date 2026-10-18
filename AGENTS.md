@@ -7,11 +7,8 @@
 [AvocaDOS](https://github.com/maxnus/AvocaDOS), and is meant to be published for other bot authors.
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
-`docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/maintaining/curating-ids.md` says how to decide which game
-ids are real and how to refresh them after a patch, `docs/reference/game-behavior/` what the game has been seen to do,
-`docs/events.md` every event a game hands out, `docs/orders.md` how a bot orders its units, `docs/debugging.md` how it
-draws, cheats and creates units, and `docs/github-actions.md` how a bot repository runs games with the `match.yml`
-workflow and the `setup-sc2` action.
+`docs/plans/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and `docs/maintaining/`
+holds how to curate the game's ids and what reviews keep finding.
 
 ## Keep this file small
 
@@ -69,7 +66,6 @@ These are the non-negotiables. They exist because this library is published for 
 
 Carried over from AvocaDOS, so the two codebases read alike:
 
-- **Imports**: separate stdlib, third-party and internal imports with blank lines.
 - **Keyword-only args**: use `*` in signatures liberally.
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
@@ -89,7 +85,6 @@ Carried over from AvocaDOS, so the two codebases read alike:
   `color`, `center`. Two exceptions: generated identifiers, where `ids/raw/` mirrors Blizzard's own names verbatim
   (`BuildinProgressNonCancellable`); those are data, never to be "corrected". And **"cancelled"**, which the code,
   the tests and the docs spell with two l's throughout.
-- Line length 120. `ruff check` and `ruff format --check` must pass.
 - **One game loop is a step.** Above the protocol layer, time is counted in steps -- `Api.step`,
   `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
   layer keeps Blizzard's `game_loop`, since the messages it hands back carry that field, and `Api.play` is the one
@@ -112,7 +107,7 @@ reviewing code.
   `https://raw.githubusercontent.com/Blizzard/s2client-proto/master/s2clientprotocol/sc2api.proto`
 - **One connection can play game after game**, so anything held because it does not change during a game is held
   per game, never per connection.
-- **`ResponseGameInfo` never changes during a game.** Ask once, at the start; python-sc2 asks on every step.
+- **`ResponseGameInfo` never changes during a game.** Ask once, at the start.
 - **`ResponseData` changes with the asking player's upgrades, and only with them**, though a unit type has one
   entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
   unit reports its own upgrade levels, visible enemies' included.
@@ -136,11 +131,9 @@ marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everyth
 protobuf fixtures via the fixture transport.
 
 **The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer, one on each map of the
-current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is. Replaying a game asks the
-same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until the
-corpus is recorded again. The bare api gives no orders, so the only orders in the corpus are the game's own, nearly
-all of them workers mining, and since nothing leaves its base the corpus shows the computer's army but none of its
-buildings.
+current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is and holds. Replaying a game asks
+the same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until the
+corpus is recorded again.
 
 | Task | Command |
 |---|---|
@@ -149,14 +142,6 @@ buildings.
 | Run the tests that start a game | `uv run pytest -m integration` |
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright` |
-| Regenerate raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as `docs/maintaining/curating-ids.md` says |
-| Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` |
-| Record the corpus again | `uv run python tools/record_corpus.py`, which starts the game |
-| Look at the ramps on a map | `uv run python tools/show_ramps.py`, which starts the game |
-| Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py`, which starts the game |
-| Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
-| Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
-| Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |
-| Find what the game does with debug commands, chat, leaving and the pathing query | `uv run python tools/sweep_requests.py`, which starts the game |
-| Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py`, which starts the game |
-| Measure every structure's footprint, and what lies under the map's rocks | `uv run python tools/sweep_placement.py footprints` or `ground-under-rocks`, which start the game, then `uv run python tools/generate_footprints.py` |
+
+The sweeps, which measure what the game does, and the generators are in `tools/README.md`. Before measuring anything
+in game, look there: a sweep may already do it.
