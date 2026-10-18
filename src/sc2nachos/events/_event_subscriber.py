@@ -35,15 +35,20 @@ class EventSubscriber[E: Event]:
         # The rest of what `on` was given: the priority, the cadence and whether to catch exceptions.
         self._options = options
 
+    # A function taking any `Event` keeps its own type, so it can be decorated for several event types.
     @overload
     def __call__[F: Callable[[Event], object]](self, handler: F, /) -> F: ...
 
+    # A method taking any `Event` after `self`, likewise.
     @overload
     def __call__[F: Callable[[Any, Event], object]](self, handler: F, /) -> F: ...
 
+    # A function taking the event it is decorated for, or a base of it, typed as a callable of that event; one taking
+    # another event matches no overload, so a type checker refuses it.
     @overload
     def __call__[H: Event, R](self: EventSubscriber[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
 
+    # A method taking that event after `self`, likewise.
     @overload
     def __call__[S, H: Event, R](self: EventSubscriber[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
 
