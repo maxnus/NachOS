@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from sc2nachos.units import Target
 
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
-# and the one after that on the ladder or in realtime (docs/game-behavior.md).
+# and the one after that on the ladder or in realtime (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
 # `UNLOAD`.

@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #127. `uv run pytest` passes 2166 tests on branch `claude/public-event-decorator`;
-  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18).
+- nachOS `main` has every PR to #128. `uv run pytest` passes 2166 tests on branch `claude/tighten-docs`;
+  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18, on #128).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
   slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat
@@ -131,6 +131,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   instance sit on one object. The bus is private (`_EventBus`), and `api.events` is gone. `api.on` returns an
   `EventSubscriber`, as `where` does, public and exported from `sc2nachos.events`: one class, the type a bot sees and
   the object it gets, over a public Protocol beside a private class, and named for what it does over `EventDecorator`.
+- **The docs** (the owner, 2026-10-18, one question at a time): the guides for bot authors stay in `docs/`;
+  `docs/reference/` holds `python-sc2.md`, every python-sc2 name and difference, and `game-behavior/`, the catalog,
+  one page per topic, with `cheats.md` its cheats topic; `docs/maintaining/` holds `curating-ids.md` and
+  `code-review.md`. `migrating-from-python-sc2.md` is a short page for people: the same bot in both, the main changes
+  and the commonest pitfalls. A measurement lives only in the catalog; everything else links there.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three

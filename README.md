@@ -46,9 +46,6 @@ def manage_workers(event):
 [`examples/demo_bot.py`](examples/demo_bot.py) is a whole bot in one file: a Terran that trains SCVs, expands and
 attacks with marines, and beats the built-in computer at medium difficulty.
 
-[Events](docs/events.md) lists every event a game hands out and how to subscribe to only some of them.
-[Orders](docs/orders.md) covers how a bot orders its units and what it learns about each order.
-
 NachOS itself never creates or exposes a singleton and holds no module-level mutable state. The singleton is your
 choice, confined to one line of your own code. One api can play game after game, and two bots playing each other
 run in a process each, as they would on a ladder.
@@ -66,15 +63,16 @@ from sc2nachos import ApiBot, Computer, Difficulty, Race, run_local
 run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
 ```
 
-## Coming from python-sc2
+## Documentation
 
-NachOS is not a drop-in replacement. [Migrating from python-sc2](docs/migrating-from-python-sc2.md) lists the
-places where the obvious translation goes wrong.
-
-## Playing games on GitHub Actions
-
-[Running StarCraft II on GitHub Actions](docs/github-actions.md) shows how a bot repository plays matches against the
-built-in AI in its own workflows.
+- [Events](docs/events.md): every event a game hands out, and how to subscribe to only some of them.
+- [Orders](docs/orders.md): how a bot orders its units, and what it learns about each order.
+- [Debugging](docs/debugging.md): drawing on the game's screen, cheats, and creating units.
+- [Running StarCraft II on GitHub Actions](docs/github-actions.md): playing matches in a bot repository's workflows.
+- [Migrating from python-sc2](docs/migrating-from-python-sc2.md): the same bot in both, and where a translation goes
+  wrong; [python-sc2 and NachOS](docs/reference/python-sc2.md) has every name and every difference.
+- [How the game behaves](docs/reference/game-behavior/README.md): what StarCraft II was seen to do through the API,
+  by topic, each finding with how it was seen.
 
 ## Requirements
 

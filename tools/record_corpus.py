@@ -1,5 +1,8 @@
 """Record the games the tests replay: a bare api against the computer, on maps from the current ladder pool.
 
+The bare api gives no orders, so the only orders in the corpus are the game's own, nearly all of them workers mining,
+and since nothing leaves its base the corpus shows the computer's army but none of its buildings.
+
 Needs StarCraft II installed. Records every game, or only those named, into `tests/corpus`, replacing any
 recording of the same name::
 

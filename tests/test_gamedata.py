@@ -34,7 +34,8 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
 # What the game charges when each of these is ordered, as opposed to what its type's row holds. A morph, an add-on
 # and a structure were each measured from the refund a cancel gives back, three quarters of the charge rounded up
-# (tool `sweep_orders`, docs/game-behavior.md); the rest are the game's long-standing prices (stated).
+# (tool `sweep_orders`, docs/reference/game-behavior/abilities-and-orders.md); the rest are the game's long-standing
+# prices (stated).
 _CHARGED = {
     AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: Cost(100, 100),
     AbilityId.BARRACKS_TRAIN_MARINE: Cost(50, 0, 1),
@@ -582,7 +583,8 @@ class TestARecordedGamesTables:
             assert data.abilities[ability].order_behavior is OrderBehavior.NEEDS_IDLE, ability.name
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
-        """Measured for a rally and a cancel, and taken to hold for the rest (docs/game-behavior.md)."""
+        """Measured for a rally and a cancel, and taken to hold for the rest
+        (docs/reference/game-behavior/abilities-and-orders.md)."""
         data = _tables(path)
         for ability in (AbilityId.RALLY_UNITS, AbilityId.RALLY_WORKERS, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name

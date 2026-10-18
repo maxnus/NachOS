@@ -194,4 +194,5 @@ A unit created and dead within one observation gets both its creation and its de
 | `ChatEvent` | `player_id`, `text` | | any player sent a message to the chat |
 | `AlertEvent` | `alert` | `only(*alerts)` | the game alerted this player, several in the order it raised them |
 
-What raises each alert is in the docstring of each `Alert` member, and in [game-behavior.md](game-behavior.md).
+What raises each alert is in the docstring of each `Alert` member, and in
+[game behavior](reference/game-behavior/alerts-and-chat.md#alerts-and-the-camera).

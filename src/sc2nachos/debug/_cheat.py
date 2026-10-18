@@ -7,7 +7,7 @@ from sc2nachos._enum import ReadableIntEnum
 
 class Cheat(ReadableIntEnum):
     """A debug cheat that is on or off for the whole game, as `api.debug.turn_on` and `turn_off` take it.
-    `docs/cheats.md` says what several do to what the game reports."""
+    `docs/reference/game-behavior/cheats.md` says what several do to what the game reports."""
 
     SHOW_MAP = debug_pb2.show_map
     """Shows the whole map, the fog lifted."""

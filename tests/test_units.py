@@ -989,8 +989,8 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         middle = game.map.playable_area.center
         out_there = home.towards(middle, 12)
         # Not the `tech_tree` cheat: it grants campaign upgrades no curated id names, and an observation holding one
-        # raises (`docs/cheats.md`). This test researches what it needs. Not `fast_build` either: a structure under
-        # construction is one of the things read below.
+        # raises (`docs/reference/game-behavior/cheats.md`). This test researches what it needs. Not `fast_build`
+        # either: a structure under construction is one of the things read below.
         game.debug(debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free))
 
         # A morph keeps the object.
