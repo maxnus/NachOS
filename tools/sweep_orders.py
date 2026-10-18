@@ -37,8 +37,9 @@ and runs its trials in turn::
 - `producer-dies` kills what is making something, and reads what the observations after say.
 - `one-command-many-makers` plays without `free`, and gives one train, one research and one add-on to several
   structures at once, to find whether each carries it out or only one. `one-command-each` gives each of several
-  structures the same train, research, add-on, morph or MULE, and each of two SCVs a depot at one site and at sites of
-  their own, one command each in one request, to find what each carries out and what is charged.
+  structures the same train, research, add-on, morph or MULE, each of two SCVs a depot at one site and at sites of
+  their own, and two flying barracks a landing, two spine crawlers a rooting and two warp gates a zealot's warp-in,
+  each at one point, one command each in one request, to find what each carries out and what is charged.
 - `add-on-while-flying` plays without `free`, and tells a flying barracks, factory and starport to build a reactor
   with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
 - `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
@@ -4627,6 +4628,71 @@ def _one_command_each(game: _Game) -> list[Trial]:
         ]
 
     trials.append(game.trial("a MULE at one field from each of two orbital commands", mules))
+
+    def at_one_point(
+        made: Sequence[raw_pb2.Unit], ability: int, point: Point, product: UnitTypeId, trial: Trial
+    ) -> None:
+        """Give each of `made` `ability` at `point`, a command each, and record the verdicts, the purse, the action
+        errors, the `product`s near the point as they settle, every 16 steps for 320, and each unit's orders then."""
+        purse = [[game.minerals, game.vespene]]
+        trial.notes["verdicts"] = each(ability, made, point)
+        near: list[list[object]] = []
+        for _ in range(20):
+            game.turn(16)
+            purse.append([game.minerals, game.vespene])
+            near.append(
+                [
+                    [unit.tag, raw_pb2.DisplayType.Name(unit.display_type), round(_at(unit).distance_to(point), 1)]
+                    for unit in game.units.values()
+                    if unit.unit_type == product and _at(unit).distance_to(point) < 6
+                ]
+            )
+        trial.notes["purse every 16 steps"] = purse
+        trial.notes[f"{product.name}s within 6 of the point, every 16 steps: tag, display, distance"] = near
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+        trial.notes["types each"] = [_type_name((game.unit(u.tag) or u).unit_type) for u in made]
+
+    def landings(trial: Trial) -> None:
+        point = game.spot(game.toward(24), 4)
+        made = [game.create(UnitTypeId.BARRACKS_FLYING, point + (0, dy))[0] for dy in (-3, 3)]
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(made, AbilityId.LAND, point, UnitTypeId.BARRACKS, trial)
+
+    trials.append(game.trial("a landing at one point to each of two flying barracks", landings))
+
+    def rootings(trial: Trial) -> None:
+        hatchery = game.create(UnitTypeId.HATCHERY, game.spot(game.toward(20), 6))[0]
+        candidates = [_at(hatchery) + offset for offset in ((6, 0), (-6, 0), (0, 6), (0, -6))]
+        # Creep spreads from a new hatchery over a while; a spine crawler needs it under all four of its tiles.
+        game.turn(400)
+        placeable = game.sandbox.placeable(AbilityId.DRONE_MORPH_SPINE_CRAWLER, candidates)
+        trial.notes["placeable"] = placeable
+        if not any(placeable):
+            trial.notes["class"] = "no place to root"
+            return
+        point = candidates[placeable.index(True)]
+        made = game.create(UnitTypeId.SPINE_CRAWLER_UPROOTED, point + (0, 3), count=2)
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(made, AbilityId.ROOT, point, UnitTypeId.SPINE_CRAWLER, trial)
+
+    trials.append(game.trial("a rooting at one point to each of two spine crawlers", rootings))
+
+    def warp_ins(trial: Trial) -> None:
+        pad = game.spot(game.toward(16), 5)
+        spawned = game.sandbox.spawn(
+            [
+                (UnitTypeId.PYLON, game.player, pad),
+                *((UnitTypeId.WARP_GATE, game.player, pad + (dx, 4)) for dx in (-3, 3)),
+            ]
+        )
+        game.made.update(unit.tag for unit in spawned)
+        game.turn(4)
+        gates = [unit for unit in spawned if unit.unit_type == UnitTypeId.WARP_GATE]
+        point = pad + (3.5, -1)
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(gates, AbilityId.WARP_GATE_WARP_IN_ZEALOT, point, UnitTypeId.ZEALOT, trial)
+
+    trials.append(game.trial("a zealot warped in at one point by each of two warp gates", warp_ins))
 
     return trials
 

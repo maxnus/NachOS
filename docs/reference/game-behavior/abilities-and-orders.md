@@ -315,8 +315,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   Where there is room for one, every command is answered `Success` and the rest come to nothing. Of two engineering
   bays given the same research, one researched, charged once, 100/100, and the other showed no order, no action error
   and no reported action. Two SCVs given a depot at one site were both charged at once, 200; one built, and the other's
-  order ended in the action error `CouldntReachTarget` by 64 steps on, and its 100 came back (tool `sweep_orders`,
-  `one-command-each`, twice; local game, build 75689).
+  order ended in the action error `CouldntReachTarget` by 64 steps on, and its 100 came back. Of two flying barracks
+  given a landing at one point, one landed within 96 steps, and the other's order ended in `CantLandLocationInvalid`
+  64 steps on, leaving it flying; of two spine crawlers given a rooting at one point, one rooted within 224 steps and
+  the other's order ended the same way 48 steps on; neither charged anything. Of two warp gates given a zealot's
+  warp-in at one point, one warped it in, charged 100, and the other showed no order, no action error and no reported
+  action (tool `sweep_orders`, `one-command-each`, twice; local game, build 75689).
 
 ## Larvae and warp gates
 
