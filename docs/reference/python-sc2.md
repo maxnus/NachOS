@@ -120,9 +120,11 @@ it.
 - **A drone's morph is given to a larva.** python-sc2's `train` picks a larva itself. In NachOS, as in the game, a
   larva's morph given to a hatchery is refused `NotSupported` (in game), so pick a larva from
   `api.units.own.of_type(UnitType.Larva)`.
-- **Only what every unit of a command carries out is given to several.** Anything else, a build, an add-on, a train, a
-  research, a morph that costs, a spell but a toggle, a landing or a load, given to several units, raises `ValueError`
-  (`AbilityData.multi_unit`) where the game would quietly have one of them carry it out: pick the unit.
+- **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
+  goes out as one command naming them all; anything else, a train, an add-on, a morph or a spell, as a command to
+  each, so three barracks given a marine train three (`AbilityData.multi_unit`). A research, or a structure placed at a
+  point or on a geyser, given to several units raises `ValueError`, since only one of them could carry it out: pick
+  the unit.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever

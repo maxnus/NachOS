@@ -9,12 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #128. `uv run pytest` passes 2166 tests on branch `claude/tighten-docs`;
-  `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18, on #128).
+- nachOS `main` has every PR to #129. `uv run pytest` passes 2174 tests on branch `claude/issue-each-unit`;
+  `uv run pytest -m integration` passes 32 against a real game (run 2026-10-18, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
-- **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
-  slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat
-  (#127), and slice 8, the demo bot (#125).
+- **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
+  (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
+  bot (#125). Slice 7, typed order methods on `OwnUnit`, is deferred (below). Next is M5, in AvocaDOS.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR; its
   `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
@@ -136,6 +136,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   one page per topic, with `cheats.md` its cheats topic; `docs/maintaining/` holds `curating-ids.md` and
   `code-review.md`. `migrating-from-python-sc2.md` is a short page for people: the same bot in both, the main changes
   and the commonest pitfalls. A measurement lives only in the catalog; everything else links there.
+- **Typed order methods are deferred** (slice 7, the owner, 2026-10-18): `api.orders.issue` stays the one way to
+  order. Of the 312 abilities offered to some type, a type is offered at most 24, and pyright's completion would offer
+  every unit all of them; AvocaDOS's build orders hold ids, so it would order through `issue` anyway.
+- **`issue` gives every unit its order** (the owner, 2026-10-18): one method taking one unit or many, over a second
+  `issue_all` for groups. An ability every unit of a command carries out goes out as one command naming them all;
+  any other as a command to each, so three barracks given a marine train three, which raised before. A research, or a
+  structure placed at a point or on a geyser, given to several raises `ValueError`, since only one of them can carry
+  it out: chosen over sending them as given, which the game answers by researching once and by charging every builder
+  until all but one give up, and over raising for the build alone.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three
@@ -205,15 +214,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   and `AnyZergTownhall`. Each group is in every group that holds all its types, so `AnyDrone` is a `Worker` and
   `CollapsibleTower` a `Structure`.
 
-## 1. The rest of M4
+## 1. Waiting until something needs them
 
-From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
-when each starts.
-
-7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
-
-Waiting until something needs them:
-
+- Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
@@ -229,14 +232,15 @@ settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS check
 `tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push only when the owner
 says so.
 
-## 3. Later, at M5 (AvocaDOS runs on NachOS)
+## 3. Next, M5 (AvocaDOS runs on NachOS)
 
 In AvocaDOS's plan, section "M5 — The swap". Already known:
 
 - AvocaDOS's own `api.event.on` becomes NachOS's `api.on`, and `api.event.listener`, which subscribes each instance
   of a class as it is made, an `api.subscribe(self)` in the class's `__init__`. Its `api.order` becomes `api.orders`;
   its `OrderManager` keeps the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is
-  `api.orders.issued_to(unit)`.
+  `api.orders.issued_to(unit)`. `OrderManager._order`, which splits a `Units` into one order per unit, gives a group
+  one `issue`, but for a research or a build at a target, which go to one unit.
 - `phase=` becomes `priority=`, with the handlers that forget the dead at `HIGHEST`.
 - The bot's `MEDIVACINCREASESPEEDBOOST`, `DUTCHMARAUDERSLOW` and `IMMORTALOVERLOAD` take their curated names;
   AvocaDOS's `tests/test_nachos_id_parity.py` fails on those three until then, as expected.

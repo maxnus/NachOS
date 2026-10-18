@@ -248,11 +248,11 @@ class AbilityData:
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
-    """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several at once: a
-    move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`). Any other
-    ability goes to one unit at a time: what costs minerals or vespene, a build, an add-on, a train, a research or a
-    morph (in game); every spell but a toggle; a landing, a load or a liberator's siege; and an ability no one has
-    seen a group carry out."""
+    """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several in one
+    command: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
+    Any other ability one unit of a command carries out, and `issue` gives it to each unit in a command of its own:
+    what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a
+    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
