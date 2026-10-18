@@ -40,6 +40,8 @@ and runs its trials in turn::
   structures the same train, research, add-on, morph or MULE, each of two SCVs a depot at one site and at sites of
   their own, and two flying barracks a landing, two spine crawlers a rooting and two warp gates a zealot's warp-in,
   each at one point, one command each in one request, to find what each carries out and what is charged.
+- `research-ends` reads a research every step to its end, to find whether its order leaves the structure in the
+  observation the upgrade arrives in, and what a cancel and the structure's death leave.
 - `add-on-while-flying` plays without `free`, and tells a flying barracks, factory and starport to build a reactor
   with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
 - `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
@@ -260,6 +262,7 @@ class _Game:
         self.minerals = 0
         self.vespene = 0
         self.supply = (0, 0)
+        self.upgrades: frozenset[int] = frozenset()
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
@@ -291,6 +294,7 @@ class _Game:
         self.minerals = common.minerals
         self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
+        self.upgrades = frozenset(observation.raw_data.player.upgrade_ids)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
             self.running.errors.extend(_error(error, self.step) for error in response.action_errors)
@@ -4697,6 +4701,67 @@ def _one_command_each(game: _Game) -> list[Trial]:
     return trials
 
 
+def _research_ends(game: _Game) -> list[Trial]:
+    """How a research ends, read every step: when its order leaves the structure against when the upgrade arrives,
+    and what a cancel and the structure's death leave. The research takes its full time."""
+    weapons = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
+    armor = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1
+
+    def researching(tag: int, ability: AbilityId) -> bool:
+        unit = game.unit(tag)
+        return unit is not None and any(order.ability_id == ability for order in unit.orders)
+
+    def bay(trial: Trial, ability: AbilityId) -> raw_pb2.Unit | None:
+        made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(12), 4))
+        if not made:
+            trial.notes["class"] = "not made"
+            return None
+        trial.notes["verdict"] = game.order(ability, made)
+        trial.notes["ordered at"] = game.step
+        return made[0]
+
+    def ended(trial: Trial, *, cancel: bool) -> None:
+        if (structure := bay(trial, armor)) is None:
+            return
+        game.until(lambda: researching(structure.tag, armor), limit=16)
+        trial.notes["first shown at"] = game.step
+        game.turn(64)
+        purse = [game.minerals, game.vespene]
+        if cancel:
+            trial.notes["cancel"] = game.order(AbilityId.CANCEL_LAST, [structure])
+        else:
+            game.kill([structure])
+        rows: list[list[object]] = []
+        for _ in range(16):
+            game.turn(1)
+            rows.append([game.step, researching(structure.tag, armor), game.unit(structure.tag) is not None])
+        trial.notes["purse before, and 16 steps after"] = [purse, [game.minerals, game.vespene]]
+        trial.notes["step, still researching, bay listed"] = rows
+        trial.notes["upgrade arrived"] = UpgradeId.TERRAN_INFANTRY_ARMOR_1 in game.upgrades
+
+    trials = [
+        game.trial("a research cancelled 64 steps in", partial(ended, cancel=True)),
+        game.trial("a research whose structure dies 64 steps in", partial(ended, cancel=False)),
+    ]
+
+    def finished(trial: Trial) -> None:
+        if (structure := bay(trial, weapons)) is None:
+            return
+        last_shown = arrived = None
+        end = game.step + 4000
+        while game.step < end and arrived is None:
+            game.turn(1)
+            if researching(structure.tag, weapons):
+                last_shown = game.step
+            if UpgradeId.TERRAN_INFANTRY_WEAPONS_1 in game.upgrades:
+                arrived = game.step
+        trial.notes["last step it was shown"] = last_shown
+        trial.notes["first step the upgrade was listed"] = arrived
+
+    trials.append(game.trial("a research to its end", finished))
+    return trials
+
+
 _SWEEPS: dict[str, _Sweep] = {
     "keeps-terran": _Sweep(Race.TERRAN, lambda g: _keeps(g, Race.TERRAN), _KEEPS_CHEATS),
     "keeps-protoss": _Sweep(Race.PROTOSS, lambda g: _keeps(g, Race.PROTOSS), _KEEPS_CHEATS),
@@ -4732,6 +4797,8 @@ _SWEEPS: dict[str, _Sweep] = {
     "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what each command charges counts.
     "one-command-each": _Sweep(Race.TERRAN, _one_command_each, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    # Not `fast_build`, so that a research takes its own time.
+    "research-ends": _Sweep(Race.TERRAN, _research_ends, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what a flying structure's add-on charges counts.
     "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what each order charges, and when, counts.

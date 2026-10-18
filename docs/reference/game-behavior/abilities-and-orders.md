@@ -375,6 +375,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   killed: the next observation still lists it with all three orders, the one after does not list it at all, and
   neither carries an action or an action error for it. An SCV killed on its way to build is the same. So what a dead
   unit was making is known only from the unit being gone, never from a report (tool `sweep_orders`).
+- A research's order leaves its structure in the step its upgrade is first listed, so no observation shows neither:
+  infantry weapons 1, ordered at step 218, was last shown at 2777 and listed from 2778. Cancelled 64 steps in with
+  `CANCEL_LAST`, it was gone by the next step and gave back 100/100; with its engineering bay killed by debug command
+  64 steps in, the bay was gone within 3 steps and 100/100 came back within 18. Neither listed the upgrade (tool
+  `sweep_orders`, `research-ends`, twice; local game, build 75689).
 
 ## Actions the game reports
 
