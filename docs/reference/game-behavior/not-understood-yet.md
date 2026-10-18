@@ -2,10 +2,10 @@
 
 Part of [how the game behaves](README.md), which says how each entry was seen.
 
-- **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it answered
-  22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots, with the
-  point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup, build
-  75689).
+- **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it
+  answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
+  with the point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup,
+  build 75689).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).

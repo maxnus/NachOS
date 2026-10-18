@@ -8,9 +8,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - The rows include damage, bonuses (new ones too: Infernal Pre-Igniter gives the hellbat a bonus against light),
   range, armor and speed, each added on. Every level adds the same amount to a type, but different types get
   different amounts: a marauder gets +1 and +1 against armored (tool `sweep_upgrades`, #30).
-- The rows leave out attack speed (Adrenal Glands, Resonating Glaives), shield armor and what abilities and buffs
-  do, and do not change for shields levels, Combat Shield, Stim or Concussive Shells. They count Anabolic Synthesis
-  whether the unit is on creep or not (tool `sweep_upgrades`, #30).
+- The rows leave out attack speed (Adrenal Glands, Resonating Glaives), shield armor and what abilities and buffs do,
+  and do not change for shields levels, Combat Shield, Stim or Concussive Shells. They count Anabolic Synthesis whether
+  the unit is on creep or not, though in play it speeds an ultralisk only off creep (stated) (tool `sweep_upgrades`,
+  #30).
 - The void ray, carrier, sentry, battlecruiser and oracle have no weapon in the rows, yet the first three take
   attack levels (tool `sweep_upgrades`, #30).
 - A type's armor plus the armor its units report from upgrades is the upgraded row's armor. Armor levels add 1
@@ -28,8 +29,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Researchable in 5.0.15: Interference Matrix, Caduceus Reactor, Mag-Field Accelerator, Tectonic Destabilizers and
   Nanomuscular Swell, which needs a Hive and since 5.0.14 reuses the `HydraliskFrenzy` ids. No longer researchable:
   Rapid Reignition System, which Caduceus Reactor replaced in 5.0.12, Ventral Sacs, Rapid Deployment, and Microbial
-  Shroud, which keeps its 150/150 price and research id but is never offered. A lair offers only Pneumatized
-  Carapace and Burrow (tool `sweep_buffs`, #23, #24).
+  Shroud, which keeps its 150/150 price and research id but is never offered: an infestation pit is never offered
+  it, whether a lair or a hive stands, and ordered it puts no order on the pit and grants nothing. A lair offers
+  only Pneumatized Carapace and Burrow, and an overlord morphing into a transport grants no upgrade (tool
+  `sweep_buffs`, #23, #24).
 - An armory offers exactly three researches, 855, 861 and 864: vehicle weapons, ship weapons and vehicle-and-ship
   plating. The upgrade table names `ArmoryResearchSwarm` for the plating levels, which an armory is never offered
   and which does nothing when ordered (#5, #23).

@@ -42,13 +42,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   or a queen's creep tumor, refused off it, could stand at each tile center around the unit: the tiles both are
   refused are its own. The placement query takes a sensor tower with no engineering bay. An acceleration zone and a
   flying inhibitor zone the game does not create at all (tool `sweep_placement`, build 75689).
-- Whether a structure may stand on creep was asked of each structure type a unit places at a point, on open ground
-  and on a hatchery's creep, with a pylon's power over both. A zerg structure but a hatchery and a nydus worm, and a
-  creep tumor, is taken only on creep, and refused off it `CantBuildTooFarFromCreepSource`; a terran or protoss
-  structure but a raven's auto turret and an oracle's stasis ward only off it, and refused on it
-  `CantBuildTooCloseToCreepSource`; a hatchery, a nydus worm, an auto turret and a stasis ward either way. A zerg structure needs creep under every tile of its footprint: beside a
-  hatchery, a spawning pool was refused while the creep had not yet reached one corner of its 3x3 (tool
-  `sweep_placement`, build 75689).
+- Whether a structure may stand on creep was asked of each structure type a unit places at a point, on open ground and
+  on a hatchery's creep, with a pylon's power over both. A zerg structure but a hatchery and a nydus worm, and a creep
+  tumor, is taken only on creep, and refused off it `CantBuildTooFarFromCreepSource`; a terran or protoss structure but
+  a raven's auto turret and an oracle's stasis ward only off it, and refused on it `CantBuildTooCloseToCreepSource`; a
+  hatchery, a nydus worm, an auto turret and a stasis ward either way. A zerg structure needs creep under every tile of
+  its footprint: beside a hatchery, a spawning pool was refused while the creep had not yet reached one corner of its
+  3x3 (tool `sweep_placement`, build 75689).
 - An add-on is its host's own type only while attached: created alone by a debug command, a barracks', factory's or
   starport's tech lab or reactor comes out plain, and a barracks lifting off leaves its reactor plain. The sweep
   measures each beside a host told to build it (tool `sweep_placement`; local game, build 75689).
@@ -74,9 +74,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   understood yet" says (tool `sweep_placement`, build 75689).
 - `start_locations` leaves out this player's own, and names each other spawn at the center of its townhall's tile
   (#17; corpus).
-- A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one.
-  The game moved a forge placed at the edge of buildable ground from (93, 150) to (90.5, 147.5), and a pylon ordered
-  onto unbuildable ground was never made (#25, #32).
+- A structure's center snaps to the grid, to a tile corner for an even footprint and a tile center for an odd one,
+  and a builder's order shows its site snapped: a depot ordered at (86.3, 159.7) at (86, 160), and a barracks ordered
+  at (82.3, 158.7) at (82.5, 158.5) (tool `sweep_orders`). An SCV's order, once construction starts, targets a center
+  at most 0.71 from the point ordered (#25). The game moved a forge placed at the edge of buildable ground from
+  (93, 150) to (90.5, 147.5), and a pylon ordered onto unbuildable ground was never made (#25, #32).
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
 - The pathing query (`RequestQueryPathing`) answers the distance a ground unit walks over the map as it stood at the

@@ -89,7 +89,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   6 and a step later in the other 3. On a cancel the structure is reported dead and the drone returns in that
   observation, under its own tag and with its health (#25, #37; tested).
 - An SCV first walks to the site carrying the build order; once construction starts, its order targets the
-  structure's snapped center, at most 0.71 from the ordered point. Halted, it has no orders and progress stops;
+  structure's snapped center ([where a site snaps](map.md)). Halted, it has no orders and progress stops;
   resumed with a smart order, its order targets the structure; killed, it is reported dead and progress freezes;
   once the structure is finished, it has no orders (#25).
 - A probe warps its building in and walks away, and a drone becomes the building, so only an SCV has anything to

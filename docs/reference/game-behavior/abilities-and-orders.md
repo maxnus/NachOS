@@ -2,6 +2,8 @@
 
 Part of [how the game behaves](README.md), which says how each entry was seen.
 
+## Ids: what a unit is offered, ordered and runs
+
 - A unit is offered and reports its type's own id of an action several types perform. The action's id is never
   offered but is accepted as an order, and the game runs each unit's own: Move (3794) shows as `Move_Move` (16),
   Attack (3674) runs as `attack_Attack` (23), `BurrowDown` burrows any unit, and a general research id researches the
@@ -40,11 +42,16 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   for 50 energy), the locust's 2018 (2704) and purification nova's 2546 (2346). Of the refinery rows 320 and 325,
   only 320 works. The rich assimilator's and rich extractor's rows name no creation ability; the plain one builds
   on a rich geyser (#23, #29).
-- `RequestQueryAvailableAbilities` leaves out what a unit lacks the tech for, counts an add-on only for the structure
-  it is attached to, and offers an unpowered structure nothing that needs power: an unpowered gateway trains nothing,
-  though a probe is offered a gateway and a forge once a nexus stands, with no pylon (#29). Asked to ignore costs,
-  it ignores energy and cooldowns too (#29); counting them, it leaves out a warp gate's warp-ins while the gate waits
-  (below).
+- Ability 0 is no ability, and Smart is the right-click order. `Cancel_Queue5` and
+  `Cancel_QueueCancelToSelection` both remap to `Cancel_Last` (stated).
+
+## What a unit is offered
+
+- `RequestQueryAvailableAbilities` leaves out what a unit lacks the tech for, counts an add-on only for the structure it
+  is attached to (a bare barracks is not offered a marauder while another stands with a tech lab), and offers an
+  unpowered structure nothing that needs power: an unpowered gateway trains nothing, though a probe is offered a gateway
+  and a forge once a nexus stands, with no pylon (#29). Asked to ignore costs, it ignores energy and cooldowns too
+  (#29); counting them, it leaves out a warp gate's warp-ins while the gate waits (below).
 - A requirement drops out of the answer within 4 steps of its structure leaving the observation; a lifted barracks
   still counts as a barracks, a lowered depot as a depot and a hive as a lair. A ghost is offered 4 steps after its
   academy appears (a tech lab alone is not enough), and weapons level 2 after level 1 (#29; tested).
@@ -60,8 +67,31 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A roach is offered the ravager morph once a roach warren stands; a warp gate warps in all six gateway units;
   workers carrying minerals are offered a return fresh ones are not; brood lord and overlord cocoons can move,
   patrol and hold; a battlecruiser has its own attack, move, patrol, hold and stop (#29, #33).
-- A building SCV is offered `Halt_TerranBuild` (348), which clears its orders and leaves the structure at its
-  progress; the other races' slot-30 rows are offered to nobody and do nothing (#23).
+- A building SCV is offered `Halt_TerranBuild` (348, named "Halt TerranBuild"), which clears its orders and leaves
+  the structure at its progress. The other slot-30 rows, zerg, protoss, the queen's, the raven's and the nydus's, named
+  `ZergBuild_30` and the like, are offered to nobody in any state, idle, building, or the half-built structure a drone
+  became, and ordered do nothing (#23).
+
+## Verdicts, and what is carried out
+
+- A player that gives no orders still has its workers mine: the game gives those orders itself (corpus).
+- Every action in a `RequestAction` gets a verdict, in the order sent, even 500 in one request, and the game carries
+  them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a queued one
+  clears it, and a queued move after an unqueued one goes behind it. A stim and a move to one marine are both
+  carried out in either order: it moves, stimmed (tool `sweep_orders`).
+- Each action is judged against the game state as the last step left it, not as earlier actions in the same step
+  change it. When the game steps, it carries them out in order and drops what no longer fits, with no error and no
+  entry among the reported actions. Ten marines sent to a barracks in ten requests within one step are all answered
+  `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in one request to a
+  command center, five are queued (tool `sweep_orders`).
+- An order to a dead unit's tag, or to a tag never used, is answered `Error`; to an enemy unit,
+  `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
+  move, a unit for a supply depot (tool `sweep_orders`).
+- An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it; the tag it
+  was seen under is refused `NotSupported` (tool `sweep_orders`).
+
+## Supply and money
+
 - With no supply, an order is refused as given: drones get `NotEnoughFood`. Five SCVs queued with 2 supply left
   train 2, and the observation with the second carries a `NotEnoughFood` action error, as it does when the depot
   they need is killed. A depot ordered onto minerals gets `CantFindPlacementLocation`, and one whose ground a sieged
@@ -75,25 +105,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   three, answers each `Success`, and starts none: no progress for 380 steps, no action error, and nothing dropped.
   Two SCVs queued at once take one supply between them, and cancelling the one that had not started gives none
   back (tool `sweep_orders`).
-- A single passenger cannot be unloaded through `RequestAction`: it takes the UI action `ActionCargoPanelUnload`
-  after a raw command with ability 0 selects the transport, with `raw_affects_selection` and a feature layer on. The
-  medivac's unload abilities unload every passenger at once (stated).
-- An item in the middle of a queue can be cancelled, but only the same way: the UI action
-  `ActionProductionPanelRemoveFromQueue`, with the structure selected. A barracks holding a marine, a reaper, a
-  marine, a reaper and a marine, selected by a rally, and asked for index 2: answered `Success`, the third item
-  goes, and the next observation reports it as a raw `CancelSlot_Queue5` command on the barracks. The same action in
-  a game joined with the raw interface and `raw_affects_selection` but no feature layer is answered `Error`, and the
-  slot ids sent raw to the selected barracks are answered as they are to an unselected one: `Cancel_Slot` `Error`,
-  `CancelSlot_Queue5` and `CancelSlot_QueueCancelToSelection` `NotSupported`. So a selection is not what those ids
-  were missing, and NachOS, which asks for the raw interface alone, can cancel only a structure's last item (tool
-  `sweep_orders`).
-- Ability 0 is no ability, and Smart is the right-click order. `Cancel_Queue5` and
-  `Cancel_QueueCancelToSelection` both remap to `Cancel_Last` (stated).
-- A player that gives no orders still has its workers mine: the game gives those orders itself (corpus).
-- Every action in a `RequestAction` gets a verdict, in the order sent, even 500 in one request, and the game carries
-  them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a queued one
-  clears it, and a queued move after an unqueued one goes behind it. A stim and a move to one marine are both
-  carried out in either order: it moves, stimmed (tool `sweep_orders`).
+
+## Production
+
 - Training and research queue behind what a structure is already making, queued or not: an unqueued train given to
   a command center, hatchery or nexus that is training, or an unqueued research to an engineering bay, forge or
   evolution chamber that is researching, waits its turn like a queued one. A structure holds 5; a sixth is answered
@@ -108,64 +122,6 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A barracks stays busy one step longer than its add-on takes: in the observation where the tech lab or reactor
   first reads finished, the barracks still shows the order that built it, is offered no train, and refuses a marine
   `NotSupported`. A step later it takes one (tool `sweep_orders`).
-- Each action is judged against the game state as the last step left it, not as earlier actions in the same step
-  change it. When the game steps, it carries them out in order and drops what no longer fits, with no error and no
-  entry among the reported actions. Ten marines sent to a barracks in ten requests within one step are all answered
-  `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in one request to a
-  command center, five are queued (tool `sweep_orders`).
-- Through `RequestAction`, a structure's production can be cancelled only from its last item. `Cancel_Last` and a
-  structure's own cancel remove the last item, and a busy structure is offered no other cancel: `Cancel_Queue5` for
-  a barracks or a bay, `Cancel_QueueCancelToSelection` for a command center. `Cancel_Slot` and the generic `Cancel`
-  are answered `Error`, and another structure's cancel and `CancelSlot_Queue5` `NotSupported`. The reported action
-  names the structure's own cancel, whichever was sent. A cancel to an idle structure is answered `Error`; three
-  cancels to a barracks training two marines are all answered `Success`, and two are carried out (tool
-  `sweep_orders`).
-- A cancel makes no room for what follows it in the same step. A cancel and then a marine to a barracks holding 5:
-  the cancel is carried out and the marine refused `QueueIsFull`; a step later a marine is taken. To one holding 4,
-  a cancel and then a reaper are both carried out, and the reaper goes last. Cancels followed by an orbital command
-  to a command center training SCVs, or a cancel followed by a tech lab to a barracks training a marine, empty the
-  queue and refuse the morph or add-on `NotSupported`; a step later it is taken (tool `sweep_orders`).
-- A cancel's refund follows a fixed rule and does not depend on progress: all of a train or a research, three
-  quarters of a morph, an add-on or a structure going up, rounded up. Seen at real prices, as the jump in the bank
-  over the observation the cancel landed in: an SCV 50 of 50 and a research 100/100 of 100/100; an orbital command
-  113 of 150, a planetary fortress 113/113 of 150/150, a tech lab 38/19 of 50/25, and a supply depot 75 of 100. An
-  orbital cancelled 400 steps into its morph refunds the same 113 as one cancelled 40 steps in, and a depot
-  cancelled half way up the same 75 as one barely started (tool `sweep_orders`).
-- A structure part way through something is offered exactly one cancel, its own. A command center morphing is
-  offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, a barracks building an add-on
-  `Cancel_BarracksAddOn`, an engineering bay researching `Cancel_Queue5`, a command center training
-  `Cancel_QueueCancelToSelection`, and a structure going up `Cancel_BuildInProgress`. `Cancel_Last` is answered
-  `Error` by a morph and by an add-on, so send the cancel the game offers, not the generic one (tool
-  `sweep_orders`).
-- Which cancel a structure is offered depends on what it is making; every producer of the three races was read. A
-  command center morphing is offered `Cancel_MorphOrbital` or `Cancel_MorphPlanetaryFortress`, according to the
-  morph it is running; a barracks, a factory and a starport building either add-on `Cancel_BarracksAddOn`,
-  `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`; a hatchery morphing `Cancel_MorphLair`, a lair `Cancel_MorphHive`
-  and a spire `Cancel_MorphGreaterSpire`. Everything training or researching is offered the queue cancel of its
-  kind: `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a forge, an evolution chamber and the rest,
-  `Cancel_QueueCancelToSelection` for a command center, an orbital command, a hatchery, a lair and a hive,
-  `Cancel_QueuePasive` for a nexus, `Cancel_QueuePassiveCancelToSelection` for a planetary fortress and
-  `Cancel_QueueAddOn` for a tech lab researching on its host. `Cancel_Last` sent to a tech lab took back its research,
-  on a barracks, a factory and a starport alike. A warp gate, which keeps no queue, is offered none. A cancel is
-  offered only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine or an
-  add-on can be done within the step its order lands in, before the structure is first read (tool
-  `sweep_tech_tree`).
-- The generic `Cancel` (3659) does whatever cancel a unit is offered, beyond a queue. Each of these was put into the
-  state it is offered a cancel in, and in every one it was offered exactly one: a command center morphing to an
-  orbital or a fortress, a barracks, factory and starport building an add-on, a hatchery, lair and spire morphing, a
-  supply depot going up, a zergling, roach, hydralisk, overlord (to an overseer and to a transport) and corruptor in
-  their cocoon or egg, a ghost sniping and arming a nuke, an infestor's neural parasite, a phoenix's graviton beam, a
-  void ray's prismatic alignment, an adept with its shade out and the shade itself. Given `Cancel`, each was answered
-  `Success`, and the game reported the action as that unit's own cancel. Each was undone as its own cancel undoes it:
-  a structure kept its type and lost its order, the depot was gone, a cocoon or egg became the unit it came from, a
-  channel stopped, the void ray lost its buff, and the shade was gone. A ghost's nuke still showed 6 steps after
-  `Cancel` and was gone 48 steps after, exactly as after the ghost's own `Cancel_Nuke` (tool `sweep_orders`,
-  `cancels-whole` and `nuke-cancels`; runs 37610767491 and 37611317534).
-- A cancelled SCV refunds its 50 minerals by the next observation, whether half made or only queued, and the refund
-  pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then an
-  SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay for
-  it. With none, 5 cancels to a command center and an orbital command to another, idle one: the orbital is refused
-  `NotEnoughMinerals`, and a step later the refunded 250 pay for it (tool `sweep_orders`).
 - Every non-producing ability a producing structure is offered leaves what it is making alone, at its progress.
   Each was given to a structure part way through a train or a research, and the structure carried on: the rally of a
   barracks, factory, starport, robotics facility, stargate, nexus, command center, orbital command, planetary
@@ -183,6 +139,77 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   one request, a forge took ground weapons 1, ground armor 1 and shields 1, and an evolution chamber melee 1,
   missile 1 and ground armor 1, each refusing `NotSupported` the second level of a line it was already on (tool
   `sweep_orders`).
+- A structure training two goes on training through a smart, which sets its rally: at a point for a barracks, factory,
+  starport, command center, orbital command, planetary fortress, nexus, gateway, robotics facility, stargate, hatchery,
+  lair and hive, and at a mineral field, which it then rallies to by tag, for a command center, nexus and hatchery. A
+  command center and a planetary fortress go on training through a load-all that takes in an SCV beside them (tool
+  `sweep_orders`, `structure-orders`).
+- A planetary fortress training two SCVs, given an attack on a command center in range, shows the attack behind its
+  trains, fires, and goes on training. Given a stop, before or after the attack, it goes on training, and shows an
+  attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
+  through both at a command center in range (tool `sweep_orders`, `held-orders`).
+
+## Cancels and refunds
+
+- A structure part way through something is offered exactly one cancel, its own, by what it is making; every producer of
+  the three races was read. A command center morphing is offered `Cancel_MorphOrbital` or
+  `Cancel_MorphPlanetaryFortress`, according to the morph it is running; a barracks, a factory and a starport building
+  either add-on `Cancel_BarracksAddOn`, `Cancel_FactoryAddOn` and `Cancel_StarportAddOn`; a hatchery morphing
+  `Cancel_MorphLair`, a lair `Cancel_MorphHive` and a spire `Cancel_MorphGreaterSpire`. Everything training or
+  researching is offered the queue cancel of its kind: `Cancel_Queue5` for a barracks, an engineering bay, a gateway, a
+  forge, an evolution chamber and the rest, `Cancel_QueueCancelToSelection` for a command center, an orbital command, a
+  hatchery, a lair and a hive, `Cancel_QueuePasive` for a nexus, `Cancel_QueuePassiveCancelToSelection` for a planetary
+  fortress and `Cancel_QueueAddOn` for a tech lab researching on its host. `Cancel_Last` sent to a tech lab took back
+  its research, on a barracks, a factory and a starport alike. A warp gate, which keeps no queue, is offered none. A
+  cancel is offered only while the work goes on, so an idle structure is offered none; and under `fast_build` a marine
+  or an add-on can be done within the step its order lands in, before the structure is first read (tool
+  `sweep_tech_tree`). `Cancel_Last` is answered `Error` by a morph and by an add-on, so send the cancel the game offers,
+  not the generic one (tool `sweep_orders`).
+- Through `RequestAction`, a structure's production can be cancelled only from its last item. `Cancel_Last` and a
+  structure's own cancel remove the last item, and a busy structure is offered no other cancel than its own, above.
+  `Cancel_Slot` and the generic `Cancel` are answered `Error`, and another structure's cancel and `CancelSlot_Queue5`
+  `NotSupported`. The reported action names the structure's own cancel, whichever was sent. A cancel to an idle
+  structure is answered `Error`; three cancels to a barracks training two marines are all answered `Success`, and two
+  are carried out (tool `sweep_orders`).
+- The generic `Cancel` (3659) does whatever cancel a unit is offered, beyond a queue. Each of these was put into the
+  state it is offered a cancel in, and in every one it was offered exactly one: a command center morphing to an
+  orbital or a fortress, a barracks, factory and starport building an add-on, a hatchery, lair and spire morphing, a
+  supply depot going up, a zergling, roach, hydralisk, overlord (to an overseer and to a transport) and corruptor in
+  their cocoon or egg, a ghost sniping and arming a nuke, an infestor's neural parasite, a phoenix's graviton beam, a
+  void ray's prismatic alignment, an adept with its shade out and the shade itself. Given `Cancel`, each was answered
+  `Success`, and the game reported the action as that unit's own cancel. Each was undone as its own cancel undoes it:
+  a structure kept its type and lost its order, the depot was gone, a cocoon or egg became the unit it came from, a
+  channel stopped, the void ray lost its buff, and the shade was gone. A ghost's nuke still showed 6 steps after
+  `Cancel` and was gone 48 steps after, exactly as after the ghost's own `Cancel_Nuke` (tool `sweep_orders`,
+  `cancels-whole` and `nuke-cancels`; runs 37610767491 and 37611317534).
+- An item in the middle of a queue can be cancelled, but only the same way: the UI action
+  `ActionProductionPanelRemoveFromQueue`, with the structure selected. A barracks holding a marine, a reaper, a
+  marine, a reaper and a marine, selected by a rally, and asked for index 2: answered `Success`, the third item
+  goes, and the next observation reports it as a raw `CancelSlot_Queue5` command on the barracks. The same action in
+  a game joined with the raw interface and `raw_affects_selection` but no feature layer is answered `Error`, and the
+  slot ids sent raw to the selected barracks are answered as they are to an unselected one: `Cancel_Slot` `Error`,
+  `CancelSlot_Queue5` and `CancelSlot_QueueCancelToSelection` `NotSupported`. So a selection is not what those ids
+  were missing, and NachOS, which asks for the raw interface alone, can cancel only a structure's last item (tool
+  `sweep_orders`).
+- A cancel makes no room for what follows it in the same step. A cancel and then a marine to a barracks holding 5:
+  the cancel is carried out and the marine refused `QueueIsFull`; a step later a marine is taken. To one holding 4,
+  a cancel and then a reaper are both carried out, and the reaper goes last. Cancels followed by an orbital command
+  to a command center training SCVs, or a cancel followed by a tech lab to a barracks training a marine, empty the
+  queue and refuse the morph or add-on `NotSupported`; a step later it is taken (tool `sweep_orders`).
+- A cancel's refund follows a fixed rule and does not depend on progress: all of a train or a research, three
+  quarters of a morph, an add-on or a structure going up, rounded up. Seen at real prices, as the jump in the bank
+  over the observation the cancel landed in: an SCV 50 of 50 and a research 100/100 of 100/100; an orbital command
+  113 of 150, a planetary fortress 113/113 of 150/150, a tech lab 38/19 of 50/25, and a supply depot 75 of 100. An
+  orbital cancelled 400 steps into its morph refunds the same 113 as one cancelled 40 steps in, and a depot
+  cancelled half way up the same 75 as one barely started (tool `sweep_orders`).
+- A cancelled SCV refunds its 50 minerals by the next observation, whether half made or only queued, and the refund
+  pays for nothing sent in the same step, to the same structure or another. With 5 minerals, a cancel and then an
+  SCV to a command center: the SCV is refused `NotEnoughMinerals`, and a step later the 55 the cancel leaves pay for
+  it. With none, 5 cancels to a command center and an orbital command to another, idle one: the orbital is refused
+  `NotEnoughMinerals`, and a step later the refunded 250 pay for it (tool `sweep_orders`).
+
+## What an order does to a unit's orders
+
 - A few abilities act at once and leave a unit's orders as they were, so a move carries on: stim, the banshee's and
   ghost's cloak, the ghost's hold fire, the medivac's boost, Guardian Shield, the mothership's cloak field, the
   oracle's pulsar beam, the void ray's prismatic alignment, the overlord's creep, the adept's shade and the
@@ -196,28 +223,43 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   answered `Success`, leaves the move first in the unit's orders, and the unit keeps closing on its point. A lurker's
   hold fire was the one that could not be tried, since it is offered only burrowed, and a burrowed lurker is offered
   no move (tool `sweep_orders`).
-- A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form:
-  a sieged tank its siege mode, which reads as `SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged
-  liberator shows `LIBERATOR_SIEGE_AT` (2554, read as the siege ordered) aimed at itself, but only while its zone
-  forms.
-  A sieged tank and a burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes
-  the tank off its attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows
-  behind the form's order until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed
-  widow mine hold no order to take them off: each answers attack, move, patrol and hold position `Error`. A sieged
-  liberator answers an attack on a unit in its zone `TargetIsOutOfRange` for at least 64 steps after it shows as
-  sieged, while its zone forms, and takes it 224 steps after; unsiege then takes it off the attack. A burrowed
-  infestor given an attack on a command center out of range shows `Scan_Move` at it and moves toward it, 4.9
-  in 46 steps, and unburrow takes it off the attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46
-  steps); without it, it answers attack, move, patrol and hold position `Error`, as a burrowed zergling and swarm host
-  do. The `tech_tree` cheat grants Tunneling Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`,
-  `structure-orders` and `burrowed-movers`).
+- A sieged or burrowed form shows the ability that made it as its first order for as long as it stays in the form: a
+  sieged tank its siege mode, which reads as `SIEGE`, and a burrowed lurker `BurrowDown_Lurker`. A sieged tank and a
+  burrowed lurker given an attack on a command center in range show it behind that. Unsiege takes the tank off its
+  attack, and unburrow and hold fire, the lurker's own or the general id, the lurker; each shows behind the form's order
+  until the unit changes. A sieged observer and overseer, a phasing warp prism and a burrowed widow mine hold no order
+  to take them off: each answers attack, move, patrol and hold position `Error`. A sieged liberator answers an attack on
+  a unit in its zone `TargetIsOutOfRange` for at least 64 steps after it shows as sieged, while its zone forms, and
+  takes it 224 steps after; unsiege then takes it off the attack. A burrowed infestor given an attack on a command
+  center out of range shows `Scan_Move` at it and moves toward it, 4.9 in 46 steps, and unburrow takes it off the
+  attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46 steps); without it, it answers attack, move,
+  patrol and hold position `Error`, as a burrowed zergling and swarm host do. The `tech_tree` cheat grants Tunneling
+  Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`, `structure-orders` and `burrowed-movers`).
+- A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
+  enemy switch to a second when given an attack or a smart at it. Given a stop, each shows the same attack again by
+  the next observation and fires on, so whether stop took it off and it took the target up again on its own cannot
+  be told from its orders (tool `sweep_orders`, `structure-orders`).
+- An unqueued order identical to a unit's first, in the ability it runs and the target to 1/4096, is ignored:
+  answered `Success`, left out of the reported actions, and free. Four marines attacking pylons, each standing at
+  each of four sites in turn for 896 steps, dealt 1382 to 1402 in all whether their attack was sent once or re-sent
+  every step, every 4th or every 16th, each round within two shots of the others; a re-sent move covered the same
+  ground, and a gather re-sent while the worker gathered mined as much. It still drops the orders queued behind the
+  first. An order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the
+  field with the cargo, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool
+  `sweep_orders`).
+
+## Loading and unloading
+
+- A single passenger cannot be unloaded through `RequestAction`: it takes the UI action `ActionCargoPanelUnload`
+  after a raw command with ability 0 selects the transport, with `raw_affects_selection` and a feature layer on. The
+  medivac's unload abilities unload every passenger at once (stated).
 - A loaded command center or planetary fortress training two SCVs goes on training while it unloads, by
-  `UnloadAll_CommandCenter` (413, which both are offered) or `UNLOAD`. A command
-  center's unload at a point is refused, `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is offered only its unload at a
-  point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is and leaves its move going;
-  aimed at a point, it replaces the move and flies there first. `UNLOAD` is answered `Error` by each of the
-  three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`). Two medivacs given a move
-  and `UNLOAD_AT` aimed at each itself, in one request and in either order, put their marines down where
+  `UnloadAll_CommandCenter` (413, which both are offered) or `UNLOAD`. A command center's unload at a point is refused,
+  `NotSupported` by its own id and `Error` by the general one. A loaded medivac, warp prism or transport overlord is
+  offered only its unload at a point (`UnloadAllAt`). Aimed at the transport itself, it unloads where the transport is
+  and leaves its move going; aimed at a point, it replaces the move and flies there first. `UNLOAD` is answered `Error`
+  by each of the three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`). Two medivacs
+  given a move and `UNLOAD_AT` aimed at each itself, in one request and in either order, put their marines down where
   they stood and flew on; from the next observation each showed only its move (`tests/test_orders.py`, run on GitHub
   Actions).
 - Nothing else swept does something different to a unit's orders by what it is aimed at. A moving medivac, warp
@@ -225,29 +267,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   its anti-armor missile or interference matrix, and a battlecruiser its Yamato, at an enemy siege tank in reach or 16
   away, drop theirs. A planetary fortress's attack aimed at a point is refused `MustTargetUnit` (tool
   `sweep_orders`, `target-dependent`).
-- A planetary fortress training two SCVs, given an attack on a command center in range, shows the attack behind its
-  trains, fires, and goes on training. Given a stop, before or after the attack, it goes on training, and shows an
-  attack again within a step, its own. A loaded bunker shows no order through an attack or a stop, and fires on
-  through both at a command center in range (tool `sweep_orders`, `held-orders`).
-- A structure training two goes on training through a smart, which sets its rally: at a point for a barracks,
-  factory, starport, command center, orbital command, planetary fortress, nexus, gateway, robotics facility,
-  stargate, hatchery, lair and hive, and at a mineral field, which it then rallies to by tag, for a command center, nexus and
-  hatchery. A command center and a planetary fortress go on training through a load-all that takes in an SCV beside
-  them (tool `sweep_orders`, `structure-orders`).
-- A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
-  enemy switch to a second when given an attack or a smart at it. Given a stop, each shows the same attack again by
-  the next observation and fires on, so whether stop took it off and it took the target up again on its own cannot
-  be told from its orders (tool `sweep_orders`, `structure-orders`).
-- One command to several units sends each moving unit to its own point around the one ordered, so they keep their
-  spacing, but a spell, a structure, a morph, a train and a research are carried out by only one of them: a storm by
-  a templar with the energy for it, a pylon by one of two probes, a morph as above, one marine from three barracks
-  given one train (50 minerals went and one of the three carried the order), one research from two engineering bays
-  given one (100/100), one reactor from two barracks given one, and the one with room beside it takes it if the
-  other's spot is blocked. Units that cannot take the order are left out, and the verdict is still `Success`: a
-  supply depot among marines given a move, a dead unit's tag among live ones. The same tag twice counts once (tool
-  `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a loaded and an empty
-  medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty medivacs, one or
-  two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
+
+## One command to several units
+
 - One command naming two units of a type has one of them carry out what costs and a few abilities more, and both
   the rest. Two of each unit type and structure, in each of its forms, were given each ability they are offered that
   costs no minerals or vespene in one command, those that move sent off first, and read for whose energy changed,
@@ -277,6 +299,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   energy spent. A medivac heals hurt units by itself, which spends energy too: of two given a load, one spent 3.6 with
   its heal on autocast, and neither with it off, so the sweep turns it off first. (Tool `sweep_orders`,
   `group-abilities-terran`, `-protoss` and `-zerg`; local game, Linux build 75689.)
+- One command to several units sends each moving unit to its own point around the one ordered, so they keep their
+  spacing. Of what only one of them carries out, above, a storm went to a templar with the energy for it and a pylon to
+  one of two probes; three barracks given one train made one marine (50 minerals went, and one of the three carried the
+  order), two engineering bays given one research made one (100/100), and two barracks given one reactor built one, the
+  one with room beside it where the other's spot was blocked. Units that cannot take the order are left out, and the
+  verdict is still `Success`: a supply depot among marines given a move, a dead unit's tag among live ones. The same tag
+  twice counts once (tool `sweep_orders`). So is a unit that could take it but not now: one unload at a point naming a
+  loaded and an empty medivac, in either order, is answered `Success` and the loaded one unloads. Naming only empty
+  medivacs, one or two, it is answered `Error`, as it is for one alone (tool `sweep_orders`, `group-verdicts`).
+
+## Larvae and warp gates
+
 - One larva given two drones in one request makes two: the game hands each order to a larva of its choosing, and the
   reported action names the larva it used, which need not be the one ordered (tool `sweep_orders`).
 - A larva keeps no queue. Given a drone, an overlord and a drone in one request, all three answered `Success`, it
@@ -292,36 +326,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   abilities query offered the warp-in when it ignored costs; counting them, it left the warp-in out from the
   observation after a warp-in to the observation the gate was ready (tool `sweep_orders`, `warp-gate-cooldown`;
   local game, Linux build 75689).
-- An order to a dead unit's tag, or to a tag never used, is answered `Error`; to an enemy unit,
-  `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
-  move, a unit for a supply depot (tool `sweep_orders`).
-- A builder killed before the game gives up on its build is reported dead and nothing more. An SCV whose site one of
-  this player's marines held position on was given up on 108 steps after the order, with `CantBuildLocationInvalid`;
-  one sent to another such site and killed on the way got no error at all, then or twelve steps later (tool
-  `sweep_orders`).
-- A structure killed while making something is reported dead and nothing more. A barracks training three marines,
-  killed: the next observation still lists it with all three orders, the one after does not list it at all, and
-  neither carries an action or an action error for it. An SCV killed on its way to build is the same. So what a dead
-  unit was making is known only from the unit being gone, never from a report (tool `sweep_orders`).
-- An enemy structure out of sight is attacked by the tag of the snapshot the observation lists for it; the tag it
-  was seen under is refused `NotSupported` (tool `sweep_orders`).
+
+## Points
+
 - A point crosses the protocol as a 32-bit float, so a coordinate the game reports is exactly a float, widened; a
   point sent is rounded to a float on the way out, before the game rounds it down to its own lattice. The two
   roundings differ: x = 157.123288015625 goes out as 157.123291015625, a whole lattice step above where rounding
   down alone would land (tool `sweep_orders`; stated).
-- The game keeps a point to 1/4096, rounded down: a move to x = 157.123456 is carried out and reported as
-  157.123291, and one to 157.124456 as 157.124268. A builder's order shows its structure's site snapped to where the
-  structure will stand, on a tile corner for an even footprint and a tile center for an odd one: a depot ordered at
-  (86.3, 159.7) at (86, 160), a barracks ordered at (82.3, 158.7) at (82.5, 158.5). The reported action keeps the
-  point as sent (tool `sweep_orders`).
-- An unqueued order identical to a unit's first, in the ability it runs and the target to 1/4096, is ignored:
-  answered `Success`, left out of the reported actions, and free. Four marines attacking pylons, each standing at
-  each of four sites in turn for 896 steps, dealt 1382 to 1402 in all whether their attack was sent once or re-sent
-  every step, every 4th or every 16th, each round within two shots of the others; a re-sent move covered the same
-  ground, and a gather re-sent while the worker gathered mined as much. It still drops the orders queued behind the
-  first. An order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the
-  field with the cargo, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool
-  `sweep_orders`).
+- The game keeps a point to 1/4096, rounded down: a move to x = 157.123456 is carried out and reported as 157.123291,
+  and one to 157.124456 as 157.124268. The reported action keeps the point as sent (tool `sweep_orders`).
+
+## Builds, and work lost
+
 - A builder whose site one of this player's units holds position on gets a `CantBuildLocationInvalid` action error
   and drops its order. A build order takes its structure's cost when given, not when the builder arrives: a depot
   ordered 35 away took 100 of 120 minerals by the next observation, an SCV ordered with the 20 left was answered
@@ -338,6 +354,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
   storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
   and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
+- A builder killed before the game gives up on its build is reported dead and nothing more. An SCV whose site one of
+  this player's marines held position on was given up on 108 steps after the order, with `CantBuildLocationInvalid`;
+  one sent to another such site and killed on the way got no error at all, then or twelve steps later (tool
+  `sweep_orders`).
+- A structure killed while making something is reported dead and nothing more. A barracks training three marines,
+  killed: the next observation still lists it with all three orders, the one after does not list it at all, and
+  neither carries an action or an action error for it. An SCV killed on its way to build is the same. So what a dead
+  unit was making is known only from the unit being gone, never from a report (tool `sweep_orders`).
 
 ## Actions the game reports
 
