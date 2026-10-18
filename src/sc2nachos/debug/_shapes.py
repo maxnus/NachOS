@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos._checks import is_whole_number
-from sc2nachos.debug._color import Color, _Rgb, _rgb_of
+from sc2nachos.debug._color import Color, _proto_color, _Rgb, _rgb_if_given
 from sc2nachos.debug._marker import Marker
 
 if TYPE_CHECKING:
@@ -43,6 +43,8 @@ class DebugText:
         _check_offset(self.offset)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the text to `draw` at `at`, in `rgb`, `size` pixels high: its own color and size, or else what it takes
+        from where it is drawn."""
         draw.text.add(color=_proto_color(rgb), text=self.text, world_pos=_point(at), size=size)
 
 
@@ -67,6 +69,7 @@ class DebugBox:
         _check_offset(self.offset)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the box to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
         x, y, z = at
         low = common_pb2.Point(x=x - self.width / 2, y=y - self.depth / 2, z=z)
         high = common_pb2.Point(x=x + self.width / 2, y=y + self.depth / 2, z=z + self.height)
@@ -91,6 +94,7 @@ class DebugSphere:
         _check_offset(self.offset)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the sphere to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
         draw.spheres.add(color=_proto_color(rgb), p=_point(at), r=self.radius)
 
 
@@ -113,6 +117,7 @@ class DebugMark:
         _check_offset(self.offset)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the mark to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
         x, y, z = at
         color = _proto_color(rgb)
         for (x0, y0), (x1, y1) in _segments_of_marker(self.marker, self.radius):
@@ -140,6 +145,8 @@ class DebugLine:
         _check_offset(self.to_offset)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the line to `draw` from `at` to `end`, offset by `to_offset`, in `rgb`: its own color, or else what it
+        takes from where it is drawn."""
         if end is None:
             return
         x, y, z = end
@@ -203,12 +210,13 @@ type DebugShape = DebugText | DebugBox | DebugSphere | DebugMark | DebugLine | D
 @final
 @dataclass(frozen=True, slots=True)
 class _ScreenText:
-    """Text written on the screen at `at`, from 0 to 1 across and down."""
+    """Text written on the screen at `at`, from 0 to 1 across and down, as `api.debug.draw_text_on_screen` writes it."""
 
     text: str
     at: tuple[float, float]
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
+        """Add the text to `draw` on the screen, in `rgb`, `size` pixels high."""
         position = common_pb2.Point(x=self.at[0], y=self.at[1])
         draw.text.add(color=_proto_color(rgb), text=self.text, virtual_pos=position, size=size)
 
@@ -234,12 +242,6 @@ def _segments_of_marker(marker: Marker, radius: float) -> list[tuple[tuple[float
             return list(zip(corners, corners[1:] + corners[:1], strict=True))
 
 
-def _rgb_if_given(color: Color | _Rgb | None) -> _Rgb | None:
-    """`color`'s red, green and blue, or `None` if no color is given. Raises `ValueError` for what is not a `Color` or
-    red, green and blue, each a whole number from 0 to 255."""
-    return None if color is None else _rgb_of(color)
-
-
 def _check_offset(offset: _Vector) -> None:
     """Raises `ValueError` for an offset that is not three finite numbers."""
     if len(offset) != 3 or not all(math.isfinite(part) for part in offset):
@@ -249,10 +251,6 @@ def _check_offset(offset: _Vector) -> None:
 def _check_length(length: float, what: str) -> None:
     if not 0 < length < math.inf:
         raise ValueError(f"{what} is a finite number above 0, not {length!r}")
-
-
-def _proto_color(rgb: _Rgb) -> debug_pb2.Color:
-    return debug_pb2.Color(r=rgb[0], g=rgb[1], b=rgb[2])
 
 
 def _point(point: _Vector) -> common_pb2.Point:

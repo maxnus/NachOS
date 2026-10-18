@@ -48,7 +48,7 @@ class DebugCommands:
     """
 
     __slots__ = (
-        "_cheats",
+        "_active_cheats",
         "_client",
         "_commands",
         "_default_color",
@@ -61,7 +61,7 @@ class DebugCommands:
         "_refresh_steps",
         "_shown",
         "_step",
-        "_toggled",
+        "_toggled_cheats",
     )
 
     def __init__(self, client: Client, game_map: GameMap, *, opponent_id: int | None, step: int) -> None:
@@ -81,9 +81,9 @@ class DebugCommands:
         self._shown: debug_pb2.DebugDraw | None = None
         self._last_refresh: int | None = None
         self._commands: list[debug_pb2.DebugCommand] = []
-        self._cheats: set[Cheat] = set()
+        self._active_cheats: set[Cheat] = set()
         # The cheats the turn switched, each sent once.
-        self._toggled: set[Cheat] = set()
+        self._toggled_cheats: set[Cheat] = set()
 
     @property
     def refresh_steps(self) -> int:
@@ -207,19 +207,19 @@ class DebugCommands:
     def cheats(self) -> frozenset[Cheat]:
         """The cheats this player has turned on in this game, this turn's included. Each is on for the whole game, and
         in a game of two the other player can switch it too, which this does not see (in game)."""
-        return frozenset(self._cheats)
+        return frozenset(self._active_cheats)
 
     def turn_on(self, cheat: Cheat) -> None:
         """Turn `cheat` on for the rest of the game. One already on stays on, and nothing is sent."""
-        if cheat not in self._cheats:
-            self._cheats.add(cheat)
-            self._toggled ^= {cheat}
+        if cheat not in self._active_cheats:
+            self._active_cheats.add(cheat)
+            self._toggled_cheats ^= {cheat}
 
     def turn_off(self, cheat: Cheat) -> None:
         """Turn `cheat` off. One already off stays off, and nothing is sent."""
-        if cheat in self._cheats:
-            self._cheats.discard(cheat)
-            self._toggled ^= {cheat}
+        if cheat in self._active_cheats:
+            self._active_cheats.discard(cheat)
+            self._toggled_cheats ^= {cheat}
 
     def give_minerals(self) -> None:
         """Give this player 5000 minerals (in game)."""
@@ -330,10 +330,10 @@ class DebugCommands:
         self._drawings = [drawing for drawing in self._drawings if drawing._shown_at(step)]
         commands = [
             debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.ValueType(cheat))
-            for cheat in sorted(self._toggled)
+            for cheat in sorted(self._toggled_cheats)
         ]
         commands += self._commands
-        self._toggled, self._commands = set(), []
+        self._toggled_cheats, self._commands = set(), []
         due = self._last_refresh is None or step - self._last_refresh >= self._refresh_steps
         if not commands and not due:
             return

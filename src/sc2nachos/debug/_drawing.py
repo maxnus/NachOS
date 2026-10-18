@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from sc2nachos.debug._shapes import DebugBox, DebugLine, DebugMark, DebugSphere, DebugText, _ScreenText, _Vector
 
 # Where a drawing stands: a point fixed when it was drawn, or a unit, which the drawing follows.
-type _Anchor = tuple[float, float, float] | Unit[Any]
+type _Anchor = _Vector | Unit[Any]
 
 
 @final
@@ -27,7 +27,7 @@ class _PlacedShape:
 
     shape: DebugText | DebugBox | DebugSphere | DebugMark | DebugLine | _ScreenText
     offset: _Vector
-    rgb: _Rgb
+    color: _Rgb
     size: int
     to: _Anchor | None = None
 
@@ -63,7 +63,7 @@ class Drawing:
         for part in self._parts:
             dx, dy, dz = part.offset
             end = None if part.to is None else _where(part.to)
-            part.shape._draw(draw, (x + dx, y + dy, z + dz), part.rgb, part.size, end)
+            part.shape._draw(draw, (x + dx, y + dy, z + dz), part.color, part.size, end)
 
 
 def _where(anchor: _Anchor) -> tuple[float, float, float]:
