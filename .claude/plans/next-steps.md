@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #129. `uv run pytest` passes 2174 tests on branch `claude/issue-each-unit`;
+- nachOS `main` has every PR to #129. `uv run pytest` passes 2184 tests on branch `claude/issue-each-unit`;
   `uv run pytest -m integration` passes 32 against a real game (run 2026-10-18, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -144,7 +144,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   any other as a command to each, so three barracks given a marine train three, which raised before. A research, or a
   structure placed at a point or on a geyser, given to several raises `ValueError`, since only one of them can carry
   it out: chosen over sending them as given, which the game answers by researching once and by charging every builder
-  until all but one give up, and over raising for the build alone.
+  until all but one give up, and over raising for the build alone. So does a landing, a rooting or a warp-in given to
+  several at one point (review of #130), which the tables do not mark: `ABILITIES_PLACING_AT_THE_TARGET`.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three

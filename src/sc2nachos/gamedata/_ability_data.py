@@ -13,6 +13,7 @@ from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree._overrides import (
+    ABILITIES_PLACING_AT_THE_TARGET,
     ABILITIES_SENT_AS_ANOTHER,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
@@ -268,6 +269,17 @@ class AbilityData:
     custom id names every type it can be given to: `SIEGE` a tank's siege mode and an observer's surveillance mode,
     aimed at nothing. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
+
+    @property
+    def is_research(self) -> bool:
+        """Whether it researches an upgrade."""
+        return any(isinstance(product, UpgradeId) for product in self.products.values())
+
+    @property
+    def places_at_target(self) -> bool:
+        """Whether, aimed at a point or a unit, it puts a structure or a unit there, where only one fits: a build, an
+        add-on, a creep tumor, a landing, a rooting or a warp-in."""
+        return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a

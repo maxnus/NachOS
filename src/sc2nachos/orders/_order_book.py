@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Cost, OrderBehavior
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_unit_command_actions
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
@@ -141,12 +141,14 @@ class OrderBook:
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an add-on with no point given to a flying
         structure, and for a transport's unload at a point aimed at one of `units` itself, which is `UNLOAD` for that
-        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a research,
-        or a structure placed at a target, given to several units, since only one of them can carry it out, and for a
-        custom ability given to a type it has nothing to be sent as for, or which this game's tables lack an ability
-        it is sent as for.
+        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a research
+        given to several units, and for an ability that places something at its target (`AbilityData.places_at_target`)
+        given to several aimed at one; and for a custom ability given to a type it has nothing to be sent as for, or
+        which this game's tables lack an ability it is sent as for.
         """
-        given = tuple(dict.fromkeys(_unit_tuple(units)))
+        given = _unit_tuple(units)
+        if len(given) > 1:
+            given = tuple(dict.fromkeys(given))
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
@@ -214,8 +216,7 @@ class OrderBook:
         commands: list[tuple[Order[Any], sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]] = []
         for order, units in self._orders_to_send(issued, forced):
             sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
-            row = self._game_data.abilities.get(order.ability)
-            groups = (units,) if row is not None and row.multi_unit else tuple((unit,) for unit in units)
+            groups = (units,) if order.ability in MULTI_UNIT_ABILITIES else tuple((unit,) for unit in units)
             for group in groups:
                 actions = create_unit_command_actions(order.ability, group, order.target, sent_as, queued=order.queued)
                 commands += [(order, *command) for command in actions]
@@ -386,14 +387,13 @@ def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], uni
 def _check_each_can_carry_it_out(
     ability: AbilityId, row: AbilityData | None, target: Target | None, count: int
 ) -> None:
-    """Raise `ValueError` if `ability`, given to `count` units, is a research or places a structure at `target`, which
-    only one of them can carry out."""
+    """Raise `ValueError` if `ability`, given to `count` units, is a research, or places something at `target`."""
     if count < 2 or row is None:
         return
-    if any(isinstance(product, UpgradeId) for product in row.products.values()):
+    if row.is_research:
         raise ValueError(f"give {ability.name} to one unit, not {count}: only one of them can research it")
-    if row.needs_placement and target is not None:
-        raise ValueError(f"give {ability.name} to one unit, not {count}: only one of them can build there")
+    if row.places_at_target and target is not None:
+        raise ValueError(f"give {ability.name} to one unit, not {count}: only one of them can carry it out there")
 
 
 def _check_placed_where_flying(ability: AbilityId, row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> None:

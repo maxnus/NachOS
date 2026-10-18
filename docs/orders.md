@@ -29,9 +29,10 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
   lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
   The game spreads such a group around the target point, where ordering each separately stacks them on the point. Any
   other ability goes out as a command to each unit, since one command naming several has only one of them carry it
-  out: three barracks given a marine train three, and two templar given a storm at one point both cast it. A research,
-  or a structure placed at a point or on a geyser, given to several units raises `ValueError`, since only one of them
-  can carry it out: the bot picks the unit.
+  out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
+  research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
+  add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
+  carry out (`AbilityData.is_research`, `places_at_target`): the bot picks the unit.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`

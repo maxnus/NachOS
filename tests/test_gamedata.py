@@ -257,6 +257,26 @@ class TestReadingTheTables:
         (weapon,) = data.units[UnitTypeId.MARAUDER].weapons
         assert weapon.damage_bonuses == {Attribute.ARMORED: 10.0}
 
+    @pytest.mark.parametrize(
+        ("ability", "is_research", "places_at_target"),
+        [
+            (AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, True, False),
+            (AbilityId.SCV_BUILD_SUPPLY_DEPOT, False, True),
+            (AbilityId.LAND, False, True),
+            (AbilityId.WARP_GATE_WARP_IN_ZEALOT, False, True),
+            (AbilityId.BARRACKS_TRAIN_MARINE, False, False),
+            (AbilityId.MOVE, False, False),
+        ],
+    )
+    def test_an_ability_says_whether_it_researches_and_whether_it_places_at_its_target(
+        self, ability: AbilityId, is_research: bool, places_at_target: bool
+    ) -> None:
+        row = data_pb2.AbilityData(ability_id=ability, is_building=ability is AbilityId.SCV_BUILD_SUPPLY_DEPOT)
+        data = GameData(sc2api_pb2.ResponseData(abilities=[row]))
+
+        assert data.abilities[ability].is_research is is_research
+        assert data.abilities[ability].places_at_target is places_at_target
+
     def test_an_ability_that_places_a_structure_says_how_much_room_it_takes(self) -> None:
         depot = data_pb2.AbilityData(
             ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT,

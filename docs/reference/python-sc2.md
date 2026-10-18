@@ -122,9 +122,9 @@ it.
   `api.units.own.of_type(UnitType.Larva)`.
 - **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
   goes out as one command naming them all; anything else, a train, an add-on, a morph or a spell, as a command to
-  each, so three barracks given a marine train three (`AbilityData.multi_unit`). A research, or a structure placed at a
-  point or on a geyser, given to several units raises `ValueError`, since only one of them could carry it out: pick
-  the unit.
+  each, so three barracks given a marine train three (`AbilityData.multi_unit`). A research given to several units
+  raises `ValueError`, and so does a build, a landing, a rooting or a warp-in given to several at one point, which only
+  one of them could carry out: pick the unit.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever

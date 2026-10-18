@@ -1125,6 +1125,7 @@ _DRONE = AbilityId.LARVA_MORPH_DRONE
 _STORM = AbilityId.HIGH_TEMPLAR_STORM
 _BUILD_REFINERY = AbilityId.SCV_BUILD_REFINERY
 _RESEARCH = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
+_WARP_IN_ZEALOT = AbilityId.WARP_GATE_WARP_IN_ZEALOT
 _SITE = (30.0, 30.0)
 
 
@@ -1159,6 +1160,9 @@ _COSTING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_STORM, target=_AT_A_POINT),
         data_pb2.AbilityData(ability_id=_BUILD_REFINERY, target=data_pb2.AbilityData.Target.Unit, is_building=True),
         data_pb2.AbilityData(ability_id=_RESEARCH),
+        data_pb2.AbilityData(ability_id=AbilityId.LAND, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=AbilityId.ROOT, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=_WARP_IN_ZEALOT, target=_AT_A_POINT),
     ],
 )
 
@@ -1272,6 +1276,20 @@ class TestAnOrderToSeveralUnits:
 
         assert _sent(game.flush()) == [(ability, [tag], target, False) for tag in (1, 2, 3)]
 
+    def test_an_order_whose_ability_this_game_s_tables_lack_is_sent_as_its_ability_goes(self) -> None:
+        """A move goes out as one command naming them all, and a train as a command to each, row or not."""
+        game = _Game([ActionResult.SUCCESS] * 3, tables=make_tables())
+        game.observe(0, _marine(1), _marine(2), _barracks(3), _barracks(4))
+
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
+        game.book.issue([game.own(3), game.own(4)], _TRAIN_MARINE)
+
+        assert _sent(game.flush()) == [
+            (_MOVE, [1, 2], _SITE, False),
+            (_TRAIN_MARINE, [3], None, False),
+            (_TRAIN_MARINE, [4], None, False),
+        ]
+
     def test_a_move_to_several_goes_out_as_one_command(self) -> None:
         game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1), _scv(2))
@@ -1302,18 +1320,36 @@ class TestAnOrderToSeveralUnits:
     @pytest.mark.parametrize(
         ("make", "ability", "target", "reason"),
         [
-            (_scv, _BUILD_DEPOT, _SITE, "build there"),
-            (_flying_barracks, _BUILD_REACTOR, _SITE, "build there"),
-            (_scv, _BUILD_REFINERY, 9, "build there"),
+            (_scv, _BUILD_DEPOT, _SITE, "carry it out there"),
+            (_flying_barracks, _BUILD_REACTOR, _SITE, "carry it out there"),
+            (_scv, _BUILD_REFINERY, 9, "carry it out there"),
             (partial(make_unit, unit_type=UnitTypeId.ENGINEERING_BAY), _RESEARCH, None, "research it"),
+            (_flying_barracks, AbilityId.LAND, _SITE, "carry it out there"),
+            (
+                partial(make_unit, unit_type=UnitTypeId.SPINE_CRAWLER_UPROOTED),
+                AbilityId.ROOT,
+                _SITE,
+                "carry it out there",
+            ),
+            (partial(make_unit, unit_type=UnitTypeId.WARP_GATE), _WARP_IN_ZEALOT, _SITE, "carry it out there"),
         ],
-        ids=["a build at a point", "an add-on at a point", "a build on a geyser", "a research"],
+        ids=[
+            "a build at a point",
+            "an add-on at a point",
+            "a build on a geyser",
+            "a research",
+            "a landing",
+            "a rooting",
+            "a warp-in",
+        ],
     )
     def test_an_order_only_one_of_them_can_carry_out_given_to_several_raises(
         self, make: Any, ability: AbilityId, target: tuple[float, float] | int | None, reason: str
     ) -> None:
-        """Two engineering bays given the same research in a command each research it once, and two SCVs given a
-        depot at one site are both charged until the second gives up (tool `sweep_orders`, `one-command-each`)."""
+        """Two engineering bays given the same research in a command each research it once, two SCVs given a depot at
+        one site are both charged until the second gives up, and of two flying barracks given a landing, two spine
+        crawlers a rooting and two warp gates a warp-in, each at one point, one carries it out (tool `sweep_orders`,
+        `one-command-each`)."""
         game = _costing()
         geyser = make_unit(9, UnitTypeId.VESPENE_GEYSER, at=(40.0, 40.0), alliance=Alliance.NEUTRAL)
         game.observe(0, make(1), make(2), geyser)

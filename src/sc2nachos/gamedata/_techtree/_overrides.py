@@ -226,6 +226,22 @@ giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. 
 to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
 
+# The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
+# units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool
+# `sweep_orders`, `one-command-each`). The game's tables mark none of them as placing anything.
+ABILITIES_PLACING_AT_THE_TARGET: Final[frozenset[AbilityId]] = frozenset(
+    {
+        AbilityId.LAND,
+        AbilityId.ROOT,
+        AbilityId.WARP_GATE_WARP_IN_ADEPT,
+        AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR,
+        AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR,
+        AbilityId.WARP_GATE_WARP_IN_SENTRY,
+        AbilityId.WARP_GATE_WARP_IN_STALKER,
+        AbilityId.WARP_GATE_WARP_IN_ZEALOT,
+    }
+)
+
 # The abilities every unit of a command naming several carries out, as `AbilityData.multi_unit` reads them (tool
 # `sweep_orders`, `group-abilities-terran`, `-protoss` and `-zerg`), with the other half of each toggle, a return,
 # a locust's swoop and an archon's merge, which needs two. None of them costs minerals or vespene.
