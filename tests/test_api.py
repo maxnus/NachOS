@@ -9,7 +9,6 @@ from s2clientprotocol import error_pb2, sc2api_pb2
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
     Event,
-    EventBus,
     GameEndEvent,
     GameStartEvent,
     OwnUnitCreatedEvent,
@@ -137,8 +136,14 @@ class TestBeforeAGame:
         with pytest.raises(NotPlayingError, match="no game has been joined"):
             getattr(Api(), name)
 
-    def test_the_events_answer_so_handlers_can_subscribe_at_import(self) -> None:
-        assert isinstance(Api().events, EventBus)
+    def test_a_handler_subscribes_before_any_game_so_it_can_at_import(self) -> None:
+        api = Api()
+
+        @api.on(TurnEvent)
+        def on_turn(event: TurnEvent) -> None:
+            pass
+
+        assert api._events._subscriptions.by_type[TurnEvent]
 
 
 class TestPlaying:
@@ -209,13 +214,13 @@ class TestPlaying:
         api = Api()
         ended: list[Result] = []
 
-        @api.events.on(TurnEvent)
+        @api.on(TurnEvent)
         def give_up(event: TurnEvent) -> None:
             api.chat("gg")
             api.leave_game()
             api.leave_game()
 
-        @api.events.on(GameEndEvent)
+        @api.on(GameEndEvent)
         def end(event: GameEndEvent) -> None:
             ended.append(event.result)
 
@@ -239,11 +244,11 @@ class TestPlaying:
         api = Api()
         ended: list[Result] = []
 
-        @api.events.on(TurnEvent)
+        @api.on(TurnEvent)
         def look(event: TurnEvent) -> None:
             api.camera.move_to((4, 4))
 
-        @api.events.on(GameEndEvent)
+        @api.on(GameEndEvent)
         def end(event: GameEndEvent) -> None:
             ended.append(event.result)
 
@@ -289,7 +294,7 @@ class TestPlaying:
         api = Api()
         listed: list[list[tuple[int, int | None, AbilityId | None, ActionResult]]] = []
 
-        @api.events.on(TurnEvent)
+        @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             failures = api.action_failures
             listed.append([(f.step, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
@@ -313,7 +318,7 @@ class TestPlaying:
         counted: list[tuple[int, int, int, int, float | None]] = []
         zealots: list[tuple[UnitTypeId, int, float | None]] = []
 
-        @api.events.on(TurnEvent)
+        @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             stalkers = (UnitTypeId.ZEALOT, UnitTypeId.STALKER)
             counted.append(
@@ -347,7 +352,7 @@ class TestPlaying:
         seen: list[tuple[Expansion, ...]] = []
         held: list[bool] = []
 
-        @api.events.on(TurnEvent)
+        @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             seen.append(api.expansions)
             held.extend(field in api.units for expansion in api.expansions for field in expansion.mineral_fields)
@@ -381,7 +386,7 @@ def _record(api: Api, seen: list[tuple[str, int]]) -> None:
     """Record every lifecycle event `api` hands out into `seen`, as the type name and the step."""
     for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
 
-        @api.events.on(kind)
+        @api.on(kind)
         def note(event: Event) -> None:
             seen.append((type(event).__name__, event.step))
 
@@ -391,7 +396,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4, ending=Result.DEFEAT))
         api, seen, results = Api(), [], []
         _record(api, seen)
-        api.events.on(GameEndEvent)(lambda event: results.append(event.result))
+        api.on(GameEndEvent)(lambda event: results.append(event.result))
         api.play(client, steps_per_turn=2)
         assert seen == [
             ("GameStartEvent", 0),
@@ -407,7 +412,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api, steps = Api(), []
         for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
-            api.events.on(kind)(lambda event: steps.append((event.step, api.step)))
+            api.on(kind)(lambda event: steps.append((event.step, api.step)))
         api.play(client, steps_per_turn=2)
         assert len(steps) == 6
         assert all(event_step == api_step for event_step, api_step in steps)
@@ -415,7 +420,7 @@ class TestEvents:
     def test_a_game_called_at_its_time_limit_ends_in_a_tie_all_the_same(self) -> None:
         client, _ = _joined(*_game(0, 112, ending=None))
         api, results = Api(), []
-        api.events.on(GameEndEvent)(lambda event: results.append((event.step, event.result)))
+        api.on(GameEndEvent)(lambda event: results.append((event.step, event.result)))
         api.play(client, steps_per_turn=112, time_limit=5)
         assert results == [(112, Result.TIE)]
 
@@ -425,26 +430,26 @@ class TestEvents:
         api = Api()
         fired: list[tuple[str, int]] = []
 
-        @api.events.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_step=2)
         def function(event: TurnEvent) -> None:
             fired.append(("function", event.step))
 
         class Handlers:
             def __init__(self, name: str) -> None:
                 self.name = name
-                api.events.subscribe(self)
+                api.subscribe(self)
 
-            @api.events.on(TurnEvent, once=True)
+            @api.on(TurnEvent, once=True)
             def on_turn(self, event: TurnEvent) -> None:
                 fired.append((self.name, event.step))
 
         Handlers("before")
 
-        @api.events.on(GameStartEvent)
+        @api.on(GameStartEvent)
         def make(event: GameStartEvent) -> None:
             # Created in the first game only, subscribed from then on.
             Handlers("during")
-            api.events.unsubscribe(make)
+            api.unsubscribe(make)
 
         api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
         first = list(fired)
@@ -452,12 +457,21 @@ class TestEvents:
         api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
         assert first == fired == [("before", 0), ("during", 0), ("function", 2)]
 
+    def test_handler_timings_count_a_games_calls_for_an_api_made_to_time_handlers(self) -> None:
+        api = Api(time_handlers=True)
+        api.on(TurnEvent)(lambda event: None)
+        api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
+        ((_, timing),) = api.handler_timings[TurnEvent].items()
+        assert timing.calls == 2
+        with pytest.raises(RuntimeError, match="time_handlers=True"):
+            _ = Api().handler_timings
+
     def test_what_happened_comes_within_each_turn_and_the_last_observations_never_does(self) -> None:
         api = Api()
         seen: list[tuple[str, int]] = []
         _record(api, seen)
         for kind in (OwnUnitCreatedEvent, UnitDiedEvent):
-            api.events.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
+            api.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
 
         def game() -> list[sc2api_pb2.Response]:
             marine, scv = make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0)
@@ -490,7 +504,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api = Api()
 
-        @api.events.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_step=2)
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 
@@ -503,14 +517,14 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api = Api()
 
-        @api.events.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_step=2)
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 
         with pytest.raises(RuntimeError, match="the handler failed"):
             api.play(client, steps_per_turn=2)
         with pytest.raises(ValueError, match="no game is being played"):
-            api.events.emit(TurnEvent())
+            api.emit(TurnEvent())
 
 
 class TestRunningLocally:
@@ -695,7 +709,7 @@ def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
 
     api = Api()
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def give_up(event: TurnEvent) -> None:
         if event.step >= 16:
             api.leave_game()

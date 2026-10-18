@@ -24,7 +24,6 @@ from sc2nachos.events import (
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
     Event,
-    EventBus,
     EventFilter,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
@@ -42,6 +41,7 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
@@ -236,7 +236,7 @@ HAPPENINGS: tuple[type[Event], ...] = (
 )
 
 
-def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
+def record(events: _EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
     """A list that collects every event of `event_types`, or matching the filters, handed out from now on."""
     seen: list[Any] = []
     for event_type in event_types:
@@ -259,7 +259,7 @@ def played(
     game_map: GameMap,
     tracker: _Tracker,
     observation: sc2api_pb2.ResponseObservation,
-    events: EventBus,
+    events: _EventBus,
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
 ) -> _Game:
@@ -313,10 +313,10 @@ class RealGame:
     """A game against the computer, stepped by hand, with its units tracked and each observation's events handed to
     `events`."""
 
-    def __init__(self, client: Client, player: int, events: EventBus | None = None) -> None:
+    def __init__(self, client: Client, player: int, events: _EventBus | None = None) -> None:
         self.client = client
         self.player = player
-        self.events = events or EventBus()
+        self.events = events or _EventBus()
         self.map = GameMap._of_game(client.game_info(), client.observation())
         self.enemy = Enemy()
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)

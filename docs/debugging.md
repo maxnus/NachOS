@@ -12,7 +12,7 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 from sc2nachos.debug import Color, DebugBox, DebugGroup, DebugLine, DebugMark, DebugText, Marker
 
 
-@api.events.on(GameStartEvent)
+@api.on(GameStartEvent)
 def set_up(event: GameStartEvent) -> None:
     api.debug.refresh_steps = 4
     api.debug.default_color = Color.YELLOW
@@ -20,7 +20,7 @@ def set_up(event: GameStartEvent) -> None:
         api.debug.draw(expansion.center, DebugMark(Marker.HEXAGON, radius=6), steps=None)
 
 
-@api.events.on(TurnEvent)
+@api.on(TurnEvent)
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.debug.draw(marine, DebugBox(1, 1), DebugText(f"{marine.health:.0f}", offset=(0, 0, 1.5)))

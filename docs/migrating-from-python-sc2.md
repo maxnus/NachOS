@@ -57,9 +57,9 @@ reads it, is in [game-behavior.md](game-behavior.md).
 [events.md](events.md) lists every event, what selects it, and when it comes.
 
 - **A bot's code runs in handlers, not overridden methods.** `on_start`, `on_step` and `on_end` are handlers of
-  `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.events.on(TurnEvent)`. A module-level
+  `GameStartEvent`, `TurnEvent` and `GameEndEvent`, subscribed with `@api.on(TurnEvent)`. A module-level
   function is subscribed as it is defined. A method is marked, and subscribed when an instance is passed to
-  `api.events.subscribe(instance)`, usually by its own `__init__`.
+  `api.subscribe(instance)`, usually by its own `__init__`.
 - **Keep `on_step` as one `TurnEvent` handler** that calls the bot's parts in the order it wants. Handlers run by
   priority, highest first, then in the order they subscribed, which is hard to follow across many modules.
 - **There is no `iteration`.** `event.step` is the game loop, and `every_steps` and `at_step` count steps, so a
@@ -68,7 +68,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   game as it ended; python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`.** One that is is refused when it subscribes.
 - **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it
-  is passed to `api.events.unsubscribe`; both are held strongly. A bot that makes new objects for each game
+  is passed to `api.unsubscribe`; both are held strongly. A bot that makes new objects for each game
   unsubscribes the old ones, or they go on handling events alongside the new.
 - **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent`, in the
   order [events.md](events.md) gives, and made only for the types something subscribes to:
@@ -100,7 +100,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **A handler of a class receives the events of its subclasses.** A handler of `Event` receives every event, and
   makes NachOS produce every type of event. `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` each cover a
   whole kind, this player's units and the enemy's alike.
-- **A bot can define its own events** by subclassing `Event`, and send them with `api.events.emit`. python-sc2
+- **A bot can define its own events** by subclassing `Event`, and send them with `api.emit`. python-sc2
   has no events to extend.
 - **A starting townhall is never reported finished**, since it was never seen unfinished. The starting units are
   reported created on the first turn.

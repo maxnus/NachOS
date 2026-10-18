@@ -72,7 +72,7 @@ def test_the_center_is_read_from_each_observation_and_a_move_goes_out_after_the_
     api = Api()
     centers: list[Point] = []
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def look(event: TurnEvent) -> None:
         centers.append(api.camera.center)
         if event.step == 0:

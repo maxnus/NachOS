@@ -28,7 +28,6 @@ from sc2nachos.events import (
     EnemyUnitVitalDroppedEvent,
     EnemyUnitVitalReachedEvent,
     Event,
-    EventBus,
     EventFilter,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
@@ -52,6 +51,7 @@ from sc2nachos.events import (
     UnitTypeChangedEvent,
     VitalEvent,
 )
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -88,8 +88,8 @@ _TABLES = make_tables(
 class _Game:
     """A game fed one observation at a time, each taken in and reported as `Api.play` does each turn."""
 
-    def __init__(self, events: EventBus | None = None) -> None:
-        self.events = events or EventBus()
+    def __init__(self, events: _EventBus | None = None) -> None:
+        self.events = events or _EventBus()
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
@@ -238,13 +238,13 @@ class TestOnlyWhatIsWanted:
     ) -> None:
         game = _Game()
         made: list[type[Event]] = []
-        hand_out = EventBus._hand_out
+        hand_out = _EventBus._hand_out
 
-        def counted(bus: EventBus, events: Sequence[Event]) -> None:
+        def counted(bus: _EventBus, events: Sequence[Event]) -> None:
             made.extend(type(event) for event in events)
             hand_out(bus, events)
 
-        monkeypatch.setattr(EventBus, "_hand_out", counted)
+        monkeypatch.setattr(_EventBus, "_hand_out", counted)
         record(game.events, wanted)
         _everything(game)
         assert made and set(made) == {wanted}
@@ -496,13 +496,13 @@ class TestOnlySomeKeys:
     ) -> None:
         game = _Game()
         made: list[Event] = []
-        hand_out = EventBus._hand_out
+        hand_out = _EventBus._hand_out
 
-        def counted(bus: EventBus, events: Sequence[Event]) -> None:
+        def counted(bus: _EventBus, events: Sequence[Event]) -> None:
             made.extend(events)
             hand_out(bus, events)
 
-        monkeypatch.setattr(EventBus, "_hand_out", counted)
+        monkeypatch.setattr(_EventBus, "_hand_out", counted)
         game.events.on(selected)(lambda event: None)
         _everything(game)
         assert made and {type(event) for event in made} == {selected.event_type}
@@ -860,7 +860,7 @@ def _played_as(race: Race) -> Iterator[tuple[RealGame, list[Any], Point]]:
         closing(Client(WebSocketTransport.connect(process.url))) as client,
     ):
         client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
-        events = EventBus()
+        events = _EventBus()
         seen = record(events, *HAPPENINGS)
         game = RealGame(client, client.join_game(race), events)
         state = debug_pb2.DebugGameState

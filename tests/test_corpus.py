@@ -147,7 +147,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     api = Api()
     seen: list[Event] = []
     for event_type in HAPPENINGS:
-        api.events.on(event_type)(lambda event: seen.append(event))
+        api.on(event_type)(lambda event: seen.append(event))
     api.play(client)
 
     tracker = api._current_game().tracker
@@ -228,7 +228,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
 
     for vital_type, value in _VALUES.items():
         for event_type in _REACHED + _DROPPED:
-            api.events.on(event_type.of(vital_type, value))(vital)
+            api.on(event_type.of(vital_type, value))(vital)
     # The starting units stand around this player's main base, and its workers cross a circle around them as they
     # mine.
     starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]
@@ -240,7 +240,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
         *(Circle(at, 20) for at in game_map.opponent_start_locations),
     ):
         for event_type in _ENTERED + _LEFT:
-            api.events.on(event_type.of(watched))(area)
+            api.on(event_type.of(watched))(area)
     api.play(client)
 
     assert not wrong, wrong[:5]

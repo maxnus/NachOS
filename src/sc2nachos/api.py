@@ -1,6 +1,6 @@
 """Everything a bot talks to."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, overload
 
 from loguru import logger
@@ -11,7 +11,19 @@ from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
-from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
+from sc2nachos.events import (
+    Event,
+    EventFilter,
+    EventPriority,
+    EventSubscriber,
+    GameEndEvent,
+    GameStartEvent,
+    HandlerTiming,
+    ParameterizedEvent,
+    TurnEvent,
+    TurnStartEvent,
+)
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Grid
@@ -54,20 +66,100 @@ class Api:
         enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC,
         time_handlers: bool = False,
     ) -> None:
-        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call if
-        `time_handlers`. This connects to nothing."""
+        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call, read
+        as `handler_timings`, if `time_handlers`. This connects to nothing."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
-        self._events = EventBus(time_handlers=time_handlers)
+        self._events = _EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
 
-    @property
-    def events(self) -> EventBus:
-        """The event bus: the events the api hands out, and the handlers subscribed to them.
+    # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
+    @overload
+    def on[E: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
+        self,
+        event_type: type[E],
+        /,
+        *,
+        priority: EventPriority = ...,
+        every_steps: int | None = ...,
+        at_step: int | None = ...,
+        once: bool = ...,
+        catch_exceptions: bool = ...,
+    ) -> None: ...
 
-        Available before any game, so handlers can subscribe as their modules are imported.
+    @overload
+    def on[E: Event](
+        self,
+        event_type: type[E] | EventFilter[E],
+        /,
+        *,
+        priority: EventPriority = ...,
+        every_steps: int | None = ...,
+        at_step: int | None = ...,
+        once: bool = ...,
+        catch_exceptions: bool = ...,
+    ) -> EventSubscriber[E]: ...
+
+    def on(self, event_type: type[Event] | EventFilter[Any], /, **options: Any) -> Any:
+        """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`. This works
+        before any game, so handlers can subscribe as their modules are imported.
+
+        `event_type` is an event type, whose events and its subclasses' the handler is handed, or a filter from `only`
+        or `of`. `where` on the `EventSubscriber` it returns narrows further. A type that has `of` is subscribed to only
+        through it, and a type checker refuses it bare. A handler of `Event` is handed every event, which makes NachOS
+        produce every type of event it otherwise would not, including comparing every unit with the observation
+        before; a parameterized event comes only with the parameters other handlers asked for.
+
+        A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
+        method in a class body is marked instead, and subscribed for each instance passed to `subscribe`. Either stays
+        subscribed until it is passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it
+        alive.
+
+        `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
+        among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
+        before any handler of the next. The handler runs on every event unless held back: `every_steps` waits until
+        that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that
+        step, and `once` on the first event. These count only the events selected, and start afresh each game, as does
+        a handler that returned `Done`. An exception it raises ends the game, unless `catch_exceptions`, which logs it
+        and goes on.
+
+        The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
+        types takes an `Event`.
         """
-        return self._events
+        return self._events.on(event_type, **options)
+
+    def subscribe(self, instance: object) -> None:
+        """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
+
+        An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
+        marked method, or is subscribed already.
+        """
+        self._events.subscribe(instance)
+
+    def unsubscribe(self, target: object) -> None:
+        """Unsubscribe `target`: a function, a bound method, or every method of an instance.
+
+        Raises `ValueError` if nothing of it is subscribed.
+        """
+        self._events.unsubscribe(target)
+
+    def emit(self, event: Event) -> None:
+        """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
+        when this returns. A handler may itself emit an event.
+
+        An event made without a step is given the current step. Raises `ValueError` for one when no game is being
+        played.
+        """
+        self._events.emit(event)
+
+    @property
+    def handler_timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
+        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
+
+        A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
+        `RuntimeError` unless the api was made with `time_handlers=True`.
+        """
+        return self._events.timings
 
     def _current_game(self) -> _Game:
         """The game being played, or the one played last."""

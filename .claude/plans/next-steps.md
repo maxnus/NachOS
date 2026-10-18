@@ -9,12 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #126. `uv run pytest` passes 2163 tests on branch `claude/debug-and-chat`, slice 6;
+- nachOS `main` has every PR to #127. `uv run pytest` passes 2166 tests on branch `claude/public-event-decorator`;
   `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
-  slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot
-  (#125).
+  slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat
+  (#127), and slice 8, the demo bot (#125).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR; its
   `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
@@ -126,6 +126,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (review of #127), is a package of its own, which an up-to-date pathing grid and NachOS's own pathfinding may join.
   - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
     `Unit.is_selected` is read, both for a bot's debug tools.
+- **Subscribing is on the api** (#128, the owner, 2026-10-18): `api.on`, `api.subscribe`, `api.unsubscribe`,
+  `api.emit` and `api.handler_timings`, over `api.events.on` and the rest, so that marking a method and subscribing its
+  instance sit on one object. The bus is private (`_EventBus`), and `api.events` is gone. `api.on` returns an
+  `EventSubscriber`, as `where` does, public and exported from `sc2nachos.events`: one class, the type a bot sees and
+  the object it gets, over a public Protocol beside a private class, and named for what it does over `EventDecorator`.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three
@@ -200,13 +205,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
 when each starts.
 
-6. **Debug and chat**: done on branch `claude/debug-and-chat`.
 7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
-
-Next, once slice 6 (#127) has merged, in a pull request of its own (the owner, 2026-10-18):
-
-- `EventBus.on` returns the private `_EventDecorator`, which shows in a bot's type hints: what it returns becomes
-  public, or is typed so that no private name reaches the bot.
 
 Waiting until something needs them:
 
@@ -229,8 +228,10 @@ says so.
 
 In AvocaDOS's plan, section "M5 — The swap". Already known:
 
-- AvocaDOS's own `api.event` and `api.order` become NachOS's `api.events` and `api.orders`; its `OrderManager` keeps
-  the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is `api.orders.issued_to(unit)`.
+- AvocaDOS's own `api.event.on` becomes NachOS's `api.on`, and `api.event.listener`, which subscribes each instance
+  of a class as it is made, an `api.subscribe(self)` in the class's `__init__`. Its `api.order` becomes `api.orders`;
+  its `OrderManager` keeps the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is
+  `api.orders.issued_to(unit)`.
 - `phase=` becomes `priority=`, with the handlers that forget the dead at `HIGHEST`.
 - The bot's `MEDIVACINCREASESPEEDBOOST`, `DUTCHMARAUDERSLOW` and `IMMORTALOVERLOAD` take their curated names;
   AvocaDOS's `tests/test_nachos_id_parity.py` fails on those three until then, as expected.

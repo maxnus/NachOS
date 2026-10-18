@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
+from collections.abc import Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, final, overload
+from typing import TYPE_CHECKING, Any, final
 
 from loguru import logger
 
@@ -14,7 +14,7 @@ from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
-from sc2nachos.events._event_subscriber import _EventSubscriber
+from sc2nachos.events._event_subscriber import EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timing import HandlerTiming
@@ -23,51 +23,11 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-# Covariant, so a decorator for one event type is one for any type its handler takes. That is how a handler's
-# parameter is checked: a type variable's bound cannot name another.
-_E_co = TypeVar("_E_co", bound=Event, covariant=True)
-
-
-class _EventDecorator(Protocol[_E_co]):
-    """The decorator `on` returns, for a handler of `_E_co`: a function taking one, or a method taking one after
-    `self`. `where` narrows it.
-
-    A handler taking any `Event` keeps its own type, so it can be decorated for several events. One taking a narrower
-    type is typed as a callable of the event it is decorated for.
-    """
-
-    def where(self, predicate: Callable[[_E_co], bool], /) -> _EventDecorator[_E_co]:
-        """This decorator, narrowed to the events `predicate` also passes. `once` and the like count only those."""
-        ...
-
-    @overload
-    def __call__[F: Callable[[Event], object]](self, handler: F, /) -> F: ...
-
-    @overload
-    def __call__[F: Callable[[Any, Event], object]](self, handler: F, /) -> F: ...
-
-    @overload
-    def __call__[H: Event, R](self: _EventDecorator[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
-
-    @overload
-    def __call__[S, H: Event, R](self: _EventDecorator[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
-
-
 @final
-class EventBus:
-    """The event bus: the events the api hands out, and the handlers subscribed to them. `api.events` is one.
-
-    A function or an instance stays subscribed until it is passed to `unsubscribe`. Both are held strongly, so a
-    handler runs whether or not anything else keeps it alive. What a handler has done counts for one game and resets
-    with the next: when it last ran, whether it ran `once` or `at_step`, and whether it returned `Done`.
-
-    An event is handed to the handlers of its class and of every base class, highest priority first, and within one
-    priority in subscription order. So a handler of `Event` is handed every event, which makes NachOS produce every
-    type of event it otherwise would not, including comparing every unit with the observation before; a
-    parameterized event comes only with the parameters other handlers asked for. A turn's events go out priority
-    first: every handler of one priority is handed each event of the turn it selects, in the turn's order, before any
-    handler of the next priority.
-    """
+class _EventBus:
+    """The handlers subscribed to events, and handing events to them. `Api` holds one, which a bot reaches through
+    `api.on`, `api.subscribe`, `api.unsubscribe`, `api.emit` and `api.handler_timings`, whose docstrings hold the
+    contracts."""
 
     __slots__ = ("_marks", "_methods_of", "_step", "_subscriptions", "_timings")
 
@@ -84,34 +44,7 @@ class EventBus:
     def __repr__(self) -> str:
         by_type = self._subscriptions.by_type.items()
         counts = ", ".join(f"{kind.__name__}: {len(handlers)}" for kind, handlers in by_type)
-        return f"EventBus({counts})"
-
-    # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
-    @overload
-    def on[E: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
-        self,
-        event_type: type[E],
-        /,
-        *,
-        priority: EventPriority = ...,
-        every_steps: int | None = ...,
-        at_step: int | None = ...,
-        once: bool = ...,
-        catch_exceptions: bool = ...,
-    ) -> None: ...
-
-    @overload
-    def on[E: Event](
-        self,
-        event_type: type[E] | EventFilter[E],
-        /,
-        *,
-        priority: EventPriority = ...,
-        every_steps: int | None = ...,
-        at_step: int | None = ...,
-        once: bool = ...,
-        catch_exceptions: bool = ...,
-    ) -> _EventDecorator[E]: ...
+        return f"_EventBus({counts})"
 
     def on(
         self,
@@ -123,25 +56,8 @@ class EventBus:
         at_step: int | None = None,
         once: bool = False,
         catch_exceptions: bool = False,
-    ) -> Any:
-        """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`.
-
-        `event_type` is an event type, whose events and its subclasses' the handler is handed, or a filter from `only`
-        or `of`. `where` on the returned decorator narrows further. A type that has `of` is subscribed to only through
-        it, and a type checker refuses it bare.
-
-        A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
-        method in a class body is marked instead, and subscribed for each instance passed to `subscribe`.
-
-        `priority` orders the handler among the event's handlers, and among a turn's, which go out priority first. The
-        handler runs on every event unless held back: `every_steps` waits until that many steps have passed since it
-        last ran, `at_step` runs it once, on the first event at or after that step, and `once` on the first event. These
-        count only the events selected. An exception it raises ends the game, unless `catch_exceptions`, which logs it
-        and goes on.
-
-        The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
-        types takes an `Event`.
-        """
+    ) -> EventSubscriber[Any]:
+        """The decorator `api.on` returns, once its arguments are checked."""
         selects = event_type if isinstance(event_type, EventFilter) else EventFilter(event_type)
         selected = selects.event_type
         if not (isinstance(selected, type) and issubclass(selected, Event)):
@@ -162,14 +78,10 @@ class EventBus:
             "once": once,
             "catch_exceptions": catch_exceptions,
         }
-        return _EventSubscriber(self, selects, options)
+        return EventSubscriber(self, selects, options)
 
     def subscribe(self, instance: object) -> None:
-        """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
-
-        An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
-        marked method, or is subscribed already.
-        """
+        """Subscribe every method of `instance` marked with `on`, as `api.subscribe` says."""
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
         if any(handler.instance is instance for handler in self._subscriptions):
@@ -178,10 +90,7 @@ class EventBus:
             self._subscriptions.add(handler.bound_to(instance))
 
     def unsubscribe(self, target: object) -> None:
-        """Unsubscribe `target`: a function, a bound method, or every method of an instance.
-
-        Raises `ValueError` if nothing of it is subscribed.
-        """
+        """Unsubscribe `target`, as `api.unsubscribe` says."""
         if isinstance(target, MethodType):
             function, instance = target.__func__, target.__self__
             removed = self._subscriptions.remove(
@@ -198,11 +107,7 @@ class EventBus:
 
     @property
     def timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
-        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
-
-        A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
-        `RuntimeError` unless the api was made with `time_handlers=True`.
-        """
+        """How long each handler has taken, as `api.handler_timings` says."""
         if self._timings is None:
             raise RuntimeError("handlers are timed only for an api made with time_handlers=True")
         return MappingProxyType({kind: MappingProxyType(timings) for kind, timings in self._timings.items()})
@@ -241,12 +146,7 @@ class EventBus:
         self._step = step
 
     def emit(self, event: Event) -> None:
-        """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
-        when this returns. A handler may itself emit an event.
-
-        An event made without a step is given the current step. Raises `ValueError` for one when no game is being
-        played.
-        """
+        """Hand `event` to its handlers, as `api.emit` says."""
         if event.step < 0:
             if self._step is None:
                 raise ValueError(f"{event!r} has no step, and no game is being played to give it one")
