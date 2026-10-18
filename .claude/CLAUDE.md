@@ -2,8 +2,8 @@
 
 @../AGENTS.md
 
-`AGENTS.md` holds the rules for writing code here. This file holds how the repo owner works with an agent, and
-`.claude/plans/next-steps.md` holds the work in progress. Read it before starting anything.
+`AGENTS.md` holds the rules for writing code and docs here, for any agent. This file holds how the repo owner works
+with an agent, and `.claude/plans/next-steps.md` holds the work in progress. Read it before starting anything.
 
 ## Pace
 
@@ -33,32 +33,3 @@
   the walk-through.
 - A local diff review with Plannotator, where it is installed: `plannotator review --git --base origin/main
   --diff-type since-base --json`, run in the background, since it waits for the owner.
-
-## Writing docs and comments
-
-- **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
-  code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
-  cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
-  file; if it is worth keeping, it goes in the commit message. After a round of doc edits, list the multi-line
-  docstrings with `uv run python tools/list_multiline_docstrings.py` and check each.
-
-- **`AGENTS.md` takes rules for writing code only**, a line or two each, never a statement of what the library does
-  for a bot; that belongs in the user docs, if anywhere. Before adding a line, ask whether an agent that skipped it
-  would get something wrong.
-- **A measurement lives in one place**: its topic's page under `docs/reference/game-behavior/`, with how it was seen.
-  The guides, `docs/reference/python-sc2.md` and `docs/maintaining/` say what NachOS does and link there, rather than
-  retelling the evidence.
-- **Where the game's answer is a matter of perspective, document what the API reports** and move on: a pylon reads
-  unpowered, though it always stands in its own field. Keep `docs/reference/game-behavior/not-understood-yet.md` for
-  readings that contradict each other or could not be observed.
-
-## Running things
-
-- `uv run pyright` with no path argument: a path makes it ignore `include` and walk the whole tree.
-- The sweeps in `tools/` and `uv run pytest -m integration` start the game and take minutes.
-
-## Code the owner likes
-
-- A filter takes one value or a collection (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
-- A value derived from a data object is a property on that object, not a lookup its callers repeat.
-- Short functions: extract a named helper rather than growing the caller.

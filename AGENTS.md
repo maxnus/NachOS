@@ -12,9 +12,10 @@ holds how to curate the game's ids and what reviews keep finding.
 
 ## Keep this file small
 
-Every agent reads all of it before every task. A line belongs here only if you can name the task whose outcome it
-changes; everything else goes where it is used, as **Where a finding goes** below says. Delete a line the code has
-overtaken.
+Every agent reads all of it before every task. It takes rules for writing code and docs here, a line or two each,
+never a statement of what the library does for a bot, which belongs in the user docs if anywhere. A line belongs here
+only if you can name the task whose outcome it changes; everything else goes where it is used, as **Where a finding
+goes** below says. Delete a line the code has overtaken.
 
 ## Python
 
@@ -77,6 +78,9 @@ Carried over from AvocaDOS, so the two codebases read alike:
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **`TYPE_CHECKING` guard** for imports that would otherwise be circular.
 - **loguru**, not stdlib `logging`.
+- **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
+- **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
+- **Short functions**: extract a named helper rather than growing the caller.
 - **Errors**: a failure of the library's own raises a subclass of `NachOSError`, which also subclasses the
   built-in it is a case of, where one fits: `ConnectionClosedError` is a `ConnectionError`. Misuse, such as a bad
   argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
@@ -91,9 +95,21 @@ Carried over from AvocaDOS, so the two codebases read alike:
   place the two meet. Never write "frame" for either.
 - **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
   piece of code goes beside that code, in its docstring or a comment. What the game was seen to do goes in its
-  topic's page under `docs/reference/game-behavior/`, with how it was seen; the code states only the part it relies
-  on, tagged `(in game)` or `(corpus)`. The steps for one kind of task go in `docs/`, and measurements in the commit
-  message or PR.
+  topic's page under `docs/reference/game-behavior/`, with how it was seen, and only there: the code states only the
+  part it relies on, tagged `(in game)` or `(corpus)`, and the guides, `docs/reference/python-sc2.md` and
+  `docs/maintaining/` say what NachOS does and link there, rather than retell the evidence. The steps for one kind of
+  task go in `docs/`, and measurements in the commit message or PR.
+
+## Docs and comments
+
+- **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
+  code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
+  cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
+  file; if it is worth keeping, it goes in the commit message. After a round of doc edits, list the multi-line
+  docstrings with `uv run python tools/list_multiline_docstrings.py` and check each.
+- **Where the game's answer is a matter of perspective, document what the API reports** and move on: a pylon reads
+  unpowered, though it always stands in its own field. Keep `docs/reference/game-behavior/not-understood-yet.md` for
+  readings that contradict each other or could not be observed.
 
 ## Review checklist
 
@@ -139,9 +155,9 @@ corpus is recorded again.
 |---|---|
 | Set up | `uv sync --extra dev` |
 | Run tests | `uv run pytest` |
-| Run the tests that start a game | `uv run pytest -m integration` |
+| Run the tests that start a game | `uv run pytest -m integration`, which takes minutes |
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
-| Type check | `uv run pyright` |
+| Type check | `uv run pyright`, with no path: a path makes it ignore `include` and walk the whole tree |
 
 The sweeps, which measure what the game does, and the generators are in `tools/README.md`. Before measuring anything
 in game, look there: a sweep may already do it.

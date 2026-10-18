@@ -1,9 +1,9 @@
 # Tools
 
-The sweeps measure what the game does and need StarCraft II installed; what they find goes on its topic's page under
-[`docs/reference/game-behavior/`](../docs/reference/game-behavior/README.md). The generators turn what a sweep wrote,
-or the vendored data, into source, and run without the game. Each tool's docstring says what it does and what it
-takes. Before measuring anything in game, look here: a sweep may already do it.
+The sweeps measure what the game does, need StarCraft II installed and take minutes; what they find goes on its topic's
+page under [`docs/reference/game-behavior/`](../docs/reference/game-behavior/README.md). The generators turn what a
+sweep wrote, or the vendored data, into source, and run without the game. Each tool's docstring says what it does and
+what it takes. Before measuring anything in game, look here: a sweep may already do it.
 
 | To | Run | Starts the game |
 |---|---|---|
