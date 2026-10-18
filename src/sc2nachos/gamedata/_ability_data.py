@@ -13,6 +13,7 @@ from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree._overrides import (
+    ABILITIES_PLACING_AT_THE_TARGET,
     ABILITIES_SENT_AS_ANOTHER,
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
@@ -248,11 +249,11 @@ class AbilityData:
     unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
-    """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several at once: a
-    move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`). Any other
-    ability goes to one unit at a time: what costs minerals or vespene, a build, an add-on, a train, a research or a
-    morph (in game); every spell but a toggle; a landing, a load or a liberator's siege; and an ability no one has
-    seen a group carry out."""
+    """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several in one
+    command: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
+    Any other ability one unit of a command carries out, and `issue` gives it to each unit in a command of its own:
+    what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a
+    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -268,6 +269,17 @@ class AbilityData:
     custom id names every type it can be given to: `SIEGE` a tank's siege mode and an observer's surveillance mode,
     aimed at nothing. Empty for most abilities."""
     _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
+
+    @property
+    def is_research(self) -> bool:
+        """Whether it researches an upgrade."""
+        return any(isinstance(product, UpgradeId) for product in self.products.values())
+
+    @property
+    def places_at_target(self) -> bool:
+        """Whether, aimed at a point or a unit, it puts a structure or a unit there, where only one fits: a build, an
+        add-on, a creep tumor, a landing, a rooting or a warp-in."""
+        return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
         """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a

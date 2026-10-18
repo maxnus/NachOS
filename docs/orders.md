@@ -24,13 +24,15 @@ api.orders.issue(marine, AbilityId.ATTACK, target=drone, data=Defending(base))
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 ```
 
-- **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a group
-  around the target point; ordering each separately stacks them on the point instead. Only an ability every unit of a
-  command carries out goes to several: a move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an
-  unload (`AbilityData.multi_unit`, from what the game was seen to do). Any other, given to several units, raises
-  `ValueError`: a build, an add-on, a train, a research, a morph that costs, every spell but a toggle, a landing, a load
-  or a liberator's siege, which the game has only one unit of a command carry out, and an ability not seen given to a
-  group. So the bot picks the unit: the nearest worker, the barracks with room beside it, the caster with the energy.
+- **`units`** is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
+  ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
+  lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
+  The game spreads such a group around the target point, where ordering each separately stacks them on the point. Any
+  other ability goes out as a command to each unit, since one command naming several has only one of them carry it
+  out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
+  research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
+  add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
+  carry out (`AbilityData.is_research`, `places_at_target`): the bot picks the unit.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
@@ -85,9 +87,10 @@ takes a point, its zone, and only one of two liberators given one carries it out
 `LIBERATOR_SIEGE_AT`, the game's. A custom id given a type it has nothing to be sent as for raises `ValueError`;
 `AbilityId.is_custom` tells one from the game's.
 
-An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
-itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
-ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming `UNLOAD`.
+An order goes out as one command for each ability it is sent as, or one per unit where the ability is not one every
+unit of a command carries out, or where it is aimed at the unit itself. A command the game refuses is listed in
+`api.action_failures` once for each unit it named, under the id ordered. An unload at a point aimed at one of the
+transports ordered raises `TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can

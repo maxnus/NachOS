@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Cost, OrderBehavior
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_unit_command_actions
@@ -123,9 +123,11 @@ class OrderBook:
     ) -> Order[Any]:
         """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Order`.
 
-        The order goes out as one command, so units ordered together keep their spacing where the game spreads them.
-        `queued` puts the order behind each unit's current orders. `data` is the bot's own; NachOS carries it and never
-        reads it. Nothing is sent until the turn's handlers have all run.
+        Every unit given carries it out, and a unit given twice counts once. An ability every unit of one command
+        carries out (`AbilityData.multi_unit`) goes out as one command naming them all, so units ordered together keep
+        their spacing where the game spreads them; any other goes out as a command to each. `queued` puts the order
+        behind each unit's current orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
+        sent until the turn's handlers have all run.
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
@@ -133,25 +135,23 @@ class OrderBook:
         those units too: that is how a unit is made to drop its queue and go on with its current order. It still
         competes with the turn's other orders like any other.
 
-        An ability that goes out as another for some types (`AbilityData.sent_as`) is sent as one command per ability
-        it goes out as. A command the game refuses is listed in `api.action_failures` once for each unit it names.
+        An ability that goes out as another for some types (`AbilityData.sent_as`) goes out as that one to their units,
+        in commands of its own. A command the game refuses is listed in `api.action_failures` once for each unit it
+        names.
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an add-on with no point given to a flying
         structure, and for a transport's unload at a point aimed at one of `units` itself, which is `UNLOAD` for that
-        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a custom
-        ability given to a type it has nothing to be sent as for, or which this game's tables lack an ability it is
-        sent as for, and for an ability given to several units that not every unit of a command is known to carry
-        out (`AbilityData.multi_unit`).
+        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a research
+        given to several units, and for an ability that places something at its target (`AbilityData.places_at_target`)
+        given to several aimed at one; and for a custom ability given to a type it has nothing to be sent as for, or
+        which this game's tables lack an ability it is sent as for.
         """
         given = _unit_tuple(units)
+        if len(given) > 1:
+            given = tuple(dict.fromkeys(given))
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        if len(given) > 1 and row is not None and not row.multi_unit:
-            raise ValueError(
-                f"give {ability.name} to one unit, not {len(given)}: a command naming several may have only one carry "
-                "it out"
-            )
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
         if ability.is_custom:
             if row is None:
@@ -159,6 +159,7 @@ class OrderBook:
             _check_sent_as(ability, sent_as, given)
         aimed = aimed_at(target)
         check_target(ability, aimed, row)
+        _check_each_can_carry_it_out(ability, row, aimed, len(given))
         if aimed is None:
             _check_placed_where_flying(ability, row, given)
         if isinstance(aimed, Unit):
@@ -197,13 +198,13 @@ class OrderBook:
     @property
     def pending_cost(self) -> Cost:
         """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
-        `cost` in the game's tables. A unit given orders that replace one another pays for the last, and one already
-        carrying an order out pays nothing for it again."""
+        `cost` in the game's tables for each unit it goes out to. A unit given orders that replace one another pays for
+        the last, and one already carrying an order out pays nothing for it again."""
         total = Cost(0, 0)
-        for order, _ in self._orders_to_send(self._issued, self._forced):
+        for order, units in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)
             if row is not None:
-                total += row.cost
+                total += row.cost * len(units)
         return total
 
     def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:
@@ -215,8 +216,10 @@ class OrderBook:
         commands: list[tuple[Order[Any], sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]] = []
         for order, units in self._orders_to_send(issued, forced):
             sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
-            actions = create_unit_command_actions(order.ability, units, order.target, sent_as, queued=order.queued)
-            commands += [(order, *command) for command in actions]
+            groups = (units,) if order.ability in MULTI_UNIT_ABILITIES else tuple((unit,) for unit in units)
+            for group in groups:
+                actions = create_unit_command_actions(order.ability, group, order.target, sent_as, queued=order.queued)
+                commands += [(order, *command) for command in actions]
         actions = [*(action for _, action, _ in commands), *then]
         if not actions:
             return
@@ -379,6 +382,18 @@ def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], uni
     """Raise `ValueError` if the custom `ability` has nothing to be sent as for one of `units`."""
     if missing := sorted({unit.type_id.name for unit in units if unit.type_id not in sent_as}):
         raise ValueError(f"{ability.name} has nothing to be sent as for {', '.join(missing)}")
+
+
+def _check_each_can_carry_it_out(
+    ability: AbilityId, row: AbilityData | None, target: Target | None, count: int
+) -> None:
+    """Raise `ValueError` if `ability`, given to `count` units, is a research, or places something at `target`."""
+    if count < 2 or row is None:
+        return
+    if row.is_research:
+        raise ValueError(f"give {ability.name} to one unit, not {count}: only one of them can research it")
+    if row.places_at_target and target is not None:
+        raise ValueError(f"give {ability.name} to one unit, not {count}: only one of them can carry it out there")
 
 
 def _check_placed_where_flying(ability: AbilityId, row: AbilityData | None, units: Sequence[OwnUnit[Any]]) -> None:

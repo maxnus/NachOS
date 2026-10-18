@@ -5,6 +5,7 @@
 
 from collections.abc import Sequence
 from contextlib import closing
+from functools import partial
 from typing import Any
 
 import pytest
@@ -23,7 +24,7 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
-from sc2nachos.units import OwnUnit, UnitType
+from sc2nachos.units import Alliance, OwnUnit, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
 
@@ -634,22 +635,20 @@ class TestSieging:
         assert (command.ability_id, list(command.unit_tags)) == (RawAbilityId.Morph_LiberatorAGMode, [2])
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
 
-    def test_two_liberators_are_not_given_one_siege_and_two_tanks_are(self) -> None:
+    def test_two_liberators_are_given_a_siege_each_and_two_tanks_one_together(self) -> None:
         """One of two liberators given one siege at a point sieges, and both of two tanks (tool `sweep_orders`,
         `group-abilities-terran`)."""
-        game = _Game([ActionResult.SUCCESS])
+        game = _Game([ActionResult.SUCCESS] * 3)
         game.observe(
             0,
             *(make_unit(tag, UnitTypeId.LIBERATOR) for tag in (1, 2)),
             *(make_unit(tag, UnitTypeId.SIEGE_TANK) for tag in (3, 4)),
         )
 
-        with pytest.raises(ValueError, match="give LIBERATOR_SIEGE_AT to one unit, not 2"):
-            game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))
+        game.book.issue([game.own(1), game.own(2)], _SIEGE_AT, target=(20.0, 21.0))
         game.book.issue([game.own(3), game.own(4)], _SIEGE)
 
-        (command,) = _commands(game.flush())
-        assert list(command.unit_tags) == [3, 4]
+        assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1], [2], [3, 4]]
 
     def test_a_tank_alone_needs_no_point(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -1124,6 +1123,9 @@ _BUILD_DEPOT = AbilityId.SCV_BUILD_SUPPLY_DEPOT
 _BUILD_REACTOR = AbilityId.BUILD_REACTOR
 _DRONE = AbilityId.LARVA_MORPH_DRONE
 _STORM = AbilityId.HIGH_TEMPLAR_STORM
+_BUILD_REFINERY = AbilityId.SCV_BUILD_REFINERY
+_RESEARCH = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
+_WARP_IN_ZEALOT = AbilityId.WARP_GATE_WARP_IN_ZEALOT
 _SITE = (30.0, 30.0)
 
 
@@ -1156,6 +1158,11 @@ _COSTING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=_TRAIN_REAPER),
         data_pb2.AbilityData(ability_id=_DRONE),
         data_pb2.AbilityData(ability_id=_STORM, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=_BUILD_REFINERY, target=data_pb2.AbilityData.Target.Unit, is_building=True),
+        data_pb2.AbilityData(ability_id=_RESEARCH),
+        data_pb2.AbilityData(ability_id=AbilityId.LAND, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=AbilityId.ROOT, target=_AT_A_POINT),
+        data_pb2.AbilityData(ability_id=_WARP_IN_ZEALOT, target=_AT_A_POINT),
     ],
 )
 
@@ -1250,22 +1257,106 @@ class TestAnOrderThatCosts:
 
 
 class TestAnOrderToSeveralUnits:
-    """One command naming several units has only one of them carry out a build, a train, a research or a morph (in
-    game), so such an order is given to one unit; any other goes out as one command naming them all."""
+    """One command naming several units has only one of them carry out a build, a train, a research, a morph or a
+    spell, and each unit given such an order in a command of its own carries it out where there is room for each
+    (tool `sweep_orders`, `one-command-many-makers` and `one-command-each`)."""
 
     @pytest.mark.parametrize(
         ("make", "ability", "target"),
-        [(_scv, _BUILD_DEPOT, _SITE), (_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE)],
-        ids=["a build", "a train", "a spell"],
+        [(_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE), (_barracks, _BUILD_REACTOR, None)],
+        ids=["a train", "a spell", "an add-on where each stands"],
     )
-    def test_an_order_one_unit_carries_out_given_to_several_raises(
+    def test_an_order_one_unit_of_a_command_carries_out_goes_to_each_in_a_command_of_its_own(
         self, make: Any, ability: AbilityId, target: tuple[float, float] | None
     ) -> None:
-        game = _costing()
-        game.observe(0, make(1), make(2))
+        game = _costing([ActionResult.SUCCESS] * 3)
+        game.observe(0, make(1), make(2), make(3))
 
-        with pytest.raises(ValueError, match=f"give {ability.name} to one unit, not 2"):
-            game.book.issue([game.own(1), game.own(2)], ability, target=target)
+        game.book.issue([game.own(1), game.own(2), game.own(3)], ability, target=target)
+
+        assert _sent(game.flush()) == [(ability, [tag], target, False) for tag in (1, 2, 3)]
+
+    def test_an_order_whose_ability_this_game_s_tables_lack_is_sent_as_its_ability_goes(self) -> None:
+        """A move goes out as one command naming them all, and a train as a command to each, row or not."""
+        game = _Game([ActionResult.SUCCESS] * 3, tables=make_tables())
+        game.observe(0, _marine(1), _marine(2), _barracks(3), _barracks(4))
+
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
+        game.book.issue([game.own(3), game.own(4)], _TRAIN_MARINE)
+
+        assert _sent(game.flush()) == [
+            (_MOVE, [1, 2], _SITE, False),
+            (_TRAIN_MARINE, [3], None, False),
+            (_TRAIN_MARINE, [4], None, False),
+        ]
+
+    def test_a_move_to_several_goes_out_as_one_command(self) -> None:
+        game = _costing([ActionResult.SUCCESS])
+        game.observe(0, _scv(1), _scv(2))
+
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=_SITE)
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2], _SITE, False)]
+
+    def test_a_unit_given_twice_counts_once(self) -> None:
+        game = _costing([ActionResult.SUCCESS] * 2)
+        game.observe(0, _barracks(1), _scv(2), _scv(3))
+
+        train = game.book.issue([game.own(1), game.own(1)], _TRAIN_MARINE)
+        game.book.issue([game.own(2), game.own(3), game.own(2)], _MOVE, target=_SITE)
+
+        assert train.units == (game.own(1),)
+        assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False), (_MOVE, [2, 3], _SITE, False)]
+
+    def test_what_the_game_refuses_of_a_command_each_is_listed_for_its_unit(self) -> None:
+        game = _costing([ActionResult.SUCCESS, ActionResult.NOT_ENOUGH_MINERALS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3))
+
+        game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
+        game.flush()
+
+        assert game.refused() == [(2, _TRAIN_MARINE, ActionResult.NOT_ENOUGH_MINERALS)]
+
+    @pytest.mark.parametrize(
+        ("make", "ability", "target", "reason"),
+        [
+            (_scv, _BUILD_DEPOT, _SITE, "carry it out there"),
+            (_flying_barracks, _BUILD_REACTOR, _SITE, "carry it out there"),
+            (_scv, _BUILD_REFINERY, 9, "carry it out there"),
+            (partial(make_unit, unit_type=UnitTypeId.ENGINEERING_BAY), _RESEARCH, None, "research it"),
+            (_flying_barracks, AbilityId.LAND, _SITE, "carry it out there"),
+            (
+                partial(make_unit, unit_type=UnitTypeId.SPINE_CRAWLER_UPROOTED),
+                AbilityId.ROOT,
+                _SITE,
+                "carry it out there",
+            ),
+            (partial(make_unit, unit_type=UnitTypeId.WARP_GATE), _WARP_IN_ZEALOT, _SITE, "carry it out there"),
+        ],
+        ids=[
+            "a build at a point",
+            "an add-on at a point",
+            "a build on a geyser",
+            "a research",
+            "a landing",
+            "a rooting",
+            "a warp-in",
+        ],
+    )
+    def test_an_order_only_one_of_them_can_carry_out_given_to_several_raises(
+        self, make: Any, ability: AbilityId, target: tuple[float, float] | int | None, reason: str
+    ) -> None:
+        """Two engineering bays given the same research in a command each research it once, two SCVs given a depot at
+        one site are both charged until the second gives up, and of two flying barracks given a landing, two spine
+        crawlers a rooting and two warp gates a warp-in, each at one point, one carries it out (tool `sweep_orders`,
+        `one-command-each`)."""
+        game = _costing()
+        geyser = make_unit(9, UnitTypeId.VESPENE_GEYSER, at=(40.0, 40.0), alliance=Alliance.NEUTRAL)
+        game.observe(0, make(1), make(2), geyser)
+        aimed = game.tracker.unit_tracker.by_tag(target) if isinstance(target, int) else target
+
+        with pytest.raises(ValueError, match=f"give {ability.name} to one unit, not 2: only one of them can {reason}"):
+            game.book.issue([game.own(1), game.own(2)], ability, target=aimed)
 
         assert game.book.pending == ()
 
@@ -1305,6 +1396,14 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(1), _BUILD_DEPOT, target=(35.0, 35.0))
         game.book.issue(game.own(2), _TRAIN_REAPER)
         game.book.issue(game.own(2), _TRAIN_MARINE)
+
+        assert game.book.pending_cost == Cost(150, 0)
+
+    def test_pending_cost_counts_an_order_to_several_once_for_each(self) -> None:
+        game = _costing()
+        game.observe(0, _barracks(1), _barracks(2), _barracks(3, _training()))
+
+        game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
 
         assert game.book.pending_cost == Cost(150, 0)
 
@@ -1576,6 +1675,40 @@ class _ProductionBot:
             self.reads.append((len(marines), progress, marines[0].progress if marines else None))
 
 
+class _GroupTrainingBot:
+    """A terran bot that raises three barracks by debug command under cheats for supply and resources, gives all three
+    a marine in one order, and records what the turn's orders cost then and each turn after how many marines are in
+    production."""
+
+    race = Race.TERRAN
+
+    def __init__(self, api: Api, player: int) -> None:
+        self.api = api
+        self.player = player
+        self.made = False
+        self.cost: Cost | None = None
+        self.in_production: list[int] = []
+
+    def turn(self, event: TurnEvent) -> None:
+        api = self.api
+        barracks = api.units.own.of_type(UnitType.Barracks).complete
+        if not self.made:
+            cheats = (debug_pb2.DebugGameState.Value(name) for name in ("food", "all_resources"))
+            site = api.map.start_location.towards(api.map.playable_area.center, 12.0)
+            api.client.debug(
+                [
+                    *(debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats),
+                    _create(UnitTypeId.BARRACKS, site, self.player, quantity=3),
+                ]
+            )
+            self.made = True
+        elif self.cost is None and len(barracks) == 3:
+            api.orders.issue(barracks, _TRAIN_MARINE)
+            self.cost = api.orders.pending_cost
+        elif self.cost is not None:
+            self.in_production.append(len(api.in_production(UnitType.Marine)))
+
+
 class _UnloadingBotUnloadingFirst(_UnloadingBot):
     unload_first = True
 
@@ -1666,6 +1799,15 @@ class TestAgainstTheRealGame:
         assert marine == sorted(marine)
         assert marine[-1] > marine[0]
 
+    def test_three_barracks_given_one_train_each_train_a_marine(self) -> None:
+        bot, failures = _play_a_minute(_GroupTrainingBot)
+
+        print("marines in production, turn by turn:", bot.in_production)
+        print("refused:", failures)
+        assert bot.cost == Cost(150, 0, supply=3)
+        assert max(bot.in_production) == 3
+        assert not [failure for failure in failures if failure.ability is _TRAIN_MARINE]
+
 
 def _play_a_minute[
     BotT: (
@@ -1675,6 +1817,7 @@ def _play_a_minute[
         _GroupSiegingBot,
         _GroupUnloadingBot,
         _ProductionBot,
+        _GroupTrainingBot,
     )
 ](
     make_bot: type[BotT],
