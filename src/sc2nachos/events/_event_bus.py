@@ -97,8 +97,8 @@ class EventBus:
         """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`.
 
         `event_type` is an event type, whose events and its subclasses' the handler is handed, or a filter from `only`
-        or `of`. `where` on the returned decorator narrows further. A type that has `of` is subscribed to only through
-        it, and a type checker refuses it bare.
+        or `of`. `where` on the `EventDecorator` it returns narrows further. A type that has `of` is subscribed to only
+        through it, and a type checker refuses it bare.
 
         A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
         method in a class body is marked instead, and subscribed for each instance passed to `subscribe`.

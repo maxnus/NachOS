@@ -28,6 +28,8 @@ class EventDecorator[E: Event]:
     __slots__ = ("_bus", "_options", "_selects")
 
     def __init__(self, bus: EventBus, selects: EventFilter[Any], options: dict[str, Any]) -> None:
+        """A decorator subscribing to `bus` what `selects` selects, with `options`, the rest of what `on` was given,
+        which only `on` checks."""
         self._bus = bus
         self._selects = selects
         # The rest of what `on` was given: the priority, the cadence and whether to catch exceptions.

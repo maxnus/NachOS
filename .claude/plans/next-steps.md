@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #127. `uv run pytest` passes 2164 tests on branch `claude/public-event-decorator`;
+- nachOS `main` has every PR to #127. `uv run pytest` passes 2165 tests on branch `claude/public-event-decorator`;
   `uv run pytest -m integration` passes 31 against a real game (run 2026-10-18).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),

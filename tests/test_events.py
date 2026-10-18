@@ -26,10 +26,12 @@ from sc2nachos.events import (
     GameEndEvent,
     GameStartEvent,
     OwnUnitCreatedEvent,
+    OwnUnitDamagedEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
     TurnEvent,
     TurnStartEvent,
+    UnitEvent,
 )
 from sc2nachos.geometry import Circle, Point
 from sc2nachos.ids import UnitTypeId
@@ -566,10 +568,15 @@ class TestTyping:
         decorator = bus.on(TurnEvent)
         narrowed = decorator.where(lambda event: event.step > 0)
 
+        damaged = bus.on(OwnUnitDamagedEvent)
+        any_unit_event: EventDecorator[UnitEvent] = damaged
+
         assert_type(decorator, EventDecorator[TurnEvent])
         assert_type(narrowed, EventDecorator[TurnEvent])
+        assert_type(damaged, EventDecorator[OwnUnitDamagedEvent])
         assert isinstance(decorator, EventDecorator)
         assert isinstance(narrowed, EventDecorator)
+        assert isinstance(any_unit_event, EventDecorator)
 
 
 class TestExceptions:

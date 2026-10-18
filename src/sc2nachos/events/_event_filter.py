@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 class EventFilter[E: Event]:
     """The events of one type a handler is handed: those with some keys, those a predicate passes, or both.
 
-    `only` and `of` on an event class make one, and `on` takes it in place of an event type; `where` on the decorator
-    `on` returns adds a predicate. The events handed out are of the type itself.
+    `only` and `of` on an event class make one, and `on` takes it in place of an event type; `where` on the
+    `EventDecorator` that `on` returns adds a predicate. The events handed out are of the type itself.
     """
 
     __slots__ = ("event_type", "keys", "predicate")
