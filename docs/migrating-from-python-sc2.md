@@ -2,8 +2,8 @@
 
 For bots moving over from [python-sc2](https://github.com/BurnySc2/python-sc2), the `burnysc2` package imported as
 `sc2`. NachOS is not a drop-in replacement. This page shows the same bot in both, the main changes, and where a
-translation most often goes wrong. [python-sc2 and NachOS](reference/python-sc2.md) has every name and every difference,
-for looking one up.
+translation most often goes wrong. [python-sc2 and NachOS](reference/python-sc2.md) has every python-sc2 name a bot is
+likely to use, and every difference, for looking one up.
 
 ## The same bot in both
 
@@ -98,7 +98,7 @@ run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficult
 
 - **A unit takes the last order a turn gives it.** A second train given to a structure replaces the first; a reactor's
   second marine needs `queued=True` ([orders](orders.md#one-order-a-unit-a-turn)).
-- **A zerg morph is given to a larva**, not to the hatchery, which refuses it
+- **A larva's morph is given to a larva**, a drone or an overlord say, not to the hatchery, which refuses it
   ([in detail](reference/python-sc2.md#orders)).
 - **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself
   ([in detail](reference/python-sc2.md#units)).
@@ -113,8 +113,8 @@ run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficult
 - **Grids are indexed `[x, y]`** and cover the playable area alone ([in detail](reference/python-sc2.md#the-map)).
 - **The names changed, not the numbers**: `UnitTypeId(old.value)` translates an id
   ([in detail](reference/python-sc2.md#ids)).
-- **Half a supply is kept**: one zergling makes `api.supply.used` read 14.5
-  ([in detail](reference/python-sc2.md#the-state)).
+- **Half a supply is kept**: the game rounds a zergling's half down, and NachOS adds it back, so a zergling made at 14
+  supply reads 14.5 ([in detail](reference/python-sc2.md#the-state)).
 - **Subscriptions outlive a game.** Objects a bot makes for each game unsubscribe the old ones, or both go on handling
   events ([in detail](reference/python-sc2.md#events)).
 - **`api.chat` and `api.leave_game()` act at the end of the turn**, and a goodbye sent in the turn that leaves never

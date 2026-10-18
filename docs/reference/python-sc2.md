@@ -2,8 +2,8 @@
 
 Every python-sc2 name a bot is likely to use, its NachOS counterpart, and every place where the obvious translation
 goes wrong, for looking one up. [Migrating from python-sc2](../migrating-from-python-sc2.md) is the place to start.
-What the game itself does, whichever library reads it, is in [game behavior](game-behavior/README.md), and each
-difference below links there for its evidence.
+What the game itself does, whichever library reads it, is in [game behavior](game-behavior/README.md), and a
+difference that rests on what the game does links there for its evidence.
 
 ## Running a game
 
@@ -125,8 +125,8 @@ it.
   (`AbilityData.multi_unit`) where the game would quietly have one of them carry it out: pick the unit.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
-  ([game behavior](game-behavior/abilities-and-orders.md)). It sends every order as given, whatever it
-  costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.pending_cost` is what the
+  ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
+  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.pending_cost` is what the
   turn's orders will cost ([orders](../orders.md#what-an-order-needs)).
 - **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
   first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
@@ -535,7 +535,7 @@ it.
   order, such as a changeling's disguise, and read `None`; the viking's alias is a row no unit is ever one of, so
   `tech_aliases` drops it.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
-  no path for yet ([game behavior](game-behavior/abilities-and-orders.md)), so `UNLOAD`,
+  no path for yet ([game behavior](game-behavior/abilities-and-orders.md#loading-and-unloading)), so `UNLOAD`,
   and `UNLOAD_AT` put everyone down at once.
 - **A cost is minerals, vespene and supply; times are steps beside it.** python-sc2's `Cost` carries a `time` in
   steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong nearly

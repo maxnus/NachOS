@@ -187,7 +187,8 @@ an order like any other. `api.data.abilities[ability].cancelled_by` names the ca
 structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
 tech lab included, and a morph's or an add-on's own cancel, since those answer `CANCEL_LAST` with `ERROR`. A
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
-neither a slot nor a mineral within the same step ([game behavior](reference/game-behavior/abilities-and-orders.md)).
+neither a slot nor a mineral within the same step
+([game behavior](reference/game-behavior/abilities-and-orders.md#cancels-and-refunds)).
 
 ## What the game did
 
