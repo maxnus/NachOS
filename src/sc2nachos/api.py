@@ -100,17 +100,7 @@ class Api:
         catch_exceptions: bool = ...,
     ) -> EventSubscriber[E]: ...
 
-    def on(
-        self,
-        event_type: type[Event] | EventFilter[Any],
-        /,
-        *,
-        priority: EventPriority = EventPriority.MEDIUM,
-        every_steps: int | None = None,
-        at_step: int | None = None,
-        once: bool = False,
-        catch_exceptions: bool = False,
-    ) -> Any:
+    def on(self, event_type: type[Event] | EventFilter[Any], /, **options: Any) -> Any:
         """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`. This works
         before any game, so handlers can subscribe as their modules are imported.
 
@@ -136,14 +126,7 @@ class Api:
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
         """
-        return self._events.on(
-            event_type,
-            priority=priority,
-            every_steps=every_steps,
-            at_step=at_step,
-            once=once,
-            catch_exceptions=catch_exceptions,
-        )
+        return self._events.on(event_type, **options)
 
     def subscribe(self, instance: object) -> None:
         """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
