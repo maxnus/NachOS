@@ -755,7 +755,7 @@ class TestAgainstTheRealGame:
             client.join_game(Race.TERRAN)
             api = Api()
             bot = _DepotBot(api, transport)
-            api.events.on(TurnEvent)(bot.turn)
+            api.on(TurnEvent)(bot.turn)
             api.play(client, steps_per_turn=8, time_limit=60)
 
         print("the site, turn by turn (depot stands, reserved, open):", bot.turns)

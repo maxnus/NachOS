@@ -5,7 +5,7 @@ handler returns, so a turn that orders nothing sends nothing. Every order goes o
 and the game charges what costs then.
 
 ```python
-@api.events.on(TurnEvent)
+@api.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.orders.issue(marine, AbilityId.ATTACK, target=enemy_base)
@@ -105,7 +105,7 @@ Orders have no priority of their own. Handlers already run highest priority firs
 `api.orders.issued_to(unit)` to leave alone a unit an earlier one has ordered:
 
 ```python
-@api.events.on(TurnEvent, priority=EventPriority.LOW)
+@api.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         if not api.orders.issued_to(marine):

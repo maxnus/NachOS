@@ -25,7 +25,7 @@ class _EventSubscriptions:
         # event is being handed out waits for the next.
         self._handlers: dict[type[Event], tuple[_Handler, ...]] = {}
         self.resolved: dict[type[Event], tuple[_Handler, ...]] = {}
-        """The handlers of each event class asked for so far, its bases' included, in run order. `EventBus.emit` reads
+        """The handlers of each event class asked for so far, its bases' included, in run order. `_EventBus.emit` reads
         it directly; a method call would slow it."""
         self.selecting: set[type[Event]] = set()
         """The resolved classes with a handler that selects by key or predicate."""

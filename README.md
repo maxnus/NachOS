@@ -20,7 +20,7 @@ PyPI belongs to an unrelated project.
 ## Design
 
 **You instantiate the API. You do not subclass it, and your bot does not live inside it.** NachOS exposes an
-`Api` that owns the client, game state, game data, units, orders and the event bus. Construct one and reach it
+`Api` that owns the client, game state, game data, units, orders and event handlers. Construct one and reach it
 however suits your bot — most bots will want a module-level singleton:
 
 ```python
@@ -28,17 +28,16 @@ however suits your bot — most bots will want a module-level singleton:
 from sc2nachos import Api
 
 api = Api()
-on = api.events.on
 ```
 
 ```python
 # my_bot/economy.py — anywhere else in your bot
 from sc2nachos.events import TurnEvent
 
-from my_bot.api import api, on
+from my_bot.api import api
 
 
-@on(TurnEvent, every_steps=4)
+@api.on(TurnEvent, every_steps=4)
 def manage_workers(event):
     for worker in api.units.own.workers.idle:
         ...

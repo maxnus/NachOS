@@ -98,17 +98,17 @@ def _play(
     client = Client(game)
     client.join_game(Race.TERRAN)
 
-    @api.events.on(GameStartEvent)
+    @api.on(GameStartEvent)
     def on_start(event: GameStartEvent) -> None:
         api.debug.refresh_steps = refresh_steps
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def on_turn(event: TurnEvent) -> None:
         turn(event.step)
 
     api.play(client)
-    api.events.unsubscribe(on_start)
-    api.events.unsubscribe(on_turn)
+    api.unsubscribe(on_start)
+    api.unsubscribe(on_turn)
     # A turn's debug request follows its observation, the steps counting from 0.
     sent: dict[int, list[debug_pb2.DebugCommand]] = {}
     step = -1
@@ -139,7 +139,7 @@ class TestDrawing:
         game = _ScriptedGame(observations, players=2)
         client = Client(game)
         client.join_game(Race.TERRAN)
-        api.events.on(TurnEvent)(lambda event: turn(event.step))
+        api.on(TurnEvent)(lambda event: turn(event.step))
         api.play(client)
 
         order = [request.WhichOneof("request") for request in game.requests]
@@ -752,7 +752,7 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
     api = Api()
     seen: dict[str, Any] = {}
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def turn(event: TurnEvent) -> None:
         turns = seen.setdefault("turns", 0)
         seen["turns"] = turns + 1

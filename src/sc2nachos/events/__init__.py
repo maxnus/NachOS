@@ -1,10 +1,10 @@
-"""The events the api hands out as a game goes on, and the bus that hands them to handlers.
+"""The events the api hands out as a game goes on, and what selects them for a handler.
 
 A game hands out `GameStartEvent`, then a turn for each observation but the last, then `GameEndEvent`. A turn hands
 out `TurnStartEvent`, then the events its observation reports, then `TurnEvent`. `only`, `of` and `where` select some
 events of a type. `UnitEvent`, `BuffEvent`, `VitalEvent` and `AreaEvent` are bases through which a handler takes a
-whole kind of event. A subclass of `Event` is a bot's own event, sent with `EventBus.emit`. `docs/events.md` lists
-every event: its fields, what selects it, and when it comes.
+whole kind of event. A subclass of `Event` is a bot's own event, sent with `api.emit`. `docs/events.md` lists every
+event: its fields, what selects it, and when it comes.
 """
 
 from sc2nachos.events._done import Done
@@ -53,10 +53,9 @@ from sc2nachos.events._event import (
     UnitTypeChangedEvent,
     VitalEvent,
 )
-from sc2nachos.events._event_bus import EventBus
-from sc2nachos.events._event_decorator import EventDecorator
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
+from sc2nachos.events._event_subscriber import EventSubscriber
 from sc2nachos.events._handler_timing import HandlerTiming
 
 __all__ = [
@@ -78,10 +77,9 @@ __all__ = [
     "EnemyUnitVitalDroppedEvent",
     "EnemyUnitVitalReachedEvent",
     "Event",
-    "EventBus",
-    "EventDecorator",
     "EventFilter",
     "EventPriority",
+    "EventSubscriber",
     "GameEndEvent",
     "GameStartEvent",
     "HandlerTiming",

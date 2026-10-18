@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from sc2nachos import Expansion, Point, Unit, Units
 
 api = Api()
-on = api.events.on
 
 MAX_TOWNHALLS = 4
 MAX_WORKERS = 66
@@ -52,7 +51,7 @@ class Budget:
         return affordable
 
 
-@on(TurnEvent)
+@api.on(TurnEvent)
 def macro(event: TurnEvent) -> None:
     """Spend the turn's money, most important first."""
     budget = Budget()
@@ -82,7 +81,7 @@ def train_workers(budget: Budget) -> None:
 
 
 # At a low priority, so it runs after `macro`, whose builders `issued_to` then shows.
-@on(TurnEvent, every_steps=8, priority=EventPriority.LOW)
+@api.on(TurnEvent, every_steps=8, priority=EventPriority.LOW)
 def send_idle_workers_to_mine(event: TurnEvent) -> None:
     """Send each idle SCV that has not been ordered this turn to mine at the townhall with the most room."""
     for scv in api.units.own.workers.idle:
@@ -93,7 +92,7 @@ def send_idle_workers_to_mine(event: TurnEvent) -> None:
             api.orders.issue(scv, AbilityId.GATHER, target=field)
 
 
-@on(TurnEvent, every_steps=64, priority=EventPriority.LOW)
+@api.on(TurnEvent, every_steps=64, priority=EventPriority.LOW)
 def balance_workers(event: TurnEvent) -> None:
     """Move SCVs from a townhall with more than it needs to one with room."""
     for townhall in api.units.own.townhalls.complete:
@@ -122,7 +121,7 @@ def _mineral_field_with_room(near: Point) -> Unit[UnitType.AnyMineralField] | No
     return fields.closest_to(near) if fields else None
 
 
-@on(OwnConstructionFinishedEvent.only(UnitType.Townhall))
+@api.on(OwnConstructionFinishedEvent.only(UnitType.Townhall))
 def rally_new_workers(event: OwnConstructionFinishedEvent) -> None:
     """Have a finished townhall send the SCVs it trains to its nearest mineral field."""
     field = _mineral_field_with_room(event.unit.position)
@@ -130,7 +129,7 @@ def rally_new_workers(event: OwnConstructionFinishedEvent) -> None:
         api.orders.issue(event.unit, AbilityId.RALLY_WORKERS, target=field)
 
 
-@on(TurnEvent, once=True)
+@api.on(TurnEvent, once=True)
 def rally_first_workers(event: TurnEvent) -> None:
     """Have the first townhall send the SCVs it trains to its nearest mineral field."""
     for townhall in api.units.own.townhalls:
@@ -195,7 +194,7 @@ def _depot_anchor() -> Point:
     return main.center.towards(main.mineral_fields.center, -8)
 
 
-@on(OwnConstructionFinishedEvent.only(UnitType.SupplyDepot))
+@api.on(OwnConstructionFinishedEvent.only(UnitType.SupplyDepot))
 def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     """Lower a finished depot, so it blocks nothing."""
     api.orders.issue(event.unit, AbilityId.SUPPLY_DEPOT_LOWER)
@@ -267,9 +266,9 @@ class Army:
     def __init__(self) -> None:
         self.attacking = False
         self.last_seen: dict[Point, int] = {}
-        api.events.subscribe(self)
+        api.subscribe(self)
 
-    @on(TurnEvent, every_steps=4)
+    @api.on(TurnEvent, every_steps=4)
     def command(self, event: TurnEvent) -> None:
         """Defend against what comes near the bases, attack once there are enough marines, and fall back once too few
         are left."""

@@ -38,7 +38,7 @@ def _two_turns(api: Api, *, answers: int) -> FakeTransport:
 def test_a_turns_chat_goes_out_in_order_after_its_orders_and_the_camera_move() -> None:
     api = Api()
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def talk(event: TurnEvent) -> None:
         api.chat("gl hf")
         api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
@@ -66,7 +66,7 @@ def test_a_message_that_is_empty_or_would_kill_the_game_client_raises(text: str,
     api = Api()
     raised: list[str] = []
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def talk(event: TurnEvent) -> None:
         with pytest.raises(ValueError, match=refused) as error:
             api.chat(text)
@@ -96,12 +96,12 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
     api = Api()
     heard: list[tuple[int, str]] = []
 
-    @api.events.on(TurnEvent)
+    @api.on(TurnEvent)
     def talk(event: TurnEvent) -> None:
         if event.step == 0:
             api.chat("gl hf ✓")
 
-    @api.events.on(ChatEvent)
+    @api.on(ChatEvent)
     def listen(event: ChatEvent) -> None:
         heard.append((event.player_id, event.text))
 

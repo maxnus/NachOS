@@ -2,39 +2,38 @@
 
 A bot's code runs in handlers of the events a game hands out. This page covers subscribing to an event, selecting a
 subset of one, and defining and emitting your own, then lists every event NachOS hands out: its fields, what selects
-it, and when it comes. The docstrings in `sc2nachos.events` cover the rest.
+it, and when it comes. The docstrings of `api.on` and of `sc2nachos.events` cover the rest.
 
 ## Subscribing
 
 ```python
-@api.events.on(TurnEvent)
+@api.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None: ...
 
 
 class Economy:
     def __init__(self) -> None:
-        api.events.subscribe(self)
+        api.subscribe(self)
 
-    @api.events.on(OwnUnitCreatedEvent, priority=EventPriority.HIGH)
+    @api.on(OwnUnitCreatedEvent, priority=EventPriority.HIGH)
     def on_created(self, event: OwnUnitCreatedEvent) -> None: ...
 ```
 
 A function is subscribed when it is defined. A method is marked, then subscribed for each instance passed to
-`api.events.subscribe`. `on` takes a `priority`, and `every_steps`, `at_step` or `once` to limit when the handler
-runs. A handler that returns `Done` is not called again that game. All of this starts over with each game.
-
-A bot with one api can alias the decorator, `on = api.events.on`, and write `@on(TurnEvent)` on functions and
-methods alike. `api.events` also holds `subscribe`, `unsubscribe`, `emit` and `timings`.
+`api.subscribe`, and `api.unsubscribe` takes a function, a method or an instance off again. `on` takes a `priority`,
+and `every_steps`, `at_step` or `once` to limit when the handler runs. A handler that returns `Done` is not called
+again that game. All of this starts over with each game. An api made with `time_handlers=True` says how long each
+handler took in `api.handler_timings`.
 
 ## Selecting some events
 
 ```python
-@api.events.on(AlertEvent.only(Alert.NUCLEAR_LAUNCH_DETECTED))
-@api.events.on(UnitDiedEvent.only(UnitType.Structure))
-@api.events.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar))
-@api.events.on(OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.3))
-@api.events.on(EnemyUnitEnteredAreaEvent.of(Circle(natural, 12)))
-@api.events.on(OwnUnitDamagedEvent).where(lambda event: event.damage > 20)
+@api.on(AlertEvent.only(Alert.NUCLEAR_LAUNCH_DETECTED))
+@api.on(UnitDiedEvent.only(UnitType.Structure))
+@api.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar))
+@api.on(OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.3))
+@api.on(EnemyUnitEnteredAreaEvent.of(Circle(natural, 12)))
+@api.on(OwnUnitDamagedEvent).where(lambda event: event.damage > 20)
 ```
 
 - **`only(...)`** narrows an event type a handler could also take whole, to some alerts, buffs, upgrades or unit
@@ -44,7 +43,7 @@ methods alike. `api.events` also holds `subscribe`, `unsubscribe`, `emit` and `t
   as an amount or a fraction of its maximum, reaching a value or dropping below it; or a unit crossing the edge of an
   area. Such a type derives from `ParameterizedEvent`, and `on` rejects it bare, as does a type checker. One `of` takes
   one set of parameters; stack the decorators for several.
-- **`where(predicate)`**, called on the `EventDecorator` that `on` returns, keeps only the events `predicate` passes,
+- **`where(predicate)`**, called on the `EventSubscriber` that `on` returns, keeps only the events `predicate` passes,
   out of the type or the `only` or `of` selection. Chained twice, an event must pass both. The decorator it returns
   subscribes every handler it decorates. A handler's predicate is called when the handler's turn comes, after the
   handlers before it have run.
@@ -57,10 +56,10 @@ of the type.
 ## Handlers of a class and its subclasses
 
 ```python
-@api.events.on(UnitEvent.only(UnitType.Structure))
-@api.events.on(BuffEvent.only(BuffId.MARINE_STIMMED))
-@api.events.on(VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
-@api.events.on(AreaEvent.of(Circle(natural, 12)))
+@api.on(UnitEvent.only(UnitType.Structure))
+@api.on(BuffEvent.only(BuffId.MARINE_STIMMED))
+@api.on(VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
+@api.on(AreaEvent.of(Circle(natural, 12)))
 ```
 
 An event is handed to the handlers of its class and of every class it derives from. Four bases each cover a whole
@@ -82,12 +81,12 @@ class ExpansionTakenEvent(Event):
     by_enemy: bool = True
 
 
-api.events.emit(ExpansionTakenEvent(natural))
+api.emit(ExpansionTakenEvent(natural))
 ```
 
 A subclass of `Event` is a frozen, slotted dataclass of the fields it declares; a `@dataclass` decorator of its own
 fails. Every event has a `step`, passed by keyword; an event made without one takes the current step of the game
-being played when it is emitted. `api.events.emit` hands an event to its handlers in priority order and returns
+being played when it is emitted. `api.emit` hands an event to its handlers in priority order and returns
 once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events too, so a bot's
 handlers can be tested without a game, given a step.
 

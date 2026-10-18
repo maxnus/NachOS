@@ -30,7 +30,6 @@ from sc2nachos.events import (
     EnemyUnitVitalDroppedEvent,
     EnemyUnitVitalReachedEvent,
     Event,
-    EventBus,
     OwnActionEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
@@ -52,6 +51,7 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
     UnitTypeChangedEvent,
 )
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
@@ -168,7 +168,7 @@ class _Game:
         if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
             self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
-    def report(self, events: EventBus) -> list[Event]:
+    def report(self, events: _EventBus) -> list[Event]:
         """The events the last observation reports, in the order they are handed out, limited to what a handler of
         `events` not yet done wants: every event of a type a handler takes whole, and those of the keys handlers select
         through `only` or `of`."""

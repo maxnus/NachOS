@@ -12,7 +12,7 @@ from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 
-# The step of an event made without one; `EventBus.emit` replaces it with the current step.
+# The step of an event made without one; `api.emit` replaces it with the current step.
 _NO_STEP = -1
 
 

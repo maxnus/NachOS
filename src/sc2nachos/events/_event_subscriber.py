@@ -1,4 +1,4 @@
-"""The decorator `EventBus.on` returns, which subscribes a handler."""
+"""The decorator `api.on` returns, which subscribes a handler."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._handler import _Handler
 
 if TYPE_CHECKING:
-    from sc2nachos.events._event_bus import EventBus
+    from sc2nachos.events._event_bus import _EventBus
 
 
 @final
-class EventDecorator[E: Event]:
-    """The decorator `EventBus.on` returns, for a handler of `E`: a function taking one, or a method taking one after
+class EventSubscriber[E: Event]:
+    """The decorator `api.on` returns, for a handler of `E`: a function taking one, or a method taking one after
     `self`. It subscribes the function it decorates to the events it selects, or marks the method it decorates for
-    `EventBus.subscribe`, with the options `on` was given. `where` narrows what it selects.
+    `api.subscribe`, with the options `on` was given. `where` narrows what it selects.
 
     A handler taking any `Event` keeps its own type, so it can be decorated for several events. One taking a narrower
     type is typed as a callable of the event it is decorated for.
@@ -27,7 +27,7 @@ class EventDecorator[E: Event]:
 
     __slots__ = ("_bus", "_options", "_selects")
 
-    def __init__(self, bus: EventBus, selects: EventFilter[Any], options: dict[str, Any]) -> None:
+    def __init__(self, bus: _EventBus, selects: EventFilter[Any], options: dict[str, Any]) -> None:
         """A decorator subscribing to `bus` what `selects` selects, with `options`, the rest of what `on` was given,
         which only `on` checks."""
         self._bus = bus
@@ -42,10 +42,10 @@ class EventDecorator[E: Event]:
     def __call__[F: Callable[[Any, Event], object]](self, handler: F, /) -> F: ...
 
     @overload
-    def __call__[H: Event, R](self: EventDecorator[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
+    def __call__[H: Event, R](self: EventSubscriber[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
 
     @overload
-    def __call__[S, H: Event, R](self: EventDecorator[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
+    def __call__[S, H: Event, R](self: EventSubscriber[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
 
     def __call__(self, handler: Any, /) -> Any:
         function: object = handler
@@ -59,7 +59,7 @@ class EventDecorator[E: Event]:
         self._bus._add(_Handler(function, self._selects, instance=instance, **self._options))
         return handler
 
-    def where(self, predicate: Callable[[E], bool], /) -> EventDecorator[E]:
+    def where(self, predicate: Callable[[E], bool], /) -> EventSubscriber[E]:
         """This decorator, narrowed to the events `predicate` also passes. `once` and the like count only those."""
         selects = self._selects
         if (first := selects.predicate) is None:
@@ -70,4 +70,4 @@ class EventDecorator[E: Event]:
                 return first(event) and predicate(event)
 
         narrowed = EventFilter(selects.event_type, keys=selects.keys, predicate=both)
-        return EventDecorator(self._bus, narrowed, self._options)
+        return EventSubscriber(self._bus, narrowed, self._options)
