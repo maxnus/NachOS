@@ -1,4 +1,4 @@
-"""The marks `Mark` draws at a point."""
+"""The marks `DebugMark` draws at a point."""
 
 from enum import Enum
 

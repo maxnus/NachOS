@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos._checks import is_whole_number
-from sc2nachos.debug._color import Color, _proto_color, _Rgb, _rgb_if_given
+from sc2nachos.debug._color import Color, _kept_color, _proto_color, _Rgb, _rgb_if_given
 from sc2nachos.debug._marker import Marker
 
 if TYPE_CHECKING:
@@ -36,11 +36,10 @@ class DebugText:
     _rgb: _Rgb | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        """Raises `ValueError` for a size that is not a whole number of pixels, at least 1, and as every shape does."""
-        if self.size is not None and (not is_whole_number(self.size) or self.size < 1):
-            raise ValueError(f"text is a whole number of pixels high, at least 1, not {self.size!r}")
-        object.__setattr__(self, "_rgb", _rgb_if_given(self.color))
-        _check_offset(self.offset)
+        """Raises `TypeError` for a text that is not a `str`, `ValueError` for a size that is not a whole number of
+        pixels, at least 1, and as every shape does."""
+        _check_text(self.text, self.size)
+        _keep_color_and_offset(self)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
         """Add the text to `draw` at `at`, in `rgb`, `size` pixels high: its own color and size, or else what it takes
@@ -65,8 +64,7 @@ class DebugBox:
         """Raises `ValueError` for a side that is not a finite number above 0, and as every shape does."""
         for side in (self.width, self.depth, self.height):
             _check_length(side, "a box's side")
-        object.__setattr__(self, "_rgb", _rgb_if_given(self.color))
-        _check_offset(self.offset)
+        _keep_color_and_offset(self)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
         """Add the box to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
@@ -90,8 +88,7 @@ class DebugSphere:
     def __post_init__(self) -> None:
         """Raises `ValueError` for a radius that is not a finite number above 0, and as every shape does."""
         _check_length(self.radius, "a radius")
-        object.__setattr__(self, "_rgb", _rgb_if_given(self.color))
-        _check_offset(self.offset)
+        _keep_color_and_offset(self)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
         """Add the sphere to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
@@ -111,10 +108,12 @@ class DebugMark:
     _rgb: _Rgb | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        """Raises `ValueError` for a radius that is not a finite number above 0, and as every shape does."""
+        """Raises `TypeError` for a marker that is not a `Marker`, `ValueError` for a radius that is not a finite
+        number above 0, and as every shape does."""
+        if not isinstance(self.marker, Marker):
+            raise TypeError(f"a mark is drawn as a `Marker`, not {self.marker!r}")
         _check_length(self.radius, "a radius")
-        object.__setattr__(self, "_rgb", _rgb_if_given(self.color))
-        _check_offset(self.offset)
+        _keep_color_and_offset(self)
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
         """Add the mark to `draw` at `at`, in `rgb`: its own color, or else what it takes from where it is drawn."""
@@ -140,9 +139,8 @@ class DebugLine:
 
     def __post_init__(self) -> None:
         """Raises `ValueError` as every shape does, for `to_offset` too."""
-        object.__setattr__(self, "_rgb", _rgb_if_given(self.color))
-        _check_offset(self.offset)
-        _check_offset(self.to_offset)
+        _keep_color_and_offset(self)
+        object.__setattr__(self, "to_offset", _kept_offset(self.to_offset))
 
     def _draw(self, draw: debug_pb2.DebugDraw, at: _Vector, rgb: _Rgb, size: int, end: _Vector | None) -> None:
         """Add the line to `draw` from `at` to `end`, offset by `to_offset`, in `rgb`: its own color, or else what it
@@ -171,11 +169,10 @@ class DebugGroup:
         """Raises `ValueError` for no shapes, and as every shape does."""
         if not shapes:
             raise ValueError("a group holds at least one shape")
-        self._rgb = _rgb_if_given(color)
-        _check_offset(offset)
+        self._color = _kept_color(color)
+        self._rgb = _rgb_if_given(self._color)
+        self._offset = _kept_offset(offset)
         self._shapes = shapes
-        self._color = color
-        self._offset = offset
 
     @property
     def shapes(self) -> tuple[DebugShape, ...]:
@@ -242,10 +239,29 @@ def _segments_of_marker(marker: Marker, radius: float) -> list[tuple[tuple[float
             return list(zip(corners, corners[1:] + corners[:1], strict=True))
 
 
-def _check_offset(offset: _Vector) -> None:
-    """Raises `ValueError` for an offset that is not three finite numbers."""
+def _keep_color_and_offset(shape: DebugText | DebugBox | DebugSphere | DebugMark | DebugLine) -> None:
+    """Keep `shape`'s color and offset as `_kept_color` and `_kept_offset` give them, and its color's red, green and
+    blue."""
+    color = _kept_color(shape.color)
+    object.__setattr__(shape, "color", color)
+    object.__setattr__(shape, "_rgb", _rgb_if_given(color))
+    object.__setattr__(shape, "offset", _kept_offset(shape.offset))
+
+
+def _kept_offset(offset: _Vector) -> _Vector:
+    """`offset` as a tuple of three floats. Raises `ValueError` for an offset that is not three finite numbers."""
     if len(offset) != 3 or not all(math.isfinite(part) for part in offset):
         raise ValueError(f"an offset is three finite numbers, across, up the map and up, not {offset!r}")
+    return (float(offset[0]), float(offset[1]), float(offset[2]))
+
+
+def _check_text(text: str, size: int | None) -> None:
+    """Raises `TypeError` for a text that is not a `str`, and `ValueError` for a size, if given, that is not a whole
+    number of pixels, at least 1."""
+    if not isinstance(text, str):
+        raise TypeError(f"text is a `str`, not {text!r}")
+    if size is not None and (not is_whole_number(size) or size < 1):
+        raise ValueError(f"text is a whole number of pixels high, at least 1, not {size!r}")
 
 
 def _check_length(length: float, what: str) -> None:

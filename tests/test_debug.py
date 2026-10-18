@@ -479,6 +479,40 @@ class TestDrawing:
         with pytest.raises(AttributeError):
             DebugText("x").offset = (0.0, 0.0, 1.0)  # pyright: ignore[reportAttributeAccessIssue]
 
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda: DebugMark("x"),  # pyright: ignore[reportArgumentType]
+            lambda: DebugText(5),  # pyright: ignore[reportArgumentType]
+        ],
+        ids=["a marker by its symbol", "text that is not a str"],
+    )
+    def test_a_shape_of_the_wrong_kind_raises_where_it_is_made(self, make: Callable[[], object]) -> None:
+        with pytest.raises(TypeError):
+            make()
+
+    def test_screen_text_that_is_not_a_str_raises_where_it_is_drawn(self) -> None:
+        api = Api()
+        raised: list[bool] = []
+
+        def turn(step: int) -> None:
+            with pytest.raises(TypeError):
+                api.debug.draw_text_on_screen(5, at=(0.1, 0.1))  # pyright: ignore[reportArgumentType]
+            raised.append(True)
+
+        assert _play(api, turn, turns=1) == {}
+        assert raised == [True]
+
+    def test_a_color_and_an_offset_given_as_lists_are_kept_as_tuples(self) -> None:
+        color, offset = [255, 0, 0], [0, 0, 1]
+        text = DebugText("x", color=color, offset=offset)  # pyright: ignore[reportArgumentType]
+        group = DebugGroup(text, color=color, offset=offset)  # pyright: ignore[reportArgumentType]
+        color[0], offset[2] = 7, 9
+        assert (text.color, text.offset, text._rgb) == ((255, 0, 0), (0.0, 0.0, 1.0), (255, 0, 0))
+        assert (group.color, group.offset) == ((255, 0, 0), (0.0, 0.0, 1.0))
+        assert len({text, DebugText("x", color=(255, 0, 0), offset=(0.0, 0.0, 1.0))}) == 1
+        hash(group)
+
     def test_one_figure_is_drawn_at_several_units(self) -> None:
         api = Api()
         figure = DebugGroup(DebugMark(Marker.PLUS), DebugText("target", offset=(0.0, 0.0, 1.0)))

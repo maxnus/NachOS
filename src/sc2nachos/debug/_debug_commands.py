@@ -11,7 +11,7 @@ from sc2nachos._checks import is_whole_number
 from sc2nachos.debug._cheat import Cheat
 from sc2nachos.debug._color import Color, _Rgb, _rgb_of
 from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
-from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _ScreenText
+from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _check_text, _ScreenText
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
@@ -26,8 +26,6 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
 
 _VITALS = debug_pb2.DebugSetUnitValue.UnitValue
-# A cross's arms run along the diagonals, so each end lies this far along both axes per unit of its radius.
-_DIAGONAL = math.sqrt(0.5)
 
 
 @final
@@ -106,7 +104,7 @@ class DebugCommands:
     @default_color.setter
     def default_color(self, color: Color | tuple[int, int, int]) -> None:
         self._default_rgb = _rgb_of(color)
-        self._default_color = color
+        self._default_color = color if isinstance(color, Color) else self._default_rgb
 
     @property
     def default_text_size(self) -> int:
@@ -154,12 +152,12 @@ class DebugCommands:
     ) -> Drawing:
         """Write `text` on the screen at `at`, from 0 to 1 across and down whatever the window's size, `size` pixels
         high, or `default_text_size` if `None`. Raises `ValueError` for anything but two coordinates from 0 to 1, and
-        as `draw` and `Text` do."""
+        as `draw` and `DebugText` do."""
         if len(at) != 2 or not (0 <= at[0] <= 1 and 0 <= at[1] <= 1):
             raise ValueError(f"a point on the screen is two coordinates, each from 0 to 1, not {at!r}")
-        written = DebugText(text, size, color)
+        _check_text(text, size)
         rgb = self._default_rgb if color is None else _rgb_of(color)
-        part = _PlacedShape(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, written.size or self._default_text_size)
+        part = _PlacedShape(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, size or self._default_text_size)
         return self._add(Drawing((0.0, 0.0, 0.0), (part,), until=self._until(steps)))
 
     def _placed(self, shapes: Sequence[DebugShape], offset: _Vector, rgb: _Rgb) -> Iterator[_PlacedShape]:

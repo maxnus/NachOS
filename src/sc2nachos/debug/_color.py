@@ -27,11 +27,17 @@ class Color(Enum):
 
 
 def _rgb_of(color: Color | _Rgb) -> _Rgb:
-    """`color`'s red, green and blue, checked to be whole numbers from 0 to 255."""
+    """`color`'s red, green and blue, as a tuple, checked to be whole numbers from 0 to 255."""
     rgb = color.value if isinstance(color, Color) else color
     if len(rgb) != 3 or not all(is_whole_number(part) and 0 <= part <= 255 for part in rgb):
         raise ValueError(f"a color is red, green and blue, each a whole number from 0 to 255, not {color!r}")
-    return rgb
+    return (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+
+def _kept_color(color: Color | _Rgb | None) -> Color | _Rgb | None:
+    """`color` as a shape keeps it: a `Color` as it is, any other as the tuple of its red, green and blue. Raises
+    `ValueError` as `_rgb_of` does."""
+    return color if color is None or isinstance(color, Color) else _rgb_of(color)
 
 
 def _rgb_if_given(color: Color | _Rgb | None) -> _Rgb | None:
