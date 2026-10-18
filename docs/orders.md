@@ -22,7 +22,6 @@ api.orders.issue(squad, AbilityId.MOVE, target=ramp)
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 api.orders.issue(marine, AbilityId.ATTACK, target=drone, data=Defending(base))
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
-api.orders.camera(base)
 ```
 
 - **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a group
@@ -35,7 +34,7 @@ api.orders.camera(base)
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
-  is the point the game was given, not quite the one passed in. `camera` stores its point the same way.
+  is the point the game was given, not quite the one passed in.
 - **`queued`** puts the order behind each unit's current orders instead of replacing them.
 - **`force`** sends the order even to units already carrying it out, which are otherwise left out
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
@@ -43,7 +42,10 @@ api.orders.camera(base)
   turn's other orders.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
-- **`api.orders.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
+
+The turn's request also carries `api.camera.move_to(point)`, which centers this player's camera on a point after the
+turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
+`api.camera.center` is where the turn's observation has the camera.
 
 ## One order a unit a turn
 

@@ -7,10 +7,11 @@
 [AvocaDOS](https://github.com/maxnus/AvocaDOS), and is meant to be published for other bot authors.
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
-`docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/curating-ids.md` says how to decide which game ids are
-real and how to refresh them after a patch, `docs/game-behavior.md` what the game has been seen to do,
-`docs/events.md` every event a game hands out, `docs/orders.md` how a bot orders its units, and
-`docs/github-actions.md` how a bot repository runs games with the `match.yml` workflow and the `setup-sc2` action.
+`docs/plans/nachOS-initial-prompt.md`. In this repo, `docs/curating-ids.md` says how to decide which game ids are real
+and how to refresh them after a patch, `docs/game-behavior.md` what the game has been seen to do, `docs/events.md` every
+event a game hands out, `docs/orders.md` how a bot orders its units, `docs/debugging.md` how it draws, cheats and
+creates units, and `docs/github-actions.md` how a bot repository runs games with the `match.yml` workflow and the
+`setup-sc2` action.
 
 ## Keep this file small
 
@@ -154,5 +155,6 @@ buildings.
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, which starts a game as each race, then `uv run python tools/generate_tech_tree.py` |
 | Find what the game does with an order | `uv run python tools/sweep_orders.py`, which starts the game and writes its trials as JSON |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py`, which starts the game |
+| Find what the game does with debug commands, chat, leaving and the pathing query | `uv run python tools/sweep_requests.py`, which starts the game |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py`, which starts the game |
 | Measure every structure's footprint, and what lies under the map's rocks | `uv run python tools/sweep_placement.py footprints` or `ground-under-rocks`, which start the game, then `uv run python tools/generate_footprints.py` |

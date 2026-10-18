@@ -25,7 +25,8 @@ reads it, is in [game-behavior.md](game-behavior.md).
 - **The tables are keyed by id, and the relations between them were swept in game**, replacing python-sc2's
   hand-written dicts ([The tables](#the-tables)).
 - **Orders are buffered and sent once a turn** through `api.orders`, and each reports the game's answer
-  ([Orders](#orders)). Debug commands are still protocol messages through `api.client.debug`.
+  ([Orders](#orders)). Drawing, cheats and debug commands go through `api.debug`, chat through `api.chat`
+  ([Debug, chat, the camera and leaving](#debug-chat-the-camera-and-leaving)).
 
 ## Running a game
 
@@ -39,7 +40,7 @@ reads it, is in [game-behavior.md](game-behavior.md).
   extra players. Two bots cannot share a process.
 - **`run_local`'s `time_limit` calls the game a tie at the first turn at or past the limit.** python-sc2's
   `game_time_limit` waits for the first turn strictly past it. `run_ladder` takes no limit: a bot ends a ladder
-  game early only by leaving it, which concedes it.
+  game early only by leaving it, with `api.leave_game()`, which concedes it.
 - **A map name can resolve to a different file.** NachOS searches every folder under `Maps`. When several copies
   match, it takes the shallowest, and the first alphabetically among copies at the same depth. python-sc2 searches
   two levels deep and takes whichever match the filesystem lists first.
@@ -129,7 +130,6 @@ it.
 | `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
-| `bot.client.move_camera(p)` | `api.orders.camera(p)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
 | nothing | `order.data`, `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
@@ -174,6 +174,42 @@ it.
   ids that look as though they would — `Cancel_Slot`, `CancelSlot_Queue5` — are answered `Error` or `NotSupported`
   however the structure was selected. Both libraries ask for the raw interface alone, so neither reaches past the
   last item ([game behavior](game-behavior.md#abilities-and-orders)).
+
+## Debug, chat, the camera and leaving
+
+[debugging.md](debugging.md) says how a bot draws, cheats and creates units.
+
+| python-sc2 | NachOS |
+|---|---|
+| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, DebugText(text))`, `draw(p, DebugLine(to=q))`, `draw(p, DebugBox(1, 1))`, `draw(p, DebugSphere(r))`, each lasting `steps=` and returning a `Drawing`; shapes compose in a `DebugGroup` |
+| `client.debug_text_screen(text, pos)` | `api.debug.draw_text_on_screen(text, at=pos)` |
+| a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
+| `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_steps` |
+| `client.debug_show_map()`, `debug_god()`, `debug_fast_build()` and the other switches | `api.debug.turn_on(Cheat.SHOW_MAP)`, `turn_off`, and `api.debug.cheats` |
+| `client.debug_minerals()`, `debug_all_resources()`, `debug_upgrade()` | `api.debug.give_minerals()`, `give_resources()`, `give_upgrades()` |
+| `client.debug_gas()` | nothing: it gives no vespene (in game) |
+| `client.debug_create_unit([[t, n, p, 2]])` | `api.debug.create_units(t, at=p, count=n, owner=Alliance.ENEMY)` |
+| `client.debug_kill_unit(units)`, `debug_set_unit_value(units, 2, v)` | `api.debug.kill(units)`, `api.debug.set_vitals(units, life=v)` |
+| `client.debug_leave()` | `api.debug.surrender()`, and `declare_victory()` |
+| `client.debug_hang(s)`, `debug_set_score(s)` | `api.client.debug([...])`, raw protocol messages |
+| `bot.chat_send(text, team_only)` | `api.chat(text, team_only=...)`, sent with the turn's orders |
+| `client.move_camera(p)`, `state.observation_raw.player.camera` | `api.camera.move_to(p)`, `api.camera.center` |
+| `client.leave()` | `api.leave_game()`, at the end of the turn |
+| `client.query_pathing(a, b)`, `query_pathings(pairs)` | `api.pathing.query_distance(a, b)`, `api.pathing.query_distances(pairs)` |
+
+- **A drawing lasts the steps you give it, and goes out only when it changes.** python-sc2 forgets every drawing
+  after a step, so a bot draws it again each step. NachOS keeps it `steps` steps, or with `steps=None` until
+  `drawing.remove()`, follows a unit drawn at until it dies, and sends the drawing at most every `refresh_steps`, and
+  not at all when it is what the screen already shows. Shapes are values with offsets, drawn at a point or a unit.
+  `api.debug` belongs to the game, so a `GameStartEvent` handler sets `refresh_steps` and the defaults for every game.
+- **A cheat is turned on or off.** python-sc2's `debug_show_map()` switches the map, so a bot keeps its own flag; NachOS
+  keeps `api.debug.cheats` and sends only a change.
+- **A chat message of 1040 bytes or more raises `ValueError`.** It kills the game client (in game); python-sc2 sends
+  it. Chat sent too fast is dropped by the game without a word, in either library.
+- **Leaving reports a defeat.** python-sc2's `leave()` records one for itself, and NachOS's `play` returns
+  `Result.DEFEAT`. A goodbye sent in the turn that leaves never arrives: send it two steps or more before.
+- **A pathing distance with no path is `math.inf`.** python-sc2's `query_pathing` returns `None` and `query_pathings`
+  0.0. A start inside a structure paths out of it; an end inside one has no path (in game).
 
 ## Errors
 
@@ -230,7 +266,7 @@ it.
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
 | `p.rounded`, which floors | `Tile.containing(p)`, the tile the point is on |
 | `p.snap()` | `Tile.containing(p).center` |
-| `await client.query_pathing(a, b)`, asked of the game | `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
+| `await client.query_pathing(a, b)`, asked of the game | `api.pathing.query_distance(a, b)`, asked of the game; or `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
 
 - **Equality is exact.** python-sc2 treats points as equal if every coordinate is within 1e-8, and counts a
   missing coordinate as zero, so `Point3((1, 2, 0)) == Point2((1, 2))`. NachOS points compare as the tuples they

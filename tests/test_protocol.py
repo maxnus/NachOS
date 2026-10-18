@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketException, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
@@ -214,6 +214,13 @@ class TestRequests:
         client, transport = make_client(make_response())
         client.debug(commands)
         assert list(transport.requests[0].debug.debug) == commands
+
+    def test_a_query_returns_the_games_answers(self) -> None:
+        answer = query_pb2.ResponseQuery(pathing=[query_pb2.ResponseQueryPathing(distance=2.5)])
+        client, transport = make_client(make_response(query=answer))
+        request = query_pb2.RequestQuery(pathing=[query_pb2.RequestQueryPathing(unit_tag=7)])
+        assert client.query(request) == answer
+        assert transport.requests[0].query == request
 
     def test_game_data_asks_for_every_table_by_default(self) -> None:
         client, transport = make_client(make_response(data=sc2api_pb2.ResponseData()))

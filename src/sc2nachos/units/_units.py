@@ -319,6 +319,11 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Point((x / count, y / count))
 
 
+def _unit_tuple[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:
+    """The units given, one unit or any number of them, as a tuple."""
+    return (units,) if isinstance(units, Unit) else tuple(units)
+
+
 def _type_ids(
     types: type[UnitType.AnyType] | Iterable[UnitTypeId], unit_types: tuple[type[UnitType.AnyType], ...]
 ) -> frozenset[UnitTypeId]:

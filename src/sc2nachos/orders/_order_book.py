@@ -10,14 +10,14 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.geometry import Point
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.orders._commands import create_camera_move_action, create_unit_command_actions
+from sc2nachos.orders._commands import create_unit_command_actions
 from sc2nachos.orders._order import Order
-from sc2nachos.orders._targets import aimed_at, as_sent, check_target, same_point, same_target
+from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
 from sc2nachos.units import OwnUnit, Unit
+from sc2nachos.units._units import _unit_tuple
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
@@ -57,7 +57,6 @@ class OrderBook:
     """
 
     __slots__ = (
-        "_camera_location",
         "_forced",
         "_game_data",
         "_issued",
@@ -84,7 +83,6 @@ class OrderBook:
         # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
         # show it or an order replaces the unit's orders.
         self._sent_not_replacing: dict[int, list[tuple[Order[Any], int]]] = {}
-        self._camera_location: Point | None = None
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
@@ -145,7 +143,7 @@ class OrderBook:
         sent as for, and for an ability given to several units that not every unit of a command is known to carry
         out (`AbilityData.multi_unit`).
         """
-        given = (units,) if isinstance(units, Unit) else tuple(units)
+        given = _unit_tuple(units)
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
@@ -208,13 +206,9 @@ class OrderBook:
                 total += row.cost
         return total
 
-    def camera(self, at: PointLike) -> None:
-        """Move this player's camera to `at`, along with the turn's orders. Only the last move of a turn is sent."""
-        aimed = coordinates(at)
-        self._camera_location = Point((as_sent(aimed[0]), as_sent(aimed[1])))
-
-    def _send(self, client: Client) -> None:
-        """Send the turn's orders, and keep what the game refused of them. Sends nothing if there is nothing to send."""
+    def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:
+        """Send the turn's orders and after them `then`, actions that belong to no order, in one request, and keep what
+        the game refused of the orders. Sends nothing if there is nothing to send."""
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         self._refusals = ()
@@ -223,16 +217,13 @@ class OrderBook:
             sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
             actions = create_unit_command_actions(order.ability, units, order.target, sent_as, queued=order.queued)
             commands += [(order, *command) for command in actions]
-        actions = [action for _, action, _ in commands]
-        if self._camera_location is not None:
-            actions.append(create_camera_move_action(self._camera_location))
-            self._camera_location = None
+        actions = [*(action for _, action, _ in commands), *then]
         if not actions:
             return
         results = client.act(actions).result
         if len(results) < len(commands):
             raise ProtocolError(f"the game answered {len(results)} of the {len(commands)} commands it was sent")
-        # A camera move, if any, is answered last and belongs to no order.
+        # What comes after the commands is answered after them, and belongs to no order.
         refusals: list[ActionFailure] = []
         for (order, _, units), result in zip(commands, results, strict=False):
             action_result = ActionResult.read(result)

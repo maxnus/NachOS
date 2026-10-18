@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import numpy
-
 from sc2nachos.constants import POINT_PRECISION
 from sc2nachos.gamedata import TargetType
 from sc2nachos.geometry import Point
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
@@ -37,17 +34,7 @@ def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
     """
     if target is None or isinstance(target, Unit):
         return target
-    point = coordinates(target)
-    return Point((as_sent(point[0]), as_sent(point[1])))
-
-
-def as_sent(coordinate: float) -> float:
-    """`coordinate` as the protocol carries it: a 32-bit float.
-
-    Everything the game reports is already a 32-bit float widened to a Python float, so only outgoing points are
-    ever cut. A point sent unrounded does not come back as the number that was sent.
-    """
-    return float(numpy.float32(coordinate))
+    return Point._rounded_to_float32(target)
 
 
 def check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:
