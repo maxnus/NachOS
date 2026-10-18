@@ -3,54 +3,24 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
+from collections.abc import Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, final, overload
+from typing import TYPE_CHECKING, Any, final, overload
 
 from loguru import logger
 
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
+from sc2nachos.events._event_decorator import EventDecorator
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
-from sc2nachos.events._event_subscriber import _EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timing import HandlerTiming
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-
-# Covariant, so a decorator for one event type is one for any type its handler takes. That is how a handler's
-# parameter is checked: a type variable's bound cannot name another.
-_E_co = TypeVar("_E_co", bound=Event, covariant=True)
-
-
-class _EventDecorator(Protocol[_E_co]):
-    """The decorator `on` returns, for a handler of `_E_co`: a function taking one, or a method taking one after
-    `self`. `where` narrows it.
-
-    A handler taking any `Event` keeps its own type, so it can be decorated for several events. One taking a narrower
-    type is typed as a callable of the event it is decorated for.
-    """
-
-    def where(self, predicate: Callable[[_E_co], bool], /) -> _EventDecorator[_E_co]:
-        """This decorator, narrowed to the events `predicate` also passes. `once` and the like count only those."""
-        ...
-
-    @overload
-    def __call__[F: Callable[[Event], object]](self, handler: F, /) -> F: ...
-
-    @overload
-    def __call__[F: Callable[[Any, Event], object]](self, handler: F, /) -> F: ...
-
-    @overload
-    def __call__[H: Event, R](self: _EventDecorator[H], handler: Callable[[H], R], /) -> Callable[[H], R]: ...
-
-    @overload
-    def __call__[S, H: Event, R](self: _EventDecorator[H], handler: Callable[[S, H], R], /) -> Callable[[S, H], R]: ...
 
 
 @final
@@ -111,7 +81,7 @@ class EventBus:
         at_step: int | None = ...,
         once: bool = ...,
         catch_exceptions: bool = ...,
-    ) -> _EventDecorator[E]: ...
+    ) -> EventDecorator[E]: ...
 
     def on(
         self,
@@ -162,7 +132,7 @@ class EventBus:
             "once": once,
             "catch_exceptions": catch_exceptions,
         }
-        return _EventSubscriber(self, selects, options)
+        return EventDecorator(self, selects, options)
 
     def subscribe(self, instance: object) -> None:
         """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.

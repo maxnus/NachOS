@@ -54,6 +54,7 @@ from sc2nachos.events._event import (
     VitalEvent,
 )
 from sc2nachos.events._event_bus import EventBus
+from sc2nachos.events._event_decorator import EventDecorator
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
 from sc2nachos.events._handler_timing import HandlerTiming
@@ -78,6 +79,7 @@ __all__ = [
     "EnemyUnitVitalReachedEvent",
     "Event",
     "EventBus",
+    "EventDecorator",
     "EventFilter",
     "EventPriority",
     "GameEndEvent",

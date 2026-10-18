@@ -44,10 +44,10 @@ methods alike. `api.events` also holds `subscribe`, `unsubscribe`, `emit` and `t
   as an amount or a fraction of its maximum, reaching a value or dropping below it; or a unit crossing the edge of an
   area. Such a type derives from `ParameterizedEvent`, and `on` rejects it bare, as does a type checker. One `of` takes
   one set of parameters; stack the decorators for several.
-- **`where(predicate)`**, called on the decorator `on` returns, keeps only the events `predicate` passes, out of the
-  type or the `only` or `of` selection. Chained twice, an event must pass both. The decorator it returns subscribes
-  every handler it decorates. A handler's predicate is called when the handler's turn comes, after the handlers
-  before it have run.
+- **`where(predicate)`**, called on the `EventDecorator` that `on` returns, keeps only the events `predicate` passes,
+  out of the type or the `only` or `of` selection. Chained twice, an event must pass both. The decorator it returns
+  subscribes every handler it decorates. A handler's predicate is called when the handler's turn comes, after the
+  handlers before it have run.
 
 `once`, `every_steps`, `at_step` and `Done` count only the events a handler selects: `once` with `where` fires on
 the first event the predicate passes. `only` and `of` also save NachOS from making events no handler wants, and `of`

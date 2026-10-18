@@ -10,6 +10,7 @@ import weakref
 from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cached_property
+from typing import assert_type
 
 import pytest
 from loguru import logger
@@ -20,6 +21,7 @@ from sc2nachos.events import (
     EnemyUnitEnteredAreaEvent,
     Event,
     EventBus,
+    EventDecorator,
     EventPriority,
     GameEndEvent,
     GameStartEvent,
@@ -558,6 +560,16 @@ class TestTyping:
             pass
 
         assert len(bus._subscriptions.by_type[AlertEvent]) == 2
+
+    def test_on_and_where_return_an_event_decorator_of_the_event_type(self) -> None:
+        bus = EventBus()
+        decorator = bus.on(TurnEvent)
+        narrowed = decorator.where(lambda event: event.step > 0)
+
+        assert_type(decorator, EventDecorator[TurnEvent])
+        assert_type(narrowed, EventDecorator[TurnEvent])
+        assert isinstance(decorator, EventDecorator)
+        assert isinstance(narrowed, EventDecorator)
 
 
 class TestExceptions:
