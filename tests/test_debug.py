@@ -470,6 +470,15 @@ class TestDrawing:
         assert (box.min.z, (box.color.r, box.color.g, box.color.b)) == (_GROUND + 1, (0, 0, 255))
         assert (text.world_pos.z, (text.color.r, text.color.g, text.color.b)) == (_GROUND + 3, (255, 0, 0))
 
+    def test_a_shape_is_a_value_that_cannot_be_changed_once_made(self) -> None:
+        group = DebugGroup(DebugBox(1.0, 1.0), color=Color.RED)
+        assert group == DebugGroup(DebugBox(1.0, 1.0), color=Color.RED)
+        assert len({group, DebugGroup(DebugBox(1.0, 1.0), color=Color.RED)}) == 1
+        with pytest.raises(AttributeError):
+            group.color = Color.BLUE  # pyright: ignore[reportAttributeAccessIssue]
+        with pytest.raises(AttributeError):
+            DebugText("x").offset = (0.0, 0.0, 1.0)  # pyright: ignore[reportAttributeAccessIssue]
+
     def test_one_figure_is_drawn_at_several_units(self) -> None:
         api = Api()
         figure = DebugGroup(DebugMark(Marker.PLUS), DebugText("target", offset=(0.0, 0.0, 1.0)))

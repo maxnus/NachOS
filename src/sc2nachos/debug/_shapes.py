@@ -151,9 +151,9 @@ class DebugLine:
 @final
 class DebugGroup:
     """Shapes drawn together, each offset from the group, and the group offset from where it is placed. A shape with no
-    color of its own takes the group's."""
+    color of its own takes the group's. Groups compare equal by what they hold, as every shape does."""
 
-    __slots__ = ("_rgb", "color", "offset", "shapes")
+    __slots__ = ("_color", "_offset", "_rgb", "_shapes")
 
     def __init__(
         self,
@@ -166,12 +166,35 @@ class DebugGroup:
             raise ValueError("a group holds at least one shape")
         self._rgb = _rgb_if_given(color)
         _check_offset(offset)
-        self.shapes = shapes
-        self.color = color
-        self.offset = offset
+        self._shapes = shapes
+        self._color = color
+        self._offset = offset
+
+    @property
+    def shapes(self) -> tuple[DebugShape, ...]:
+        """The shapes drawn together."""
+        return self._shapes
+
+    @property
+    def color(self) -> Color | tuple[int, int, int] | None:
+        """The color of each shape with none of its own, or `None` for the drawing's."""
+        return self._color
+
+    @property
+    def offset(self) -> tuple[float, float, float]:
+        """How far the group is drawn from where it is placed, across, up the map and up."""
+        return self._offset
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DebugGroup):
+            return NotImplemented
+        return (self._shapes, self._color, self._offset) == (other._shapes, other._color, other._offset)
+
+    def __hash__(self) -> int:
+        return hash((self._shapes, self._color, self._offset))
 
     def __repr__(self) -> str:
-        return f"DebugGroup({', '.join(map(repr, self.shapes))}, color={self.color!r}, offset={self.offset!r})"
+        return f"DebugGroup({', '.join(map(repr, self._shapes))}, color={self._color!r}, offset={self._offset!r})"
 
 
 type DebugShape = DebugText | DebugBox | DebugSphere | DebugMark | DebugLine | DebugGroup
