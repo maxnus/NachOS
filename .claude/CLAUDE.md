@@ -60,6 +60,9 @@
 - **`AGENTS.md` takes rules for writing code only**, a line or two each, never a statement of what the library does
   for a bot; that belongs in the user docs, if anywhere. Before adding a line, ask whether an agent that skipped it
   would get something wrong.
+- **A measurement lives in one place**: its topic's page under `docs/reference/game-behavior/`, with how it was seen.
+  The guides, `docs/reference/python-sc2.md` and `docs/maintaining/` say what NachOS does and link there, rather than
+  retelling the evidence.
 - **Where the game's answer is a matter of perspective, document what the API reports** and move on: a pylon reads
   unpowered, though it always stands in its own field. Keep `docs/reference/game-behavior/not-understood-yet.md` for
   readings that contradict each other or could not be observed.
