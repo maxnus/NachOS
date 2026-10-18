@@ -34,7 +34,7 @@ def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
     """
     if target is None or isinstance(target, Unit):
         return target
-    return Point._as_sent(target)
+    return Point._rounded_to_float32(target)
 
 
 def check_target(ability: AbilityId, target: Target | None, row: AbilityData | None) -> None:

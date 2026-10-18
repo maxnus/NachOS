@@ -254,7 +254,7 @@ class Point(_PointND, tuple[float, float]):
         return cls((data.x, data.y))
 
     @classmethod
-    def _as_sent(cls, point: PointLike) -> Self:
+    def _rounded_to_float32(cls, point: PointLike) -> Self:
         """`point` on the ground as the protocol carries it: its height dropped, and each coordinate cut to a 32-bit
         float. Everything the game reports is a 32-bit float already, so only a point sent unrounded would come back as
         another number."""

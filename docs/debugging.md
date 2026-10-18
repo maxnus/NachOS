@@ -9,37 +9,46 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 ## Drawing
 
 ```python
+from sc2nachos.debug import Box, Color, Group, Line, Mark, Marker, Text
+
+
 @api.events.on(GameStartEvent)
 def set_up(event: GameStartEvent) -> None:
     api.debug.refresh_steps = 4
+    api.debug.default_color = Color.YELLOW
     for expansion in api.expansions:
-        api.debug.draw_polygon(expansion.center, 6, sides=8, color=Color.GREEN, steps=None)
+        api.debug.draw(expansion.center, Mark(Marker.HEXAGON, radius=6), steps=None)
 
 
 @api.events.on(TurnEvent)
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        api.debug.draw_text(f"{marine.health:.0f}", at=marine)
+        api.debug.draw(marine, Box(1, 1), Text(f"{marine.health:.0f}", offset=(0, 0, 1.5)))
     api.debug.draw_text_on_screen(f"step {event.step}", at=(0.01, 0.01))
 ```
 
-`api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. Each draw method returns
-the `Drawing`:
+`api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. `api.debug.draw(at,
+*shapes)` draws shapes at a point or a unit as one `Drawing`, which it returns:
 
-- **What.** Text in the world or on the screen, a line, a box over a `Rectangle` from the ground up 1, a sphere, a
-  regular polygon of `sides` around a point, and a `Marker`, a cross or a plus.
+- **What.** The shapes are values, made once and drawn anywhere: `Text`, a `Box` centered on its place and standing on
+  it, a `Sphere`, a `Mark` (a cross, a plus, a star, or a triangle, a square, a pentagon or a hexagon with a level
+  base), and a `Line` to another point or unit. A `Group` of shapes is a shape too. Text on the screen is
+  `draw_text_on_screen`, placed from 0 to 1 across and down, whatever the window's size.
 - **Where.** A point of two coordinates is drawn on the ground, and one of three at its own height. A unit is drawn
-  where it stands, and a drawing at a unit follows it: a line between two units keeps joining them. Out of sight, the
-  unit is drawn where it was last seen, and the drawing ends once the unit is dead. Text on the screen is placed from 0
-  to 1 across and down, whatever the window's size.
+  where it stands, and a drawing at a unit follows it, as does a line to a unit. Out of sight, the unit is drawn where
+  it was last seen, and the drawing ends once the unit is dead. Each shape and each group takes an `offset` from where
+  it is drawn, and a line a `to_offset` from where it ends.
 - **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in. With
   `steps=None` it lasts until `drawing.remove()`.
 - **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two refreshes of the drawing;
   meanwhile the screen keeps the last one sent. A refresh whose drawing is what the screen already shows sends nothing,
   so a drawing that never changes costs a request at the first refresh after it is made and one at the first after it
-  ends. A cheat or a command goes out at once, with the drawing as it stands. Each game starts at 1, so a
-  `GameStartEvent` handler sets it for every game.
-- **Colors** are a `Color`, such as `Color.RED`, or any red, green and blue, each from 0 to 255; white unless given.
+  ends. A cheat or a command goes out at once, with the drawing as it stands.
+- **Colors** are a `Color`, such as `Color.RED`, or any red, green and blue, each from 0 to 255. A shape with no color
+  of its own takes its group's, then the drawing's, then `api.debug.default_color`, white unless set; text with no size
+  is `api.debug.default_text_size` pixels high, 8 unless set.
+
+Each game starts afresh, so a `GameStartEvent` handler sets `refresh_steps` and the defaults for every game.
 
 ## Cheats
 

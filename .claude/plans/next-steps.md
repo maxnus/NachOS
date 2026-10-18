@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #126. `uv run pytest` passes 2145 tests on branch `claude/debug-and-chat`, slice 6;
+- nachOS `main` has every PR to #126. `uv run pytest` passes 2158 tests on branch `claude/debug-and-chat`, slice 6;
   `uv run pytest -m integration` passes 31 against a real game (run 2026-10-17).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done but for slice 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
@@ -99,16 +99,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **Debug, chat, the camera, pathing distances and leaving** (slice 6, the owner, 2026-10-16 and the reviews of #127,
   one question at a time):
   - `api.debug` is one `DebugCommands` per game, on `_Game` like `Camera` (the owner, review of #127, over one for the
-    api's life). `refresh_steps` is set in a game, a `GameStartEvent` handler setting it for every game; there are no
-    configurable default steps or text size, so that `None` has one meaning.
-  - A drawing lasts `steps=`, 1 by default, chosen over one turn and over until cleared; `steps=None` lasts until the
-    `Drawing` every draw method returns is `remove()`d (review of #127). `refresh_steps` sends it at most that often,
-    and only when it changed. A drawing at a unit follows it, and ends once the unit is dead (the second review).
-    Everything goes out after the turn's `RequestAction`, in one `RequestDebug`, and a request the game refuses raises
-    out of `play` (the code review, over catching it).
-  - Shapes are subclasses of `Drawing`, each building its own proto. Beside text, lines, boxes and spheres:
-    `draw_polygon(center, radius, sides=)` and `draw_marker(at, Marker.CROSS | Marker.PLUS, radius=)`, over a method for
-    each mark. Colors are a `Color` enum, or any red, green and blue.
+    api's life). `refresh_steps`, `default_color` and `default_text_size` are set in a game, a `GameStartEvent` handler
+    setting them for every game; there are no default steps, so that `None` has one meaning (the owner's second round:
+    defaults for size and color only).
+  - Shapes are values with offsets (the owner's second round, over offsets on `draw_*` methods and a group handle):
+    `Text`, `Box`, `Sphere`, `Mark` and `Line(to=)`, each with `offset=` and `color=`, and `Group(*shapes, offset=,
+    color=)`, itself a shape. `api.debug.draw(at, *shapes, color=, steps=)` returns one `Drawing`; the `draw_*` methods
+    went but for `draw_text_on_screen`. A figure made once is drawn at any number of units.
+  - A drawing lasts `steps=`, 1 by default, chosen over one turn and over until cleared; `steps=None` lasts until
+    `drawing.remove()`. `refresh_steps` sends it at most that often, and only when it changed. A drawing at a unit, or a
+    line to one, follows it, and ends once the unit is dead (the second review). Everything goes out after the turn's
+    `RequestAction`, in one `RequestDebug`, and a request the game refuses raises out of `play` (the code review, over
+    catching it).
+  - `Marker` holds `CROSS = "x"`, `PLUS = "+"`, `STAR = "*"`, and `TRIANGLE`, `SQUARE`, `PENTAGON` and `HEXAGON`, each
+    with a level base, polygons being wanted only as marks (the owner's second round, over a `Polygon` of any sides).
+    Colors are a `Color` enum, or any red, green and blue.
   - Cheats are on and off, tracked (`cheats`, `turn_on`, `turn_off`), over a raw toggle. The givers are `give_minerals`,
     `give_resources` and `give_upgrades`; `gas`, which gives nothing, is left out.
   - `api.chat(text, team_only=False)` is on the api itself, over `api.orders.chat`, and goes in the turn's

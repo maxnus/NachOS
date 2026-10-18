@@ -2,6 +2,10 @@
 
 from enum import Enum
 
+from sc2nachos._checks import is_whole_number
+
+type _Rgb = tuple[int, int, int]
+
 
 class Color(Enum):
     """A standard color, by its red, green and blue, each from 0 to 255. Any other is drawn by giving a tuple of the
@@ -18,3 +22,11 @@ class Color(Enum):
     MAGENTA = (255, 0, 255)
     ORANGE = (255, 165, 0)
     PURPLE = (128, 0, 128)
+
+
+def _rgb(color: Color | _Rgb) -> _Rgb:
+    """`color`'s red, green and blue, checked to be whole numbers from 0 to 255."""
+    rgb = color.value if isinstance(color, Color) else color
+    if len(rgb) != 3 or not all(is_whole_number(part) and 0 <= part <= 255 for part in rgb):
+        raise ValueError(f"a color is red, green and blue, each a whole number from 0 to 255, not {color!r}")
+    return rgb

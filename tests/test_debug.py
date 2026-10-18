@@ -9,9 +9,9 @@ import pytest
 from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NotPlayingError
-from sc2nachos.debug import Cheat, Color, Drawing, Marker, _debug_commands
+from sc2nachos.debug import Box, Cheat, Color, Drawing, Group, Line, Mark, Marker, Sphere, Text, _debug_commands
 from sc2nachos.events import GameStartEvent, TurnEvent
-from sc2nachos.geometry import Point, Rectangle
+from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
@@ -121,7 +121,7 @@ class TestDrawing:
         def turn(step: int) -> None:
             if step == 0:
                 api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
-                api.debug.draw_text("here", at=(2.0, 3.0))
+                api.debug.draw((2.0, 3.0), Text("here"))
 
         observations = [make_observation(step, units=[make_unit(1)]) for step in range(3)]
         game = _ScriptedGame(observations, players=2)
@@ -145,7 +145,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_line((1.0, 1.0), (2.0, 2.0, 5.0), color=(255, 0, 0), steps=3)
+                api.debug.draw((1.0, 1.0), Line(to=(2.0, 2.0, 5.0)), color=(255, 0, 0), steps=3)
 
         sent = _play(api, turn, turns=6)
 
@@ -156,7 +156,7 @@ class TestDrawing:
 
     def test_a_drawing_made_again_unchanged_every_turn_is_sent_once(self) -> None:
         api = Api()
-        sent = _play(api, lambda step: api.debug.draw_text("fixed", at=(1.0, 1.0)), turns=5)
+        sent = _play(api, lambda step: api.debug.draw((1.0, 1.0), Text("fixed")), turns=5)
         assert list(sent) == [0]
 
     def test_with_a_refresh_every_four_steps_a_drawing_that_changes_every_turn_goes_out_every_fourth_step(self) -> None:
@@ -173,7 +173,7 @@ class TestDrawing:
         api = Api()
 
         def turn(step: int) -> None:
-            api.debug.draw_text(f"step {step}", at=(1.0, 1.0))
+            api.debug.draw((1.0, 1.0), Text(f"step {step}"))
             if step == 2:
                 api.debug.turn_on(Cheat.GOD)
 
@@ -186,18 +186,18 @@ class TestDrawing:
 
     def test_an_unchanged_drawing_is_looked_at_once_a_refresh(self, monkeypatch: pytest.MonkeyPatch) -> None:
         looked_at: list[int] = []
-        draw = _debug_commands._draw
+        draw = _debug_commands._draw_all
 
         def counted(drawings: Sequence[Drawing]) -> debug_pb2.DebugDraw:
             looked_at.append(len(drawings))
             return draw(drawings)
 
-        monkeypatch.setattr(_debug_commands, "_draw", counted)
+        monkeypatch.setattr(_debug_commands, "_draw_all", counted)
         api = Api()
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_text("fixed", at=(1.0, 1.0), steps=100)
+                api.debug.draw((1.0, 1.0), Text("fixed"), steps=100)
 
         sent = _play(api, turn, turns=9, refresh_steps=4)
 
@@ -211,7 +211,7 @@ class TestDrawing:
             if step == 1:
                 api.debug.give_minerals()
             if step == 2:
-                api.debug.draw_text("late", at=(1.0, 1.0), steps=10)
+                api.debug.draw((1.0, 1.0), Text("late"), steps=10)
 
         sent = _play(api, turn, turns=6, refresh_steps=4)
 
@@ -224,7 +224,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_sphere(api.units.own[0], 1.5, steps=10)
+                api.debug.draw(api.units.own[0], Sphere(1.5), steps=10)
 
         sent = _play(api, turn, turns=3, units=lambda step: [make_unit(1, at=(2.0 + step, 2.0))])
 
@@ -239,7 +239,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_text("doomed", at=api.units.own[0], steps=10)
+                api.debug.draw(api.units.own[0], Text("doomed"), steps=10)
 
         sent = _play(
             api,
@@ -257,19 +257,19 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_text("scouted", at=api.units.enemy[0], steps=10)
+                api.debug.draw(api.units.enemy[0], Text("scouted"), steps=10)
 
         enemy = make_unit(1, alliance=Alliance.ENEMY, at=(3.0, 3.0))
         sent = _play(api, turn, turns=4, units=lambda step: [enemy] if step < 2 else [])
 
         assert list(sent) == [0]
 
-    def test_a_box_stands_over_its_rectangle_from_the_ground_up_one(self) -> None:
+    def test_a_box_is_centered_on_its_place_and_stands_on_it(self) -> None:
         api = Api()
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_box(Rectangle(1.0, 2.0, 3.0, 4.0))
+                api.debug.draw((2.5, 4.0), Box(3.0, 4.0))
 
         sent = _play(api, turn, turns=1)
 
@@ -281,21 +281,24 @@ class TestDrawing:
 
     def test_a_new_game_forgets_the_last_ones_drawing(self) -> None:
         api = Api()
-        _play(api, lambda step: api.debug.draw_text("first game", at=(1.0, 1.0), steps=100), turns=2)
+        _play(api, lambda step: api.debug.draw((1.0, 1.0), Text("first game"), steps=100), turns=2)
         assert _play(api, lambda step: None, turns=2) == {}
 
     @pytest.mark.parametrize(
         "draw",
         [
-            lambda api: api.debug.draw_text("x", at=(1.0, 1.0), color=(256, 0, 0)),
-            lambda api: api.debug.draw_text("x", at=(1.0, 1.0), color=(0.5, 0, 0)),
-            lambda api: api.debug.draw_text("x", at=(1.0, 1.0), steps=0),
-            lambda api: api.debug.draw_text("x", at=(1.0, 1.0), size=0),
+            lambda api: api.debug.draw((1.0, 1.0), Text("x"), color=(256, 0, 0)),
+            lambda api: api.debug.draw((1.0, 1.0), Text("x"), color=(0.5, 0, 0)),
+            lambda api: api.debug.draw((1.0, 1.0), Text("x"), steps=0),
+            lambda api: api.debug.draw((1.0, 1.0), Text("x", size=0)),
             lambda api: api.debug.draw_text_on_screen("x", at=(1.5, 0.5)),
             lambda api: api.debug.draw_text_on_screen("x", at=(0.1, 0.1, 0.0)),  # pyright: ignore[reportArgumentType]
-            lambda api: api.debug.draw_sphere((1.0, 1.0), 0),
-            lambda api: api.debug.draw_polygon((1.0, 1.0), 1, sides=2),
-            lambda api: api.debug.draw_marker((1.0, 1.0), Marker.CROSS, radius=math.inf),
+            lambda api: api.debug.draw((1.0, 1.0), Sphere(0)),
+            lambda api: api.debug.draw((1.0, 1.0)),
+            lambda api: api.debug.draw((1.0, 1.0), Mark(Marker.CROSS, radius=math.inf)),
+            lambda api: api.debug.draw((1.0, 1.0), Text("x", offset=(1.0, 2.0))),  # pyright: ignore[reportArgumentType]
+            lambda api: api.debug.draw((1.0, 1.0), Group()),
+            lambda api: api.debug.draw((1.0, 1.0), Box(1.0, 1.0, -1.0)),
         ],
         ids=[
             "color over 255",
@@ -305,8 +308,11 @@ class TestDrawing:
             "off the screen",
             "three coordinates on the screen",
             "no radius",
-            "two sides",
+            "no shapes",
             "an infinite marker",
+            "an offset of two",
+            "an empty group",
+            "a box below ground",
         ],
     )
     def test_a_drawing_given_what_cannot_be_drawn_raises(self, draw: Callable[[Api], None]) -> None:
@@ -347,7 +353,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                drawings.append(api.debug.draw_line((1.0, 1.0), (2.0, 2.0), steps=None))
+                drawings.append(api.debug.draw((1.0, 1.0), Line(to=(2.0, 2.0)), steps=None))
             if step == 5:
                 drawings[0].remove()
                 drawings[0].remove()
@@ -361,27 +367,45 @@ class TestDrawing:
         api = Api()
 
         def turn(step: int) -> None:
-            api.debug.draw_text("red", at=(1.0, 1.0), color=Color.RED)
-            api.debug.draw_text("teal", at=(1.0, 1.0), color=(0, 128, 128))
+            api.debug.draw((1.0, 1.0), Text("red"), color=Color.RED)
+            api.debug.draw((1.0, 1.0), Text("teal"), color=(0, 128, 128))
 
         sent = _play(api, turn, turns=1)
 
         colors = [(text.color.r, text.color.g, text.color.b) for text in sent[0][0].draw.text]
         assert colors == [(255, 0, 0), (0, 128, 128)]
 
-    def test_a_polygon_is_its_sides_around_its_center_the_first_corner_due_east(self) -> None:
+    def test_a_square_mark_has_its_sides_along_the_axes(self) -> None:
         api = Api()
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_polygon((4.0, 4.0), 2, sides=4)
+                api.debug.draw((4.0, 4.0), Mark(Marker.SQUARE, radius=math.sqrt(2)))
 
         sent = _play(api, turn, turns=1)
 
         lines = [(line.line.p0, line.line.p1) for line in sent[0][0].draw.lines]
         ends = [((round(a.x, 6), round(a.y, 6)), (round(b.x, 6), round(b.y, 6))) for a, b in lines]
-        assert ends == [((6, 4), (4, 6)), ((4, 6), (2, 4)), ((2, 4), (4, 2)), ((4, 2), (6, 4))]
+        assert ends == [((3, 3), (5, 3)), ((5, 3), (5, 5)), ((5, 5), (3, 5)), ((3, 5), (3, 3))]
         assert {point.z for pair in lines for point in pair} == {_GROUND}
+
+    @pytest.mark.parametrize(
+        ("marker", "sides"), [(Marker.TRIANGLE, 3), (Marker.SQUARE, 4), (Marker.PENTAGON, 5), (Marker.HEXAGON, 6)]
+    )
+    def test_a_polygon_mark_has_its_sides_and_a_level_bottom(self, marker: Marker, sides: int) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw((4.0, 4.0), Mark(marker, radius=2))
+
+        sent = _play(api, turn, turns=1)
+
+        corners = [(round(line.line.p0.x, 6), round(line.line.p0.y, 6)) for line in sent[0][0].draw.lines]
+        assert len(corners) == sides
+        lowest = min(y for _, y in corners)
+        assert sum(1 for _, y in corners if y == lowest) == 2
+        assert all(math.dist(corner, (4, 4)) == pytest.approx(2) for corner in corners)
 
     @pytest.mark.parametrize(
         ("shape", "ends"),
@@ -391,20 +415,101 @@ class TestDrawing:
                 Marker.CROSS,
                 [((3.292893, 3.292893), (4.707107, 4.707107)), ((3.292893, 4.707107), (4.707107, 3.292893))],
             ),
+            (
+                Marker.STAR,
+                [
+                    ((3.292893, 3.292893), (4.707107, 4.707107)),
+                    ((3.292893, 4.707107), (4.707107, 3.292893)),
+                    ((3, 4), (5, 4)),
+                    ((4, 3), (4, 5)),
+                ],
+            ),
         ],
-        ids=["plus", "cross"],
+        ids=["plus", "cross", "star"],
     )
-    def test_a_marker_is_two_arms_reaching_its_radius(self, shape: Marker, ends: list[Any]) -> None:
+    def test_a_cross_mark_is_arms_reaching_its_radius(self, shape: Marker, ends: list[Any]) -> None:
         api = Api()
 
         def turn(step: int) -> None:
             if step == 0:
-                api.debug.draw_marker((4.0, 4.0), shape, radius=1)
+                api.debug.draw((4.0, 4.0), Mark(shape, radius=1))
 
         sent = _play(api, turn, turns=1)
 
         lines = [(line.line.p0, line.line.p1) for line in sent[0][0].draw.lines]
         assert [((round(a.x, 6), round(a.y, 6)), (round(b.x, 6), round(b.y, 6))) for a, b in lines] == ends
+
+    def test_a_marker_is_read_by_its_symbol(self) -> None:
+        assert (Marker("x"), Marker("+"), Marker("*")) == (Marker.CROSS, Marker.PLUS, Marker.STAR)
+
+    def test_a_group_offsets_and_colors_its_shapes_each_of_which_may_have_its_own(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                hp = Text("hp", offset=(0.0, 0.0, 2.0), color=Color.RED)
+                api.debug.draw((4.0, 4.0), Group(Box(1.0, 1.0), hp, offset=(0.0, 0.0, 1.0), color=Color.BLUE))
+
+        sent = _play(api, turn, turns=1)
+
+        draw = sent[0][0].draw
+        (box,) = draw.boxes
+        (text,) = draw.text
+        assert (box.min.z, (box.color.r, box.color.g, box.color.b)) == (_GROUND + 1, (0, 0, 255))
+        assert (text.world_pos.z, (text.color.r, text.color.g, text.color.b)) == (_GROUND + 3, (255, 0, 0))
+
+    def test_one_figure_is_drawn_at_several_units(self) -> None:
+        api = Api()
+        figure = Group(Mark(Marker.PLUS), Text("target", offset=(0.0, 0.0, 1.0)))
+
+        def turn(step: int) -> None:
+            if step == 0:
+                for unit in api.units.own:
+                    api.debug.draw(unit, figure)
+
+        units = [make_unit(1, at=(2.0, 2.0)), make_unit(2, at=(6.0, 6.0))]
+        sent = _play(api, turn, turns=1, units=lambda step: units)
+
+        assert [(text.world_pos.x, text.world_pos.y) for text in sent[0][0].draw.text] == [(2.0, 2.0), (6.0, 6.0)]
+
+    def test_a_line_to_a_unit_follows_it_and_ends_once_it_is_dead(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.draw((1.0, 1.0), Line(to=api.units.own[0], to_offset=(0.0, 0.0, 1.0)), steps=None)
+
+        sent = _play(
+            api,
+            turn,
+            turns=4,
+            units=lambda step: [make_unit(1, at=(2.0 + step, 2.0))] if step < 2 else [],
+            dead=lambda step: (1,) * (step == 2),
+        )
+
+        ends = {
+            step: [(line.line.p1.x, line.line.p1.z) for line in commands[0].draw.lines]
+            for step, commands in sent.items()
+        }
+        assert ends == {0: [(2.0, 1.0)], 1: [(3.0, 1.0)], 2: []}
+
+    def test_shapes_with_no_color_or_size_take_the_defaults_as_drawn(self) -> None:
+        api = Api()
+
+        def turn(step: int) -> None:
+            if step == 0:
+                api.debug.default_color = Color.ORANGE
+                api.debug.default_text_size = 12
+                api.debug.draw((1.0, 1.0), Text("defaults"))
+                with pytest.raises(ValueError):
+                    api.debug.default_text_size = 0
+                with pytest.raises(ValueError):
+                    api.debug.default_color = (1, 2)  # pyright: ignore[reportAttributeAccessIssue]
+
+        sent = _play(api, turn, turns=1)
+
+        (text,) = sent[0][0].draw.text
+        assert ((text.color.r, text.color.g, text.color.b), text.size) == ((255, 165, 0), 12)
 
 
 class TestCheats:
@@ -605,7 +710,7 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
                     UnitTypeId.MARINE, at=townhall.position.towards(api.map.playable_area.center, 6), count=2
                 )
                 api.debug.turn_on(Cheat.SHOW_MAP)
-                api.debug.draw_text("NachOS", at=townhall)
+                api.debug.draw(townhall, Text("NachOS"))
             case 2:
                 seen["marines"] = len(marines)
                 seen["enemy_in_sight_shown"] = _in_sight(api)

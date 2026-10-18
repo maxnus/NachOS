@@ -248,8 +248,8 @@ class Api:
         fast without a word, once some 500 bytes have gone out in a row, counting by the clock rather than in steps
         (in game).
 
-        Raises `ValueError` for an empty text, and for one of 1040 bytes or more in UTF-8, which kills the game client
-        (in game).
+        Raises `ValueError` for an empty text, and for one of 1040 bytes or more in UTF-8, which would kill the game
+        client (in game).
         """
         game = self._current_game()
         if not text:
@@ -265,10 +265,6 @@ class Api:
         gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
         nothing to a client that has left, even when both players leave in the same step (in game). Asking again in
         the turn changes nothing.
-
-        Chat sent in the step of the leave never reaches the other player. A message reaches it a step or two after it
-        is sent, and it sees the message only if it observes before the game ends, so a goodbye goes at least two steps
-        before the turn that leaves (in game). Leaving is accepted against the built-in computer too (in game).
         """
         self._current_game().leaving = True
 
@@ -315,7 +311,7 @@ class Api:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
                 if game.leaving:
-                    logger.info("Leaving the game, which concedes it")
+                    logger.info("Leaving the game")
                     client.leave_game()
                     return game.finish(Result.DEFEAT)
                 if not realtime:

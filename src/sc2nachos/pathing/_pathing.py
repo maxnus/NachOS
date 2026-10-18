@@ -46,7 +46,7 @@ class Pathing:
         requests: list[query_pb2.RequestQueryPathing] = []
         coinciding: list[bool] = []
         for start, end in pairs:
-            end_point = Point._as_sent(end)
+            end_point = Point._rounded_to_float32(end)
             request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point.x, y=end_point.y))
             if isinstance(start, Unit):
                 if start.is_stale:
@@ -54,7 +54,7 @@ class Pathing:
                 request.unit_tag = start.tag
                 start_point = start.position
             else:
-                start_point = Point._as_sent(start)
+                start_point = Point._rounded_to_float32(start)
                 request.start_pos.x, request.start_pos.y = start_point.x, start_point.y
             requests.append(request)
             coinciding.append(start_point == end_point)

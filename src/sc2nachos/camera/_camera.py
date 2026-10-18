@@ -31,7 +31,7 @@ class Camera:
     def move_to(self, at: PointLike) -> None:
         """Center the camera on `at`, with the turn's orders. Only the last move of a turn is sent, and its point is
         rounded to the protocol's 32-bit floats."""
-        self._move_to = Point._as_sent(at)
+        self._move_to = Point._rounded_to_float32(at)
 
     @classmethod
     def _of_player(cls, player: raw_pb2.PlayerRaw) -> Camera:

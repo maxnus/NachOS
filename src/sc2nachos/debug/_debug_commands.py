@@ -9,29 +9,19 @@ from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos._checks import is_whole_number
 from sc2nachos.debug._cheat import Cheat
-from sc2nachos.debug._color import Color
-from sc2nachos.debug._drawing import (
-    Drawing,
-    _Anchor,
-    _Box,
-    _draw,
-    _Figure,
-    _Line,
-    _Rgb,
-    _ScreenText,
-    _Sphere,
-    _Text,
-)
-from sc2nachos.debug._marker import Marker
+from sc2nachos.debug._color import Color, _Rgb, _rgb
+from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _Placed
+from sc2nachos.debug._shapes import Group, Line, Text, _ScreenText
 from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator, Sequence
 
+    from sc2nachos.debug._shapes import Shape, _Vector
     from sc2nachos.gamemap import GameMap
-    from sc2nachos.geometry import PointLike, Rectangle
+    from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId
     from sc2nachos.protocol import Client
 
@@ -61,6 +51,9 @@ class DebugCommands:
         "_cheats",
         "_client",
         "_commands",
+        "_default_color",
+        "_default_rgb",
+        "_default_text_size",
         "_drawings",
         "_game_map",
         "_last_refresh",
@@ -79,6 +72,9 @@ class DebugCommands:
         self._opponent_id = opponent_id
         self._step = step
         self._refresh_steps = 1
+        self._default_color: Color | _Rgb = Color.WHITE
+        self._default_rgb = _rgb(Color.WHITE)
+        self._default_text_size = 8
         self._drawings: list[Drawing] = []
         # What the screen shows of ours as last sent, if anything, and the step of the last refresh, which sent the
         # drawing or found it unchanged.
@@ -101,114 +97,88 @@ class DebugCommands:
             raise ValueError(f"drawings are refreshed every whole number of steps, at least 1, not {steps!r}")
         self._refresh_steps = steps
 
+    @property
+    def default_color(self) -> Color | _Rgb:
+        """The color of a shape drawn with no color given, `Color.WHITE` unless set. Set to what is not a `Color` or
+        red, green and blue, each a whole number from 0 to 255, it raises `ValueError`."""
+        return self._default_color
+
+    @default_color.setter
+    def default_color(self, color: Color | _Rgb) -> None:
+        self._default_rgb = _rgb(color)
+        self._default_color = color
+
+    @property
+    def default_text_size(self) -> int:
+        """How many pixels high text drawn with no size given is, 8 unless set. Set to anything but a whole number, at
+        least 1, it raises `ValueError`."""
+        return self._default_text_size
+
+    @default_text_size.setter
+    def default_text_size(self, size: int) -> None:
+        if not is_whole_number(size) or size < 1:
+            raise ValueError(f"text is a whole number of pixels high, at least 1, not {size!r}")
+        self._default_text_size = size
+
     # Drawing.
 
-    def draw_text(
+    def draw(
         self,
-        text: str,
-        *,
         at: PointLike | Unit[Any],
-        color: Color | _Rgb = Color.WHITE,
-        size: int = 8,
+        *shapes: Shape,
+        color: Color | _Rgb | None = None,
         steps: int | None = 1,
     ) -> Drawing:
-        """Write `text` in the world at `at`, `size` pixels high.
+        """Draw `shapes` at `at`, each offset from it as it says, as one drawing.
 
         A point of two coordinates is drawn on the ground, as `api.map.height_at` gives it, which raises `IndexError`
-        outside the playable area, and one of three at its own height. `color` is a `Color`, or red, green and blue,
-        each from 0 to 255, and raises `ValueError` otherwise, as does a `steps` under 1.
+        outside the playable area, and one of three at its own height; so is a line's end. A unit is drawn where it
+        stands. A shape with no color of its own, nor its group's, is drawn in `color`, or `default_color` if `None`.
+        Raises `ValueError` for no shapes, for a color that is not a `Color` or red, green and blue, each from 0 to
+        255, and for a `steps` under 1.
         """
-        drawing = _Text(text, self._anchor(at), _rgb(color), size=_checked_size(size), until=self._until(steps))
-        return self._add(drawing)
+        if not shapes:
+            raise ValueError("draw at least one shape")
+        rgb = self._default_rgb if color is None else _rgb(color)
+        parts = tuple(self._placed(shapes, (0.0, 0.0, 0.0), rgb))
+        return self._add(Drawing(self._anchor(at), parts, until=self._until(steps)))
 
     def draw_text_on_screen(
         self,
         text: str,
         *,
         at: tuple[float, float],
-        color: Color | _Rgb = Color.WHITE,
-        size: int = 8,
+        color: Color | _Rgb | None = None,
+        size: int | None = None,
         steps: int | None = 1,
     ) -> Drawing:
         """Write `text` on the screen at `at`, from 0 to 1 across and down whatever the window's size, `size` pixels
-        high. Raises `ValueError` for anything but two coordinates from 0 to 1, and as `draw_text` does."""
+        high, or `default_text_size` if `None`. Raises `ValueError` for anything but two coordinates from 0 to 1, and
+        as `draw` and `Text` do."""
         if len(at) != 2 or not (0 <= at[0] <= 1 and 0 <= at[1] <= 1):
             raise ValueError(f"a point on the screen is two coordinates, each from 0 to 1, not {at!r}")
-        drawing = _ScreenText(text, at, _rgb(color), size=_checked_size(size), until=self._until(steps))
-        return self._add(drawing)
+        written = Text(text, size, color)
+        rgb = self._default_rgb if color is None else _rgb(color)
+        part = _Placed(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, written.size or self._default_text_size)
+        return self._add(Drawing((0.0, 0.0, 0.0), (part,), until=self._until(steps)))
 
-    def draw_line(
-        self,
-        start: PointLike | Unit[Any],
-        end: PointLike | Unit[Any],
-        *,
-        color: Color | _Rgb = Color.WHITE,
-        steps: int | None = 1,
-    ) -> Drawing:
-        """Draw a line from `start` to `end`, each placed as `draw_text` places its point. Raises as `draw_text`
-        does."""
-        return self._add(_Line(self._anchor(start), self._anchor(end), _rgb(color), until=self._until(steps)))
-
-    def draw_box(self, rectangle: Rectangle, *, color: Color | _Rgb = Color.WHITE, steps: int | None = 1) -> Drawing:
-        """Draw a box over `rectangle`, from the ground at its center up 1. Raises as `draw_text` does."""
-        ground = self._game_map.height_at(rectangle.center)
-        low = (rectangle.left, rectangle.bottom, ground)
-        high = (rectangle.right, rectangle.top, ground + 1)
-        return self._add(_Box(low, high, _rgb(color), until=self._until(steps)))
-
-    def draw_sphere(
-        self,
-        center: PointLike | Unit[Any],
-        radius: float,
-        *,
-        color: Color | _Rgb = Color.WHITE,
-        steps: int | None = 1,
-    ) -> Drawing:
-        """Draw a sphere of `radius` around `center`, placed as `draw_text` places its point. Raises `ValueError` for
-        a radius that is not a finite number above 0, and as `draw_text` does."""
-        drawing = _Sphere(self._anchor(center), _checked_radius(radius), _rgb(color), until=self._until(steps))
-        return self._add(drawing)
-
-    def draw_polygon(
-        self,
-        center: PointLike | Unit[Any],
-        radius: float,
-        *,
-        sides: int,
-        color: Color | _Rgb = Color.WHITE,
-        steps: int | None = 1,
-    ) -> Drawing:
-        """Draw a regular polygon of `sides` straight lines around `center`, placed as `draw_text` places its point,
-        its corners `radius` from it, the first due east, all level with the center. Raises `ValueError` for fewer
-        than 3 sides and for a radius that is not a finite number above 0, and as `draw_text` does."""
-        if not is_whole_number(sides) or sides < 3:
-            raise ValueError(f"a polygon has a whole number of sides, at least 3, not {sides!r}")
-        radius = _checked_radius(radius)
-        corners = [
-            (radius * math.cos(math.tau * k / sides), radius * math.sin(math.tau * k / sides)) for k in range(sides)
-        ]
-        segments = list(zip(corners, corners[1:] + corners[:1], strict=True))
-        return self._add(_Figure(self._anchor(center), segments, _rgb(color), until=self._until(steps)))
-
-    def draw_marker(
-        self,
-        at: PointLike | Unit[Any],
-        shape: Marker,
-        *,
-        radius: float = 0.5,
-        color: Color | _Rgb = Color.WHITE,
-        steps: int | None = 1,
-    ) -> Drawing:
-        """Mark `at` with `shape`, its arms reaching `radius` from it, placed as `draw_text` places its point. Raises
-        `ValueError` for a radius that is not a finite number above 0, and as `draw_text` does."""
-        radius = _checked_radius(radius)
-        match shape:
-            case Marker.CROSS:
-                arm = radius * _DIAGONAL
-                segments = [((-arm, -arm), (arm, arm)), ((-arm, arm), (arm, -arm))]
-            case Marker.PLUS:
-                segments = [((-radius, 0.0), (radius, 0.0)), ((0.0, -radius), (0.0, radius))]
-        return self._add(_Figure(self._anchor(at), segments, _rgb(color), until=self._until(steps)))
+    def _placed(self, shapes: Sequence[Shape], offset: _Vector, rgb: _Rgb) -> Iterator[_Placed]:
+        """`shapes` as drawn `offset` from the drawing's place, those of no color of their own in `rgb`, each group's
+        shapes in turn."""
+        for shape in shapes:
+            x, y, z = offset
+            dx, dy, dz = shape.offset
+            at = (x + dx, y + dy, z + dz)
+            own = rgb if shape.color is None else _rgb(shape.color)
+            match shape:
+                case Group():
+                    yield from self._placed(shape.shapes, at, own)
+                case Text():
+                    yield _Placed(shape, at, own, shape.size or self._default_text_size)
+                case Line():
+                    yield _Placed(shape, at, own, self._default_text_size, self._anchor(shape.to))
+                case _:
+                    yield _Placed(shape, at, own, self._default_text_size)
 
     def _anchor(self, at: PointLike | Unit[Any]) -> _Anchor:
         """Where to draw at `at`: a unit itself, or a point fixed now, on the ground unless it has a height."""
@@ -357,7 +327,7 @@ class DebugCommands:
         """Send the turn's cheats and commands, and the drawing if it is due and changed, in one debug request, or
         nothing if neither is to go out."""
         step = self._step
-        self._drawings = [drawing for drawing in self._drawings if drawing._lasts_at(step)]
+        self._drawings = [drawing for drawing in self._drawings if drawing._shown_at(step)]
         commands = [
             debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.ValueType(cheat))
             for cheat in sorted(self._toggled)
@@ -367,7 +337,7 @@ class DebugCommands:
         due = self._last_refresh is None or step - self._last_refresh >= self._refresh_steps
         if not commands and not due:
             return
-        draw = _draw(self._drawings)
+        draw = _draw_all(self._drawings)
         shown = draw if draw.ListFields() else None
         if not commands and shown == self._shown:
             self._last_refresh = step
@@ -379,23 +349,3 @@ class DebugCommands:
         self._client.debug(commands)
         if drawing:
             self._shown, self._last_refresh = shown, step
-
-
-def _rgb(color: Color | _Rgb) -> _Rgb:
-    """`color`'s red, green and blue, checked to be whole numbers from 0 to 255."""
-    rgb = color.value if isinstance(color, Color) else color
-    if len(rgb) != 3 or not all(is_whole_number(part) and 0 <= part <= 255 for part in rgb):
-        raise ValueError(f"a color is red, green and blue, each a whole number from 0 to 255, not {color!r}")
-    return rgb
-
-
-def _checked_size(size: int) -> int:
-    if not is_whole_number(size) or size < 1:
-        raise ValueError(f"text is a whole number of pixels high, at least 1, not {size!r}")
-    return size
-
-
-def _checked_radius(radius: float) -> float:
-    if not 0 < radius < math.inf:
-        raise ValueError(f"a radius is a finite number above 0, not {radius!r}")
-    return float(radius)

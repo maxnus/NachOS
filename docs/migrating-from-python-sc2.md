@@ -181,7 +181,8 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `client.debug_text_world(text, p)`, `debug_text_screen`, `debug_line_out`, `debug_box2_out`, `debug_sphere_out` | `api.debug.draw_text(text, at=p)`, `draw_text_on_screen`, `draw_line`, `draw_box`, `draw_sphere`, each lasting `steps=` and returning a `Drawing`, beside `draw_polygon` and `draw_marker` |
+| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, Text(text))`, `draw(p, Line(to=q))`, `draw(p, Box(1, 1))`, `draw(p, Sphere(r))`, each lasting `steps=` and returning a `Drawing`; shapes compose in a `Group` |
+| `client.debug_text_screen(text, pos)` | `api.debug.draw_text_on_screen(text, at=pos)` |
 | a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
 | `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_steps` |
 | `client.debug_show_map()`, `debug_god()`, `debug_fast_build()` and the other switches | `api.debug.turn_on(Cheat.SHOW_MAP)`, `turn_off`, and `api.debug.cheats` |
@@ -199,8 +200,8 @@ it.
 - **A drawing lasts the steps you give it, and goes out only when it changes.** python-sc2 forgets every drawing
   after a step, so a bot draws it again each step. NachOS keeps it `steps` steps, or with `steps=None` until
   `drawing.remove()`, follows a unit drawn at until it dies, and sends the drawing at most every `refresh_steps`, and
-  not at all when it is what the screen already shows. `api.debug` belongs to the game, so a `GameStartEvent` handler
-  sets `refresh_steps` for every game.
+  not at all when it is what the screen already shows. Shapes are values with offsets, drawn at a point or a unit.
+  `api.debug` belongs to the game, so a `GameStartEvent` handler sets `refresh_steps` and the defaults for every game.
 - **A cheat is turned on or off.** python-sc2's `debug_show_map()` switches the map, so a bot keeps its own flag; NachOS
   keeps `api.debug.cheats` and sends only a change.
 - **A chat message of 1040 bytes or more raises `ValueError`.** It kills the game client (in game); python-sc2 sends
