@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #129. `uv run pytest` passes 2184 tests on branch `claude/issue-each-unit`;
+- nachOS `main` has every PR to #130. `uv run pytest` passes 2204 tests on branch `claude/more-events`;
   `uv run pytest -m integration` passes 32 against a real game (run 2026-10-18, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -126,6 +126,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (review of #127), is a package of its own, which an up-to-date pathing grid and NachOS's own pathfinding may join.
   - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
     `Unit.is_selected` is read, both for a bot's debug tools.
+- **More events before M5** (the owner, 2026-10-18, from the Discussions #62, #65 and #67, one question at a time):
+  - `OwnUnitBecameIdleEvent`: a finished unit of this player's with no orders and none sent that may not show yet,
+    having had orders or such an order, been unfinished, or not been listed in the observation before. Chosen over
+    reported orders alone, which reports a unit just ordered on the ladder, and over a change from busy alone.
+  - `OwnWarpInStartedEvent`, and `OwnUpgradeStartedEvent` and `OwnUpgradeStoppedEvent`, both `(upgrade, unit)`, under
+    a new base `UpgradeEvent` with `OwnUpgradeFinishedEvent`. Started counts a queued research; stopped is a cancel or
+    the structure's death, never a finish (tool `sweep_orders`, `research-ends`).
+  - `OwnChatEvent` and `EnemyChatEvent`, subclasses of `ChatEvent`: enemy is any other player but an observer, an
+    ally included in a larger game, since the protocol names no teams; an observer's message is a plain `ChatEvent`.
+  - `OwnUnitDiedEvent` and `EnemyUnitDiedEvent`, `OwnUnitTypeChangedEvent` and `EnemyUnitTypeChangedEvent`, the
+    owner's addition, as subclasses of `UnitDiedEvent` and `UnitTypeChangedEvent`, which a neutral unit still gets.
+  - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
+    existing pairs had it; `unit.first_alliance` says whose it was.
+  - Not done: own and enemy as a selector over one class (Discussion #66), which would lose the `OwnUnit` typing of
+    the own events.
 - **Subscribing is on the api** (#128, the owner, 2026-10-18): `api.on`, `api.subscribe`, `api.unsubscribe`,
   `api.emit` and `api.handler_timings`, over `api.events.on` and the rest, so that marking a method and subscribing its
   instance sit on one object. The bus is private (`_EventBus`), and `api.events` is gone. `api.on` returns an

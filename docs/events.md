@@ -130,19 +130,29 @@ All `UnitEvent`s.
 |---|---|---|---|
 | `OwnUnitCreatedEvent` | `unit` | `only(*unit_types)` | a unit of this player's is first seen |
 | `EnemyUnitFirstSeenEvent` | `unit` | `only(*unit_types)` | an enemy unit is first seen, in sight or in the fog |
-| `UnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit changes type |
+| `OwnUnitTypeChangedEvent`, `EnemyUnitTypeChangedEvent`, `UnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit on this player's side, the enemy's, or neither changes type |
 | `UnitAllianceChangedEvent` | `unit`, `previous_alliance` | `only(*unit_types)` | a unit changes sides to or from this player's |
 
-### Construction and research
+Where an event comes in an own and an enemy kind, its side is the one the unit is on at the time, and the unit has
+that side's class: a unit a neural parasite holds is an `OwnUnit` of the holder's while held, and `unit.first_alliance`
+says whose it was. A handler of `UnitTypeChangedEvent` gets all three of its kinds, a neutral unit's included.
 
-`UnitEvent`s but `OwnUpgradeFinishedEvent`.
+### Construction, warp-ins and research
+
+`UnitEvent`s, but the upgrade events, which are `UpgradeEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnConstructionStartedEvent` | `unit` | `only(*unit_types)` | a structure of this player's is first seen unfinished |
-| `OwnConstructionFinishedEvent` | `unit` | `only(*unit_types)` | one of those finishes |
+| `OwnWarpInStartedEvent` | `unit` | `only(*unit_types)` | a unit of this player's is first seen warping in |
+| `OwnConstructionFinishedEvent` | `unit` | `only(*unit_types)` | a structure that got `OwnConstructionStartedEvent` finishes |
 | `OwnWarpInFinishedEvent` | `unit` | `only(*unit_types)` | a unit of this player's finishes warping in |
+| `OwnUpgradeStartedEvent` | `upgrade`, `unit` | `only(*upgrades)` | a research first shows in a structure's orders, queued behind another included |
+| `OwnUpgradeStoppedEvent` | `upgrade`, `unit` | `only(*upgrades)` | a research shows nowhere and did not finish: it was cancelled, or its structure died |
 | `OwnUpgradeFinishedEvent` | `upgrade` | `only(*upgrades)` | this player finishes an upgrade |
+
+A finished research never reads as stopped: its order leaves the structure in the step its upgrade arrives
+([game behavior](reference/game-behavior/abilities-and-orders.md#builds-and-work-lost)).
 
 ### What units went through
 
@@ -175,24 +185,39 @@ The buff events are `BuffEvent`s, the vital events `VitalEvent`s, the area event
 - **An enemy unit counts only while in sight**; one listed in the fog counts for none of these. Burrowing is not
   cloaking: a burrowed enemy unit nothing detects is not in the observation at all.
 
-### Deaths
+### Idle units
 
-Both `UnitEvent`s.
+A `UnitEvent`.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
-| `UnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead |
+| `OwnUnitBecameIdleEvent` | `unit` | `only(*unit_types)` | a finished unit of this player's has no orders, and none NachOS sent it that may not show yet, having had orders or such an order, been unfinished, or not been listed in the observation before |
+
+A unit trained with no rally gets it, as do a structure just finished, a worker whose mineral field ran out, and a
+unit whose order the game dropped. A unit just ordered does not, though on the ladder its order can take two
+observations to show. A larva or a depot, which never takes orders, gets it once. A handler that starts mid-game
+hears of every unit idle then.
+
+### Deaths
+
+`UnitEvent`s.
+
+| event | fields | selected by | comes when |
+|---|---|---|---|
+| `OwnUnitDiedEvent`, `EnemyUnitDiedEvent`, `UnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead: one on this player's side, the enemy's, or neither |
 | `UnitFoundDeadEvent` | `unit` | `only(*unit_types)` | NachOS finds a unit dead the game did not report |
 
-A unit created and dead within one observation gets both its creation and its death, in that order.
+A handler of `UnitDiedEvent` gets all three of its kinds, a mineral field's or a rock's death included. A unit created
+and dead within one observation gets both its creation and its death, in that order.
 
 ### Actions, chat and alerts
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnActionEvent` | `action` | | this player did something, as the game carried it out |
-| `ChatEvent` | `player_id`, `text` | | any player sent a message to the chat |
+| `OwnChatEvent`, `EnemyChatEvent`, `ChatEvent` | `player_id`, `text` | | this player sent a message, through `api.chat` or typed into its game window; another player did; or an observer did |
 | `AlertEvent` | `alert` | `only(*alerts)` | the game alerted this player, several in the order it raised them |
 
-What raises each alert is in the docstring of each `Alert` member, and in
+A handler of `ChatEvent` gets every message. The game names no teams, so with more than two players an ally's message
+is an `EnemyChatEvent` too. What raises each alert is in the docstring of each `Alert` member, and in
 [game behavior](reference/game-behavior/alerts-and-chat.md#alerts-and-the-camera).

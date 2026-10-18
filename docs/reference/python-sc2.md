@@ -54,16 +54,17 @@ difference that rests on what the game does links there for its evidence.
   |---|---|
   | `on_unit_created(unit)` | `OwnUnitCreatedEvent`, structures included |
   | `on_building_construction_started`, `_complete` | `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent` |
-  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, and `UnitFoundDeadEvent` for a structure found gone from its spot |
-  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit |
+  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, or `OwnUnitDiedEvent` or `EnemyUnitDiedEvent` for one side, and `UnitFoundDeadEvent` for a structure found gone from its spot |
+  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit, or `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
   | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
   | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's units in vision |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
-  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
+  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInStartedEvent`, `OwnWarpInFinishedEvent` |
+  | nothing | `OwnUnitBecameIdleEvent`, `OwnUpgradeStartedEvent`, `OwnUpgradeStoppedEvent` |
   | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
   | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
   | nothing | a unit's health, shields or energy reaching a value or dropping below it, and a unit crossing the edge of an area, each through `of` |
-  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, or `OwnChatEvent` or `EnemyChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
 
 - **A handler selects the events it wants instead of testing each one.** `AlertEvent.only(Alert.X)`,
   `UnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the

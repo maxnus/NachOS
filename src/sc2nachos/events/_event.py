@@ -68,8 +68,9 @@ class GameEndEvent(Event):
 class UnitEvent(Event):
     """Something happened to one unit. `only` selects by the unit's type.
 
-    A handler of it is handed every event with a `unit`, this player's and the enemy's alike, except the buff, vital
-    and area events, which have bases of their own.
+    A handler of it is handed every event with a `unit`, this player's and the enemy's alike, except the buff, vital,
+    area and upgrade events, which have bases of their own. Where an event comes in an own and an enemy kind, the side
+    is the one the unit is on at the time, whose class it has: a unit a neural parasite holds is the holder's.
     """
 
     unit: Unit[Any]
@@ -104,10 +105,21 @@ class EnemyUnitFirstSeenEvent(UnitEvent):
 
 class UnitTypeChangedEvent(UnitEvent):
     """A unit has changed type: it burrowed, sieged, lowered, became a cocoon, or finished a morph. `only` selects it by
-    the type it changed to."""
+    the type it changed to. A unit on this player's side comes as `OwnUnitTypeChangedEvent`, one on the enemy's as
+    `EnemyUnitTypeChangedEvent`, and any other as this."""
 
     previous_type: UnitTypeId
     """The type it was."""
+
+
+class OwnUnitTypeChangedEvent(UnitTypeChangedEvent):
+    """A unit of this player's has changed type."""
+
+    unit: OwnUnit[Any]
+
+
+class EnemyUnitTypeChangedEvent(UnitTypeChangedEvent):
+    """A unit of the enemy's has changed type. A change out of sight comes when the unit is next seen."""
 
 
 class UnitAllianceChangedEvent(UnitEvent):
@@ -130,14 +142,21 @@ class OwnConstructionFinishedEvent(UnitEvent):
     unit: OwnUnit[Any]
 
 
+class OwnWarpInStartedEvent(UnitEvent):
+    """A unit of this player's has started warping in: it is first seen unfinished. It gets `OwnUnitCreatedEvent`
+    too."""
+
+    unit: OwnUnit[Any]
+
+
 class OwnWarpInFinishedEvent(UnitEvent):
     """A unit of this player's has finished warping in."""
 
     unit: OwnUnit[Any]
 
 
-class OwnUpgradeFinishedEvent(Event):
-    """This player has finished researching an upgrade. Several in one observation come in id order."""
+class UpgradeEvent(Event):
+    """Something happened to one of this player's upgrades. `only` selects by the upgrade."""
 
     upgrade: UpgradeId
 
@@ -152,6 +171,27 @@ class OwnUpgradeFinishedEvent(Event):
 
     def _key(self) -> Hashable:
         return self._key_of(self.upgrade)
+
+
+class OwnUpgradeStartedEvent(UpgradeEvent):
+    """A research of this player's first shows in a structure's orders, queued behind another included, which the game
+    charges at once. From now on `api.research_progress` reads it."""
+
+    unit: OwnUnit[Any]
+    """The structure researching it."""
+
+
+class OwnUpgradeStoppedEvent(UpgradeEvent):
+    """A research of this player's shows in no structure's orders, having shown in the observation before, and the
+    upgrade has not arrived: it was cancelled, or its structure died. A finished research never reads as stopped, since
+    its order leaves the structure in the step its upgrade arrives (in game)."""
+
+    unit: OwnUnit[Any]
+    """The structure that was researching it."""
+
+
+class OwnUpgradeFinishedEvent(UpgradeEvent):
+    """This player has finished researching an upgrade. Several in one observation come in id order."""
 
 
 class OwnUnitDamagedEvent(UnitEvent):
@@ -382,10 +422,30 @@ class EnemyUnitLeftAreaEvent(AreaEvent):
     that dies inside it, or goes out of sight there, has not left it."""
 
 
+class OwnUnitBecameIdleEvent(UnitEvent):
+    """A finished unit of this player's has no orders, and none NachOS sent it that the observations may not show yet,
+    having had orders or such an order in the observation before, been unfinished, or not been listed: a unit trained
+    with no rally, a structure just finished, a worker whose mineral field ran out, a unit whose order the game dropped.
+    One that never takes orders, a larva or a depot, gets it once."""
+
+    unit: OwnUnit[Any]
+
+
 class UnitDiedEvent(UnitEvent):
     """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone when
     the structure it became finishes or is killed, or a step later (in game). A dead unit gets this or
-    `UnitFoundDeadEvent`, never both."""
+    `UnitFoundDeadEvent`, never both. A unit on this player's side comes as `OwnUnitDiedEvent`, one on the enemy's as
+    `EnemyUnitDiedEvent`, and any other as this."""
+
+
+class OwnUnitDiedEvent(UnitDiedEvent):
+    """The game has reported a unit of this player's dead."""
+
+    unit: OwnUnit[Any]
+
+
+class EnemyUnitDiedEvent(UnitDiedEvent):
+    """The game has reported a unit of the enemy's dead. Only deaths this player sees are reported (in game)."""
 
 
 class UnitFoundDeadEvent(UnitEvent):
@@ -402,11 +462,21 @@ class OwnActionEvent(Event):
 
 
 class ChatEvent(Event):
-    """A player, this one included, sent a message to the game's chat (in game)."""
+    """A player, this one included, sent a message to the game's chat (in game). This player's comes as
+    `OwnChatEvent`, another player's as `EnemyChatEvent`, and an observer's as this."""
 
     player_id: int
     """The id of the player who sent it."""
     text: str
+
+
+class OwnChatEvent(ChatEvent):
+    """This player sent a message: through `api.chat`, or typed into its game window."""
+
+
+class EnemyChatEvent(ChatEvent):
+    """A player other than this one, not an observer, sent a message. The game names no teams, so in a game of more than
+    two an ally's message comes as this too."""
 
 
 class AlertEvent(Event):

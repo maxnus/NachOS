@@ -9,7 +9,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable
+    from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata import AbilityData, GameData
     from sc2nachos.units import OwnUnit
@@ -26,12 +26,13 @@ class _Production:
     the structure itself. An order not yet sent is nowhere.
     """
 
-    __slots__ = ("_items", "_progress")
+    __slots__ = ("_items", "_progress", "_researchers")
 
     def __init__(self, units: Iterable[OwnUnit[Any]], game_data: GameData) -> None:
         """Read what `units` are making, by what `game_data` says each ability makes."""
         self._items: list[InProduction] = []
         self._progress: dict[UpgradeId, float] = {}
+        self._researchers: dict[UpgradeId, OwnUnit[Any]] = {}
         for unit in units:
             self._read(unit, game_data)
 
@@ -42,6 +43,11 @@ class _Production:
     def progress(self, upgrade: UpgradeId) -> float | None:
         """How far along a research of `upgrade` is, from 0 to 1, or `None` if nothing researches it."""
         return self._progress.get(upgrade)
+
+    @property
+    def researchers(self) -> Mapping[UpgradeId, OwnUnit[Any]]:
+        """Each upgrade being researched, with the structure researching it."""
+        return self._researchers
 
     def _read(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
@@ -55,6 +61,7 @@ class _Production:
             product = _ability_product(row, unit.type_id)
             if isinstance(product, UpgradeId):
                 self._progress[product] = max(self._progress.get(product, 0.0), order.progress)
+                self._researchers.setdefault(product, unit)
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
 

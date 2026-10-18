@@ -5,7 +5,7 @@ from contextlib import closing, contextmanager
 from typing import Any
 
 import pytest
-from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import _game
 from sc2nachos.enemy import Enemy
@@ -15,8 +15,10 @@ from sc2nachos.events import (
     BuffEvent,
     ChatEvent,
     Done,
+    EnemyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
+    EnemyUnitDiedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
@@ -25,25 +27,33 @@ from sc2nachos.events import (
     EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitTypeChangedEvent,
     EnemyUnitVitalDroppedEvent,
     EnemyUnitVitalReachedEvent,
     Event,
     EventFilter,
     OwnActionEvent,
+    OwnChatEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitBecameIdleEvent,
     OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
+    OwnUnitDiedEvent,
     OwnUnitEnergyLostEvent,
     OwnUnitEnteredAreaEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLeftAreaEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitTypeChangedEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
     OwnUpgradeFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnWarpInFinishedEvent,
+    OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
     UnitDiedEvent,
     UnitEvent,
@@ -68,6 +78,7 @@ from support import (
     make_client,
     make_game_info,
     make_observation,
+    make_response,
     make_tables,
     make_unit,
     played,
@@ -79,9 +90,17 @@ _ENEMY = Alliance.ENEMY
 _EVERY_ALERT = [value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values]
 _PASSED_OVER = frozenset({sc2api_pb2.Alert.AlertError, sc2api_pb2.Alert.TrainError})
 _STRUCTURE = [data_pb2.Attribute.Structure]
+_WEAPONS = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
+_ARMOR = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=_STRUCTURE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, attributes=_STRUCTURE),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.ENGINEERING_BAY, attributes=_STRUCTURE),
+    abilities=[data_pb2.AbilityData(ability_id=_WEAPONS), data_pb2.AbilityData(ability_id=_ARMOR)],
+    upgrades=[
+        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
+        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_ARMOR_1, mineral_cost=100, vespene_cost=100),
+    ],
 )
 
 
@@ -108,10 +127,17 @@ def _depot(tag: int, **fields: Any) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.SUPPLY_DEPOT, at=(30.5, 40.5), alliance=_ENEMY, build_progress=1.0, **fields)
 
 
+def _bay(tag: int, *researching: AbilityId) -> raw_pb2.Unit:
+    """One of this player's engineering bays, researching what `researching` names."""
+    orders = [raw_pb2.UnitOrder(ability_id=ability) for ability in researching]
+    return make_unit(tag, UnitTypeId.ENGINEERING_BAY, at=(50.5, 50.5), build_progress=1.0, orders=orders)
+
+
 def _everything(game: _Game) -> None:
     """Two turns: the first with the starting units, the second reporting one event of every kind."""
     game.observe(
         0,
+        make_unit(16, UnitTypeId.SIEGE_TANK, build_progress=1.0),
         make_unit(1, health=45.0, energy=50.0, build_progress=1.0, buff_ids=[BuffId.MARINE_STIMMED]),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=0.5),
@@ -130,10 +156,16 @@ def _everything(game: _Game) -> None:
             buff_ids=[BuffId.SENTRY_GUARDIAN_SHIELD],
         ),
         make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, visibility=Visibility.INVISIBLE, cloak=CloakState.CLOAKED),
+        make_unit(17, UnitTypeId.SIEGE_TANK, alliance=Alliance.NEUTRAL),
+        make_unit(18, UnitTypeId.ZERGLING, alliance=_ENEMY),
+        make_unit(19, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL),
+        _bay(20, _ARMOR),
+        _bay(21),
     )
     camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=30.75, y=139.0))
     game.observe(
         16,
+        make_unit(16, UnitTypeId.SIEGE_TANK_SIEGED, build_progress=1.0),
         make_unit(1, health=40.0, energy=25.0, build_progress=1.0),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=1.0),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=1.0),
@@ -154,10 +186,14 @@ def _everything(game: _Game) -> None:
             buff_ids=[BuffId.INFESTOR_FUNGAL_GROWTH],
         ),
         make_unit(14, UnitTypeId.OBSERVER, alliance=_ENEMY, cloak=CloakState.CLOAKED_DETECTED),
-        dead=(8,),
+        make_unit(15, UnitTypeId.ZEALOT, build_progress=0.2),
+        make_unit(17, UnitTypeId.SIEGE_TANK_SIEGED, alliance=Alliance.NEUTRAL),
+        _bay(20),
+        _bay(21, _WEAPONS),
+        dead=(8, 18, 19),
         upgrades=[UpgradeId.STIMPACK],
         actions=[sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=camera), game_loop=12)],
-        chat=[(2, "gl hf")],
+        chat=[(1, "!show"), (2, "gl hf"), (3, "an observer's")],
         alerts=_EVERY_ALERT,
     )
 
@@ -179,6 +215,7 @@ class TestWhatATurnReports:
             (OwnUnitCreatedEvent, units[0]),
             (OwnUnitCreatedEvent, units[1]),
             (OwnConstructionStartedEvent, units[1]),
+            (OwnUnitBecameIdleEvent, units[0]),
         ]
 
     def test_each_event_carries_what_happened(self) -> None:
@@ -188,10 +225,18 @@ class TestWhatATurnReports:
         units = {unit.tag: unit for unit in game.tracker.unit_tracker._units_by_id.values()}
         own = {tag: unit for tag, unit in units.items() if isinstance(unit, OwnUnit)}
         at_16 = {type(event): event for event in seen if event.step == 16}
-        assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(units[4], UnitTypeId.SIEGE_TANK, step=16)
+        changed = OwnUnitTypeChangedEvent(own[16], UnitTypeId.SIEGE_TANK, step=16)
+        assert at_16[OwnUnitTypeChangedEvent] == changed
+        assert at_16[EnemyUnitTypeChangedEvent] == EnemyUnitTypeChangedEvent(units[4], UnitTypeId.SIEGE_TANK, step=16)
+        assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(units[17], UnitTypeId.SIEGE_TANK, step=16)
         assert at_16[UnitAllianceChangedEvent] == UnitAllianceChangedEvent(units[6], _ENEMY, step=16)
+        assert at_16[OwnWarpInStartedEvent].unit is units[15]
         assert at_16[OwnConstructionFinishedEvent].unit is units[2]
         assert at_16[OwnWarpInFinishedEvent].unit is units[3]
+        started = OwnUpgradeStartedEvent(UpgradeId.TERRAN_INFANTRY_WEAPONS_1, own[21], step=16)
+        assert at_16[OwnUpgradeStartedEvent] == started
+        stopped = OwnUpgradeStoppedEvent(UpgradeId.TERRAN_INFANTRY_ARMOR_1, own[20], step=16)
+        assert at_16[OwnUpgradeStoppedEvent] == stopped
         assert at_16[OwnUpgradeFinishedEvent] == OwnUpgradeFinishedEvent(UpgradeId.STIMPACK, step=16)
         assert at_16[OwnUnitDamagedEvent] == OwnUnitDamagedEvent(own[1], 5.0, step=16)
         assert at_16[EnemyUnitDamagedEvent] == EnemyUnitDamagedEvent(units[13], 10.0, step=16)
@@ -206,10 +251,16 @@ class TestWhatATurnReports:
         lost = EnemyUnitLostBuffEvent(units[13], BuffId.SENTRY_GUARDIAN_SHIELD, step=16)
         assert at_16[EnemyUnitLostBuffEvent] == lost
         assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(units[5], step=16)
-        assert at_16[UnitDiedEvent] == UnitDiedEvent(units[8], step=16)
+        idle = [event.unit for event in seen if isinstance(event, OwnUnitBecameIdleEvent) and event.step == 16]
+        assert idle == [own[2], own[3], own[10], own[20]]
+        assert at_16[OwnUnitDiedEvent] == OwnUnitDiedEvent(own[8], step=16)
+        assert at_16[EnemyUnitDiedEvent] == EnemyUnitDiedEvent(units[18], step=16)
+        assert at_16[UnitDiedEvent] == UnitDiedEvent(units[19], step=16)
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(units[900], step=16)
         assert at_16[OwnActionEvent] == OwnActionEvent(CameraMove(12, Point((30.75, 139.0))), step=16)
-        assert at_16[ChatEvent] == ChatEvent(2, "gl hf", step=16)
+        assert at_16[OwnChatEvent] == OwnChatEvent(1, "!show", step=16)
+        assert at_16[EnemyChatEvent] == EnemyChatEvent(2, "gl hf", step=16)
+        assert at_16[ChatEvent] == ChatEvent(3, "an observer's", step=16)
         alerts = [event.alert for event in seen if isinstance(event, AlertEvent)]
         assert alerts == [Alert(value) for value in _EVERY_ALERT if value not in _PASSED_OVER]
 
@@ -218,7 +269,7 @@ class TestWhatATurnReports:
         seen = record(game.events, UnitDiedEvent, OwnUnitCreatedEvent)
         game.observe(0)
         game.observe(16, make_unit(1), dead=(1,))
-        assert [type(event) for event in seen] == [OwnUnitCreatedEvent, UnitDiedEvent]
+        assert [type(event) for event in seen] == [OwnUnitCreatedEvent, OwnUnitDiedEvent]
 
     def test_every_alert_the_protocol_names_is_curated_but_the_two_passed_over(self) -> None:
         protocol = {value.number for value in sc2api_pb2.Alert.DESCRIPTOR.values}
@@ -247,7 +298,7 @@ class TestOnlyWhatIsWanted:
         monkeypatch.setattr(_EventBus, "_hand_out", counted)
         record(game.events, wanted)
         _everything(game)
-        assert made and set(made) == {wanted}
+        assert wanted in made and all(issubclass(kind, wanted) for kind in made)
 
     def test_with_no_handler_the_actions_are_never_read_and_no_units_are_compared(self) -> None:
         game = _Game()
@@ -505,7 +556,7 @@ class TestOnlySomeKeys:
         monkeypatch.setattr(_EventBus, "_hand_out", counted)
         game.events.on(selected)(lambda event: None)
         _everything(game)
-        assert made and {type(event) for event in made} == {selected.event_type}
+        assert made and all(isinstance(event, selected.event_type) for event in made)
         assert selected.keys is not None and all(event._key() in selected.keys for event in made)
 
     def test_a_type_change_is_selected_by_the_type_changed_to(self) -> None:
@@ -755,6 +806,111 @@ class TestAreas:
         ]
 
 
+def _moving() -> raw_pb2.UnitOrder:
+    return raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=20.0, y=20.0))
+
+
+class TestIdle:
+    """`OwnUnitBecameIdleEvent`."""
+
+    def test_a_unit_whose_orders_ran_out_is_reported_once(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
+        game.observe(16, make_unit(1, build_progress=1.0))
+        game.observe(32, make_unit(1, build_progress=1.0))
+        assert [(event.step, event.unit.tag) for event in seen] == [(16, 1)]
+
+    def test_a_unit_first_seen_idle_and_a_structure_once_it_finishes_are_reported(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(1, build_progress=1.0), make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5))
+        game.observe(16, make_unit(1, build_progress=1.0), make_unit(2, UnitTypeId.BARRACKS, build_progress=1.0))
+        assert [(event.step, event.unit.tag) for event in seen] == [(0, 1), (16, 2)]
+
+    @pytest.mark.parametrize("shown", [True, False], ids=["the order shows", "the game drops it"])
+    def test_a_unit_sent_an_order_the_observations_may_not_show_yet_is_not_idle(self, shown: bool) -> None:
+        """An order shows by the second observation after its turn on the ladder (in game); one that has not by then
+        was dropped, and the unit is idle."""
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
+        assert game._game is not None
+        orders = game._game.orders
+        orders.issue(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
+        client, _ = make_client(
+            make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
+        )
+        orders._send(client)
+        game.observe(16, make_unit(1, build_progress=1.0))
+        game.observe(32, make_unit(1, build_progress=1.0, orders=[_moving()] if shown else []))
+        assert [(event.step, event.unit.tag) for event in seen] == ([] if shown else [(32, 1)])
+
+    def test_a_unit_on_the_enemys_side_is_never_idle(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
+        game.observe(16, make_unit(1, build_progress=1.0, alliance=_ENEMY))
+        assert not seen
+
+
+def _own_unit(game: _Game, tag: int) -> OwnUnit[Any]:
+    """This player's unit reported under `tag`."""
+    unit = game.tracker.unit_tracker.by_tag(tag)
+    assert isinstance(unit, OwnUnit)
+    return unit
+
+
+class TestResearch:
+    """`OwnUpgradeStartedEvent` and `OwnUpgradeStoppedEvent`."""
+
+    def test_a_research_starts_when_first_shown_a_queued_one_too_in_id_order(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUpgradeStartedEvent)
+        game.observe(0, _bay(20))
+        game.observe(16, _bay(20, _WEAPONS, _ARMOR))
+        game.observe(32, _bay(20, _WEAPONS, _ARMOR))
+        bay = _own_unit(game, 20)
+        assert seen == [
+            OwnUpgradeStartedEvent(UpgradeId.TERRAN_INFANTRY_WEAPONS_1, bay, step=16),
+            OwnUpgradeStartedEvent(UpgradeId.TERRAN_INFANTRY_ARMOR_1, bay, step=16),
+        ]
+
+    def test_a_research_that_finishes_never_stops(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUpgradeStoppedEvent, OwnUpgradeFinishedEvent)
+        game.observe(0, _bay(20, _WEAPONS))
+        game.observe(16, _bay(20), upgrades=[UpgradeId.TERRAN_INFANTRY_WEAPONS_1])
+        assert seen == [OwnUpgradeFinishedEvent(UpgradeId.TERRAN_INFANTRY_WEAPONS_1, step=16)]
+
+    def test_a_research_whose_structure_dies_stops(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUpgradeStoppedEvent)
+        game.observe(0, _bay(20, _WEAPONS))
+        bay = _own_unit(game, 20)
+        game.observe(16, dead=(20,))
+        assert seen == [OwnUpgradeStoppedEvent(UpgradeId.TERRAN_INFANTRY_WEAPONS_1, bay, step=16)]
+
+    def test_nothing_stops_on_the_first_turn_a_handler_looks(self) -> None:
+        game = _Game()
+        game.observe(0, _bay(20, _WEAPONS))
+        seen = record(game.events, OwnUpgradeStoppedEvent)
+        game.observe(16, _bay(20))
+        assert not seen
+
+
+class TestSides:
+    def test_a_unit_a_neural_parasite_holds_dies_on_the_holders_side(self) -> None:
+        game = _Game()
+        seen = record(game.events, UnitDiedEvent)
+        game.observe(0, make_unit(6, alliance=_ENEMY))
+        game.observe(16, make_unit(6, alliance=Alliance.OWN))
+        held = game.tracker.unit_tracker.by_tag(6)
+        game.observe(32, dead=(6,))
+        assert [type(event) for event in seen] == [OwnUnitDiedEvent]
+        assert held is not None and held.first_alliance is _ENEMY
+
+
 class TestBases:
     def test_a_handler_of_unit_event_is_handed_every_units_event_of_either_side(self) -> None:
         game = _Game()
@@ -764,14 +920,14 @@ class TestBases:
         assert kinds == {event_type for event_type in HAPPENINGS if issubclass(event_type, UnitEvent)}
         assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, UnitDiedEvent} <= kinds
         assert not kinds & {OwnUnitGainedBuffEvent, OwnUpgradeFinishedEvent, AlertEvent}
-        assert {event.unit.alliance for event in seen} == {Alliance.OWN, Alliance.ENEMY}
+        assert {event.unit.alliance for event in seen} == {Alliance.OWN, Alliance.ENEMY, Alliance.NEUTRAL}
 
     def test_only_on_unit_event_selects_by_type_across_every_kind(self) -> None:
         game = _Game()
         seen = record(game.events, UnitEvent.only(UnitTypeId.MARINE))
         _everything(game)
         assert seen and all(event.unit.type_id is UnitTypeId.MARINE for event in seen)
-        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, OwnUnitDamagedEvent, UnitDiedEvent} <= {
+        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, OwnUnitDamagedEvent, OwnUnitDiedEvent} <= {
             type(event) for event in seen
         }
 
@@ -890,7 +1046,7 @@ def _alerts(seen: list[Any], alert: Alert) -> list[AlertEvent]:
 
 
 def _of(seen: list[Any], *event_types: type[Event]) -> list[Any]:
-    return [event for event in seen if type(event) in event_types]
+    return [event for event in seen if isinstance(event, event_types)]
 
 
 def _vitals(seen: list[Any], unit: Unit[Any]) -> list[Any]:
@@ -936,7 +1092,7 @@ class TestAgainstTheRealGame:
             # The game reports the drone dead in the step the pool finishes or the one after.
             _until(game, lambda: drone.is_dead)
             (drone_died,) = [event for event in _of(seen, UnitDiedEvent, UnitFoundDeadEvent) if event.unit is drone]
-            assert type(drone_died) is UnitDiedEvent and drone_died.step - finished.step in (0, 4)
+            assert type(drone_died) is OwnUnitDiedEvent and drone_died.step - finished.step in (0, 4)
             assert AlertEvent(Alert.BUILDING_COMPLETE, step=finished.step) in seen
 
             # A zergling stays itself through its cocoon.
@@ -957,7 +1113,9 @@ class TestAgainstTheRealGame:
             game.client.act([sc2api_pb2.Action(action_chat=chat)])
             _until(game, lambda: _of(seen, ChatEvent), steps=2)
             game.turn(2)
-            assert [(event.player_id, event.text) for event in _of(seen, ChatEvent)] == [(game.player, "gl hf")]
+            assert [(type(event), event.player_id, event.text) for event in _of(seen, ChatEvent)] == [
+                (OwnChatEvent, game.player, "gl hf")
+            ]
 
     def test_terran_structures_add_ons_morphs_and_research(self) -> None:
         with _played_as(Race.TERRAN) as (game, seen, middle):
@@ -968,10 +1126,14 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.SCV_BUILD_SUPPLY_DEPOT, scv, target=game.open_ground(home.towards(middle, 8), size=2))
             _until(game, lambda: _of(seen, OwnConstructionFinishedEvent))
             (depot,) = [event.unit for event in _of(seen, OwnConstructionStartedEvent)]
-            assert [event.unit for event in _of(seen, OwnConstructionFinishedEvent)] == [depot]
+            (finished,) = _of(seen, OwnConstructionFinishedEvent)
+            assert finished.unit is depot
+            # The depot, which takes no orders, is idle as it finishes, and its SCV once the build leaves its orders.
+            assert OwnUnitBecameIdleEvent(depot, step=finished.step) in seen
+            _until(game, lambda: any(event.unit is scv for event in _of(seen, OwnUnitBecameIdleEvent)))
             game.order(AbilityId.SUPPLY_DEPOT_LOWER, depot)
             _until(game, lambda: depot.type_id is UnitTypeId.SUPPLY_DEPOT_LOWERED)
-            assert UnitTypeChangedEvent(depot, UnitTypeId.SUPPLY_DEPOT, step=game.step) in seen
+            assert OwnUnitTypeChangedEvent(depot, UnitTypeId.SUPPLY_DEPOT, step=game.step) in seen
 
             # An add-on is a unit of its own, seen as soon as it is started.
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 13), size=5)))
@@ -988,16 +1150,24 @@ class TestAgainstTheRealGame:
             center = _own(game, UnitTypeId.COMMAND_CENTER)
             game.order(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, center)
             _until(game, lambda: center.type_id is UnitTypeId.ORBITAL_COMMAND)
-            assert UnitTypeChangedEvent(center, UnitTypeId.COMMAND_CENTER, step=game.step) in seen
+            assert OwnUnitTypeChangedEvent(center, UnitTypeId.COMMAND_CENTER, step=game.step) in seen
             assert AlertEvent(Alert.UPGRADE_COMPLETE, step=game.step) in seen
 
-            # A research finishes.
+            # A research starts, and one queued behind it, which is cancelled and stops; the first finishes.
             game.debug(game.create(UnitTypeId.ENGINEERING_BAY, game.open_ground(home.towards(middle, 18), size=3)))
             game.turn(4)
-            game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, _own(game, UnitTypeId.ENGINEERING_BAY))
+            researcher = _own(game, UnitTypeId.ENGINEERING_BAY)
+            game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, researcher)
+            game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1, researcher)
+            _until(game, lambda: len(_of(seen, OwnUpgradeStartedEvent)) == 2, steps=1)
+            game.order(AbilityId.CANCEL_LAST, researcher)
             _until(game, lambda: _of(seen, OwnUpgradeFinishedEvent))
+            started = [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStartedEvent)]
+            weapons, armor = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1
+            assert started == [(weapons, researcher), (armor, researcher)]
+            assert [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStoppedEvent)] == [(armor, researcher)]
             (upgrade,) = _of(seen, OwnUpgradeFinishedEvent)
-            assert upgrade.upgrade is UpgradeId.TERRAN_INFANTRY_WEAPONS_1
+            assert upgrade.upgrade is weapons
 
             # A structure cancelled while built is reported dead.
             scv = _own(game, UnitTypeId.SCV)
@@ -1007,7 +1177,7 @@ class TestAgainstTheRealGame:
             bay = _of(seen, OwnConstructionStartedEvent)[-1].unit
             game.order(AbilityId.CANCEL, bay)
             _until(game, lambda: bay.is_dead)
-            assert UnitDiedEvent(bay, step=game.step) in seen
+            assert OwnUnitDiedEvent(bay, step=game.step) in seen
 
             # A MULE is reported dead once it expires.
             field = min(
@@ -1023,7 +1193,7 @@ class TestAgainstTheRealGame:
             _until(game, lambda: game.tracker.unit_tracker.present.own.of_type(UnitTypeId.MULE))
             mule = _own(game, UnitTypeId.MULE)
             _until(game, lambda: mule.is_dead, steps=100, turns=20)
-            assert UnitDiedEvent(mule, step=game.step) in seen
+            assert OwnUnitDiedEvent(mule, step=game.step) in seen
             assert AlertEvent(Alert.MULE_EXPIRED, step=game.step) in seen
 
     def test_cloaking_detection_and_buffs(self) -> None:

@@ -9,7 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NotPlayingError
 from sc2nachos.enemy import Enemy
-from sc2nachos.events import ChatEvent
+from sc2nachos.events import ChatEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -485,7 +485,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         messages = record(game.events, ChatEvent)
         game.turn(1)
         game.turn(1)
-        assert messages == [ChatEvent(game.player, "gl hf", step=messages[0].step)]
+        assert messages == [OwnChatEvent(game.player, "gl hf", step=messages[0].step)]
 
         # A unit that dies is among the dead units in one observation only.
         game.debug(game.kill(zergling))

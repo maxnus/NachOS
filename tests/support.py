@@ -15,27 +15,37 @@ from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
+    EnemyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
+    EnemyUnitDiedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitTypeChangedEvent,
     Event,
     EventFilter,
     OwnActionEvent,
+    OwnChatEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitBecameIdleEvent,
     OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
+    OwnUnitDiedEvent,
     OwnUnitEnergyLostEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitTypeChangedEvent,
     OwnUpgradeFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnWarpInFinishedEvent,
+    OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
     UnitDiedEvent,
     UnitFoundDeadEvent,
@@ -206,15 +216,24 @@ def make_unit(
     )
 
 
+# The player a game `played` builds plays as, and the one observer it has.
+PLAYER_ID = 1
+OBSERVER_ID = 3
+
 # Every event a turn can report, in the order it reports them.
 HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitCreatedEvent,
     EnemyUnitFirstSeenEvent,
+    OwnUnitTypeChangedEvent,
+    EnemyUnitTypeChangedEvent,
     UnitTypeChangedEvent,
     UnitAllianceChangedEvent,
     OwnConstructionStartedEvent,
+    OwnWarpInStartedEvent,
     OwnConstructionFinishedEvent,
     OwnWarpInFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnUpgradeFinishedEvent,
     OwnUnitDamagedEvent,
     EnemyUnitDamagedEvent,
@@ -228,19 +247,31 @@ HAPPENINGS: tuple[type[Event], ...] = (
     EnemyUnitLostBuffEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitLeftSightEvent,
+    OwnUnitBecameIdleEvent,
+    OwnUnitDiedEvent,
+    EnemyUnitDiedEvent,
     UnitDiedEvent,
     UnitFoundDeadEvent,
     OwnActionEvent,
+    OwnChatEvent,
+    EnemyChatEvent,
     ChatEvent,
     AlertEvent,
 )
 
 
 def record(events: _EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
-    """A list that collects every event of `event_types`, or matching the filters, handed out from now on."""
+    """A list that collects every event of `event_types`, or matching the filters, handed out from now on, each once
+    though several of them take it: a type and its base."""
     seen: list[Any] = []
+
+    def keep(event: Event) -> None:
+        # Handlers of one priority, as these all are, are handed an event one after another.
+        if not seen or seen[-1] is not event:
+            seen.append(event)
+
     for event_type in event_types:
-        events.on(event_type)(lambda event: seen.append(event))
+        events.on(event_type)(lambda event: keep(event))
     return seen
 
 
@@ -293,6 +324,8 @@ def played(
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
+            player_id=PLAYER_ID,
+            observer_ids=frozenset({OBSERVER_ID}),
             step=step,
         )
         game._read(observation, step)

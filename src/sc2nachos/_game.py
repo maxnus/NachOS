@@ -17,8 +17,10 @@ from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     ChatEvent,
+    EnemyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
+    EnemyUnitDiedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredAreaEvent,
     EnemyUnitEnteredSightEvent,
@@ -27,24 +29,32 @@ from sc2nachos.events import (
     EnemyUnitLeftAreaEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitTypeChangedEvent,
     EnemyUnitVitalDroppedEvent,
     EnemyUnitVitalReachedEvent,
     Event,
     OwnActionEvent,
+    OwnChatEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitBecameIdleEvent,
     OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
+    OwnUnitDiedEvent,
     OwnUnitEnergyLostEvent,
     OwnUnitEnteredAreaEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLeftAreaEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitTypeChangedEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
     OwnUpgradeFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnWarpInFinishedEvent,
+    OwnWarpInStartedEvent,
     ParameterizedEvent,
     UnitAllianceChangedEvent,
     UnitDiedEvent,
@@ -56,7 +66,7 @@ from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Area
-from sc2nachos.ids import UnitTypeId
+from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
@@ -64,11 +74,15 @@ from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert
 from sc2nachos.state._state import _State
-from sc2nachos.units import Unit, VitalType
+from sc2nachos.units import Alliance, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 
 # Alerts by their protocol value.
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
+# The events of a happening that comes in a kind for each side: this player's, the enemy's, and any other's.
+type _BySide = tuple[type[Event], type[Event], type[Event]]
+_TYPE_CHANGED: Final[_BySide] = (OwnUnitTypeChangedEvent, EnemyUnitTypeChangedEvent, UnitTypeChangedEvent)
+_DIED: Final[_BySide] = (OwnUnitDiedEvent, EnemyUnitDiedEvent, UnitDiedEvent)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -89,6 +103,15 @@ class _Game:
     pathing: Final[Pathing]
     camera: Final[Camera]
     debug: Final[DebugCommands]
+    # This player's id, and the ids of the game's observers, which tell whose a chat message is.
+    player_id: Final[int | None]
+    observer_ids: Final[frozenset[int]]
+    # The ids of this player's units idle as `OwnUnitBecameIdleEvent` counts it, at the tracker's update `idle_update`.
+    idle_unit_ids: frozenset[int] = frozenset()
+    idle_update: int = -1
+    # The upgrades being researched, each with its structure, at the tracker's update `researching_update`.
+    researching: Mapping[UpgradeId, OwnUnit[Any]] = field(default_factory=dict)
+    researching_update: int = -1
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
     # The turn's chat, in the order given, as the actions that send it.
@@ -134,6 +157,8 @@ class _Game:
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=_the_other_player(info, client.player_id), step=step),
+            player_id=client.player_id,
+            observer_ids=_observer_ids(info),
             step=step,
         )
         game._read(observation, step)
@@ -176,19 +201,28 @@ class _Game:
         changes = tracker.last_changes
         happened: list[Event] = []
         hand_on = functools.partial(self._hand_on, subscriptions, happened)
+        hand_on_by_side = functools.partial(self._hand_on_by_side, subscriptions, happened)
         hand_on(OwnUnitCreatedEvent, changes.own_units_created)
         hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen)
-        hand_on(UnitTypeChangedEvent, changes.units_type_changed, tuples=True)
+        hand_on_by_side(_TYPE_CHANGED, changes.units_type_changed, tuples=True)
         hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, tuples=True)
-        if changes.own_units_created and _wants_any(subscriptions, OwnConstructionStartedEvent):
-            started = [unit for unit in changes.own_units_created if not unit.is_complete and self._is_structure(unit)]
-            hand_on(OwnConstructionStartedEvent, started)
+        if changes.own_units_created:
+            if _wants_any(subscriptions, OwnConstructionStartedEvent):
+                built = [u for u in changes.own_units_created if not u.is_complete and self._is_structure(u)]
+                hand_on(OwnConstructionStartedEvent, built)
+            if _wants_any(subscriptions, OwnWarpInStartedEvent):
+                warping = [u for u in changes.own_units_created if not u.is_complete and not self._is_structure(u)]
+                hand_on(OwnWarpInStartedEvent, warping)
         if changes.own_units_finished:
             if _wants_any(subscriptions, OwnConstructionFinishedEvent):
                 hand_on(OwnConstructionFinishedEvent, [u for u in changes.own_units_finished if self._is_structure(u)])
             if _wants_any(subscriptions, OwnWarpInFinishedEvent):
                 warped = [unit for unit in changes.own_units_finished if not self._is_structure(unit)]
                 hand_on(OwnWarpInFinishedEvent, warped)
+        if _wants_any(subscriptions, OwnUpgradeStartedEvent) or _wants_any(subscriptions, OwnUpgradeStoppedEvent):
+            started, stopped = self._researches_started_and_stopped()
+            hand_on(OwnUpgradeStartedEvent, started, tuples=True)
+            hand_on(OwnUpgradeStoppedEvent, stopped, tuples=True)
         hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished)
         compared, watched = self._compare(subscriptions), self._watch(subscriptions)
         own, enemy = changes.own, changes.enemy
@@ -216,15 +250,19 @@ class _Game:
             hand_on(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
             hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
             hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
-        hand_on(UnitDiedEvent, changes.units_died)
+        if _wants_any(subscriptions, OwnUnitBecameIdleEvent):
+            hand_on(OwnUnitBecameIdleEvent, self._units_become_idle())
+        hand_on_by_side(_DIED, changes.units_died)
         hand_on(UnitFoundDeadEvent, changes.units_found_dead)
         add, step = happened.append, self.step
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
                 add(OwnActionEvent(action, step=step))
-        if observation.chat and subscriptions.wants_every(ChatEvent):
+        if observation.chat:
             for message in observation.chat:
-                add(ChatEvent(message.player_id, message.message, step=step))
+                kind = self._chat_kind(message.player_id)
+                if subscriptions.wants_every(kind):
+                    add(kind(message.player_id, message.message, step=step))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
@@ -296,8 +334,7 @@ class _Game:
         selects. A parameterized event is made only for selected keys, even for a handler of one of its bases."""
         if not found:
             return
-        every = subscriptions.wants_every(event_type) and not issubclass(event_type, ParameterizedEvent)
-        keys = _NO_KEYS if every else subscriptions.wanted_keys(event_type)
+        every, keys = _wanted(subscriptions, event_type)
         if not (every or keys):
             return
         add, step, key_of = happened.append, self.step, event_type._key_of
@@ -308,6 +345,68 @@ class _Game:
                     add(make(*item, step=step))
             elif every or key_of(item) in keys:
                 add(make(item, step=step))
+
+    def _hand_on_by_side(
+        self,
+        subscriptions: _EventSubscriptions,
+        happened: list[Event],
+        kinds: _BySide,
+        found: Sequence[Any],
+        *,
+        tuples: bool = False,
+    ) -> None:
+        """Add to `happened`, for each item of `found` a handler wants, the event of `kinds` for the side its unit is
+        on, made as `_hand_on` makes it: this player's, the enemy's, or any other's. The unit is the item, or its first
+        item if `tuples`."""
+        if not found:
+            return
+        wanted = tuple(_wanted(subscriptions, kind) for kind in kinds)
+        if not any(every or keys for every, keys in wanted):
+            return
+        add, step = happened.append, self.step
+        for item in found:
+            made_of = item if tuples else (item,)
+            unit = made_of[0]
+            side = 0 if isinstance(unit, OwnUnit) else 1 if unit.alliance is Alliance.ENEMY else 2
+            kind = kinds[side]
+            every, keys = wanted[side]
+            if every or (keys and kind._key_of(*made_of) in keys):
+                add(cast("Callable[..., Event]", kind)(*made_of, step=step))
+
+    def _units_become_idle(self) -> list[OwnUnit[Any]]:
+        """The units of this player's that are idle now and were not at the update before, by
+        `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
+        when the update before was not looked at."""
+        update = self.tracker.last_changes.update
+        before = self.idle_unit_ids if self.idle_update == update - 1 else frozenset()
+        idle = [
+            unit
+            for unit in self.tracker.unit_tracker.present.own
+            if unit.is_complete and unit.is_idle and not self.orders.issued_to(unit, include_sent=True)
+        ]
+        self.idle_unit_ids, self.idle_update = frozenset(unit.id for unit in idle), update
+        return [unit for unit in idle if unit.id not in before]
+
+    def _researches_started_and_stopped(
+        self,
+    ) -> tuple[list[tuple[UpgradeId, OwnUnit[Any]]], list[tuple[UpgradeId, OwnUnit[Any]]]]:
+        """The researches that show now and did not at the update before, and those that showed then and show nowhere
+        now without having finished, each with its structure, in id order. None stopped, and every one showing started,
+        when the update before was not looked at."""
+        update = self.tracker.last_changes.update
+        before = self.researching if self.researching_update == update - 1 else {}
+        now = self.state.production.researchers
+        self.researching, self.researching_update = dict(now), update
+        finished = set(self.tracker.last_changes.own_upgrades_finished)
+        started = [(upgrade, now[upgrade]) for upgrade in sorted(now.keys() - before.keys())]
+        gone = sorted(before.keys() - now.keys() - finished)
+        return started, [(upgrade, before[upgrade]) for upgrade in gone]
+
+    def _chat_kind(self, player_id: int) -> type[ChatEvent]:
+        """The event a chat message of the player `player_id` comes as."""
+        if self.player_id is None or player_id in self.observer_ids:
+            return ChatEvent
+        return OwnChatEvent if player_id == self.player_id else EnemyChatEvent
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""
@@ -362,6 +461,18 @@ def _step(observation: sc2api_pb2.ResponseObservation) -> int:
 
 
 _NO_KEYS: frozenset[Hashable] = frozenset()
+
+
+def _wanted(subscriptions: _EventSubscriptions, event_type: type[Event]) -> tuple[bool, frozenset[Hashable]]:
+    """Whether a handler in `subscriptions` takes every event of `event_type`, and else the keys handlers select. A
+    parameterized event is never taken whole."""
+    every = subscriptions.wants_every(event_type) and not issubclass(event_type, ParameterizedEvent)
+    return every, _NO_KEYS if every else subscriptions.wanted_keys(event_type)
+
+
+def _observer_ids(info: sc2api_pb2.ResponseGameInfo) -> frozenset[int]:
+    """The ids of the observers of the game `info` describes."""
+    return frozenset(entry.player_id for entry in info.player_info if entry.type == sc2api_pb2.PlayerType.Observer)
 
 
 def _wants_any(subscriptions: _EventSubscriptions, event_type: type[Event]) -> bool:
