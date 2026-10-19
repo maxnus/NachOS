@@ -370,7 +370,8 @@ class Api:
         for this player.
 
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
-        recording. `time_limit`, in game seconds, calls a game that reaches it a tie.
+        recording. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
+        was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
 
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
@@ -415,7 +416,21 @@ class Api:
                 # The game ended while the handlers ran, as a realtime game can. Its last observation says how.
                 game.observe()
             else:
-                # A realtime game runs on its own, so each turn asks for the step it wants.
-                game.observe(game.step + steps_per_turn if realtime else None)
+                if realtime:
+                    # A realtime game runs on its own, so each turn asks for the step it wants.
+                    _observe_realtime(game, game.step + steps_per_turn)
+                else:
+                    game.observe()
             events._set_step(game.step)
         return result
+
+
+def _observe_realtime(game: _Game, step: int) -> None:
+    """Observe a realtime `game` once it reaches `step`. Raises `ValueError` if a game still in progress answers short
+    of it, as a game created stepped does."""
+    game.observe(step)
+    if game.client.in_game and game.step < step:
+        raise ValueError(
+            f"the game answered at step {game.step} when asked for step {step}, as only a stepped game does: "
+            "play it with realtime=False"
+        )

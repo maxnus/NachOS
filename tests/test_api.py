@@ -204,6 +204,13 @@ class TestPlaying:
         assert asked == [0, 4, 8]
         assert not any(request.HasField("step") for request in transport.requests)
 
+    def test_a_stepped_game_played_in_real_time_is_refused_on_its_first_turn(self) -> None:
+        """It never moves: asked for a step it has not reached, a stepped game answers at once, where it stands."""
+        client, transport = _joined(*_game(*[0] * 20, stepped=False))
+        with pytest.raises(ValueError, match="answered at step 0 when asked for step 4"):
+            Api().play(client, steps_per_turn=4, realtime=True)
+        assert sum(request.HasField("observation") for request in transport.requests) == 2
+
     def test_a_bot_that_leaves_sends_its_turn_then_leaves_and_loses(self) -> None:
         client, transport = _joined(
             make_response(game_info=make_game_info()),

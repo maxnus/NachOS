@@ -41,8 +41,8 @@ def run_local(
     """Start a game client, create a match on `map_file` for `bot` against `opponent`, and play it out.
 
     `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
-    `opponent` it plays the map alone. However the game ends, the client is stopped and its temporary directory
-    removed.
+    `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. However the game
+    ends, the client is stopped and its temporary directory removed.
     """
     if isinstance(map_file, str):
         installation = installation or Installation.find()
@@ -73,8 +73,9 @@ def run_ladder(
     """Join the game a ladder has set up, and play it out.
 
     The ladder starts the client, creates the match, and passes the bot the client's address and `start_port` on
-    the command line. A game against the built-in computer has no `start_port`. There is no time limit: a bot can
-    only end a game early by leaving it, which concedes.
+    the command line. A game against the built-in computer has no `start_port`. `realtime` must match the ladder's
+    `--RealTime` flag, as `Api.play` says. There is no time limit: a bot can only end a game early by leaving it,
+    which concedes.
     """
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
