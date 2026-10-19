@@ -10,7 +10,7 @@ import weakref
 from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cached_property
-from typing import assert_type
+from typing import Any, assert_type
 
 import pytest
 from loguru import logger
@@ -204,14 +204,16 @@ class TestSubscribing:
             _EventBus().on(int)  # type: ignore
 
     @pytest.mark.parametrize(
-        ("every_steps", "at_step", "message"),
-        [(0, None, "every_steps is at least 1"), (4, 100, "not both")],
+        ("cadence", "message"),
+        [
+            ({"every_steps": 0}, "every_steps is at least 1"),
+            ({"every_steps": 4, "at_step": 100}, "or at one step, not both"),
+            ({"every_steps": 4, "once": True}, "or once, not both"),
+        ],
     )
-    def test_a_cadence_that_cannot_be_kept_is_refused(
-        self, every_steps: int, at_step: int | None, message: str
-    ) -> None:
+    def test_a_cadence_that_cannot_be_kept_is_refused(self, cadence: dict[str, Any], message: str) -> None:
         with pytest.raises(ValueError, match=message):
-            _EventBus().on(TurnEvent, every_steps=every_steps, at_step=at_step)
+            _EventBus().on(TurnEvent, **cadence)
 
 
 class TestOrder:

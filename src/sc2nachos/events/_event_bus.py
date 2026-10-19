@@ -73,6 +73,8 @@ class _EventBus:
                 raise ValueError(f"every_steps is at least 1, not {every_steps}")
             if at_step is not None:
                 raise ValueError("a handler runs every so many steps or at one step, not both")
+            if once:
+                raise ValueError("a handler runs every so many steps or once, not both")
 
         options = {
             "priority": priority,

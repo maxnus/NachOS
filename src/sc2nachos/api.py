@@ -120,9 +120,9 @@ class Api:
         among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
         before any handler of the next. The handler runs on every event unless held back: `every_steps` waits until
         that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that
-        step, and `once` on the first event. These count only the events selected, and start afresh each game, as does
-        a handler that returned `Done`. An exception it raises ends the game, unless `catch_exceptions`, which logs it
-        and goes on.
+        step, and `once` on the first event; `every_steps` with either of the others raises `ValueError`. These count
+        only the events selected, and start afresh each game, as does a handler that returned `Done`. An exception it
+        raises ends the game, unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
