@@ -2,14 +2,14 @@
 
 from contextlib import closing
 from itertools import count
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 
 from sc2nachos import Api, NotPlayingError
 from sc2nachos.enemy import Enemy
-from sc2nachos.events import ChatEvent
+from sc2nachos.events import AnyChatEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -23,6 +23,7 @@ from sc2nachos.state import (
     CameraMove,
     CategoryScore,
     Effect,
+    Research,
     Supply,
     UiUnitCounts,
     UnitCommand,
@@ -104,8 +105,16 @@ _MAKING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=AbilityId.ZERGLING_MORPH_BANELING),
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
+        data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1),
     ],
-    upgrades=[data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100)],
+    upgrades=[
+        data_pb2.UpgradeData(
+            upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100, research_time=2560.0
+        ),
+        data_pb2.UpgradeData(
+            upgrade_id=UpgradeId.TERRAN_INFANTRY_ARMOR_1, mineral_cost=100, vespene_cost=100, research_time=2560.0
+        ),
+    ],
 )
 
 
@@ -193,11 +202,28 @@ class TestProduction:
         state = _Game(tables=_MAKING_TABLES).observe(units=[enemy])
         assert _made(state, UnitTypeId.ZEALOT) == []
 
-    def test_a_research_reads_its_progress_and_nothing_else_does(self) -> None:
-        research = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
-        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.ENGINEERING_BAY, research)])
-        assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1) == 0.25
-        assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_2) is None
+    def test_each_research_running_or_queued_is_one_by_upgrade_with_its_structure_progress_and_time(self) -> None:
+        weapons = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
+        armor = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1)
+        bays = [_done(1, UnitTypeId.ENGINEERING_BAY, weapons, armor), _done(2, UnitTypeId.ENGINEERING_BAY)]
+        researches = _Game(tables=_MAKING_TABLES).observe(units=bays).production.researches
+        assert [
+            (upgrade, research.unit.tag, research.total_steps, research.steps_left, research.progress)
+            for upgrade, research in researches.items()
+        ] == [
+            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 2560, 1920, 0.25),
+            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 2560, 2560, 0.0),
+        ]
+        assert all(upgrade is research.upgrade for upgrade, research in researches.items())
+        assert UpgradeId.TERRAN_INFANTRY_WEAPONS_2 not in researches
+
+    def test_the_researches_cannot_be_changed_through_what_is_handed_out(self) -> None:
+        weapons = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.ENGINEERING_BAY, weapons)])
+        handed_out = cast("dict[UpgradeId, Research]", state.production.researches)
+        with pytest.raises(TypeError):
+            del handed_out[UpgradeId.TERRAN_INFANTRY_WEAPONS_1]
+        assert UpgradeId.TERRAN_INFANTRY_WEAPONS_1 in state.production.researches
 
 
 class TestScore:
@@ -482,10 +508,10 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         # A message sent to the chat comes back, once.
         chat = sc2api_pb2.ActionChat(channel=sc2api_pb2.ActionChat.Broadcast, message="gl hf")
         client.act([sc2api_pb2.Action(action_chat=chat)])
-        messages = record(game.events, ChatEvent)
+        messages = record(game.events, AnyChatEvent)
         game.turn(1)
         game.turn(1)
-        assert messages == [ChatEvent(game.player, "gl hf", step=messages[0].step)]
+        assert messages == [OwnChatEvent(game.player, "gl hf", step=messages[0].step)]
 
         # A unit that dies is among the dead units in one observation only.
         game.debug(game.kill(zergling))

@@ -54,19 +54,20 @@ difference that rests on what the game does links there for its evidence.
   |---|---|
   | `on_unit_created(unit)` | `OwnUnitCreatedEvent`, structures included |
   | `on_building_construction_started`, `_complete` | `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent` |
-  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, and `UnitFoundDeadEvent` for a structure found gone from its spot |
-  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit |
+  | `on_unit_destroyed(tag)` | `AnyUnitDiedEvent`, with the unit, or one side's `OwnUnitDiedEvent`, `EnemyUnitDiedEvent` or `NeutralUnitDiedEvent`; and `UnitFoundDeadEvent` for a structure found gone from its spot |
+  | `on_unit_type_changed` | `AnyUnitTypeChangedEvent`, for this player's units and the enemy's, or one side's `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
   | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
   | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's units in vision |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
-  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInFinishedEvent` |
+  | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInStartedEvent`, `OwnWarpInFinishedEvent` |
+  | nothing | `OwnUnitBecameIdleEvent`, `OwnUpgradeStartedEvent`, `OwnUpgradeStoppedEvent` |
   | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
   | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
   | nothing | a unit's health, shields or energy reaching a value or dropping below it, and a unit crossing the edge of an area, each through `of` |
-  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `AnyChatEvent`, or `OwnChatEvent` or `OpponentChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
 
 - **A handler selects the events it wants instead of testing each one.** `AlertEvent.only(Alert.X)`,
-  `UnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the
+  `AnyUnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the
   top of a python-sc2 hook. `once` and `every_steps` then count only the selected events, and with `only` NachOS
   does not make the rest. What python-sc2 leaves the bot to compare every step, such as a caster's energy, is an
   event through `of`: `OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)`.
@@ -378,7 +379,7 @@ it.
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
-| `bot.already_pending_upgrade(u)` | `api.research_progress(u)`, `None` when nothing researches it; once done, `u in api.upgrades` |
+| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `steps_left`; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |

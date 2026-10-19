@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #129. `uv run pytest` passes 2184 tests on branch `claude/issue-each-unit`;
-  `uv run pytest -m integration` passes 32 against a real game (run 2026-10-18, on that branch).
+- nachOS `main` has every PR to #130. `uv run pytest` passes 2227 tests on branch `claude/more-events`;
+  `uv run pytest -m integration` passes 32 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -126,6 +126,35 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (review of #127), is a package of its own, which an up-to-date pathing grid and NachOS's own pathfinding may join.
   - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
     `Unit.is_selected` is read, both for a bot's debug tools.
+- **More events before M5** (the owner, 2026-10-18, from the Discussions #62, #65 and #67, one question at a time):
+  - `OwnUnitBecameIdleEvent`: a finished unit of this player's with no orders and none sent that may not show yet,
+    having had orders or such an order, been unfinished, or not been listed in the observation before. Chosen over
+    reported orders alone, which reports a unit just ordered on the ladder, and over a change from busy alone.
+  - `OwnWarpInStartedEvent`, and `OwnUpgradeStartedEvent` and `OwnUpgradeStoppedEvent`, both `(upgrade, unit)`, under
+    a new base `AnyUpgradeEvent` with `OwnUpgradeFinishedEvent`. Started counts a queued research; stopped is a cancel
+    or the structure's death, never a finish (tool `sweep_orders`, `research-ends`).
+  - `OwnChatEvent` and `OpponentChatEvent` (review of #131: "opponent" for the other player, as
+    `opponent_start_locations` has it, "enemy" for units): the opponent is any other player but one the game's info
+    lists as an observer, an ally included in a larger game, since the protocol names no teams.
+  - `OwnUnitDiedEvent` and `EnemyUnitDiedEvent`, `OwnUnitTypeChangedEvent` and `EnemyUnitTypeChangedEvent`, the
+    owner's addition, and `NeutralUnitDiedEvent` for the map's units, whose deaths matter to a bot: a mineral field
+    gone, a rock broken.
+  - Every base is an `Any…` event, which NachOS never hands out itself (review of #131): `AnyUnitEvent`,
+    `AnyBuffEvent`, `AnyVitalEvent`, `AnyAreaEvent`, `AnyUpgradeEvent`, `AnyUnitTypeChangedEvent`, `AnyUnitDiedEvent`
+    and `AnyChatEvent`. Chosen over handing out a base for the units and players neither side's kind takes, since a
+    bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
+  - `api.researches` (reviews of #131): a mapping from each upgrade running or queued to its `Research` record, with
+    `unit`, the table's time as `total_steps`, `steps_left`, and `progress` worked out from the two, chosen over a
+    tuple of records and over a mapping to the structure alone. It replaces `api.research_progress`, which answered
+    one upgrade. The steps are whole (the owner): the tables' research times are, and the game's progress rounds to
+    the steps left exactly (tool `sweep_orders`, `research-ends`).
+  - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
+    existing pairs had it; `unit.first_alliance` says whose it was.
+  - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other
+    events take it by their own rules, as `docs/events.md` says (the owner, 2026-10-19). As a rule, a niche case of
+    one spell gets its behavior documented, never event generation made more complicated for it.
+  - Not done: own and enemy as a selector over one class (Discussion #66), which would lose the `OwnUnit` typing of
+    the own events.
 - **Subscribing is on the api** (#128, the owner, 2026-10-18): `api.on`, `api.subscribe`, `api.unsubscribe`,
   `api.emit` and `api.handler_timings`, over `api.events.on` and the rest, so that marking a method and subscribing its
   instance sit on one object. The bus is private (`_EventBus`), and `api.events` is gone. `api.on` returns an
@@ -155,8 +184,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall.
   - `api.in_production(types)` gives what the game has started or charged for, one `InProduction` per unit with its
     progress, and not the turn's orders, which are in `issued_to`; a count is its `len`. A morph other than a larva's
-    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)` is from 0 to
-    1, or `None`.
+    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)`, from 0 to
+    1 or `None`, gave way to `api.researches` in #131.
   - No `api.enemy.units`: the enemy's units stay `api.units.enemy`.
 - **The expansions** (#122, the owner, 2026-10-08 and review of #122):
   - `api.expansions` is found once at the start, on the api and not the map, so that `GameMap` stays a pure reading of

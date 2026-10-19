@@ -1,5 +1,6 @@
 """The api and the two runners, tested without a game wherever possible."""
 
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 
@@ -8,13 +9,13 @@ from s2clientprotocol import error_pb2, sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
+    AnyUnitDiedEvent,
     Event,
     GameEndEvent,
     GameStartEvent,
     OwnUnitCreatedEvent,
     TurnEvent,
     TurnStartEvent,
-    UnitDiedEvent,
 )
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -29,7 +30,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
-from sc2nachos.state import ActionResult
+from sc2nachos.state import ActionResult, Research
 from sc2nachos.units import Alliance, UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
@@ -315,8 +316,9 @@ class TestPlaying:
         warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
         client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
         api = Api()
-        counted: list[tuple[int, int, int, int, float | None]] = []
+        counted: list[tuple[int, int, int, int]] = []
         zealots: list[tuple[UnitTypeId, int, float | None]] = []
+        researches: list[Mapping[UpgradeId, Research]] = []
 
         @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
@@ -327,15 +329,16 @@ class TestPlaying:
                     len(api.in_production(stalkers)),
                     len(api.in_production(UnitType.Protoss)),
                     len(api.in_production(UnitType.Stalker, UnitType.Adept)),
-                    api.research_progress(UpgradeId.WARP_GATE),
                 )
             )
             zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
+            researches.append(api.researches)
 
         api.play(client)
 
-        assert counted == [(1, 1, 1, 0, None)]
+        assert counted == [(1, 1, 1, 0)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
+        assert researches == [{}]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [
@@ -470,7 +473,7 @@ class TestEvents:
         api = Api()
         seen: list[tuple[str, int]] = []
         _record(api, seen)
-        for kind in (OwnUnitCreatedEvent, UnitDiedEvent):
+        for kind in (OwnUnitCreatedEvent, AnyUnitDiedEvent):
             api.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
 
         def game() -> list[sc2api_pb2.Response]:

@@ -1639,7 +1639,8 @@ class _GroupUnloadingBot:
 class _ProductionBot:
     """A terran bot that raises a barracks and an engineering bay by debug command under cheats for supply and
     resources, gives the barracks a marine and a second queued behind it and the bay infantry weapons 1, and records
-    each turn after what is in production: the marines, the research's progress, and the first marine's."""
+    each turn after what is in production: the marines, the research's progress, and the first marine's, and with
+    the step the steps the research has left."""
 
     race = Race.TERRAN
 
@@ -1649,6 +1650,7 @@ class _ProductionBot:
         self.made = False
         self.ordered = False
         self.reads: list[tuple[int, float | None, float | None]] = []
+        self.steps_left: list[tuple[int, int]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1670,9 +1672,12 @@ class _ProductionBot:
             api.orders.issue(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
             self.ordered = True
         elif self.ordered:
-            progress = api.research_progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+            research = api.researches.get(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+            progress = None if research is None else research.progress
             marines = api.in_production(UnitType.Marine)
             self.reads.append((len(marines), progress, marines[0].progress if marines else None))
+            if research is not None:
+                self.steps_left.append((api.step, research.steps_left))
 
 
 class _GroupTrainingBot:
@@ -1794,6 +1799,9 @@ class TestAgainstTheRealGame:
         progress = [each for _, each, _ in bot.reads if each is not None]
         assert progress == sorted(progress)
         assert 0.0 < progress[-1] < 1.0
+        # Every read of the steps a research has left names one step for it to finish at.
+        assert len(bot.steps_left) > 1
+        assert len({step + left for step, left in bot.steps_left}) == 1
         assert all(marine is not None for count, _, marine in bot.reads if count)
         marine = [each for count, _, each in bot.reads if count == 2 and each is not None]
         assert marine == sorted(marine)

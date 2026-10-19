@@ -116,7 +116,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - The starting townhall is never seen unfinished. An auto-turret has the structure attribute but is first seen
   finished. A queen's creep tumor is first seen at 0%, finishes 240 steps later, then becomes
   `CREEP_TUMOR_BURROWED` (#37).
-- A structure cancelled while going up is reported dead, and so is a MULE when it expires (#37; tested).
+- A structure cancelled while going up is reported dead, and so is a MULE when it expires (#37; tested), and a mineral
+  field killed by debug command (tested; local game, build 75689).
 - A neural parasite keeps the tag and hands the unit to the caster's player within 24 steps, alliance and upgrades
   included (a marine read 55 health), with the `INFESTOR_NEURAL_PARASITE` buff; the unit returns when the infestor
   dies (#25, #34; tested).

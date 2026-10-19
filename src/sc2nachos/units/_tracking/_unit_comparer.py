@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.ids import BuffId
+from sc2nachos.units._tracking._snapshot import _Snapshot
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
@@ -27,19 +28,17 @@ class _UnitComparer:
     """Records, on request, what each of this player's and the enemy's units lost since the tracker's previous
     update, how its cloak changed, and the buffs it gained and lost, into the tracker's last changes."""
 
-    __slots__ = ("_compared", "_compared_update", "_tracker", "_worn", "_worn_update")
+    __slots__ = ("_compared", "_tracker", "_worn")
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
         # The report of each of this player's and the enemy's units in sight, by id, as of the update `compare` last
         # ran on.
-        self._compared: dict[int, raw_pb2.Unit] = {}
-        self._compared_update = 0
+        self._compared: _Snapshot[dict[int, raw_pb2.Unit]] = _Snapshot({})
         # The buffs of each of those units in vision that has any, by id, as of the update `compare` last compared
         # buffs on. Kept separately, and only for units with buffs, since reading a unit's buffs costs some five times
         # what reading another field does.
-        self._worn: dict[int, tuple[int, ...]] = {}
-        self._worn_update = 0
+        self._worn: _Snapshot[dict[int, tuple[int, ...]]] = _Snapshot({})
 
     def compare(
         self, *, damage: bool, energy: bool, cloak: bool, buffs: bool, only_buffs: Collection[int] | None = None
@@ -58,8 +57,8 @@ class _UnitComparer:
         tracker = self._tracker
         changes = tracker.last_changes
         update = changes.update
-        before = self._compared if self._compared_update == update - 1 else None
-        worn_before = self._worn if buffs and self._worn_update == update - 1 else None
+        before = self._compared.at(update - 1, default=None)
+        worn_before = self._worn.at(update - 1, default=None) if buffs else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
         for unit in tracker.unit_tracker.present:
@@ -86,16 +85,14 @@ class _UnitComparer:
                 side.damaged.append((unit, lost))
             if energy and (drained := then.energy - report.energy) > 0.0:
                 side.energy_lost.append((unit, drained))
-        self._compared = compared
-        self._compared_update = update
+        self._compared = _Snapshot(compared, update)
         if buffs:
-            self._worn = worn
-            self._worn_update = update
+            self._worn = _Snapshot(worn, update)
 
     def stop(self) -> None:
         """Drop the reports and buffs kept."""
-        self._compared = {}
-        self._worn = {}
+        self._compared = _Snapshot({})
+        self._worn = _Snapshot({})
 
     def _record_buffs(
         self,

@@ -37,8 +37,9 @@ class UpgradeData:
     """The upgrade described."""
     cost: Cost
     """The cost of researching it."""
-    research_steps: float
-    """Steps it takes to research."""
+    research_steps: int
+    """Steps it takes to research: a whole number for every upgrade in the game's tables, and above 0 for every curated
+    one (corpus)."""
     research_ability: AbilityId | None
     """The ability that researches it."""
     upgrade_type: UpgradeType
@@ -53,7 +54,7 @@ class UpgradeData:
         return cls(
             id=upgrade,
             cost=Cost(data.mineral_cost, data.vespene_cost),
-            research_steps=data.research_time,
+            research_steps=round(data.research_time),
             research_ability=AbilityId.get(data.ability_id) or tech_tree.research_abilities.get(upgrade),
             upgrade_type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree.upgrade_levels.get(upgrade, 0),

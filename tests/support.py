@@ -8,38 +8,46 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos._game import _Game
+from sc2nachos._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
-    ChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
+    EnemyUnitDiedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitTypeChangedEvent,
     Event,
     EventFilter,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
+    OwnChatEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitBecameIdleEvent,
     OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
+    OwnUnitDiedEvent,
     OwnUnitEnergyLostEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitTypeChangedEvent,
     OwnUpgradeFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnWarpInFinishedEvent,
+    OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
@@ -206,15 +214,26 @@ def make_unit(
     )
 
 
+# The player a game `played` builds plays as, and the one observer it has.
+PLAYER_ID = 1
+OBSERVER_ID = 3
+_WITH_AN_OBSERVER = sc2api_pb2.ResponseGameInfo(
+    player_info=[sc2api_pb2.PlayerInfo(player_id=OBSERVER_ID, type=sc2api_pb2.PlayerType.Observer)]
+)
+
 # Every event a turn can report, in the order it reports them.
 HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitCreatedEvent,
     EnemyUnitFirstSeenEvent,
-    UnitTypeChangedEvent,
+    OwnUnitTypeChangedEvent,
+    EnemyUnitTypeChangedEvent,
     UnitAllianceChangedEvent,
     OwnConstructionStartedEvent,
+    OwnWarpInStartedEvent,
     OwnConstructionFinishedEvent,
     OwnWarpInFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnUpgradeFinishedEvent,
     OwnUnitDamagedEvent,
     EnemyUnitDamagedEvent,
@@ -228,19 +247,30 @@ HAPPENINGS: tuple[type[Event], ...] = (
     EnemyUnitLostBuffEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitLeftSightEvent,
-    UnitDiedEvent,
+    OwnUnitBecameIdleEvent,
+    OwnUnitDiedEvent,
+    EnemyUnitDiedEvent,
+    NeutralUnitDiedEvent,
     UnitFoundDeadEvent,
     OwnActionEvent,
-    ChatEvent,
+    OwnChatEvent,
+    OpponentChatEvent,
     AlertEvent,
 )
 
 
 def record(events: _EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
-    """A list that collects every event of `event_types`, or matching the filters, handed out from now on."""
+    """A list that collects every event of `event_types`, or matching the filters, handed out from now on, each once
+    though several of them take it: a kind and its base."""
     seen: list[Any] = []
+
+    def keep(event: Event) -> None:
+        # Handlers of one priority, as these all are, are handed an event one after another.
+        if not seen or seen[-1] is not event:
+            seen.append(event)
+
     for event_type in event_types:
-        events.on(event_type)(lambda event: seen.append(event))
+        events.on(event_type)(lambda event: keep(event))
     return seen
 
 
@@ -264,7 +294,8 @@ def played(
     infer: UpgradeInference = UpgradeInference.NONE,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
-    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
+    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
+    `PLAYER_ID` with `OBSERVER_ID` watching."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
@@ -293,6 +324,7 @@ def played(
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
+            _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
         )
         game._read(observation, step)

@@ -355,7 +355,7 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
         assert row.cost == Cost(minerals=100, vespene=100)
-        assert row.research_steps == 2240.0
+        assert row.research_steps == 2240 and isinstance(row.research_steps, int)
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
@@ -760,6 +760,9 @@ class TestARecordedGamesTables:
             AbilityId.UNSIEGE,
         ):
             assert data.abilities[ability].multi_unit, ability.name
+
+    def test_every_research_time_is_a_whole_number_of_steps(self, path: Path) -> None:
+        assert all(upgrade.research_time == round(upgrade.research_time) for upgrade in _answer(path).upgrades)
 
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)

@@ -235,6 +235,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46 steps); without it, it answers attack, move,
   patrol and hold position `Error`, as a burrowed zergling and swarm host do. The `tech_tree` cheat grants Tunneling
   Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`, `structure-orders` and `burrowed-movers`).
+- A supply depot holds no order, lowering included: one reported idle as it finished was not reported idle again once
+  told to lower and lowered (tested; local game, build 75689).
 - A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
   enemy switch to a second when given an attack or a smart at it. Given a stop, each shows the same attack again by
   the next observation and fires on, so whether stop took it off and it took the target up again on its own cannot
@@ -375,6 +377,16 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   killed: the next observation still lists it with all three orders, the one after does not list it at all, and
   neither carries an action or an action error for it. An SCV killed on its way to build is the same. So what a dead
   unit was making is known only from the unit being gone, never from a report (tool `sweep_orders`).
+- A research's order leaves its structure in the step its upgrade is first listed, so no observation shows neither:
+  infantry weapons 1, ordered at step 218, was last shown at 2777 and listed from 2778, the 2560 steps its row in the
+  game's tables gives as its research time, and Hi-Sec Auto Tracking, ordered at 2800, was listed from 4080, its
+  row's 1280. The order's progress is the steps done over that time, sent as a 32-bit float: `(1 - progress)` times
+  the time came within 0.00006 of the steps left at each of the 2559 and the 1279 steps the two showed, so rounding it
+  gives the steps left exactly, where flooring or ceiling it misses some 40% of steps. Infantry armor 1 cancelled 64
+  steps in with `CANCEL_LAST` was gone by the next step and gave back 100/100; with its engineering bay killed by
+  debug command 64 steps in, the bay was gone within 3 steps and 100/100 came back within 18. Neither listed the
+  upgrade (tool
+  `sweep_orders`, `research-ends`, twice, the progress in two more runs; local game, build 75689).
 
 ## Actions the game reports
 

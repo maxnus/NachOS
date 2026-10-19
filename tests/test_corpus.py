@@ -13,6 +13,7 @@ from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
+    AnyUnitDiedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredAreaEvent,
@@ -30,7 +31,6 @@ from sc2nachos.events import (
     OwnUnitLeftAreaEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
@@ -160,7 +160,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
     assert sorted(unit.id for unit in created) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 1]
     assert sorted(unit.id for unit in first_seen) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 4]
-    assert all(event.unit.is_dead for event in seen if isinstance(event, UnitDiedEvent | UnitFoundDeadEvent))
+    assert all(event.unit.is_dead for event in seen if isinstance(event, AnyUnitDiedEvent | UnitFoundDeadEvent))
     in_sight: dict[int, bool] = {}
     for event in seen:
         if isinstance(event, EnemyUnitEnteredSightEvent | EnemyUnitLeftSightEvent):
