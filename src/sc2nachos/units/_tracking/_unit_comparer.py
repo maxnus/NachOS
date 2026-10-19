@@ -57,8 +57,8 @@ class _UnitComparer:
         tracker = self._tracker
         changes = tracker.last_changes
         update = changes.update
-        before = self._compared.at(update - 1, otherwise=None)
-        worn_before = self._worn.at(update - 1, otherwise=None) if buffs else None
+        before = self._compared.at(update - 1, default=None)
+        worn_before = self._worn.at(update - 1, default=None) if buffs else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
         for unit in tracker.unit_tracker.present:

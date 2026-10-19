@@ -19,13 +19,13 @@ class Research:
     """What is being researched."""
     unit: OwnUnit[Any]
     """The structure researching it."""
-    progress: float
-    """How far along it is, from 0 to 1: 0 for one queued behind another."""
-    research_steps: int
+    total_steps: int
     """Steps the whole research takes, as the game's tables give it (in game)."""
+    steps_left: int
+    """Steps until it finishes, exactly at the normal rate (in game): a chrono boost makes it sooner, and one queued
+    behind another has all its steps left and waits for the one ahead first."""
 
     @property
-    def steps_left(self) -> int:
-        """Steps until it finishes, exactly at the normal rate (in game): a chrono boost makes it sooner, and one queued
-        waits for the one ahead first."""
-        return round((1 - self.progress) * self.research_steps)
+    def progress(self) -> float:
+        """How far along it is, from 0 to 1: 0 for one queued behind another."""
+        return (self.total_steps - self.steps_left) / self.total_steps

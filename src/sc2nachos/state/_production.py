@@ -57,8 +57,10 @@ class _Production:
                 continue
             product = _ability_product(row, unit.type_id)
             if isinstance(product, UpgradeId):
-                steps = game_data.upgrades[product].research_steps
-                self._researches.setdefault(product, Research(product, unit, order.progress, steps))
+                if product not in self._researches:
+                    total = game_data.upgrades[product].research_steps
+                    # The game's progress is the steps done over the total, as a 32-bit float (in game).
+                    self._researches[product] = Research(product, unit, total, round((1 - order.progress) * total))
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
 

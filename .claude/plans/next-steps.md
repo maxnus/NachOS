@@ -144,10 +144,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     and `AnyChatEvent`. Chosen over handing out a base for the units and players neither side's kind takes, since a
     bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
   - `api.researches` (reviews of #131): a mapping from each upgrade running or queued to its `Research` record, with
-    `unit`, `progress`, the table's `research_steps` and `steps_left`, chosen over a tuple of records and over a
-    mapping to the structure alone. It replaces `api.research_progress`, which answered one upgrade. Both counts are
-    whole steps (the owner): the tables' research times are whole, and the progress rounds to the steps left exactly
-    (tool `sweep_orders`, `research-ends`).
+    `unit`, the table's time as `total_steps`, `steps_left`, and `progress` worked out from the two, chosen over a
+    tuple of records and over a mapping to the structure alone. It replaces `api.research_progress`, which answered
+    one upgrade. The steps are whole (the owner): the tables' research times are, and the game's progress rounds to
+    the steps left exactly (tool `sweep_orders`, `research-ends`).
   - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
     existing pairs had it; `unit.first_alliance` says whose it was.
   - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other

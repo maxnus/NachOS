@@ -207,11 +207,11 @@ class TestProduction:
         bays = [_done(1, UnitTypeId.ENGINEERING_BAY, weapons, armor), _done(2, UnitTypeId.ENGINEERING_BAY)]
         researches = _Game(tables=_MAKING_TABLES).observe(units=bays).production.researches
         assert [
-            (upgrade, research.unit.tag, research.progress, research.steps_left)
+            (upgrade, research.unit.tag, research.total_steps, research.steps_left, research.progress)
             for upgrade, research in researches.items()
         ] == [
-            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 0.25, 1920),
-            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 0.0, 2560),
+            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 2560, 1920, 0.25),
+            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 2560, 2560, 0.0),
         ]
         assert all(upgrade is research.upgrade for upgrade, research in researches.items())
         assert UpgradeId.TERRAN_INFANTRY_WEAPONS_2 not in researches

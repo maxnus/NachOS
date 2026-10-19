@@ -409,7 +409,7 @@ class _Game:
         `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
         when the update before was not looked at. Keeps the idle units for the next update: call it once an update."""
         update = self.tracker.last_changes.update
-        before = self._idle_unit_ids.at(update - 1, otherwise=frozenset())
+        before = self._idle_unit_ids.at(update - 1, default=frozenset())
         idle = [
             unit
             for unit in self.tracker.unit_tracker.present.own
@@ -425,7 +425,7 @@ class _Game:
         now without having finished, each with its structure, in id order. None stopped, and every one showing started,
         when the update before was not looked at. Keeps the researches for the next update: call it once an update."""
         update = self.tracker.last_changes.update
-        before = self._researching.at(update - 1, otherwise={})
+        before = self._researching.at(update - 1, default={})
         now = self.state.production.researches
         self._researching = _Snapshot(now, update)
         finished = set(self.tracker.last_changes.own_upgrades_finished)

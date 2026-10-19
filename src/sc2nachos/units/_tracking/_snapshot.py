@@ -16,6 +16,6 @@ class _Snapshot[T]:
     update: int = -1
     """The number of the tracker update it was taken at."""
 
-    def at[D](self, update: int, *, otherwise: D) -> T | D:
-        """The value if it was taken at `update`, else `otherwise`."""
-        return self.value if self.update == update else otherwise
+    def at[D](self, update: int, *, default: D) -> T | D:
+        """The value if it was taken at `update`, else `default`."""
+        return self.value if self.update == update else default
