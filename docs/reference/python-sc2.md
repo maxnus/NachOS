@@ -247,6 +247,9 @@ it.
   `positions - numpy.asarray(point)`.
 - **Methods that take a point take only a point.** python-sc2's also accept anything with a `.position`. In
   NachOS, pass the position itself.
+- **A tile is no tuple.** python-sc2 names a grid cell by a `Point2` of its lower left corner, which unpacks and
+  indexes; a `Tile` reads `tile.x` and `tile.y`, never equals a point, and is no array index. Hand python-sc2 or
+  numpy `(tile.x, tile.y)`.
 - **Grids are indexed `[x, y]`.** python-sc2's `PixelMap.data_numpy` is indexed `[y, x]`. `grid[point]` reads the
   tile any point falls in, where a `PixelMap` needs whole-number coordinates. Reading past the edge raises
   `IndexError`, or returns the grid's `outside` value if it has one, instead of failing an assert.

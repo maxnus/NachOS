@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast, final
 import numpy
 import scipy.ndimage
 
-from sc2nachos.geometry import Tile, TileSet
+from sc2nachos.geometry import TileSet
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -63,17 +63,11 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
         if high - low >= _HALF_A_LEVEL:
             ramps.append(
                 Ramp(
-                    tiles=TileSet(_tiles(patch, origin)),
+                    tiles=TileSet._from_mask(origin, patch),
                     # A ramp climbs at least half a level, more than the two bytes its ends reach into it, so top
                     # and bottom cannot overlap.
-                    top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
-                    bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
+                    top=TileSet._from_mask(origin, patch & (heights >= high - _A_BYTE)),
+                    bottom=TileSet._from_mask(origin, patch & (heights <= low + _A_BYTE)),
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))
-
-
-def _tiles(mask: ndarray, origin: Tile) -> list[Tile]:
-    """The tiles where `mask` is true, addressed from the grid's `origin`."""
-    xs, ys = numpy.nonzero(mask)
-    return [Tile(origin[0] + x, origin[1] + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast, final
 import numpy
 
 from sc2nachos._checks import is_whole_number
-from sc2nachos.geometry._point import Point, coordinates
+from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 from sc2nachos.util._math import _rounded_half_up
 
@@ -102,18 +102,18 @@ class Footprint:
 
     def _lower_left_tile(self, *, at: PointLike) -> tuple[int, int]:
         """The lower left tile of `mask`, with the footprint placed at `at` and centered as the game snaps it."""
-        x, y = coordinates(at)[:2]
+        x, y = at[0], at[1]
         return _rounded_half_up(x - self.width / 2), _rounded_half_up(y - self.height / 2)
 
     def tiles(self, *, at: PointLike) -> TileSet:
         """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""
         left, bottom = self._lower_left_tile(at=at)
-        return TileSet(Tile(left + int(x), bottom + int(y)) for x, y in zip(*numpy.nonzero(self._mask), strict=True))
+        return TileSet._from_mask(Tile(left, bottom), self._mask)
 
     def center_in_tile(self, tile: Tile) -> Point:
         """Where the footprint is centered when its center lies in `tile`: the tile's center along a side of odd
         length, and its lower left corner along a side of even length."""
-        return Point((tile[0] + 0.5 * (self.width % 2), tile[1] + 0.5 * (self.height % 2)))
+        return Point((tile.x + 0.5 * (self.width % 2), tile.y + 0.5 * (self.height % 2)))
 
     def _grown(self, sides: tuple[int, int, int, int]) -> Footprint:
         """This footprint and every tile within `sides` of a tile it covers: so many to the left and right of one, and

@@ -12,7 +12,7 @@ from sc2nachos.enemy import Enemy
 from sc2nachos.events import AnyChatEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawEffectId, RawUpgradeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
@@ -328,7 +328,7 @@ class TestTheMapAsItStands:
         visibility = make_bytes([0, 0, 0, 0], [0, 2, 1, 0], [0, 1, 0, 0], [0, 0, 2, 0])
         state = _Game(self._GAME_INFO).observe(visibility=visibility)
         for grid in (state.vision, state.explored):
-            assert (grid.origin, grid.width, grid.height) == ((1, 1), 2, 3)
+            assert (grid.origin, grid.width, grid.height) == (Tile(1, 1), 2, 3)
             assert grid.readonly
             assert grid[Point((0.5, 0.5))] is False
         # A row for each y from the bottom of the playable area up.

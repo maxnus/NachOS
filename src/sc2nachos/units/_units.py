@@ -7,7 +7,6 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
 from sc2nachos.geometry import Area, Point
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
@@ -377,5 +376,4 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
 
 def _ground(point: PointLike) -> tuple[float, float]:
     """The ground-plane coordinates of `point`."""
-    position = coordinates(point)
-    return position[0], position[1]
+    return point[0], point[1]

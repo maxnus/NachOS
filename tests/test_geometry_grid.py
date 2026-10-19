@@ -214,6 +214,11 @@ class TestArrayIndices:
         assert grid.index_of(Point((5.7, 7.3))) == (1, 1)
         assert grid.values[grid.index_of(Point((5.7, 7.3)))] == grid[Point((5.7, 7.3))]
 
+    def test_tile_at_refuses_an_index_that_is_not_whole(self) -> None:
+        """It floored one while it shifted the origin by `Tile.translated`."""
+        with pytest.raises(TypeError):
+            playable_grid().tile_at((1.5, 2))  # pyright: ignore[reportArgumentType]
+
     def test_tile_at_inverts_index_of(self) -> None:
         grid = playable_grid()
         for point in (Point((4.0, 6.0)), Point((5.7, 7.3)), Point((13.9, 13.9))):

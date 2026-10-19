@@ -12,7 +12,6 @@ from sc2nachos.debug._cheat import Cheat
 from sc2nachos.debug._color import Color, _Rgb, _rgb_of
 from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
 from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _check_text, _ScreenText
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
 
@@ -182,10 +181,9 @@ class DebugCommands:
         """Where to draw at `at`: a unit itself, or a point fixed now, on the ground unless it has a height."""
         if isinstance(at, Unit):
             return at
-        point = coordinates(at)
-        if len(point) == 3:
-            return (float(point[0]), float(point[1]), float(point[2]))
-        return (float(point[0]), float(point[1]), self._game_map.height_at(point))
+        if len(at) == 3:
+            return (float(at[0]), float(at[1]), float(at[2]))
+        return (float(at[0]), float(at[1]), self._game_map.height_at(at))
 
     def _until(self, steps: int | None) -> int | None:
         """The step a drawing made now that lasts `steps` ends at, or `None` if it lasts until removed."""
@@ -246,11 +244,10 @@ class DebugCommands:
         """
         if not is_whole_number(count) or count < 1:
             raise ValueError(f"units are created a whole number at a time, at least 1, not {count!r}")
-        point = coordinates(at)
         create = debug_pb2.DebugCreateUnit(
             unit_type=unit_type,
             owner=self._player(owner),
-            pos=common_pb2.Point2D(x=point[0], y=point[1]),
+            pos=common_pb2.Point2D(x=at[0], y=at[1]),
             quantity=count,
         )
         self._commands.append(debug_pb2.DebugCommand(create_unit=create))

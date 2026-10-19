@@ -40,7 +40,7 @@ class Area(ABC):
         generator, which the whole process shares."""
 
     @abstractmethod
-    def __contains__(self, point: PointLike) -> bool:
+    def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether `point` lies inside, a `Tile` read as its center. Raises `TypeError` on anything but a point or a
         tile."""
 
