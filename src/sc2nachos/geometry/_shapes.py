@@ -13,7 +13,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, _PointND, checked_ground_offset, coordinates
+from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -117,8 +117,8 @@ class Tile(Area):
 def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
     """The x and y of the tile `point` falls in, or of the tile itself. Raises `TypeError` on anything but a point or a
     tile."""
-    # Points first, as `coordinates` has them: this runs for every lookup of a tile set.
-    if isinstance(point, _PointND) or type(point) is tuple:
+    # Points first, as `coordinates` has them: this runs for every lookup of a tile set and a grid.
+    if isinstance(point, tuple):
         return math.floor(point[0]), math.floor(point[1])
     if type(point) is Tile:
         return point.x, point.y
@@ -128,8 +128,8 @@ def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
 
 def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
     """`value` checked as `coordinates` checks it, or a `Tile` read as its center: what `in` takes on every area."""
-    # The point cases first, as `coordinates` has them, so a point pays nothing for the tile check.
-    if isinstance(value, _PointND) or type(value) is tuple:
+    # Points first, as `coordinates` has them, so a point pays nothing for the tile check.
+    if isinstance(value, tuple):
         return value
     if type(value) is Tile:
         return value.center
