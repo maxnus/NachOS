@@ -402,6 +402,32 @@ class TestDerivedGrids:
         assert distances[Tile(1, 1)] == pytest.approx(1.0)
         assert distances[Tile(0, 0)] == 0.0
 
+    def test_distance_transform_counts_the_ground_past_a_false_edge_as_false(self) -> None:
+        """The map's pathing grid reads false past its edge, so a tile on the edge is 1 from the nearest false tile."""
+        pathable = Grid(numpy.ones((5, 3), dtype=bool), origin=Tile(2, 4), outside=False)
+        pathable[Tile(6, 5)] = False
+        distances = pathable.distance_transform()
+        assert distances.values.tolist() == [
+            [1.0, 1.0, 1.0],
+            [1.0, 2.0, 1.0],
+            [1.0, 2.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ]
+        assert distances.origin == Tile(2, 4)
+
+    @pytest.mark.parametrize("outside", [None, True])
+    def test_distance_transform_ignores_an_edge_that_is_not_false(self, outside: bool | None) -> None:
+        pathable = Grid(numpy.ones((5, 1), dtype=bool), outside=outside)
+        pathable[Tile(4, 0)] = False
+        assert pathable.distance_transform().values[:, 0].tolist() == [4.0, 3.0, 2.0, 1.0, 0.0]
+
+    @pytest.mark.parametrize("outside", [None, True])
+    def test_distance_transform_with_no_false_tile_is_inf(self, outside: bool | None) -> None:
+        """scipy alone gives an all-true 1x7 grid the distances 1 to 7."""
+        pathable = Grid(numpy.ones((1, 7), dtype=bool), outside=outside)
+        assert pathable.distance_transform().values.tolist() == [[math.inf] * 7]
+
     def test_a_path_distance_goes_around_what_is_false(self) -> None:
         """A wall at x = 12 from y = 20 to 23 leaves one way round, over the top row: up 3 and a diagonal to (11, 24),
         2 across, and a diagonal and 3 down to (14, 20)."""

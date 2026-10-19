@@ -364,9 +364,17 @@ class Grid[T: float]:
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:
-        """For each true tile, the distance to the nearest false one; zero on a false tile."""
-        distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
-        return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
+        """For each true tile, the distance from its center to the nearest false tile's; zero on a false tile. Where
+        this grid reads false beyond its edge, the tiles beyond it count as false; where no false tile is found, every
+        distance is `inf`."""
+        if self._outside is not None and not self._outside:
+            padded = numpy.pad(self._data, 1, constant_values=False)
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(padded, return_indices=False))[1:-1, 1:-1]
+        elif self._data.all():
+            distances = numpy.full(self._data.shape, math.inf)
+        else:
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(self._data, return_indices=False))
+        return Grid(distances, origin=self._origin, outside=outside)
 
     def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
