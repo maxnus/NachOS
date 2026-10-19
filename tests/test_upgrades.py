@@ -430,6 +430,21 @@ class TestWhatAUnitReads:
         )
         assert ultralisk.armor == base + 5
 
+    def test_a_visible_unit_reads_the_armor_it_reports_alone(self, tables: GameData) -> None:
+        """Though its owner is known to have more."""
+        tracker = _tracker(tables)
+        tracker.enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
+        assert marine.armor == tables.units[UnitTypeId.MARINE].armor
+
+    def test_a_unit_out_of_sight_reads_the_more_of_its_last_report_and_its_owners(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        tracker.enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
+        tracker.update(make_observation(16, units=[]).observation.raw_data, 16)
+        assert marine.is_stale
+        assert marine.armor == tables.units[UnitTypeId.MARINE].armor + 1
+
     def test_a_unit_never_shown_in_sight_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         tracker.enemy.assume_upgrades(UpgradeId.BUILDING_ARMOR)
@@ -443,6 +458,8 @@ class TestWhatAUnitReads:
         assert tracker.enemy.upgrades == {UpgradeId.PROTOSS_SHIELDS_1, UpgradeId.PROTOSS_SHIELDS_2}
         never_seen = make_unit(2, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
         assert _observe(tracker, never_seen)[0].shield_armor == 2
+        visible = make_unit(3, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=0)
+        assert _observe(tracker, visible)[0].shield_armor == 0
 
     def test_a_unit_without_shields_has_no_shield_armor(self, tables: GameData) -> None:
         tracker = _tracker(tables)

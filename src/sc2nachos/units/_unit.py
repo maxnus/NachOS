@@ -569,13 +569,15 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def armor(self) -> float:
-        """The unit's base armor plus the armor its upgrades add: as the unit reports it when in sight, and as its
-        owner is known to have when out of sight."""
+        """The unit's base armor plus the armor its upgrades add: as the unit reports it when visible in the last
+        observation, and otherwise the more of what it last reported visible and what its owner is known to have."""
         return self._tracker.upgrade_tracker.armor_of(self)
 
     @property
     def shield_armor(self) -> float:
-        """The armor of the unit's shields: the shield upgrade levels its owner has, and 0 for a unit without shields.
+        """The armor of the unit's shields: its shield upgrade level as it reports it when visible in the last
+        observation, and otherwise the more of what it last reported visible and the levels its owner is known to have;
+        0 for a unit without shields.
 
         The game's tables do not hold this. `docs/reference/game-behavior/damage-and-buffs.md` has what a level was
         measured to take off a hit.
