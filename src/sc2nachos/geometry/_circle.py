@@ -64,11 +64,12 @@ class Circle(Area):
         """The circle shifted by `offset`, keeping its radius. Raises `ValueError` for an offset with a height."""
         return Circle(self._center + checked_ground_offset(offset), self._radius)
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the circle."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the circle, by `rng` or the `random` module's own generator."""
+        draw = random.random if rng is None else rng.random
         # sqrt, because a uniform radius would crowd the points toward the center.
-        distance = self._radius * math.sqrt(random.random())
-        angle = random.uniform(0, 2 * math.pi)
+        distance = self._radius * math.sqrt(draw())
+        angle = 2 * math.pi * draw()
         return Point(
             (
                 self._center[0] + distance * math.cos(angle),

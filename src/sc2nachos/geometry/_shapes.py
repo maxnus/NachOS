@@ -69,9 +69,10 @@ class Tile(tuple[int, int], Area):
         """The ground covered: one square game unit."""
         return 1.0
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the tile."""
-        return Point((self[0] + random.random(), self[1] + random.random()))
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the tile, by `rng` or the `random` module's own generator."""
+        draw = random.random if rng is None else rng.random
+        return Point((self[0] + draw(), self[1] + draw()))
 
     @property
     def neighbors4(self) -> tuple[Tile, Tile, Tile, Tile]:
@@ -293,10 +294,11 @@ class Rectangle(Area):
             return None
         return Rectangle(left, bottom, right - left, top - bottom)
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the rectangle."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the rectangle, by `rng` or the `random` module's own generator."""
         self._refuse_if_empty("points to draw from")
-        return Point((self.left + random.uniform(0, self.width), self.bottom + random.uniform(0, self.height)))
+        uniform = random.uniform if rng is None else rng.uniform
+        return Point((self.left + uniform(0, self.width), self.bottom + uniform(0, self.height)))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the rectangle nearest to `point`, and the distance to it."""
@@ -413,11 +415,12 @@ class TileSet(Area):
         candidates = tree.query_ball_point(position, farthest_center_that_can_be_nearer, return_sorted=True)
         return min((tiles[index].closest_point_to(position) for index in candidates), key=operator.itemgetter(1))
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the covered ground."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the covered ground, by `rng` or the `random` module's own generator."""
         if not self._tiles:
             raise ValueError("an empty tile set has no points to draw from")
-        return random.choice(self._ordered).random_point()
+        choice = random.choice if rng is None else rng.choice
+        return choice(self._ordered).random_point(rng=rng)
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing every covered tile."""

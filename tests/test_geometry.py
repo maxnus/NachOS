@@ -1,6 +1,7 @@
 """Geometry primitives."""
 
 import math
+import random
 from collections.abc import Callable
 
 import numpy
@@ -688,6 +689,16 @@ class TestAreaAgreement:
             area.translated(Tile(1, 1))
         with pytest.raises(ValueError, match=r"drop a height with \.ground"):
             area.translated(Point3D((1, 2, 3)))
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_every_shape_draws_its_random_point_by_the_generator_given(self, area: Area) -> None:
+        """Every draw came from the `random` module's own generator, so two apis in one process shared one."""
+        random.seed(5)
+        untouched = random.getstate()
+        first = [area.random_point(rng=random.Random(3)) for _ in range(3)]
+        assert [area.random_point(rng=random.Random(3)) for _ in range(3)] == first
+        assert random.getstate() == untouched
+        assert all(point in area for point in first)
 
     def test_random_point_spreads_over_the_ground(self) -> None:
         """A tile set once answered with tile centers, so this one-tile area returned one point forever."""
