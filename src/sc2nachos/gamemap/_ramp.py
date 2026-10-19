@@ -64,7 +64,8 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
             ramps.append(
                 Ramp(
                     tiles=TileSet(_tiles(patch, origin)),
-                    # A ramp climbs a whole level and each end reaches a byte into it, so top and bottom cannot overlap.
+                    # A ramp climbs at least half a level, more than the two bytes its ends reach into it, so top
+                    # and bottom cannot overlap.
                     top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
                     bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
                 )

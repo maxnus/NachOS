@@ -568,7 +568,7 @@ class Grid[T: float]:
         return self._combine(other, numpy.greater_equal)
 
     def __bool__(self) -> bool:
-        """Refused: `grid == other` compares per tile, so `if grid == other` would always be true."""
+        """Raises `TypeError`: a grid has no truth value. `any` and `all` say whether any tile is true, or every one."""
         raise TypeError("a grid has no truth value; use .any() or .all()")
 
     def any(self) -> bool:

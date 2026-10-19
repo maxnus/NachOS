@@ -33,11 +33,7 @@ SCALAR_TYPES = (int, float, numbers.Real)
 
 
 def coordinates(value: PointLike) -> PointLike:
-    """`value` itself, checked to be coordinates. Raises `TypeError` otherwise, which catches a caller that is not
-    type-checked.
-
-    A `Tile` is rejected although it is a coordinate pair: it is an address, not the point it stands for.
-    """
+    """`value` itself, checked to be coordinates. Raises `TypeError` for anything else, a `Tile` among them."""
     # Points first: the common case, and a concrete class is far quicker to test than an ABC.
     if isinstance(value, _PointND) or type(value) is tuple:
         return value
@@ -98,7 +94,8 @@ class _PointND(tuple[float, ...]):
 
     @property
     def normalized(self) -> Self:
-        """The point scaled to unit length on the ground plane."""
+        """The point scaled to unit length on the ground plane. Raises `ZeroDivisionError` for a point of no length
+        there."""
         length = self.length
         if not length:
             raise ZeroDivisionError("cannot normalize a zero-length point")
@@ -136,7 +133,8 @@ class _PointND(tuple[float, ...]):
         return type(self)(value + fraction * (target - value) for value, target in zip(self, position, strict=True))
 
     def direction_vector(self, other: PointLike) -> Point:
-        """The unit vector on the ground plane pointing from this point to another."""
+        """The unit vector on the ground plane pointing from this point to another. Raises `ZeroDivisionError` where
+        the two meet on the ground plane."""
         position = coordinates(other)
         return Point((position[0] - self[0], position[1] - self[1])).normalized
 
