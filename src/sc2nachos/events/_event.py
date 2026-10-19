@@ -123,7 +123,9 @@ class EnemyUnitTypeChangedEvent(UnitTypeChangedEvent):
 
 
 class UnitAllianceChangedEvent(UnitEvent):
-    """A unit has changed sides to or from this player's: a neural parasite took it over or let it go."""
+    """A unit has changed sides to or from this player's: a neural parasite took it over or let it go. To the vital and
+    area events of the side it left, it is a unit gone from the observation, and to those of the side it joined, one
+    first seen. It neither enters nor leaves sight."""
 
     previous_alliance: Alliance
     """The side it was on."""
@@ -371,7 +373,8 @@ class EnemyUnitEnteredSightEvent(UnitEvent):
 
 
 class EnemyUnitLeftSightEvent(UnitEvent):
-    """A unit of the enemy's that was in sight in the observation before is not now, and is not dead."""
+    """A unit of the enemy's that was in sight in the observation before is not now, and is not dead. A unit of this
+    player's the enemy took over in sight gets it with no `EnemyUnitEnteredSightEvent` before."""
 
 
 class AreaEvent(ParameterizedEvent):
@@ -424,9 +427,10 @@ class EnemyUnitLeftAreaEvent(AreaEvent):
 
 class OwnUnitBecameIdleEvent(UnitEvent):
     """A finished unit of this player's has no orders, and none NachOS sent it that the observations may not show yet,
-    having had orders or such an order in the observation before, been unfinished, or not been listed: a unit trained
-    with no rally, a structure just finished, a worker whose mineral field ran out, a unit whose order the game dropped.
-    One that never takes orders, a larva or a depot, gets it once."""
+    having had orders or such an order in the observation before, been unfinished or another side's, or not been
+    listed: a unit trained with no rally, a structure just finished, a worker whose mineral field ran out, a unit whose
+    order the game dropped, a unit a neural parasite just took over. One that never takes orders, a larva or a depot,
+    gets it once."""
 
     unit: OwnUnit[Any]
 

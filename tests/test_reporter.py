@@ -944,6 +944,40 @@ class TestSides:
         assert [type(event) for event in seen] == [OwnUnitDiedEvent]
         assert held is not None and held.first_alliance is _ENEMY
 
+    def test_a_unit_taken_over_in_sight_neither_leaves_nor_enters_it(self) -> None:
+        game = _Game()
+        seen = record(game.events, EnemyUnitEnteredSightEvent, EnemyUnitLeftSightEvent)
+        game.observe(0, make_unit(6, alliance=_ENEMY), make_unit(1))
+        game.observe(16, make_unit(6, alliance=Alliance.OWN), make_unit(1, alliance=_ENEMY))
+        game.observe(32, make_unit(6, alliance=_ENEMY))
+        assert [(type(event), event.step, event.unit.tag) for event in seen] == [
+            (EnemyUnitEnteredSightEvent, 0, 6),
+            (EnemyUnitLeftSightEvent, 32, 1),
+        ]
+
+    def test_to_the_area_watches_a_unit_taken_over_left_one_sides_observation_and_is_first_seen_by_the_other(
+        self,
+    ) -> None:
+        game = _Game()
+        kinds = (EnemyUnitEnteredAreaEvent, EnemyUnitLeftAreaEvent, OwnUnitEnteredAreaEvent, OwnUnitLeftAreaEvent)
+        seen = record(game.events, *(kind.of(_AREA) for kind in kinds))
+        own = Alliance.OWN
+        held = ((_ENEMY, _INSIDE), (_ENEMY, _INSIDE), (own, _INSIDE), (own, _OUTSIDE), (_ENEMY, _OUTSIDE))
+        for step, (alliance, at) in enumerate(held):
+            game.observe(step * 16, make_unit(6, alliance=alliance, at=at))
+        assert [(type(event), event.step) for event in seen] == [
+            (OwnUnitEnteredAreaEvent, 32),
+            (OwnUnitLeftAreaEvent, 48),
+            (EnemyUnitLeftAreaEvent, 64),
+        ]
+
+    def test_a_unit_taken_over_is_idle(self) -> None:
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(6, alliance=_ENEMY))
+        game.observe(16, make_unit(6, alliance=Alliance.OWN, build_progress=1.0))
+        assert [(event.step, event.unit.tag) for event in seen] == [(16, 6)]
+
 
 class TestBases:
     def test_a_handler_of_unit_event_is_handed_every_units_event_of_either_side(self) -> None:

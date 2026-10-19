@@ -140,6 +140,14 @@ Where an event comes in an own and an enemy kind, its side is the one the unit i
 that side's class: a unit a neural parasite holds is an `OwnUnit` of the holder's while held, and `unit.first_alliance`
 says whose it was. A handler of `UnitTypeChangedEvent` gets all three of its kinds, a neutral unit's included.
 
+A unit that changes sides gets `UnitAllianceChangedEvent`, and the other events take it by their own rules:
+
+- **Sight does not change with the side.** A unit taken over in sight neither leaves it nor enters it, so a unit of
+  this player's the enemy holds can get `EnemyUnitLeftSightEvent` with no `EnemyUnitEnteredSightEvent` before it.
+- **The vital and area watches keep each side's units apart.** To the side a unit leaves, it is a unit gone from the
+  observation, whose crossings meanwhile come when that side has it back. To the side it joins, it is a unit first
+  seen, so one taken over inside an area gets the holder's entered event.
+
 ### Construction, warp-ins and research
 
 `UnitEvent`s, but the upgrade events, which are `UpgradeEvent`s.
@@ -195,12 +203,12 @@ A `UnitEvent`.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
-| `OwnUnitBecameIdleEvent` | `unit` | `only(*unit_types)` | a finished unit of this player's has no orders, and none NachOS sent it that may not show yet, having had orders or such an order, been unfinished, or not been listed in the observation before |
+| `OwnUnitBecameIdleEvent` | `unit` | `only(*unit_types)` | a finished unit of this player's has no orders, and none NachOS sent it that may not show yet, having had orders or such an order, been unfinished or another side's, or not been listed in the observation before |
 
-A unit trained with no rally gets it, as do a structure just finished, a worker whose mineral field ran out, and a
-unit whose order the game dropped. A unit just ordered does not, though on the ladder its order can take two
-observations to show. A larva or a depot, which never takes orders, gets it once. A handler that starts mid-game
-hears of every unit idle then.
+A unit trained with no rally gets it, as do a structure just finished, a worker whose mineral field ran out, a unit
+whose order the game dropped, and one a neural parasite just took over. A unit just ordered does not, though on the
+ladder its order can take two observations to show. A larva or a depot, which never takes orders, gets it once. A
+handler that starts mid-game hears of every unit idle then.
 
 ### Deaths
 

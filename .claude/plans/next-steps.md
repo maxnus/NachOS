@@ -139,6 +139,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     owner's addition, as subclasses of `UnitDiedEvent` and `UnitTypeChangedEvent`, which a neutral unit still gets.
   - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
     existing pairs had it; `unit.first_alliance` says whose it was.
+  - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other
+    events take it by their own rules, as `docs/events.md` says (the owner, 2026-10-19). As a rule, a niche case of
+    one spell gets its behavior documented, never event generation made more complicated for it.
   - Not done: own and enemy as a selector over one class (Discussion #66), which would lose the `OwnUnit` typing of
     the own events.
 - **Subscribing is on the api** (#128, the owner, 2026-10-18): `api.on`, `api.subscribe`, `api.unsubscribe`,
