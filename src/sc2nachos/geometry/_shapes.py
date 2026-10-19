@@ -140,6 +140,16 @@ class Tile(tuple[int, int], Area):
         raise TypeError(f"{self!r} is an address; scale its `center` instead")
 
 
+def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
+    """`value` checked as `coordinates` checks it, or a `Tile` read as its center: what `in` takes on every area."""
+    # The point cases first, as `coordinates` has them, so a point pays nothing for the tile check.
+    if isinstance(value, _PointND) or type(value) is tuple:
+        return value
+    if type(value) is Tile:
+        return Point((value[0] + 0.5, value[1] + 0.5))
+    return coordinates(value)
+
+
 @final
 @dataclass(frozen=True, slots=True)
 class Rectangle(Area):
@@ -222,7 +232,7 @@ class Rectangle(Area):
 
     def __contains__(self, point: PointLike) -> bool:
         """Whether a point lies inside, on the lower edges but not the upper ones."""
-        position = coordinates(point)
+        position = coordinates_or_tile_center(point)
         return self.left <= position[0] < self.right and self.bottom <= position[1] < self.top
 
     def encloses(self, other: Rectangle) -> bool:

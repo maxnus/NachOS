@@ -10,7 +10,7 @@ import numpy
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
 
 if TYPE_CHECKING:
     from sc2nachos.geometry._point import PointLike
@@ -55,7 +55,7 @@ class Circle(Area):
 
     def __contains__(self, point: PointLike) -> bool:
         """Whether `point` lies in the circle, boundary included."""
-        position = coordinates(point)
+        position = coordinates_or_tile_center(point)
         dx = position[0] - self._center[0]
         dy = position[1] - self._center[1]
         return dx * dx + dy * dy <= self._radius**2

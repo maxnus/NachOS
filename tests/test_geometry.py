@@ -560,6 +560,9 @@ class TestAreaLayout:
         assert hasattr(TileSet([Tile(0, 0)]), "__dict__")
 
 
+EVERY_SHAPE = (Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(5, 5)]))
+
+
 class TestAreaAgreement:
     """The same ground must answer the same way however it is wrapped."""
 
@@ -612,11 +615,16 @@ class TestAreaAgreement:
         centers = rect.tile_centers().reshape(-1, 2)
         assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
 
-    @pytest.mark.parametrize(
-        "area",
-        [Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(5, 5)])],
-        ids=lambda area: type(area).__name__,
-    )
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
+        """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""
+        around = area.bounding_rectangle().rounded_out()
+        tiles = Rectangle(around.x - 1, around.y - 1, around.width + 2, around.height + 2).tiles()
+        assert any(tile in area for tile in tiles), area
+        for tile in tiles:
+            assert (tile in area) == (tile.center in area), (area, tile)
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_shifts_by_a_point_on_the_ground_alone(self, area: Area) -> None:
         """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
         assert area.translated(Point((1, 2))) == area.translated((1, 2))

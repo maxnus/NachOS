@@ -36,7 +36,8 @@ class Area(ABC):
 
     @abstractmethod
     def __contains__(self, point: PointLike) -> bool:
-        """Whether `point` lies inside. Raises `TypeError` on anything but a point."""
+        """Whether `point` lies inside, a `Tile` read as its center. Raises `TypeError` on anything but a point or a
+        tile."""
 
     @abstractmethod
     def translated(self, offset: PointLike) -> Self:
