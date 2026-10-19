@@ -189,8 +189,9 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def structures(self) -> Units[U]:
-        """The units whose type is a structure."""
-        return Units(unit for unit in self._units if unit.is_structure)
+        """The structures, as `UnitType.Structure` has them: the types the game's tables give the structure
+        attribute."""
+        return self._in_group(UnitType.Structure)
 
     @property
     def workers(self) -> Units[U]:
