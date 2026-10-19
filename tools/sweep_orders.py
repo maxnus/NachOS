@@ -4723,7 +4723,9 @@ def _research_ends(game: _Game) -> list[Trial]:
     def ended(trial: Trial, *, cancel: bool) -> None:
         if (structure := bay(trial, armor)) is None:
             return
-        game.until(lambda: researching(structure.tag, armor), limit=16)
+        if not game.until(lambda: researching(structure.tag, armor), limit=16):
+            trial.notes["class"] = "never shown"
+            return
         trial.notes["first shown at"] = game.step
         game.turn(64)
         purse = [game.minerals, game.vespene]

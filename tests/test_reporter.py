@@ -520,11 +520,16 @@ def _observer(cloak: CloakState, **fields: Any) -> raw_pb2.Unit:
 _ONE_KEY: list[EventFilter[Any]] = [
     OwnUnitCreatedEvent.only(UnitTypeId.BARRACKS),
     EnemyUnitFirstSeenEvent.only(UnitTypeId.ROACH),
+    OwnUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
+    EnemyUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
     UnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
     UnitAllianceChangedEvent.only(UnitTypeId.MARINE),
     OwnConstructionStartedEvent.only(UnitTypeId.BARRACKS),
+    OwnWarpInStartedEvent.only(UnitTypeId.ZEALOT),
     OwnConstructionFinishedEvent.only(UnitTypeId.BARRACKS),
     OwnWarpInFinishedEvent.only(UnitTypeId.ZEALOT),
+    OwnUpgradeStartedEvent.only(UpgradeId.TERRAN_INFANTRY_WEAPONS_1),
+    OwnUpgradeStoppedEvent.only(UpgradeId.TERRAN_INFANTRY_ARMOR_1),
     OwnUpgradeFinishedEvent.only(UpgradeId.STIMPACK),
     OwnUnitDamagedEvent.only(UnitTypeId.MARINE),
     EnemyUnitDamagedEvent.only(UnitTypeId.HIGH_TEMPLAR),
@@ -538,6 +543,9 @@ _ONE_KEY: list[EventFilter[Any]] = [
     EnemyUnitLostBuffEvent.only(BuffId.SENTRY_GUARDIAN_SHIELD),
     EnemyUnitEnteredSightEvent.only(UnitTypeId.ROACH),
     EnemyUnitLeftSightEvent.only(UnitTypeId.ZERGLING),
+    OwnUnitBecameIdleEvent.only(UnitTypeId.BARRACKS),
+    OwnUnitDiedEvent.only(UnitTypeId.MARINE),
+    EnemyUnitDiedEvent.only(UnitTypeId.ZERGLING),
     UnitDiedEvent.only(UnitTypeId.MARINE),
     UnitFoundDeadEvent.only(UnitTypeId.SUPPLY_DEPOT),
     AlertEvent.only(Alert.RESEARCH_COMPLETE),
@@ -545,6 +553,10 @@ _ONE_KEY: list[EventFilter[Any]] = [
 
 
 class TestOnlySomeKeys:
+    def test_every_event_type_only_narrows_has_a_case(self) -> None:
+        narrowed = {event_type for event_type in HAPPENINGS if hasattr(event_type, "only")}
+        assert {selected.event_type for selected in _ONE_KEY} == narrowed
+
     @pytest.mark.parametrize("selected", _ONE_KEY, ids=lambda selected: selected.event_type.__name__)
     def test_an_event_is_made_only_for_the_keys_selected(
         self, selected: EventFilter[Any], monkeypatch: pytest.MonkeyPatch
@@ -1196,12 +1208,15 @@ class TestAgainstTheRealGame:
             (depot,) = [event.unit for event in _of(seen, OwnConstructionStartedEvent)]
             (finished,) = _of(seen, OwnConstructionFinishedEvent)
             assert finished.unit is depot
-            # The depot, which takes no orders, is idle as it finishes, and its SCV once the build leaves its orders.
+            # The depot, which holds no order, is idle as it finishes, and its SCV once the build leaves its orders.
             assert OwnUnitBecameIdleEvent(depot, step=finished.step) in seen
             _until(game, lambda: any(event.unit is scv for event in _of(seen, OwnUnitBecameIdleEvent)))
             game.order(AbilityId.SUPPLY_DEPOT_LOWER, depot)
             _until(game, lambda: depot.type_id is UnitTypeId.SUPPLY_DEPOT_LOWERED)
             assert OwnUnitTypeChangedEvent(depot, UnitTypeId.SUPPLY_DEPOT, step=game.step) in seen
+            # Lowering leaves no order on the depot, so it stays idle, reported once.
+            game.turn(8)
+            assert [event.unit for event in _of(seen, OwnUnitBecameIdleEvent)].count(depot) == 1
 
             # An add-on is a unit of its own, seen as soon as it is started.
             game.debug(game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 13), size=5)))

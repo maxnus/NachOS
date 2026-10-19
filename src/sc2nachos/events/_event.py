@@ -105,8 +105,8 @@ class EnemyUnitFirstSeenEvent(UnitEvent):
 
 class UnitTypeChangedEvent(UnitEvent):
     """A unit has changed type: it burrowed, sieged, lowered, became a cocoon, or finished a morph. `only` selects it by
-    the type it changed to. A unit on this player's side comes as `OwnUnitTypeChangedEvent`, one on the enemy's as
-    `EnemyUnitTypeChangedEvent`, and any other as this."""
+    the type it changed to. A unit of this player's comes as `OwnUnitTypeChangedEvent`, one of the enemy's as
+    `EnemyUnitTypeChangedEvent`, and any other, an ally's or the map's, as this."""
 
     previous_type: UnitTypeId
     """The type it was."""
@@ -186,7 +186,8 @@ class OwnUpgradeStartedEvent(UpgradeEvent):
 class OwnUpgradeStoppedEvent(UpgradeEvent):
     """A research of this player's shows in no structure's orders, having shown in the observation before, and the
     upgrade has not arrived: it was cancelled, or its structure died. A finished research never reads as stopped, since
-    its order leaves the structure in the step its upgrade arrives (in game)."""
+    its order leaves the structure in the step its upgrade arrives (in game). One that leaves a structure and shows in
+    another between two observations is neither stopped nor started."""
 
     unit: OwnUnit[Any]
     """The structure that was researching it."""
@@ -429,8 +430,9 @@ class OwnUnitBecameIdleEvent(UnitEvent):
     """A finished unit of this player's has no orders, and none NachOS sent it that the observations may not show yet,
     having had orders or such an order in the observation before, been unfinished or another side's, or not been
     listed: a unit trained with no rally, a structure just finished, a worker whose mineral field ran out, a unit whose
-    order the game dropped, a unit a neural parasite just took over. One that never takes orders, a larva or a depot,
-    gets it once."""
+    order the game dropped, a unit a neural parasite just took over. One that holds no order, a larva, or a depot even
+    as it lowers (in game), gets it once. A sieged tank and a burrowed lurker hold the order that made the form, so
+    neither is idle in it (in game)."""
 
     unit: OwnUnit[Any]
 
@@ -438,8 +440,8 @@ class OwnUnitBecameIdleEvent(UnitEvent):
 class UnitDiedEvent(UnitEvent):
     """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone when
     the structure it became finishes or is killed, or a step later (in game). A dead unit gets this or
-    `UnitFoundDeadEvent`, never both. A unit on this player's side comes as `OwnUnitDiedEvent`, one on the enemy's as
-    `EnemyUnitDiedEvent`, and any other as this."""
+    `UnitFoundDeadEvent`, never both. A unit of this player's comes as `OwnUnitDiedEvent`, one of the enemy's as
+    `EnemyUnitDiedEvent`, and any other, an ally's or the map's, as this."""
 
 
 class OwnUnitDiedEvent(UnitDiedEvent):
@@ -467,7 +469,8 @@ class OwnActionEvent(Event):
 
 class ChatEvent(Event):
     """A player, this one included, sent a message to the game's chat (in game). This player's comes as
-    `OwnChatEvent`, another player's as `EnemyChatEvent`, and an observer's as this."""
+    `OwnChatEvent`, another player's as `EnemyChatEvent`, and one from a player the game's info lists as an observer as
+    this."""
 
     player_id: int
     """The id of the player who sent it."""
@@ -479,8 +482,8 @@ class OwnChatEvent(ChatEvent):
 
 
 class EnemyChatEvent(ChatEvent):
-    """A player other than this one, not an observer, sent a message. The game names no teams, so in a game of more than
-    two an ally's message comes as this too."""
+    """A player other than this one, and not listed as an observer, sent a message. The game names no teams, so in a
+    game of more than two an ally's message comes as this too."""
 
 
 class AlertEvent(Event):

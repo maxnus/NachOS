@@ -9,6 +9,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
+- **Whether `ResponseGameInfo.player_info` lists a game's observers, and whether their chat reaches the players**: no
+  game with an observer has been played. NachOS hands out a plain `ChatEvent` for a message whose sender that list
+  names as an `Observer`.
 - **What an ability a busy structure refuses would do to what it is making** is still open: a lift, a morph and an
   add-on are answered `NotSupported`, so what they would do to a queue was never seen. Every ability a producer does
   take leaves what it is making alone (tool `sweep_orders`).

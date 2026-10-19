@@ -235,6 +235,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   attack. A burrowed roach does the same with Tunneling Claws (5.1 in 46 steps); without it, it answers attack, move,
   patrol and hold position `Error`, as a burrowed zergling and swarm host do. The `tech_tree` cheat grants Tunneling
   Claws (tool `sweep_orders`, `held-orders`, `liberator-orders`, `structure-orders` and `burrowed-movers`).
+- A supply depot holds no order, lowering included: one reported idle as it finished was not reported idle again once
+  told to lower and lowered (tested; local game, build 75689).
 - A missile turret, spore crawler, photon cannon, spine crawler, auto turret and planetary fortress attacking one
   enemy switch to a second when given an attack or a smart at it. Given a stop, each shows the same attack again by
   the next observation and fires on, so whether stop took it off and it took the target up again on its own cannot

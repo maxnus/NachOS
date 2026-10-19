@@ -133,7 +133,7 @@ All `UnitEvent`s.
 |---|---|---|---|
 | `OwnUnitCreatedEvent` | `unit` | `only(*unit_types)` | a unit of this player's is first seen |
 | `EnemyUnitFirstSeenEvent` | `unit` | `only(*unit_types)` | an enemy unit is first seen, in sight or in the fog |
-| `OwnUnitTypeChangedEvent`, `EnemyUnitTypeChangedEvent`, `UnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit on this player's side, the enemy's, or neither changes type |
+| `OwnUnitTypeChangedEvent`, `EnemyUnitTypeChangedEvent`, `UnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit of this player's, of the enemy's, or anyone else's, an ally's or the map's, changes type |
 | `UnitAllianceChangedEvent` | `unit`, `previous_alliance` | `only(*unit_types)` | a unit changes sides to or from this player's |
 
 Where an event comes in an own and an enemy kind, its side is the one the unit is on at the time, and the unit has
@@ -163,7 +163,8 @@ A unit that changes sides gets `UnitAllianceChangedEvent`, and the other events 
 | `OwnUpgradeFinishedEvent` | `upgrade` | `only(*upgrades)` | this player finishes an upgrade |
 
 A finished research never reads as stopped: its order leaves the structure in the step its upgrade arrives
-([game behavior](reference/game-behavior/abilities-and-orders.md#builds-and-work-lost)). A handler of the research
+([game behavior](reference/game-behavior/abilities-and-orders.md#builds-and-work-lost)). A research that leaves one
+structure and shows in another between two observations is neither stopped nor started. A handler of the research
 events that starts mid-game is handed every research already running as started, on its first turn.
 
 ### What units went through
@@ -207,8 +208,12 @@ A `UnitEvent`.
 
 A unit trained with no rally gets it, as do a structure just finished, a worker whose mineral field ran out, a unit
 whose order the game dropped, and one a neural parasite just took over. A unit just ordered does not, though on the
-ladder its order can take two observations to show. A larva or a depot, which never takes orders, gets it once. A
-handler that starts mid-game hears of every unit idle then.
+ladder its order can take two observations to show
+([game behavior](reference/game-behavior/protocol.md#time-and-steps)). A larva, or a depot even as it lowers, holds no
+order and gets it once. A sieged tank and a burrowed lurker show the order that made the form for as long as they keep
+it, so neither is idle in it
+([game behavior](reference/game-behavior/abilities-and-orders.md#what-an-order-does-to-a-units-orders)). A handler
+that starts mid-game hears of every unit idle then.
 
 ### Deaths
 
@@ -216,7 +221,7 @@ handler that starts mid-game hears of every unit idle then.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
-| `OwnUnitDiedEvent`, `EnemyUnitDiedEvent`, `UnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead: one on this player's side, the enemy's, or neither |
+| `OwnUnitDiedEvent`, `EnemyUnitDiedEvent`, `UnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead: this player's, the enemy's, or anyone else's, an ally's or the map's |
 | `UnitFoundDeadEvent` | `unit` | `only(*unit_types)` | NachOS finds a unit dead the game did not report |
 
 A handler of `UnitDiedEvent` gets all three of its kinds, a mineral field's or a rock's death included. A unit created
@@ -227,7 +232,7 @@ and dead within one observation gets both its creation and its death, in that or
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnActionEvent` | `action` | | this player did something, as the game carried it out |
-| `OwnChatEvent`, `EnemyChatEvent`, `ChatEvent` | `player_id`, `text` | | this player sent a message, through `api.chat` or typed into its game window; another player did; or an observer did |
+| `OwnChatEvent`, `EnemyChatEvent`, `ChatEvent` | `player_id`, `text` | | this player sent a message, through `api.chat` or typed into its game window; another player did; or a player the game's info lists as an observer did |
 | `AlertEvent` | `alert` | `only(*alerts)` | the game alerted this player, several in the order it raised them |
 
 A handler of `ChatEvent` gets every message. The game names no teams, so with more than two players an ally's message

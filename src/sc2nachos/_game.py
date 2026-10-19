@@ -377,7 +377,7 @@ class _Game:
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by
         `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
-        when the update before was not looked at."""
+        when the update before was not looked at. Keeps the idle units for the next update: call it once an update."""
         update = self.tracker.last_changes.update
         before = self.idle_unit_ids if self.idle_update == update - 1 else frozenset()
         idle = [
@@ -393,7 +393,7 @@ class _Game:
     ) -> tuple[list[tuple[UpgradeId, OwnUnit[Any]]], list[tuple[UpgradeId, OwnUnit[Any]]]]:
         """The researches that show now and did not at the update before, and those that showed then and show nowhere
         now without having finished, each with its structure, in id order. None stopped, and every one showing started,
-        when the update before was not looked at."""
+        when the update before was not looked at. Keeps the researches for the next update: call it once an update."""
         update = self.tracker.last_changes.update
         before = self.researching if self.researching_update == update - 1 else {}
         now = self.state.production.researchers
