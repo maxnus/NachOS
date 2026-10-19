@@ -349,6 +349,18 @@ class TestWhatAUnitReads:
         _observe(tracker, make_unit(1, attack_upgrade_level=3))
         assert not tracker.enemy.upgrades
 
+    def test_a_unit_taken_from_this_player_shows_nothing(self, tables: GameData) -> None:
+        """A neural parasite puts it on the enemy's side, but the levels it reports may be this player's."""
+        tracker = _tracker(tables)
+        _observe(tracker, make_unit(1, attack_upgrade_level=3))
+        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=3), step=1)
+        assert not tracker.enemy.upgrades
+
+    def test_a_negative_level_shows_nothing(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=-1, armor_upgrade_level=-2))
+        assert not tracker.enemy.upgrades
+
     def test_the_enemys_units_read_with_what_it_is_assumed_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
