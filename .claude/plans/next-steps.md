@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #135. `uv run pytest` passes 2358 tests on branch `claude/area-grid-indices`;
+- nachOS `main` has every PR to #135. `uv run pytest` passes 2374 tests on branch `claude/area-grid-indices`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-19, on that branch).
 - **Next: `Tile` becomes a frozen dataclass** (the owner, 2026-10-19), in the pull request after #2's. A tuple
   `Tile` passes pyright as a point, equals its corner point, indexes numpy as an array index and needed its tuple
