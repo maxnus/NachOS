@@ -62,7 +62,8 @@ class _UnitTracker:
         self._by_tag: _UnitsByTag = {}
         # The tags among those of structures in the fog. Such a tag never comes back once it leaves.
         self._in_fog_tags: set[int] = set()
-        # Fog tags of structures seen elsewhere since, ignored for as long as the game keeps listing them.
+        # Fog tags of structures seen elsewhere since, ignored for as long as the game keeps listing them: each update
+        # keeps those it still lists and those it newly ignores.
         self._ignored_tags: set[int] = set()
         # Every tag ever linked, dead units' included, mapped to its id, and every unit ever created, by id.
         self._ids: dict[int, int] = {}
@@ -165,6 +166,7 @@ class _UnitTracker:
         new: list[raw_pb2.Unit] = []
         by_tag = self._by_tag
         ignored = self._ignored_tags
+        still_ignored: list[int] = []
         pop_previous = previous.pop
         # Runs for every unit in every observation, so the common case, a tag also in the last observation, comes
         # first.
@@ -176,6 +178,7 @@ class _UnitTracker:
             unit = pop_previous(tag, None)
             if unit is None:
                 if tag in ignored:
+                    still_ignored.append(tag)
                     continue
                 unit = by_tag.get(tag)
                 if unit is None:
@@ -185,11 +188,14 @@ class _UnitTracker:
                     del self._stale_units[unit._id]
                     self._record_entered_sight(unit, report)
                 elif unit._tag in self._in_fog_tags:
+                    still_ignored.append(unit._tag)
                     self._ignore_structure_fog_copy(unit._tag, previous, present)
                     self._record_entered_sight(unit, report)
                 unit._tag = tag
             unit._update(report, step)
             present[tag] = unit
+        if ignored:
+            self._ignored_tags = set(still_ignored)
         return present, new
 
     def _record_entered_sight(self, unit: Unit[Any], report: raw_pb2.Unit) -> None:

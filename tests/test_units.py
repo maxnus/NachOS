@@ -292,6 +292,17 @@ class TestTheFog:
         (landed,) = game.observe(48, make_unit(1, UnitTypeId.BARRACKS, at=(60.5, 30.5), alliance=_ENEMY))
         assert landed is barracks
 
+    def test_a_copy_left_behind_is_ignored_only_while_the_game_lists_it(self) -> None:
+        """Each return to sight leaves a copy to ignore; once the game stops listing it, it is forgotten."""
+        game = _Game()
+        game.observe(0, _depot(1))
+        for cycle in range(1, 101):
+            game.observe(32 * cycle - 16, _depot(900 + cycle, visibility=_IN_FOG))
+            game.observe(32 * cycle, _depot(1))
+        assert game.tracker.unit_tracker._ignored_tags == {1000}
+        game.observe(3232, _depot(1))
+        assert not game.tracker.unit_tracker._ignored_tags
+
     def test_the_structures_that_can_move_are_those_that_lift_off_or_uproot(self) -> None:
         movable = {UnitTypeId(value) for value in _MOVABLE_UNIT_TYPE_IDS}
         assert movable == {
