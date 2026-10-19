@@ -111,10 +111,10 @@ class Api:
         before; a parameterized event comes only with the parameters other handlers asked for.
 
         A method is marked, and subscribed for each instance passed to `subscribe`: a function defined in a class body
-        that takes at least two positional arguments without defaults, the instance and the event. Any other function
-        is subscribed at once, wherever it is defined, a static method included, and so is a method already bound to its
-        instance. Either stays subscribed until it is passed to `unsubscribe`, held strongly, so it runs whether or not
-        anything else keeps it alive.
+        that takes at least two positional arguments without defaults, the instance and the event, or wraps one through
+        `functools.wraps`. Any other function is subscribed at once, wherever it is defined, a static method taking the
+        event alone included, and so is a method already bound to its instance. Either stays subscribed until it is
+        passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it alive.
 
         `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
         among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,

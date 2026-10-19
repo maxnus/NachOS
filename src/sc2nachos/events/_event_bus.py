@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import weakref
 from collections.abc import Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
@@ -243,11 +244,16 @@ def _selects(handler: _Handler, event: Event, key: Hashable) -> bool:
 def _is_method(function: FunctionType) -> bool:
     """Whether `function` is a method, to be bound to an instance: defined in a class body, which its qualified name
     says by a class's name before its own, where a module-level function has nothing and a nested one has `<locals>`;
-    and taking at least two positional arguments without defaults, the instance and the event."""
+    and taking at least two positional arguments without defaults, the instance and the event. A function a decorator
+    wrapped with `functools.wraps` is judged by the function it wraps."""
     parts = function.__qualname__.rsplit(".", 2)
     if len(parts) < 2 or parts[-2] == "<locals>":
         return False
-    return function.__code__.co_argcount - len(function.__defaults__ or ()) >= 2
+    parameters = inspect.signature(function).parameters.values()
+    return sum(parameter.kind in _POSITIONAL and parameter.default is parameter.empty for parameter in parameters) >= 2
+
+
+_POSITIONAL = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
 
 
 def _timed(timings: dict[str, HandlerTiming], handler: _Handler, event: Event) -> object:

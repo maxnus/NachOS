@@ -598,6 +598,10 @@ def _templar(energy: float, **fields: Any) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.HIGH_TEMPLAR, alliance=alliance, energy=energy, energy_max=200.0, **fields)
 
 
+def _tank(unit_type: UnitTypeId, health: float) -> raw_pb2.Unit:
+    return make_unit(1, unit_type, alliance=_ENEMY, health=health, health_max=175.0)
+
+
 def _zealot(health: float, shield: float, **fields: Any) -> raw_pb2.Unit:
     return make_unit(
         1,
@@ -675,6 +679,18 @@ class TestVitalReached:
         game.observe(32, _raven(100, energy_max=200.0))
         game.observe(48, _raven(100, energy_max=200.0))
         assert seen == []
+
+    def test_a_unit_become_a_type_watched_anew_starts_afresh_too(self) -> None:
+        """A tank seen below the value, then sieged and healed above it, is not reported when the sieged form is
+        watched from then on: nothing read its health under the watch while it was sieged."""
+        game = _Game()
+        record(game.events, EnemyUnitVitalReachedEvent.of(VitalType.HEALTH, 100, UnitTypeId.SIEGE_TANK))
+        game.observe(0, _tank(UnitTypeId.SIEGE_TANK, 50))
+        game.observe(16, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 160))
+        sieged = record(game.events, EnemyUnitVitalReachedEvent.of(VitalType.HEALTH, 100, UnitTypeId.SIEGE_TANK_SIEGED))
+        game.observe(32, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 160))
+        game.observe(48, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 170))
+        assert not sieged
 
     def test_a_watch_starts_on_the_turn_its_handler_subscribed_reporting_nothing_that_turn(self) -> None:
         game = _Game()

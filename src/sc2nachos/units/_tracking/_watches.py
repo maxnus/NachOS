@@ -30,6 +30,7 @@ class _Watches[U: Unit[Any]]:
         "_dropped_keys",
         "_reached_keys",
         "_vital_ids",
+        "_vital_types",
         "_vital_watches_by_type",
         "watching",
     )
@@ -39,9 +40,10 @@ class _Watches[U: Unit[Any]]:
         # only when they change.
         self._reached_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
         self._dropped_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
-        # The unit ids of each vital watch, shared across the unit types it is watched for, and the watches by raw
-        # unit type.
+        # The unit ids of each vital watch, shared across the unit types it is watched for, those raw unit types, and
+        # the watches by raw unit type.
         self._vital_ids: dict[tuple[VitalType, float, bool], set[int]] = {}
+        self._vital_types: dict[tuple[VitalType, float, bool], set[int]] = {}
         self._vital_watches_by_type: dict[int, list[_VitalWatch]] = {}
         self._area_watches: dict[Area, _AreaWatch] = {}
         self.watching = False
@@ -72,22 +74,22 @@ class _Watches[U: Unit[Any]]:
     ) -> None:
         """Rebuild the vital watches from `reached` and `dropped`. A watch that continues keeps the unit ids it has seen
         of the types it watched before and still does, so it starts afresh on a type it watches anew."""
-        types_before = _types_by_watch(self._reached_keys, self._dropped_keys)
-        types_now = _types_by_watch(reached, dropped)
         kept: dict[tuple[VitalType, float, bool], set[int]] = {}
+        types: dict[tuple[VitalType, float, bool], set[int]] = {}
         by_type: dict[int, list[_VitalWatch]] = {}
         for keys, reaching in ((reached, True), (dropped, False)):
             # Sorted, since a set of keys iterates in an order that differs from one process to the next, and this
             # order is the order of one unit's crossings in a turn.
             for vital, value, unit_type in sorted(keys, key=lambda key: (key[0].name, key[1], key[2])):
                 watch = (vital, value, reaching)
-                if (ids := kept.get(watch)) is None:
-                    ids = kept[watch] = set()
-                    if (seen := self._vital_ids.get(watch)) is not None:
-                        still = types_before[watch] & types_now[watch]
-                        ids.update(unit_id for unit_id in seen if _type_of(units_by_id, unit_id) in still)
+                ids = kept.setdefault(watch, set())
+                types.setdefault(watch, set()).add(int(unit_type))
                 by_type.setdefault(int(unit_type), []).append((_VITAL_READERS[vital], vital, value, reaching, ids))
-        self._vital_ids, self._vital_watches_by_type = kept, by_type
+        for watch, ids in kept.items():
+            if (seen := self._vital_ids.get(watch)) is not None:
+                still = self._vital_types[watch] & types[watch]
+                ids.update(unit_id for unit_id in seen if _type_of(units_by_id, unit_id) in still)
+        self._vital_ids, self._vital_types, self._vital_watches_by_type = kept, types, by_type
 
     def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, in_vision: bool) -> None:
         """Record into `found` what `unit`, in sight with `report`, crossed since it was last seen."""
@@ -154,17 +156,6 @@ def _keep_only(watches: dict[Area, _AreaWatch], wanted: Collection[Area]) -> Non
     for area in wanted:
         if area not in watches:
             watches[area] = _AreaWatch(area)
-
-
-def _types_by_watch(
-    reached: Collection[tuple[VitalType, float, UnitTypeId]], dropped: Collection[tuple[VitalType, float, UnitTypeId]]
-) -> dict[tuple[VitalType, float, bool], set[int]]:
-    """The raw unit types each vital watch in `reached` and `dropped` watches, by vital, value and whether reaching."""
-    types: dict[tuple[VitalType, float, bool], set[int]] = {}
-    for keys, reaching in ((reached, True), (dropped, False)):
-        for vital, value, unit_type in keys:
-            types.setdefault((vital, value, reaching), set()).add(int(unit_type))
-    return types
 
 
 def _type_of(units_by_id: Mapping[int, Unit[Any]], unit_id: int) -> int | None:

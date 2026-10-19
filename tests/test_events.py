@@ -7,10 +7,10 @@ import dataclasses
 import functools
 import gc
 import weakref
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, assert_type
+from typing import Any, assert_type, cast
 
 import pytest
 from loguru import logger
@@ -146,7 +146,31 @@ class TestSubscribing:
         _turns(bus, 0)
         assert calls == ["static", "read off"]
 
-    def test_a_method_marked_under_a_classmethod_is_refused_when_subscribing(self) -> None:
+    def test_a_method_under_a_decorator_that_wraps_it_is_marked(self) -> None:
+        bus = _EventBus()
+
+        def logged[F: Callable[..., object]](method: F) -> F:
+            @functools.wraps(method)
+            def wrapper(*args: object, **kwargs: object) -> object:
+                return method(*args, **kwargs)
+
+            return cast("F", wrapper)
+
+        class Handlers:
+            def __init__(self) -> None:
+                self.calls: list[int] = []
+                bus.subscribe(self)
+
+            @bus.on(TurnEvent)
+            @logged
+            def on_turn(self, event: TurnEvent) -> None:
+                self.calls.append(event.step)
+
+        handlers = Handlers()
+        _turns(bus, 4)
+        assert handlers.calls == [4]
+
+    def test_a_method_marked_under_a_classmethod_or_a_staticmethod_is_refused_when_subscribing(self) -> None:
         bus = _EventBus()
 
         class Handlers:
@@ -155,8 +179,16 @@ class TestSubscribing:
             def on_turn(cls, event: TurnEvent) -> None:
                 pass
 
+        class Statics:
+            @staticmethod
+            @bus.on(TurnEvent)
+            def on_turn(context: object, event: TurnEvent) -> None:
+                pass
+
         with pytest.raises(TypeError, match="on_turn of Handlers is marked with `on` under a classmethod"):
             bus.subscribe(Handlers())
+        with pytest.raises(TypeError, match="on_turn of Statics is marked with `on` under a staticmethod"):
+            bus.subscribe(Statics())
 
     def test_stacked_decorators_subscribe_to_each_event(self) -> None:
         bus, calls = _EventBus(), []
