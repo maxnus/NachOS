@@ -612,6 +612,26 @@ class TestRunningLocally:
             "leave_game",
         ]
 
+    def test_a_recording_with_no_folder_to_go_in_is_refused_before_the_game_starts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        launched: list[bool] = []
+        monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
+        with pytest.raises(FileNotFoundError, match="no folder to record into"):
+            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), record_to=str(tmp_path / "missing" / "game.sc2rec"))
+        assert not launched
+
+    def test_a_recording_named_by_a_string_is_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        _no_real_game(monkeypatch, _local_transport())
+        path = tmp_path / "game.sc2rec"
+        assert run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2, record_to=str(path)) is (
+            Result.VICTORY
+        )
+        assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][:2] == [
+            "create_game",
+            "join_game",
+        ]
+
 
 class TestRunningOnALadder:
     def test_the_join_carries_the_ports_the_ladder_handed_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -639,6 +659,15 @@ class TestRunningOnALadder:
         run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2)
         assert not any(request.HasField("quit") for request in transport.requests)
         assert any(request.HasField("leave_game") for request in transport.requests)
+        assert transport.closed
+
+    def test_a_recording_that_fails_to_open_closes_the_connection(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        with pytest.raises(FileNotFoundError):
+            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, record_to=tmp_path / "missing" / "x")
         assert transport.closed
 
     def test_the_connection_is_closed_even_when_leaving_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
