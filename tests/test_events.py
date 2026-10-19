@@ -855,6 +855,10 @@ class TestOnlyAndOf:
         assert terran is not None
         assert {UnitTypeId.MARINE, UnitTypeId.BARRACKS, UnitTypeId.ZERGLING} <= terran
         assert UnitTypeId.ZEALOT not in terran
+
+    def test_a_unit_type_named_by_its_name_is_refused(self) -> None:
+        with pytest.raises(TypeError, match="not 'MARINE'"):
+            OwnUnitCreatedEvent.only("MARINE")  # type: ignore
         storm = OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)
         assert storm.keys == {(VitalType.ENERGY, 75.0, UnitTypeId.HIGH_TEMPLAR)}
         every = OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75).keys

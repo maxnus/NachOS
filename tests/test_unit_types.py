@@ -245,7 +245,7 @@ def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnU
     assert_type(units.own.of_type(UnitType.Worker), Units[OwnUnit[UnitType.Worker]])
     assert_type(units.of_type(UnitType.AnyMineralField), Units[Unit[UnitType.AnyMineralField]])
     assert_type(own.excluding_type(UnitType.Marine), Units[OwnUnit[Any]])
-    units.of_type(UnitType.Marine, UnitTypeId.MARINE)  # pyright: ignore[reportArgumentType]
+    assert_type(units.of_type(UnitType.Marine, UnitTypeId.MARAUDER), Units[Unit[Any]])
 
 
 def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], other: OwnUnit[Any]) -> None:

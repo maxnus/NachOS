@@ -11,6 +11,7 @@ from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
+from sc2nachos.units._units import _unit_type_ids_in
 
 # The step of an event made without one; `api.emit` hands out a copy with the current step.
 _NO_STEP = -1
@@ -514,11 +515,3 @@ class AlertEvent(Event):
 
 # Every unit type: what a vital is watched for when `of` is given no types.
 _EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType._type_ids
-
-
-def _unit_type_ids_in(unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...]) -> frozenset[Hashable]:
-    """The ids `unit_types` stand for, expanding each `UnitType` to its group."""
-    ids: set[UnitTypeId] = set()
-    for unit_type in unit_types:
-        ids.update((unit_type,) if isinstance(unit_type, UnitTypeId) else unit_type._type_ids)
-    return frozenset(ids)
