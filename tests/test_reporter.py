@@ -101,8 +101,10 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ENGINEERING_BAY, attributes=_STRUCTURE),
     abilities=[data_pb2.AbilityData(ability_id=_WEAPONS), data_pb2.AbilityData(ability_id=_ARMOR)],
     upgrades=[
-        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
-        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_ARMOR_1, mineral_cost=100, vespene_cost=100),
+        *(
+            data_pb2.UpgradeData(upgrade_id=upgrade, mineral_cost=100, vespene_cost=100, research_time=2560.0)
+            for upgrade in (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        ),
     ],
 )
 

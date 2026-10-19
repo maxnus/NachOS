@@ -4759,7 +4759,7 @@ def _research_ends(game: _Game) -> list[Trial]:
         trial.notes["research steps in the tables"] = research_steps
         last_shown = arrived = None
         shown: list[tuple[int, float]] = []
-        end = game.step + int(research_steps) + 400
+        end = game.step + research_steps + 400
         while game.step < end and arrived is None:
             game.turn(1)
             if (progress := progress_of(structure.tag, ability)) is not None:
@@ -4787,7 +4787,7 @@ def _research_ends(game: _Game) -> list[Trial]:
     return trials
 
 
-def _steps_left_fits(shown: Sequence[tuple[int, float]], arrived: int, research_steps: float) -> dict[str, object]:
+def _steps_left_fits(shown: Sequence[tuple[int, float]], arrived: int, research_steps: int) -> dict[str, object]:
     """How each rounding of `(1 - progress) * research_steps` fits the steps a research had left until its upgrade
     was listed at `arrived`, over `shown`, the steps it showed at with its progress: how many steps it missed, and the
     first misses as the step, the steps left, and what the rounding gave."""

@@ -290,11 +290,11 @@ class _Game:
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
                 add(OwnActionEvent(action, step=step))
-        if observation.chat and any(subscriptions.wants_every(kind) for kind in _CHAT_EVENT_TYPES):
+        if observation.chat and any(subscriptions.wants_every(event_type) for event_type in _CHAT_EVENT_TYPES):
             for message in observation.chat:
-                kind = self._chat_event_type(message.player_id)
-                if kind is not None and subscriptions.wants_every(kind):
-                    add(kind(message.player_id, message.message, step=step))
+                event_type = self._chat_event_type(message.player_id)
+                if event_type is not None and subscriptions.wants_every(event_type):
+                    add(event_type(message.player_id, message.message, step=step))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
@@ -381,28 +381,28 @@ class _Game:
         self,
         subscriptions: _EventSubscriptions,
         happened: list[Event],
-        kinds: _EventTypeByAlliance,
+        event_types: _EventTypeByAlliance,
         found: Sequence[Any],
         *,
         tuples: bool = False,
     ) -> None:
-        """Add to `happened`, for each item of `found` a handler wants, the event of `kinds` for the alliance its unit
-        is on, made as `_add_wanted_events` makes it; a unit of an alliance `kinds` leaves out gets none. The unit is
-        the item, or its first item if `tuples`."""
+        """Add to `happened`, for each item of `found` a handler wants, the event of `event_types` for the alliance its
+        unit is on, made as `_add_wanted_events` makes it; a unit of an alliance `event_types` leaves out gets none. The
+        unit is the item, or its first item if `tuples`."""
         if not found:
             return
-        wanted = {alliance: _wanted(subscriptions, kind) for alliance, kind in kinds.items()}
+        wanted = {alliance: _wanted(subscriptions, event_type) for alliance, event_type in event_types.items()}
         if not any(every or keys for every, keys in wanted.values()):
             return
         add, step = happened.append, self.step
         for item in found:
             made_of = item if tuples else (item,)
             alliance = made_of[0].alliance
-            if (kind := kinds.get(alliance)) is None:
+            if (event_type := event_types.get(alliance)) is None:
                 continue
             every, keys = wanted[alliance]
-            if every or (keys and kind._key_of(*made_of) in keys):
-                add(cast("Callable[..., Event]", kind)(*made_of, step=step))
+            if every or (keys and event_type._key_of(*made_of) in keys):
+                add(cast("Callable[..., Event]", event_type)(*made_of, step=step))
 
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by

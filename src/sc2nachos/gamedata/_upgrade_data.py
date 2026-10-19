@@ -38,7 +38,8 @@ class UpgradeData:
     cost: Cost
     """The cost of researching it."""
     research_steps: int
-    """Steps it takes to research, a whole number for every upgrade in the game's tables (corpus)."""
+    """Steps it takes to research: a whole number for every upgrade in the game's tables, and above 0 for every curated
+    one (corpus)."""
     research_ability: AbilityId | None
     """The ability that researches it."""
     upgrade_type: UpgradeType

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.gamedata import OrderBehavior
@@ -44,7 +45,7 @@ class _Production:
     def researches(self) -> Mapping[UpgradeId, Research]:
         """Each research running or queued, by upgrade, in the order the observation lists the structures and each its
         orders."""
-        return self._researches
+        return MappingProxyType(self._researches)
 
     def _read(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""

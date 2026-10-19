@@ -441,10 +441,9 @@ class OwnUnitBecameIdleEvent(AnyUnitEvent):
 
 class AnyUnitDiedEvent(AnyUnitEvent):
     """The game has reported a unit dead: killed, cancelled, an egg that hatched, a MULE that expired, or a drone when
-    the structure it became finishes or is killed, or a step later (in game). A dead unit gets one of these or
-    `UnitFoundDeadEvent`, never both. NachOS never hands one out itself: a unit of this player's comes as
-    `OwnUnitDiedEvent`, one of the enemy's as `EnemyUnitDiedEvent` and one of the map's as `NeutralUnitDiedEvent`, and
-    an ally's gets none."""
+    the structure it became finishes or is killed, or a step later (in game). NachOS never hands one out itself: a unit
+    of this player's comes as `OwnUnitDiedEvent`, one of the enemy's as `EnemyUnitDiedEvent` and one of the map's as
+    `NeutralUnitDiedEvent`, and an ally's gets none. A unit reported dead never also gets `UnitFoundDeadEvent`."""
 
 
 class OwnUnitDiedEvent(AnyUnitDiedEvent):

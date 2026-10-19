@@ -2,7 +2,7 @@
 
 from contextlib import closing
 from itertools import count
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
@@ -23,6 +23,7 @@ from sc2nachos.state import (
     CameraMove,
     CategoryScore,
     Effect,
+    Research,
     Supply,
     UiUnitCounts,
     UnitCommand,
@@ -215,6 +216,14 @@ class TestProduction:
         ]
         assert all(upgrade is research.upgrade for upgrade, research in researches.items())
         assert UpgradeId.TERRAN_INFANTRY_WEAPONS_2 not in researches
+
+    def test_the_researches_cannot_be_changed_through_what_is_handed_out(self) -> None:
+        weapons = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.ENGINEERING_BAY, weapons)])
+        handed_out = cast("dict[UpgradeId, Research]", state.production.researches)
+        with pytest.raises(TypeError):
+            del handed_out[UpgradeId.TERRAN_INFANTRY_WEAPONS_1]
+        assert UpgradeId.TERRAN_INFANTRY_WEAPONS_1 in state.production.researches
 
 
 class TestScore:
