@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numbers
-from typing import TYPE_CHECKING, Self, overload
+from typing import TYPE_CHECKING, Self, final, overload
 
 import numpy
 import scipy.ndimage
@@ -19,11 +19,14 @@ if TYPE_CHECKING:
 INITIAL_BUFFER = 128
 
 
+@final
 class TimeSeries[T: float]:
     """Values recorded against the step they were observed at.
 
     Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
-    of the series. Steps are contiguous: a gap between appends is filled by linear interpolation.
+    of the series. A slice is a copy, sharing no memory with the series. Steps are contiguous: a gap between appends
+    is filled by linear interpolation, rounded to the nearest whole number in an integer series, a tie to the even
+    one.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
@@ -122,6 +125,8 @@ class TimeSeries[T: float]:
             self._buffer[index] = value
         else:
             interpolated = numpy.linspace(self._buffer[index - gap], value, num=gap + 1)
+            if numpy.issubdtype(self._buffer.dtype, numpy.integer):
+                interpolated = numpy.rint(interpolated)
             self._buffer[index - gap + 1 : index + 1] = interpolated[1:]
         self._size += gap
 
@@ -148,9 +153,11 @@ class TimeSeries[T: float]:
         return index
 
     def _slice(self, item: slice) -> slice:
-        """A range of steps as a range of buffer positions."""
+        """A range of steps as a range of buffer positions: none in an empty series."""
         if item.step is not None:
             raise NotImplementedError("TimeSeries does not support strided slicing")
+        if self._start is None:
+            return slice(0, 0)
         start = 0 if item.start is None else item.start - self._start
         stop = self._size if item.stop is None else item.stop - self._start
         if start < 0 or stop < 0:
@@ -164,12 +171,14 @@ class TimeSeries[T: float]:
     def __getitem__(self, item: slice) -> TimeSeries[T]: ...
 
     def __getitem__(self, item: int | slice) -> T | TimeSeries[T]:
+        """The value at a step, or a copy of the series over a range of steps. Raises `IndexError` for a step not
+        recorded, or a range that begins before the first."""
         if isinstance(item, slice):
             values = self.values[self._slice(item)]
             if not len(values):
                 return self._empty_like()
             start = self._start if item.start is None else item.start
-            return TimeSeries(values, start, len(values))
+            return TimeSeries(values.copy(), start, len(values))
         return self._buffer.item(self._index(item))
 
     def __setitem__(self, item: int | slice, value: T | ndarray) -> None:
@@ -201,8 +210,10 @@ class TimeSeries[T: float]:
     def derivative_at(self, step: int, *, window: int = 100) -> float | None:
         """The rate of change per second over the `window` steps ending at `step`.
 
-        `None` if the series does not cover the whole range.
+        `None` if the series does not cover the whole range. Raises `ValueError` for a `window` under one step.
         """
+        if window <= 0:
+            raise ValueError(f"a window is at least one step, not {window}")
         if self._start is None:
             return None
         start = step - window
