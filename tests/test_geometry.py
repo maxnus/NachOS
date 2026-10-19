@@ -688,6 +688,17 @@ class TestAreaAgreement:
                 sampled = numpy.hypot(*(points_inside - numpy.asarray(probe)).T).min()
                 assert distance <= sampled + 1e-9, probe
 
+    @pytest.mark.parametrize(
+        "area",
+        [*EVERY_SHAPE, TileSet([]), Circle((5.9, 5.9), 0.4), Rectangle(0.6, 0.6, 0.3, 0.3), TileSet([Tile(-3, 9)])],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_tile_mask_holds_its_tiles(self, area: Area) -> None:
+        """A grid reads an area through its mask, so the mask must hold exactly the tiles `tiles` gives."""
+        left, bottom, mask = area._tile_mask()
+        xs, ys = numpy.nonzero(mask)
+        assert {Tile(left + x, bottom + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)} == set(area.tiles())
+
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
         """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""

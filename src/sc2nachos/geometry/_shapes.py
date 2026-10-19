@@ -448,6 +448,24 @@ class TileSet(Area):
         """The tile set itself."""
         return self
 
+    def _tile_mask(self) -> tuple[int, int, ndarray]:
+        """The x and y of the covered tiles' lower left corner, and the mask of them, indexed `[x, y]`, over their
+        bounding rectangle: an empty mask at (0, 0) for an empty set."""
+        return self._mask_over_bounds
+
+    @cached_property
+    def _mask_over_bounds(self) -> tuple[int, int, ndarray]:
+        """What `_tile_mask` returns, built on first use."""
+        if not self._tiles:
+            return 0, 0, numpy.zeros((0, 0), dtype=bool)
+        xs = numpy.fromiter((tile[0] for tile in self._tiles), dtype=int, count=len(self._tiles))
+        ys = numpy.fromiter((tile[1] for tile in self._tiles), dtype=int, count=len(self._tiles))
+        left, bottom = int(xs.min()), int(ys.min())
+        mask = numpy.zeros((int(xs.max()) - left + 1, int(ys.max()) - bottom + 1), dtype=bool)
+        mask[xs - left, ys - bottom] = True
+        mask.flags.writeable = False
+        return left, bottom, mask
+
     def translated(self, offset: PointLike) -> TileSet:
         """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a
         height."""

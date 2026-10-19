@@ -13,6 +13,8 @@ from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
 
 if TYPE_CHECKING:
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import PointLike
 
 
@@ -96,6 +98,15 @@ class Circle(Area):
 
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
+        first_x, first_y, inside = self._tile_mask()
+        rows, columns = numpy.nonzero(inside)
+        return TileSet(
+            Tile(first_x + row, first_y + column) for row, column in zip(rows.tolist(), columns.tolist(), strict=True)
+        )
+
+    def _tile_mask(self) -> tuple[int, int, ndarray]:
+        """The x and y of the tile a mask's `[0, 0]` entry addresses, and that mask, indexed `[x, y]`, of the tiles
+        whose center lies in the circle."""
         # Derived from the circle, not from its bounding rectangle: that rectangle is half-open, so it would
         # drop a tile center sitting exactly on the circle's rightmost or topmost point.
         center_x, center_y = self._center[0], self._center[1]
@@ -105,11 +116,7 @@ class Circle(Area):
         last_y = math.floor(center_y + self._radius - 0.5)
         offsets_x = numpy.arange(first_x, last_x + 1) + 0.5 - center_x
         offsets_y = numpy.arange(first_y, last_y + 1) + 0.5 - center_y
-        inside = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
-        rows, columns = numpy.nonzero(inside)
-        return TileSet(
-            Tile(first_x + row, first_y + column) for row, column in zip(rows.tolist(), columns.tolist(), strict=True)
-        )
+        return first_x, first_y, offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
 
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.

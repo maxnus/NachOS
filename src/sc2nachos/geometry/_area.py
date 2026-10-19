@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Self
 if TYPE_CHECKING:
     import random
 
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import Point, PointLike
     from sc2nachos.geometry._shapes import Rectangle, TileSet
 
@@ -61,3 +63,8 @@ class Area(ABC):
     @abstractmethod
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
+
+    def _tile_mask(self) -> tuple[int, int, ndarray]:
+        """The x and y of the tile a mask's `[0, 0]` entry addresses, and that mask, indexed `[x, y]`, of the tiles
+        `tiles` gives."""
+        return self.tiles()._tile_mask()
