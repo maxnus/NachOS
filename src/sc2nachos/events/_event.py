@@ -210,7 +210,7 @@ class OwnUnitDamagedEvent(AnyUnitEvent):
 
 
 class EnemyUnitDamagedEvent(AnyUnitEvent):
-    """A unit of the enemy's in vision now and in the observation before has lost health or shields, and kept its
+    """A unit of the enemy's visible now and in the observation before has lost health or shields, and kept its
     type."""
 
     damage: float
@@ -227,7 +227,7 @@ class OwnUnitEnergyLostEvent(AnyUnitEvent):
 
 
 class EnemyUnitEnergyLostEvent(AnyUnitEvent):
-    """A unit of the enemy's in vision now and in the observation before has less energy, and kept its type: it cast a
+    """A unit of the enemy's visible now and in the observation before has less energy, and kept its type: it cast a
     spell, or lost energy to a feedback or an EMP."""
 
     energy_lost: float
@@ -272,7 +272,7 @@ class AnyVitalEvent(ParameterizedEvent):
 
 
 class OwnUnitVitalReachedEvent(AnyVitalEvent):
-    """A unit of this player's in vision has at least the value given to `of`, having last been seen in vision below
+    """A visible unit of this player's has at least the value given to `of`, having last been seen visible below
     it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit back to full. Not for a unit first seen at it, and not again until
     it has been seen below it."""
 
@@ -280,13 +280,13 @@ class OwnUnitVitalReachedEvent(AnyVitalEvent):
 
 
 class EnemyUnitVitalReachedEvent(AnyVitalEvent):
-    """A unit of the enemy's in vision has at least the value given to `of`, having last been seen in vision below it.
+    """A visible unit of the enemy's has at least the value given to `of`, having last been seen visible below it.
     One that regenerated past it out of sight is reported when next seen. Not for a unit first seen at it, and not
     again until it has been seen below it."""
 
 
 class OwnUnitVitalDroppedEvent(AnyVitalEvent):
-    """A unit of this player's in vision has less than the value given to `of`, having last been seen in vision at or
+    """A visible unit of this player's has less than the value given to `of`, having last been seen visible at or
     above it: `of(VitalType.LIFE_FRACTION, 1.0)` is a unit hurt. Not for a unit first seen below it, and not again
     until it has been seen at or above it."""
 
@@ -294,7 +294,7 @@ class OwnUnitVitalDroppedEvent(AnyVitalEvent):
 
 
 class EnemyUnitVitalDroppedEvent(AnyVitalEvent):
-    """A unit of the enemy's in vision has less than the value given to `of`, having last been seen in vision at or
+    """A visible unit of the enemy's has less than the value given to `of`, having last been seen visible at or
     above it. Not for a unit first seen below it, and not again until it has been seen at or above it."""
 
 
@@ -347,7 +347,7 @@ class OwnUnitGainedBuffEvent(AnyBuffEvent):
 
 
 class EnemyUnitGainedBuffEvent(AnyBuffEvent):
-    """A unit of the enemy's in vision now and in the observation before has a buff it did not have then. An enemy unit
+    """A unit of the enemy's visible now and in the observation before has a buff it did not have then. An enemy unit
     nothing detects shows no buffs, so one becoming detected gains none (in game). Several on one unit come in id
     order."""
 
@@ -365,7 +365,7 @@ class OwnUnitLostBuffEvent(AnyBuffEvent):
 
 
 class EnemyUnitLostBuffEvent(AnyBuffEvent):
-    """A unit of the enemy's in vision now and in the observation before no longer has a buff it had then. Several on
+    """A unit of the enemy's visible now and in the observation before no longer has a buff it had then. Several on
     one unit come in id order."""
 
     buff: BuffId
@@ -463,7 +463,7 @@ class NeutralUnitDiedEvent(AnyUnitDiedEvent):
 
 
 class UnitFoundDeadEvent(AnyUnitEvent):
-    """A unit is dead without the game reporting it: a structure remembered in the fog whose spot came into vision
+    """A unit is dead without the game reporting it: a structure remembered in the fog whose spot came into sight
     empty (in game), or a drone not reported dead an update after its structure finished or was killed, which no game
     has needed."""
 

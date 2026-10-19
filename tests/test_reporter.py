@@ -1399,7 +1399,7 @@ class TestAgainstTheRealGame:
             _until(game, lambda: _of(seen, EnemyUnitCloakChangedEvent), steps=1)
             (detected,) = _of(seen, EnemyUnitCloakChangedEvent)
             assert detected.unit is observer and detected.previous_cloak_state is CloakState.CLOAKED
-            assert observer.cloak_state is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.IN_VISION
+            assert observer.cloak_state is CloakState.CLOAKED_DETECTED and observer.visibility is Visibility.VISIBLE
 
             # A fungal growth on an enemy marine is a buff it gains, and loses as it wears off.
             game.debug(
@@ -1486,7 +1486,7 @@ class TestAgainstTheRealGame:
                 EnemyUnitLeftSightEvent,
             ]
             assert enemy.visibility is Visibility.IN_FOG
-            sighting = enemy._latest_report_in_vision
+            sighting = enemy._latest_visible_report
             assert sighting is not None
             game.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[sighting.tag])))
             game.turn(8)

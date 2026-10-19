@@ -71,7 +71,7 @@ def _one(proto: raw_pb2.Unit) -> Unit[Any]:
     return _Game().observe(0, proto)[0]
 
 
-def _depot(tag: int, *, visibility: Visibility = Visibility.IN_VISION, **fields: Any) -> raw_pb2.Unit:
+def _depot(tag: int, *, visibility: Visibility = Visibility.VISIBLE, **fields: Any) -> raw_pb2.Unit:
     """An enemy supply depot at a fixed spot, in sight or remembered."""
     return make_unit(tag, UnitTypeId.SUPPLY_DEPOT, at=(30.5, 40.5), alliance=_ENEMY, visibility=visibility, **fields)
 
@@ -221,7 +221,7 @@ class TestTheFog:
         assert depot.last_seen == 0
         (seen,) = game.observe(32, _depot(1, health=300.0))
         assert seen is depot
-        assert (depot.tag, depot.visibility, depot.health, depot.last_seen) == (1, Visibility.IN_VISION, 300.0, 32)
+        assert (depot.tag, depot.visibility, depot.health, depot.last_seen) == (1, Visibility.VISIBLE, 300.0, 32)
         (again,) = game.observe(48, _depot(901, visibility=_IN_FOG))
         assert again is depot
         assert [unit.id for unit in game.tracker.unit_tracker.known] == [400001]
@@ -230,7 +230,7 @@ class TestTheFog:
         field = {"at": (60.0, 20.5), "alliance": Alliance.NEUTRAL}
         game = _Game()
         (remembered,) = game.observe(0, make_unit(700, UnitTypeId.MINERAL_FIELD, visibility=_IN_FOG, **field))
-        with pytest.raises(NotReportedError, match="never showed .* in sight, so it never reported its minerals"):
+        with pytest.raises(NotReportedError, match="never showed .* visible, so it never reported its minerals"):
             _ = remembered.mineral_contents
         (seen,) = game.observe(16, make_unit(5, UnitTypeId.MINERAL_FIELD, mineral_contents=1800, **field))
         assert seen is remembered
@@ -355,7 +355,7 @@ class TestTheFog:
         for step in (32, 48):
             game.observe(step, *((copy, landed) if copy_first else (landed, copy)))
             assert list(game.tracker.unit_tracker.present) == [unit]
-            assert (unit.position, unit.visibility, unit.health) == (Point((60.5, 30.5)), Visibility.IN_VISION, 900.0)
+            assert (unit.position, unit.visibility, unit.health) == (Point((60.5, 30.5)), Visibility.VISIBLE, 900.0)
         game.observe(64, landed)
         assert list(game.tracker.unit_tracker.known) == [unit]
         assert not unit.is_stale
@@ -374,7 +374,11 @@ class TestWhatAUnitReads:
         )
         assert (banshee.health, banshee.owner_id, banshee.last_seen) == (140.0, 2, 0)
 
-    def test_what_was_never_shown_in_sight_raises(self) -> None:
+    def test_a_unit_visible_or_invisible_is_in_sight_and_one_remembered_is_not(self) -> None:
+        assert [visibility.is_in_sight for visibility in Visibility] == [True, False, True]
+        assert list(Visibility) == [Visibility.VISIBLE, _IN_FOG, _INVISIBLE]
+
+    def test_what_was_never_shown_visible_raises(self) -> None:
         mine = _one(make_unit(1, alliance=_ENEMY, visibility=_INVISIBLE, is_burrowed=True))
         assert mine.is_burrowed
         assert mine.last_seen is None
@@ -733,8 +737,8 @@ class TestOwnUnits:
             return make_unit(tag, UnitTypeId.MINERAL_FIELD, at=(20.0, 20.0), alliance=neutral, visibility=visibility)
 
         game = _Game()
-        worker, mined = game.observe(0, scv(RawAbilityId.Harvest_Gather_SCV, 5), field(5, Visibility.IN_VISION))
-        game.observe(16, scv(RawAbilityId.Harvest_Gather_SCV, 5), field(5, Visibility.IN_VISION))
+        worker, mined = game.observe(0, scv(RawAbilityId.Harvest_Gather_SCV, 5), field(5, Visibility.VISIBLE))
+        game.observe(16, scv(RawAbilityId.Harvest_Gather_SCV, 5), field(5, Visibility.VISIBLE))
         game.observe(32, scv(RawAbilityId.Harvest_Gather_SCV, 5), field(50, Visibility.IN_FOG))
         game.observe(48, scv(RawAbilityId.Harvest_Return_SCV, 7), field(50, Visibility.IN_FOG))
         game.observe(64, scv(RawAbilityId.Harvest_Gather_SCV, 99), field(50, Visibility.IN_FOG))
@@ -1116,7 +1120,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
             game.create(UnitTypeId.MARINE, spot + (2, 0)), game.create(UnitTypeId.SUPPLY_DEPOT, spot, owner=enemy)
         )
         game.turn(4)
-        assert field.visibility is Visibility.IN_VISION
+        assert field.visibility is Visibility.VISIBLE
         assert game.tracker.unit_tracker.present.get(field.id) is field
         spotter, depot = game.newest(UnitTypeId.MARINE), game.newest(UnitTypeId.SUPPLY_DEPOT)
 
@@ -1129,7 +1133,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         assert depot.health == health
         game.debug(game.create(UnitTypeId.MARINE, spot + (2, 0)))
         game.turn(4)
-        assert depot.visibility is Visibility.IN_VISION
+        assert depot.visibility is Visibility.VISIBLE
         assert game.tracker.unit_tracker.present.get(depot.id) is depot
 
         # A structure that dies out of sight is found dead once its spot is in sight again.

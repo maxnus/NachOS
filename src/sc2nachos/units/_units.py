@@ -225,7 +225,8 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def complete(self) -> Units[U]:
-        """The units that have finished building or warping in. Raises `NotReportedError` for a unit never in sight."""
+        """The units that have finished building or warping in. Raises `NotReportedError` for a unit never shown
+        visible."""
         return Units(unit for unit in self._units if unit.is_complete)
 
     @property

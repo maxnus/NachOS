@@ -77,7 +77,7 @@ class _UpgradeTracker:
         if not unit._stale and (now := unit._latest_report).display_type == _VISIBLE:
             return base + now.armor_upgrade_level
         upgraded = self.upgraded_type(unit).armor
-        if (report := unit._latest_report_in_vision) is None:
+        if (report := unit._latest_visible_report) is None:
             return upgraded
         return max(upgraded, base + report.armor_upgrade_level)
 
@@ -89,7 +89,7 @@ class _UpgradeTracker:
             return now.shield_upgrade_level
         upgrades = self._of(unit)
         levels = sum(1 for upgrade in self._reader.shields_of(unit.type_id) if upgrade in upgrades)
-        if (report := unit._latest_report_in_vision) is None:
+        if (report := unit._latest_visible_report) is None:
             return levels
         return max(levels, report.shield_upgrade_level)
 

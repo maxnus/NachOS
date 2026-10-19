@@ -227,8 +227,8 @@ class TestFilters:
         assert _tags(units.gas_buildings) == [6]
         assert _tags(units.own.workers) == [1]
 
-    def test_a_filter_over_what_was_never_shown_in_sight_raises(self) -> None:
-        """The hidden enemy was never in sight, so its build progress was never reported."""
+    def test_a_filter_over_what_was_never_shown_visible_raises(self) -> None:
+        """The hidden enemy was never visible, so its build progress was never reported."""
         with pytest.raises(NotReportedError):
             _ = _mixed().complete
         assert _tags(_mixed().own.idle) == [1]

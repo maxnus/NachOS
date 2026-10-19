@@ -367,7 +367,7 @@ class TestWhatAUnitReads:
         )
         assert zergling.speed == tables.units[UnitTypeId.ZERGLING].speed
 
-    def test_an_enemy_unit_in_sight_shows_the_levels_of_its_own_lines(self, tables: GameData) -> None:
+    def test_a_visible_enemy_unit_shows_the_levels_of_its_own_lines(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2))
         assert tracker.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_WEAPONS_2}
@@ -422,7 +422,7 @@ class TestWhatAUnitReads:
         assert not tracker.enemy.upgrades
         assert ultralisk.armor == tables.units[UnitTypeId.ULTRALISK].armor + 2
 
-    def test_a_unit_in_sight_reads_the_armor_it_reports(self, tables: GameData) -> None:
+    def test_a_visible_unit_reads_the_armor_it_reports(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         base = tables.units[UnitTypeId.ULTRALISK].armor
         (ultralisk,) = _observe(
@@ -445,7 +445,7 @@ class TestWhatAUnitReads:
         assert marine.is_stale
         assert marine.armor == tables.units[UnitTypeId.MARINE].armor + 1
 
-    def test_a_unit_never_shown_in_sight_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
+    def test_a_unit_never_shown_visible_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         tracker.enemy.assume_upgrades(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)

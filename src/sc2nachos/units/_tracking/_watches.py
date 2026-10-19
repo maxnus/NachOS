@@ -91,10 +91,10 @@ class _Watches[U: Unit[Any]]:
                 ids.update(unit_id for unit_id in seen if _type_of(units_by_id, unit_id) in still)
         self._vital_ids, self._vital_types, self._vital_watches_by_type = kept, types, by_type
 
-    def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, in_vision: bool) -> None:
+    def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, visible: bool) -> None:
         """Record into `found` what `unit`, in sight with `report`, crossed since it was last seen."""
         unit_id = unit._id
-        if in_vision and (watches := self._vital_watches_by_type.get(report.unit_type)) is not None:
+        if visible and (watches := self._vital_watches_by_type.get(report.unit_type)) is not None:
             for read, vital, value, reaching, ids in watches:
                 if (now := read(report)) is None:
                     continue

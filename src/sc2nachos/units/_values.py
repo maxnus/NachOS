@@ -33,19 +33,26 @@ class Alliance(ReadableIntEnum):
 class Visibility(ReadableIntEnum):
     """How much of a unit this player can see."""
 
-    IN_VISION = raw_pb2.DisplayType.Visible
-    """In sight."""
+    VISIBLE = raw_pb2.DisplayType.Visible
+    """In sight and seen: not cloaked, or detected."""
     IN_FOG = raw_pb2.DisplayType.Snapshot
     """A structure out of sight, remembered where it was last seen."""
     INVISIBLE = raw_pb2.DisplayType.Hidden
-    """In sight, but cloaked and undetected. A burrowed unit nothing detects is not listed at all (in game)."""
+    """In sight, but cloaked or burrowed and undetected: an enemy observer nothing detects (in game), and an enemy's
+    burrowed widow mine (corpus). An enemy's burrowed zergling nothing detects is not listed at all (in game)."""
+
+    @property
+    def is_in_sight(self) -> bool:
+        """Whether the unit is in sight: visible, or invisible."""
+        return self is not Visibility.IN_FOG
 
 
 class CloakState(ReadableIntEnum):
     """Whether a unit is cloaked, and whether this player sees through it."""
 
     UNKNOWN = raw_pb2.CloakState.CloakedUnknown
-    """A remembered unit, so whether it is cloaked is not known."""
+    """Whether the unit is cloaked is not known: a remembered structure, or an enemy's burrowed widow mine listed
+    invisible (corpus)."""
     CLOAKED = raw_pb2.CloakState.Cloaked
     """Cloaked, and nothing of this player's detects it."""
     CLOAKED_DETECTED = raw_pb2.CloakState.CloakedDetected
