@@ -18,6 +18,7 @@ from loguru import logger
 from sc2nachos import Api
 from sc2nachos.events import (
     AlertEvent,
+    AnyUnitEvent,
     Done,
     EnemyUnitEnteredAreaEvent,
     Event,
@@ -31,7 +32,6 @@ from sc2nachos.events import (
     OwnUnitVitalReachedEvent,
     TurnEvent,
     TurnStartEvent,
-    UnitEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.geometry import Circle, Point
@@ -570,7 +570,7 @@ class TestTyping:
         narrowed = subscriber.where(lambda event: event.step > 0)
 
         damaged = api.on(OwnUnitDamagedEvent)
-        any_unit_event: EventSubscriber[UnitEvent] = damaged
+        any_unit_event: EventSubscriber[AnyUnitEvent] = damaged
 
         assert_type(subscriber, EventSubscriber[TurnEvent])
         assert_type(narrowed, EventSubscriber[TurnEvent])

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #130. `uv run pytest` passes 2220 tests on branch `claude/more-events`;
+- nachOS `main` has every PR to #130. `uv run pytest` passes 2219 tests on branch `claude/more-events`;
   `uv run pytest -m integration` passes 32 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -131,12 +131,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
     having had orders or such an order, been unfinished, or not been listed in the observation before. Chosen over
     reported orders alone, which reports a unit just ordered on the ladder, and over a change from busy alone.
   - `OwnWarpInStartedEvent`, and `OwnUpgradeStartedEvent` and `OwnUpgradeStoppedEvent`, both `(upgrade, unit)`, under
-    a new base `UpgradeEvent` with `OwnUpgradeFinishedEvent`. Started counts a queued research; stopped is a cancel or
-    the structure's death, never a finish (tool `sweep_orders`, `research-ends`).
-  - `OwnChatEvent` and `EnemyChatEvent`, subclasses of `ChatEvent`: enemy is any other player but an observer, an
-    ally included in a larger game, since the protocol names no teams; an observer's message is a plain `ChatEvent`.
+    a new base `AnyUpgradeEvent` with `OwnUpgradeFinishedEvent`. Started counts a queued research; stopped is a cancel
+    or the structure's death, never a finish (tool `sweep_orders`, `research-ends`).
+  - `OwnChatEvent` and `OpponentChatEvent` (review of #131: "opponent" for the other player, as
+    `opponent_start_locations` has it, "enemy" for units): the opponent is any other player but one the game's info
+    lists as an observer, an ally included in a larger game, since the protocol names no teams.
   - `OwnUnitDiedEvent` and `EnemyUnitDiedEvent`, `OwnUnitTypeChangedEvent` and `EnemyUnitTypeChangedEvent`, the
-    owner's addition, as subclasses of `UnitDiedEvent` and `UnitTypeChangedEvent`, which a neutral unit still gets.
+    owner's addition, and `NeutralUnitDiedEvent` for the map's units, whose deaths matter to a bot: a mineral field
+    gone, a rock broken.
+  - Every base is an `Any…` event, which NachOS never hands out itself (review of #131): `AnyUnitEvent`,
+    `AnyBuffEvent`, `AnyVitalEvent`, `AnyAreaEvent`, `AnyUpgradeEvent`, `AnyUnitTypeChangedEvent`, `AnyUnitDiedEvent`
+    and `AnyChatEvent`. Chosen over handing out a base for the units and players neither side's kind takes, since a
+    bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
   - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
     existing pairs had it; `unit.first_alliance` says whose it was.
   - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other

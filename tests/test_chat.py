@@ -4,7 +4,7 @@ import pytest
 from s2clientprotocol import error_pb2, sc2api_pb2
 
 from sc2nachos import Api, NotPlayingError
-from sc2nachos.events import ChatEvent, TurnEvent
+from sc2nachos.events import AnyChatEvent, TurnEvent
 from sc2nachos.ids import AbilityId
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
@@ -101,8 +101,8 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
         if event.step == 0:
             api.chat("gl hf ✓")
 
-    @api.on(ChatEvent)
-    def listen(event: ChatEvent) -> None:
+    @api.on(AnyChatEvent)
+    def listen(event: AnyChatEvent) -> None:
         heard.append((event.player_id, event.text))
 
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)

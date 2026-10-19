@@ -11,11 +11,14 @@ from sc2nachos import _game
 from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
-    AreaEvent,
-    BuffEvent,
-    ChatEvent,
+    AnyAreaEvent,
+    AnyBuffEvent,
+    AnyChatEvent,
+    AnyUnitDiedEvent,
+    AnyUnitEvent,
+    AnyUnitTypeChangedEvent,
+    AnyVitalEvent,
     Done,
-    EnemyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitDiedEvent,
@@ -32,6 +35,8 @@ from sc2nachos.events import (
     EnemyUnitVitalReachedEvent,
     Event,
     EventFilter,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
     OwnChatEvent,
     OwnConstructionFinishedEvent,
@@ -55,11 +60,7 @@ from sc2nachos.events import (
     OwnWarpInFinishedEvent,
     OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
-    UnitEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
-    VitalEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamemap import GameMap
@@ -74,6 +75,7 @@ from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, Visib
 from sc2nachos.units._tracking import _Tracker
 from support import (
     HAPPENINGS,
+    OBSERVER_ID,
     PLAYER_ID,
     RealGame,
     make_client,
@@ -108,9 +110,8 @@ _TABLES = make_tables(
 class _Game:
     """A game fed one observation at a time, each taken in and reported as `Api.play` does each turn."""
 
-    def __init__(self, events: _EventBus | None = None, *, player_id: int | None = PLAYER_ID) -> None:
+    def __init__(self, events: _EventBus | None = None) -> None:
         self.events = events or _EventBus()
-        self._player_id = player_id
         self.tracker = _Tracker(_TABLES, Enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
@@ -120,9 +121,7 @@ class _Game:
     def observe(self, step: int, *units: raw_pb2.Unit, **fields: Any) -> dict[int, Unit[Any]]:
         """Take in an observation of `units` and `fields` at `step`, report it, and return the units by tag."""
         observation = make_observation(step, units=units, **fields)
-        self._game = played(
-            self._game, self._client, self.map, self.tracker, observation, self.events, player_id=self._player_id
-        )
+        self._game = played(self._game, self._client, self.map, self.tracker, observation, self.events)
         self.state = self._game.state
         return {unit.tag: unit for unit in self.tracker.unit_tracker.present}
 
@@ -225,6 +224,7 @@ class TestWhatATurnReports:
     def test_each_event_carries_what_happened(self) -> None:
         game = _Game()
         seen = record(game.events, *HAPPENINGS)
+        type_changes, chat = record(game.events, AnyUnitTypeChangedEvent), record(game.events, AnyChatEvent)
         _everything(game)
         units = {unit.tag: unit for unit in game.tracker.unit_tracker._units_by_id.values()}
         own = {tag: unit for tag, unit in units.items() if isinstance(unit, OwnUnit)}
@@ -232,7 +232,8 @@ class TestWhatATurnReports:
         changed = OwnUnitTypeChangedEvent(own[16], UnitTypeId.SIEGE_TANK, step=16)
         assert at_16[OwnUnitTypeChangedEvent] == changed
         assert at_16[EnemyUnitTypeChangedEvent] == EnemyUnitTypeChangedEvent(units[4], UnitTypeId.SIEGE_TANK, step=16)
-        assert at_16[UnitTypeChangedEvent] == UnitTypeChangedEvent(units[17], UnitTypeId.SIEGE_TANK, step=16)
+        # The map's tank changed type too, and that is handed out as no kind.
+        assert [event.unit for event in type_changes] == [own[16], units[4]]
         assert at_16[UnitAllianceChangedEvent] == UnitAllianceChangedEvent(units[6], _ENEMY, step=16)
         assert at_16[OwnWarpInStartedEvent].unit is units[15]
         assert at_16[OwnConstructionFinishedEvent].unit is units[2]
@@ -259,18 +260,19 @@ class TestWhatATurnReports:
         assert idle == [own[2], own[3], own[10], own[20]]
         assert at_16[OwnUnitDiedEvent] == OwnUnitDiedEvent(own[8], step=16)
         assert at_16[EnemyUnitDiedEvent] == EnemyUnitDiedEvent(units[18], step=16)
-        assert at_16[UnitDiedEvent] == UnitDiedEvent(units[19], step=16)
+        assert at_16[NeutralUnitDiedEvent] == NeutralUnitDiedEvent(units[19], step=16)
         assert at_16[UnitFoundDeadEvent] == UnitFoundDeadEvent(units[900], step=16)
         assert at_16[OwnActionEvent] == OwnActionEvent(CameraMove(12, Point((30.75, 139.0))), step=16)
         assert at_16[OwnChatEvent] == OwnChatEvent(1, "!show", step=16)
-        assert at_16[EnemyChatEvent] == EnemyChatEvent(2, "gl hf", step=16)
-        assert at_16[ChatEvent] == ChatEvent(3, "an observer's", step=16)
+        assert at_16[OpponentChatEvent] == OpponentChatEvent(2, "gl hf", step=16)
+        # So is the observer's message.
+        assert [event.player_id for event in chat] == [PLAYER_ID, 2]
         alerts = [event.alert for event in seen if isinstance(event, AlertEvent)]
         assert alerts == [Alert(value) for value in _EVERY_ALERT if value not in _PASSED_OVER]
 
     def test_a_unit_created_and_killed_in_one_observation_reads_in_order(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitDiedEvent, OwnUnitCreatedEvent)
+        seen = record(game.events, AnyUnitDiedEvent, OwnUnitCreatedEvent)
         game.observe(0)
         game.observe(16, make_unit(1), dead=(1,))
         assert [type(event) for event in seen] == [OwnUnitCreatedEvent, OwnUnitDiedEvent]
@@ -522,7 +524,6 @@ _ONE_KEY: list[EventFilter[Any]] = [
     EnemyUnitFirstSeenEvent.only(UnitTypeId.ROACH),
     OwnUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
     EnemyUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
-    UnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK_SIEGED),
     UnitAllianceChangedEvent.only(UnitTypeId.MARINE),
     OwnConstructionStartedEvent.only(UnitTypeId.BARRACKS),
     OwnWarpInStartedEvent.only(UnitTypeId.ZEALOT),
@@ -546,7 +547,7 @@ _ONE_KEY: list[EventFilter[Any]] = [
     OwnUnitBecameIdleEvent.only(UnitTypeId.BARRACKS),
     OwnUnitDiedEvent.only(UnitTypeId.MARINE),
     EnemyUnitDiedEvent.only(UnitTypeId.ZERGLING),
-    UnitDiedEvent.only(UnitTypeId.MARINE),
+    NeutralUnitDiedEvent.only(UnitTypeId.ZERGLING),
     UnitFoundDeadEvent.only(UnitTypeId.SUPPLY_DEPOT),
     AlertEvent.only(Alert.RESEARCH_COMPLETE),
 ]
@@ -577,7 +578,7 @@ class TestOnlySomeKeys:
 
     def test_a_type_change_is_selected_by_the_type_changed_to(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK))
+        seen = record(game.events, AnyUnitTypeChangedEvent.only(UnitTypeId.SIEGE_TANK))
         _everything(game)
         assert not seen
 
@@ -932,11 +933,19 @@ class TestSides:
         assert [(type(event), event.unit.tag) for event in died] == [(OwnUnitDiedEvent, 8)]
         assert [(type(event), event.unit.tag) for event in changed] == [(EnemyUnitTypeChangedEvent, 4)]
 
-    def test_a_game_with_no_player_of_its_own_hands_out_every_message_as_a_plain_chat_event(self) -> None:
-        game = _Game(player_id=None)
-        seen = record(game.events, ChatEvent)
-        game.observe(0, chat=[(1, "!show"), (2, "gl hf")])
-        assert [type(event) for event in seen] == [ChatEvent, ChatEvent]
+    def test_an_observers_message_is_handed_out_as_no_kind(self) -> None:
+        game = _Game()
+        seen = record(game.events, AnyChatEvent)
+        game.observe(0, chat=[(OBSERVER_ID, "an observer's"), (2, "gl hf")])
+        assert [type(event) for event in seen] == [OpponentChatEvent]
+
+    def test_an_allys_unit_gets_no_type_change_or_death(self) -> None:
+        game = _Game()
+        seen = record(game.events, AnyUnitTypeChangedEvent, AnyUnitDiedEvent)
+        game.observe(0, make_unit(6, UnitTypeId.SIEGE_TANK, alliance=Alliance.ALLY))
+        game.observe(16, make_unit(6, UnitTypeId.SIEGE_TANK_SIEGED, alliance=Alliance.ALLY))
+        game.observe(32, dead=(6,))
+        assert not seen
 
     def test_with_no_chat_handler_no_message_is_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
         game = _Game()
@@ -948,7 +957,7 @@ class TestSides:
 
     def test_a_unit_a_neural_parasite_holds_dies_on_the_holders_side(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitDiedEvent)
+        seen = record(game.events, AnyUnitDiedEvent)
         game.observe(0, make_unit(6, alliance=_ENEMY))
         game.observe(16, make_unit(6, alliance=Alliance.OWN))
         held = game.tracker.unit_tracker.by_tag(6)
@@ -992,19 +1001,25 @@ class TestSides:
 
 
 class TestBases:
+    def test_no_base_is_ever_handed_out_itself(self) -> None:
+        game = _Game()
+        seen = record(game.events, Event)
+        _everything(game)
+        assert seen and not [event for event in seen if type(event).__name__.startswith("Any")]
+
     def test_a_handler_of_unit_event_is_handed_every_units_event_of_either_side(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitEvent)
+        seen = record(game.events, AnyUnitEvent)
         _everything(game)
         kinds = {type(event) for event in seen}
-        assert kinds == {event_type for event_type in HAPPENINGS if issubclass(event_type, UnitEvent)}
-        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, UnitDiedEvent} <= kinds
+        assert kinds == {event_type for event_type in HAPPENINGS if issubclass(event_type, AnyUnitEvent)}
+        assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, NeutralUnitDiedEvent} <= kinds
         assert not kinds & {OwnUnitGainedBuffEvent, OwnUpgradeFinishedEvent, AlertEvent}
         assert {event.unit.alliance for event in seen} == {Alliance.OWN, Alliance.ENEMY, Alliance.NEUTRAL}
 
     def test_only_on_unit_event_selects_by_type_across_every_kind(self) -> None:
         game = _Game()
-        seen = record(game.events, UnitEvent.only(UnitTypeId.MARINE))
+        seen = record(game.events, AnyUnitEvent.only(UnitTypeId.MARINE))
         _everything(game)
         assert seen and all(event.unit.type_id is UnitTypeId.MARINE for event in seen)
         assert {OwnUnitCreatedEvent, EnemyUnitFirstSeenEvent, OwnUnitDamagedEvent, OwnUnitDiedEvent} <= {
@@ -1013,7 +1028,7 @@ class TestBases:
 
     def test_a_handler_of_buff_event_is_handed_gains_and_losses_on_either_side(self) -> None:
         game = _Game()
-        seen = record(game.events, BuffEvent.only(BuffId.MARINE_STIMMED))
+        seen = record(game.events, AnyBuffEvent.only(BuffId.MARINE_STIMMED))
         for step, buffs in enumerate(([], [BuffId.MARINE_STIMMED], [])):
             game.observe(step * 16, make_unit(1, buff_ids=buffs), make_unit(2, alliance=_ENEMY, buff_ids=buffs))
         assert [type(event) for event in seen] == [
@@ -1025,7 +1040,7 @@ class TestBases:
 
     def test_a_handler_of_vital_event_is_handed_the_drop_and_the_rise_on_either_side(self) -> None:
         game = _Game()
-        seen = record(game.events, VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
+        seen = record(game.events, AnyVitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
         for step, (health, shield) in enumerate(((100, 50), (50, 0), (100, 50))):
             own = make_unit(2, UnitTypeId.ZEALOT, health=health, health_max=100.0, shield=shield, shield_max=50.0)
             game.observe(step * 16, _zealot(health, shield), own)
@@ -1038,7 +1053,7 @@ class TestBases:
 
     def test_a_handler_of_area_event_is_handed_the_entry_and_the_exit_on_either_side(self) -> None:
         game = _Game()
-        seen = record(game.events, AreaEvent.of(_AREA))
+        seen = record(game.events, AnyAreaEvent.of(_AREA))
         for step, at in enumerate((_OUTSIDE, _INSIDE, _OUTSIDE)):
             game.observe(step * 16, make_unit(1, alliance=_ENEMY, at=at), make_unit(2, at=at))
         assert [type(event) for event in seen] == [
@@ -1149,11 +1164,11 @@ class TestAgainstTheRealGame:
 
             # A larva becomes an egg, which is reported dead as the drone hatches out of it under a new tag.
             game.order(AbilityId.LARVA_MORPH_DRONE, _own(game, UnitTypeId.LARVA))
-            _until(game, lambda: _of(seen, UnitDiedEvent))
+            _until(game, lambda: _of(seen, AnyUnitDiedEvent))
             (egg,) = [
-                event.unit for event in _of(seen, UnitTypeChangedEvent) if event.previous_type is UnitTypeId.LARVA
+                event.unit for event in _of(seen, AnyUnitTypeChangedEvent) if event.previous_type is UnitTypeId.LARVA
             ]
-            (died,) = _of(seen, UnitDiedEvent)
+            (died,) = _of(seen, AnyUnitDiedEvent)
             assert died.unit is egg
             hatched = [event.unit.type_id for event in _of(seen, OwnUnitCreatedEvent) if event.step == died.step]
             assert UnitTypeId.DRONE in hatched
@@ -1171,7 +1186,7 @@ class TestAgainstTheRealGame:
             assert finished.unit.type_id is UnitTypeId.SPAWNING_POOL
             # The game reports the drone dead in the step the pool finishes or the one after.
             _until(game, lambda: drone.is_dead)
-            (drone_died,) = [event for event in _of(seen, UnitDiedEvent, UnitFoundDeadEvent) if event.unit is drone]
+            (drone_died,) = [event for event in _of(seen, AnyUnitDiedEvent, UnitFoundDeadEvent) if event.unit is drone]
             assert type(drone_died) is OwnUnitDiedEvent and drone_died.step - finished.step in (0, 4)
             assert AlertEvent(Alert.BUILDING_COMPLETE, step=finished.step) in seen
 
@@ -1182,7 +1197,7 @@ class TestAgainstTheRealGame:
             zergling = _own(game, UnitTypeId.ZERGLING)
             game.order(AbilityId.ZERGLING_MORPH_BANELING, zergling)
             _until(game, lambda: zergling.type_id is UnitTypeId.BANELING)
-            assert [event.previous_type for event in _of(seen, UnitTypeChangedEvent) if event.unit is zergling] == [
+            assert [event.previous_type for event in _of(seen, AnyUnitTypeChangedEvent) if event.unit is zergling] == [
                 UnitTypeId.ZERGLING,
                 UnitTypeId.BANELING_COCOON,
             ]
@@ -1191,9 +1206,9 @@ class TestAgainstTheRealGame:
             # This player's own message comes back.
             chat = sc2api_pb2.ActionChat(channel=sc2api_pb2.ActionChat.Broadcast, message="gl hf")
             game.client.act([sc2api_pb2.Action(action_chat=chat)])
-            _until(game, lambda: _of(seen, ChatEvent), steps=2)
+            _until(game, lambda: _of(seen, AnyChatEvent), steps=2)
             game.turn(2)
-            assert [(type(event), event.player_id, event.text) for event in _of(seen, ChatEvent)] == [
+            assert [(type(event), event.player_id, event.text) for event in _of(seen, AnyChatEvent)] == [
                 (OwnChatEvent, game.player, "gl hf")
             ]
 
@@ -1278,6 +1293,11 @@ class TestAgainstTheRealGame:
             _until(game, lambda: mule.is_dead, steps=100, turns=20)
             assert OwnUnitDiedEvent(mule, step=game.step) in seen
             assert AlertEvent(Alert.MULE_EXPIRED, step=game.step) in seen
+
+            # A mineral field killed is reported dead as the map's.
+            game.debug(game.kill(field))
+            _until(game, lambda: field.is_dead)
+            assert NeutralUnitDiedEvent(field, step=game.step) in seen
 
     def test_cloaking_detection_and_buffs(self) -> None:
         with _played_as(Race.TERRAN) as (game, seen, middle):
@@ -1475,7 +1495,7 @@ class TestAgainstTheRealGame:
             ):
                 game.events.on(selected)(lambda event: watched.append(event))
             workers = record(game.events, AlertEvent.only(Alert.TRAIN_WORKER_COMPLETE))
-            structures = record(game.events, UnitDiedEvent.only(UnitType.Structure))
+            structures = record(game.events, AnyUnitDiedEvent.only(UnitType.Structure))
 
             # A worker trained raises an alert the handler of that alert hears. Trained first, before the units made
             # below take up the supply.
@@ -1529,6 +1549,7 @@ class TestAgainstTheRealGame:
             game.debug(game.kill(_own(game, UnitTypeId.PYLON), zealot))
             _until(game, lambda: zealot.is_dead, steps=1)
             assert [event.unit.type_id for event in structures] == [UnitTypeId.PYLON]
-            assert {event.unit.type_id for event in _of(seen, UnitDiedEvent)} >= {UnitTypeId.PYLON, UnitTypeId.ZEALOT}
+            died = {event.unit.type_id for event in _of(seen, AnyUnitDiedEvent)}
+            assert died >= {UnitTypeId.PYLON, UnitTypeId.ZEALOT}
             assert {event.alert for event in workers} == {Alert.TRAIN_WORKER_COMPLETE}
             assert workers == _alerts(seen, Alert.TRAIN_WORKER_COMPLETE)

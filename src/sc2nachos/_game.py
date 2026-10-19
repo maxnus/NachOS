@@ -16,8 +16,7 @@ from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
-    ChatEvent,
-    EnemyChatEvent,
+    AnyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitDiedEvent,
@@ -33,6 +32,8 @@ from sc2nachos.events import (
     EnemyUnitVitalDroppedEvent,
     EnemyUnitVitalReachedEvent,
     Event,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
     OwnChatEvent,
     OwnConstructionFinishedEvent,
@@ -57,9 +58,7 @@ from sc2nachos.events import (
     OwnWarpInStartedEvent,
     ParameterizedEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
@@ -79,11 +78,16 @@ from sc2nachos.units._tracking import _Tracker
 
 # Alerts by their protocol value.
 _ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
-# The events of a happening that comes in a kind for each side: this player's, the enemy's, and any other's.
-type _BySide = tuple[type[Event], type[Event], type[Event]]
-_TYPE_CHANGED: Final[_BySide] = (OwnUnitTypeChangedEvent, EnemyUnitTypeChangedEvent, UnitTypeChangedEvent)
-_DIED: Final[_BySide] = (OwnUnitDiedEvent, EnemyUnitDiedEvent, UnitDiedEvent)
-_CHAT: Final[_BySide] = (OwnChatEvent, EnemyChatEvent, ChatEvent)
+# The kinds of a happening that comes in a kind for each side, by the alliance of the unit it happened to.
+type _BySide = Mapping[Alliance, type[Event]]
+_TYPE_CHANGED: Final[_BySide] = MappingProxyType(
+    {Alliance.OWN: OwnUnitTypeChangedEvent, Alliance.ENEMY: EnemyUnitTypeChangedEvent}
+)
+_DIED: Final[_BySide] = MappingProxyType(
+    {Alliance.OWN: OwnUnitDiedEvent, Alliance.ENEMY: EnemyUnitDiedEvent, Alliance.NEUTRAL: NeutralUnitDiedEvent}
+)
+# The kinds a chat message comes as.
+_CHAT: Final[tuple[type[AnyChatEvent], ...]] = (OwnChatEvent, OpponentChatEvent)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -198,15 +202,29 @@ class _Game:
         """The events the last observation reports, in the order they are handed out, limited to what a handler of
         `events` not yet done wants: every event of a type a handler takes whole, and those of the keys handlers select
         through `only` or `of`."""
-        tracker, observation, subscriptions = self.tracker, self.observation, events._subscriptions
-        changes = tracker.last_changes
+        subscriptions = events._subscriptions
         happened: list[Event] = []
+        self._report_units_coming_and_changing(subscriptions, happened)
+        self._report_construction_and_research(subscriptions, happened)
+        self._report_what_units_went_through(subscriptions, happened)
+        self._report_idle_units_and_deaths(subscriptions, happened)
+        self._report_actions_chat_and_alerts(subscriptions, happened)
+        return happened
+
+    def _report_units_coming_and_changing(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` the units first seen, and those that changed type or sides, that a handler wants."""
+        changes = self.tracker.last_changes
         hand_on = functools.partial(self._hand_on, subscriptions, happened)
-        hand_on_by_side = functools.partial(self._hand_on_by_side, subscriptions, happened)
         hand_on(OwnUnitCreatedEvent, changes.own_units_created)
         hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen)
-        hand_on_by_side(_TYPE_CHANGED, changes.units_type_changed, tuples=True)
+        self._hand_on_by_side(subscriptions, happened, _TYPE_CHANGED, changes.units_type_changed, tuples=True)
         hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, tuples=True)
+
+    def _report_construction_and_research(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` the constructions and warp-ins started and finished, and the researches started, stopped
+        and finished, that a handler wants."""
+        changes = self.tracker.last_changes
+        hand_on = functools.partial(self._hand_on, subscriptions, happened)
         if changes.own_units_created:
             if _wants_any(subscriptions, OwnConstructionStartedEvent):
                 built = [u for u in changes.own_units_created if not u.is_complete and self._is_structure(u)]
@@ -225,6 +243,12 @@ class _Game:
             hand_on(OwnUpgradeStartedEvent, started, tuples=True)
             hand_on(OwnUpgradeStoppedEvent, stopped, tuples=True)
         hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished)
+
+    def _report_what_units_went_through(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` what units went through since the observation before that a handler wants: damage,
+        energy lost, vitals crossed, cloak and buffs changed, and sight and areas entered and left."""
+        changes = self.tracker.last_changes
+        hand_on = functools.partial(self._hand_on, subscriptions, happened)
         compared, watched = self._compare(subscriptions), self._watch(subscriptions)
         own, enemy = changes.own, changes.enemy
         if compared:
@@ -251,18 +275,27 @@ class _Game:
             hand_on(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
             hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
             hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
+
+    def _report_idle_units_and_deaths(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` the units become idle, those the game reports dead and those found dead, that a handler
+        wants."""
+        changes = self.tracker.last_changes
         if _wants_any(subscriptions, OwnUnitBecameIdleEvent):
-            hand_on(OwnUnitBecameIdleEvent, self._units_become_idle())
-        hand_on_by_side(_DIED, changes.units_died)
-        hand_on(UnitFoundDeadEvent, changes.units_found_dead)
-        add, step = happened.append, self.step
+            self._hand_on(subscriptions, happened, OwnUnitBecameIdleEvent, self._units_become_idle())
+        self._hand_on_by_side(subscriptions, happened, _DIED, changes.units_died)
+        self._hand_on(subscriptions, happened, UnitFoundDeadEvent, changes.units_found_dead)
+
+    def _report_actions_chat_and_alerts(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` this player's actions, the chat and the alerts of the last observation that a handler
+        wants."""
+        observation, add, step = self.observation, happened.append, self.step
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
                 add(OwnActionEvent(action, step=step))
         if observation.chat and any(subscriptions.wants_every(kind) for kind in _CHAT):
             for message in observation.chat:
                 kind = self._chat_kind(message.player_id)
-                if subscriptions.wants_every(kind):
+                if kind is not None and subscriptions.wants_every(kind):
                     add(kind(message.player_id, message.message, step=step))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
@@ -270,7 +303,6 @@ class _Game:
                 # `AlertError` and `TrainError` have no member and are skipped.
                 if (alert := _ALERTS.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
                     add(AlertEvent(alert, step=step))
-        return happened
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker compare each unit with the update before, for the damage, energy lost, cloak and buff
@@ -356,21 +388,21 @@ class _Game:
         *,
         tuples: bool = False,
     ) -> None:
-        """Add to `happened`, for each item of `found` a handler wants, the event of `kinds` for the side its unit is
-        on, made as `_hand_on` makes it: this player's, the enemy's, or any other's. The unit is the item, or its first
-        item if `tuples`."""
+        """Add to `happened`, for each item of `found` a handler wants, the event of `kinds` for the alliance its unit
+        is on, made as `_hand_on` makes it; a unit of an alliance `kinds` leaves out gets none. The unit is the item, or
+        its first item if `tuples`."""
         if not found:
             return
-        wanted = tuple(_wanted(subscriptions, kind) for kind in kinds)
-        if not any(every or keys for every, keys in wanted):
+        wanted = {alliance: _wanted(subscriptions, kind) for alliance, kind in kinds.items()}
+        if not any(every or keys for every, keys in wanted.values()):
             return
         add, step = happened.append, self.step
         for item in found:
             made_of = item if tuples else (item,)
-            unit = made_of[0]
-            side = 0 if isinstance(unit, OwnUnit) else 1 if unit.alliance is Alliance.ENEMY else 2
-            kind = kinds[side]
-            every, keys = wanted[side]
+            alliance = made_of[0].alliance
+            if (kind := kinds.get(alliance)) is None:
+                continue
+            every, keys = wanted[alliance]
             if every or (keys and kind._key_of(*made_of) in keys):
                 add(cast("Callable[..., Event]", kind)(*made_of, step=step))
 
@@ -403,11 +435,12 @@ class _Game:
         gone = sorted(before.keys() - now.keys() - finished)
         return started, [(upgrade, before[upgrade]) for upgrade in gone]
 
-    def _chat_kind(self, player_id: int) -> type[ChatEvent]:
-        """The event a chat message of the player `player_id` comes as."""
-        if self.player_id is None or player_id in self.observer_ids:
-            return ChatEvent
-        return OwnChatEvent if player_id == self.player_id else EnemyChatEvent
+    def _chat_kind(self, player_id: int) -> type[AnyChatEvent] | None:
+        """The event a chat message of the player `player_id` comes as, or `None` for an observer's, which comes as
+        none."""
+        if player_id in self.observer_ids:
+            return None
+        return OwnChatEvent if player_id == self.player_id else OpponentChatEvent
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""

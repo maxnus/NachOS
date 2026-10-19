@@ -8,13 +8,13 @@ from s2clientprotocol import error_pb2, sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
+    AnyUnitDiedEvent,
     Event,
     GameEndEvent,
     GameStartEvent,
     OwnUnitCreatedEvent,
     TurnEvent,
     TurnStartEvent,
-    UnitDiedEvent,
 )
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -470,7 +470,7 @@ class TestEvents:
         api = Api()
         seen: list[tuple[str, int]] = []
         _record(api, seen)
-        for kind in (OwnUnitCreatedEvent, UnitDiedEvent):
+        for kind in (OwnUnitCreatedEvent, AnyUnitDiedEvent):
             api.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
 
         def game() -> list[sc2api_pb2.Response]:

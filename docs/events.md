@@ -29,7 +29,7 @@ handler took in `api.handler_timings`.
 
 ```python
 @api.on(AlertEvent.only(Alert.NUCLEAR_LAUNCH_DETECTED))
-@api.on(UnitDiedEvent.only(UnitType.Structure))
+@api.on(AnyUnitDiedEvent.only(UnitType.Structure))
 @api.on(OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar))
 @api.on(OwnUnitVitalDroppedEvent.of(VitalType.LIFE_FRACTION, 0.3))
 @api.on(EnemyUnitEnteredAreaEvent.of(Circle(natural, 12)))
@@ -56,21 +56,27 @@ of the type.
 ## Handlers of a class and its subclasses
 
 ```python
-@api.on(UnitEvent.only(UnitType.Structure))
-@api.on(BuffEvent.only(BuffId.MARINE_STIMMED))
-@api.on(VitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
-@api.on(AreaEvent.of(Circle(natural, 12)))
+@api.on(AnyUnitEvent.only(UnitType.Structure))
+@api.on(AnyBuffEvent.only(BuffId.MARINE_STIMMED))
+@api.on(AnyVitalEvent.of(VitalType.LIFE_FRACTION, 0.5))
+@api.on(AnyAreaEvent.of(Circle(natural, 12)))
 ```
 
-An event is handed to the handlers of its class and of every class it derives from. Five bases each cover a whole
-kind of event: `BuffEvent` a buff gained or lost, `VitalEvent` a vital reaching a value or dropping below it, and
-`AreaEvent` the edge of an area crossed either way, each for this player's units and the enemy's alike;
-`UpgradeEvent` a research of this player's started, stopped or finished, which `only` selects by the upgrade; and
-`UnitEvent` every other event about one unit, which `only` selects by the unit's type. `VitalEvent` and `AreaEvent`
-are parameterized, so a handler takes them through `of` and is handed both directions of the crossing it asked for.
-A handler of a base is typed as taking it: a handler of `UnitEvent` reads `event.unit`, and `event.unit.alliance` for
-the side. `UnitTypeChangedEvent`, `UnitDiedEvent` and `ChatEvent` are each also the base of an own and an enemy kind,
-so a handler of one gets both sides.
+An event is handed to the handlers of its class and of every class it derives from. Eight bases each cover a whole
+kind of event, and NachOS never hands one out itself, only the kinds under it:
+
+- `AnyUnitEvent`: every event about one unit but the buff, vital, area and upgrade events. `only` selects by the unit's
+  type.
+- `AnyUnitTypeChangedEvent` and `AnyUnitDiedEvent`: a type change and a death, this player's or the enemy's, and a
+  death of the map's units too.
+- `AnyBuffEvent`, `AnyVitalEvent` and `AnyAreaEvent`: a buff gained or lost, a vital reaching a value or dropping below
+  it, and the edge of an area crossed either way, each for this player's units and the enemy's alike.
+- `AnyUpgradeEvent`: a research of this player's started, stopped or finished. `only` selects by the upgrade.
+- `AnyChatEvent`: a message from this player or another.
+
+`AnyVitalEvent` and `AnyAreaEvent` are parameterized, so a handler takes them through `of` and is handed both directions
+of the crossing it asked for. A handler of a base is typed as taking it: a handler of `AnyUnitEvent` reads
+`event.unit`, and `event.unit.alliance` for the side.
 
 A handler of `Event` is handed every event, which makes NachOS produce every event type it otherwise would not,
 including comparing every unit with the previous observation. A handler of `Event` is handed parameterized events
@@ -127,18 +133,19 @@ base its events share, for a handler that wants the whole kind.
 
 ### Units coming and changing
 
-All `UnitEvent`s.
+All `AnyUnitEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnUnitCreatedEvent` | `unit` | `only(*unit_types)` | a unit of this player's is first seen |
 | `EnemyUnitFirstSeenEvent` | `unit` | `only(*unit_types)` | an enemy unit is first seen, in sight or in the fog |
-| `OwnUnitTypeChangedEvent`, `EnemyUnitTypeChangedEvent`, `UnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit of this player's, of the enemy's, or anyone else's, an ally's or the map's, changes type |
+| `OwnUnitTypeChangedEvent`, `EnemyUnitTypeChangedEvent` | `unit`, `previous_type` | `only(*unit_types)`, the type changed to | a unit of this player's or of the enemy's changes type |
 | `UnitAllianceChangedEvent` | `unit`, `previous_alliance` | `only(*unit_types)` | a unit changes sides to or from this player's |
 
 Where an event comes in an own and an enemy kind, its side is the one the unit is on at the time, and the unit has
 that side's class: a unit a neural parasite holds is an `OwnUnit` of the holder's while held, and `unit.first_alliance`
-says whose it was. A handler of `UnitTypeChangedEvent` gets all three of its kinds, a neutral unit's included.
+says whose it was. A handler of `AnyUnitTypeChangedEvent` gets both kinds; a unit of the map's or of an ally's gets
+neither.
 
 A unit that changes sides gets `UnitAllianceChangedEvent`, and the other events take it by their own rules:
 
@@ -150,7 +157,7 @@ A unit that changes sides gets `UnitAllianceChangedEvent`, and the other events 
 
 ### Construction, warp-ins and research
 
-`UnitEvent`s, but the upgrade events, which are `UpgradeEvent`s.
+`AnyUnitEvent`s, but the upgrade events, which are `AnyUpgradeEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
@@ -170,8 +177,8 @@ events that starts mid-game is handed every research already running as started,
 ### What units went through
 
 Compared with the previous observation, for units in vision in both, or watched from the turn the watch starts on.
-The buff events are `BuffEvent`s, the vital events `VitalEvent`s, the area events `AreaEvent`s, and the rest
-`UnitEvent`s.
+The buff events are `AnyBuffEvent`s, the vital events `AnyVitalEvent`s, the area events `AnyAreaEvent`s, and the rest
+`AnyUnitEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
@@ -200,7 +207,7 @@ The buff events are `BuffEvent`s, the vital events `VitalEvent`s, the area event
 
 ### Idle units
 
-A `UnitEvent`.
+An `AnyUnitEvent`.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
@@ -217,14 +224,15 @@ that starts mid-game hears of every unit idle then.
 
 ### Deaths
 
-`UnitEvent`s.
+`AnyUnitEvent`s.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
-| `OwnUnitDiedEvent`, `EnemyUnitDiedEvent`, `UnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead: this player's, the enemy's, or anyone else's, an ally's or the map's |
+| `OwnUnitDiedEvent`, `EnemyUnitDiedEvent`, `NeutralUnitDiedEvent` | `unit` | `only(*unit_types)` | the game reports a unit dead: this player's, the enemy's, or the map's, such as a mineral field |
 | `UnitFoundDeadEvent` | `unit` | `only(*unit_types)` | NachOS finds a unit dead the game did not report |
 
-A handler of `UnitDiedEvent` gets all three of its kinds, a mineral field's or a rock's death included. A unit created
+A handler of `AnyUnitDiedEvent` gets all three kinds; a unit of an ally's gets none. The game reports a mineral field
+killed dead ([game behavior](reference/game-behavior/units.md#units-coming-changing-and-going)). A unit created
 and dead within one observation gets both its creation and its death, in that order.
 
 ### Actions, chat and alerts
@@ -232,9 +240,11 @@ and dead within one observation gets both its creation and its death, in that or
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `OwnActionEvent` | `action` | | this player did something, as the game carried it out |
-| `OwnChatEvent`, `EnemyChatEvent`, `ChatEvent` | `player_id`, `text` | | this player sent a message, through `api.chat` or typed into its game window; another player did; or a player the game's info lists as an observer did |
+| `OwnChatEvent`, `OpponentChatEvent` | `player_id`, `text` | | this player sent a message, through `api.chat` or typed into its game window, or another player did |
 | `AlertEvent` | `alert` | `only(*alerts)` | the game alerted this player, several in the order it raised them |
 
-A handler of `ChatEvent` gets every message. The game names no teams, so with more than two players an ally's message
-is an `EnemyChatEvent` too. What raises each alert is in the docstring of each `Alert` member, and in
+A handler of `AnyChatEvent` gets both kinds. A message from a player the game's info lists as an observer comes as
+neither, though whether the game lists observers is [not known yet](reference/game-behavior/not-understood-yet.md). The
+game names no teams, so with more than two players an ally's message is an `OpponentChatEvent` too. What raises each
+alert is in the docstring of each `Alert` member, and in
 [game behavior](reference/game-behavior/alerts-and-chat.md#alerts-and-the-camera).

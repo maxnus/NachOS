@@ -206,7 +206,7 @@ another. What happened shows in the game itself:
 
 - **`unit.orders`**: what each unit is doing now, its current order and then its queued ones.
 - **`OwnConstructionStartedEvent`** and **`OwnUnitCreatedEvent`**: a structure placed, a unit made.
-- **`UnitDiedEvent`**: a unit died, and with a producer, whatever it was making was lost.
+- **`OwnUnitDiedEvent`**: a unit of yours died, and with a producer, whatever it was making was lost.
 - **`api.action_failures`**: every order the game refused when the last turn's were sent, and every one it accepted
   earlier and gave up on since the previous observation, with the unit and why.
 

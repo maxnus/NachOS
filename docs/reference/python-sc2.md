@@ -54,8 +54,8 @@ difference that rests on what the game does links there for its evidence.
   |---|---|
   | `on_unit_created(unit)` | `OwnUnitCreatedEvent`, structures included |
   | `on_building_construction_started`, `_complete` | `OwnConstructionStartedEvent`, `OwnConstructionFinishedEvent` |
-  | `on_unit_destroyed(tag)` | `UnitDiedEvent(unit)`, or `OwnUnitDiedEvent` or `EnemyUnitDiedEvent` for one side, and `UnitFoundDeadEvent` for a structure found gone from its spot |
-  | `on_unit_type_changed` | `UnitTypeChangedEvent`, for every unit, or `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
+  | `on_unit_destroyed(tag)` | `AnyUnitDiedEvent`, with the unit, or one side's `OwnUnitDiedEvent`, `EnemyUnitDiedEvent` or `NeutralUnitDiedEvent`; and `UnitFoundDeadEvent` for a structure found gone from its spot |
+  | `on_unit_type_changed` | `AnyUnitTypeChangedEvent`, for this player's units and the enemy's, or one side's `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
   | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
   | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's units in vision |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
@@ -64,10 +64,10 @@ difference that rests on what the game does links there for its evidence.
   | nothing | `OwnUnitEnergyLostEvent`, `EnemyUnitEnergyLostEvent`, `OwnUnitCloakChangedEvent`, `EnemyUnitCloakChangedEvent` |
   | nothing | `OwnUnitGainedBuffEvent`, `EnemyUnitGainedBuffEvent`, `OwnUnitLostBuffEvent`, `EnemyUnitLostBuffEvent` |
   | nothing | a unit's health, shields or energy reaching a value or dropping below it, and a unit crossing the edge of an area, each through `of` |
-  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `ChatEvent`, or `OwnChatEvent` or `EnemyChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
+  | `state.chat`, `state.actions`, `bot.alert(Alert.X)` | `AnyChatEvent`, or `OwnChatEvent` or `OpponentChatEvent`, `OwnActionEvent`, and `AlertEvent.only(Alert.X)` |
 
 - **A handler selects the events it wants instead of testing each one.** `AlertEvent.only(Alert.X)`,
-  `UnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the
+  `AnyUnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the
   top of a python-sc2 hook. `once` and `every_steps` then count only the selected events, and with `only` NachOS
   does not make the rest. What python-sc2 leaves the bot to compare every step, such as a caster's energy, is an
   event through `of`: `OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)`.

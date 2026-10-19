@@ -14,8 +14,6 @@ from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
-    ChatEvent,
-    EnemyChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitDiedEvent,
@@ -28,6 +26,8 @@ from sc2nachos.events import (
     EnemyUnitTypeChangedEvent,
     Event,
     EventFilter,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
     OwnChatEvent,
     OwnConstructionFinishedEvent,
@@ -47,9 +47,7 @@ from sc2nachos.events import (
     OwnWarpInFinishedEvent,
     OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
@@ -226,7 +224,6 @@ HAPPENINGS: tuple[type[Event], ...] = (
     EnemyUnitFirstSeenEvent,
     OwnUnitTypeChangedEvent,
     EnemyUnitTypeChangedEvent,
-    UnitTypeChangedEvent,
     UnitAllianceChangedEvent,
     OwnConstructionStartedEvent,
     OwnWarpInStartedEvent,
@@ -250,19 +247,18 @@ HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitBecameIdleEvent,
     OwnUnitDiedEvent,
     EnemyUnitDiedEvent,
-    UnitDiedEvent,
+    NeutralUnitDiedEvent,
     UnitFoundDeadEvent,
     OwnActionEvent,
     OwnChatEvent,
-    EnemyChatEvent,
-    ChatEvent,
+    OpponentChatEvent,
     AlertEvent,
 )
 
 
 def record(events: _EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
     """A list that collects every event of `event_types`, or matching the filters, handed out from now on, each once
-    though several of them take it: a type and its base."""
+    though several of them take it: a kind and its base."""
     seen: list[Any] = []
 
     def keep(event: Event) -> None:

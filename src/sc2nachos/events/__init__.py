@@ -2,18 +2,22 @@
 
 A game hands out `GameStartEvent`, then a turn for each observation but the last, then `GameEndEvent`. A turn hands
 out `TurnStartEvent`, then the events its observation reports, then `TurnEvent`. `only`, `of` and `where` select some
-events of a type. `UnitEvent`, `BuffEvent`, `VitalEvent`, `AreaEvent` and `UpgradeEvent` are bases through which a
-handler takes a whole kind of event. A subclass of `Event` is a bot's own event, sent with `api.emit`.
+events of a type. The `Any…` events, such as `AnyUnitEvent`, are bases through which a handler takes a whole kind of
+event, and are never handed out themselves. A subclass of `Event` is a bot's own event, sent with `api.emit`.
 `docs/events.md` lists every event: its fields, what selects it, and when it comes.
 """
 
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import (
     AlertEvent,
-    AreaEvent,
-    BuffEvent,
-    ChatEvent,
-    EnemyChatEvent,
+    AnyAreaEvent,
+    AnyBuffEvent,
+    AnyChatEvent,
+    AnyUnitDiedEvent,
+    AnyUnitEvent,
+    AnyUnitTypeChangedEvent,
+    AnyUpgradeEvent,
+    AnyVitalEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitDiedEvent,
@@ -31,6 +35,8 @@ from sc2nachos.events._event import (
     Event,
     GameEndEvent,
     GameStartEvent,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
     OwnChatEvent,
     OwnConstructionFinishedEvent,
@@ -57,12 +63,7 @@ from sc2nachos.events._event import (
     TurnEvent,
     TurnStartEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
-    UnitEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
-    UpgradeEvent,
-    VitalEvent,
 )
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_priority import EventPriority
@@ -71,11 +72,15 @@ from sc2nachos.events._handler_timing import HandlerTiming
 
 __all__ = [
     "AlertEvent",
-    "AreaEvent",
-    "BuffEvent",
-    "ChatEvent",
+    "AnyAreaEvent",
+    "AnyBuffEvent",
+    "AnyChatEvent",
+    "AnyUnitDiedEvent",
+    "AnyUnitEvent",
+    "AnyUnitTypeChangedEvent",
+    "AnyUpgradeEvent",
+    "AnyVitalEvent",
     "Done",
-    "EnemyChatEvent",
     "EnemyUnitCloakChangedEvent",
     "EnemyUnitDamagedEvent",
     "EnemyUnitDiedEvent",
@@ -97,6 +102,8 @@ __all__ = [
     "GameEndEvent",
     "GameStartEvent",
     "HandlerTiming",
+    "NeutralUnitDiedEvent",
+    "OpponentChatEvent",
     "OwnActionEvent",
     "OwnChatEvent",
     "OwnConstructionFinishedEvent",
@@ -123,10 +130,5 @@ __all__ = [
     "TurnEvent",
     "TurnStartEvent",
     "UnitAllianceChangedEvent",
-    "UnitDiedEvent",
-    "UnitEvent",
     "UnitFoundDeadEvent",
-    "UnitTypeChangedEvent",
-    "UpgradeEvent",
-    "VitalEvent",
 ]
