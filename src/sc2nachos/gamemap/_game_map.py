@@ -125,7 +125,7 @@ class GameMap:
         x, y = position[0], position[1]
         column, row = math.floor(x), math.floor(y)
         origin = self._height.origin
-        i, j = column - origin[0], row - origin[1]
+        i, j = column - origin.x, row - origin.y
         if not (0 <= i < self._corners.shape[0] and 0 <= j < self._corners.shape[1]):
             raise IndexError(f"{Tile(column, row)!r} lies outside {self._playable!r}")
         low_left, low_right, up_left, up_right = self._corners[i, j].tolist()

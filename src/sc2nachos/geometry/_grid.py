@@ -99,7 +99,7 @@ class Grid[T: float]:
     @property
     def bounds(self) -> Rectangle:
         """The ground the grid covers."""
-        return Rectangle(self._origin[0], self._origin[1], self.width, self.height)
+        return Rectangle(self._origin.x, self._origin.y, self.width, self.height)
 
     @property
     def values(self) -> ndarray:
@@ -121,8 +121,8 @@ class Grid[T: float]:
         """The index into `values` of the tile holding `point`, or `None` for a point the grid does not cover."""
         # Floored here rather than through `Tile.containing`, which would build a tile per lookup.
         position = point if isinstance(point, tuple) else coordinates(point)
-        x = math.floor(position[0]) - self._origin[0]
-        y = math.floor(position[1]) - self._origin[1]
+        x = math.floor(position[0]) - self._origin.x
+        y = math.floor(position[1]) - self._origin.y
         if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
             return x, y
         return None
@@ -132,7 +132,7 @@ class Grid[T: float]:
         x, y = index
         if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
             raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
-        return Tile(self._origin[0] + x, self._origin[1] + y)
+        return Tile(self._origin.x + x, self._origin.y + y)
 
     @property
     def outside(self) -> T | None:
@@ -271,7 +271,7 @@ class Grid[T: float]:
         grid: first those of the grid's values under it, clipped to the grid, then those of the mask over the same
         tiles. Both are empty where it lies wholly beyond the grid."""
         width, height = self._data.shape
-        mask_x, mask_y = left - self._origin[0], bottom - self._origin[1]
+        mask_x, mask_y = left - self._origin.x, bottom - self._origin.y
         x = min(max(mask_x, 0), width)
         y = min(max(mask_y, 0), height)
         stop_x = min(max(mask_x + shape[0], x), width)
@@ -361,14 +361,14 @@ class Grid[T: float]:
     def cropped(self, rectangle: Rectangle) -> Grid[T]:
         """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
         x, y = self._slices(rectangle)
-        origin = Tile(self._origin[0] + x.start, self._origin[1] + y.start)
+        origin = Tile(self._origin.x + x.start, self._origin.y + y.start)
         return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
     def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The distance from each tile's center to `point`."""
         position = coordinates(point)
-        xs = numpy.arange(self.width) + self._origin[0] + 0.5 - position[0]
-        ys = numpy.arange(self.height) + self._origin[1] + 0.5 - position[1]
+        xs = numpy.arange(self.width) + self._origin.x + 0.5 - position[0]
+        ys = numpy.arange(self.height) + self._origin.y + 0.5 - position[1]
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:

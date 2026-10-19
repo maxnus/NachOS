@@ -76,4 +76,4 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
 def _tiles(mask: ndarray, origin: Tile) -> list[Tile]:
     """The tiles where `mask` is true, addressed from the grid's `origin`."""
     xs, ys = numpy.nonzero(mask)
-    return [Tile(origin[0] + x, origin[1] + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]
+    return [Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]

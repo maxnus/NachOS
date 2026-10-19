@@ -113,7 +113,7 @@ class Footprint:
     def center_in_tile(self, tile: Tile) -> Point:
         """Where the footprint is centered when its center lies in `tile`: the tile's center along a side of odd
         length, and its lower left corner along a side of even length."""
-        return Point((tile[0] + 0.5 * (self.width % 2), tile[1] + 0.5 * (self.height % 2)))
+        return Point((tile.x + 0.5 * (self.width % 2), tile.y + 0.5 * (self.height % 2)))
 
     def _grown(self, sides: tuple[int, int, int, int]) -> Footprint:
         """This footprint and every tile within `sides` of a tile it covers: so many to the left and right of one, and

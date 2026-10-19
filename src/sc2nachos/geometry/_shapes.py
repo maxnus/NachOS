@@ -390,8 +390,8 @@ class TileSet(Area):
             raise ValueError("an empty tile set has no center")
         x = y = 0
         for tile in self._tiles:
-            x += tile[0]
-            y += tile[1]
+            x += tile.x
+            y += tile.y
         count = len(self._tiles)
         return Point((x / count + 0.5, y / count + 0.5))
 
@@ -492,8 +492,8 @@ class TileSet(Area):
     @cached_property
     def _addresses(self) -> tuple[ndarray, ndarray]:
         """The x and the y of every covered tile, as two arrays, built on first use."""
-        xs = numpy.fromiter((tile[0] for tile in self._tiles), dtype=int, count=len(self._tiles))
-        ys = numpy.fromiter((tile[1] for tile in self._tiles), dtype=int, count=len(self._tiles))
+        xs = numpy.fromiter((tile.x for tile in self._tiles), dtype=int, count=len(self._tiles))
+        ys = numpy.fromiter((tile.y for tile in self._tiles), dtype=int, count=len(self._tiles))
         xs.flags.writeable = ys.flags.writeable = False
         return xs, ys
 
