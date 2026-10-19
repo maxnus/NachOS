@@ -53,8 +53,7 @@ class WebSocketTransport:
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
         """Send `request`, wait for the game's answer, and return it.
 
-        A request that fails once sent closes the connection, since an answer still to come would be read as the next
-        request's, so every later request raises `ConnectionClosedError`.
+        A request that fails once sent closes the connection, so every later request raises `ConnectionClosedError`.
         """
         payload = request.SerializeToString()
         try:
