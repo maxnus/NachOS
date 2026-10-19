@@ -113,11 +113,12 @@ class Grid[T: float]:
 
         Raises `IndexError` for a point the grid does not cover, whatever `outside` is.
         """
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
+        # Floored here rather than through `Tile.containing`, which would build a tile per lookup.
+        position = point if isinstance(point, tuple) else coordinates(point)
+        x = math.floor(position[0]) - self._origin[0]
+        y = math.floor(position[1]) - self._origin[1]
         if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+            raise IndexError(f"{Tile.containing(position)!r} lies outside {self.bounds!r}")
         return x, y
 
     def tile_at(self, index: tuple[int, int]) -> Tile:
@@ -146,13 +147,14 @@ class Grid[T: float]:
 
     def _value_at(self, point: PointLike) -> T:
         """The value at `point`, or `outside` for a point the grid does not cover."""
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
+        # Floored here, as in `index_of`.
+        position = point if isinstance(point, tuple) else coordinates(point)
+        x = math.floor(position[0]) - self._origin[0]
+        y = math.floor(position[1]) - self._origin[1]
         if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
             return self._data.item(x, y)
         if self._outside is None:
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+            raise IndexError(f"{Tile.containing(position)!r} lies outside {self.bounds!r}")
         return self._outside
 
     def _aligned(self, other: Grid) -> ndarray:

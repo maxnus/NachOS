@@ -244,7 +244,9 @@ class Rectangle(Area):
     def __contains__(self, point: PointLike) -> bool:
         """Whether a point lies inside, on the lower edges but not the upper ones."""
         position = coordinates_or_tile_center(point)
-        return self.left <= position[0] < self.right and self.bottom <= position[1] < self.top
+        # The fields rather than the edge properties, a call each; the arithmetic is the same as `right` and `top`.
+        x, y = self.x, self.y
+        return x <= position[0] < x + self.width and y <= position[1] < y + self.height
 
     def encloses(self, other: Rectangle) -> bool:
         """Whether the whole of `other` lies inside."""
