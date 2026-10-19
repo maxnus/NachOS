@@ -440,6 +440,18 @@ class TestWhatTheTablesSay:
         }
         assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE}
 
+    def test_only_the_abilities_the_sweep_never_saw_offered_have_no_performers(self, tables: GameData) -> None:
+        """Those `AbilityData.performers` names, and `NULL`, which is no ability at all."""
+        unoffered = {row.id for row in tables.abilities.values() if not row.performers}
+        assert unoffered == {
+            AbilityId.NULL,
+            AbilityId.GATEWAY_MORPH_WARP_GATE,
+            AbilityId.MORPH_ARCHON,
+            AbilityId.CARRIER_BUILD_INTERCEPTORS,
+            AbilityId.HOLD_FIRE_OFF,
+            AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
+        }
+
     def test_a_morph_several_types_perform_is_made_out_of_the_one_the_others_come_from(self, tables: GameData) -> None:
         """An overlord and the overlord transport it becomes can both become an overseer."""
         overseer = tables.abilities[AbilityId.OVERLORD_MORPH_OVERSEER]

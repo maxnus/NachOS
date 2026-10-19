@@ -54,12 +54,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   gateway's 150 and records nothing it is made from; an overlord transport 25/25, though its row reads the same 100
   as an overlord's; a pair of zerglings 50 minerals and a whole supply, where the row prices one; an auto turret
   nothing but the raven's energy, its row keeping a price the game no longer charges; and a purification nova no
-  supply, though its row carries the disruptor's 3. A nuke, 100/100, and an interceptor, 15, have no row to derive
-  from at all, since the curated ids name no unit type for either. A reactor and a tech lab no longer need a
-  correction of their own: their rows read 50/50 and 50/25 (corpus).
-- `unit_alias` names the type something morphed from; `is_building` means "needs placing"; an add-on's
-  `footprint_radius` is 3.5, the reach past its host's far side; a bare tech lab or reactor is a requirement, and no
-  unit is ever built as one (#23).
+  supply, though its row carries the disruptor's 3. A nuke, 100/100, has no row to derive from at all, since the
+  curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
+  and a carrier is never offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no longer need
+  a correction of their own: their rows read 50/50 and 50/25 (corpus).
+- `unit_alias` names the type a form is of, a siege tank for a sieged tank, but also links types that are not forms
+  of each other: an adept's shade names the adept, the queen's creep tumor the creep tumor, four geyser variants the
+  plain geyser, the icy and `_EX1` rocks a plain one, and each changeling the plain changeling (corpus).
+- `is_building` means "needs placing"; an add-on's `footprint_radius` is 3.5, the reach past its host's far side; a
+  bare tech lab or reactor is a requirement, and no unit is ever built as one (#23).
 - The tables count `AUTO_TURRET` and `REAPER_GRENADE` as terran structures and `STASIS_WARD` as protoss; map units
   have no race (#27).
 - Ability names: `link_name` is the command card group (15 protoss builds share one), `button_name` is blank for ten
