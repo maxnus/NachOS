@@ -16,7 +16,7 @@ from sc2nachos._errors import NachOSError
 from sc2nachos.launch._installation import Installation
 
 
-class GameLaunchError(NachOSError):
+class GameLaunchError(NachOSError, OSError):
     """The client did not start, or died before it began listening."""
 
 

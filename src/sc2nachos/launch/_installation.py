@@ -18,15 +18,15 @@ _VERSIONS = "Versions"
 _BASE_PREFIX = "Base"
 
 
-class UnsupportedPlatformError(NachOSError):
+class UnsupportedPlatformError(NachOSError, ValueError):
     """StarCraft II does not run on the platform asked for."""
 
 
-class InstallationNotFoundError(NachOSError):
+class InstallationNotFoundError(NachOSError, FileNotFoundError):
     """StarCraft II is not installed where this platform keeps it, and `SC2PATH` does not say otherwise."""
 
 
-class GameVersionError(NachOSError):
+class GameVersionError(NachOSError, LookupError):
     """The installation holds no version this library can drive."""
 
 
