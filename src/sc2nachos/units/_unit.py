@@ -12,6 +12,7 @@ from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.units._errors import NotReportedError
+from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
 
@@ -58,14 +59,13 @@ class Unit[K: UnitType.AnyType]:
     __slots__ = (
         "__weakref__",
         "_dead",
-        "_hallucination",
+        "_hallucination_confirmed",
         "_id",
         "_latest_report",
         "_last_seen",
         "_latest_visible_report",
         "_order_targets",
         "_orders",
-        "_orders_step",
         "_own",
         "_position",
         "_previous_position",
@@ -97,18 +97,18 @@ class Unit[K: UnitType.AnyType]:
     _previous_step: int
     _stale: bool
     _dead: bool
-    # Whether the enemy's unit was once reported a hallucination, which it is only while a detector is near (in game).
-    _hallucination: bool
+    # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
+    # (in game).
+    _hallucination_confirmed: bool
     # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
     _radius_footprint: Footprint | None
     # For each ability, the unit this unit's latest order of that ability was aimed at, kept while the game names
     # that unit by a tag it reports. Read when an order names a tag the game never reports. Keyed by the ability's raw
     # id; `None` until an order is aimed at a unit.
     _order_targets: dict[int, Unit[Any]] | None
-    # `OwnUnit.orders` as read at `_orders_step`, kept here since `OwnUnit` declares no slots of its own. Keyed by the
-    # step, which changes exactly when a report comes in, so that it holds no report and keeps no observation alive.
-    _orders: tuple[UnitOrder, ...]
-    _orders_step: int
+    # `OwnUnit.orders` as last read, with the tracker update it was read at, kept here since `OwnUnit` declares no
+    # slots of its own. It holds no report, so it keeps no observation alive.
+    _orders: _Snapshot[tuple[UnitOrder, ...]]
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -126,11 +126,10 @@ class Unit[K: UnitType.AnyType]:
         self._previous_step = step
         self._stale = False
         self._dead = False
-        self._hallucination = not self._own and report.display_type == _VISIBLE and report.is_hallucination
+        self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
         self._radius_footprint = None
         self._order_targets = None
-        self._orders = ()
-        self._orders_step = -1
+        self._orders = _Snapshot(())
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
@@ -155,8 +154,8 @@ class Unit[K: UnitType.AnyType]:
             self._position = Point((x, y))
         if report.display_type == _VISIBLE:
             self._latest_visible_report = report
-            if not self._own and not self._hallucination:
-                self._hallucination = report.is_hallucination
+            if not self._own and not self._hallucination_confirmed:
+                self._hallucination_confirmed = report.is_hallucination
         elif self._latest_visible_report is self._latest_report:
             # Just stopped being visible: the last sighting must outlive the observation it came in.
             self._latest_visible_report = _copy(self._latest_report)
@@ -343,6 +342,12 @@ class Unit[K: UnitType.AnyType]:
         return _VISIBILITIES[self._latest_report.display_type]
 
     @property
+    def is_visible(self) -> bool:
+        """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for a
+        stale unit, whose `visibility` reads as it was last listed."""
+        return not self._stale and self._latest_report.display_type == _VISIBLE
+
+    @property
     def cloak_state(self) -> CloakState:
         """Whether the unit is cloaked, and whether this player sees through it."""
         return _CLOAKS[self._latest_report.cloak]
@@ -376,7 +381,7 @@ class Unit[K: UnitType.AnyType]:
     def is_hallucination(self) -> bool:
         """Whether the unit is a hallucination. Always known for this player's own units; an enemy's reads true once a
         detector has shown it to be one, and stays true."""
-        if self._hallucination:
+        if self._hallucination_confirmed:
             return True
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("hallucination")
@@ -583,15 +588,15 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def armor(self) -> float:
-        """The unit's base armor plus the armor its upgrades add: as the unit reports it when visible in the last
-        observation, and otherwise the more of what it last reported visible and what its owner is known to have."""
+        """The unit's base armor plus the armor its upgrades add: as the unit reports it when `is_visible`, and
+        otherwise the more of what it last reported visible and what its owner is known to have."""
         return self._tracker.upgrade_tracker.armor_of(self)
 
     @property
     def shield_armor(self) -> float:
-        """The armor of the unit's shields: its shield upgrade level as it reports it when visible in the last
-        observation, and otherwise the more of what it last reported visible and the levels its owner is known to have;
-        0 for a unit without shields.
+        """The armor of the unit's shields: its shield upgrade level as it reports it when `is_visible`, and otherwise
+        the more of what it last reported visible and the levels its owner is known to have; 0 for a unit without
+        shields.
 
         The game's tables do not hold this. `docs/reference/game-behavior/damage-and-buffs.md` has what a level was
         measured to take off a hit.

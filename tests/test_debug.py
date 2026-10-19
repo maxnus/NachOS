@@ -736,7 +736,7 @@ class TestCommands:
         ]
 
 
-def _visible(api: Api) -> int:
+def _count_visible_enemies(api: Api) -> int:
     """How many of the enemy's units are visible."""
     return sum(1 for unit in api.units.enemy if unit.visibility is Visibility.VISIBLE)
 
@@ -760,7 +760,7 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
         marines = api.units.own.of_type(UnitTypeId.MARINE)
         match turns:
             case 0:
-                seen["enemy_visible"] = _visible(api)
+                seen["enemy_visible"] = _count_visible_enemies(api)
                 api.debug.create_units(
                     UnitTypeId.MARINE, at=townhall.position.towards(api.map.playable_area.center, 6), count=2
                 )
@@ -768,12 +768,12 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
                 api.debug.draw(townhall, DebugText("NachOS"))
             case 2:
                 seen["marines"] = len(marines)
-                seen["enemy_visible_shown"] = _visible(api)
+                seen["enemy_visible_shown"] = _count_visible_enemies(api)
                 api.debug.set_vitals(marines, life=10)
                 api.debug.turn_off(Cheat.SHOW_MAP)
             case 4:
                 seen["life"] = [marine.health for marine in marines]
-                seen["enemy_visible_hidden"] = _visible(api)
+                seen["enemy_visible_hidden"] = _count_visible_enemies(api)
                 api.debug.kill(marines)
             case 6:
                 seen["marines_left"] = len(marines)

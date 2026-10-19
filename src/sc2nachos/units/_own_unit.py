@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
@@ -23,11 +24,14 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
         """The unit's current order, then its queued orders."""
-        if self._orders_step != self._step:
-            orders = self._latest_report.orders
-            self._orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in orders)
-            self._orders_step = self._step
-        return self._orders
+        update = self._tracker.last_changes.update
+        # Read off the snapshot's fields rather than through `at`, to spare a call on the common path.
+        if (cached := self._orders).update == update:
+            return cached.value
+        reported = self._latest_report.orders
+        orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in reported)
+        self._orders = _Snapshot(orders, update)
+        return orders
 
     def _unit_target_of_order(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
         """The unit `order` names: the one the game reported under its tag, or, for a tag the game never reports, the

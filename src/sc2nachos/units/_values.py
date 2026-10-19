@@ -42,7 +42,7 @@ class Visibility(ReadableIntEnum):
     burrowed widow mine (corpus). An enemy's burrowed zergling nothing detects is not listed at all (in game)."""
 
     @property
-    def is_in_sight(self) -> bool:
+    def in_sight(self) -> bool:
         """Whether the unit is in sight: visible, or invisible."""
         return self is not Visibility.IN_FOG
 

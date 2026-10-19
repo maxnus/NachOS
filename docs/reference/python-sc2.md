@@ -261,7 +261,7 @@ it.
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.excluding_type(UnitType.Structure)`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `Visibility.VISIBLE` |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |

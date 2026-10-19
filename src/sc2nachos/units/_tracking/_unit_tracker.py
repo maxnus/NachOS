@@ -240,7 +240,7 @@ class _UnitTracker:
         for report in reports:
             display = report.display_type
             unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
-            if unit is not None and _continues(unit, display):
+            if unit is not None and _new_tag_is_same_unit(unit, display):
                 if report.alliance == _ENEMY:
                     changes = self._tracker.last_changes
                     entered = display == _VISIBLE
@@ -276,7 +276,7 @@ class _UnitTracker:
             if tag in self._in_fog_tags:
                 self._in_fog_tags.discard(tag)
                 del self._by_tag[tag]
-                if unit._step != step and _among(unit, dead):
+                if unit._step != step and _holds_a_tag_of(dead, unit):
                     # Died as the game reports, under either of its tags, before one is unlinked unseen.
                     self._mark_unit_dead(unit, present, reported=True)
                     continue
@@ -341,7 +341,7 @@ class _UnitTracker:
         self._unfinished = {}
 
 
-def _among(unit: Unit[Any], tags: set[int]) -> bool:
+def _holds_a_tag_of(tags: set[int], unit: Unit[Any]) -> bool:
     """Whether `tags` holds the tag `unit` was last reported under, or the one it was last visible under."""
     if unit._tag in tags:
         return True
@@ -349,7 +349,7 @@ def _among(unit: Unit[Any], tags: set[int]) -> bool:
     return sighting is not None and sighting.tag in tags
 
 
-def _continues(unit: Unit[Any], display: int) -> bool:
+def _new_tag_is_same_unit(unit: Unit[Any], display: int) -> bool:
     """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
     visible into the fog, or a fog copy of a unit never seen visible shown visible."""
     before = unit._latest_report.display_type

@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-_VISIBLE = raw_pb2.DisplayType.Visible
 
 
 @final
@@ -71,22 +70,22 @@ class _UpgradeTracker:
         return upgraded
 
     def armor_of(self, unit: Unit[Any]) -> float:
-        """The armor of `unit`: its base armor plus what its upgrades add, as it reports that when visible in the last
-        observation, and otherwise the more of what it last reported visible and what its owner is known to have."""
+        """The armor of `unit`: its base armor plus what its upgrades add, as it reports that when `is_visible`, and
+        otherwise the more of what it last reported visible and what its owner is known to have."""
         base = self._game_data.units[unit.type_id].armor
-        if not unit._stale and (now := unit._latest_report).display_type == _VISIBLE:
-            return base + now.armor_upgrade_level
+        if unit.is_visible:
+            return base + unit._latest_report.armor_upgrade_level
         upgraded = self.upgraded_type(unit).armor
         if (report := unit._latest_visible_report) is None:
             return upgraded
         return max(upgraded, base + report.armor_upgrade_level)
 
     def shield_armor_of(self, unit: Unit[Any]) -> float:
-        """The armor of `unit`'s shields: its shield upgrade level, as it reports that when visible in the last
-        observation, and otherwise the more of what it last reported visible and the levels its owner is known to have;
-        0 for a unit without shields."""
-        if not unit._stale and (now := unit._latest_report).display_type == _VISIBLE:
-            return now.shield_upgrade_level
+        """The armor of `unit`'s shields: its shield upgrade level, as it reports that when `is_visible`, and otherwise
+        the more of what it last reported visible and the levels its owner is known to have; 0 for a unit without
+        shields."""
+        if unit.is_visible:
+            return unit._latest_report.shield_upgrade_level
         upgrades = self._of(unit)
         levels = sum(1 for upgrade in self._reader.shields_of(unit.type_id) if upgrade in upgrades)
         if (report := unit._latest_visible_report) is None:

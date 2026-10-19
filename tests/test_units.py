@@ -388,8 +388,22 @@ class TestWhatAUnitReads:
         )
         assert (banshee.health, banshee.owner_id, banshee.last_seen) == (140.0, 2, 0)
 
+    def test_a_unit_is_visible_while_the_last_observation_shows_it_so(self) -> None:
+        """Not once it is invisible, remembered in the fog, or gone from the observation, though its `visibility` then
+        reads as it was last listed."""
+        game = _Game()
+        (depot,) = game.observe(0, _depot(1))
+        assert depot.is_visible
+        game.observe(16, _depot(900, visibility=_IN_FOG))
+        assert not depot.is_visible
+        (banshee,) = game.observe(32, make_unit(2, alliance=_ENEMY, visibility=_INVISIBLE))
+        assert not banshee.is_visible
+        (marine,) = game.observe(48, make_unit(3, alliance=_ENEMY))
+        game.observe(64)
+        assert (marine.is_stale, marine.visibility, marine.is_visible) == (True, Visibility.VISIBLE, False)
+
     def test_a_unit_visible_or_invisible_is_in_sight_and_one_remembered_is_not(self) -> None:
-        assert [visibility.is_in_sight for visibility in Visibility] == [True, False, True]
+        assert [visibility.in_sight for visibility in Visibility] == [True, False, True]
         assert list(Visibility) == [Visibility.VISIBLE, _IN_FOG, _INVISIBLE]
 
     def test_what_was_never_shown_visible_raises(self) -> None:

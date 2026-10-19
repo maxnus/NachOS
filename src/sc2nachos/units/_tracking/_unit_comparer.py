@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.ids import BuffId
-from sc2nachos.units._tracking._snapshot import _Snapshot
+from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
