@@ -20,11 +20,10 @@ class Economy:
 ```
 
 A function is subscribed when it is defined, a static method included. A method, which takes `self` and the event, is
-marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method
-or an instance off again. `on` takes a `priority`,
-and `every_steps`, `at_step` or `once` to limit when the handler runs. A handler that returns `Done` is not called
-again that game. All of this starts over with each game. An api made with `time_handlers=True` says how long each
-handler took in `api.handler_timings`.
+marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method or
+an instance off again. `on` takes a `priority`, and `every_steps`, `at_step` or `once` to limit when the handler runs. A
+handler that returns `Done` is not called again that game. All of this starts over with each game. An api made with
+`time_handlers=True` says how long each handler took in `api.handler_timings`.
 
 ## Selecting some events
 
@@ -96,9 +95,9 @@ api.emit(ExpansionTakenEvent(natural))
 
 A subclass of `Event` is a frozen, slotted dataclass of the fields it declares; a `@dataclass` decorator of its own
 fails. Every event has a `step`, passed by keyword; an event made without one is handed out as a copy with the current
-step of the game being played, so one made once can be emitted every turn. `api.emit` hands an event to its handlers
-in priority order and returns once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events too, so a bot's
-handlers can be tested without a game, given a step.
+step of the game being played, so one made once can be emitted every turn. `api.emit` hands an event to its handlers in
+priority order and returns once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events
+too, so a bot's handlers can be tested without a game, given a step.
 
 ## When events come
 
