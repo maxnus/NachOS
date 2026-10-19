@@ -7,7 +7,7 @@ import pytest
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamemap import GameMap
-from sc2nachos.gamemap._ramp import _TOUCHING
+from sc2nachos.gamemap._ramp import _NEIGHBORS_ACROSS_EDGES_AND_CORNERS
 from sc2nachos.geometry import Point, Rectangle, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import ProtocolError, Recording
@@ -162,9 +162,9 @@ class TestReadingAMap:
         (ramp,) = game_map.ramps
         assert set(ramp.tiles) == {Tile(1, 2), Tile(2, 1), Tile(3, 0)}
 
-    def test_the_neighborhood_ramps_are_found_with_is_read_only(self) -> None:
-        """Every api in the process shares it, so a write to it would reach every game's ramps."""
-        assert not _TOUCHING.flags.writeable
+    def test_the_neighbors_a_ramp_joins_are_read_only(self) -> None:
+        """Every api in the process shares them, so a write would reach every game's ramps."""
+        assert not _NEIGHBORS_ACROSS_EDGES_AND_CORNERS.flags.writeable
 
     def test_ground_that_climbs_no_level_is_no_ramp(self) -> None:
         # A bridge or a stand of trees, level throughout, and the first two tiles of the slope, 0.5 apart.

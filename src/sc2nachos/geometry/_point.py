@@ -50,11 +50,11 @@ def checked_ground_offset(offset: PointLike) -> PointLike:
     `Tile` among them, and `ValueError` for anything but two coordinates."""
     if isinstance(offset, Area):
         raise TypeError(f"a {type(offset).__name__} is an area, not an offset")
-    shift = coordinates(offset)
-    if len(shift) != 2:
-        height_hint = "; drop a height with .ground" if len(shift) == 3 else ""
-        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(shift)}{height_hint}")
-    return shift
+    ground_offset = coordinates(offset)
+    if len(ground_offset) != 2:
+        height_hint = "; drop a height with .ground" if len(ground_offset) == 3 else ""
+        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(ground_offset)}{height_hint}")
+    return ground_offset
 
 
 class _PointND(tuple[float, ...]):
