@@ -140,11 +140,6 @@ class Installation:
         lowercase = self.base / "maps"
         return lowercase if lowercase.is_dir() else self.base / "Maps"
 
-    @property
-    def replays(self) -> Path:
-        """The directory the client writes replays to."""
-        return self.base / "Replays"
-
     @staticmethod
     def _from_execute_info(settings: _Platform) -> str | None:
         """The install path the launcher last recorded, where a non-default install shows up."""
