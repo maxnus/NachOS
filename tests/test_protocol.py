@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from loguru import logger
 from s2clientprotocol import debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketException, WebSocketTimeoutException
 
@@ -65,9 +66,26 @@ class TestStatus:
 
 class TestErrors:
     def test_a_refused_request_raises(self) -> None:
-        client, _ = make_client(make_response(error=["Doh!"], ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(error=["Doh!"]))
         with pytest.raises(ProtocolError, match="Doh!"):
             client.ping()
+
+    def test_what_the_game_says_beside_the_answer_is_a_warning_and_the_answer_comes_back(self) -> None:
+        """The proto: "If command is missing, this will contain the error. Otherwise this will contain any
+        warnings." """
+        client, _ = make_client(make_response(error=["Careful"], ping=sc2api_pb2.ResponsePing(base_build=75689)))
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}", level="WARNING")
+        try:
+            assert client.ping().base_build == 75689
+        finally:
+            logger.remove(sink)
+        assert messages == ["The game answered ping with warnings: Careful\n"]
+
+    def test_a_request_with_no_answer_to_read_raises_on_anything_the_game_says(self) -> None:
+        client, _ = make_client(make_response(error=["Doh!"]))
+        with pytest.raises(ProtocolError, match="Doh!"):
+            client.debug([])
 
     def test_a_finished_game_raises_its_own_error(self) -> None:
         client, _ = make_client(make_response(Status.ENDED, error=["Game has already ended"]))
