@@ -46,13 +46,8 @@ class Tile(tuple[int, int], Area):
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
         """The tile a point falls in, or the tile itself."""
-        # Skips the general dispatch; this runs once per unit per grid lookup.
-        if isinstance(point, _PointND):
-            return cls(math.floor(point[0]), math.floor(point[1]))
-        if isinstance(point, Tile):
-            return cls(point[0], point[1])
-        position = coordinates(point)
-        return cls(math.floor(position[0]), math.floor(position[1]))
+        x, y = tile_address_of(point)
+        return cls(x, y)
 
     @property
     def x(self) -> int:
@@ -127,7 +122,7 @@ class Tile(tuple[int, int], Area):
 
     def tiles(self) -> TileSet:
         """A set of this tile alone."""
-        return TileSet([self])
+        return TileSet._of_addresses([(self[0], self[1])])
 
     def __repr__(self) -> str:
         return f"Tile({self[0]}, {self[1]})"
@@ -147,6 +142,18 @@ class Tile(tuple[int, int], Area):
     def __rmul__(self, other: object) -> NoReturn:
         """Raises `TypeError`, as `*` does the other way round."""
         raise TypeError(f"{self!r} is an address; scale its `center` instead")
+
+
+def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
+    """The x and y of the tile `point` falls in, or of the tile itself. Raises `TypeError` on anything but a point or a
+    tile."""
+    # Points first, as `coordinates` has them: this runs for every lookup of a tile set.
+    if isinstance(point, _PointND) or type(point) is tuple:
+        return math.floor(point[0]), math.floor(point[1])
+    if type(point) is Tile:
+        return point.x, point.y
+    position = coordinates(point)
+    return math.floor(position[0]), math.floor(position[1])
 
 
 def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
@@ -351,7 +358,7 @@ class Rectangle(Area):
     def tiles(self) -> TileSet:
         """Every tile whose center the rectangle contains."""
         x_range, y_range = self.tile_range()
-        return TileSet(Tile(x, y) for x in x_range for y in y_range)
+        return TileSet._of_addresses((x, y) for x in x_range for y in y_range)
 
 
 def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
@@ -372,11 +379,18 @@ class TileSet(Area):
     Build one from positions with `Tile.containing`. An empty tile set is falsy.
     """
 
-    _tiles: frozenset[Tile]
+    _tile_addresses: frozenset[tuple[int, int]]
 
     def __init__(self, tiles: Iterable[Tile]) -> None:
         """A tile set covering `tiles`."""
-        self._tiles = frozenset(tiles)
+        self._tile_addresses = frozenset((tile.x, tile.y) for tile in tiles)
+
+    @classmethod
+    def _of_addresses(cls, addresses: Iterable[tuple[int, int]]) -> TileSet:
+        """A tile set covering the tiles at `addresses`, each an x and a y."""
+        tile_set = cls.__new__(cls)
+        tile_set._tile_addresses = frozenset(addresses)
+        return tile_set
 
     @property
     def center(self) -> Point:
@@ -386,49 +400,49 @@ class TileSet(Area):
     @cached_property
     def _centroid(self) -> Point:
         """The mean position, computed on first use."""
-        if not self._tiles:
+        if not self._tile_addresses:
             raise ValueError("an empty tile set has no center")
-        x = y = 0
-        for tile in self._tiles:
-            x += tile.x
-            y += tile.y
-        count = len(self._tiles)
-        return Point((x / count + 0.5, y / count + 0.5))
+        sum_x = sum_y = 0
+        for x, y in self._tile_addresses:
+            sum_x += x
+            sum_y += y
+        count = len(self._tile_addresses)
+        return Point((sum_x / count + 0.5, sum_y / count + 0.5))
 
     @property
     def area(self) -> float:
         """The ground covered, in square game units: one per tile."""
-        return float(len(self._tiles))
+        return float(len(self._tile_addresses))
 
     def __len__(self) -> int:
-        return len(self._tiles)
+        return len(self._tile_addresses)
 
     @cached_property
     def _ordered(self) -> tuple[Tile, ...]:
         """The covered tiles by ascending x then y, sorted on first use."""
         # Keep the sort: a set built by difference iterates in a different order from one built directly, which
         # reaches `random_point` and makes a seeded game unreproducible.
-        return tuple(sorted(self._tiles))
+        return tuple(Tile(x, y) for x, y in sorted(self._tile_addresses))
 
     def __iter__(self) -> Iterator[Tile]:
         yield from self._ordered
 
-    def __contains__(self, point: PointLike) -> bool:
+    def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether the tile containing `point` is covered."""
-        return Tile.containing(point) in self._tiles
+        return tile_address_of(point) in self._tile_addresses
 
     @cached_property
     def _spatial_index(self) -> tuple[KDTree, list[Tile]]:
         """A KD-tree over the tile centers, with the tiles in the order it indexes them, built on first use."""
         tiles = list(self._ordered)
-        return KDTree(numpy.array([tile.center for tile in tiles])), tiles
+        return KDTree(numpy.array([(tile.x + 0.5, tile.y + 0.5) for tile in tiles])), tiles
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the covered ground nearest to `point`, and the distance to it."""
-        if not self._tiles:
+        if not self._tile_addresses:
             raise ValueError("an empty tile set has no closest point")
         position = Point(coordinates(point)[:2])
-        if Tile.containing(position) in self._tiles:
+        if tile_address_of(position) in self._tile_addresses:
             return position, 0.0
         tree, tiles = self._spatial_index
         nearest_center_distance, _ = tree.query(position)
@@ -440,20 +454,17 @@ class TileSet(Area):
 
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the covered ground, by `rng` or the `random` module's own generator."""
-        if not self._tiles:
+        if not self._tile_addresses:
             raise ValueError("an empty tile set has no points to draw from")
         choice = random.choice if rng is None else rng.choice
         return choice(self._ordered).random_point(rng=rng)
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing every covered tile."""
-        if not self._tiles:
+        if not self._tile_addresses:
             raise ValueError("an empty tile set has no bounding rectangle")
-        left = min(tile.x for tile in self._tiles)
-        bottom = min(tile.y for tile in self._tiles)
-        right = max(tile.x for tile in self._tiles) + 1
-        top = max(tile.y for tile in self._tiles) + 1
-        return Rectangle(left, bottom, right - left, top - bottom)
+        lowest_x, lowest_y, highest_x, highest_y = self._address_bounds
+        return Rectangle(lowest_x, lowest_y, highest_x - lowest_x + 1, highest_y - lowest_y + 1)
 
     def tiles(self) -> TileSet:
         """The tile set itself."""
@@ -463,7 +474,7 @@ class TileSet(Area):
         """The covered tiles that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed `[x, y]`
         over their bounding rectangle, and first the tile at its `[0, 0]` entry: an empty mask at `Tile(0, 0)` for
         none."""
-        xs, ys = self._addresses
+        xs, ys = self._address_arrays
         if within is None or not len(xs) or self._lies_within(within):
             # Kept once built: its size is at most that of `within`, or of the set's own bounds if none was given.
             return self._mask_over_bounds
@@ -486,53 +497,55 @@ class TileSet(Area):
     def _address_bounds(self) -> tuple[int, int, int, int]:
         """The lowest x and y and the highest x and y of the covered tiles, found on first use. The set is not
         empty."""
-        xs, ys = self._addresses
+        xs, ys = self._address_arrays
         return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
     @cached_property
-    def _addresses(self) -> tuple[ndarray, ndarray]:
+    def _address_arrays(self) -> tuple[ndarray, ndarray]:
         """The x and the y of every covered tile, as two arrays, built on first use."""
-        xs = numpy.fromiter((tile.x for tile in self._tiles), dtype=int, count=len(self._tiles))
-        ys = numpy.fromiter((tile.y for tile in self._tiles), dtype=int, count=len(self._tiles))
-        xs.flags.writeable = ys.flags.writeable = False
-        return xs, ys
+        address_rows = numpy.array(tuple(self._tile_addresses), dtype=int).reshape(-1, 2)
+        address_rows.flags.writeable = False
+        return address_rows[:, 0], address_rows[:, 1]
 
     @cached_property
     def _mask_over_bounds(self) -> tuple[Tile, ndarray]:
         """What `_tile_mask` returns for every covered tile, built on first use."""
-        origin, covered_tiles = _mask_of_addresses(*self._addresses)
+        origin, covered_tiles = _mask_of_addresses(*self._address_arrays)
         covered_tiles.flags.writeable = False
         return origin, covered_tiles
 
     def translated(self, offset: PointLike) -> TileSet:
-        """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a
-        height."""
+        """The tiles shifted by `offset`, snapped back onto the tile grid, as `Tile.translated` shifts each. Raises
+        `ValueError` for an offset with a height."""
         ground_offset = checked_ground_offset(offset)
-        return TileSet(tile.translated(ground_offset) for tile in self._tiles)
+        offset_x, offset_y = ground_offset[0], ground_offset[1]
+        return TileSet._of_addresses(
+            (math.floor(x + 0.5 + offset_x), math.floor(y + 0.5 + offset_y)) for x, y in self._tile_addresses
+        )
 
     def filter(self, predicate: Callable[[Tile], bool]) -> TileSet:
         """The tiles satisfying `predicate`."""
-        return TileSet(tile for tile in self._tiles if predicate(tile))
+        return TileSet(tile for tile in self._ordered if predicate(tile))
 
     def __add__(self, other: Area) -> TileSet:
         if not isinstance(other, Area):
             return NotImplemented
-        return TileSet(self._tiles.union(other.tiles()))
+        return TileSet._of_addresses(self._tile_addresses | other.tiles()._tile_addresses)
 
     def __sub__(self, other: Area) -> TileSet:
         if not isinstance(other, Area):
             return NotImplemented
-        return TileSet(self._tiles.difference(other.tiles()))
+        return TileSet._of_addresses(self._tile_addresses - other.tiles()._tile_addresses)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TileSet):
             return NotImplemented
-        return self._tiles == other._tiles
+        return self._tile_addresses == other._tile_addresses
 
     def __hash__(self) -> int:
-        return hash(self._tiles)
+        return hash(self._tile_addresses)
 
     def __repr__(self) -> str:
-        if not self._tiles:
+        if not self._tile_addresses:
             return "TileSet(empty)"
-        return f"TileSet({len(self._tiles)} tiles around {self.center})"
+        return f"TileSet({len(self._tile_addresses)} tiles around {self.center})"

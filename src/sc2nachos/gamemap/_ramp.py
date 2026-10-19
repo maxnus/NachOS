@@ -63,17 +63,17 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
         if high - low >= _HALF_A_LEVEL:
             ramps.append(
                 Ramp(
-                    tiles=TileSet(_tiles(patch, origin)),
+                    tiles=_tile_set_where(patch, origin),
                     # A ramp climbs at least half a level, more than the two bytes its ends reach into it, so top
                     # and bottom cannot overlap.
-                    top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
-                    bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
+                    top=_tile_set_where(patch & (heights >= high - _A_BYTE), origin),
+                    bottom=_tile_set_where(patch & (heights <= low + _A_BYTE), origin),
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))
 
 
-def _tiles(mask: ndarray, origin: Tile) -> list[Tile]:
+def _tile_set_where(mask: ndarray, origin: Tile) -> TileSet:
     """The tiles where `mask` is true, addressed from the grid's `origin`."""
     xs, ys = numpy.nonzero(mask)
-    return [Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]
+    return TileSet._of_addresses(zip((xs + origin.x).tolist(), (ys + origin.y).tolist(), strict=True))
