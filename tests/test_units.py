@@ -596,6 +596,15 @@ class TestConstruction:
         assert (scv.construction, depot.builder) == (None, None)
         assert not scv.is_dead
 
+    def test_a_dead_scv_builds_nothing(self) -> None:
+        """The structure it was building is halted, so it has no builder either."""
+        game = _Game()
+        scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
+        game.observe(16, _building_depot(2, 0.3), dead=(1,))
+        assert isinstance(scv, OwnUnit) and isinstance(depot, OwnUnit)
+        assert scv.is_dead
+        assert (scv.construction, depot.builder) == (None, None)
+
     def test_a_halted_structure_has_no_builder(self) -> None:
         game = _Game()
         scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))

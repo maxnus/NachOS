@@ -38,13 +38,13 @@ class _BuilderTracker:
         self._builders_now: dict[Unit[Any], Unit[Any]] | None = None
 
     def structure_built_by(self, unit: Unit[Any]) -> Unit[Any] | None:
-        """The unfinished structure of this player's that `unit`'s first order builds, or `None`.
+        """The unfinished structure of this player's that `unit`'s first order builds, or `None`, as for a dead unit.
 
         An SCV's build order is aimed at the structure's center once construction starts, and at the structure itself
         once construction is resumed (in game).
         """
         orders = unit._latest_report.orders
-        if not orders:
+        if not orders or unit._dead:
             return None
         order = orders[0]
         if (target := self._order_target_position(order)) is None:
