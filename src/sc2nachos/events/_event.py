@@ -179,7 +179,7 @@ class AnyUpgradeEvent(Event):
 
 class OwnUpgradeStartedEvent(AnyUpgradeEvent):
     """A research of this player's first shows in a structure's orders, queued behind another included, which the game
-    charges at once. From now on `api.research_progress` reads it."""
+    charges at once. From now on `api.research_progress` reads it and `api.researches` lists it."""
 
     unit: OwnUnit[Any]
     """The structure researching it."""

@@ -33,7 +33,7 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
-from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
+from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
 
@@ -272,6 +272,12 @@ class Api:
         """How far along this player's research of `upgrade` is, from 0 to 1, or `None` if nothing researches it. A
         finished one is in `upgrades`."""
         return self._current_game().state.production.progress(upgrade)
+
+    @property
+    def researches(self) -> tuple[Research, ...]:
+        """Each research this player has running or queued in the last observation, with its structure and progress,
+        in the order the observation lists the structures and each its orders."""
+        return self._current_game().state.production.researches
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:

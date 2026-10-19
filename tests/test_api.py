@@ -29,7 +29,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
-from sc2nachos.state import ActionResult
+from sc2nachos.state import ActionResult, Research
 from sc2nachos.units import Alliance, UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
@@ -317,6 +317,7 @@ class TestPlaying:
         api = Api()
         counted: list[tuple[int, int, int, int, float | None]] = []
         zealots: list[tuple[UnitTypeId, int, float | None]] = []
+        researches: list[tuple[Research, ...]] = []
 
         @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
@@ -331,11 +332,13 @@ class TestPlaying:
                 )
             )
             zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
+            researches.append(api.researches)
 
         api.play(client)
 
         assert counted == [(1, 1, 1, 0, None)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
+        assert researches == [()]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [

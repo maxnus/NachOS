@@ -104,8 +104,12 @@ _MAKING_TABLES = make_tables(
         data_pb2.AbilityData(ability_id=AbilityId.ZERGLING_MORPH_BANELING),
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
+        data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1),
     ],
-    upgrades=[data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100)],
+    upgrades=[
+        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_WEAPONS_1, mineral_cost=100, vespene_cost=100),
+        data_pb2.UpgradeData(upgrade_id=UpgradeId.TERRAN_INFANTRY_ARMOR_1, mineral_cost=100, vespene_cost=100),
+    ],
 )
 
 
@@ -198,6 +202,18 @@ class TestProduction:
         state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.ENGINEERING_BAY, research)])
         assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_1) == 0.25
         assert state.production.progress(UpgradeId.TERRAN_INFANTRY_WEAPONS_2) is None
+
+    def test_each_research_running_or_queued_is_one_with_its_structure_and_progress(self) -> None:
+        weapons = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, 0.25)
+        armor = _making(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1)
+        bays = [_done(1, UnitTypeId.ENGINEERING_BAY, weapons, armor), _done(2, UnitTypeId.ENGINEERING_BAY)]
+        state = _Game(tables=_MAKING_TABLES).observe(units=bays)
+        assert [
+            (research.upgrade, research.unit.tag, research.progress) for research in state.production.researches
+        ] == [
+            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 0.25),
+            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 0.0),
+        ]
 
 
 class TestScore:

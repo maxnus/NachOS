@@ -8,7 +8,7 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos._game import _Game
+from sc2nachos._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
@@ -217,6 +217,9 @@ def make_unit(
 # The player a game `played` builds plays as, and the one observer it has.
 PLAYER_ID = 1
 OBSERVER_ID = 3
+_WITH_AN_OBSERVER = sc2api_pb2.ResponseGameInfo(
+    player_info=[sc2api_pb2.PlayerInfo(player_id=OBSERVER_ID, type=sc2api_pb2.PlayerType.Observer)]
+)
 
 # Every event a turn can report, in the order it reports them.
 HAPPENINGS: tuple[type[Event], ...] = (
@@ -289,11 +292,10 @@ def played(
     events: _EventBus,
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
-    player_id: int | None = PLAYER_ID,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
-    `player_id`."""
+    `PLAYER_ID` with `OBSERVER_ID` watching."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
@@ -322,8 +324,7 @@ def played(
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
-            player_id=player_id,
-            observer_ids=frozenset({OBSERVER_ID}),
+            _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
         )
         game._read(observation, step)

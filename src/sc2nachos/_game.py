@@ -76,18 +76,28 @@ from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
 
-# Alerts by their protocol value.
-_ALERTS: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
-# The kinds of a happening that comes in a kind for each side, by the alliance of the unit it happened to.
-type _BySide = Mapping[Alliance, type[Event]]
-_TYPE_CHANGED: Final[_BySide] = MappingProxyType(
+_ALERT_BY_VALUE: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
+# The event a happening comes as, by the alliance of the unit it happened to. An alliance left out gets none.
+type _EventTypeByAlliance = Mapping[Alliance, type[Event]]
+_TYPE_CHANGED_EVENT_BY_ALLIANCE: Final[_EventTypeByAlliance] = MappingProxyType(
     {Alliance.OWN: OwnUnitTypeChangedEvent, Alliance.ENEMY: EnemyUnitTypeChangedEvent}
 )
-_DIED: Final[_BySide] = MappingProxyType(
+_DIED_EVENT_BY_ALLIANCE: Final[_EventTypeByAlliance] = MappingProxyType(
     {Alliance.OWN: OwnUnitDiedEvent, Alliance.ENEMY: EnemyUnitDiedEvent, Alliance.NEUTRAL: NeutralUnitDiedEvent}
 )
-# The kinds a chat message comes as.
-_CHAT: Final[tuple[type[AnyChatEvent], ...]] = (OwnChatEvent, OpponentChatEvent)
+_CHAT_EVENT_TYPES: Final[tuple[type[AnyChatEvent], ...]] = (OwnChatEvent, OpponentChatEvent)
+
+
+@dataclass(frozen=True, slots=True)
+class _Snapshot[T]:
+    """A value as it stood at one tracker update."""
+
+    value: T
+    update: int = -1
+
+    def at(self, update: int, *, otherwise: T) -> T:
+        """The value if it was taken at `update`, else `otherwise`."""
+        return self.value if self.update == update else otherwise
 
 
 @dataclass(slots=True, kw_only=True)
@@ -108,19 +118,17 @@ class _Game:
     pathing: Final[Pathing]
     camera: Final[Camera]
     debug: Final[DebugCommands]
-    # This player's id, and the ids of the game's observers, which tell whose a chat message is.
-    player_id: Final[int | None]
-    observer_ids: Final[frozenset[int]]
-    # The ids of this player's units idle as `OwnUnitBecameIdleEvent` counts it, at the tracker's update `idle_update`.
-    idle_unit_ids: frozenset[int] = frozenset()
-    idle_update: int = -1
-    # The upgrades being researched, each with its structure, at the tracker's update `researching_update`.
-    researching: Mapping[UpgradeId, OwnUnit[Any]] = field(default_factory=dict)
-    researching_update: int = -1
+    # The event each player's chat comes as, by player id: this player's own, and `None` for an observer's. Any other
+    # player's is the opponent's.
+    _chat_event_types: Final[Mapping[int, type[AnyChatEvent] | None]]
+    # The ids of this player's units idle as `OwnUnitBecameIdleEvent` counts it, at the update they were taken.
+    _idle_unit_ids: _Snapshot[frozenset[int]] = field(default_factory=lambda: _Snapshot(frozenset()))
+    # The upgrades being researched, each with its structure, at the update they were taken.
+    _researching: _Snapshot[Mapping[UpgradeId, OwnUnit[Any]]] = field(default_factory=lambda: _Snapshot({}))
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
     # The turn's chat, in the order given, as the actions that send it.
-    chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
+    _chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
     step: int
     result: Result | None = None
@@ -162,8 +170,7 @@ class _Game:
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=_the_other_player(info, client.player_id), step=step),
-            player_id=client.player_id,
-            observer_ids=_observer_ids(info),
+            _chat_event_types=_chat_event_types_by_player(info, client.player_id),
             step=step,
         )
         game._read(observation, step)
@@ -214,76 +221,79 @@ class _Game:
     def _report_units_coming_and_changing(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` the units first seen, and those that changed type or sides, that a handler wants."""
         changes = self.tracker.last_changes
-        hand_on = functools.partial(self._hand_on, subscriptions, happened)
-        hand_on(OwnUnitCreatedEvent, changes.own_units_created)
-        hand_on(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen)
-        self._hand_on_by_side(subscriptions, happened, _TYPE_CHANGED, changes.units_type_changed, tuples=True)
-        hand_on(UnitAllianceChangedEvent, changes.units_alliance_changed, tuples=True)
+        add_wanted = functools.partial(self._add_wanted_events, subscriptions, happened)
+        add_wanted(OwnUnitCreatedEvent, changes.own_units_created)
+        add_wanted(EnemyUnitFirstSeenEvent, changes.enemy_units_first_seen)
+        self._add_wanted_events_by_alliance(
+            subscriptions, happened, _TYPE_CHANGED_EVENT_BY_ALLIANCE, changes.units_type_changed, tuples=True
+        )
+        add_wanted(UnitAllianceChangedEvent, changes.units_alliance_changed, tuples=True)
 
     def _report_construction_and_research(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` the constructions and warp-ins started and finished, and the researches started, stopped
         and finished, that a handler wants."""
         changes = self.tracker.last_changes
-        hand_on = functools.partial(self._hand_on, subscriptions, happened)
+        add_wanted = functools.partial(self._add_wanted_events, subscriptions, happened)
         if changes.own_units_created:
             if _wants_any(subscriptions, OwnConstructionStartedEvent):
                 built = [u for u in changes.own_units_created if not u.is_complete and self._is_structure(u)]
-                hand_on(OwnConstructionStartedEvent, built)
+                add_wanted(OwnConstructionStartedEvent, built)
             if _wants_any(subscriptions, OwnWarpInStartedEvent):
                 warping = [u for u in changes.own_units_created if not u.is_complete and not self._is_structure(u)]
-                hand_on(OwnWarpInStartedEvent, warping)
+                add_wanted(OwnWarpInStartedEvent, warping)
         if changes.own_units_finished:
             if _wants_any(subscriptions, OwnConstructionFinishedEvent):
-                hand_on(OwnConstructionFinishedEvent, [u for u in changes.own_units_finished if self._is_structure(u)])
+                finished = [unit for unit in changes.own_units_finished if self._is_structure(unit)]
+                add_wanted(OwnConstructionFinishedEvent, finished)
             if _wants_any(subscriptions, OwnWarpInFinishedEvent):
                 warped = [unit for unit in changes.own_units_finished if not self._is_structure(unit)]
-                hand_on(OwnWarpInFinishedEvent, warped)
+                add_wanted(OwnWarpInFinishedEvent, warped)
         if _wants_any(subscriptions, OwnUpgradeStartedEvent) or _wants_any(subscriptions, OwnUpgradeStoppedEvent):
             started, stopped = self._researches_started_and_stopped()
-            hand_on(OwnUpgradeStartedEvent, started, tuples=True)
-            hand_on(OwnUpgradeStoppedEvent, stopped, tuples=True)
-        hand_on(OwnUpgradeFinishedEvent, changes.own_upgrades_finished)
+            add_wanted(OwnUpgradeStartedEvent, started, tuples=True)
+            add_wanted(OwnUpgradeStoppedEvent, stopped, tuples=True)
+        add_wanted(OwnUpgradeFinishedEvent, changes.own_upgrades_finished)
 
     def _report_what_units_went_through(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` what units went through since the observation before that a handler wants: damage,
         energy lost, vitals crossed, cloak and buffs changed, and sight and areas entered and left."""
         changes = self.tracker.last_changes
-        hand_on = functools.partial(self._hand_on, subscriptions, happened)
+        add_wanted = functools.partial(self._add_wanted_events, subscriptions, happened)
         compared, watched = self._compare(subscriptions), self._watch(subscriptions)
         own, enemy = changes.own, changes.enemy
         if compared:
-            hand_on(OwnUnitDamagedEvent, own.damaged, tuples=True)
-            hand_on(EnemyUnitDamagedEvent, enemy.damaged, tuples=True)
-            hand_on(OwnUnitEnergyLostEvent, own.energy_lost, tuples=True)
-            hand_on(EnemyUnitEnergyLostEvent, enemy.energy_lost, tuples=True)
+            add_wanted(OwnUnitDamagedEvent, own.damaged, tuples=True)
+            add_wanted(EnemyUnitDamagedEvent, enemy.damaged, tuples=True)
+            add_wanted(OwnUnitEnergyLostEvent, own.energy_lost, tuples=True)
+            add_wanted(EnemyUnitEnergyLostEvent, enemy.energy_lost, tuples=True)
         if watched:
-            hand_on(OwnUnitVitalReachedEvent, own.vital_reached, tuples=True)
-            hand_on(EnemyUnitVitalReachedEvent, enemy.vital_reached, tuples=True)
-            hand_on(OwnUnitVitalDroppedEvent, own.vital_dropped, tuples=True)
-            hand_on(EnemyUnitVitalDroppedEvent, enemy.vital_dropped, tuples=True)
+            add_wanted(OwnUnitVitalReachedEvent, own.vital_reached, tuples=True)
+            add_wanted(EnemyUnitVitalReachedEvent, enemy.vital_reached, tuples=True)
+            add_wanted(OwnUnitVitalDroppedEvent, own.vital_dropped, tuples=True)
+            add_wanted(EnemyUnitVitalDroppedEvent, enemy.vital_dropped, tuples=True)
         if compared:
-            hand_on(OwnUnitCloakChangedEvent, own.cloak_changed, tuples=True)
-            hand_on(EnemyUnitCloakChangedEvent, enemy.cloak_changed, tuples=True)
-            hand_on(OwnUnitGainedBuffEvent, own.gained_buff, tuples=True)
-            hand_on(EnemyUnitGainedBuffEvent, enemy.gained_buff, tuples=True)
-            hand_on(OwnUnitLostBuffEvent, own.lost_buff, tuples=True)
-            hand_on(EnemyUnitLostBuffEvent, enemy.lost_buff, tuples=True)
-        hand_on(EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight)
-        hand_on(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight)
+            add_wanted(OwnUnitCloakChangedEvent, own.cloak_changed, tuples=True)
+            add_wanted(EnemyUnitCloakChangedEvent, enemy.cloak_changed, tuples=True)
+            add_wanted(OwnUnitGainedBuffEvent, own.gained_buff, tuples=True)
+            add_wanted(EnemyUnitGainedBuffEvent, enemy.gained_buff, tuples=True)
+            add_wanted(OwnUnitLostBuffEvent, own.lost_buff, tuples=True)
+            add_wanted(EnemyUnitLostBuffEvent, enemy.lost_buff, tuples=True)
+        add_wanted(EnemyUnitEnteredSightEvent, changes.enemy_units_entered_sight)
+        add_wanted(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight)
         if watched:
-            hand_on(OwnUnitEnteredAreaEvent, own.entered_area, tuples=True)
-            hand_on(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
-            hand_on(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
-            hand_on(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
+            add_wanted(OwnUnitEnteredAreaEvent, own.entered_area, tuples=True)
+            add_wanted(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
+            add_wanted(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
+            add_wanted(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
 
     def _report_idle_units_and_deaths(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` the units become idle, those the game reports dead and those found dead, that a handler
         wants."""
         changes = self.tracker.last_changes
         if _wants_any(subscriptions, OwnUnitBecameIdleEvent):
-            self._hand_on(subscriptions, happened, OwnUnitBecameIdleEvent, self._units_become_idle())
-        self._hand_on_by_side(subscriptions, happened, _DIED, changes.units_died)
-        self._hand_on(subscriptions, happened, UnitFoundDeadEvent, changes.units_found_dead)
+            self._add_wanted_events(subscriptions, happened, OwnUnitBecameIdleEvent, self._units_become_idle())
+        self._add_wanted_events_by_alliance(subscriptions, happened, _DIED_EVENT_BY_ALLIANCE, changes.units_died)
+        self._add_wanted_events(subscriptions, happened, UnitFoundDeadEvent, changes.units_found_dead)
 
     def _report_actions_chat_and_alerts(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` this player's actions, the chat and the alerts of the last observation that a handler
@@ -292,16 +302,16 @@ class _Game:
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
                 add(OwnActionEvent(action, step=step))
-        if observation.chat and any(subscriptions.wants_every(kind) for kind in _CHAT):
+        if observation.chat and any(subscriptions.wants_every(kind) for kind in _CHAT_EVENT_TYPES):
             for message in observation.chat:
-                kind = self._chat_kind(message.player_id)
+                kind = self._chat_event_type(message.player_id)
                 if kind is not None and subscriptions.wants_every(kind):
                     add(kind(message.player_id, message.message, step=step))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
                 # `AlertError` and `TrainError` have no member and are skipped.
-                if (alert := _ALERTS.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
+                if (alert := _ALERT_BY_VALUE.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
                     add(AlertEvent(alert, step=step))
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
@@ -353,7 +363,7 @@ class _Game:
         )
         return True
 
-    def _hand_on(
+    def _add_wanted_events(
         self,
         subscriptions: _EventSubscriptions,
         happened: list[Event],
@@ -379,18 +389,18 @@ class _Game:
             elif every or key_of(item) in keys:
                 add(make(item, step=step))
 
-    def _hand_on_by_side(
+    def _add_wanted_events_by_alliance(
         self,
         subscriptions: _EventSubscriptions,
         happened: list[Event],
-        kinds: _BySide,
+        kinds: _EventTypeByAlliance,
         found: Sequence[Any],
         *,
         tuples: bool = False,
     ) -> None:
         """Add to `happened`, for each item of `found` a handler wants, the event of `kinds` for the alliance its unit
-        is on, made as `_hand_on` makes it; a unit of an alliance `kinds` leaves out gets none. The unit is the item, or
-        its first item if `tuples`."""
+        is on, made as `_add_wanted_events` makes it; a unit of an alliance `kinds` leaves out gets none. The unit is
+        the item, or its first item if `tuples`."""
         if not found:
             return
         wanted = {alliance: _wanted(subscriptions, kind) for alliance, kind in kinds.items()}
@@ -411,13 +421,13 @@ class _Game:
         `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
         when the update before was not looked at. Keeps the idle units for the next update: call it once an update."""
         update = self.tracker.last_changes.update
-        before = self.idle_unit_ids if self.idle_update == update - 1 else frozenset()
+        before = self._idle_unit_ids.at(update - 1, otherwise=frozenset())
         idle = [
             unit
             for unit in self.tracker.unit_tracker.present.own
             if unit.is_complete and unit.is_idle and not self.orders.issued_to(unit, include_sent=True)
         ]
-        self.idle_unit_ids, self.idle_update = frozenset(unit.id for unit in idle), update
+        self._idle_unit_ids = _Snapshot(frozenset(unit.id for unit in idle), update)
         return [unit for unit in idle if unit.id not in before]
 
     def _researches_started_and_stopped(
@@ -427,20 +437,18 @@ class _Game:
         now without having finished, each with its structure, in id order. None stopped, and every one showing started,
         when the update before was not looked at. Keeps the researches for the next update: call it once an update."""
         update = self.tracker.last_changes.update
-        before = self.researching if self.researching_update == update - 1 else {}
+        before = self._researching.at(update - 1, otherwise={})
         now = self.state.production.researchers
-        self.researching, self.researching_update = dict(now), update
+        self._researching = _Snapshot(dict(now), update)
         finished = set(self.tracker.last_changes.own_upgrades_finished)
         started = [(upgrade, now[upgrade]) for upgrade in sorted(now.keys() - before.keys())]
         gone = sorted(before.keys() - now.keys() - finished)
         return started, [(upgrade, before[upgrade]) for upgrade in gone]
 
-    def _chat_kind(self, player_id: int) -> type[AnyChatEvent] | None:
+    def _chat_event_type(self, player_id: int) -> type[AnyChatEvent] | None:
         """The event a chat message of the player `player_id` comes as, or `None` for an observer's, which comes as
         none."""
-        if player_id in self.observer_ids:
-            return None
-        return OwnChatEvent if player_id == self.player_id else OpponentChatEvent
+        return self._chat_event_types.get(player_id, OpponentChatEvent)
 
     def _is_structure(self, unit: Unit[Any]) -> bool:
         """Whether the game's tables give the type of `unit` the structure attribute."""
@@ -450,12 +458,12 @@ class _Game:
     def queue_chat(self, text: str, *, team_only: bool) -> None:
         """Send `text` to every player, or to this player's team only if `team_only`, with the turn's request."""
         channel = sc2api_pb2.ActionChat.Team if team_only else sc2api_pb2.ActionChat.Broadcast
-        self.chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
+        self._chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
     def send_turn(self) -> None:
         """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request,
         and after it the debug commands and drawing."""
-        chat, self.chat_to_send = self.chat_to_send, []
+        chat, self._chat_to_send = self._chat_to_send, []
         move = self.camera._create_move_action()
         self.orders._send(self.client, then=[*([] if move is None else [move]), *chat])
         self.debug._send()
@@ -504,9 +512,17 @@ def _wanted(subscriptions: _EventSubscriptions, event_type: type[Event]) -> tupl
     return every, _NO_KEYS if every else subscriptions.wanted_keys(event_type)
 
 
-def _observer_ids(info: sc2api_pb2.ResponseGameInfo) -> frozenset[int]:
-    """The ids of the observers of the game `info` describes."""
-    return frozenset(entry.player_id for entry in info.player_info if entry.type == sc2api_pb2.PlayerType.Observer)
+def _chat_event_types_by_player(
+    info: sc2api_pb2.ResponseGameInfo, player: int | None
+) -> Mapping[int, type[AnyChatEvent] | None]:
+    """The event the chat of each player of the game `info` describes comes as, for those whose chat is not the
+    opponent's: `player`'s own, and none for an observer's."""
+    event_types: dict[int, type[AnyChatEvent] | None] = {
+        entry.player_id: None for entry in info.player_info if entry.type == sc2api_pb2.PlayerType.Observer
+    }
+    if player is not None:
+        event_types[player] = OwnChatEvent
+    return MappingProxyType(event_types)
 
 
 def _wants_any(subscriptions: _EventSubscriptions, event_type: type[Event]) -> bool:

@@ -952,7 +952,7 @@ class TestSides:
         record(game.events, OwnUnitCreatedEvent)
         game.observe(0)
         assert game._game is not None
-        monkeypatch.setattr(type(game._game), "_chat_kind", lambda *_: pytest.fail("a message was read"))
+        monkeypatch.setattr(type(game._game), "_chat_event_type", lambda *_: pytest.fail("a message was read"))
         game.observe(16, chat=[(2, "gl hf")])
 
     def test_a_unit_a_neural_parasite_holds_dies_on_the_holders_side(self) -> None:
@@ -1258,10 +1258,16 @@ class TestAgainstTheRealGame:
             game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, researcher)
             game.order(AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1, researcher)
             _until(game, lambda: len(_of(seen, OwnUpgradeStartedEvent)) == 2, steps=1)
+            weapons, armor = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1
+            researches = game.state.production.researches
+            assert [(research.upgrade, research.unit) for research in researches] == [
+                (weapons, researcher),
+                (armor, researcher),
+            ]
+            assert researches[1].progress == 0.0
             game.order(AbilityId.CANCEL_LAST, researcher)
             _until(game, lambda: _of(seen, OwnUpgradeFinishedEvent))
             started = [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStartedEvent)]
-            weapons, armor = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1
             assert started == [(weapons, researcher), (armor, researcher)]
             assert [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStoppedEvent)] == [(armor, researcher)]
             (upgrade,) = _of(seen, OwnUpgradeFinishedEvent)

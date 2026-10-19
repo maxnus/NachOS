@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
+from sc2nachos.state._research import Research
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
@@ -26,13 +27,14 @@ class _Production:
     the structure itself. An order not yet sent is nowhere.
     """
 
-    __slots__ = ("_items", "_progress", "_researchers")
+    __slots__ = ("_items", "_progress", "_researchers", "_researches")
 
     def __init__(self, units: Iterable[OwnUnit[Any]], game_data: GameData) -> None:
         """Read what `units` are making, by what `game_data` says each ability makes."""
         self._items: list[InProduction] = []
         self._progress: dict[UpgradeId, float] = {}
         self._researchers: dict[UpgradeId, OwnUnit[Any]] = {}
+        self._researches: list[Research] = []
         for unit in units:
             self._read(unit, game_data)
 
@@ -43,6 +45,11 @@ class _Production:
     def progress(self, upgrade: UpgradeId) -> float | None:
         """How far along a research of `upgrade` is, from 0 to 1, or `None` if nothing researches it."""
         return self._progress.get(upgrade)
+
+    @property
+    def researches(self) -> tuple[Research, ...]:
+        """Each research running or queued, in the order the observation lists the structures and each its orders."""
+        return tuple(self._researches)
 
     @property
     def researchers(self) -> Mapping[UpgradeId, OwnUnit[Any]]:
@@ -62,6 +69,7 @@ class _Production:
             if isinstance(product, UpgradeId):
                 self._progress[product] = max(self._progress.get(product, 0.0), order.progress)
                 self._researchers.setdefault(product, unit)
+                self._researches.append(Research(product, unit, order.progress))
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
 
