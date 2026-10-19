@@ -1650,7 +1650,7 @@ class _ProductionBot:
         self.made = False
         self.ordered = False
         self.reads: list[tuple[int, float | None, float | None]] = []
-        self.steps_left: list[tuple[int, float]] = []
+        self.steps_left: list[tuple[int, int]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1798,9 +1798,9 @@ class TestAgainstTheRealGame:
         progress = [each for _, each, _ in bot.reads if each is not None]
         assert progress == sorted(progress)
         assert 0.0 < progress[-1] < 1.0
-        # The steps a research has left count down a step a step.
-        (first_step, first_left), (last_step, last_left) = bot.steps_left[0], bot.steps_left[-1]
-        assert abs((first_left - last_left) - (last_step - first_step)) <= 2
+        # Every read of the steps a research has left names one step for it to finish at.
+        assert len(bot.steps_left) > 1
+        assert len({step + left for step, left in bot.steps_left}) == 1
         assert all(marine is not None for count, _, marine in bot.reads if count)
         marine = [each for count, _, each in bot.reads if count == 2 and each is not None]
         assert marine == sorted(marine)

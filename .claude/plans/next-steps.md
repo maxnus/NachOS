@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #130. `uv run pytest` passes 2219 tests on branch `claude/more-events`;
+- nachOS `main` has every PR to #130. `uv run pytest` passes 2226 tests on branch `claude/more-events`;
   `uv run pytest -m integration` passes 32 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -145,7 +145,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
   - `api.researches` (reviews of #131): a mapping from each upgrade running or queued to its `Research` record, with
     `unit`, `progress`, the table's `research_steps` and `steps_left`, chosen over a tuple of records and over a
-    mapping to the structure alone. It replaces `api.research_progress`, which answered one upgrade.
+    mapping to the structure alone. It replaces `api.research_progress`, which answered one upgrade. Both counts are
+    whole steps (the owner): the tables' research times are whole, and the progress rounds to the steps left exactly
+    (tool `sweep_orders`, `research-ends`).
   - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
     existing pairs had it; `unit.first_alliance` says whose it was.
   - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other

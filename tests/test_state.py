@@ -210,8 +210,8 @@ class TestProduction:
             (upgrade, research.unit.tag, research.progress, research.steps_left)
             for upgrade, research in researches.items()
         ] == [
-            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 0.25, 1920.0),
-            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 0.0, 2560.0),
+            (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 0.25, 1920),
+            (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 0.0, 2560),
         ]
         assert all(upgrade is research.upgrade for upgrade, research in researches.items())
         assert UpgradeId.TERRAN_INFANTRY_WEAPONS_2 not in researches

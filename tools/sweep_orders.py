@@ -41,7 +41,8 @@ and runs its trials in turn::
   their own, and two flying barracks a landing, two spine crawlers a rooting and two warp gates a zealot's warp-in,
   each at one point, one command each in one request, to find what each carries out and what is charged.
 - `research-ends` reads a research every step to its end, to find whether its order leaves the structure in the
-  observation the upgrade arrives in, and what a cancel and the structure's death leave.
+  observation the upgrade arrives in, which rounding of its progress gives the steps it has left, and what a cancel and
+  the structure's death leave.
 - `add-on-while-flying` plays without `free`, and tells a flying barracks, factory and starport to build a reactor
   with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
 - `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
@@ -110,6 +111,7 @@ the trial measured. `docs/reference/game-behavior/` holds the conclusions. Measu
 
 import argparse
 import json
+import math
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -4708,8 +4710,12 @@ def _research_ends(game: _Game) -> list[Trial]:
     armor = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1
 
     def researching(tag: int, ability: AbilityId) -> bool:
+        return progress_of(tag, ability) is not None
+
+    def progress_of(tag: int, ability: AbilityId) -> float | None:
         unit = game.unit(tag)
-        return unit is not None and any(order.ability_id == ability for order in unit.orders)
+        orders = [] if unit is None else [order for order in unit.orders if order.ability_id == ability]
+        return orders[0].progress if orders else None
 
     def bay(trial: Trial, ability: AbilityId) -> raw_pb2.Unit | None:
         made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(12), 4))
@@ -4746,22 +4752,57 @@ def _research_ends(game: _Game) -> list[Trial]:
         game.trial("a research whose structure dies 64 steps in", partial(ended, cancel=False)),
     ]
 
-    def finished(trial: Trial) -> None:
-        if (structure := bay(trial, weapons)) is None:
+    def finished(trial: Trial, ability: AbilityId, upgrade: UpgradeId) -> None:
+        if (structure := bay(trial, ability)) is None:
             return
+        research_steps = game.data.upgrades[upgrade].research_steps
+        trial.notes["research steps in the tables"] = research_steps
         last_shown = arrived = None
-        end = game.step + 4000
+        shown: list[tuple[int, float]] = []
+        end = game.step + int(research_steps) + 400
         while game.step < end and arrived is None:
             game.turn(1)
-            if researching(structure.tag, weapons):
+            if (progress := progress_of(structure.tag, ability)) is not None:
                 last_shown = game.step
-            if UpgradeId.TERRAN_INFANTRY_WEAPONS_1 in game.upgrades:
+                shown.append((game.step, progress))
+            if upgrade in game.upgrades:
                 arrived = game.step
         trial.notes["last step it was shown"] = last_shown
         trial.notes["first step the upgrade was listed"] = arrived
+        trial.notes["first and last progress shown"] = [shown[0], shown[-1]] if shown else None
+        if arrived is not None:
+            trial.notes["steps left against the progress"] = _steps_left_fits(shown, arrived, research_steps)
 
-    trials.append(game.trial("a research to its end", finished))
+    trials.append(
+        game.trial(
+            "a research to its end", partial(finished, ability=weapons, upgrade=UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+        )
+    )
+    hisec = AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING
+    trials.append(
+        game.trial(
+            "a shorter research to its end", partial(finished, ability=hisec, upgrade=UpgradeId.HISEC_AUTO_TRACKING)
+        )
+    )
     return trials
+
+
+def _steps_left_fits(shown: Sequence[tuple[int, float]], arrived: int, research_steps: float) -> dict[str, object]:
+    """How each rounding of `(1 - progress) * research_steps` fits the steps a research had left until its upgrade
+    was listed at `arrived`, over `shown`, the steps it showed at with its progress: how many steps it missed, and the
+    first misses as the step, the steps left, and what the rounding gave."""
+    fits: dict[str, object] = {}
+    roundings: dict[str, Callable[[float], int]] = {"floor": math.floor, "ceil": math.ceil, "round": round}
+    for name, rounding in roundings.items():
+        misses = [
+            (step, arrived - step, rounding((1 - progress) * research_steps))
+            for step, progress in shown
+            if rounding((1 - progress) * research_steps) != arrived - step
+        ]
+        fits[name] = {"misses": len(misses), "first misses": misses[:4]}
+    left_less_estimate = [arrived - step - (1 - progress) * research_steps for step, progress in shown]
+    fits["steps left less the estimate, least and most"] = [min(left_less_estimate), max(left_less_estimate)]
+    return fits
 
 
 _SWEEPS: dict[str, _Sweep] = {

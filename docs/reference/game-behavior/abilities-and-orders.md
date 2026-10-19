@@ -379,10 +379,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   unit was making is known only from the unit being gone, never from a report (tool `sweep_orders`).
 - A research's order leaves its structure in the step its upgrade is first listed, so no observation shows neither:
   infantry weapons 1, ordered at step 218, was last shown at 2777 and listed from 2778, the 2560 steps its row in the
-  game's tables gives as its research time. Cancelled 64 steps in with
-  `CANCEL_LAST`, it was gone by the next step and gave back 100/100; with its engineering bay killed by debug command
-  64 steps in, the bay was gone within 3 steps and 100/100 came back within 18. Neither listed the upgrade (tool
-  `sweep_orders`, `research-ends`, twice; local game, build 75689).
+  game's tables gives as its research time, and Hi-Sec Auto Tracking, ordered at 2800, was listed from 4080, its
+  row's 1280. The order's progress is the steps done over that time, sent as a 32-bit float: `(1 - progress)` times
+  the time came within 0.00006 of the steps left at each of the 2559 and the 1279 steps the two showed, so rounding it
+  gives the steps left exactly, where flooring or ceiling it misses some 40% of steps. Infantry armor 1 cancelled 64
+  steps in with `CANCEL_LAST` was gone by the next step and gave back 100/100; with its engineering bay killed by
+  debug command 64 steps in, the bay was gone within 3 steps and 100/100 came back within 18. Neither listed the
+  upgrade (tool
+  `sweep_orders`, `research-ends`, twice, the progress in two more runs; local game, build 75689).
 
 ## Actions the game reports
 
