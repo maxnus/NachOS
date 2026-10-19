@@ -51,27 +51,40 @@ class WebSocketTransport:
         return cls(websocket)
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        """Send `request`, wait for the game's answer, and return it."""
+        """Send `request`, wait for the game's answer, and return it.
+
+        A request that fails once sent closes the connection, since an answer still to come would be read as the next
+        request's, so every later request raises `ConnectionClosedError`.
+        """
+        payload = request.SerializeToString()
         try:
-            self._websocket.send_binary(request.SerializeToString())
-            payload = self._websocket.recv()
+            return self._exchange(payload)
+        except BaseException:
+            self._websocket.close(timeout=0)
+            raise
+
+    def _exchange(self, payload: bytes) -> sc2api_pb2.Response:
+        """Send `payload`, and read and parse the game's answer."""
+        try:
+            self._websocket.send_binary(payload)
+            answer = self._websocket.recv()
         except WebSocketConnectionClosedException as error:
             raise ConnectionClosedError("the connection to the game closed mid-request") from error
         except WebSocketTimeoutException as error:
-            raise ConnectionTimeoutError("the game did not answer in time") from error
+            raise ConnectionTimeoutError("the game did not answer in time, so the connection is closed") from error
         except WebSocketException as error:
             raise ProtocolError(f"the websocket failed: {error}") from error
         except ConnectionError as error:
             # A game that dies resets the socket, which the websocket library passes through as a bare OSError.
             raise ConnectionClosedError(f"the connection to the game was lost: {error}") from error
-        if payload == "":
+        if answer == "":
             # What the websocket library returns for a close frame: the game or a proxy closed the connection.
             raise ConnectionClosedError("the game closed the connection")
-        if not isinstance(payload, bytes):
-            raise ProtocolError(f"the game sent text where the protocol is binary: {payload!r}")
+        if not isinstance(answer, bytes):
+            raise ProtocolError(f"the game sent text where the protocol is binary: {answer!r}")
         response = sc2api_pb2.Response()
         try:
-            response.ParseFromString(payload)
+            response.ParseFromString(answer)
         except DecodeError as error:
             raise ProtocolError("the game sent an answer that does not parse") from error
         return response

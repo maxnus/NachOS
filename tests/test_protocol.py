@@ -315,6 +315,25 @@ class TestWebSocketTransport:
         with pytest.raises(ProtocolError, match="does not parse"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
+    @pytest.mark.parametrize(
+        "websocket",
+        [
+            FakeWebSocket(failure=WebSocketTimeoutException("timed out")),
+            FakeWebSocket(failure=ConnectionResetError(104, "Connection reset by peer")),
+            FakeWebSocket("Bad Request"),
+            FakeWebSocket(b"\xff\xff\xff"),
+        ],
+        ids=["timeout", "reset", "text", "garbage"],
+    )
+    def test_a_request_that_fails_once_sent_closes_the_connection(self, websocket: FakeWebSocket) -> None:
+        """An answer still to come would otherwise be read as the next request's."""
+        transport = self._transport(websocket)
+        with pytest.raises(ProtocolError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        assert websocket.closed
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()))
+
     def test_closing_closes_the_socket(self) -> None:
         websocket = FakeWebSocket()
         self._transport(websocket).close()
