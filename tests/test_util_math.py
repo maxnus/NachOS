@@ -78,6 +78,10 @@ class TestStickyRound:
     def test_custom_tolerance(self):
         assert sticky_round(4.4, 4, tolerance=0.1) == 4
 
+    def test_a_tie_rounds_up(self):
+        """Python's `round` sends a tie to the even integer, so 2.5 gave 2."""
+        assert [sticky_round(value, 0) for value in (2.5, 3.5, -2.5)] == [3, 4, -2]
+
 
 class TestDamp:
     def test_moves_from_start_toward_end(self):

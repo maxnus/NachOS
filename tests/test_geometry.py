@@ -86,6 +86,12 @@ class TestPoint2:
         """A half-tile lattice is corners, edge midpoints and centers -- not centers alone."""
         assert Point(probe).snapped(step=0.5) == expected, kind
 
+    def test_snapped_rounds_a_tie_up(self) -> None:
+        """Python's `round` sends a tie to the even value, so `Point((0.5, 1.5)).snapped(step=1)` gave (0, 2)."""
+        assert Point((0.5, 1.5)).snapped(step=1) == (1, 2)
+        assert Point((-0.5, -1.5)).snapped(step=1) == (0, -1)
+        assert Point((0.25, 0.75)).snapped(step=0.5) == (0.5, 1.0)
+
     def test_snapped_to_whole_tiles_gives_corners_not_centers(self) -> None:
         assert Point((3.4, 4.6)).snapped(step=1) == (3.0, 5.0)
 

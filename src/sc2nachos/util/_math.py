@@ -28,13 +28,14 @@ def remap(value: float, lower: float, upper: float, *, lower_value: float = 0.0,
 
 
 def sticky_round(value: float, previous_value: int, *, tolerance: float = 1.0) -> int:
-    """`value` rounded, except that it stays at `previous_value` while within `tolerance` of it.
+    """`value` rounded, a tie up, toward the larger integer, except that it stays at `previous_value` while within
+    `tolerance` of it.
 
     Stops an estimate recomputed every step from flickering between neighboring integers.
     """
     if abs(value - previous_value) < tolerance:
         return previous_value
-    return round(value)
+    return math.floor(value + 0.5)
 
 
 def damp(start: float, end: float, *, decay: float, seconds: float) -> float:

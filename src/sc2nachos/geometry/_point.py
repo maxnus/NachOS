@@ -160,11 +160,12 @@ class _PointND(tuple[float, ...]):
         """The nearest point on a lattice of `step` tiles. Height is carried through.
 
         Each axis rounds on its own, so `step=0.5` gives the nearest of a tile's four corners, its four
-        edge midpoints and its center, and `step=1` gives the nearest corner rather than the nearest center.
+        edge midpoints and its center, and `step=1` gives the nearest corner rather than the nearest center. A tie
+        rounds up, toward the larger coordinate: `Point((0.5, -0.5)).snapped(step=1)` is `(1, 0)`.
         """
         if step <= 0:
             raise ValueError(f"a lattice step must be positive, got {step}")
-        snapped = (round(self[0] / step) * step, round(self[1] / step) * step)
+        snapped = (math.floor(self[0] / step + 0.5) * step, math.floor(self[1] / step + 0.5) * step)
         return type(self)(snapped + tuple(self[2:]))
 
     def rounded_down(self, *, step: float) -> Self:
