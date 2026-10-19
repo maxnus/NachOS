@@ -42,11 +42,12 @@ def run_local(
 
     `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
     `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. `record_to` is a file
-    to record the whole conversation into, whose folder must exist, or `FileNotFoundError` is raised before the game
-    starts. However the game ends, the client is stopped and its temporary directory removed.
+    to record the whole conversation into, in a folder that exists, or `FileNotFoundError` is raised before the game
+    starts, and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its
+    temporary directory removed.
     """
-    if record_to is not None and not (folder := Path(record_to).parent).is_dir():
-        raise FileNotFoundError(f"{folder} is no folder to record into")
+    if record_to is not None:
+        _check_recording_path(Path(record_to))
     if isinstance(map_file, str):
         installation = installation or Installation.find()
         map_file = MapFile.find(map_file, installation=installation)
@@ -136,6 +137,14 @@ def _command_line() -> ArgumentParser:
     parser.add_argument("--result-file", type=Path, help="where to write the result, as JSON")
     parser.add_argument("--replay-file", type=Path, help="accepted for the match workflow; no replay is saved yet")
     return parser
+
+
+def _check_recording_path(path: Path) -> None:
+    """Raise `FileNotFoundError` if `path` is in no folder that exists, and `IsADirectoryError` if it is a folder."""
+    if not path.parent.is_dir():
+        raise FileNotFoundError(f"there is no folder {path.parent} to record into")
+    if path.is_dir():
+        raise IsADirectoryError(f"{path} is a folder, not a file to record into")
 
 
 def _connect(url: str, record_to: Path | str | None) -> Client:

@@ -1,6 +1,8 @@
 """The protocol layer, driven entirely through the transport seam."""
 
 import lzma
+import socket
+import time
 from pathlib import Path
 from typing import cast
 
@@ -373,6 +375,22 @@ class TestWebSocketTransport:
         assert websocket.closed
         with pytest.raises(ConnectionClosedError):
             transport.request(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()))
+
+    def test_a_real_websocket_that_times_out_is_closed_without_waiting_for_the_game(self) -> None:
+        """Over a socket pair whose far end, the game, never answers."""
+        ours, game = socket.socketpair()
+        ours.settimeout(0.05)
+        websocket = WebSocket()
+        websocket.sock, websocket.connected = ours, True
+        transport = WebSocketTransport(websocket)
+        start = time.monotonic()
+        with pytest.raises(ConnectionTimeoutError, match="so the connection is closed"):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        assert time.monotonic() - start < 1
+        assert not websocket.connected
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        game.close()
 
     def test_closing_closes_the_socket(self) -> None:
         websocket = FakeWebSocket()

@@ -1,5 +1,6 @@
 """The api and the two runners, tested without a game wherever possible."""
 
+import itertools
 from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
@@ -612,13 +613,18 @@ class TestRunningLocally:
             "leave_game",
         ]
 
-    def test_a_recording_with_no_folder_to_go_in_is_refused_before_the_game_starts(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    @pytest.mark.parametrize(
+        ("recording", "error"),
+        [("missing/game.sc2rec", FileNotFoundError), (".", IsADirectoryError)],
+        ids=["no folder", "a folder"],
+    )
+    def test_a_recording_with_no_file_to_go_in_is_refused_before_the_game_starts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, recording: str, error: type[OSError]
     ) -> None:
         launched: list[bool] = []
         monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
-        with pytest.raises(FileNotFoundError, match="no folder to record into"):
-            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), record_to=str(tmp_path / "missing" / "game.sc2rec"))
+        with pytest.raises(error, match="to record into"):
+            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), record_to=str(tmp_path / recording))
         assert not launched
 
     def test_a_recording_named_by_a_string_is_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -758,3 +764,29 @@ def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
 
     assert result is Result.DEFEAT
     assert api.step == 16
+
+
+@pytest.mark.integration
+def test_in_a_real_realtime_game_each_turn_comes_at_or_after_the_step_asked_for() -> None:
+    """Run with `pytest -m integration`. Plays some ten seconds of a realtime game, whose turns the game paces."""
+    try:
+        MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+
+    api, steps = Api(), []
+    api.on(TurnEvent)(lambda event: steps.append(event.step))
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(
+        _LADDER_MAP,
+        ApiBot(api, Race.TERRAN),
+        opponent,
+        steps_per_turn=8,
+        realtime=True,
+        time_limit=10,
+        window=(640, 480),
+    )
+
+    assert result is Result.TIE
+    assert len(steps) > 10
+    assert all(later - earlier >= 8 for earlier, later in itertools.pairwise(steps))

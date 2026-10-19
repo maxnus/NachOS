@@ -1,5 +1,6 @@
 """A transport over the websocket of a running game client."""
 
+from contextlib import suppress
 from typing import Self
 
 from google.protobuf.message import DecodeError
@@ -59,7 +60,9 @@ class WebSocketTransport:
         try:
             return self._exchange(payload)
         except BaseException:
-            self._websocket.close(timeout=0)
+            # Without waiting for the game's close frame; a failure to close must not hide why the request failed.
+            with suppress(WebSocketException, OSError):
+                self._websocket.close(timeout=0)
             raise
 
     def _exchange(self, payload: bytes) -> sc2api_pb2.Response:
