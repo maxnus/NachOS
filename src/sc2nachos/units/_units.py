@@ -368,8 +368,9 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
     """The ground positions of `of`: a point, a unit, or several of either."""
     if isinstance(of, Unit):
         return [(of._position[0], of._position[1])]
-    # A point is a tuple of numbers; several are anything else that iterates.
-    if isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit)):
+    # A point is a tuple of numbers, and an area is no point, which `_ground` refuses; several are anything else
+    # that iterates.
+    if isinstance(of, Area) or (isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit))):
         return [_ground(cast("PointLike", of))]
     several = cast("Iterable[PointLike | Unit[Any]]", of)
     return [_ground(item._position if isinstance(item, Unit) else item) for item in several]

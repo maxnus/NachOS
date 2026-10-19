@@ -35,12 +35,16 @@ SCALAR_TYPES = (int, float, numbers.Real)
 
 def coordinates(value: PointLike) -> PointLike:
     """`value` itself, checked to be coordinates. Raises `TypeError` for anything else, a `Tile` among them."""
-    # Points first: the common case, and a concrete class is far quicker to test than an ABC.
     if isinstance(value, tuple):
         return value
+    raise not_a_point_error(value)
+
+
+def not_a_point_error(value: object) -> TypeError:
+    """The error for `value` given where a point is wanted, which tells an area to pass its center."""
     if isinstance(value, Area):
-        raise TypeError(f"a {type(value).__name__} is an area, not a point — pass its .center")
-    raise TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
+        return TypeError(f"a {type(value).__name__} is an area, not a point — pass its .center")
+    return TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
 
 
 def checked_ground_offset(offset: PointLike) -> PointLike:

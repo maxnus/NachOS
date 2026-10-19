@@ -13,7 +13,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
+from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates, not_a_point_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -27,8 +27,9 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True, order=True, init=False)
 class Tile(Area):
-    """One square of the map, addressed by the integer coordinates of its lower left corner. Used as a point, a tile
-    reads as its `center`. Tiles sort by `x`, then `y`."""
+    """One square of the map, addressed by the integer coordinates of its lower left corner. An area's `in`, a grid's
+    index and `Tile.containing` take a tile where they take a point; anything else that wants a point takes its
+    `center`. Tiles sort by `x`, then `y`."""
 
     x: int
     """The left edge."""
@@ -122,8 +123,7 @@ def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
         return math.floor(point[0]), math.floor(point[1])
     if type(point) is Tile:
         return point.x, point.y
-    position = coordinates(point)
-    return math.floor(position[0]), math.floor(position[1])
+    raise not_a_point_error(point)
 
 
 def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
@@ -133,7 +133,7 @@ def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
         return value
     if type(value) is Tile:
         return value.center
-    return coordinates(value)
+    raise not_a_point_error(value)
 
 
 @final
@@ -352,8 +352,11 @@ class TileSet(Area):
     _tile_addresses: frozenset[tuple[int, int]]
 
     def __init__(self, tiles: Iterable[Tile]) -> None:
-        """A tile set covering `tiles`."""
-        self._tile_addresses = frozenset((tile.x, tile.y) for tile in tiles)
+        """A tile set covering `tiles`. Raises `TypeError` for anything else among them."""
+        try:
+            self._tile_addresses = frozenset((tile.x, tile.y) for tile in tiles)
+        except AttributeError:
+            raise TypeError("a tile set is built of tiles; Tile.containing gives the one a point falls in") from None
 
     @classmethod
     def _of_addresses(cls, addresses: Iterable[tuple[int, int]]) -> TileSet:

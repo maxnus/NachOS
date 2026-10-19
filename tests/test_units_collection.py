@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import data_pb2, raw_pb2
 
 from sc2nachos.enemy import Enemy
-from sc2nachos.geometry import Circle, Point, Rectangle
+from sc2nachos.geometry import Circle, Point, Rectangle, Tile
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -276,6 +276,11 @@ class TestWhereTheyAre:
         assert _tags(units.within(distance, of=points)) == near(*points)
         assert _tags(units.within(distance, of=[anchor, points[1]])) == near(anchor.position, points[1])
         assert _tags(units.within(distance, of=units[:3])) == near(*(unit.position for unit in units[:3]))
+
+    def test_within_a_distance_of_a_tile_asks_for_its_center(self) -> None:
+        """A tile is no tuple, and was taken for several positions to iterate."""
+        with pytest.raises(TypeError, match="pass its .center"):
+            _mine(3).within(5, of=Tile(1, 2))  # pyright: ignore[reportArgumentType]
 
     @pytest.mark.parametrize("distance", [-1.0, math.nan])
     def test_within_a_negative_distance_raises(self, distance: float) -> None:

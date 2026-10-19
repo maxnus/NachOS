@@ -531,6 +531,11 @@ class TestTile:
         with pytest.raises(IndexError):
             numpy.arange(100).reshape(10, 10)[tile]  # pyright: ignore[reportCallIssue, reportArgumentType]
 
+    def test_a_tile_set_is_built_of_tiles_alone(self) -> None:
+        """A pair was taken, by chance, while a tile was one."""
+        with pytest.raises(TypeError, match="built of tiles"):
+            TileSet([(1, 2)])  # pyright: ignore[reportArgumentType]
+
     def test_sorts_by_x_then_y(self) -> None:
         assert sorted([Tile(2, 0), Tile(1, 5), Tile(1, 2)]) == [Tile(1, 2), Tile(1, 5), Tile(2, 0)]
 
