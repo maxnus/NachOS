@@ -93,7 +93,8 @@ class TilePath(Sequence[Tile]):
         return self._tiles.count(Tile.containing(value))
 
     def __contains__(self, point: object) -> bool:
-        """Whether the path covers the tile holding `point`. Raises `TypeError` on anything but a point.
+        """Whether the path covers the tile holding `point`, a tile reading as itself. Raises `TypeError` on anything
+        but a point or a tile.
 
         This scans the path; build a `TileSet` from it to test many points.
         """

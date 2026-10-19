@@ -1,6 +1,8 @@
 """Geometry primitives."""
 
+import copy
 import math
+import pickle
 import random
 from collections.abc import Callable
 
@@ -92,6 +94,10 @@ class TestPoint2:
         assert Point((0.5, 1.5)).snapped(step=1) == (1, 2)
         assert Point((-0.5, -1.5)).snapped(step=1) == (0, -1)
         assert Point((0.25, 0.75)).snapped(step=0.5) == (0.5, 1.0)
+
+    def test_snapped_rounds_what_lies_below_a_tie_down(self) -> None:
+        """`math.floor(value + 0.5)` took the largest float below 0.5 to 1, and an odd float above 2**52 up one."""
+        assert Point((math.nextafter(0.5, 0), 2.0**52 + 1)).snapped(step=1) == (0, 2**52 + 1)
 
     def test_snapped_to_whole_tiles_gives_corners_not_centers(self) -> None:
         assert Point((3.4, 4.6)).snapped(step=1) == (3.0, 5.0)
@@ -535,6 +541,16 @@ class TestTile:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
 
     @pytest.mark.parametrize(
+        "copy_of",
+        [copy.copy, copy.deepcopy, lambda tile: pickle.loads(pickle.dumps(tile))],
+        ids=["copy", "deep", "pickle"],
+    )
+    def test_copies_and_pickles(self, copy_of: Callable[[Tile], Tile]) -> None:
+        """A tuple's own reduction handed `__new__` one tuple, where it takes x and y, so each of these raised."""
+        assert copy_of(Tile(3, 4)) == Tile(3, 4)
+        assert copy.deepcopy(TileSet([Tile(3, 4)])) == TileSet([Tile(3, 4)])
+
+    @pytest.mark.parametrize(
         "operation",
         [
             lambda tile: Point((1, 0)) + tile,
@@ -685,15 +701,16 @@ class TestAreaAgreement:
     def test_every_shape_shifts_by_a_point_on_the_ground_alone(self, area: Area) -> None:
         """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
         assert area.translated(Point((1, 2))) == area.translated((1, 2))
-        with pytest.raises(TypeError, match="a Tile is an area, not a point"):
+        with pytest.raises(TypeError, match="a Tile is an area, not an offset"):
             area.translated(Tile(1, 1))
         with pytest.raises(ValueError, match=r"drop a height with \.ground"):
             area.translated(Point3D((1, 2, 3)))
+        with pytest.raises(ValueError, match=r"not \(1\.0,\)$"):
+            area.translated((1.0,))  # pyright: ignore[reportArgumentType]
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_draws_its_random_point_by_the_generator_given(self, area: Area) -> None:
         """Every draw came from the `random` module's own generator, so two apis in one process shared one."""
-        random.seed(5)
         untouched = random.getstate()
         first = [area.random_point(rng=random.Random(3)) for _ in range(3)]
         assert [area.random_point(rng=random.Random(3)) for _ in range(3)] == first

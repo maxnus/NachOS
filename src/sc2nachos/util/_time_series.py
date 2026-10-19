@@ -25,8 +25,7 @@ class TimeSeries[T: float]:
 
     Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
     of the series. A slice is a copy, sharing no memory with the series. Steps are contiguous: a gap between appends
-    is filled by linear interpolation, rounded to the nearest whole number in an integer series, a tie to the even
-    one.
+    is filled by linear interpolation, rounded to the nearest whole number in an integer series, a tie up.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
@@ -126,7 +125,9 @@ class TimeSeries[T: float]:
         else:
             interpolated = numpy.linspace(self._buffer[index - gap], value, num=gap + 1)
             if numpy.issubdtype(self._buffer.dtype, numpy.integer):
-                interpolated = numpy.rint(interpolated)
+                # A tie up, as `sticky_round` has it; `numpy.rint` would send it to the even value.
+                floored = numpy.floor(interpolated)
+                interpolated = floored + (interpolated - floored >= 0.5)
             self._buffer[index - gap + 1 : index + 1] = interpolated[1:]
         self._size += gap
 

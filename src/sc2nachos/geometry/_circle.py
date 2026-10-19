@@ -66,10 +66,10 @@ class Circle(Area):
 
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the circle, by `rng` or the `random` module's own generator."""
-        draw = random.random if rng is None else rng.random
+        random_fraction = random.random if rng is None else rng.random
         # sqrt, because a uniform radius would crowd the points toward the center.
-        distance = self._radius * math.sqrt(draw())
-        angle = 2 * math.pi * draw()
+        distance = self._radius * math.sqrt(random_fraction())
+        angle = 2 * math.pi * random_fraction()
         return Point(
             (
                 self._center[0] + distance * math.cos(angle),

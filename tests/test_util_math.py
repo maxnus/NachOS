@@ -82,6 +82,11 @@ class TestStickyRound:
         """Python's `round` sends a tie to the even integer, so 2.5 gave 2."""
         assert [sticky_round(value, 0) for value in (2.5, 3.5, -2.5)] == [3, 4, -2]
 
+    def test_what_lies_below_a_tie_rounds_down(self):
+        """`math.floor(value + 0.5)` took the largest float below 0.5 to 1, and an odd float above 2**52 up one."""
+        assert sticky_round(math.nextafter(0.5, 0), 9) == 0
+        assert sticky_round(2.0**52 + 1, 0) == 2**52 + 1
+
 
 class TestDamp:
     def test_moves_from_start_toward_end(self):

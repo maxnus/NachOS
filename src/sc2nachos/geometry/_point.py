@@ -12,6 +12,7 @@ import numpy
 
 # Imported for the check in `coordinates`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
+from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -45,13 +46,14 @@ def coordinates(value: PointLike) -> PointLike:
 
 
 def checked_ground_offset(offset: PointLike) -> PointLike:
-    """`offset`, checked as `coordinates` checks it, as a shift along the ground. Raises `ValueError` for one with a
-    height."""
+    """`offset`, checked as `coordinates` checks it, as a shift along the ground. Raises `TypeError` for an area, a
+    `Tile` among them, and `ValueError` for anything but two coordinates."""
+    if isinstance(offset, Area):
+        raise TypeError(f"a {type(offset).__name__} is an area, not an offset")
     shift = coordinates(offset)
     if len(shift) != 2:
-        raise ValueError(
-            f"a shape on the ground shifts by two coordinates, not {tuple(shift)}; drop a height with .ground"
-        )
+        height_hint = "; drop a height with .ground" if len(shift) == 3 else ""
+        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(shift)}{height_hint}")
     return shift
 
 
@@ -163,7 +165,7 @@ class _PointND(tuple[float, ...]):
         """
         if step <= 0:
             raise ValueError(f"a lattice step must be positive, got {step}")
-        snapped = (math.floor(self[0] / step + 0.5) * step, math.floor(self[1] / step + 0.5) * step)
+        snapped = (_rounded_half_up(self[0] / step) * step, _rounded_half_up(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
     def rounded_down(self, *, step: float) -> Self:
@@ -276,8 +278,8 @@ class Point(_PointND, tuple[float, float]):
         """The point lifted to height `z`."""
         return Point3D((self[0], self[1], z))
 
-    # Two-coordinate fast paths for a point or a plain tuple, ~2.5x quicker than the general implementation and used
-    # in per-unit loops.
+    # Two-coordinate fast paths for a point or a plain tuple, quicker than the general implementation and used in
+    # per-unit loops.
 
     def __add__(self, other: PointLike | float) -> Point:  # pyright: ignore[reportIncompatibleMethodOverride]
         if (type(other) is Point or type(other) is tuple) and len(other) == 2:

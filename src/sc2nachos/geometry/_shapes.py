@@ -38,6 +38,10 @@ class Tile(tuple[int, int], Area):
         `int`. Raises `TypeError` for any other coordinate, a float among them."""
         return super().__new__(cls, (operator.index(x), operator.index(y)))
 
+    def __reduce__(self) -> tuple[type[Tile], tuple[int, int]]:
+        # A tuple's own hands `__new__` one tuple, where it takes x and y, so a tile could not be copied or pickled.
+        return Tile, (self[0], self[1])
+
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
         """The tile a point falls in, or the tile itself."""
@@ -71,8 +75,8 @@ class Tile(tuple[int, int], Area):
 
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the tile, by `rng` or the `random` module's own generator."""
-        draw = random.random if rng is None else rng.random
-        return Point((self[0] + draw(), self[1] + draw()))
+        random_fraction = random.random if rng is None else rng.random
+        return Point((self[0] + random_fraction(), self[1] + random_fraction()))
 
     @property
     def neighbors4(self) -> tuple[Tile, Tile, Tile, Tile]:
@@ -211,9 +215,14 @@ class Rectangle(Area):
         self._refuse_if_empty("center")
         return Point((self.x + self.width / 2, self.y + self.height / 2))
 
+    @property
+    def _is_empty(self) -> bool:
+        """Whether the rectangle has no width or no height, and so covers nothing."""
+        return not self.width or not self.height
+
     def _refuse_if_empty(self, what: str) -> None:
-        """Raises `ValueError`, naming `what` it lacks, if the rectangle has no width or no height."""
-        if not self.width or not self.height:
+        """Raises `ValueError`, naming `what` it lacks, if the rectangle is empty."""
+        if self._is_empty:
             raise ValueError(f"{self!r} covers no ground, so it has no {what}")
 
     @property
@@ -264,7 +273,7 @@ class Rectangle(Area):
 
     def intersects(self, other: Rectangle) -> bool:
         """Whether the two rectangles share any ground: never when either is empty."""
-        if not self.width or not self.height or not other.width or not other.height:
+        if self._is_empty or other._is_empty:
             return False
         return not (
             self.right <= other.left or self.left >= other.right or self.top <= other.bottom or self.bottom >= other.top
