@@ -73,15 +73,21 @@ class _BuilderTracker:
 
     def link_builder(self, structure: Unit[Any], ordered: list[Unit[Any]]) -> None:
         """Link `structure`, new to this observation, to the unit in `ordered` that became it, if any, and remove
-        that unit from `ordered`.
+        that unit from `ordered`. Only a unit of the type the structure is morphed from can have become it: a drone,
+        never an SCV gone into the refinery it built.
 
         `ordered` holds this player's units that left this observation while carrying out an order. A drone that
         becomes a structure leaves the observation with no death reported, and the structure appears under a new tag
         (in game).
         """
+        row = self._tracker.game_data.units.get(structure._type_id)
+        if row is None or (source := row.morphed_from) is None:
+            return
         builder = None
         nearest = _BUILDER_REACH * _BUILDER_REACH
         for unit in ordered:
+            if unit._type_id is not source:
+                continue
             order = unit._latest_report.orders[0]
             if (
                 not self._order_makes_structure(order, structure)

@@ -38,6 +38,7 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SPINE_CRAWLER, ability_id=AbilityId.DRONE_MORPH_SPINE_CRAWLER),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY, ability_id=AbilityId.SCV_BUILD_REFINERY),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
@@ -515,6 +516,19 @@ class TestUnitsThatBecomeStructures:
         game.observe(16, extractor, geyser)
         game.observe(32, extractor, geyser)
         assert drone.is_dead
+
+    def test_an_scv_gone_into_the_refinery_it_built_is_not_what_it_became(self) -> None:
+        """A worker that built a gas structure goes inside it to harvest (in game), and comes out under its own tag."""
+        game = _Game()
+        geyser = make_unit(9, UnitTypeId.VESPENE_GEYSER, at=(30.5, 30.5), alliance=Alliance.NEUTRAL)
+        order = raw_pb2.UnitOrder(ability_id=AbilityId.SCV_BUILD_REFINERY, target_unit_tag=9)
+        scv, _ = game.observe(0, make_unit(1, UnitTypeId.SCV, at=(29.0, 30.5), orders=[order]), geyser)
+        for step, progress in ((16, 0.1), (32, 1.0), (48, 1.0)):
+            game.observe(step, make_unit(3, UnitTypeId.REFINERY, at=(30.5, 30.5), build_progress=progress), geyser)
+        assert scv.is_stale and not scv.is_dead
+        (back,) = game.observe(64, make_unit(1, UnitTypeId.SCV, at=(29.0, 30.5)))
+        assert back is scv
+        assert not game.tracker.last_changes.own_units_created
 
     def test_a_structure_far_from_where_the_drone_was_sent_is_not_what_it_became(self) -> None:
         game = _Game()
