@@ -379,7 +379,7 @@ it.
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
-| `bot.already_pending_upgrade(u)` | `api.research_progress(u)`, `None` when nothing researches it; once done, `u in api.upgrades`; every research running or queued, with its structure: `api.researches` |
+| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `steps_left`; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |

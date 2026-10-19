@@ -71,10 +71,10 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client
-from sc2nachos.state import Alert
+from sc2nachos.state import Alert, Research
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, Unit, VitalType
-from sc2nachos.units._tracking import _Tracker
+from sc2nachos.units._tracking import _Snapshot, _Tracker
 
 _ALERT_BY_VALUE: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 # The event a happening comes as, by the alliance of the unit it happened to. An alliance left out gets none.
@@ -86,18 +86,6 @@ _DIED_EVENT_BY_ALLIANCE: Final[_EventTypeByAlliance] = MappingProxyType(
     {Alliance.OWN: OwnUnitDiedEvent, Alliance.ENEMY: EnemyUnitDiedEvent, Alliance.NEUTRAL: NeutralUnitDiedEvent}
 )
 _CHAT_EVENT_TYPES: Final[tuple[type[AnyChatEvent], ...]] = (OwnChatEvent, OpponentChatEvent)
-
-
-@dataclass(frozen=True, slots=True)
-class _Snapshot[T]:
-    """A value as it stood at one tracker update."""
-
-    value: T
-    update: int = -1
-
-    def at(self, update: int, *, otherwise: T) -> T:
-        """The value if it was taken at `update`, else `otherwise`."""
-        return self.value if self.update == update else otherwise
 
 
 @dataclass(slots=True, kw_only=True)
@@ -123,8 +111,8 @@ class _Game:
     _chat_event_types: Final[Mapping[int, type[AnyChatEvent] | None]]
     # The ids of this player's units idle as `OwnUnitBecameIdleEvent` counts it, at the update they were taken.
     _idle_unit_ids: _Snapshot[frozenset[int]] = field(default_factory=lambda: _Snapshot(frozenset()))
-    # The upgrades being researched, each with its structure, at the update they were taken.
-    _researching: _Snapshot[Mapping[UpgradeId, OwnUnit[Any]]] = field(default_factory=lambda: _Snapshot({}))
+    # The researches running or queued, by upgrade, at the update they were taken.
+    _researching: _Snapshot[Mapping[UpgradeId, Research]] = field(default_factory=lambda: _Snapshot({}))
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
     # The turn's chat, in the order given, as the actions that send it.
@@ -438,12 +426,12 @@ class _Game:
         when the update before was not looked at. Keeps the researches for the next update: call it once an update."""
         update = self.tracker.last_changes.update
         before = self._researching.at(update - 1, otherwise={})
-        now = self.state.production.researchers
-        self._researching = _Snapshot(dict(now), update)
+        now = self.state.production.researches
+        self._researching = _Snapshot(now, update)
         finished = set(self.tracker.last_changes.own_upgrades_finished)
-        started = [(upgrade, now[upgrade]) for upgrade in sorted(now.keys() - before.keys())]
+        started = [(upgrade, now[upgrade].unit) for upgrade in sorted(now.keys() - before.keys())]
         gone = sorted(before.keys() - now.keys() - finished)
-        return started, [(upgrade, before[upgrade]) for upgrade in gone]
+        return started, [(upgrade, before[upgrade].unit) for upgrade in gone]
 
     def _chat_event_type(self, player_id: int) -> type[AnyChatEvent] | None:
         """The event a chat message of the player `player_id` comes as, or `None` for an observer's, which comes as

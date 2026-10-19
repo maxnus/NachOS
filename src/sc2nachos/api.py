@@ -268,15 +268,10 @@ class Api:
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids(types, unit_types)
         return self._current_game().state.production.of_types(wanted)
 
-    def research_progress(self, upgrade: UpgradeId) -> float | None:
-        """How far along this player's research of `upgrade` is, from 0 to 1, or `None` if nothing researches it. A
-        finished one is in `upgrades`."""
-        return self._current_game().state.production.progress(upgrade)
-
     @property
-    def researches(self) -> tuple[Research, ...]:
-        """Each research this player has running or queued in the last observation, with its structure and progress,
-        in the order the observation lists the structures and each its orders."""
+    def researches(self) -> Mapping[UpgradeId, Research]:
+        """Each research this player has running or queued in the last observation, by upgrade, in the order the
+        observation lists the structures and each its orders. A finished one is in `upgrades`."""
         return self._current_game().state.production.researches
 
     @property

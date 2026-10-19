@@ -919,7 +919,7 @@ class TestWhatChanged:
         assert not any(getattr(changes, name) for name in changes.__slots__ if name not in {"update", "own", "enemy"})
         assert not any(getattr(side, name) for side in (changes.own, changes.enemy) for name in side.__slots__)
         assert not game.tracker.unit_tracker._unfinished
-        assert not game.tracker.unit_comparer._compared
+        assert not game.tracker.unit_comparer._compared.value
 
 
 class TestThroughTheApi:

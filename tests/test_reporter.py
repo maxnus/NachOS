@@ -310,7 +310,7 @@ class TestOnlyWhatIsWanted:
         game = _Game()
         _everything(game)
         assert game.state is not None and "actions" not in vars(game.state)
-        assert not game.tracker.unit_comparer._compared
+        assert not game.tracker.unit_comparer._compared.value
 
     def test_a_handler_that_is_done_stops_the_units_being_compared(self) -> None:
         game = _Game()
@@ -318,7 +318,7 @@ class TestOnlyWhatIsWanted:
         game.observe(0, make_unit(1, health=45.0))
         game.observe(16, make_unit(1, health=40.0))
         game.observe(32, make_unit(1, health=35.0))
-        assert not game.tracker.unit_comparer._compared
+        assert not game.tracker.unit_comparer._compared.value
 
 
 def _marine(health: float, *, shield: float = 0.0, **fields: Any) -> raw_pb2.Unit:
@@ -1260,11 +1260,11 @@ class TestAgainstTheRealGame:
             _until(game, lambda: len(_of(seen, OwnUpgradeStartedEvent)) == 2, steps=1)
             weapons, armor = UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1
             researches = game.state.production.researches
-            assert [(research.upgrade, research.unit) for research in researches] == [
+            assert [(upgrade, research.unit) for upgrade, research in researches.items()] == [
                 (weapons, researcher),
                 (armor, researcher),
             ]
-            assert researches[1].progress == 0.0
+            assert researches[armor].progress == 0.0
             game.order(AbilityId.CANCEL_LAST, researcher)
             _until(game, lambda: _of(seen, OwnUpgradeFinishedEvent))
             started = [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStartedEvent)]

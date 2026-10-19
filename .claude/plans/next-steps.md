@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #130. `uv run pytest` passes 2220 tests on branch `claude/more-events`;
+- nachOS `main` has every PR to #130. `uv run pytest` passes 2219 tests on branch `claude/more-events`;
   `uv run pytest -m integration` passes 32 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -143,8 +143,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `AnyBuffEvent`, `AnyVitalEvent`, `AnyAreaEvent`, `AnyUpgradeEvent`, `AnyUnitTypeChangedEvent`, `AnyUnitDiedEvent`
     and `AnyChatEvent`. Chosen over handing out a base for the units and players neither side's kind takes, since a
     bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
-  - `api.researches` (second review of #131): a `Research` record, `upgrade`, `unit` and `progress`, for each research
-    running or queued, as `in_production` gives `InProduction` records; chosen over a mapping of upgrade to structure.
+  - `api.researches` (reviews of #131): a mapping from each upgrade running or queued to its `Research` record, with
+    `unit`, `progress`, the table's `research_steps` and `steps_left`, chosen over a tuple of records and over a
+    mapping to the structure alone. It replaces `api.research_progress`, which answered one upgrade.
   - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
     existing pairs had it; `unit.first_alliance` says whose it was.
   - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other
@@ -181,8 +182,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall.
   - `api.in_production(types)` gives what the game has started or charged for, one `InProduction` per unit with its
     progress, and not the turn's orders, which are in `issued_to`; a count is its `len`. A morph other than a larva's
-    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)` is from 0 to
-    1, or `None`.
+    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)`, from 0 to
+    1 or `None`, gave way to `api.researches` in #131.
   - No `api.enemy.units`: the enemy's units stay `api.units.enemy`.
 - **The expansions** (#122, the owner, 2026-10-08 and review of #122):
   - `api.expansions` is found once at the start, on the api and not the map, so that `GameMap` stays a pure reading of

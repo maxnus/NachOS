@@ -1,5 +1,6 @@
 """The api and the two runners, tested without a game wherever possible."""
 
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 
@@ -315,9 +316,9 @@ class TestPlaying:
         warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
         client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
         api = Api()
-        counted: list[tuple[int, int, int, int, float | None]] = []
+        counted: list[tuple[int, int, int, int]] = []
         zealots: list[tuple[UnitTypeId, int, float | None]] = []
-        researches: list[tuple[Research, ...]] = []
+        researches: list[Mapping[UpgradeId, Research]] = []
 
         @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
@@ -328,7 +329,6 @@ class TestPlaying:
                     len(api.in_production(stalkers)),
                     len(api.in_production(UnitType.Protoss)),
                     len(api.in_production(UnitType.Stalker, UnitType.Adept)),
-                    api.research_progress(UpgradeId.WARP_GATE),
                 )
             )
             zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
@@ -336,9 +336,9 @@ class TestPlaying:
 
         api.play(client)
 
-        assert counted == [(1, 1, 1, 0, None)]
+        assert counted == [(1, 1, 1, 0)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
-        assert researches == [()]
+        assert researches == [{}]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [

@@ -21,3 +21,11 @@ class Research:
     """The structure researching it."""
     progress: float
     """How far along it is, from 0 to 1: 0 for one queued behind another."""
+    research_steps: float
+    """Steps the whole research takes, as the game's tables give it (in game)."""
+
+    @property
+    def steps_left(self) -> float:
+        """Steps until it finishes at the normal rate: a chrono boost makes it sooner, and one queued waits for the one
+        ahead first."""
+        return (1 - self.progress) * self.research_steps
