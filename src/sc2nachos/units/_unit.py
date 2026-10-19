@@ -65,7 +65,7 @@ class Unit[K: UnitType.AnyType]:
         "_latest_visible_report",
         "_order_targets",
         "_orders",
-        "_orders_report",
+        "_orders_step",
         "_own",
         "_position",
         "_previous_position",
@@ -105,9 +105,10 @@ class Unit[K: UnitType.AnyType]:
     # that unit by a tag it reports. Read when an order names a tag the game never reports. Keyed by the ability's raw
     # id; `None` until an order is aimed at a unit.
     _order_targets: dict[int, Unit[Any]] | None
-    # `OwnUnit.orders` as read from `_orders_report`, kept here since `OwnUnit` declares no slots of its own.
+    # `OwnUnit.orders` as read at `_orders_step`, kept here since `OwnUnit` declares no slots of its own. Keyed by the
+    # step, which changes exactly when a report comes in, so that it holds no report and keeps no observation alive.
     _orders: tuple[UnitOrder, ...]
-    _orders_report: raw_pb2.Unit | None
+    _orders_step: int
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -129,7 +130,7 @@ class Unit[K: UnitType.AnyType]:
         self._radius_footprint = None
         self._order_targets = None
         self._orders = ()
-        self._orders_report = None
+        self._orders_step = -1
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:

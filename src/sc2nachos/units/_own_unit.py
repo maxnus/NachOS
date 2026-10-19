@@ -23,9 +23,10 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
         """The unit's current order, then its queued orders."""
-        if (report := self._latest_report) is not self._orders_report:
-            self._orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in report.orders)
-            self._orders_report = report
+        if self._orders_step != self._step:
+            orders = self._latest_report.orders
+            self._orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in orders)
+            self._orders_step = self._step
         return self._orders
 
     def _unit_target_of_order(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:

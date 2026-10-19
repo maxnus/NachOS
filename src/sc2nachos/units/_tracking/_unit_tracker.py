@@ -270,12 +270,17 @@ class _UnitTracker:
 
     def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]) -> None:
         """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be. A
-        unit among `dead`, the tags the observation reports dead, is left for the reported death."""
+        fog copy whose tag, or whose unit's last visible tag, is among `dead`, the tags the observation reports dead,
+        died as reported."""
         for tag, unit in departed.items():
             if tag in self._in_fog_tags:
                 self._in_fog_tags.discard(tag)
                 del self._by_tag[tag]
-                if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS and not _among(unit, dead):
+                if unit._step != step and _among(unit, dead):
+                    # Died as the game reports, under either of its tags, before one is unlinked unseen.
+                    self._mark_unit_dead(unit, present, reported=True)
+                    continue
+                if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS:
                     # Its spot came into sight without it. The game reports no death it cannot see (in game).
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
@@ -346,7 +351,7 @@ def _among(unit: Unit[Any], tags: set[int]) -> bool:
 
 def _continues(unit: Unit[Any], display: int) -> bool:
     """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
-    sight into the fog, or a fog copy of a unit never seen visible shown visible."""
+    visible into the fog, or a fog copy of a unit never seen visible shown visible."""
     before = unit._latest_report.display_type
     if before == _VISIBLE:
         return display == _IN_FOG

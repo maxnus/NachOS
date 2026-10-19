@@ -117,6 +117,19 @@ class TestIds:
         game.observe(16, make_unit(1))
         assert marine.orders == ()
 
+    def test_a_unit_holds_no_report_but_its_latest_and_its_latest_visible(self) -> None:
+        """Any other would keep the observation it came in alive, as a cache of the report its orders were last read
+        from would once the unit is stale."""
+        game = _Game()
+        moving = raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=9.0, y=9.0))
+        (marine,) = game.observe(0, make_unit(1, orders=[moving]))
+        assert isinstance(marine, OwnUnit) and marine.orders
+        game.observe(16)
+        assert marine.is_stale
+        held = [getattr(marine, name) for name in Unit.__slots__ if hasattr(marine, name)]
+        reports = [value for value in held if isinstance(value, raw_pb2.Unit)]
+        assert all(report is marine._latest_report or report is marine._latest_visible_report for report in reports)
+
     def test_running_out_of_ids_raises(self) -> None:
         game = _Game()
         game.tracker.unit_tracker._units_seen_per_alliance[Alliance.OWN] = 99_998
@@ -291,12 +304,13 @@ class TestTheFog:
         assert game.tracker.last_changes.units_found_dead == [depot]
         assert not game.tracker.last_changes.units_died
 
-    def test_a_structure_the_game_reports_dead_as_its_spot_comes_back_into_sight_died(self) -> None:
+    @pytest.mark.parametrize("reported", [1, 900], ids=["its visible tag", "its fog tag"])
+    def test_a_structure_the_game_reports_dead_as_its_spot_comes_back_into_sight_died(self, reported: int) -> None:
         """The report wins over finding it missing, as for a structure that can move."""
         game = _Game()
         (depot,) = game.observe(0, _depot(1))
         game.observe(16, _depot(900, visibility=_IN_FOG))
-        game.observe(32, dead=(1,))
+        game.observe(32, dead=(reported,))
         assert depot.is_dead
         assert (game.tracker.last_changes.units_died, game.tracker.last_changes.units_found_dead) == ([depot], [])
         assert not game.tracker.last_changes.enemy_units_left_sight
