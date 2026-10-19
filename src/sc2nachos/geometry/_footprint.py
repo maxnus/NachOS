@@ -108,7 +108,7 @@ class Footprint:
     def tiles(self, *, at: PointLike) -> TileSet:
         """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""
         left, bottom = self._lower_left_tile(at=at)
-        return TileSet._of_mask(Tile(left, bottom), self._mask)
+        return TileSet._from_mask(Tile(left, bottom), self._mask)
 
     def center_in_tile(self, tile: Tile) -> Point:
         """Where the footprint is centered when its center lies in `tile`: the tile's center along a side of odd

@@ -99,7 +99,7 @@ class Circle(Area):
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
         origin, tiles_in_circle = self._tile_mask()
-        return TileSet._of_mask(origin, tiles_in_circle)
+        return TileSet._from_mask(origin, tiles_in_circle)
 
     def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
         """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given,

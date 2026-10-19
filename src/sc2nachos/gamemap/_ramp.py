@@ -63,11 +63,11 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
         if high - low >= _HALF_A_LEVEL:
             ramps.append(
                 Ramp(
-                    tiles=TileSet._of_mask(origin, patch),
+                    tiles=TileSet._from_mask(origin, patch),
                     # A ramp climbs at least half a level, more than the two bytes its ends reach into it, so top
                     # and bottom cannot overlap.
-                    top=TileSet._of_mask(origin, patch & (heights >= high - _A_BYTE)),
-                    bottom=TileSet._of_mask(origin, patch & (heights <= low + _A_BYTE)),
+                    top=TileSet._from_mask(origin, patch & (heights >= high - _A_BYTE)),
+                    bottom=TileSet._from_mask(origin, patch & (heights <= low + _A_BYTE)),
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))
