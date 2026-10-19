@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import operator
 import random
 from dataclasses import dataclass
 from functools import cached_property
@@ -12,7 +13,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, _PointND, coordinates
+from sc2nachos.geometry._point import Point, _PointND, checked_ground_offset, coordinates
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -33,7 +34,14 @@ class Tile(tuple[int, int], Area):
     __slots__ = ()
 
     def __new__(cls, x: int, y: int) -> Self:
-        return super().__new__(cls, (x, y))
+        """The tile whose lower left corner is at `x` and `y`, each an integer, a numpy one included, which becomes an
+        `int`. Raises `TypeError` for any other coordinate, a float among them."""
+        return super().__new__(cls, (operator.index(x), operator.index(y)))
+
+    def __reduce__(self) -> tuple[type[Tile], tuple[int, int]]:
+        # How `copy`, `deepcopy` and `pickle` rebuild a tile: as `Tile(x, y)`. A tuple's own reduction hands `__new__`
+        # one tuple, which it cannot take.
+        return Tile, (self[0], self[1])
 
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
@@ -66,9 +74,10 @@ class Tile(tuple[int, int], Area):
         """The ground covered: one square game unit."""
         return 1.0
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the tile."""
-        return Point((self[0] + random.random(), self[1] + random.random()))
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the tile, by `rng` or the `random` module's own generator."""
+        random_fraction = random.random if rng is None else rng.random
+        return Point((self[0] + random_fraction(), self[1] + random_fraction()))
 
     @property
     def neighbors4(self) -> tuple[Tile, Tile, Tile, Tile]:
@@ -96,9 +105,10 @@ class Tile(tuple[int, int], Area):
         return Tile.containing(point) == self  # pyright: ignore[reportArgumentType]
 
     def translated(self, offset: PointLike) -> Tile:
-        """The tile reached by shifting this one's center by `offset`."""
-        shift = coordinates(offset)
-        return Tile.containing((self[0] + 0.5 + shift[0], self[1] + 0.5 + shift[1]))
+        """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
+        height."""
+        ground_offset = checked_ground_offset(offset)
+        return Tile.containing((self[0] + 0.5 + ground_offset[0], self[1] + 0.5 + ground_offset[1]))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the tile nearest to `point`, and the distance to it."""
@@ -139,12 +149,23 @@ class Tile(tuple[int, int], Area):
         raise TypeError(f"{self!r} is an address; scale its `center` instead")
 
 
+def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
+    """`value` checked as `coordinates` checks it, or a `Tile` read as its center: what `in` takes on every area."""
+    # The point cases first, as `coordinates` has them, so a point pays nothing for the tile check.
+    if isinstance(value, _PointND) or type(value) is tuple:
+        return value
+    if type(value) is Tile:
+        return value.center
+    return coordinates(value)
+
+
 @final
 @dataclass(frozen=True, slots=True)
 class Rectangle(Area):
     """An axis-aligned rectangle, anchored at its lower left corner.
 
-    `y` grows upward, as in the game, so `top` is the higher edge.
+    `y` grows upward, as in the game, so `top` is the higher edge. A rectangle with no width or no height covers
+    nothing: it is empty, as `Area` has it.
     """
 
     x: float
@@ -192,7 +213,18 @@ class Rectangle(Area):
     @property
     def center(self) -> Point:
         """The midpoint."""
+        self._raise_if_empty("center")
         return Point((self.x + self.width / 2, self.y + self.height / 2))
+
+    @property
+    def _is_empty(self) -> bool:
+        """Whether the rectangle has no width or no height, and so covers nothing."""
+        return not self.width or not self.height
+
+    def _raise_if_empty(self, what: str) -> None:
+        """Raises `ValueError`, naming `what` it lacks, if the rectangle is empty."""
+        if self._is_empty:
+            raise ValueError(f"{self!r} covers no ground, so it has no {what}")
 
     @property
     def size(self) -> tuple[float, float]:
@@ -221,8 +253,10 @@ class Rectangle(Area):
 
     def __contains__(self, point: PointLike) -> bool:
         """Whether a point lies inside, on the lower edges but not the upper ones."""
-        position = coordinates(point)
-        return self.left <= position[0] < self.right and self.bottom <= position[1] < self.top
+        position = coordinates_or_tile_center(point)
+        # The fields rather than the edge properties, a call each; the arithmetic is the same as `right` and `top`.
+        x, y = self.x, self.y
+        return x <= position[0] < x + self.width and y <= position[1] < y + self.height
 
     def encloses(self, other: Rectangle) -> bool:
         """Whether the whole of `other` lies inside."""
@@ -234,12 +268,14 @@ class Rectangle(Area):
         )
 
     def translated(self, offset: PointLike) -> Rectangle:
-        """The rectangle shifted by `offset`, keeping its size."""
-        shift = coordinates(offset)
-        return Rectangle(self.x + shift[0], self.y + shift[1], self.width, self.height)
+        """The rectangle shifted by `offset`, keeping its size. Raises `ValueError` for an offset with a height."""
+        ground_offset = checked_ground_offset(offset)
+        return Rectangle(self.x + ground_offset[0], self.y + ground_offset[1], self.width, self.height)
 
     def intersects(self, other: Rectangle) -> bool:
-        """Whether the two rectangles share any ground."""
+        """Whether the two rectangles share any ground: never when either is empty."""
+        if self._is_empty or other._is_empty:
+            return False
         return not (
             self.right <= other.left or self.left >= other.right or self.top <= other.bottom or self.bottom >= other.top
         )
@@ -270,12 +306,15 @@ class Rectangle(Area):
             return None
         return Rectangle(left, bottom, right - left, top - bottom)
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the rectangle."""
-        return Point((self.left + random.uniform(0, self.width), self.bottom + random.uniform(0, self.height)))
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the rectangle, by `rng` or the `random` module's own generator."""
+        self._raise_if_empty("points to draw from")
+        uniform = random.uniform if rng is None else rng.uniform
+        return Point((self.left + uniform(0, self.width), self.bottom + uniform(0, self.height)))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the rectangle nearest to `point`, and the distance to it."""
+        self._raise_if_empty("closest point")
         position = coordinates(point)
         closest = Point(
             (
@@ -287,6 +326,7 @@ class Rectangle(Area):
 
     def bounding_rectangle(self) -> Rectangle:
         """The rectangle itself."""
+        self._raise_if_empty("bounding rectangle")
         return self
 
     def tile_range(self) -> tuple[range, range]:
@@ -302,10 +342,10 @@ class Rectangle(Area):
         Laid out like the tiles themselves, so a mask over the same region indexes it directly. `offset`
         shifts every point without changing which tiles are covered.
         """
-        shift = coordinates(offset)
+        ground_offset = coordinates(offset)
         x_range, y_range = self.tile_range()
-        xs = numpy.arange(x_range.start, x_range.stop) + 0.5 + shift[0]
-        ys = numpy.arange(y_range.start, y_range.stop) + 0.5 + shift[1]
+        xs = numpy.arange(x_range.start, x_range.stop) + 0.5 + ground_offset[0]
+        ys = numpy.arange(y_range.start, y_range.stop) + 0.5 + ground_offset[1]
         return numpy.stack(numpy.meshgrid(xs, ys, indexing="ij"), axis=-1)
 
     def tiles(self) -> TileSet:
@@ -373,25 +413,26 @@ class TileSet(Area):
         return KDTree(numpy.array([tile.center for tile in tiles])), tiles
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the covered ground nearest to `point`, and the distance to it.
-
-        The nearest tile is found by its center, so a tile whose edge is marginally closer can lose to one
-        whose center is nearer.
-        """
+        """The point of the covered ground nearest to `point`, and the distance to it."""
         if not self._tiles:
             raise ValueError("an empty tile set has no closest point")
         position = Point(coordinates(point)[:2])
         if Tile.containing(position) in self._tiles:
             return position, 0.0
         tree, tiles = self._spatial_index
-        _, nearest = tree.query([position.x, position.y])
-        return tiles[nearest].closest_point_to(position)
+        nearest_center_distance, _ = tree.query(position)
+        # A tile's nearest point lies between 1/2 and sqrt(1/2) nearer than its center, so a tile can beat the one
+        # whose center is nearest only if its own center lies within this distance.
+        farthest_center_that_can_be_nearer = nearest_center_distance + math.sqrt(0.5) - 0.5
+        candidates = tree.query_ball_point(position, farthest_center_that_can_be_nearer, return_sorted=True)
+        return min((tiles[index].closest_point_to(position) for index in candidates), key=operator.itemgetter(1))
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the covered ground."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the covered ground, by `rng` or the `random` module's own generator."""
         if not self._tiles:
             raise ValueError("an empty tile set has no points to draw from")
-        return random.choice(self._ordered).random_point()
+        choice = random.choice if rng is None else rng.choice
+        return choice(self._ordered).random_point(rng=rng)
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing every covered tile."""
@@ -408,8 +449,10 @@ class TileSet(Area):
         return self
 
     def translated(self, offset: PointLike) -> TileSet:
-        """The tiles shifted by `offset`, snapped back onto the tile grid."""
-        return TileSet(tile.translated(offset) for tile in self._tiles)
+        """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a
+        height."""
+        ground_offset = checked_ground_offset(offset)
+        return TileSet(tile.translated(ground_offset) for tile in self._tiles)
 
     def filter(self, predicate: Callable[[Tile], bool]) -> TileSet:
         """The tiles satisfying `predicate`."""

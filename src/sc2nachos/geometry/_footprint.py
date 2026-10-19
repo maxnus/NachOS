@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, cast, final
 
 import numpy
@@ -10,6 +9,7 @@ import numpy
 from sc2nachos._checks import is_whole_number
 from sc2nachos.geometry._point import Point, coordinates
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -91,18 +91,23 @@ class Footprint:
     def bounding_box(self, *, at: PointLike) -> Rectangle:
         """The tiles `mask` spans, with the footprint placed at `at` and centered as the game snaps it. The footprint
         covers some of them, or all."""
-        x, y = coordinates(at)[:2]
-        left, bottom = math.floor(x - self.width / 2 + 0.5), math.floor(y - self.height / 2 + 0.5)
+        left, bottom = self._lower_left_tile(at=at)
         return Rectangle(left, bottom, self.width, self.height)
 
     def snapped_center(self, *, at: PointLike) -> Point:
-        """Where the footprint centers when placed at `at`, as the game snaps a structure."""
-        return self.bounding_box(at=at).center
+        """Where the footprint centers when placed at `at`, as the game snaps a structure: for the empty footprint,
+        the tile corner nearest `at`."""
+        left, bottom = self._lower_left_tile(at=at)
+        return Point((left + self.width / 2, bottom + self.height / 2))
+
+    def _lower_left_tile(self, *, at: PointLike) -> tuple[int, int]:
+        """The lower left tile of `mask`, with the footprint placed at `at` and centered as the game snaps it."""
+        x, y = coordinates(at)[:2]
+        return _rounded_half_up(x - self.width / 2), _rounded_half_up(y - self.height / 2)
 
     def tiles(self, *, at: PointLike) -> TileSet:
         """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""
-        box = self.bounding_box(at=at)
-        left, bottom = int(box.x), int(box.y)
+        left, bottom = self._lower_left_tile(at=at)
         return TileSet(Tile(left + int(x), bottom + int(y)) for x, y in zip(*numpy.nonzero(self._mask), strict=True))
 
     def center_in_tile(self, tile: Tile) -> Point:
@@ -127,10 +132,10 @@ class Footprint:
         if not any(sides := _margin_sides(margin)):
             return self, at
         left, _, bottom, _ = sides
-        box = self.bounding_box(at=at)
+        lower_left_x, lower_left_y = self._lower_left_tile(at=at)
         grown = self._grown(sides)
         # Centered so that its lower left tile lies `left` and `bottom` beyond this footprint's.
-        return grown, (box.x - left + grown.width / 2, box.y - bottom + grown.height / 2)
+        return grown, (lower_left_x - left + grown.width / 2, lower_left_y - bottom + grown.height / 2)
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Footprint) and numpy.array_equal(self._mask, other._mask)

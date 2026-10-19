@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
+from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
 
 if TYPE_CHECKING:
     from sc2nachos.geometry._point import PointLike
@@ -55,20 +55,21 @@ class Circle(Area):
 
     def __contains__(self, point: PointLike) -> bool:
         """Whether `point` lies in the circle, boundary included."""
-        position = coordinates(point)
+        position = coordinates_or_tile_center(point)
         dx = position[0] - self._center[0]
         dy = position[1] - self._center[1]
         return dx * dx + dy * dy <= self._radius**2
 
     def translated(self, offset: PointLike) -> Circle:
-        """The circle shifted by `offset`, keeping its radius."""
-        return Circle(self._center + offset, self._radius)
+        """The circle shifted by `offset`, keeping its radius. Raises `ValueError` for an offset with a height."""
+        return Circle(self._center + checked_ground_offset(offset), self._radius)
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the circle."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the circle, by `rng` or the `random` module's own generator."""
+        random_fraction = random.random if rng is None else rng.random
         # sqrt, because a uniform radius would crowd the points toward the center.
-        distance = self._radius * math.sqrt(random.random())
-        angle = random.uniform(0, 2 * math.pi)
+        distance = self._radius * math.sqrt(random_fraction())
+        angle = 2 * math.pi * random_fraction()
         return Point(
             (
                 self._center[0] + distance * math.cos(angle),

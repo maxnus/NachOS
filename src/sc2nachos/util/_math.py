@@ -28,13 +28,21 @@ def remap(value: float, lower: float, upper: float, *, lower_value: float = 0.0,
 
 
 def sticky_round(value: float, previous_value: int, *, tolerance: float = 1.0) -> int:
-    """`value` rounded, except that it stays at `previous_value` while within `tolerance` of it.
+    """`value` rounded, a tie up, toward the larger integer, except that it stays at `previous_value` while within
+    `tolerance` of it.
 
     Stops an estimate recomputed every step from flickering between neighboring integers.
     """
     if abs(value - previous_value) < tolerance:
         return previous_value
-    return round(value)
+    return _rounded_half_up(value)
+
+
+def _rounded_half_up(value: float) -> int:
+    """`value` rounded to the nearest integer, a tie up, toward the larger one."""
+    # Not `math.floor(value + 0.5)`: the addition itself rounds, taking 0.49999999999999994 to 1.0.
+    floored = math.floor(value)
+    return floored + (value - floored >= 0.5)
 
 
 def damp(start: float, end: float, *, decay: float, seconds: float) -> float:
@@ -58,10 +66,12 @@ def logistic(x: float, *, k: float = 1.0) -> float:
 
 
 def s_curve(x: float, *, k: float = 1.0) -> float:
-    """An S-shaped remap of the unit interval onto itself, with steepness `k`.
+    """An S-shaped remap of the unit interval onto itself, with steepness `k`: the logistic curve about 0.5, scaled
+    to pass through 0 and 1.
 
-    0, 0.5 and 1 map to exactly themselves; inputs outside `[0, 1]` extrapolate.
+    0, 0.5 and 1 map to exactly themselves; inputs outside `[0, 1]` extrapolate. A `k` of 0 gives `x` itself, the
+    limit as the curve flattens.
     """
-    low = logistic(-0.5, k=k)
-    high = logistic(0.5, k=k)
-    return (logistic(x - 0.5, k=k) - low) / (high - low)
+    if not k:
+        return x
+    return 0.5 + 0.5 * math.tanh(k * (x - 0.5) / 2) / math.tanh(k / 4)

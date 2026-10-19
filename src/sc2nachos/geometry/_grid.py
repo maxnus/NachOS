@@ -113,12 +113,19 @@ class Grid[T: float]:
 
         Raises `IndexError` for a point the grid does not cover, whatever `outside` is.
         """
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
-        if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
-        return x, y
+        if (index := self._index_if_covered(point)) is None:
+            raise IndexError(f"{Tile.containing(point)!r} lies outside {self.bounds!r}")
+        return index
+
+    def _index_if_covered(self, point: PointLike) -> tuple[int, int] | None:
+        """The index into `values` of the tile holding `point`, or `None` for a point the grid does not cover."""
+        # Floored here rather than through `Tile.containing`, which would build a tile per lookup.
+        position = point if isinstance(point, tuple) else coordinates(point)
+        x = math.floor(position[0]) - self._origin[0]
+        y = math.floor(position[1]) - self._origin[1]
+        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
+            return x, y
+        return None
 
     def tile_at(self, index: tuple[int, int]) -> Tile:
         """The tile an index into `values` addresses. The inverse of `index_of`."""
@@ -146,13 +153,10 @@ class Grid[T: float]:
 
     def _value_at(self, point: PointLike) -> T:
         """The value at `point`, or `outside` for a point the grid does not cover."""
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
-        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
-            return self._data.item(x, y)
+        if (index := self._index_if_covered(point)) is not None:
+            return self._data.item(index)
         if self._outside is None:
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+            raise IndexError(f"{Tile.containing(point)!r} lies outside {self.bounds!r}")
         return self._outside
 
     def _aligned(self, other: Grid) -> ndarray:
@@ -364,9 +368,17 @@ class Grid[T: float]:
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:
-        """For each true tile, the distance to the nearest false one; zero on a false tile."""
-        distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
-        return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
+        """For each true tile, the distance from its center to the nearest false tile's; zero on a false tile. Where
+        this grid reads false beyond its edge, the tiles beyond it count as false; where no false tile is found, every
+        distance is `inf`."""
+        if self._outside is not None and not self._outside:
+            padded = numpy.pad(self._data, 1, constant_values=False)
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(padded, return_indices=False))[1:-1, 1:-1]
+        elif self._data.all():
+            distances = numpy.full(self._data.shape, math.inf)
+        else:
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(self._data, return_indices=False))
+        return Grid(distances, origin=self._origin, outside=outside)
 
     def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
@@ -558,7 +570,7 @@ class Grid[T: float]:
         return self._combine(other, numpy.greater_equal)
 
     def __bool__(self) -> bool:
-        """Refused: `grid == other` compares per tile, so `if grid == other` would always be true."""
+        """Raises `TypeError`: a grid has no truth value. `any` and `all` say whether any tile is true, or every one."""
         raise TypeError("a grid has no truth value; use .any() or .all()")
 
     def any(self) -> bool:

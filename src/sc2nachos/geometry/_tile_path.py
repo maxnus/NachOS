@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import itertools
 import math
+import sys
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast, final, overload
 
 from sc2nachos.geometry._shapes import Tile
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
     from sc2nachos.geometry._point import PointLike
 
@@ -75,8 +76,25 @@ class TilePath(Sequence[Tile]):
     def __len__(self) -> int:
         return len(self._tiles)
 
+    def __iter__(self) -> Iterator[Tile]:
+        return iter(self._tiles)
+
+    def __reversed__(self) -> Iterator[Tile]:
+        return reversed(self._tiles)
+
+    def index(self, value: PointLike | Tile, start: int = 0, stop: int = sys.maxsize) -> int:
+        """The position of the first tile from `start`, and before `stop`, that holds the point `value`, a tile
+        reading as itself. Raises `ValueError` if none does, and `TypeError` on anything but a point or a tile."""
+        return self._tiles.index(Tile.containing(value), start, stop)
+
+    def count(self, value: PointLike | Tile) -> int:
+        """How many of the path's tiles hold the point `value`, a tile reading as itself. Raises `TypeError` on
+        anything but a point or a tile."""
+        return self._tiles.count(Tile.containing(value))
+
     def __contains__(self, point: object) -> bool:
-        """Whether the path covers the tile holding `point`. Raises `TypeError` on anything but a point.
+        """Whether the path covers the tile holding `point`, a tile reading as itself. Raises `TypeError` on anything
+        but a point or a tile.
 
         This scans the path; build a `TileSet` from it to test many points.
         """

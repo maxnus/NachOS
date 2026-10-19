@@ -12,6 +12,7 @@ import numpy
 
 # Imported for the check in `coordinates`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
+from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,11 +34,7 @@ SCALAR_TYPES = (int, float, numbers.Real)
 
 
 def coordinates(value: PointLike) -> PointLike:
-    """`value` itself, checked to be coordinates. Raises `TypeError` otherwise, which catches a caller that is not
-    type-checked.
-
-    A `Tile` is rejected although it is a coordinate pair: it is an address, not the point it stands for.
-    """
+    """`value` itself, checked to be coordinates. Raises `TypeError` for anything else, a `Tile` among them."""
     # Points first: the common case, and a concrete class is far quicker to test than an ABC.
     if isinstance(value, _PointND) or type(value) is tuple:
         return value
@@ -46,6 +43,18 @@ def coordinates(value: PointLike) -> PointLike:
     if isinstance(value, tuple):
         return value
     raise TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
+
+
+def checked_ground_offset(offset: PointLike) -> PointLike:
+    """`offset`, checked as `coordinates` checks it, as a shift along the ground. Raises `TypeError` for an area, a
+    `Tile` among them, and `ValueError` for anything but two coordinates."""
+    if isinstance(offset, Area):
+        raise TypeError(f"a {type(offset).__name__} is an area, not an offset")
+    ground_offset = coordinates(offset)
+    if len(ground_offset) != 2:
+        height_hint = "; drop a height with .ground" if len(ground_offset) == 3 else ""
+        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(ground_offset)}{height_hint}")
+    return ground_offset
 
 
 class _PointND(tuple[float, ...]):
@@ -87,7 +96,8 @@ class _PointND(tuple[float, ...]):
 
     @property
     def normalized(self) -> Self:
-        """The point scaled to unit length on the ground plane."""
+        """The point scaled to unit length on the ground plane. Raises `ZeroDivisionError` for a point of no length
+        there."""
         length = self.length
         if not length:
             raise ZeroDivisionError("cannot normalize a zero-length point")
@@ -125,7 +135,8 @@ class _PointND(tuple[float, ...]):
         return type(self)(value + fraction * (target - value) for value, target in zip(self, position, strict=True))
 
     def direction_vector(self, other: PointLike) -> Point:
-        """The unit vector on the ground plane pointing from this point to another."""
+        """The unit vector on the ground plane pointing from this point to another. Raises `ZeroDivisionError` where
+        the two meet on the ground plane."""
         position = coordinates(other)
         return Point((position[0] - self[0], position[1] - self[1])).normalized
 
@@ -149,11 +160,12 @@ class _PointND(tuple[float, ...]):
         """The nearest point on a lattice of `step` tiles. Height is carried through.
 
         Each axis rounds on its own, so `step=0.5` gives the nearest of a tile's four corners, its four
-        edge midpoints and its center, and `step=1` gives the nearest corner rather than the nearest center.
+        edge midpoints and its center, and `step=1` gives the nearest corner rather than the nearest center. A tie
+        rounds up, toward the larger coordinate: `Point((0.5, -0.5)).snapped(step=1)` is `(1, 0)`.
         """
         if step <= 0:
             raise ValueError(f"a lattice step must be positive, got {step}")
-        snapped = (round(self[0] / step) * step, round(self[1] / step) * step)
+        snapped = (_rounded_half_up(self[0] / step) * step, _rounded_half_up(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
     def rounded_down(self, *, step: float) -> Self:
@@ -191,8 +203,9 @@ class _PointND(tuple[float, ...]):
 
     def _combine(self, other: PointLike | float, operation: Callable[[float, float], float]) -> Self:
         """Apply `operation` coordinate-wise against a point of equal dimensionality, or a scalar."""
-        # Ordered so the common point-and-point case never reaches the expensive ABC check.
-        if isinstance(other, tuple):
+        # Ordered so the common point-and-point case never reaches the expensive ABC check. Any other tuple, a `Tile`
+        # among them, goes through `coordinates`.
+        if type(other) is tuple or isinstance(other, _PointND):
             position: tuple[float, ...] = other
         elif isinstance(other, SCALAR_TYPES):
             return type(self)([operation(value, other) for value in self])
@@ -240,7 +253,8 @@ class _PointND(tuple[float, ...]):
 
 @final
 class Point(_PointND, tuple[float, float]):
-    """An immutable 2D point, constructed from an iterable: `Point((3, 4))`.
+    """An immutable 2D point, constructed from an iterable of exactly two coordinates: `Point((3, 4))`. The count is
+    not checked, so a `Point3D` becomes a `Point` through its `ground`, never through `Point(point3d)`.
 
     A tuple subclass, so it unpacks, hashes and compares like `(x, y)` and works as a dict key. A numpy array combines
     with a point only through `numpy.asarray(point)`: `positions - point` raises `TypeError`.
@@ -264,15 +278,16 @@ class Point(_PointND, tuple[float, float]):
         """The point lifted to height `z`."""
         return Point3D((self[0], self[1], z))
 
-    # Two-coordinate fast paths, ~2.5x quicker than the general implementation and used in per-unit loops.
+    # Two-coordinate fast paths for a point or a plain tuple, quicker than the general implementation and used in
+    # per-unit loops.
 
     def __add__(self, other: PointLike | float) -> Point:  # pyright: ignore[reportIncompatibleMethodOverride]
-        if isinstance(other, tuple) and len(other) == 2:
+        if (type(other) is Point or type(other) is tuple) and len(other) == 2:
             return Point((self[0] + other[0], self[1] + other[1]))
         return super().__add__(other)
 
     def __sub__(self, other: PointLike | float) -> Point:
-        if isinstance(other, tuple) and len(other) == 2:
+        if (type(other) is Point or type(other) is tuple) and len(other) == 2:
             return Point((self[0] - other[0], self[1] - other[1]))
         return super().__sub__(other)
 
