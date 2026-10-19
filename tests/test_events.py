@@ -416,6 +416,32 @@ class TestInstances:
         with pytest.raises(ValueError, match="subscribed already"):
             bus.subscribe(handlers)
 
+    @pytest.mark.parametrize("bound_first", [True, False])
+    def test_a_method_subscribed_bound_does_not_stop_the_instance_subscribing(self, bound_first: bool) -> None:
+        """The area of a watch known only once the instance is made, as a natural's is."""
+        bus = _EventBus()
+
+        class Natural:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+                if bound_first:
+                    bus.on(EnemyUnitEnteredAreaEvent.of(Circle(Point((50.0, 50.0)), 12)))(self.on_entered)
+                bus.subscribe(self)
+                if not bound_first:
+                    bus.on(EnemyUnitEnteredAreaEvent.of(Circle(Point((50.0, 50.0)), 12)))(self.on_entered)
+
+            def on_entered(self, event: EnemyUnitEnteredAreaEvent) -> None:
+                self.calls.append("entered")
+
+            @bus.on(TurnEvent)
+            def on_turn(self, event: TurnEvent) -> None:
+                self.calls.append("turn")
+
+        natural = Natural()
+        _turns(bus, 0)
+        assert natural.calls == ["turn"]
+        assert len(bus._subscriptions.by_type[EnemyUnitEnteredAreaEvent]) == 1
+
     def test_what_the_bus_holds_reads_as_its_event_types(self) -> None:
         bus = _EventBus()
         assert repr(bus) == "_EventBus()"

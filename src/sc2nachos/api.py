@@ -132,9 +132,9 @@ class Api:
     def subscribe(self, instance: object) -> None:
         """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
 
-        An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
-        marked method, or is subscribed already, and `TypeError` if a marked function is under a `classmethod` or a
-        `staticmethod`.
+        An unmarked override leaves the method it overrides unsubscribed, and a method of `instance` subscribed bound
+        counts for nothing here. Raises `ValueError` if `instance` has no marked method, or has one subscribed for it
+        already, and `TypeError` if a marked function is under a `classmethod` or a `staticmethod`.
         """
         self._events.subscribe(instance)
 

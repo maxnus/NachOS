@@ -84,7 +84,11 @@ class _EventBus:
         """Subscribe every method of `instance` marked with `on`, as `api.subscribe` says."""
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
-        if any(handler.instance is instance for handler in self._subscriptions):
+        marks = {(handler.function, handler.selects) for handler in marked}
+        if any(
+            handler.instance is instance and (handler.function, handler.selects) in marks
+            for handler in self._subscriptions
+        ):
             raise ValueError(f"{instance!r} is subscribed already")
         for handler in marked:
             self._subscriptions.add(handler.bound_to(instance))
