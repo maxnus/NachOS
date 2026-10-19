@@ -13,7 +13,7 @@ from scipy.sparse.csgraph import dijkstra
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.geometry._point import coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile
+from sc2nachos.geometry._shapes import Rectangle, Tile, tile_address_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -108,8 +108,8 @@ class Grid[T: float]:
         view.flags.writeable = False
         return view
 
-    def index_of(self, point: PointLike) -> tuple[int, int]:
-        """The index into `values` of the tile holding `point`.
+    def index_of(self, point: PointLike | Tile) -> tuple[int, int]:
+        """The index into `values` of the tile holding `point`, a tile reading as itself.
 
         Raises `IndexError` for a point the grid does not cover, whatever `outside` is.
         """
@@ -117,12 +117,10 @@ class Grid[T: float]:
             raise IndexError(f"{Tile.containing(point)!r} lies outside {self.bounds!r}")
         return index
 
-    def _index_if_covered(self, point: PointLike) -> tuple[int, int] | None:
+    def _index_if_covered(self, point: PointLike | Tile) -> tuple[int, int] | None:
         """The index into `values` of the tile holding `point`, or `None` for a point the grid does not cover."""
-        # Floored here rather than through `Tile.containing`, which would build a tile per lookup.
-        position = point if isinstance(point, tuple) else coordinates(point)
-        x = math.floor(position[0]) - self._origin.x
-        y = math.floor(position[1]) - self._origin.y
+        tile_x, tile_y = tile_address_of(point)
+        x, y = tile_x - self._origin.x, tile_y - self._origin.y
         if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
             return x, y
         return None
@@ -151,7 +149,7 @@ class Grid[T: float]:
         """
         return Grid(self._data, origin=self._origin, outside=value, readonly=self._readonly)
 
-    def _value_at(self, point: PointLike) -> T:
+    def _value_at(self, point: PointLike | Tile) -> T:
         """The value at `point`, or `outside` for a point the grid does not cover."""
         if (index := self._index_if_covered(point)) is not None:
             return self._data.item(index)
@@ -182,9 +180,9 @@ class Grid[T: float]:
     def __getitem__(self, key: PointLike | Area | Grid[bool]) -> T | ndarray:
         """The value at a point, the values over an area, or the values a mask selects. The values over a rectangle
         are a view, read-only when the grid is; the others are a copy, by ascending x, then y."""
-        # Points first, checked as tuples: `Tile` is the only `Area` that is a tuple, and it addresses a single tile
-        # like any other point. A miss here is cheap; a miss against an `Area` subclass is not.
-        if isinstance(key, tuple):
+        # Points first, checked as tuples, then a tile, which addresses a single tile like any point. A miss here is
+        # cheap; a miss against an `Area` subclass is not.
+        if isinstance(key, tuple) or type(key) is Tile:
             return self._value_at(key)
         if isinstance(key, Rectangle):
             view = self._data[self._slices(key)]
@@ -201,7 +199,7 @@ class Grid[T: float]:
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
         self._refuse_readonly()
-        if isinstance(key, tuple):
+        if isinstance(key, tuple) or type(key) is Tile:
             self._data[self.index_of(key)] = value
         elif isinstance(key, Rectangle):
             self._data[self._slices(key)] = value

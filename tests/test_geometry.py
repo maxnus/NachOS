@@ -496,8 +496,9 @@ class TestTile:
         ],
     )
     def test_arithmetic_is_refused(self, operation: Callable[[Tile], object]) -> None:
-        """As a tuple it would concatenate or repeat, and `grid[tile + (1, 0)]` read the tile it started from."""
-        with pytest.raises(TypeError, match="is an address"):
+        """A tile has none. As a tuple it concatenated or repeated, so `grid[tile + (1, 0)]` read the tile it started
+        from."""
+        with pytest.raises(TypeError):
             operation(Tile(3, 4))
 
     def test_takes_whole_number_coordinates_alone(self) -> None:
@@ -510,7 +511,7 @@ class TestTile:
     def test_a_numpy_integer_becomes_an_int(self) -> None:
         tile = Tile(numpy.int64(3), numpy.int32(4))  # pyright: ignore[reportArgumentType]
         assert tile == Tile(3, 4)
-        assert (type(tile[0]), type(tile[1])) == (int, int)
+        assert (type(tile.x), type(tile.y)) == (int, int)
 
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
@@ -519,9 +520,23 @@ class TestTile:
     def test_center_is_where_a_unit_stands(self) -> None:
         assert Tile(3, 4).center == Point((3.5, 4.5))
 
-    def test_indexes_numpy_directly(self) -> None:
-        grid = numpy.arange(100).reshape(10, 10)
-        assert grid[Tile(3, 4)] == grid[3, 4]
+    def test_it_is_neither_a_tuple_nor_its_corner_point(self) -> None:
+        """As a tuple, a tile equalled the point at its corner and hashed like it, and indexed a numpy array as an
+        array index, which is wrong for any grid whose origin is not (0, 0)."""
+        tile = Tile(3, 4)
+        assert not isinstance(tile, tuple)
+        assert tile != (3, 4)
+        assert tile != Point((3, 4))
+        assert Point((3, 4)) not in {tile}
+        with pytest.raises(IndexError):
+            numpy.arange(100).reshape(10, 10)[tile]  # pyright: ignore[reportCallIssue, reportArgumentType]
+
+    def test_sorts_by_x_then_y(self) -> None:
+        assert sorted([Tile(2, 0), Tile(1, 5), Tile(1, 2)]) == [Tile(1, 2), Tile(1, 5), Tile(2, 0)]
+
+    def test_is_frozen(self) -> None:
+        with pytest.raises(AttributeError):
+            Tile(3, 4).x = 5  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_is_an_area(self) -> None:
         tile = Tile(3, 4)
@@ -535,7 +550,7 @@ class TestTile:
         assert (3.0, 4.0) in tile, "the lower edges are inside"
         assert (4.0, 4.5) not in tile, "the upper edges belong to the next tile"
         with pytest.raises(TypeError):
-            _ = 3 in tile
+            _ = 3 in tile  # pyright: ignore[reportOperatorIssue]
 
     def test_translated(self) -> None:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
@@ -565,11 +580,8 @@ class TestTile:
             operation(Tile(3, 4))
 
     def test_it_is_an_address_not_a_point(self) -> None:
-        """A tile is a patch of ground with a center, so point math must be given that center.
-
-        Its tuple is the grid address. Read as a point it would measure from the tile's corner, half a tile out and
-        silently, so it is refused.
-        """
+        """A tile is a patch of ground with a center, so point math must be given that center. Read as a point it
+        would measure from the tile's corner, half a tile out and silently, so it is refused."""
         tile = Tile(3, 4)
         with pytest.raises(TypeError, match="a Tile is an area, not a point"):
             _ = Point((0, 0)).distance_to(tile)  # pyright: ignore[reportArgumentType]
@@ -580,7 +592,7 @@ class TestTile:
         """Both readings stay available, and neither is the default."""
         grid = numpy.arange(100).reshape(10, 10)
         tile = Tile(3, 4)
-        assert grid[tile] == grid[3, 4], "the tuple is the array index"
+        assert grid[tile.x, tile.y] == grid[3, 4], "the address is x and y"
         assert tile.center == (3.5, 4.5), "the center is where a unit stands"
         assert Point((0, 0)).towards(tile.center, 1.0) == pytest.approx(tile.center.normalized)
 
@@ -723,7 +735,7 @@ class TestAreaAgreement:
         """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
         assert area.translated(Point((1, 2))) == area.translated((1, 2))
         with pytest.raises(TypeError, match="a Tile is an area, not an offset"):
-            area.translated(Tile(1, 1))
+            area.translated(Tile(1, 1))  # pyright: ignore[reportArgumentType]
         with pytest.raises(ValueError, match=r"drop a height with \.ground"):
             area.translated(Point3D((1, 2, 3)))
         with pytest.raises(ValueError, match=r"not \(1\.0,\)$"):

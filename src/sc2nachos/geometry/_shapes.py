@@ -7,7 +7,7 @@ import operator
 import random
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, NoReturn, Self, final
+from typing import TYPE_CHECKING, Self, final
 
 import numpy
 from scipy.spatial import KDTree
@@ -25,23 +25,21 @@ if TYPE_CHECKING:
 
 
 @final
-class Tile(tuple[int, int], Area):
-    """One square of the map, addressed by the integer coordinates of its lower left corner.
+@dataclass(frozen=True, slots=True, order=True, init=False)
+class Tile(Area):
+    """One square of the map, addressed by the integer coordinates of its lower left corner. Used as a point, a tile
+    reads as its `center`. Tiles sort by `x`, then `y`."""
 
-    The tuple is the address. Used as a point, a tile reads as its `center`.
-    """
+    x: int
+    """The left edge."""
+    y: int
+    """The bottom edge."""
 
-    __slots__ = ()
-
-    def __new__(cls, x: int, y: int) -> Self:
+    def __init__(self, x: int, y: int) -> None:
         """The tile whose lower left corner is at `x` and `y`, each an integer, a numpy one included, which becomes an
         `int`. Raises `TypeError` for any other coordinate, a float among them."""
-        return super().__new__(cls, (operator.index(x), operator.index(y)))
-
-    def __reduce__(self) -> tuple[type[Tile], tuple[int, int]]:
-        # How `copy`, `deepcopy` and `pickle` rebuild a tile: as `Tile(x, y)`. A tuple's own reduction hands `__new__`
-        # one tuple, which it cannot take.
-        return Tile, (self[0], self[1])
+        object.__setattr__(self, "x", operator.index(x))
+        object.__setattr__(self, "y", operator.index(y))
 
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
@@ -50,19 +48,9 @@ class Tile(tuple[int, int], Area):
         return cls(x, y)
 
     @property
-    def x(self) -> int:
-        """The left edge."""
-        return self[0]
-
-    @property
-    def y(self) -> int:
-        """The bottom edge."""
-        return self[1]
-
-    @property
     def center(self) -> Point:
         """The middle of the tile, where a unit on it stands."""
-        return Point((self[0] + 0.5, self[1] + 0.5))
+        return Point((self.x + 0.5, self.y + 0.5))
 
     @property
     def area(self) -> float:
@@ -72,18 +60,18 @@ class Tile(tuple[int, int], Area):
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the tile, by `rng` or the `random` module's own generator."""
         random_fraction = random.random if rng is None else rng.random
-        return Point((self[0] + random_fraction(), self[1] + random_fraction()))
+        return Point((self.x + random_fraction(), self.y + random_fraction()))
 
     @property
     def neighbors4(self) -> tuple[Tile, Tile, Tile, Tile]:
         """The four orthogonally adjacent tiles."""
-        x, y = self[0], self[1]
+        x, y = self.x, self.y
         return (Tile(x, y + 1), Tile(x, y - 1), Tile(x + 1, y), Tile(x - 1, y))
 
     @property
     def neighbors8(self) -> tuple[Tile, Tile, Tile, Tile, Tile, Tile, Tile, Tile]:
         """The eight adjacent tiles, diagonals included."""
-        x, y = self[0], self[1]
+        x, y = self.x, self.y
         return (
             *self.neighbors4,
             Tile(x + 1, y + 1),
@@ -92,56 +80,38 @@ class Tile(tuple[int, int], Area):
             Tile(x - 1, y - 1),
         )
 
-    def __contains__(self, point: object) -> bool:
-        """Whether a point falls on this tile, on the lower edges but not the upper ones.
-
-        Membership in the area, not in the coordinate pair: `3 in Tile(3, 4)` raises rather than returning True.
-        """
-        return Tile.containing(point) == self  # pyright: ignore[reportArgumentType]
+    def __contains__(self, point: PointLike | Tile) -> bool:
+        """Whether a point falls on this tile, on the lower edges but not the upper ones, a tile reading as itself.
+        Raises `TypeError` on anything but a point or a tile."""
+        return tile_address_of(point) == (self.x, self.y)
 
     def translated(self, offset: PointLike) -> Tile:
         """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
         height."""
         ground_offset = checked_ground_offset(offset)
-        return Tile.containing((self[0] + 0.5 + ground_offset[0], self[1] + 0.5 + ground_offset[1]))
+        return Tile.containing((self.x + 0.5 + ground_offset[0], self.y + 0.5 + ground_offset[1]))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the tile nearest to `point`, and the distance to it."""
         position = coordinates(point)
         closest = Point(
             (
-                max(self[0], min(position[0], self[0] + 1)),
-                max(self[1], min(position[1], self[1] + 1)),
+                max(self.x, min(position[0], self.x + 1)),
+                max(self.y, min(position[1], self.y + 1)),
             )
         )
         return closest, closest.distance_to(position)
 
     def bounding_rectangle(self) -> Rectangle:
         """The tile as a unit rectangle."""
-        return Rectangle(self[0], self[1], 1, 1)
+        return Rectangle(self.x, self.y, 1, 1)
 
     def tiles(self) -> TileSet:
         """A set of this tile alone."""
-        return TileSet._of_addresses([(self[0], self[1])])
+        return TileSet._of_addresses([(self.x, self.y)])
 
     def __repr__(self) -> str:
-        return f"Tile({self[0]}, {self[1]})"
-
-    def __add__(self, other: object) -> NoReturn:
-        """Raises `TypeError`: a tile is an address. `translated` shifts it, and `center` is its point."""
-        raise TypeError(f"{self!r} is an address; shift it with `translated`, or add to its `center`")
-
-    def __radd__(self, other: object) -> NoReturn:
-        """Raises `TypeError`, as `+` does the other way round."""
-        raise TypeError(f"{self!r} is an address; shift it with `translated`, or add to its `center`")
-
-    def __mul__(self, other: object) -> NoReturn:
-        """Raises `TypeError`: a tile is an address, and scaling one is scaling its `center`."""
-        raise TypeError(f"{self!r} is an address; scale its `center` instead")
-
-    def __rmul__(self, other: object) -> NoReturn:
-        """Raises `TypeError`, as `*` does the other way round."""
-        raise TypeError(f"{self!r} is an address; scale its `center` instead")
+        return f"Tile({self.x}, {self.y})"
 
 
 def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
@@ -258,7 +228,7 @@ class Rectangle(Area):
             Point((self.left, self.top)),
         )
 
-    def __contains__(self, point: PointLike) -> bool:
+    def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether a point lies inside, on the lower edges but not the upper ones."""
         position = coordinates_or_tile_center(point)
         # The fields rather than the edge properties, a call each; the arithmetic is the same as `right` and `top`.

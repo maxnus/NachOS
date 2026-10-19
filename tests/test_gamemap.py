@@ -92,7 +92,7 @@ class TestReadingAMap:
 
     def test_a_height_at_takes_a_point_and_not_a_tile(self) -> None:
         with pytest.raises(TypeError, match="pass its .center"):
-            GameMap(make_game_info(), start_location=Point((0.5, 0.5))).height_at(Tile(1, 1))
+            GameMap(make_game_info(), start_location=Point((0.5, 0.5))).height_at(Tile(1, 1))  # pyright: ignore[reportArgumentType]
 
     def test_a_height_at_past_the_playable_area_raises(self) -> None:
         with pytest.raises(IndexError, match="lies outside"):

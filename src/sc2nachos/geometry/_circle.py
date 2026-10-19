@@ -55,7 +55,7 @@ class Circle(Area):
         """The length of the boundary."""
         return 2 * math.pi * self._radius
 
-    def __contains__(self, point: PointLike) -> bool:
+    def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether `point` lies in the circle, boundary included."""
         position = coordinates_or_tile_center(point)
         dx = position[0] - self._center[0]
