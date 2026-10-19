@@ -291,6 +291,16 @@ class TestAreaAccess:
         assert [grid[tile] for tile in on_grid] == [-float(n) for n in range(1, len(on_grid) + 1)]
         assert int((grid.values < 0).sum()) == len(on_grid)
 
+    def test_an_area_reaching_far_beyond_the_grid_reads_and_writes_only_what_the_grid_holds(self) -> None:
+        """A mask over the whole of either would need more memory than there is: `numpy.zeros` refuses one of
+        10**18 entries."""
+        grid = Grid.zeros(10, 10)
+        sparse = TileSet([Tile(1, 1), Tile(10**9, 10**9)])
+        grid[sparse] = 1.0
+        grid[Circle((5.5, 5.5), 10**8)] += 1.0
+        assert grid[sparse].tolist() == [2.0]
+        assert grid.sum() == 101.0
+
     def test_a_tile_set_writes_exactly_its_tiles(self) -> None:
         grid = Grid.zeros(10, 10, dtype=bool)
         tiles = TileSet([Tile(1, 1), Tile(3, 4), Tile(9, 9)])

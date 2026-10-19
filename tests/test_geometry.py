@@ -695,9 +695,18 @@ class TestAreaAgreement:
     )
     def test_every_shapes_tile_mask_holds_its_tiles(self, area: Area) -> None:
         """A grid reads an area through its mask, so the mask must hold exactly the tiles `tiles` gives."""
-        left, bottom, mask = area._tile_mask()
-        xs, ys = numpy.nonzero(mask)
+        left, bottom, tiles_mask = area._tile_mask()
+        xs, ys = numpy.nonzero(tiles_mask)
         assert {Tile(left + x, bottom + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)} == set(area.tiles())
+
+    @pytest.mark.parametrize("area", [*EVERY_SHAPE, TileSet([Tile(1, 2), Tile(40, 40)])], ids=lambda area: repr(area))
+    @pytest.mark.parametrize("within", [Rectangle(1, 1, 3, 2), Rectangle(-5, -5, 4, 4), Rectangle(0, 0, 50, 50)])
+    def test_every_shapes_tile_mask_within_a_window_holds_its_tiles_there(self, area: Area, within: Rectangle) -> None:
+        """A grid asks for the mask within its own bounds, so a mask never outgrows the grid it is read on."""
+        left, bottom, tiles_mask = area._tile_mask(within)
+        xs, ys = numpy.nonzero(tiles_mask)
+        masked = {Tile(left + x, bottom + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        assert masked == {tile for tile in area.tiles() if tile.center in within}
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:

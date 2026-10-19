@@ -64,7 +64,7 @@ class Area(ABC):
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
 
-    def _tile_mask(self) -> tuple[int, int, ndarray]:
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[int, int, ndarray]:
         """The x and y of the tile a mask's `[0, 0]` entry addresses, and that mask, indexed `[x, y]`, of the tiles
-        `tiles` gives."""
-        return self.tiles()._tile_mask()
+        `tiles` gives that lie `within` a rectangle on whole tiles, if one is given."""
+        return self.tiles()._tile_mask(within)
