@@ -95,7 +95,7 @@ class _UpgradeTracker:
 
     def _of(self, unit: Unit[Any]) -> frozenset[UpgradeId]:
         """The upgrades `unit`'s owner has: this player's own, the enemy's known ones, and none for anyone else."""
-        alliance = unit._latest_report.alliance
+        alliance = unit._raw_alliance
         if alliance == _OWN:
             return self._own
         return self._enemy.upgrades if alliance == _ENEMY else frozenset()

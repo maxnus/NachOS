@@ -98,6 +98,15 @@ class TestIds:
         assert marine.alliance is Alliance.OWN
         assert marine.first_alliance is Alliance.ENEMY
 
+    def test_a_unit_reads_the_alliance_of_its_latest_report(self) -> None:
+        """Through a change between two sides neither of which is this player's."""
+        game = _Game()
+        (unit,) = game.observe(0, make_unit(1, alliance=Alliance.ALLY))
+        game.observe(16, make_unit(1, alliance=_ENEMY))
+        assert unit.alliance is _ENEMY
+        assert list(game.tracker.unit_tracker.present.enemy) == [unit]
+        assert not game.tracker.last_changes.units_alliance_changed
+
     def test_running_out_of_ids_raises(self) -> None:
         game = _Game()
         game.tracker.unit_tracker._units_seen_per_alliance[Alliance.OWN] = 99_998

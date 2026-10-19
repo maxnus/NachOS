@@ -62,9 +62,11 @@ class _UnitComparer:
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
         for unit in tracker.unit_tracker.present:
+            alliance = unit._raw_alliance
+            if alliance != _OWN and alliance != _ENEMY:
+                continue
             report = unit._latest_report
-            alliance = report.alliance
-            if (alliance != _OWN and alliance != _ENEMY) or report.display_type == _IN_FOG:
+            if report.display_type == _IN_FOG:
                 continue
             compared[unit._id] = report
             in_vision = report.display_type == _IN_VISION

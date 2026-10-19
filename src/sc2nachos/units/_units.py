@@ -165,7 +165,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if unit.type_id not in unwanted)
 
     def _of_alliance(self, alliance: Alliance) -> Units[U]:
-        return Units(unit for unit in self._units if unit.alliance is alliance)
+        return Units(unit for unit in self._units if unit._raw_alliance == alliance)
 
     @property
     def own[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:

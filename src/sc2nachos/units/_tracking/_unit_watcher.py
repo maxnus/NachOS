@@ -63,7 +63,7 @@ class _UnitWatcher:
         changes = self._tracker.last_changes
         for unit in self._tracker.unit_tracker.present:
             report = unit._latest_report
-            alliance = report.alliance
+            alliance = unit._raw_alliance
             if alliance == _OWN:
                 if own.watching and (display := report.display_type) != _IN_FOG:
                     own.compare(cast("OwnUnit[Any]", unit), report, changes.own, in_vision=display == _IN_VISION)

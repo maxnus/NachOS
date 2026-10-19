@@ -67,6 +67,7 @@ class Unit[K: UnitType.AnyType]:
         "_position",
         "_previous_position",
         "_previous_step",
+        "_raw_alliance",
         "_raw_type",
         "_radius_footprint",
         "_stale",
@@ -82,6 +83,8 @@ class Unit[K: UnitType.AnyType]:
     _latest_report: raw_pb2.Unit
     _latest_report_in_vision: raw_pb2.Unit | None
     _last_seen: int | None
+    # The alliance of the latest report, as the protocol numbers it, read once per report.
+    _raw_alliance: int
     _raw_type: int
     _type_id: UnitTypeId
     _position: Point
@@ -109,7 +112,8 @@ class Unit[K: UnitType.AnyType]:
         # Set only for a unit out of sight; a unit in sight was last seen at its last observation.
         self._last_seen = None
         self._position = Point((report.pos.x, report.pos.y))
-        self._own = report.alliance == _OWN
+        self._raw_alliance = report.alliance
+        self._own = self._raw_alliance == _OWN
         self._step = step
         self._previous_position = None
         self._previous_step = step
@@ -148,10 +152,11 @@ class Unit[K: UnitType.AnyType]:
             # Just went out of sight: the last sighting must outlive the observation it came in.
             self._latest_report_in_vision = _copy(self._latest_report)
             self._last_seen = last
-        if (report.alliance == _OWN) is not self._own:
-            # The old alliance is read before the new report replaces the old one.
-            self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._latest_report.alliance]))
-            self._update_alliance()
+        if (alliance := report.alliance) != self._raw_alliance:
+            if (alliance == _OWN) is not self._own:
+                self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._raw_alliance]))
+                self._update_alliance()
+            self._raw_alliance = alliance
         # The game reports orders for this player's units alone.
         if self._own and (orders := self._latest_report.orders):
             self._remember_order_targets(orders)
@@ -249,7 +254,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def alliance(self) -> Alliance:
         """Whose side the unit is on."""
-        return _ALLIANCES[self._latest_report.alliance]
+        return _ALLIANCES[self._raw_alliance]
 
     @property
     def owner_id(self) -> int:
