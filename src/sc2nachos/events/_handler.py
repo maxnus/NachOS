@@ -24,6 +24,7 @@ class _Handler:
         "function",
         "instance",
         "last_step",
+        "name",
         "once",
         "order",
         "priority",
@@ -43,6 +44,8 @@ class _Handler:
         instance: object | None = None,
     ) -> None:
         self.function = function
+        self.name = f"{function.__module__}.{function.__qualname__}"
+        """The function's module and qualified name, shared by every instance of a class."""
         self.selects = selects
         """The events it is handed: those of a type, or what `only`, `of` and `where` select of them."""
         self.priority = priority
@@ -69,8 +72,3 @@ class _Handler:
         if self.catch_exceptions:
             details.append("catch_exceptions=True")
         return f"_Handler({', '.join(details)})"
-
-    @property
-    def name(self) -> str:
-        """The function's module and qualified name, shared by every instance of a class."""
-        return f"{self.function.__module__}.{self.function.__qualname__}"

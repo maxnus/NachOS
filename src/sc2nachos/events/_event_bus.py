@@ -33,7 +33,7 @@ class _EventBus:
     __slots__ = ("_marks", "_step", "_subscriptions", "_timings")
 
     def __init__(self, *, time_handlers: bool = False) -> None:
-        """Time every handler call if `time_handlers`, at some 200 ns a call."""
+        """Time every handler call if `time_handlers`."""
         self._subscriptions = _EventSubscriptions()
         # What each method marked in a class body is to be subscribed to, and with which options, until `subscribe`
         # binds it to an instance. Nothing in a mark refers to the method, so a class is collected with its methods.
