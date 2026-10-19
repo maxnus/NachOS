@@ -149,8 +149,8 @@ class Api:
         """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
         when this returns. A handler may itself emit an event.
 
-        An event made without a step is given the current step. Raises `ValueError` for one when no game is being
-        played.
+        An event made without a step is handed out as a copy with the current step, and the one passed in keeps none,
+        so it can be emitted again. Raises `ValueError` for one when no game is being played.
         """
         self._events.emit(event)
 

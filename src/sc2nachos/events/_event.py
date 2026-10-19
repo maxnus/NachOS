@@ -12,7 +12,7 @@ from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 
-# The step of an event made without one; `api.emit` replaces it with the current step.
+# The step of an event made without one; `api.emit` hands out a copy with the current step.
 _NO_STEP = -1
 
 
@@ -24,7 +24,8 @@ class Event(metaclass=_EventMeta):
     """
 
     step: int = field(default=_NO_STEP, kw_only=True)
-    """The step of the observation it comes with. An event made without one gets the current step when emitted."""
+    """The step of the observation it comes with. An event made without one is emitted as a copy with the current
+    step."""
 
     @classmethod
     def _key_of(cls, *made_of: Any) -> Hashable:

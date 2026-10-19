@@ -95,9 +95,9 @@ api.emit(ExpansionTakenEvent(natural))
 ```
 
 A subclass of `Event` is a frozen, slotted dataclass of the fields it declares; a `@dataclass` decorator of its own
-fails. Every event has a `step`, passed by keyword; an event made without one takes the current step of the game
-being played when it is emitted. `api.emit` hands an event to its handlers in priority order and returns
-once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events too, so a bot's
+fails. Every event has a `step`, passed by keyword; an event made without one is handed out as a copy with the current
+step of the game being played, so one made once can be emitted every turn. `api.emit` hands an event to its handlers
+in priority order and returns once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events too, so a bot's
 handlers can be tested without a game, given a step.
 
 ## When events come

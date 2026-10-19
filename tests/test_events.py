@@ -879,6 +879,16 @@ class TestTheStep:
         bus.emit(_Scouted("natural", step=16))
         assert seen == [80, 16]
 
+    def test_one_made_once_without_a_step_is_handed_out_with_each_steps_and_kept_as_it_was(self) -> None:
+        bus, seen = _EventBus(), []
+        bus.on(_Scouted)(lambda event: seen.append(event.step))
+        scouted = _Scouted("natural")
+        for step in (0, 16, 32):
+            bus._set_step(step)
+            bus.emit(scouted)
+        assert seen == [0, 16, 32]
+        assert scouted.step < 0
+
     def test_one_emitted_without_a_step_and_with_no_game_being_played_is_refused(self) -> None:
         with pytest.raises(ValueError, match="no game is being played"):
             _EventBus().emit(_Scouted("natural"))

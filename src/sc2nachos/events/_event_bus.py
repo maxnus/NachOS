@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import weakref
 from collections.abc import Hashable, Iterable, Iterator, Sequence
 from time import perf_counter
@@ -157,7 +158,7 @@ class _EventBus:
         if event.step < 0:
             if self._step is None:
                 raise ValueError(f"{event!r} has no step, and no game is being played to give it one")
-            object.__setattr__(event, "step", self._step)
+            event = dataclasses.replace(event, step=self._step)
         subscriptions = self._subscriptions
         if (handlers := subscriptions.resolved.get(type(event))) is None:
             handlers = subscriptions.resolve(type(event))
