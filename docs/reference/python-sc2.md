@@ -499,7 +499,7 @@ it.
 | `bot.calculate_supply_cost(t)` | `unit_data.cost.supply`, the type's own; `ability_data.cost.supply` of what makes it counts what the order frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
 | `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
-| `UNIT_TRAINED_FROM[t]` | `data.abilities[data.units[t].creation_ability].performers` |
+| `UNIT_TRAINED_FROM[t]` | `data.units[t].made_by` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
 | `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]` |
 | `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |

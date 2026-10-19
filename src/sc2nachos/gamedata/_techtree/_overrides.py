@@ -69,6 +69,15 @@ SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
 )
 """The unit type that carries out each ability it is never offered, turning itself into the ability's product."""
 
+MAKERS_NEVER_SWEPT: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
+    {
+        # A templar is never offered `MORPH_ARCHON` (tool `sweep_tech_tree`), though two given it in one command, high
+        # or dark, merge into an archon (in game).
+        UnitTypeId.ARCHON: frozenset({UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}),
+    }
+)
+"""The unit types that make each unit type, where the sweep never saw them make it."""
+
 # Each of these, ordered unqueued while a unit moved, was carried out while the move went on; every other ability a
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.

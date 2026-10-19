@@ -11,7 +11,7 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES, TechTree
+from sc2nachos.gamedata._techtree import MAKERS_NEVER_SWEPT, UNNAMED_CREATION_ABILITIES, TechTree
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
@@ -144,8 +144,10 @@ class TestGeneratingTheTables:
         # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
         assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
+        assert tree.unit_type_makers[UnitTypeId.MARINE] == {UnitTypeId.BARRACKS}
         stimpack = tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
         assert stimpack == {UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK}
+        assert UpgradeId.STIMPACK not in tree.unit_type_makers
 
     def test_an_action_several_types_perform_makes_what_each_one_s_own_id_makes(self) -> None:
         """A barracks offered its own lift becomes a flying barracks, and a starport a flying starport."""
@@ -384,6 +386,25 @@ class TestWhatTheTablesSay:
         assert tables.units[UnitTypeId.ASSIMILATOR_RICH].morphed_from is None
         # The build ability a rich refinery shares with a refinery makes a refinery, as the table says.
         assert tables.abilities[AbilityId.SCV_BUILD_REFINERY].products == {UnitTypeId.SCV: UnitTypeId.REFINERY}
+
+    def test_a_unit_type_names_every_type_that_makes_one(self, tables: GameData) -> None:
+        units = tables.units
+        assert units[UnitTypeId.ZEALOT].made_by == {UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}
+        assert units[UnitTypeId.ARCHON].made_by == {UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}
+        assert units[UnitTypeId.ORBITAL_COMMAND].made_by == {UnitTypeId.COMMAND_CENTER}
+        assert units[UnitTypeId.SCV].made_by == {
+            UnitTypeId.COMMAND_CENTER,
+            UnitTypeId.ORBITAL_COMMAND,
+            UnitTypeId.PLANETARY_FORTRESS,
+        }
+        assert units[UnitTypeId.REFINERY_RICH].made_by == {UnitTypeId.SCV}
+        assert units[UnitTypeId.LARVA].made_by == frozenset()
+
+    def test_a_maker_written_by_hand_is_one_the_sweep_never_saw(self) -> None:
+        """Once a sweep sees it, the entry can go."""
+        swept = _sweep().unit_type_makers
+        for unit_type, makers in MAKERS_NEVER_SWEPT.items():
+            assert not swept.get(unit_type, frozenset()) & makers, unit_type.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
         zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]

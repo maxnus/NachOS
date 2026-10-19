@@ -53,6 +53,10 @@ class TechTree:
     """The unit types offered each ability."""
     research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
     """The ability that researches each upgrade, inverted from `ability_products`."""
+    unit_type_makers: Mapping[UnitTypeId, frozenset[UnitTypeId]] = field(init=False)
+    """The unit types that make each unit type, inverted from `ability_products`, and for a type whose creation ability
+    names another product, the types that carry that ability out: an SCV makes a rich refinery, which a refinery's
+    build puts up on a rich geyser."""
 
     def __post_init__(self) -> None:
         performers: defaultdict[AbilityId, set[UnitTypeId]] = defaultdict(set)
@@ -62,8 +66,17 @@ class TechTree:
         by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
         object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
         researched: dict[UpgradeId, AbilityId] = {}
+        makers: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
         for ability, products in self.ability_products.items():
-            for product in products.values():
+            for maker, product in products.items():
                 if isinstance(product, UpgradeId):
                     researched[product] = ability
+                else:
+                    makers[product].add(maker)
         object.__setattr__(self, "research_abilities", MappingProxyType(researched))
+        for unit_type, ability in self.creation_abilities.items():
+            products = self.ability_products.get(ability, {})
+            if not any(product is unit_type for product in products.values()):
+                makers[unit_type].update(products)
+        makers_by_type = {unit_type: frozenset(unit_types) for unit_type, unit_types in makers.items()}
+        object.__setattr__(self, "unit_type_makers", MappingProxyType(makers_by_type))
