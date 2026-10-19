@@ -14,6 +14,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A barracks that lifts off, a spine crawler that uproots and a command center that becomes an orbital command out
   of sight keep their tags. Seen elsewhere, the structure is listed there while its copy stays listed at the old
   spot, until that spot is seen (#25; tested).
+- A structure lifted off or uprooted, and a viking landed or flying, is never left in the fog as a remembered copy
+  (stated, the owner, 2026-09-26).
 - A refinery stands at its geyser's exact position (#25).
 - A unit inside a transport or a gas building, or a drone that became a structure, leaves the observation; a
   passenger returns under its tag when unloaded (#25; tested).

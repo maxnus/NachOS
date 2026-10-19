@@ -25,7 +25,8 @@ _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# The structures that can leave the spot they are remembered at: those offered a lift or an uproot.
+# The structures that can leave the spot they are remembered at: those offered a lift or an uproot, in their grounded
+# forms alone, since one lifted off or uprooted, like a viking in either form, is never remembered in the fog (stated).
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
     unit_type
     for ability in (AbilityId.LIFT, AbilityId.UPROOT)

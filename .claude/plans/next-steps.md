@@ -250,6 +250,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
+- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
+  as a remembered copy, which the tracker assumes (the owner, review of #71).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though
   an unburrow's autocast is the performer's: a burrowed roach comes up by autocast, a drone does not. A family id
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the
