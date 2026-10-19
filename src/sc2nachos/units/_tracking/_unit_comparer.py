@@ -35,7 +35,7 @@ class _UnitComparer:
         # The report of each of this player's and the enemy's units in sight, by id, as of the update `compare` last
         # ran on.
         self._compared: _Snapshot[dict[int, raw_pb2.Unit]] = _Snapshot({})
-        # The buffs of each of those units visible that has any, by id, as of the update `compare` last compared
+        # The buffs of each of those visible units that has any, by id, as of the update `compare` last compared
         # buffs on. Kept separately, and only for units with buffs, since reading a unit's buffs costs some five times
         # what reading another field does.
         self._worn: _Snapshot[dict[int, tuple[int, ...]]] = _Snapshot({})
