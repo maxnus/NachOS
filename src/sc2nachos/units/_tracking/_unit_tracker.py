@@ -214,9 +214,11 @@ class _UnitTracker:
         new unit.
 
         A structure going out of vision is replaced, in the same observation, by a fog copy at the same position
-        under a new tag, and coming back into vision swaps the other way. The type is not compared, since a structure
-        can change form between the two observations, as a supply depot lowering does (in game). The alliance is
-        compared, since a refinery stands at the same position as its geyser.
+        under a new tag. A fog copy coming into vision swaps the other way only for a unit never seen in vision, such
+        as a mineral field first listed in the fog: one seen in vision comes back under its first tag (in game), so a
+        new tag in vision at its spot is a new unit, such as a structure rebuilt where it died out of sight. The type
+        is not compared, since a structure can change form between the two observations, as a supply depot lowering
+        does (in game). The alliance is compared, since a refinery stands at the same position as its geyser.
         """
         # The units that left this observation without dying or being updated under another tag, and among them this
         # player's units that had an order, one of which may have become a structure.
@@ -231,7 +233,7 @@ class _UnitTracker:
         for report in reports:
             display = report.display_type
             unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
-            if unit is not None and {display, unit._latest_report.display_type} == {_IN_VISION, _IN_FOG}:
+            if unit is not None and _continues(unit, display):
                 if report.alliance == _ENEMY:
                     changes = self._tracker.last_changes
                     entered = display == _IN_VISION
@@ -322,3 +324,12 @@ class _UnitTracker:
             unit._mark_stale()
         self._set_present_units({})
         self._unfinished = {}
+
+
+def _continues(unit: Unit[Any], display: int) -> bool:
+    """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
+    vision into the fog, or a fog copy of a unit never seen in vision come into it."""
+    before = unit._latest_report.display_type
+    if before == _IN_VISION:
+        return display == _IN_FOG
+    return before == _IN_FOG and display == _IN_VISION and unit._latest_report_in_vision is None

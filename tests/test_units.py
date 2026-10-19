@@ -239,6 +239,18 @@ class TestTheFog:
         assert other is not depot
         assert depot.is_stale
 
+    def test_a_structure_rebuilt_where_one_died_out_of_sight_is_another_unit(self) -> None:
+        """A structure seen in vision comes back under its first tag, so a new tag in vision at its spot is new."""
+        game = _Game()
+        (old,) = game.observe(0, _depot(1, health=400.0))
+        game.observe(16, _depot(900, visibility=_IN_FOG))
+        (new,) = game.observe(32, _depot(2, health=100.0))
+        changes = game.tracker.last_changes
+        assert new is not old
+        assert (old.is_dead, new.health) == (True, 100.0)
+        assert (changes.units_found_dead, changes.enemy_units_first_seen) == ([old], [new])
+        assert not changes.units_type_changed
+
     def test_a_unit_arriving_where_another_left_is_not_it(self) -> None:
         """Only a swap between sight and memory is one unit; a visible unit replacing a visible one is not."""
         game = _Game()
