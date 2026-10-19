@@ -57,8 +57,9 @@ class _UnitWatcher:
         Stops watching what is no longer asked for, and starts watching what is newly asked for.
         """
         own, enemy = self._own, self._enemy
-        own.watch(own_reached, own_dropped, own_areas)
-        enemy.watch(enemy_reached, enemy_dropped, enemy_areas)
+        units_by_id = self._tracker.unit_tracker._units_by_id
+        own.watch(own_reached, own_dropped, own_areas, units_by_id=units_by_id)
+        enemy.watch(enemy_reached, enemy_dropped, enemy_areas, units_by_id=units_by_id)
         changes = self._tracker.last_changes
         for unit in self._tracker.unit_tracker.present:
             report = unit._latest_report

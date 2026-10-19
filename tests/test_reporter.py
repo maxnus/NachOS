@@ -657,6 +657,25 @@ class TestVitalReached:
         ]
         assert not enemy
 
+    def test_a_unit_type_watched_again_starts_afresh_though_another_type_kept_the_watch_going(self) -> None:
+        """A raven seen below the value, then above it unwatched, is not reported when watched again."""
+        game = _Game()
+        record(game.events, _STORM_READY)
+        raven_ready = EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitTypeId.RAVEN)
+        seen: list[int] = []
+
+        def first(event: EnemyUnitVitalReachedEvent) -> None:
+            seen.append(event.step)
+
+        game.events.on(raven_ready)(first)
+        game.observe(0, _raven(50, energy_max=200.0))
+        game.events.unsubscribe(first)
+        game.observe(16, _raven(100, energy_max=200.0))
+        game.events.on(raven_ready)(lambda event: seen.append(event.step))
+        game.observe(32, _raven(100, energy_max=200.0))
+        game.observe(48, _raven(100, energy_max=200.0))
+        assert seen == []
+
     def test_a_watch_starts_on_the_turn_its_handler_subscribed_reporting_nothing_that_turn(self) -> None:
         game = _Game()
         game.observe(0, _templar(70))
