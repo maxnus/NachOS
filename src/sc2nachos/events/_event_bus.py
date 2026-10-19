@@ -113,8 +113,8 @@ class _EventBus:
         return MappingProxyType({kind: MappingProxyType(timings) for kind, timings in self._timings.items()})
 
     def _add(self, handler: _Handler) -> None:
-        """Subscribe `handler`, or mark it for `subscribe` if its function is a method in a class body."""
-        if handler.instance is None and _in_class_body(handler.function):
+        """Subscribe `handler`, or mark it for `subscribe` if its function is a method yet to be bound."""
+        if handler.instance is None and _is_method(handler.function):
             self._marks.setdefault(handler.function, []).append(handler)
         else:
             self._subscriptions.add(handler)
@@ -132,6 +132,9 @@ class _EventBus:
                     seen.add(name)
                     if isinstance(value, FunctionType):
                         found.extend(self._marks.get(value, ()))
+                    elif isinstance(value, classmethod | staticmethod) and value.__func__ in self._marks:
+                        kind = type(value).__name__
+                        raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
             marked = self._methods_of[cls] = tuple(found)
         return marked
 
@@ -227,11 +230,14 @@ def _selects(handler: _Handler, event: Event, key: Hashable) -> bool:
         return False
 
 
-def _in_class_body(function: FunctionType) -> bool:
-    """Whether `function` was defined in a class body, read off its qualified name: a class's name comes before its
-    own, where a module-level function has nothing and a nested one has `<locals>`."""
+def _is_method(function: FunctionType) -> bool:
+    """Whether `function` is a method, to be bound to an instance: defined in a class body, which its qualified name
+    says by a class's name before its own, where a module-level function has nothing and a nested one has `<locals>`;
+    and taking at least two positional arguments without defaults, the instance and the event."""
     parts = function.__qualname__.rsplit(".", 2)
-    return len(parts) > 1 and parts[-2] != "<locals>"
+    if len(parts) < 2 or parts[-2] == "<locals>":
+        return False
+    return function.__code__.co_argcount - len(function.__defaults__ or ()) >= 2
 
 
 def _timed(timings: dict[str, HandlerTiming], handler: _Handler, event: Event) -> object:

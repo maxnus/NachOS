@@ -110,10 +110,11 @@ class Api:
         produce every type of event it otherwise would not, including comparing every unit with the observation
         before; a parameterized event comes only with the parameters other handlers asked for.
 
-        A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
-        method in a class body is marked instead, and subscribed for each instance passed to `subscribe`. Either stays
-        subscribed until it is passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it
-        alive.
+        A method is marked, and subscribed for each instance passed to `subscribe`: a function defined in a class body
+        that takes at least two positional arguments without defaults, the instance and the event. Any other function
+        is subscribed at once, wherever it is defined, a static method included, and so is a method already bound to its
+        instance. Either stays subscribed until it is passed to `unsubscribe`, held strongly, so it runs whether or not
+        anything else keeps it alive.
 
         `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
         among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
@@ -132,7 +133,8 @@ class Api:
         """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
 
         An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
-        marked method, or is subscribed already.
+        marked method, or is subscribed already, and `TypeError` if a marked function is under a `classmethod` or a
+        `staticmethod`.
         """
         self._events.subscribe(instance)
 

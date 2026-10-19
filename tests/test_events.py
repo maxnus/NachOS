@@ -128,6 +128,36 @@ class TestSubscribing:
         _turns(bus, 1)
         assert calls == [1]
 
+    def test_a_static_method_and_a_function_read_off_a_class_are_subscribed_at_once(self) -> None:
+        """Each takes the event alone, so it is no method, though its qualified name puts it in a class."""
+        bus, calls = _EventBus(), []
+
+        class Macro:
+            @staticmethod
+            @bus.on(TurnEvent)
+            def on_turn(event: TurnEvent) -> None:
+                calls.append("static")
+
+            @staticmethod
+            def later(event: TurnEvent) -> None:
+                calls.append("read off")
+
+        bus.on(TurnEvent)(Macro.later)
+        _turns(bus, 0)
+        assert calls == ["static", "read off"]
+
+    def test_a_method_marked_under_a_classmethod_is_refused_when_subscribing(self) -> None:
+        bus = _EventBus()
+
+        class Handlers:
+            @classmethod
+            @bus.on(TurnEvent)
+            def on_turn(cls, event: TurnEvent) -> None:
+                pass
+
+        with pytest.raises(TypeError, match="on_turn of Handlers is marked with `on` under a classmethod"):
+            bus.subscribe(Handlers())
+
     def test_stacked_decorators_subscribe_to_each_event(self) -> None:
         bus, calls = _EventBus(), []
 

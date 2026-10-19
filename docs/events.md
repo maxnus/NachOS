@@ -19,8 +19,9 @@ class Economy:
     def on_created(self, event: OwnUnitCreatedEvent) -> None: ...
 ```
 
-A function is subscribed when it is defined. A method is marked, then subscribed for each instance passed to
-`api.subscribe`, and `api.unsubscribe` takes a function, a method or an instance off again. `on` takes a `priority`,
+A function is subscribed when it is defined, a static method included. A method, which takes `self` and the event, is
+marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method
+or an instance off again. `on` takes a `priority`,
 and `every_steps`, `at_step` or `once` to limit when the handler runs. A handler that returns `Done` is not called
 again that game. All of this starts over with each game. An api made with `time_handlers=True` says how long each
 handler took in `api.handler_timings`.
