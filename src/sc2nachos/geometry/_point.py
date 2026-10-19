@@ -48,6 +48,17 @@ def coordinates(value: PointLike) -> PointLike:
     raise TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
 
 
+def checked_ground_offset(offset: PointLike) -> PointLike:
+    """`offset`, checked as `coordinates` checks it, as a shift along the ground. Raises `ValueError` for one with a
+    height."""
+    shift = coordinates(offset)
+    if len(shift) != 2:
+        raise ValueError(
+            f"a shape on the ground shifts by two coordinates, not {tuple(shift)}; drop a height with .ground"
+        )
+    return shift
+
+
 class _PointND(tuple[float, ...]):
     """A point of any dimensionality: the coordinate math shared by `Point` and `Point3D`.
 
@@ -191,8 +202,9 @@ class _PointND(tuple[float, ...]):
 
     def _combine(self, other: PointLike | float, operation: Callable[[float, float], float]) -> Self:
         """Apply `operation` coordinate-wise against a point of equal dimensionality, or a scalar."""
-        # Ordered so the common point-and-point case never reaches the expensive ABC check.
-        if isinstance(other, tuple):
+        # Ordered so the common point-and-point case never reaches the expensive ABC check. Any other tuple, a `Tile`
+        # among them, goes through `coordinates`.
+        if type(other) is tuple or isinstance(other, _PointND):
             position: tuple[float, ...] = other
         elif isinstance(other, SCALAR_TYPES):
             return type(self)([operation(value, other) for value in self])
@@ -264,15 +276,16 @@ class Point(_PointND, tuple[float, float]):
         """The point lifted to height `z`."""
         return Point3D((self[0], self[1], z))
 
-    # Two-coordinate fast paths, ~2.5x quicker than the general implementation and used in per-unit loops.
+    # Two-coordinate fast paths for a point or a plain tuple, ~2.5x quicker than the general implementation and used
+    # in per-unit loops.
 
     def __add__(self, other: PointLike | float) -> Point:  # pyright: ignore[reportIncompatibleMethodOverride]
-        if isinstance(other, tuple) and len(other) == 2:
+        if (type(other) is Point or type(other) is tuple) and len(other) == 2:
             return Point((self[0] + other[0], self[1] + other[1]))
         return super().__add__(other)
 
     def __sub__(self, other: PointLike | float) -> Point:
-        if isinstance(other, tuple) and len(other) == 2:
+        if (type(other) is Point or type(other) is tuple) and len(other) == 2:
             return Point((self[0] - other[0], self[1] - other[1]))
         return super().__sub__(other)
 

@@ -497,6 +497,20 @@ class TestTile:
     def test_translated(self) -> None:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
 
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda tile: Point((1, 0)) + tile,
+            lambda tile: Point((1, 0)) - tile,
+            lambda tile: Point((1, 0)) * tile,
+            lambda tile: Point((1, 0)) / tile,
+        ],
+    )
+    def test_a_point_refuses_to_combine_with_one(self, operation: Callable[[Tile], object]) -> None:
+        """`point + tile` once added the tile's corner, through the two-coordinate fast path."""
+        with pytest.raises(TypeError, match="a Tile is an area, not a point"):
+            operation(Tile(3, 4))
+
     def test_it_is_an_address_not_a_point(self) -> None:
         """A tile is a patch of ground with a center, so point math must be given that center.
 
@@ -597,6 +611,19 @@ class TestAreaAgreement:
         """Their docstring promises a mask over one indexes the other, so they cannot round differently."""
         centers = rect.tile_centers().reshape(-1, 2)
         assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+
+    @pytest.mark.parametrize(
+        "area",
+        [Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(5, 5)])],
+        ids=lambda area: type(area).__name__,
+    )
+    def test_every_shape_shifts_by_a_point_on_the_ground_alone(self, area: Area) -> None:
+        """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
+        assert area.translated(Point((1, 2))) == area.translated((1, 2))
+        with pytest.raises(TypeError, match="a Tile is an area, not a point"):
+            area.translated(Tile(1, 1))
+        with pytest.raises(ValueError, match=r"drop a height with \.ground"):
+            area.translated(Point3D((1, 2, 3)))
 
     def test_random_point_spreads_over_the_ground(self) -> None:
         """A tile set once answered with tile centers, so this one-tile area returned one point forever."""

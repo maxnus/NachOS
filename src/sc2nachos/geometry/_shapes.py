@@ -12,7 +12,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, _PointND, coordinates
+from sc2nachos.geometry._point import Point, _PointND, checked_ground_offset, coordinates
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -96,8 +96,9 @@ class Tile(tuple[int, int], Area):
         return Tile.containing(point) == self  # pyright: ignore[reportArgumentType]
 
     def translated(self, offset: PointLike) -> Tile:
-        """The tile reached by shifting this one's center by `offset`."""
-        shift = coordinates(offset)
+        """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
+        height."""
+        shift = checked_ground_offset(offset)
         return Tile.containing((self[0] + 0.5 + shift[0], self[1] + 0.5 + shift[1]))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
@@ -234,8 +235,8 @@ class Rectangle(Area):
         )
 
     def translated(self, offset: PointLike) -> Rectangle:
-        """The rectangle shifted by `offset`, keeping its size."""
-        shift = coordinates(offset)
+        """The rectangle shifted by `offset`, keeping its size. Raises `ValueError` for an offset with a height."""
+        shift = checked_ground_offset(offset)
         return Rectangle(self.x + shift[0], self.y + shift[1], self.width, self.height)
 
     def intersects(self, other: Rectangle) -> bool:
@@ -408,8 +409,10 @@ class TileSet(Area):
         return self
 
     def translated(self, offset: PointLike) -> TileSet:
-        """The tiles shifted by `offset`, snapped back onto the tile grid."""
-        return TileSet(tile.translated(offset) for tile in self._tiles)
+        """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a
+        height."""
+        shift = checked_ground_offset(offset)
+        return TileSet(tile.translated(shift) for tile in self._tiles)
 
     def filter(self, predicate: Callable[[Tile], bool]) -> TileSet:
         """The tiles satisfying `predicate`."""

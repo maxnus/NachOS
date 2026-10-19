@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, coordinates
+from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 
 if TYPE_CHECKING:
@@ -61,8 +61,8 @@ class Circle(Area):
         return dx * dx + dy * dy <= self._radius**2
 
     def translated(self, offset: PointLike) -> Circle:
-        """The circle shifted by `offset`, keeping its radius."""
-        return Circle(self._center + offset, self._radius)
+        """The circle shifted by `offset`, keeping its radius. Raises `ValueError` for an offset with a height."""
+        return Circle(self._center + checked_ground_offset(offset), self._radius)
 
     def random_point(self) -> Point:
         """A point drawn uniformly from the circle."""

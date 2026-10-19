@@ -40,7 +40,8 @@ class Area(ABC):
 
     @abstractmethod
     def translated(self, offset: PointLike) -> Self:
-        """The area shifted by `offset`, keeping its shape."""
+        """The area shifted by `offset`, keeping its shape. Raises `TypeError` for a `Tile`, and `ValueError` for an
+        offset with a height."""
 
     @abstractmethod
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
