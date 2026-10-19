@@ -56,8 +56,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   nothing but the raven's energy, its row keeping a price the game no longer charges; and a purification nova no
   supply, though its row carries the disruptor's 3. A nuke, 100/100, has no row to derive from at all, since the
   curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
-  and a carrier is never offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no longer need
-  a correction of their own: their rows read 50/50 and 50/25 (corpus).
+  and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
+  longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
 - `unit_alias` names the type a form is of, a siege tank for a sieged tank, but also links types that are not forms
   of each other: an adept's shade names the adept, the queen's creep tumor the creep tumor, four geyser variants the
   plain geyser, the icy and `_EX1` rocks a plain one, and each changeling the plain changeling (corpus).

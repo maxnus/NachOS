@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #137. `uv run pytest` passes 2380 tests on branch `claude/game-data-statements`;
+- nachOS `main` has every PR to #137. `uv run pytest` passes 2383 tests on branch `claude/game-data-statements`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -34,9 +34,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   from the state, never written into `api.data`.
 - **A unit type names what makes it, not what the tables alias it to** (#75; the owner, 2026-09-26 and 2026-10-19).
   `UnitTypeData.made_by` holds every type that makes one, from the tech tree, with the archon's templar written by
-  hand, since a templar is never offered the merge. `base_type`, the game's `unit_alias`, is gone: the tables alias an
-  adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read `unit_alias` from
-  the game's answer.
+  hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
+  tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
+  `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
   refuses is listed in `api.action_failures` on the next turn, once for each unit it named, under the id ordered,
   ahead of what the game gave up on. The `Order` stays as a handle: its `data`, `withdraw()`, and what `issued_to`
@@ -271,8 +271,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - An up-to-date pathing grid.
 - The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
   as a remembered copy, which the tracker assumes (the owner, review of #71).
-- The next sweep of the tech tree gets a carrier offered Build Interceptors, which no carrier was (#75), so that the
-  tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
+- The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
+  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
 - When the corpus is next recorded, `run_ladder` pings the client for its build and warns of one the tech tree was not
   swept on, as `run_local` warns from the installation without asking the game (the owner, #75).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though

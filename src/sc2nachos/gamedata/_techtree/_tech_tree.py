@@ -66,17 +66,17 @@ class TechTree:
         by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
         object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
         researched: dict[UpgradeId, AbilityId] = {}
-        makers: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
+        makers_of: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
         for ability, products in self.ability_products.items():
             for maker, product in products.items():
                 if isinstance(product, UpgradeId):
                     researched[product] = ability
                 else:
-                    makers[product].add(maker)
+                    makers_of[product].add(maker)
         object.__setattr__(self, "research_abilities", MappingProxyType(researched))
         for unit_type, ability in self.creation_abilities.items():
-            products = self.ability_products.get(ability, {})
-            if not any(product is unit_type for product in products.values()):
-                makers[unit_type].update(products)
-        makers_by_type = {unit_type: frozenset(unit_types) for unit_type, unit_types in makers.items()}
+            products_by_maker = self.ability_products.get(ability, {})
+            if not any(product is unit_type for product in products_by_maker.values()):
+                makers_of[unit_type].update(products_by_maker)
+        makers_by_type = {unit_type: frozenset(unit_types) for unit_type, unit_types in makers_of.items()}
         object.__setattr__(self, "unit_type_makers", MappingProxyType(makers_by_type))

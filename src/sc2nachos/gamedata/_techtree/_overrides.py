@@ -71,8 +71,8 @@ SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
 
 MAKERS_NEVER_SWEPT: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
-        # A templar is never offered `MORPH_ARCHON` (tool `sweep_tech_tree`), though two given it in one command, high
-        # or dark, merge into an archon (in game).
+        # The sweep never saw a templar offered `MORPH_ARCHON` (tool `sweep_tech_tree`), though two given it in one
+        # command, high or dark, merge into an archon (in game).
         UnitTypeId.ARCHON: frozenset({UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}),
     }
 )
@@ -217,9 +217,9 @@ for each ability it goes out as, or one per unit where that is aimed at the unit
 
 COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {
-        # Nothing makes an interceptor in the tech tree: the table names no ability for it, and a carrier is never
-        # offered Build Interceptors (tool `sweep_tech_tree`). Each costs 15, charged when the carrier is ordered to
-        # build it.
+        # Nothing makes an interceptor in the tech tree: the table names no ability for it, and the sweep never saw a
+        # carrier offered Build Interceptors (tool `sweep_tech_tree`). Each costs 15, charged when the carrier is
+        # ordered to build it.
         AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
         # The nova's row carries the disruptor's 3 supply; a nova takes none.
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),

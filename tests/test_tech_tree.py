@@ -448,9 +448,13 @@ class TestWhatTheTablesSay:
             AbilityId.GATEWAY_MORPH_WARP_GATE,
             AbilityId.MORPH_ARCHON,
             AbilityId.CARRIER_BUILD_INTERCEPTORS,
-            AbilityId.HOLD_FIRE_OFF,
-            AbilityId.BANELING_ATTACK_STRUCTURES_OFF,
         }
+
+    def test_the_off_half_of_a_toggle_is_carried_out_by_what_carries_out_the_on_half(self, tables: GameData) -> None:
+        """A unit is offered the off half only once the on half has taken, which the sweep never set up for these."""
+        abilities = tables.abilities
+        assert abilities[AbilityId.HOLD_FIRE_OFF].performers == {UnitTypeId.GHOST, UnitTypeId.LURKER_BURROWED}
+        assert abilities[AbilityId.BANELING_ATTACK_STRUCTURES_OFF].performers == {UnitTypeId.BANELING}
 
     def test_a_morph_several_types_perform_is_made_out_of_the_one_the_others_come_from(self, tables: GameData) -> None:
         """An overlord and the overlord transport it becomes can both become an overseer."""

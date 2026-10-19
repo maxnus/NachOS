@@ -206,7 +206,7 @@ def without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.Observ
     return kept, sorted(left_out)
 
 
-def unit_forms(tables: sc2api_pb2.ResponseData) -> dict[UnitTypeId, UnitTypeId]:
+def unit_aliases(tables: sc2api_pb2.ResponseData) -> dict[UnitTypeId, UnitTypeId]:
     """The type the game's `tables` call each type a form of, their `unit_alias`, where both are curated: the siege
     tank, for a sieged tank."""
     return {

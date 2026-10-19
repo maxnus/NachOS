@@ -135,9 +135,9 @@ class UpgradeReader:
         """The upgrades `unit` shows its owner has: by its type, and while visible, by its buffs and its health.
 
         A unit under a neural parasite shows only that its controller has Neural Parasite: its buffs and type belong to
-        the player it was taken from.
+        the player it was taken from. One taken from this player shows nothing by its type, even out of sight.
         """
-        shown = self._of_type(unit.type_id)
+        shown = self._of_type(unit.type_id) if unit.first_alliance is Alliance.ENEMY else frozenset()
         if unit.visibility is not Visibility.VISIBLE:
             return shown
         buffs = unit.buffs

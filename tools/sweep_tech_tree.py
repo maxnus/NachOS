@@ -41,7 +41,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing, unit_forms
+from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing, unit_aliases
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
 
@@ -194,7 +194,7 @@ class TechSweep:
         self._map = GameMap._of_game(self._client.game_info(), self._client.observation())
         raw_data = self._client.game_data()
         self._data = GameData(raw_data)
-        self._forms = unit_forms(raw_data)
+        self._form_of = unit_aliases(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
         findings.remaps |= {
             _ability_name(entry.ability_id): _ability_name(entry.remaps_to_ability_id)
@@ -1166,8 +1166,8 @@ class TechSweep:
                 return "morph"
             # A structure whose add-on has no room lifts off to build it elsewhere, which is a `build` all the same.
             if now.unit_type != unit.unit_type and unit.unit_type not in self._structure_types:
-                form = UnitTypeId.get(now.unit_type)
-                if form is not None and self._forms.get(form) == unit.unit_type:
+                now_type = UnitTypeId.get(now.unit_type)
+                if now_type is not None and self._form_of.get(now_type) == unit.unit_type:
                     # It turned into a form of itself, as a zergling ordered to burrow as a drone does.
                     return "other"
                 # On the way, as a larva is an egg first, and offered meanwhile what it is offered at no other time.

@@ -550,6 +550,15 @@ class TestWhatAUnitGivesAway:
         )
         assert _evident(tables, taken) == {UpgradeId.NEURAL_PARASITE}
 
+    def test_a_unit_taken_from_this_player_shows_nothing_by_its_type(self, tables: GameData) -> None:
+        """Its type is this player's doing: a burrowed zergling of this player's, now the enemy's and out of sight,
+        shows no Burrow."""
+        tracker = _tracker(tables)
+        _observe(tracker, make_unit(1, UnitTypeId.ZERGLING_BURROWED))
+        taken = make_unit(1, UnitTypeId.ZERGLING_BURROWED, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        _observe(tracker, taken, step=1)
+        assert not UpgradeReader(tables).read_intermediate_upgrades(tracker.unit_tracker.present, ())
+
     def test_only_the_enemys_storm_shows_storm(self, tables: GameData) -> None:
         assert _evident(tables, effects=(_storm(Alliance.ENEMY),)) == {UpgradeId.STORM}
         assert not _evident(tables, effects=(_storm(Alliance.OWN),))

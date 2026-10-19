@@ -21,16 +21,21 @@ from sc2nachos.units import _unit_type as unit_type_module
 from sc2nachos.units._tracking import _Tracker
 from support import make_observation, make_tables, make_unit
 
-_GENERATOR = Path(__file__).parents[1] / "tools" / "generate_unit_types.py"
+_TOOLS = Path(__file__).parents[1] / "tools"
 
 
-def _generator() -> Any:
-    """The `tools/generate_unit_types.py` module, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location("generate_unit_types", _GENERATOR)
+def _tool(name: str) -> Any:
+    """The module `tools/<name>.py`, loaded by path since `tools` is not a package."""
+    spec = importlib.util.spec_from_file_location(name, _TOOLS / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _generator() -> Any:
+    """The `tools/generate_unit_types.py` module."""
+    return _tool("generate_unit_types")
 
 
 @pytest.fixture(scope="module")
@@ -39,14 +44,16 @@ def tables() -> GameData:
 
 
 @pytest.fixture(scope="module")
-def forms() -> dict[UnitTypeId, UnitTypeId]:
-    """The type the tables call each type a form of, their `unit_alias`, where both are curated."""
-    return {
-        unit_type: alias
-        for row in _generator().corpus_answer().units
-        if (unit_type := UnitTypeId.get(row.unit_id)) is not None
-        and (alias := UnitTypeId.get(row.unit_alias)) is not None
-    }
+def form_of() -> dict[UnitTypeId, UnitTypeId]:
+    """The type the corpus's tables call each type a form of, as the sweeps read it."""
+    return _tool("_sandbox").unit_aliases(_generator().corpus_answer())
+
+
+def test_the_sweeps_read_the_type_a_form_is_of_where_both_are_curated(form_of: dict[UnitTypeId, UnitTypeId]) -> None:
+    assert form_of[UnitTypeId.SIEGE_TANK_SIEGED] is UnitTypeId.SIEGE_TANK
+    assert form_of[UnitTypeId.BARRACKS_FLYING] is UnitTypeId.BARRACKS
+    assert UnitTypeId.SIEGE_TANK not in form_of
+    assert UnitTypeId.MARINE not in form_of
 
 
 def _types() -> list[Any]:
@@ -85,7 +92,7 @@ def _named(prefix: str) -> set[UnitTypeId]:
 class TestUnitType:
     @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
     def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(
-        self, group: str, tables: GameData, forms: dict[UnitTypeId, UnitTypeId]
+        self, group: str, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
         call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
@@ -98,7 +105,7 @@ class TestUnitType:
         linked = [
             TECH_TREE.morph_sources.get(one) is other
             or other in tables.units[one].tech_aliases
-            or forms.get(one) is other
+            or form_of.get(one) is other
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
@@ -163,13 +170,13 @@ class TestUnitType:
         }
 
     def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(
-        self, tables: GameData, forms: dict[UnitTypeId, UnitTypeId]
+        self, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """Its tech aliases, and the type the tables call it a form of. They call an adept's shade a form of the
         adept, but it is a unit of its own beside the adept."""
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
             row = tables.units[unit_type]
-            for linked in {*row.tech_aliases, *filter(None, [forms.get(unit_type)])}:
+            for linked in {*row.tech_aliases, *filter(None, [form_of.get(unit_type)])}:
                 shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
                 assert shared, (unit_type, linked)
 

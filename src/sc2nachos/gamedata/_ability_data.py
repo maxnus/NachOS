@@ -236,10 +236,10 @@ class AbilityData:
     drone (in game), and the switch takes effect only under each type's own game id, not `UNBURROW`'s."""
     performers: frozenset[UnitTypeId]
     """The unit types offered it. An action several types perform is offered to each under its one id, though the
-    game offers each type its own. Empty for an ability the sweep never saw offered: `GATEWAY_MORPH_WARP_GATE`, which a
-    gateway carries out by itself once the research is done; `MORPH_ARCHON`, which two templar carry out together;
-    `CARRIER_BUILD_INTERCEPTORS`; and `HOLD_FIRE_OFF` and `BANELING_ATTACK_STRUCTURES_OFF`, offered only once their on
-    half has taken."""
+    game offers each type its own. The off half of a toggle, offered only once its on half has taken, has its on half's.
+    Empty for an ability the sweep never saw offered: `GATEWAY_MORPH_WARP_GATE`, which a gateway carries out by itself
+    once the research is done; `MORPH_ARCHON`, which two templar carry out together; and
+    `CARRIER_BUILD_INTERCEPTORS`."""
     products: Mapping[UnitTypeId, UnitTypeId | UpgradeId] = field(hash=False)
     """The unit type it makes, or the upgrade it researches, by the unit type that carries it out: `LIFT`
     makes a flying barracks of a barracks and a flying starport of a starport. Empty for an ability that makes
@@ -354,10 +354,11 @@ _SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 
 def _performers(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
-    """The unit types offered `ability`, and those offered the ability it goes out to them as: a medivac is offered
-    the unload at a point that `UNLOAD` goes out to it as."""
+    """The unit types offered `ability`, the off half of a toggle taking its on half's as `_performers_of` does, and
+    those offered the ability it goes out to them as: a medivac is offered the unload at a point that `UNLOAD` goes
+    out to it as."""
     performers = tech_tree.ability_performers
-    offered = performers.get(ability, frozenset())
+    offered = _performers_of(ability, tech_tree)
     sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
     return offered | {
         unit_type
