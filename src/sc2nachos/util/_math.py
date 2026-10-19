@@ -58,10 +58,12 @@ def logistic(x: float, *, k: float = 1.0) -> float:
 
 
 def s_curve(x: float, *, k: float = 1.0) -> float:
-    """An S-shaped remap of the unit interval onto itself, with steepness `k`.
+    """An S-shaped remap of the unit interval onto itself, with steepness `k`: the logistic curve about 0.5, scaled
+    to pass through 0 and 1.
 
-    0, 0.5 and 1 map to exactly themselves; inputs outside `[0, 1]` extrapolate.
+    0, 0.5 and 1 map to exactly themselves; inputs outside `[0, 1]` extrapolate. A `k` of 0 gives `x` itself, the
+    limit as the curve flattens.
     """
-    low = logistic(-0.5, k=k)
-    high = logistic(0.5, k=k)
-    return (logistic(x - 0.5, k=k) - low) / (high - low)
+    if not k:
+        return x
+    return 0.5 + 0.5 * math.tanh(k * (x - 0.5) / 2) / math.tanh(k / 4)

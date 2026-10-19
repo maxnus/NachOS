@@ -134,10 +134,15 @@ class TestLogistic:
 
 
 class TestSCurve:
-    def test_fixes_the_endpoints_and_the_middle(self):
-        assert s_curve(0.0) == pytest.approx(0.0)
-        assert s_curve(0.5) == pytest.approx(0.5)
-        assert s_curve(1.0) == pytest.approx(1.0)
+    @pytest.mark.parametrize("k", [1.0, 7.0, -3.0, 1000.0])
+    def test_fixes_the_endpoints_and_the_middle_exactly(self, k):
+        """The logistic form gave `s_curve(0.5)` as 0.4999999999999999."""
+        assert [s_curve(x, k=k) for x in (0.0, 0.5, 1.0)] == [0.0, 0.5, 1.0]
+
+    def test_no_steepness_is_the_identity(self):
+        """It divided by zero."""
+        assert s_curve(0.3, k=0) == 0.3
+        assert s_curve(0.3, k=1e-6) == pytest.approx(0.3)
 
     def test_monotonic(self):
         values = [s_curve(x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]
