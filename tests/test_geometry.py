@@ -469,6 +469,18 @@ class TestTile:
         with pytest.raises(TypeError, match="is an address"):
             operation(Tile(3, 4))
 
+    def test_takes_whole_number_coordinates_alone(self) -> None:
+        """`Tile(3.7, 4.2)` was accepted, and then missed every tile set and raised inside a grid lookup."""
+        with pytest.raises(TypeError):
+            Tile(3.7, 4.2)  # pyright: ignore[reportArgumentType]
+        with pytest.raises(TypeError):
+            Tile(3, 4.0)  # pyright: ignore[reportArgumentType]
+
+    def test_a_numpy_integer_becomes_an_int(self) -> None:
+        tile = Tile(numpy.int64(3), numpy.int32(4))  # pyright: ignore[reportArgumentType]
+        assert tile == Tile(3, 4)
+        assert (type(tile[0]), type(tile[1])) == (int, int)
+
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
         assert Tile.containing(Tile(3, 4)) == Tile(3, 4)

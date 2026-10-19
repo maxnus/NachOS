@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import operator
 import random
 from dataclasses import dataclass
 from functools import cached_property
@@ -33,7 +34,9 @@ class Tile(tuple[int, int], Area):
     __slots__ = ()
 
     def __new__(cls, x: int, y: int) -> Self:
-        return super().__new__(cls, (x, y))
+        """The tile whose lower left corner is at `x` and `y`, each an integer, a numpy one included, which becomes an
+        `int`. Raises `TypeError` for any other coordinate, a float among them."""
+        return super().__new__(cls, (operator.index(x), operator.index(y)))
 
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
