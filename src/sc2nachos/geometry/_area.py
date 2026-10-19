@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from numpy import ndarray
 
     from sc2nachos.geometry._point import Point, PointLike
-    from sc2nachos.geometry._shapes import Rectangle, TileSet
+    from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 
 
 class Area(ABC):
@@ -64,7 +64,8 @@ class Area(ABC):
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[int, int, ndarray]:
-        """The x and y of the tile a mask's `[0, 0]` entry addresses, and that mask, indexed `[x, y]`, of the tiles
-        `tiles` gives that lie `within` a rectangle on whole tiles, if one is given."""
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed
+        `[x, y]`, and first the tile at its `[0, 0]` entry, as a grid has its `origin`: entry `[i, j]` is the tile `i`
+        across and `j` up from it."""
         return self.tiles()._tile_mask(within)

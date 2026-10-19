@@ -354,15 +354,15 @@ class Rectangle(Area):
         return TileSet(Tile(x, y) for x in x_range for y in y_range)
 
 
-def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[int, int, ndarray]:
-    """The x and y of the lower left corner of the tiles at `xs` and `ys`, and the mask of them, indexed `[x, y]`, over
-    their bounding rectangle: an empty mask at (0, 0) for none."""
+def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
+    """The tiles at `xs` and `ys` as a mask indexed `[x, y]` over their bounding rectangle, and first the tile at its
+    `[0, 0]` entry: an empty mask at `Tile(0, 0)` for none."""
     if not len(xs):
-        return 0, 0, numpy.zeros((0, 0), dtype=bool)
+        return Tile(0, 0), numpy.zeros((0, 0), dtype=bool)
     lowest_x, lowest_y = int(xs.min()), int(ys.min())
     covered_tiles = numpy.zeros((int(xs.max()) - lowest_x + 1, int(ys.max()) - lowest_y + 1), dtype=bool)
     covered_tiles[xs - lowest_x, ys - lowest_y] = True
-    return lowest_x, lowest_y, covered_tiles
+    return Tile(lowest_x, lowest_y), covered_tiles
 
 
 @final
@@ -459,10 +459,10 @@ class TileSet(Area):
         """The tile set itself."""
         return self
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[int, int, ndarray]:
-        """The x and y of the lower left corner of the covered tiles that lie `within` a rectangle on whole tiles, if
-        one is given, and the mask of them, indexed `[x, y]`, over their bounding rectangle: an empty mask at (0, 0)
-        for none."""
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The covered tiles that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed `[x, y]`
+        over their bounding rectangle, and first the tile at its `[0, 0]` entry: an empty mask at `Tile(0, 0)` for
+        none."""
         xs, ys = self._addresses
         if within is None or not len(xs) or self._lies_within(within):
             # Kept once built: its size is at most that of `within`, or of the set's own bounds if none was given.
@@ -498,11 +498,11 @@ class TileSet(Area):
         return xs, ys
 
     @cached_property
-    def _mask_over_bounds(self) -> tuple[int, int, ndarray]:
+    def _mask_over_bounds(self) -> tuple[Tile, ndarray]:
         """What `_tile_mask` returns for every covered tile, built on first use."""
-        lowest_x, lowest_y, covered_tiles = _mask_of_addresses(*self._addresses)
+        origin, covered_tiles = _mask_of_addresses(*self._addresses)
         covered_tiles.flags.writeable = False
-        return lowest_x, lowest_y, covered_tiles
+        return origin, covered_tiles
 
     def translated(self, offset: PointLike) -> TileSet:
         """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a

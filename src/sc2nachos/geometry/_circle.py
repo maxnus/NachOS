@@ -98,15 +98,16 @@ class Circle(Area):
 
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
-        first_x, first_y, tiles_in_circle = self._tile_mask()
+        origin, tiles_in_circle = self._tile_mask()
+        origin_x, origin_y = origin.x, origin.y
         rows, columns = numpy.nonzero(tiles_in_circle)
         return TileSet(
-            Tile(first_x + row, first_y + column) for row, column in zip(rows.tolist(), columns.tolist(), strict=True)
+            Tile(origin_x + row, origin_y + column) for row, column in zip(rows.tolist(), columns.tolist(), strict=True)
         )
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[int, int, ndarray]:
-        """The x and y of the tile a mask's `[0, 0]` entry addresses, and that mask, indexed `[x, y]`, of the tiles
-        whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given."""
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given,
+        as a mask indexed `[x, y]`, and first the tile at its `[0, 0]` entry."""
         # Derived from the circle, not from its bounding rectangle: that rectangle is half-open, so it would
         # drop a tile center sitting exactly on the circle's rightmost or topmost point.
         center_x, center_y = self._center[0], self._center[1]
@@ -120,7 +121,8 @@ class Circle(Area):
             last_y = min(last_y, int(within.y + within.height) - 1)
         offsets_x = numpy.arange(first_x, last_x + 1) + 0.5 - center_x
         offsets_y = numpy.arange(first_y, last_y + 1) + 0.5 - center_y
-        return first_x, first_y, offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
+        tiles_in_circle = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
+        return Tile(first_x, first_y), tiles_in_circle
 
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.

@@ -260,8 +260,8 @@ class Grid[T: float]:
     def _slices_and_mask_for_area(self, area: Area) -> tuple[tuple[slice, slice], ndarray]:
         """The slices of the grid's values over the tiles `area` covers, clipped to the grid, and the mask of those
         tiles over the same slices."""
-        left, bottom, area_mask = area._tile_mask(self.bounds)
-        grid_slices, mask_slices = self._slices_for_mask(left, bottom, area_mask.shape)
+        origin, area_mask = area._tile_mask(self.bounds)
+        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, area_mask.shape)
         return grid_slices, area_mask[mask_slices]
 
     def _slices_for_mask(
