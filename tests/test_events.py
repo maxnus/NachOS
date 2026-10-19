@@ -7,10 +7,10 @@ import dataclasses
 import functools
 import gc
 import weakref
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property
-from typing import assert_type
+from typing import Any, assert_type, cast
 
 import pytest
 from loguru import logger
@@ -128,6 +128,68 @@ class TestSubscribing:
         _turns(bus, 1)
         assert calls == [1]
 
+    def test_a_static_method_and_a_function_read_off_a_class_are_subscribed_at_once(self) -> None:
+        """Each takes the event alone, so it is no method, though its qualified name puts it in a class."""
+        bus, calls = _EventBus(), []
+
+        class Macro:
+            @staticmethod
+            @bus.on(TurnEvent)
+            def on_turn(event: TurnEvent) -> None:
+                calls.append("static")
+
+            @staticmethod
+            def later(event: TurnEvent) -> None:
+                calls.append("read off")
+
+        bus.on(TurnEvent)(Macro.later)
+        _turns(bus, 0)
+        assert calls == ["static", "read off"]
+
+    def test_a_method_under_a_decorator_that_wraps_it_is_marked(self) -> None:
+        bus = _EventBus()
+
+        def logged[F: Callable[..., object]](method: F) -> F:
+            @functools.wraps(method)
+            def wrapper(*args: object, **kwargs: object) -> object:
+                return method(*args, **kwargs)
+
+            return cast("F", wrapper)
+
+        class Handlers:
+            def __init__(self) -> None:
+                self.calls: list[int] = []
+                bus.subscribe(self)
+
+            @bus.on(TurnEvent)
+            @logged
+            def on_turn(self, event: TurnEvent) -> None:
+                self.calls.append(event.step)
+
+        handlers = Handlers()
+        _turns(bus, 4)
+        assert handlers.calls == [4]
+
+    def test_a_method_marked_under_a_classmethod_or_a_staticmethod_is_refused_when_subscribing(self) -> None:
+        bus = _EventBus()
+
+        class Handlers:
+            @classmethod
+            @bus.on(TurnEvent)
+            def on_turn(cls, event: TurnEvent) -> None:
+                pass
+
+        class Statics:
+            @staticmethod
+            @bus.on(TurnEvent)
+            def on_turn(context: object, event: TurnEvent) -> None:
+                pass
+
+        with pytest.raises(TypeError, match="on_turn of Handlers is marked with `on` under a classmethod"):
+            bus.subscribe(Handlers())
+        with pytest.raises(TypeError, match="on_turn of Statics is marked with `on` under a staticmethod"):
+            bus.subscribe(Statics())
+
     def test_stacked_decorators_subscribe_to_each_event(self) -> None:
         bus, calls = _EventBus(), []
 
@@ -174,14 +236,16 @@ class TestSubscribing:
             _EventBus().on(int)  # type: ignore
 
     @pytest.mark.parametrize(
-        ("every_steps", "at_step", "message"),
-        [(0, None, "every_steps is at least 1"), (4, 100, "not both")],
+        ("cadence", "message"),
+        [
+            ({"every_steps": 0}, "every_steps is at least 1"),
+            ({"every_steps": 4, "at_step": 100}, "or at one step, not both"),
+            ({"every_steps": 4, "once": True}, "or once, not both"),
+        ],
     )
-    def test_a_cadence_that_cannot_be_kept_is_refused(
-        self, every_steps: int, at_step: int | None, message: str
-    ) -> None:
+    def test_a_cadence_that_cannot_be_kept_is_refused(self, cadence: dict[str, Any], message: str) -> None:
         with pytest.raises(ValueError, match=message):
-            _EventBus().on(TurnEvent, every_steps=every_steps, at_step=at_step)
+            _EventBus().on(TurnEvent, **cadence)
 
 
 class TestOrder:
@@ -373,6 +437,33 @@ class TestInstances:
         gc.collect()
         assert reference() is None
 
+    def test_a_class_is_collected_once_its_instances_are_unsubscribed(self) -> None:
+        """Though its marked method calls `super()`, which keeps the class in the method's closure."""
+        bus = _EventBus()
+
+        def make() -> type:
+            class Base:
+                def take_turn(self, event: TurnEvent) -> None:
+                    pass
+
+            class Handlers(Base):
+                @bus.on(TurnEvent)
+                def on_turn(self, event: TurnEvent) -> None:
+                    super().take_turn(event)
+
+            return Handlers
+
+        made = make()
+        instance = made()
+        bus.subscribe(instance)
+        _turns(bus, 0)
+        bus.unsubscribe(instance)
+        reference = weakref.ref(made)
+        del made, instance
+        gc.collect()
+        assert reference() is None
+        assert not bus._marks
+
     def test_an_instance_is_subscribed_once(self) -> None:
         bus = _EventBus()
 
@@ -385,6 +476,32 @@ class TestInstances:
         bus.subscribe(handlers)
         with pytest.raises(ValueError, match="subscribed already"):
             bus.subscribe(handlers)
+
+    @pytest.mark.parametrize("bound_first", [True, False])
+    def test_a_method_subscribed_bound_does_not_stop_the_instance_subscribing(self, bound_first: bool) -> None:
+        """The area of a watch known only once the instance is made, as a natural's is."""
+        bus = _EventBus()
+
+        class Natural:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+                if bound_first:
+                    bus.on(EnemyUnitEnteredAreaEvent.of(Circle(Point((50.0, 50.0)), 12)))(self.on_entered)
+                bus.subscribe(self)
+                if not bound_first:
+                    bus.on(EnemyUnitEnteredAreaEvent.of(Circle(Point((50.0, 50.0)), 12)))(self.on_entered)
+
+            def on_entered(self, event: EnemyUnitEnteredAreaEvent) -> None:
+                self.calls.append("entered")
+
+            @bus.on(TurnEvent)
+            def on_turn(self, event: TurnEvent) -> None:
+                self.calls.append("turn")
+
+        natural = Natural()
+        _turns(bus, 0)
+        assert natural.calls == ["turn"]
+        assert len(bus._subscriptions.by_type[EnemyUnitEnteredAreaEvent]) == 1
 
     def test_what_the_bus_holds_reads_as_its_event_types(self) -> None:
         bus = _EventBus()
@@ -822,6 +939,16 @@ class TestTheStep:
         bus.emit(_Scouted("natural"))
         bus.emit(_Scouted("natural", step=16))
         assert seen == [80, 16]
+
+    def test_one_made_once_without_a_step_is_handed_out_with_each_steps_and_kept_as_it_was(self) -> None:
+        bus, seen = _EventBus(), []
+        bus.on(_Scouted)(lambda event: seen.append(event.step))
+        scouted = _Scouted("natural")
+        for step in (0, 16, 32):
+            bus._set_step(step)
+            bus.emit(scouted)
+        assert seen == [0, 16, 32]
+        assert scouted.step < 0
 
     def test_one_emitted_without_a_step_and_with_no_game_being_played_is_refused(self) -> None:
         with pytest.raises(ValueError, match="no game is being played"):

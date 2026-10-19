@@ -12,7 +12,7 @@ from sc2nachos.match import Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 
-# The step of an event made without one; `api.emit` replaces it with the current step.
+# The step of an event made without one; `api.emit` hands out a copy with the current step.
 _NO_STEP = -1
 
 
@@ -24,7 +24,8 @@ class Event(metaclass=_EventMeta):
     """
 
     step: int = field(default=_NO_STEP, kw_only=True)
-    """The step of the observation it comes with. An event made without one gets the current step when emitted."""
+    """The step of the observation it comes with. An event made without one is emitted as a copy with the current
+    step."""
 
     @classmethod
     def _key_of(cls, *made_of: Any) -> Hashable:
@@ -411,16 +412,16 @@ class OwnUnitEnteredAreaEvent(AnyAreaEvent):
     unit: OwnUnit[Any]
 
 
+class EnemyUnitEnteredAreaEvent(AnyAreaEvent):
+    """A unit of the enemy's in sight is inside the area given to `of`, having last been seen in sight outside it, or
+    first seen in sight inside it once the area has been watched for a turn. One in the fog counts for neither."""
+
+
 class OwnUnitLeftAreaEvent(AnyAreaEvent):
     """A unit of this player's is outside the area given to `of`, having last been seen inside it. One that dies inside
     it, or leaves the observation there, has not left it."""
 
     unit: OwnUnit[Any]
-
-
-class EnemyUnitEnteredAreaEvent(AnyAreaEvent):
-    """A unit of the enemy's in sight is inside the area given to `of`, having last been seen in sight outside it, or
-    first seen in sight inside it once the area has been watched for a turn. One in the fog counts for neither."""
 
 
 class EnemyUnitLeftAreaEvent(AnyAreaEvent):

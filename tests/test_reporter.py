@@ -598,6 +598,10 @@ def _templar(energy: float, **fields: Any) -> raw_pb2.Unit:
     return make_unit(tag, UnitTypeId.HIGH_TEMPLAR, alliance=alliance, energy=energy, energy_max=200.0, **fields)
 
 
+def _tank(unit_type: UnitTypeId, health: float) -> raw_pb2.Unit:
+    return make_unit(1, unit_type, alliance=_ENEMY, health=health, health_max=175.0)
+
+
 def _zealot(health: float, shield: float, **fields: Any) -> raw_pb2.Unit:
     return make_unit(
         1,
@@ -656,6 +660,37 @@ class TestVitalReached:
             (16, units[1], VitalType.ENERGY, 75.0)
         ]
         assert not enemy
+
+    def test_a_unit_type_watched_again_starts_afresh_though_another_type_kept_the_watch_going(self) -> None:
+        """A raven seen below the value, then above it unwatched, is not reported when watched again."""
+        game = _Game()
+        record(game.events, _STORM_READY)
+        raven_ready = EnemyUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitTypeId.RAVEN)
+        seen: list[int] = []
+
+        def first(event: EnemyUnitVitalReachedEvent) -> None:
+            seen.append(event.step)
+
+        game.events.on(raven_ready)(first)
+        game.observe(0, _raven(50, energy_max=200.0))
+        game.events.unsubscribe(first)
+        game.observe(16, _raven(100, energy_max=200.0))
+        game.events.on(raven_ready)(lambda event: seen.append(event.step))
+        game.observe(32, _raven(100, energy_max=200.0))
+        game.observe(48, _raven(100, energy_max=200.0))
+        assert seen == []
+
+    def test_a_unit_become_a_type_watched_anew_starts_afresh_too(self) -> None:
+        """A tank seen below the value, then sieged and healed above it, is not reported when the sieged form is
+        watched from then on: nothing read its health under the watch while it was sieged."""
+        game = _Game()
+        record(game.events, EnemyUnitVitalReachedEvent.of(VitalType.HEALTH, 100, UnitTypeId.SIEGE_TANK))
+        game.observe(0, _tank(UnitTypeId.SIEGE_TANK, 50))
+        game.observe(16, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 160))
+        sieged = record(game.events, EnemyUnitVitalReachedEvent.of(VitalType.HEALTH, 100, UnitTypeId.SIEGE_TANK_SIEGED))
+        game.observe(32, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 160))
+        game.observe(48, _tank(UnitTypeId.SIEGE_TANK_SIEGED, 170))
+        assert not sieged
 
     def test_a_watch_starts_on_the_turn_its_handler_subscribed_reporting_nothing_that_turn(self) -> None:
         game = _Game()
@@ -823,6 +858,21 @@ class TestAreas:
             (OwnUnitEnteredAreaEvent, 16, _AREA),
             (OwnUnitLeftAreaEvent, 32, _AREA),
         ]
+
+    def test_a_turn_hands_out_the_entered_of_both_sides_before_the_left(self) -> None:
+        game = _Game()
+        events = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent, OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
+        seen = record(game.events, *(event_type.of(_AREA) for event_type in events))
+        game.observe(0, *_both_sides_at(_OUTSIDE, _INSIDE))
+        game.observe(16, *_both_sides_at(_INSIDE, _OUTSIDE))
+        assert [type(event) for event in seen] == list(events)
+
+
+def _both_sides_at(first: tuple[float, float], second: tuple[float, float]) -> list[raw_pb2.Unit]:
+    """A unit of this player's and one of the enemy's at `first`, tags 1 and 2, and one of each at `second`, tags 3
+    and 4."""
+    places = [(Alliance.OWN, first), (_ENEMY, first), (Alliance.OWN, second), (_ENEMY, second)]
+    return [make_unit(tag, alliance=alliance, at=at) for tag, (alliance, at) in enumerate(places, start=1)]
 
 
 def _moving() -> raw_pb2.UnitOrder:

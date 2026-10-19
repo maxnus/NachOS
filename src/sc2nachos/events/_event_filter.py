@@ -27,6 +27,8 @@ class EventFilter[E: Event]:
         keys: frozenset[Hashable] | None = None,
         predicate: Callable[[E], bool] | None = None,
     ) -> None:
+        """The events of `event_type` with one of `keys`, if given, that `predicate` passes, if given. Made by `only`,
+        `of` and `where`, never by a bot."""
         self.event_type = event_type
         """The type of the events it hands on."""
         self.keys = keys

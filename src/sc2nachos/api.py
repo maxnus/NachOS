@@ -54,7 +54,7 @@ class Api:
 
     Time is counted in steps. One step is one game loop, 22.4 steps make a second, and the bot takes a turn every
     `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
-    the events its observation reports, in the order `sc2nachos.events` gives, then a `TurnEvent`.
+    the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
     Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
     answering from it until the next one starts.
@@ -110,18 +110,19 @@ class Api:
         produce every type of event it otherwise would not, including comparing every unit with the observation
         before; a parameterized event comes only with the parameters other handlers asked for.
 
-        A function is subscribed at once, wherever it is defined, and so is a method already bound to its instance. A
-        method in a class body is marked instead, and subscribed for each instance passed to `subscribe`. Either stays
-        subscribed until it is passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it
-        alive.
+        A method is marked, and subscribed for each instance passed to `subscribe`: a function defined in a class body
+        that takes at least two positional arguments without defaults, the instance and the event, or wraps one through
+        `functools.wraps`. Any other function is subscribed at once, wherever it is defined, a static method taking the
+        event alone included, and so is a method already bound to its instance. Either stays subscribed until it is
+        passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it alive.
 
         `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
         among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
         before any handler of the next. The handler runs on every event unless held back: `every_steps` waits until
         that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that
-        step, and `once` on the first event. These count only the events selected, and start afresh each game, as does
-        a handler that returned `Done`. An exception it raises ends the game, unless `catch_exceptions`, which logs it
-        and goes on.
+        step, and `once` on the first event; `every_steps` with either of the others raises `ValueError`. These count
+        only the events selected, and start afresh each game, as does a handler that returned `Done`. An exception it
+        raises ends the game, unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -132,7 +133,8 @@ class Api:
         """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
 
         An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
-        marked method, or is subscribed already.
+        marked method, or one of them is subscribed for it already, a method subscribed bound through `on` aside; and
+        `TypeError` if a marked function is under a `classmethod` or a `staticmethod`.
         """
         self._events.subscribe(instance)
 
@@ -147,8 +149,8 @@ class Api:
         """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
         when this returns. A handler may itself emit an event.
 
-        An event made without a step is given the current step. Raises `ValueError` for one when no game is being
-        played.
+        An event made without a step is handed out as a copy with the current step, and the one passed in keeps none,
+        so it can be emitted again. Raises `ValueError` for one when no game is being played.
         """
         self._events.emit(event)
 
