@@ -187,6 +187,28 @@ class TestObservation:
         assert len(transport.requests) == 2
         assert client.results == {1: Result.DEFEAT}
 
+    def test_the_results_are_kept_through_observations_that_report_none(self) -> None:
+        """The proto fills `player_result` only in the step the game ended, so the next observation has none."""
+        client, transport = make_client(
+            make_response(Status.ENDED, observation=make_observation(0, (1, Result.VICTORY))),
+            make_response(Status.ENDED, observation=sc2api_pb2.ResponseObservation()),
+        )
+        client.observation()
+        client.observation()
+        assert len(transport.requests) == 2
+        assert client.results == {1: Result.VICTORY}
+
+    def test_a_result_the_game_left_unset_is_not_read_as_a_victory(self) -> None:
+        ended = sc2api_pb2.ResponseObservation(
+            player_result=[
+                sc2api_pb2.PlayerResult(player_id=1),
+                sc2api_pb2.PlayerResult(player_id=2, result=sc2api_pb2.Defeat),
+            ]
+        )
+        client, _ = make_client(make_response(Status.ENDED, observation=ended))
+        client.observation()
+        assert client.results == {2: Result.DEFEAT}
+
     def test_joining_clears_the_results_of_the_last_game(self) -> None:
         client, _ = make_client(
             make_response(Status.ENDED, observation=make_observation(0, (1, Result.VICTORY))),
