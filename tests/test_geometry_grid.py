@@ -6,7 +6,7 @@ import math
 import numpy
 import pytest
 
-from sc2nachos.geometry import Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TileSet
 from test_geometry_footprint import DIAGONAL, SHAPES
 
 
@@ -268,6 +268,38 @@ class TestAreaAccess:
         assert grid[nothing].size == 0
         grid[nothing] = 1.0
         assert not grid.values.any()
+
+    @pytest.mark.parametrize(
+        "area",
+        [
+            Circle((5.3, 7.8), 3.5),
+            Circle((4.2, 6.1), 2.5),  # hangs off the grid's lower left corner
+            TileSet([Tile(5, 7), Tile(13, 13), Tile(2, 2), Tile(9, 6)]),  # Tile(2, 2) lies off the grid
+            Circle((60, 60), 3),  # wholly off the grid
+        ],
+        ids=repr,
+    )
+    def test_every_area_reads_and_writes_its_tiles_on_the_grid_by_ascending_x_then_y(self, area: Area) -> None:
+        """The values once came from Python tiles turned back into indices (#2); they come from a mask now, and must
+        still be each tile's value in the order the tiles sort in."""
+        grid = playable_grid()
+        bounds = grid.bounds
+        on_grid = [tile for tile in sorted(area.tiles()) if tile.center in bounds]
+        read = grid[area]
+        assert numpy.atleast_1d(read).tolist() == [grid[tile] for tile in on_grid]
+        grid[area] = -numpy.arange(1.0, len(on_grid) + 1)
+        assert [grid[tile] for tile in on_grid] == [-float(n) for n in range(1, len(on_grid) + 1)]
+        assert int((grid.values < 0).sum()) == len(on_grid)
+
+    def test_an_area_reaching_far_beyond_the_grid_reads_and_writes_only_what_the_grid_holds(self) -> None:
+        """A mask over the whole of either would need more memory than there is: `numpy.zeros` refuses one of
+        10**18 entries."""
+        grid = Grid.zeros(10, 10)
+        sparse = TileSet([Tile(1, 1), Tile(10**9, 10**9)])
+        grid[sparse] = 1.0
+        grid[Circle((5.5, 5.5), 10**8)] += 1.0
+        assert grid[sparse].tolist() == [2.0]
+        assert grid.sum() == 101.0
 
     def test_a_tile_set_writes_exactly_its_tiles(self) -> None:
         grid = Grid.zeros(10, 10, dtype=bool)

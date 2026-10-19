@@ -688,6 +688,27 @@ class TestAreaAgreement:
                 sampled = numpy.hypot(*(points_inside - numpy.asarray(probe)).T).min()
                 assert distance <= sampled + 1e-9, probe
 
+    @pytest.mark.parametrize(
+        "area",
+        [*EVERY_SHAPE, TileSet([]), Circle((5.9, 5.9), 0.4), Rectangle(0.6, 0.6, 0.3, 0.3), TileSet([Tile(-3, 9)])],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_tile_mask_holds_its_tiles(self, area: Area) -> None:
+        """A grid reads an area through its mask, so the mask must hold exactly the tiles `tiles` gives."""
+        origin, tiles_mask = area._tile_mask()
+        xs, ys = numpy.nonzero(tiles_mask)
+        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        assert masked == set(area.tiles())
+
+    @pytest.mark.parametrize("area", [*EVERY_SHAPE, TileSet([Tile(1, 2), Tile(40, 40)])], ids=lambda area: repr(area))
+    @pytest.mark.parametrize("within", [Rectangle(1, 1, 3, 2), Rectangle(-5, -5, 4, 4), Rectangle(0, 0, 50, 50)])
+    def test_every_shapes_tile_mask_within_a_window_holds_its_tiles_there(self, area: Area, within: Rectangle) -> None:
+        """A grid asks for the mask within its own bounds, so a mask never outgrows the grid it is read on."""
+        origin, tiles_mask = area._tile_mask(within)
+        xs, ys = numpy.nonzero(tiles_mask)
+        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        assert masked == {tile for tile in area.tiles() if tile.center in within}
+
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
         """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""

@@ -354,6 +354,17 @@ class Rectangle(Area):
         return TileSet(Tile(x, y) for x in x_range for y in y_range)
 
 
+def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
+    """The tiles at `xs` and `ys` as a mask indexed `[x, y]` over their bounding rectangle, and first the tile at its
+    `[0, 0]` entry: an empty mask at `Tile(0, 0)` for none."""
+    if not len(xs):
+        return Tile(0, 0), numpy.zeros((0, 0), dtype=bool)
+    lowest_x, lowest_y = int(xs.min()), int(ys.min())
+    covered_tiles = numpy.zeros((int(xs.max()) - lowest_x + 1, int(ys.max()) - lowest_y + 1), dtype=bool)
+    covered_tiles[xs - lowest_x, ys - lowest_y] = True
+    return Tile(lowest_x, lowest_y), covered_tiles
+
+
 @final
 class TileSet(Area):
     """An area of any shape, held as the set of map tiles it covers.
@@ -447,6 +458,51 @@ class TileSet(Area):
     def tiles(self) -> TileSet:
         """The tile set itself."""
         return self
+
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The covered tiles that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed `[x, y]`
+        over their bounding rectangle, and first the tile at its `[0, 0]` entry: an empty mask at `Tile(0, 0)` for
+        none."""
+        xs, ys = self._addresses
+        if within is None or not len(xs) or self._lies_within(within):
+            # Kept once built: its size is at most that of `within`, or of the set's own bounds if none was given.
+            return self._mask_over_bounds
+        left, bottom = int(within.x), int(within.y)
+        right, top = left + int(within.width), bottom + int(within.height)
+        kept = (xs >= left) & (xs < right) & (ys >= bottom) & (ys < top)
+        return _mask_of_addresses(xs[kept], ys[kept])
+
+    def _lies_within(self, within: Rectangle) -> bool:
+        """Whether every covered tile lies within `within`, a rectangle on whole tiles. The set is not empty."""
+        lowest_x, lowest_y, highest_x, highest_y = self._address_bounds
+        return (
+            within.x <= lowest_x
+            and highest_x < within.x + within.width
+            and within.y <= lowest_y
+            and highest_y < within.y + within.height
+        )
+
+    @cached_property
+    def _address_bounds(self) -> tuple[int, int, int, int]:
+        """The lowest x and y and the highest x and y of the covered tiles, found on first use. The set is not
+        empty."""
+        xs, ys = self._addresses
+        return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+
+    @cached_property
+    def _addresses(self) -> tuple[ndarray, ndarray]:
+        """The x and the y of every covered tile, as two arrays, built on first use."""
+        xs = numpy.fromiter((tile[0] for tile in self._tiles), dtype=int, count=len(self._tiles))
+        ys = numpy.fromiter((tile[1] for tile in self._tiles), dtype=int, count=len(self._tiles))
+        xs.flags.writeable = ys.flags.writeable = False
+        return xs, ys
+
+    @cached_property
+    def _mask_over_bounds(self) -> tuple[Tile, ndarray]:
+        """What `_tile_mask` returns for every covered tile, built on first use."""
+        origin, covered_tiles = _mask_of_addresses(*self._addresses)
+        covered_tiles.flags.writeable = False
+        return origin, covered_tiles
 
     def translated(self, offset: PointLike) -> TileSet:
         """The tiles shifted by `offset`, snapped back onto the tile grid. Raises `ValueError` for an offset with a

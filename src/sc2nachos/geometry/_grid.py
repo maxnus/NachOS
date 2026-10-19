@@ -181,7 +181,7 @@ class Grid[T: float]:
 
     def __getitem__(self, key: PointLike | Area | Grid[bool]) -> T | ndarray:
         """The value at a point, the values over an area, or the values a mask selects. The values over a rectangle
-        are a view, read-only when the grid is; the others are a copy."""
+        are a view, read-only when the grid is; the others are a copy, by ascending x, then y."""
         # Points first, checked as tuples: `Tile` is the only `Area` that is a tuple, and it addresses a single tile
         # like any other point. A miss here is cheap; a miss against an `Area` subclass is not.
         if isinstance(key, tuple):
@@ -192,7 +192,8 @@ class Grid[T: float]:
                 view.flags.writeable = False
             return view
         if isinstance(key, Area):
-            return self._data[self._scatter(key)]
+            grid_slices, area_mask_on_grid = self._slices_and_mask_for_area(key)
+            return self._data[grid_slices][area_mask_on_grid]
         if isinstance(key, Grid):
             return self._data[self._mask(key)]
         return self._value_at(key)
@@ -205,7 +206,8 @@ class Grid[T: float]:
         elif isinstance(key, Rectangle):
             self._data[self._slices(key)] = value
         elif isinstance(key, Area):
-            self._data[self._scatter(key)] = value
+            grid_slices, area_mask_on_grid = self._slices_and_mask_for_area(key)
+            self._data[grid_slices][area_mask_on_grid] = value
         elif isinstance(key, Grid):
             self._data[self._mask(key)] = value
         else:
@@ -252,34 +254,36 @@ class Grid[T: float]:
         under its bounding box, clipped to the grid, then those of its mask over the same tiles. A 3x3 footprint
         centered on the grid's lower left tile meets the values in `[0:2, 0:2]` with its mask's `[1:3, 1:3]`. Both are
         empty where it lies wholly beyond the grid."""
-        box = footprint.bounding_box(at=center)
-        grid_xs, grid_ys = self._slices(box)
-        box_x, box_y = int(box.x) - self._origin[0], int(box.y) - self._origin[1]
-        mask_slices = (
-            slice(grid_xs.start - box_x, grid_xs.stop - box_x),
-            slice(grid_ys.start - box_y, grid_ys.stop - box_y),
-        )
-        return (grid_xs, grid_ys), mask_slices
+        left, bottom = footprint._lower_left_tile(at=center)
+        return self._slices_for_mask(left, bottom, footprint.mask.shape)
+
+    def _slices_and_mask_for_area(self, area: Area) -> tuple[tuple[slice, slice], ndarray]:
+        """The slices of the grid's values over the tiles `area` covers, clipped to the grid, and the mask of those
+        tiles over the same slices."""
+        origin, area_mask = area._tile_mask(self.bounds)
+        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, area_mask.shape)
+        return grid_slices, area_mask[mask_slices]
+
+    def _slices_for_mask(
+        self, left: int, bottom: int, shape: tuple[int, ...]
+    ) -> tuple[tuple[slice, slice], tuple[slice, slice]]:
+        """The slices that line a mask of `shape`, whose `[0, 0]` entry is the tile at `left` and `bottom`, up with the
+        grid: first those of the grid's values under it, clipped to the grid, then those of the mask over the same
+        tiles. Both are empty where it lies wholly beyond the grid."""
+        width, height = self._data.shape
+        mask_x, mask_y = left - self._origin[0], bottom - self._origin[1]
+        x = min(max(mask_x, 0), width)
+        y = min(max(mask_y, 0), height)
+        stop_x = min(max(mask_x + shape[0], x), width)
+        stop_y = min(max(mask_y + shape[1], y), height)
+        grid_slices = (slice(x, stop_x), slice(y, stop_y))
+        return grid_slices, (slice(x - mask_x, stop_x - mask_x), slice(y - mask_y, stop_y - mask_y))
 
     def _slices(self, rectangle: Rectangle) -> tuple[slice, slice]:
         """The array slices covering the tiles of `rectangle`, clipped to the grid."""
         x_range, y_range = rectangle.tile_range()
-        width, height = self._data.shape
-        x = min(max(x_range.start - self._origin[0], 0), width)
-        y = min(max(y_range.start - self._origin[1], 0), height)
-        stop_x = min(max(x_range.stop - self._origin[0], x), width)
-        stop_y = min(max(y_range.stop - self._origin[1], y), height)
-        return slice(x, stop_x), slice(y, stop_y)
-
-    def _scatter(self, area: Area) -> tuple[ndarray, ndarray]:
-        """The array indices of the area's tiles that the grid covers, as a pair of index arrays."""
-        tiles = area.tiles()
-        if not tiles:
-            return numpy.empty(0, dtype=int), numpy.empty(0, dtype=int)
-        addresses = numpy.array([(tile[0], tile[1]) for tile in tiles]) - numpy.array(self._origin)
-        covered = ((addresses >= 0) & (addresses < self._data.shape)).all(axis=1)
-        addresses = addresses[covered]
-        return addresses[:, 0], addresses[:, 1]
+        grid_slices, _ = self._slices_for_mask(x_range.start, y_range.start, (len(x_range), len(y_range)))
+        return grid_slices
 
     def _mask(self, mask: Grid[bool]) -> ndarray:
         """The values of `mask`, which must cover the same tiles and hold booleans; numpy would read any other dtype
