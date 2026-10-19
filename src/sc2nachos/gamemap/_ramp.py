@@ -15,8 +15,10 @@ if TYPE_CHECKING:
 
     from sc2nachos.geometry import Grid
 
-# Ground touching at a corner is one patch, so a ramp that runs diagonally is one ramp.
+# Ground touching at a corner is one patch, so a ramp that runs diagonally is one ramp. Read-only, since every api in
+# the process shares it.
 _TOUCHING = numpy.ones((3, 3), dtype=bool)
+_TOUCHING.flags.writeable = False
 
 # Levels are two apart in height, so ground spanning this much climbs from one to the next.
 _HALF_A_LEVEL = 1.0
