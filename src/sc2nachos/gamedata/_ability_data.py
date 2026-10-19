@@ -197,8 +197,7 @@ def _derived_cost(
         return None if upgrade is None else upgrade.cost
     if (made := units.get(product)) is None:
         return None
-    source = made.morphed_from or made.base_type
-    if source is None:
+    if (source := made.morphed_from) is None:
         return made.cost
     used = units.get(source)
     return None if used is None else made.cost - used.cost

@@ -486,7 +486,7 @@ it.
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons` |
-| `unit_data.unit_alias` | `unit_data.base_type` |
+| `unit_data.unit_alias` | nothing: `unit_data.morphed_from` gives the type a form is made from, a siege tank for a sieged tank |
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |

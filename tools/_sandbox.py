@@ -206,6 +206,17 @@ def without_uncurated_units(raw: raw_pb2.ObservationRaw) -> tuple[raw_pb2.Observ
     return kept, sorted(left_out)
 
 
+def unit_forms(tables: sc2api_pb2.ResponseData) -> dict[UnitTypeId, UnitTypeId]:
+    """The type the game's `tables` call each type a form of, their `unit_alias`, where both are curated: the siege
+    tank, for a sieged tank."""
+    return {
+        unit_type: alias
+        for row in tables.units
+        if (unit_type := UnitTypeId.get(row.unit_id)) is not None
+        and (alias := UnitTypeId.get(row.unit_alias)) is not None
+    }
+
+
 def join_with(transport: WebSocketTransport, race: Race, interface: sc2api_pb2.InterfaceOptions) -> int:
     """Join the waiting game as `race` with `interface`, and return the player id.
 

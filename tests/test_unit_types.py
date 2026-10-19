@@ -38,6 +38,17 @@ def tables() -> GameData:
     return _generator().corpus_tables()
 
 
+@pytest.fixture(scope="module")
+def forms() -> dict[UnitTypeId, UnitTypeId]:
+    """The type the tables call each type a form of, their `unit_alias`, where both are curated."""
+    return {
+        unit_type: alias
+        for row in _generator().corpus_answer().units
+        if (unit_type := UnitTypeId.get(row.unit_id)) is not None
+        and (alias := UnitTypeId.get(row.unit_alias)) is not None
+    }
+
+
 def _types() -> list[Any]:
     """The classes in `UnitType` that name one type, not a group."""
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
@@ -73,10 +84,12 @@ def _named(prefix: str) -> set[UnitTypeId]:
 
 class TestUnitType:
     @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
-    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(self, group: str, tables: GameData) -> None:
+    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(
+        self, group: str, tables: GameData, forms: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
-        base type. The factory trains a hellion and a hellbat both, so neither links them; each performs the morph to
-        the other."""
+        call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
+        performs the morph to the other."""
         first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
         if group == "AnyHellion":
             assert UnitTypeId.HELLION in tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
@@ -85,7 +98,7 @@ class TestUnitType:
         linked = [
             TECH_TREE.morph_sources.get(one) is other
             or other in tables.units[one].tech_aliases
-            or tables.units[one].base_type is other
+            or forms.get(one) is other
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
@@ -149,12 +162,14 @@ class TestUnitType:
             UnitTypeId.OVERSEER_SIEGED,
         }
 
-    def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(self, tables: GameData) -> None:
-        """Its base type and its tech aliases. An adept's shade has the adept as its base type, but is a unit of its
-        own beside the adept."""
+    def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(
+        self, tables: GameData, forms: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
+        """Its tech aliases, and the type the tables call it a form of. They call an adept's shade a form of the
+        adept, but it is a unit of its own beside the adept."""
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
             row = tables.units[unit_type]
-            for linked in {*row.tech_aliases, *filter(None, [row.base_type])}:
+            for linked in {*row.tech_aliases, *filter(None, [forms.get(unit_type)])}:
                 shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
                 assert shared, (unit_type, linked)
 

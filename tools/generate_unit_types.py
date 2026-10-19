@@ -11,6 +11,8 @@ game's tables, so this runs without StarCraft II. Run it again after changing `U
 
 from pathlib import Path
 
+from s2clientprotocol import sc2api_pb2
+
 from sc2nachos.gamedata import Attribute, GameData, UnitTypeData
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Race
@@ -361,10 +363,15 @@ def render(tables: GameData) -> str:
     return "\n".join(blocks)
 
 
-def corpus_tables() -> GameData:
-    """The tables of the first corpus game; every game on the current ladder shares them."""
+def corpus_answer() -> sc2api_pb2.ResponseData:
+    """The tables of the first corpus game, as the game answered them; every game on the current ladder shares them."""
     recording = Recording(sorted(CORPUS.glob("*.sc2rec"))[0])
-    return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
+    return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
+
+
+def corpus_tables() -> GameData:
+    """The tables of the first corpus game."""
+    return GameData(corpus_answer())
 
 
 if __name__ == "__main__":

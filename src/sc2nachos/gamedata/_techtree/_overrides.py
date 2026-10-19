@@ -78,6 +78,15 @@ MAKERS_NEVER_SWEPT: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingP
 )
 """The unit types that make each unit type, where the sweep never saw them make it."""
 
+MORPH_SOURCES_NEVER_SWEPT: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
+    {
+        # The sweep holds no trial of a liberator's siege, though a liberator ordered to siege at a point is a sieged
+        # liberator by the next observation (in game).
+        UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
+    }
+)
+"""The source type of each unit type morphed from another, where the sweep never saw it morph."""
+
 # Each of these, ordered unqueued while a unit moved, was carried out while the move went on; every other ability a
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.

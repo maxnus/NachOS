@@ -11,7 +11,12 @@ import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
-from sc2nachos.gamedata._techtree import MAKERS_NEVER_SWEPT, UNNAMED_CREATION_ABILITIES, TechTree
+from sc2nachos.gamedata._techtree import (
+    MAKERS_NEVER_SWEPT,
+    MORPH_SOURCES_NEVER_SWEPT,
+    UNNAMED_CREATION_ABILITIES,
+    TechTree,
+)
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
@@ -371,6 +376,7 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.ZERGLING].morphed_from is UnitTypeId.LARVA
         assert units[UnitTypeId.SPAWNING_POOL].morphed_from is UnitTypeId.DRONE
         assert units[UnitTypeId.SIEGE_TANK_SIEGED].morphed_from is UnitTypeId.SIEGE_TANK
+        assert units[UnitTypeId.LIBERATOR_SIEGED].morphed_from is UnitTypeId.LIBERATOR
         assert units[UnitTypeId.BARRACKS].morphed_from is None
         assert units[UnitTypeId.MARINE].morphed_from is None
 
@@ -400,11 +406,13 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.REFINERY_RICH].made_by == {UnitTypeId.SCV}
         assert units[UnitTypeId.LARVA].made_by == frozenset()
 
-    def test_a_maker_written_by_hand_is_one_the_sweep_never_saw(self) -> None:
+    def test_a_maker_or_a_source_written_by_hand_is_one_the_sweep_never_saw(self) -> None:
         """Once a sweep sees it, the entry can go."""
-        swept = _sweep().unit_type_makers
+        sweep = _sweep()
         for unit_type, makers in MAKERS_NEVER_SWEPT.items():
-            assert not swept.get(unit_type, frozenset()) & makers, unit_type.name
+            assert not sweep.unit_type_makers.get(unit_type, frozenset()) & makers, unit_type.name
+        for unit_type in MORPH_SOURCES_NEVER_SWEPT:
+            assert unit_type not in sweep.morph_sources, unit_type.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
         zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
