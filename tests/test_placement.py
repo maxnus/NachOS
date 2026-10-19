@@ -61,6 +61,7 @@ _TABLES = make_tables(
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
     _row(UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
     _row(UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
+    _row(UnitTypeId.HEALING_SHRINE_XEL_NAGA),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
     abilities=[
         data_pb2.AbilityData(ability_id=AbilityId.MOVE, target=data_pb2.AbilityData.Target.PointOrUnit),
@@ -360,6 +361,15 @@ class TestReservingASite:
         assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
         assert not grids.is_free(_DEPOT, at=(8.0, 8.0))
         assert not grids.free[Point((8.0, 8.0))]
+
+    def test_a_type_that_covers_no_tile_reserves_none_where_it_snaps(self) -> None:
+        """A Xel'Naga healing shrine's footprint is empty, and its bounding box a rectangle with no center."""
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(UnitTypeId.HEALING_SHRINE_XEL_NAGA, at=(3.4, 7.6))
+
+        assert reservation.at == Point((3.0, 8.0))
+        assert not grids.reserved.any()
 
     def test_a_margin_reserves_the_tiles_within_it_too(self) -> None:
         """Two tiles on a depot's right, as a barracks keeps them for its add-on."""

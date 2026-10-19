@@ -91,13 +91,19 @@ class Footprint:
     def bounding_box(self, *, at: PointLike) -> Rectangle:
         """The tiles `mask` spans, with the footprint placed at `at` and centered as the game snaps it. The footprint
         covers some of them, or all."""
-        x, y = coordinates(at)[:2]
-        left, bottom = math.floor(x - self.width / 2 + 0.5), math.floor(y - self.height / 2 + 0.5)
+        left, bottom = self._lower_left_tile(at=at)
         return Rectangle(left, bottom, self.width, self.height)
 
     def snapped_center(self, *, at: PointLike) -> Point:
-        """Where the footprint centers when placed at `at`, as the game snaps a structure."""
-        return self.bounding_box(at=at).center
+        """Where the footprint centers when placed at `at`, as the game snaps a structure: for the empty footprint,
+        the tile corner nearest `at`."""
+        left, bottom = self._lower_left_tile(at=at)
+        return Point((left + self.width / 2, bottom + self.height / 2))
+
+    def _lower_left_tile(self, *, at: PointLike) -> tuple[int, int]:
+        """The lower left tile of `mask`, with the footprint placed at `at` and centered as the game snaps it."""
+        x, y = coordinates(at)[:2]
+        return math.floor(x - self.width / 2 + 0.5), math.floor(y - self.height / 2 + 0.5)
 
     def tiles(self, *, at: PointLike) -> TileSet:
         """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""

@@ -158,7 +158,8 @@ def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
 class Rectangle(Area):
     """An axis-aligned rectangle, anchored at its lower left corner.
 
-    `y` grows upward, as in the game, so `top` is the higher edge.
+    `y` grows upward, as in the game, so `top` is the higher edge. A rectangle with no width or no height covers
+    nothing: it is empty, as `Area` has it.
     """
 
     x: float
@@ -206,7 +207,13 @@ class Rectangle(Area):
     @property
     def center(self) -> Point:
         """The midpoint."""
+        self._refuse_if_empty("center")
         return Point((self.x + self.width / 2, self.y + self.height / 2))
+
+    def _refuse_if_empty(self, what: str) -> None:
+        """Raises `ValueError`, naming `what` it lacks, if the rectangle has no width or no height."""
+        if not self.width or not self.height:
+            raise ValueError(f"{self!r} covers no ground, so it has no {what}")
 
     @property
     def size(self) -> tuple[float, float]:
@@ -253,7 +260,9 @@ class Rectangle(Area):
         return Rectangle(self.x + shift[0], self.y + shift[1], self.width, self.height)
 
     def intersects(self, other: Rectangle) -> bool:
-        """Whether the two rectangles share any ground."""
+        """Whether the two rectangles share any ground: never when either is empty."""
+        if not self.width or not self.height or not other.width or not other.height:
+            return False
         return not (
             self.right <= other.left or self.left >= other.right or self.top <= other.bottom or self.bottom >= other.top
         )
@@ -286,10 +295,12 @@ class Rectangle(Area):
 
     def random_point(self) -> Point:
         """A point drawn uniformly from the rectangle."""
+        self._refuse_if_empty("points to draw from")
         return Point((self.left + random.uniform(0, self.width), self.bottom + random.uniform(0, self.height)))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the rectangle nearest to `point`, and the distance to it."""
+        self._refuse_if_empty("closest point")
         position = coordinates(point)
         closest = Point(
             (
@@ -301,6 +312,7 @@ class Rectangle(Area):
 
     def bounding_rectangle(self) -> Rectangle:
         """The rectangle itself."""
+        self._refuse_if_empty("bounding rectangle")
         return self
 
     def tile_range(self) -> tuple[range, range]:

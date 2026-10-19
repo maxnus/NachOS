@@ -355,6 +355,24 @@ class TestRectangle:
         assert (10, 10) not in rect, "the upper edges belong to the next rectangle"
         assert (11, 5) not in rect
 
+    @pytest.mark.parametrize("rect", [Rectangle(3, 3, 0, 0), Rectangle(1, 1, 0, 3), Rectangle(1, 1, 3, 0)])
+    def test_one_with_no_width_or_no_height_is_empty(self, rect: Rectangle) -> None:
+        """`Rectangle(3, 3, 0, 0).random_point()` returned (3, 3), which is not in it, and `Rectangle(1, 1, 0, 3)`
+        intersected `Rectangle(0, 0, 5, 5)` though their intersection was `None`."""
+        assert rect.area == 0
+        assert not rect.tiles()
+        for read in (
+            lambda: rect.center,
+            rect.random_point,
+            lambda: rect.closest_point_to((0, 0)),
+            rect.bounding_rectangle,
+        ):
+            with pytest.raises(ValueError, match="covers no ground"):
+                read()
+        assert not rect.intersects(Rectangle(0, 0, 5, 5))
+        assert not Rectangle(0, 0, 5, 5).intersects(rect)
+        assert rect.intersection(Rectangle(0, 0, 5, 5)) is None
+
     def test_encloses(self) -> None:
         assert Rectangle(0, 0, 10, 10).encloses(Rectangle(2, 2, 4, 4))
         assert not Rectangle(0, 0, 10, 10).encloses(Rectangle(2, 2, 40, 4))
