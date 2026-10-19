@@ -268,6 +268,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   as a remembered copy, which the tracker assumes (the owner, review of #71).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which no carrier was (#75), so that the
   tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
+- When the corpus is next recorded, `run_ladder` pings the client for its build and warns of one the tech tree was not
+  swept on, as `run_local` warns from the installation without asking the game (the owner, #75).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though
   an unburrow's autocast is the performer's: a burrowed roach comes up by autocast, a drone does not. A family id
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the

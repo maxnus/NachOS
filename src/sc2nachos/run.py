@@ -11,6 +11,7 @@ from pathlib import Path
 from loguru import logger
 
 from sc2nachos.api import Api
+from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Player, Race, Result
 from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport, WebSocketTransport
@@ -44,17 +45,23 @@ def run_local(
     `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. `record_to` is a file
     to record the whole conversation into, in a folder that exists, or `FileNotFoundError` is raised before the game
     starts, and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its
-    temporary directory removed.
+    temporary directory removed. The newest build installed is played, with a warning if it is not the one the tech
+    tree was swept on.
     """
     if record_to is not None:
         _check_recording_path(Path(record_to))
+    installation = installation or Installation.find()
     if isinstance(map_file, str):
-        installation = installation or Installation.find()
         map_file = MapFile.find(map_file, installation=installation)
     # A participant tells the game a client will fill the slot; who fills it is settled at the join.
     players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
+    base_build = installation.build_to_launch()
+    _warn_unless_the_tech_tree_was_swept_on(base_build)
 
-    with GameProcess.launch(installation, window=window) as game, closing(_connect(game.url, record_to)) as client:
+    with (
+        GameProcess.launch(installation, base_build=base_build, window=window) as game,
+        closing(_connect(game.url, record_to)) as client,
+    ):
         try:
             client.create_game(map_file.path, players, realtime=realtime, random_seed=random_seed)
             client.join_game(bot.race, name=bot.name)
@@ -137,6 +144,17 @@ def _command_line() -> ArgumentParser:
     parser.add_argument("--result-file", type=Path, help="where to write the result, as JSON")
     parser.add_argument("--replay-file", type=Path, help="accepted for the match workflow; no replay is saved yet")
     return parser
+
+
+def _warn_unless_the_tech_tree_was_swept_on(base_build: int) -> None:
+    """Log a warning if `base_build` is not the build the tech tree was swept on."""
+    if base_build != TECH_TREE.base_build:
+        logger.warning(
+            "Playing build {}, but the tech tree is build {}'s: what each ability needs, who is offered it, how it "
+            "takes a unit's orders and what each upgrade changes come from that build",
+            base_build,
+            TECH_TREE.base_build,
+        )
 
 
 def _check_recording_path(path: Path) -> None:
