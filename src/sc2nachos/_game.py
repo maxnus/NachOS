@@ -74,7 +74,8 @@ from sc2nachos.protocol import Client
 from sc2nachos.state import Alert, Research
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, Unit, VitalType
-from sc2nachos.units._tracking import _Snapshot, _Tracker
+from sc2nachos.units._snapshot import _Snapshot
+from sc2nachos.units._tracking import _Tracker
 
 _ALERT_BY_VALUE: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 # The event a happening comes as, by the alliance of the unit it happened to. An alliance left out gets none.

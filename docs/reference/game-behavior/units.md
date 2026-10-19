@@ -14,6 +14,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A barracks that lifts off, a spine crawler that uproots and a command center that becomes an orbital command out
   of sight keep their tags. Seen elsewhere, the structure is listed there while its copy stays listed at the old
   spot, until that spot is seen (#25; tested).
+- A structure lifted off or uprooted, and a viking landed or flying, is never left in the fog as a remembered copy
+  (stated, the owner, 2026-09-26).
 - A refinery stands at its geyser's exact position (#25).
 - A unit inside a transport or a gas building, or a drone that became a structure, leaves the observation; a
   passenger returns under its tag when unloaded (#25; tested).
@@ -22,8 +24,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   77 of 81 in one corpus game (#25, #28; corpus; tested).
 - A structure killed or burned down out of sight is never reported dead, not even once its spot is seen; its copy
   disappears (#25; tested).
-- An undetected cloaked enemy is listed, as `CLOAKED` and not in vision. An undetected burrowed enemy is not listed
-  at all (#37; tested).
+- An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
+  listed at all (#37; tested), but an enemy's burrowed widow mine can be (below).
 - Force fields and reaper grenades are listed as neutral units, not effects; a parasitic bomb adds no unit. Lurker
   spines are one effect with several positions along a line (#12, #25).
 - Map-owned units are owner 16 (stated). An enemy structure built out of sight is not listed (tested).
@@ -135,14 +137,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A change out of sight, such as a morph in the fog, shows only when the unit is next seen (stated).
 - Vision of an enemy lingers some 60 steps after the unit that saw it dies (#37; tested).
 - An enemy that cloaks where it stands stays listed. An undetected enemy observer is listed `CLOAKED` and
-  `INVISIBLE`, in sight but not in vision, with no buffs; beside an overseer or a raven it reads `CLOAKED_DETECTED`
-  and `IN_VISION`, and a ghost detected that way shows `GHOST_CLOAK` (#37; tested).
+  `INVISIBLE`, in sight but not visible, with no buffs; beside an overseer or a raven it reads `CLOAKED_DETECTED`
+  and `VISIBLE`, and a ghost detected that way shows `GHOST_CLOAK` (#37; tested).
 - A cloaked unit of this player's (an observer, a dark templar, a cloaked ghost) reads `CLOAKED_ALLIED` and
-  `IN_VISION` whether the enemy detects it or not: an enemy observer, missile turret and photon cannon each detected
+  `VISIBLE` whether the enemy detects it or not: an enemy observer, missile turret and photon cannon each detected
   and shot one (the turret took an observer from 70 to 34), and nothing in its report changed (#37).
 - A ghost cloaks and uncloaks one step after the order (#37; tested).
-- Burrowing is no cloak: a burrowed zergling reads `NOT_CLOAKED`, and an undetected burrowed enemy is not listed
-  (#37).
+- Burrowing is no cloak: a burrowed zergling reads `NOT_CLOAKED`, and an undetected burrowed enemy zergling is not
+  listed (#37).
+- An enemy's burrowed widow mine was listed `INVISIBLE` with its cloak `UNKNOWN`, in 28 reports of one game,
+  MagannathaAIE_v2-TvT; no other unit was listed so (corpus).
+- A unit that burrows reads `is_burrowed` false for up to 3 observations after its type turned burrowed: a widow mine
+  for 3, a lurker for 2 (corpus).
 - A remembered copy reports its cloak as unknown (stated).
 - The visibility grid reads 0 for never seen, 1 for seen before and 2 for in sight now; creep is one bit per tile.
   At the start this player's base has creep and vision, and the enemy's start is unexplored (tested).

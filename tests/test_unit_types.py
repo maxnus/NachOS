@@ -245,7 +245,7 @@ def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnU
     assert_type(units.own.of_type(UnitType.Worker), Units[OwnUnit[UnitType.Worker]])
     assert_type(units.of_type(UnitType.AnyMineralField), Units[Unit[UnitType.AnyMineralField]])
     assert_type(own.excluding_type(UnitType.Marine), Units[OwnUnit[Any]])
-    units.of_type(UnitType.Marine, UnitTypeId.MARINE)  # pyright: ignore[reportArgumentType]
+    assert_type(units.of_type(UnitType.Marine, UnitTypeId.MARAUDER), Units[Unit[Any]])
 
 
 def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], other: OwnUnit[Any]) -> None:
@@ -258,6 +258,15 @@ def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], ot
         assert_type(other, OwnUnit[UnitType.Marine] | OwnUnit[UnitType.Marauder])
     assert_type(UnitType.Marine.id, UnitTypeId)
     _ = UnitType.Terran.id  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _what_a_structure_of_this_players_builds_and_carries_is_its_own(structure: OwnUnit[Any]) -> None:
+    """What the type checker makes of the units an own structure names. Never run."""
+    assert_type(structure.add_on, OwnUnit[Any] | None)
+    assert_type(structure.construction, OwnUnit[Any] | None)
+    assert_type(structure.builder, OwnUnit[Any] | None)
+    if (builder := structure.builder) is not None:
+        _ = builder.orders
 
 
 def _a_group_is_typed_as_in_the_groups_all_its_types_are_in(

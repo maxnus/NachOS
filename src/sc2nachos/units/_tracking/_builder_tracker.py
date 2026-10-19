@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.ids import AbilityId
+from sc2nachos.units._own_unit import OwnUnit
 
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
@@ -28,23 +29,23 @@ class _BuilderTracker:
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
         # Each structure still being built by a unit that became it, as a drone does, mapped to that unit.
-        self._builders: dict[Unit[Any], Unit[Any]] = {}
+        self._builders: dict[OwnUnit[Any], OwnUnit[Any]] = {}
         # The units whose structure finished or died in the last update. The game has one more update to report them
         # dead.
-        self._used_up_builders: list[Unit[Any]] = []
+        self._used_up_builders: list[OwnUnit[Any]] = []
         # Computed from the last observation when first asked for: this player's unfinished structures, and each
         # structure being built by a unit in the observation, mapped to that unit.
-        self._under_construction: list[Unit[Any]] | None = None
-        self._builders_now: dict[Unit[Any], Unit[Any]] | None = None
+        self._under_construction: list[OwnUnit[Any]] | None = None
+        self._builders_now: dict[OwnUnit[Any], OwnUnit[Any]] | None = None
 
-    def structure_built_by(self, unit: Unit[Any]) -> Unit[Any] | None:
-        """The unfinished structure of this player's that `unit`'s first order builds, or `None`.
+    def structure_built_by(self, unit: OwnUnit[Any]) -> OwnUnit[Any] | None:
+        """The unfinished structure of this player's that `unit`'s first order builds, or `None`, as for a dead unit.
 
         An SCV's build order is aimed at the structure's center once construction starts, and at the structure itself
         once construction is resumed (in game).
         """
         orders = unit._latest_report.orders
-        if not orders:
+        if not orders or unit._dead:
             return None
         order = orders[0]
         if (target := self._order_target_position(order)) is None:
@@ -60,28 +61,34 @@ class _BuilderTracker:
                 built = structure
         return built
 
-    def builder_of(self, structure: Unit[Any]) -> Unit[Any] | None:
+    def builder_of(self, structure: OwnUnit[Any]) -> OwnUnit[Any] | None:
         """The unit building `structure`: the drone that became it, or a unit in the observation building it."""
         if (drone := self._builders.get(structure)) is not None:
             return drone
         if self._builders_now is None:
             self._builders_now = {}
             for unit in self._tracker.unit_tracker.present:
-                if unit._own and (built := self.structure_built_by(unit)) is not None:
+                if isinstance(unit, OwnUnit) and (built := self.structure_built_by(unit)) is not None:
                     self._builders_now[built] = unit
         return self._builders_now.get(structure)
 
-    def link_builder(self, structure: Unit[Any], ordered: list[Unit[Any]]) -> None:
+    def link_builder(self, structure: OwnUnit[Any], ordered: list[OwnUnit[Any]]) -> None:
         """Link `structure`, new to this observation, to the unit in `ordered` that became it, if any, and remove
-        that unit from `ordered`.
+        that unit from `ordered`. Only a unit of the type the structure is morphed from can have become it: a drone,
+        never an SCV gone into the refinery it built.
 
         `ordered` holds this player's units that left this observation while carrying out an order. A drone that
         becomes a structure leaves the observation with no death reported, and the structure appears under a new tag
         (in game).
         """
+        row = self._tracker.game_data.units.get(structure._type_id)
+        if row is None or (source := row.morphed_from) is None:
+            return
         builder = None
         nearest = _BUILDER_REACH * _BUILDER_REACH
         for unit in ordered:
+            if unit._type_id is not source:
+                continue
             order = unit._latest_report.orders[0]
             if (
                 not self._order_makes_structure(order, structure)
@@ -146,12 +153,12 @@ class _BuilderTracker:
             and row.creation_ability is AbilityId.get(order.ability_id)
         )
 
-    def _structures_under_construction(self) -> list[Unit[Any]]:
+    def _structures_under_construction(self) -> list[OwnUnit[Any]]:
         """This player's unfinished units in the last observation, computed on first use."""
         if self._under_construction is None:
             self._under_construction = [
                 unit
                 for unit in self._tracker.unit_tracker.present
-                if unit._own and unit._latest_report.build_progress < 1.0
+                if isinstance(unit, OwnUnit) and unit._latest_report.build_progress < 1.0
             ]
         return self._under_construction

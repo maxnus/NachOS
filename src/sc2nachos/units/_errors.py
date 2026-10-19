@@ -4,8 +4,12 @@ from sc2nachos._errors import NachOSError
 
 
 class NotReportedError(NachOSError, LookupError):
-    """The game has never shown this unit in sight, so it has never reported this field of it."""
+    """The game has never shown this unit visible, so it has never reported this field of it."""
 
 
 class UnknownTagError(NachOSError, LookupError):
     """The game named a unit by a tag it has never reported a unit under."""
+
+
+class UnitIdsExhaustedError(NachOSError, OverflowError):
+    """A game has seen more units of one alliance than its ids can number."""

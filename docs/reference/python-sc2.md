@@ -57,7 +57,7 @@ difference that rests on what the game does links there for its evidence.
   | `on_unit_destroyed(tag)` | `AnyUnitDiedEvent`, with the unit, or one side's `OwnUnitDiedEvent`, `EnemyUnitDiedEvent` or `NeutralUnitDiedEvent`; and `UnitFoundDeadEvent` for a structure found gone from its spot |
   | `on_unit_type_changed` | `AnyUnitTypeChangedEvent`, for this player's units and the enemy's, or one side's `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
   | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
-  | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's units in vision |
+  | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's visible units |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
   | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInStartedEvent`, `OwnWarpInFinishedEvent` |
   | nothing | `OwnUnitBecameIdleEvent`, `OwnUpgradeStartedEvent`, `OwnUpgradeStoppedEvent` |
@@ -261,7 +261,7 @@ it.
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.excluding_type(UnitType.Structure)`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `Visibility.IN_VISION` |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |

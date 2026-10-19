@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos._errors import NachOSError
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId
-from sc2nachos.units._errors import UnknownTagError
+from sc2nachos.units._errors import UnitIdsExhaustedError, UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
 from sc2nachos.units._unit_type import UnitType
@@ -21,11 +20,12 @@ if TYPE_CHECKING:
 
     from sc2nachos.units._tracking._tracker import _Tracker
 
-_IN_VISION = raw_pb2.DisplayType.Visible
+_VISIBLE = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
-# The structures that can leave the spot they are remembered at: those offered a lift or an uproot.
+# The structures that can leave the spot they are remembered at: those offered a lift or an uproot, in their grounded
+# forms alone, since one lifted off or uprooted, like a viking in either form, is never remembered in the fog (stated).
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
     unit_type
     for ability in (AbilityId.LIFT, AbilityId.UPROOT)
@@ -57,11 +57,12 @@ class _UnitTracker:
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
-        # Every tag of a living unit: a tag in vision for good, a tag in the fog until it leaves.
+        # Every tag of a living unit: a tag in sight for good, a tag in the fog until it leaves.
         self._by_tag: _UnitsByTag = {}
         # The tags among those of structures in the fog. Such a tag never comes back once it leaves.
         self._in_fog_tags: set[int] = set()
-        # Fog tags of structures seen elsewhere since, ignored for as long as the game keeps listing them.
+        # Fog tags of structures seen elsewhere since, ignored for as long as the game keeps listing them: each update
+        # keeps those it still lists and those it newly ignores.
         self._ignored_tags: set[int] = set()
         # Every tag ever linked, dead units' included, mapped to its id, and every unit ever created, by id.
         self._ids: dict[int, int] = {}
@@ -125,11 +126,12 @@ class _UnitTracker:
         """
         previous = self._present_units_by_tag
         present, new = self._update_known_tags(reports, previous, step)
+        dead_tags = set(dead)
         if new:
-            self._identify_new_tags(new, previous, present, step, set(dead))
+            self._identify_new_tags(new, previous, present, step, dead_tags)
             # New units were added after the rest, so restore the game's order.
             present = {report.tag: present[report.tag] for report in reports if report.tag in present}
-        self._handle_departed_units(previous, present, step)
+        self._handle_departed_units(previous, present, step, dead_tags)
         return present
 
     def _update_deaths(self, dead: Iterable[int], present: _UnitsByTag) -> None:
@@ -163,6 +165,7 @@ class _UnitTracker:
         new: list[raw_pb2.Unit] = []
         by_tag = self._by_tag
         ignored = self._ignored_tags
+        still_ignored: list[int] = []
         pop_previous = previous.pop
         # Runs for every unit in every observation, so the common case, a tag also in the last observation, comes
         # first.
@@ -174,6 +177,7 @@ class _UnitTracker:
             unit = pop_previous(tag, None)
             if unit is None:
                 if tag in ignored:
+                    still_ignored.append(tag)
                     continue
                 unit = by_tag.get(tag)
                 if unit is None:
@@ -183,11 +187,14 @@ class _UnitTracker:
                     del self._stale_units[unit._id]
                     self._record_entered_sight(unit, report)
                 elif unit._tag in self._in_fog_tags:
+                    still_ignored.append(unit._tag)
                     self._ignore_structure_fog_copy(unit._tag, previous, present)
                     self._record_entered_sight(unit, report)
                 unit._tag = tag
             unit._update(report, step)
             present[tag] = unit
+        if ignored:
+            self._ignored_tags = set(still_ignored)
         return present, new
 
     def _record_entered_sight(self, unit: Unit[Any], report: raw_pb2.Unit) -> None:
@@ -196,10 +203,10 @@ class _UnitTracker:
             self._tracker.last_changes.enemy_units_entered_sight.append(unit)
 
     def _ignore_structure_fog_copy(self, tag: int, previous: _UnitsByTag, present: _UnitsByTag) -> None:
-        """Ignore for good the fog copy under `tag` of a structure that is back in vision.
+        """Ignore for good the fog copy under `tag` of a structure that is back in sight.
 
-        A structure that lifts off or uproots out of vision and is seen elsewhere keeps its fog copy listed where it
-        was, until that spot is in vision too (in game).
+        A structure that lifts off or uproots out of sight and is seen elsewhere keeps its fog copy listed where it
+        was, until that spot is in sight too (in game).
         """
         self._in_fog_tags.discard(tag)
         del self._by_tag[tag]
@@ -213,35 +220,37 @@ class _UnitTracker:
         """Identify the unit behind each report under a new tag: a structure passing between vision and fog, or a
         new unit.
 
-        A structure going out of vision is replaced, in the same observation, by a fog copy at the same position
-        under a new tag, and coming back into vision swaps the other way. The type is not compared, since a structure
-        can change form between the two observations, as a supply depot lowering does (in game). The alliance is
-        compared, since a refinery stands at the same position as its geyser.
+        A structure going out of sight is replaced, in the same observation, by a fog copy at the same position under
+        a new tag. A fog copy shown visible swaps the other way only for a unit never seen visible, such as a mineral
+        field first listed in the fog: one seen visible comes back under its first tag (in game), so a new tag shown
+        visible at its spot is a new unit, such as a structure rebuilt where it died out of sight. The type
+        is not compared, since a structure can change form between the two observations, as a supply depot lowering
+        does (in game). The alliance is compared, since a refinery stands at the same position as its geyser.
         """
         # The units that left this observation without dying or being updated under another tag, and among them this
         # player's units that had an order, one of which may have become a structure.
         departed: dict[tuple[int, float, float], Unit[Any]] = {}
-        ordered: list[Unit[Any]] = []
+        ordered: list[OwnUnit[Any]] = []
         for tag, unit in previous.items():
             if unit._step != step and tag not in dead:
                 last_report = unit._latest_report
                 departed[(last_report.alliance, last_report.pos.x, last_report.pos.y)] = unit
-                if unit._own and last_report.orders:
+                if isinstance(unit, OwnUnit) and last_report.orders:
                     ordered.append(unit)
         for report in reports:
             display = report.display_type
             unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
-            if unit is not None and {display, unit._latest_report.display_type} == {_IN_VISION, _IN_FOG}:
+            if unit is not None and _new_tag_is_same_unit(unit, display):
                 if report.alliance == _ENEMY:
                     changes = self._tracker.last_changes
-                    entered = display == _IN_VISION
+                    entered = display == _VISIBLE
                     sight = changes.enemy_units_entered_sight if entered else changes.enemy_units_left_sight
                     sight.append(unit)
                 unit._tag = report.tag
                 unit._update(report, step)
             else:
                 unit = self._create_unit(report, step)
-                if ordered and unit._own:
+                if ordered and isinstance(unit, OwnUnit):
                     self._tracker.builder_tracker.link_builder(unit, ordered)
             tag = report.tag
             self._by_tag[tag] = unit
@@ -259,14 +268,20 @@ class _UnitTracker:
                 del self._unfinished[unit_id]
                 self._tracker.last_changes.own_units_finished.append(unit)
 
-    def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int) -> None:
-        """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be."""
+    def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]) -> None:
+        """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be. A
+        fog copy whose tag, or whose unit's last visible tag, is among `dead`, the tags the observation reports dead,
+        died as reported."""
         for tag, unit in departed.items():
             if tag in self._in_fog_tags:
                 self._in_fog_tags.discard(tag)
                 del self._by_tag[tag]
+                if unit._step != step and _holds_a_tag_of(dead, unit):
+                    # Died as the game reports, under either of its tags, before one is unlinked unseen.
+                    self._mark_unit_dead(unit, present, reported=True)
+                    continue
                 if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS:
-                    # Its spot came into vision without it. The game reports no death it cannot see (in game).
+                    # Its spot came into sight without it. The game reports no death it cannot see (in game).
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
             if unit._step != step and not unit._stale:
@@ -281,7 +296,9 @@ class _UnitTracker:
         alliance = report.alliance
         count = self._units_seen_per_alliance[alliance] + 1
         if count >= _IDS_PER_ALLIANCE:
-            raise NachOSError(f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids")
+            raise UnitIdsExhaustedError(
+                f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
+            )
         self._units_seen_per_alliance[alliance] = count
         unit_id = alliance * _IDS_PER_ALLIANCE + count
         changes = self._tracker.last_changes
@@ -303,8 +320,8 @@ class _UnitTracker:
     def _mark_unit_dead(self, unit: Unit[Any], present: _UnitsByTag, *, reported: bool) -> None:
         """Mark `unit` dead and drop it. `reported` says whether the game reported the death or the unit was found
         dead, as when gone from a spot it could not have left."""
-        # Its tags: the one it was last reported under, and the one it was last in vision under.
-        sighting = unit._latest_report_in_vision
+        # Its tags: the one it was last reported under, and the one it was last visible under.
+        sighting = unit._latest_visible_report
         tags = {unit._tag} if sighting is None else {unit._tag, sighting.tag}
         unit._mark_dead()
         changes = self._tracker.last_changes
@@ -322,3 +339,20 @@ class _UnitTracker:
             unit._mark_stale()
         self._set_present_units({})
         self._unfinished = {}
+
+
+def _holds_a_tag_of(tags: set[int], unit: Unit[Any]) -> bool:
+    """Whether `tags` holds the tag `unit` was last reported under, or the one it was last visible under."""
+    if unit._tag in tags:
+        return True
+    sighting = unit._latest_visible_report
+    return sighting is not None and sighting.tag in tags
+
+
+def _new_tag_is_same_unit(unit: Unit[Any], display: int) -> bool:
+    """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
+    visible into the fog, or a fog copy of a unit never seen visible shown visible."""
+    before = unit._latest_report.display_type
+    if before == _VISIBLE:
+        return display == _IN_FOG
+    return before == _IN_FOG and display == _VISIBLE and unit._latest_visible_report is None

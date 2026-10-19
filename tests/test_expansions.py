@@ -373,7 +373,7 @@ class TestARecordedMap:
         first = Expansion._find_all(game_map, unit_tracker)[0]
         assert first.center == game_map.start_location
         assert len(first.mineral_fields) == 8
-        assert all(field.visibility is Visibility.IN_VISION for field in first.mineral_fields)
+        assert all(field.visibility is Visibility.VISIBLE for field in first.mineral_fields)
 
     def test_the_start_locations_are_the_expansions_marked_as_one(self, path: Path) -> None:
         game_map, unit_tracker = _recorded_map_and_units(path)

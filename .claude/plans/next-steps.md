@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #132. `uv run pytest` passes 2256 tests on branch `claude/protocol-failure-paths`;
+- nachOS `main` has every PR to #133. `uv run pytest` passes 2280 tests on branch `claude/unit-tracking-gaps`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -250,6 +250,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
+- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
+  as a remembered copy, which the tracker assumes (the owner, review of #71).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though
   an unburrow's autocast is the performer's: a burrowed roach comes up by autocast, a drone does not. A family id
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the

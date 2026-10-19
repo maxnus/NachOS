@@ -176,7 +176,8 @@ events that starts mid-game is handed every research already running as started,
 
 ### What units went through
 
-Compared with the previous observation, for units in vision in both, or watched from the turn the watch starts on.
+Compared with the previous observation, for units visible in both, or in sight in both for a cloak change, or watched
+from the turn the watch starts on.
 The buff events are `AnyBuffEvent`s, the vital events `AnyVitalEvent`s, the area events `AnyAreaEvent`s, and the rest
 `AnyUnitEvent`s.
 
