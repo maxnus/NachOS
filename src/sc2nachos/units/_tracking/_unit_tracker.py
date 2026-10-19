@@ -225,12 +225,12 @@ class _UnitTracker:
         # The units that left this observation without dying or being updated under another tag, and among them this
         # player's units that had an order, one of which may have become a structure.
         departed: dict[tuple[int, float, float], Unit[Any]] = {}
-        ordered: list[Unit[Any]] = []
+        ordered: list[OwnUnit[Any]] = []
         for tag, unit in previous.items():
             if unit._step != step and tag not in dead:
                 last_report = unit._latest_report
                 departed[(last_report.alliance, last_report.pos.x, last_report.pos.y)] = unit
-                if unit._own and last_report.orders:
+                if isinstance(unit, OwnUnit) and last_report.orders:
                     ordered.append(unit)
         for report in reports:
             display = report.display_type
@@ -245,7 +245,7 @@ class _UnitTracker:
                 unit._update(report, step)
             else:
                 unit = self._create_unit(report, step)
-                if ordered and unit._own:
+                if ordered and isinstance(unit, OwnUnit):
                     self._tracker.builder_tracker.link_builder(unit, ordered)
             tag = report.tag
             self._by_tag[tag] = unit

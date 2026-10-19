@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
@@ -76,10 +76,11 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
 
     @property
-    def add_on(self) -> Unit[Any] | None:
+    def add_on(self) -> OwnUnit[Any] | None:
         """The structure's add-on, or `None`."""
         tag = self._latest_report.add_on_tag
-        return self._tracker.unit_tracker.by_tag(tag) if tag else None
+        # An add-on is its structure's owner's.
+        return cast("OwnUnit[Any]", self._tracker.unit_tracker.by_tag(tag)) if tag else None
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
@@ -88,13 +89,13 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._tracker.unit_tracker.by_tag(tag) if tag else None
 
     @property
-    def construction(self) -> Unit[Any] | None:
+    def construction(self) -> OwnUnit[Any] | None:
         """The unfinished structure the unit is building, or the one a drone became until it finishes, or `None`, as
         for a dead unit."""
         return self._tracker.builder_tracker.structure_built_by(self)
 
     @property
-    def builder(self) -> Unit[Any] | None:
+    def builder(self) -> OwnUnit[Any] | None:
         """The SCV building this structure, or the drone that became it, or `None` for a structure nobody is building:
         one halted, one warped in, or one finished."""
         return self._tracker.builder_tracker.builder_of(self)
