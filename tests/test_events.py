@@ -403,6 +403,33 @@ class TestInstances:
         gc.collect()
         assert reference() is None
 
+    def test_a_class_is_collected_once_its_instances_are_unsubscribed(self) -> None:
+        """Though its marked method calls `super()`, which keeps the class in the method's closure."""
+        bus = _EventBus()
+
+        def make() -> type:
+            class Base:
+                def take_turn(self, event: TurnEvent) -> None:
+                    pass
+
+            class Handlers(Base):
+                @bus.on(TurnEvent)
+                def on_turn(self, event: TurnEvent) -> None:
+                    super().take_turn(event)
+
+            return Handlers
+
+        made = make()
+        instance = made()
+        bus.subscribe(instance)
+        _turns(bus, 0)
+        bus.unsubscribe(instance)
+        reference = weakref.ref(made)
+        del made, instance
+        gc.collect()
+        assert reference() is None
+        assert not bus._marks
+
     def test_an_instance_is_subscribed_once(self) -> None:
         bus = _EventBus()
 

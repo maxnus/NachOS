@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, final, overload
 
 from sc2nachos.events._event import Event
 from sc2nachos.events._event_filter import EventFilter
-from sc2nachos.events._handler import _Handler
 
 if TYPE_CHECKING:
     from sc2nachos.events._event_bus import _EventBus
@@ -61,7 +60,7 @@ class EventSubscriber[E: Event]:
             raise TypeError(f"a handler is a function or a method, not {handler!r}")
         if inspect.iscoroutinefunction(function):
             raise TypeError(f"{function.__qualname__} is a coroutine function, and handlers are called synchronously")
-        self._bus._add(_Handler(function, self._selects, instance=instance, **self._options))
+        self._bus._add(function, self._selects, self._options, instance=instance)
         return handler
 
     def where(self, predicate: Callable[[E], bool], /) -> EventSubscriber[E]:

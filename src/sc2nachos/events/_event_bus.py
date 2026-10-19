@@ -30,14 +30,16 @@ class _EventBus:
     `api.on`, `api.subscribe`, `api.unsubscribe`, `api.emit` and `api.handler_timings`, whose docstrings hold the
     contracts."""
 
-    __slots__ = ("_marks", "_methods_of", "_step", "_subscriptions", "_timings")
+    __slots__ = ("_marks", "_step", "_subscriptions", "_timings")
 
     def __init__(self, *, time_handlers: bool = False) -> None:
         """Time every handler call if `time_handlers`, at some 200 ns a call."""
         self._subscriptions = _EventSubscriptions()
-        # Handlers of methods marked in class bodies, unbound until `subscribe` binds them to an instance.
-        self._marks: weakref.WeakKeyDictionary[FunctionType, list[_Handler]] = weakref.WeakKeyDictionary()
-        self._methods_of: weakref.WeakKeyDictionary[type, tuple[_Handler, ...]] = weakref.WeakKeyDictionary()
+        # What each method marked in a class body is to be subscribed to, and with which options, until `subscribe`
+        # binds it to an instance. Nothing in a mark refers to the method, so a class is collected with its methods.
+        self._marks: weakref.WeakKeyDictionary[FunctionType, list[tuple[EventFilter[Any], Mapping[str, Any]]]] = (
+            weakref.WeakKeyDictionary()
+        )
         # The current step, given to an event emitted without one, or `None` between games.
         self._step: int | None = None
         self._timings: dict[type[Event], dict[str, HandlerTiming]] | None = {} if time_handlers else None
@@ -85,14 +87,14 @@ class _EventBus:
         """Subscribe every method of `instance` marked with `on`, as `api.subscribe` says."""
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
-        marks = {(handler.function, handler.selects) for handler in marked}
+        marks = {(function, selects) for function, selects, _ in marked}
         if any(
             handler.instance is instance and (handler.function, handler.selects) in marks
             for handler in self._subscriptions
         ):
             raise ValueError(f"{instance!r} is subscribed already")
-        for handler in marked:
-            self._subscriptions.add(handler.bound_to(instance))
+        for function, selects, options in marked:
+            self._subscriptions.add(_Handler(function, selects, instance=instance, **options))
 
     def unsubscribe(self, target: object) -> None:
         """Unsubscribe `target`, as `api.unsubscribe` says."""
@@ -117,31 +119,32 @@ class _EventBus:
             raise RuntimeError("handlers are timed only for an api made with time_handlers=True")
         return MappingProxyType({kind: MappingProxyType(timings) for kind, timings in self._timings.items()})
 
-    def _add(self, handler: _Handler) -> None:
-        """Subscribe `handler`, or mark it for `subscribe` if its function is a method yet to be bound."""
-        if handler.instance is None and _is_method(handler.function):
-            self._marks.setdefault(handler.function, []).append(handler)
+    def _add(
+        self, function: FunctionType, selects: EventFilter[Any], options: Mapping[str, Any], *, instance: object | None
+    ) -> None:
+        """Subscribe `function`, called on `instance` if it is not `None`, to what `selects` selects, with `options`,
+        the rest of what `on` was given; or mark it for `subscribe` if it is a method yet to be bound."""
+        if instance is None and _is_method(function):
+            self._marks.setdefault(function, []).append((selects, options))
         else:
-            self._subscriptions.add(handler)
+            self._subscriptions.add(_Handler(function, selects, instance=instance, **options))
 
-    def _marked_methods(self, cls: type) -> tuple[_Handler, ...]:
-        """The handlers of the marked methods an instance of `cls` has: those its attributes resolve to, so an unmarked
-        override hides a marked method."""
-        if (marked := self._methods_of.get(cls)) is None:
-            found: list[_Handler] = []
-            seen: set[str] = set()
-            for klass in cls.__mro__:
-                for name, value in vars(klass).items():
-                    if name in seen:
-                        continue
-                    seen.add(name)
-                    if isinstance(value, FunctionType):
-                        found.extend(self._marks.get(value, ()))
-                    elif isinstance(value, classmethod | staticmethod) and value.__func__ in self._marks:
-                        kind = type(value).__name__
-                        raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
-            marked = self._methods_of[cls] = tuple(found)
-        return marked
+    def _marked_methods(self, cls: type) -> list[tuple[FunctionType, EventFilter[Any], Mapping[str, Any]]]:
+        """Each marked method an instance of `cls` has, with what it is to be subscribed to and its options: the
+        methods its attributes resolve to, so an unmarked override hides a marked method."""
+        found: list[tuple[FunctionType, EventFilter[Any], Mapping[str, Any]]] = []
+        seen: set[str] = set()
+        for klass in cls.__mro__:
+            for name, value in vars(klass).items():
+                if name in seen:
+                    continue
+                seen.add(name)
+                if isinstance(value, FunctionType):
+                    found.extend((value, selects, options) for selects, options in self._marks.get(value, ()))
+                elif isinstance(value, classmethod | staticmethod) and value.__func__ in self._marks:
+                    kind = type(value).__name__
+                    raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
+        return found
 
     def _start_game(self) -> None:
         """Forget what every handler has done, and how long it took."""

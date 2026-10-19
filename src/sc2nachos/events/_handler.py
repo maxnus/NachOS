@@ -74,16 +74,3 @@ class _Handler:
     def name(self) -> str:
         """The function's module and qualified name, shared by every instance of a class."""
         return f"{self.function.__module__}.{self.function.__qualname__}"
-
-    def bound_to(self, instance: object) -> _Handler:
-        """A copy of this handler, of a method marked in a class body, bound to `instance` with nothing done yet."""
-        return _Handler(
-            self.function,
-            self.selects,
-            priority=self.priority,
-            every_steps=self.every_steps,
-            at_step=self.at_step,
-            once=self.once,
-            catch_exceptions=self.catch_exceptions,
-            instance=instance,
-        )
