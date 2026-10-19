@@ -9,3 +9,7 @@ class NotReportedError(NachOSError, LookupError):
 
 class UnknownTagError(NachOSError, LookupError):
     """The game named a unit by a tag it has never reported a unit under."""
+
+
+class UnitIdsExhaustedError(NachOSError, OverflowError):
+    """A game has seen more units of one alliance than its ids can number."""

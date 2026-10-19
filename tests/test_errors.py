@@ -16,6 +16,7 @@ from sc2nachos.launch import (
     UnsupportedPlatformError,
 )
 from sc2nachos.protocol import ConnectionClosedError, ConnectionTimeoutError
+from sc2nachos.units import UnitIdsExhaustedError
 
 
 def test_every_exception_the_library_defines_is_one_of_its_own() -> None:
@@ -40,6 +41,7 @@ def test_every_exception_the_library_defines_is_one_of_its_own() -> None:
         (InstallationNotFoundError, FileNotFoundError),
         (MapNotFoundError, LookupError),
         (NotPlayingError, RuntimeError),
+        (UnitIdsExhaustedError, OverflowError),
         (UnsupportedPlatformError, ValueError),
     ],
 )

@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos._errors import NachOSError
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId
-from sc2nachos.units._errors import UnknownTagError
+from sc2nachos.units._errors import UnitIdsExhaustedError, UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
 from sc2nachos.units._unit_type import UnitType
@@ -292,7 +291,9 @@ class _UnitTracker:
         alliance = report.alliance
         count = self._units_seen_per_alliance[alliance] + 1
         if count >= _IDS_PER_ALLIANCE:
-            raise NachOSError(f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids")
+            raise UnitIdsExhaustedError(
+                f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
+            )
         self._units_seen_per_alliance[alliance] = count
         unit_id = alliance * _IDS_PER_ALLIANCE + count
         changes = self._tracker.last_changes

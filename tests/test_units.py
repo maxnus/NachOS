@@ -24,6 +24,7 @@ from sc2nachos.units import (
     Passenger,
     RallyTarget,
     Unit,
+    UnitIdsExhaustedError,
     UnitOrder,
     UnknownTagError,
     Visibility,
@@ -101,7 +102,7 @@ class TestIds:
         game = _Game()
         game.tracker.unit_tracker._units_seen_per_alliance[Alliance.OWN] = 99_998
         game.observe(0, make_unit(1))
-        with pytest.raises(NachOSError, match="all its ids"):
+        with pytest.raises(UnitIdsExhaustedError, match="all its ids"):
             game.observe(16, make_unit(1), make_unit(2))
 
 
