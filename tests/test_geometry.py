@@ -536,6 +536,11 @@ class TestTile:
         with pytest.raises(TypeError, match="built of tiles"):
             TileSet([(1, 2)])  # pyright: ignore[reportArgumentType]
 
+    def test_shifted_moves_it_by_whole_tiles_alone(self) -> None:
+        assert Tile(3, 4).shifted(2, -1) == Tile(5, 3)
+        with pytest.raises(TypeError):
+            Tile(3, 4).shifted(1.5, 0)  # pyright: ignore[reportArgumentType]
+
     def test_sorts_by_x_then_y(self) -> None:
         assert sorted([Tile(2, 0), Tile(1, 5), Tile(1, 2)]) == [Tile(1, 2), Tile(1, 5), Tile(2, 0)]
 
@@ -739,7 +744,7 @@ class TestAreaAgreement:
     def test_every_shape_shifts_by_a_point_on_the_ground_alone(self, area: Area) -> None:
         """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
         assert area.translated(Point((1, 2))) == area.translated((1, 2))
-        with pytest.raises(TypeError, match="a Tile is an area, not an offset"):
+        with pytest.raises(TypeError):
             area.translated(Tile(1, 1))  # pyright: ignore[reportArgumentType]
         with pytest.raises(ValueError, match=r"drop a height with \.ground"):
             area.translated(Point3D((1, 2, 3)))

@@ -50,8 +50,8 @@ class Tile(Area):
 
     @staticmethod
     def _address_containing(point: PointLike | Tile) -> tuple[int, int]:
-        """The x and y of the tile `point` falls in, or of the tile itself, without a tile built for them. Raises
-        `TypeError` on anything but a point or a tile."""
+        """The x and y of the tile `point` falls in, or of the tile itself. Raises `TypeError` on anything but a point
+        or a tile."""
         # Points first: this runs for every lookup of a tile set and a grid.
         if isinstance(point, tuple):
             return math.floor(point[0]), math.floor(point[1])
@@ -96,6 +96,10 @@ class Tile(Area):
         """Whether a point falls on this tile, on the lower edges but not the upper ones, a tile reading as itself.
         Raises `TypeError` on anything but a point or a tile."""
         return Tile._address_containing(point) == (self.x, self.y)
+
+    def shifted(self, dx: int, dy: int) -> Tile:
+        """The tile `dx` across and `dy` up from this one. Raises `TypeError` for a shift that is not a whole number."""
+        return Tile(self.x + dx, self.y + dy)
 
     def translated(self, offset: PointLike) -> Tile:
         """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
@@ -352,8 +356,8 @@ class TileSet(Area):
         """A tile set covering `tiles`. Raises `TypeError` for anything else among them."""
         try:
             self._tile_addresses = frozenset((tile.x, tile.y) for tile in tiles)
-        except AttributeError:
-            raise TypeError("a tile set is built of tiles; Tile.containing gives the one a point falls in") from None
+        except AttributeError as error:
+            raise TypeError("a tile set is built of tiles; Tile.containing gives the one a point falls in") from error
 
     @classmethod
     def _of_addresses(cls, addresses: Iterable[tuple[int, int]]) -> TileSet:

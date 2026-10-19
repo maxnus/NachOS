@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING, Self, Union, final
 
 import numpy
 
-# Imported for the checks in `not_a_point_error` and `checked_ground_offset`. Safe at runtime: `_area` only imports
-# this module for annotations.
+# Imported for the check in `not_a_point_error`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
 from sc2nachos.util._math import _rounded_half_up
 
@@ -42,10 +41,8 @@ def not_a_point_error(value: object) -> TypeError:
 
 
 def checked_ground_offset(offset: PointLike) -> PointLike:
-    """`offset`, checked to be a shift along the ground. Raises `TypeError` for an area, a `Tile` among them, and
-    `ValueError` for anything but two coordinates."""
-    if isinstance(offset, Area):
-        raise TypeError(f"a {type(offset).__name__} is an area, not an offset")
+    """`offset`, checked to be a shift along the ground, two coordinates. Raises `ValueError` for any other number of
+    them."""
     if len(offset) != 2:
         height_hint = "; drop a height with .ground" if len(offset) == 3 else ""
         raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(offset)}{height_hint}")

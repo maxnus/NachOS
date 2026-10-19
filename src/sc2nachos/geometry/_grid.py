@@ -130,7 +130,7 @@ class Grid[T: float]:
         x, y = index
         if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
             raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
-        return self._origin.translated((x, y))
+        return self._origin.shifted(x, y)
 
     @property
     def outside(self) -> T | None:
@@ -359,7 +359,7 @@ class Grid[T: float]:
     def cropped(self, rectangle: Rectangle) -> Grid[T]:
         """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
         x, y = self._slices(rectangle)
-        origin = self._origin.translated((x.start, y.start))
+        origin = self._origin.shifted(x.start, y.start)
         return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
     def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:

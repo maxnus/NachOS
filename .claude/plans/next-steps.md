@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #136. `uv run pytest` passes 2378 tests on branch `claude/tile-dataclass`;
+- nachOS `main` has every PR to #136. `uv run pytest` passes 2380 tests on branch `claude/tile-dataclass`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-19, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -243,7 +243,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   int, and a float raises. No arithmetic methods: Python's own `TypeError` stands. The generated equality and hash
   are kept; a bot's own `set[Tile]` pays for them, a 10,000-tile flood fill taking 10.8 ms against 7.1 with tuple
   tiles, and keys on `(tile.x, tile.y)` where that matters. `TileSet` holds `(x, y)` pairs, so its own lookups stay
-  a tuple's. This supersedes the note of 2026-09-07 in AvocaDOS's plan, "A tile is a tuple for hashing".
+  a tuple's, but its constructor takes tiles: the pairs stay private to the library (review of #137).
+  `Tile.shifted(dx, dy)` moves a tile by whole tiles, refusing a fraction, where `translated` moves its center by
+  any offset. This supersedes the note of 2026-09-07 in AvocaDOS's plan, "A tile is a tuple for hashing".
+- **No runtime check that a point is a point** (the owner, review of #137): `coordinates()` went, and a method that
+  takes a point reads its coordinates. pyright catches a tile or a unit given as one, and anything else gets
+  Python's own error. What must refuse a non-point to work at all, `in`, a grid's index and `Point`'s arithmetic,
+  raises `not_a_point_error`.
 - **The unit type groups** (review of #125, the owner): a group for each structure and unit with a second form
   (`AnySupplyDepot`, `AnyRoach` burrowed or not, `AnyOrbitalCommand`, `AnyCommandCenter` the plain one only...);
   `AnySpire` and `AnyOverlord`, overseers included, as the tables count them, but no `AnyHatchery` or `AnyLair`; the
