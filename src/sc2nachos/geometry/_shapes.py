@@ -387,19 +387,19 @@ class TileSet(Area):
         return KDTree(numpy.array([tile.center for tile in tiles])), tiles
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the covered ground nearest to `point`, and the distance to it.
-
-        The nearest tile is found by its center, so a tile whose edge is marginally closer can lose to one
-        whose center is nearer.
-        """
+        """The point of the covered ground nearest to `point`, and the distance to it."""
         if not self._tiles:
             raise ValueError("an empty tile set has no closest point")
         position = Point(coordinates(point)[:2])
         if Tile.containing(position) in self._tiles:
             return position, 0.0
         tree, tiles = self._spatial_index
-        _, nearest = tree.query([position.x, position.y])
-        return tiles[nearest].closest_point_to(position)
+        nearest_center_distance, _ = tree.query(position)
+        # A tile's nearest point lies between 1/2 and sqrt(1/2) nearer than its center, so a tile can beat the one
+        # whose center is nearest only if its own center lies within this distance.
+        farthest_center_that_can_be_nearer = nearest_center_distance + math.sqrt(0.5) - 0.5 + 1e-9
+        candidates = tree.query_ball_point(position, farthest_center_that_can_be_nearer, return_sorted=True)
+        return min((tiles[index].closest_point_to(position) for index in candidates), key=operator.itemgetter(1))
 
     def random_point(self) -> Point:
         """A point drawn uniformly from the covered ground."""

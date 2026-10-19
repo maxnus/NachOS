@@ -572,7 +572,7 @@ class TestAreaLayout:
         assert hasattr(TileSet([Tile(0, 0)]), "__dict__")
 
 
-EVERY_SHAPE = (Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(5, 5)]))
+EVERY_SHAPE = (Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(2, 1)]))
 
 
 class TestAreaAgreement:
@@ -626,6 +626,26 @@ class TestAreaAgreement:
         """Their docstring promises a mask over one indexes the other, so they cannot round differently."""
         centers = rect.tile_centers().reshape(-1, 2)
         assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_no_point_of_any_shape_is_nearer_than_its_closest_point(self, area: Area) -> None:
+        """A tile set answered from the tile with the nearest center, up to 0.2 farther than its nearest point: from
+        (0.35, 3.2), 2.20 to `Tile(0, 0)`, whose center is nearer, rather than 2.04 to `Tile(2, 1)`. Checked against a
+        lattice of the shape's points 0.05 apart."""
+        bounds = area.bounding_rectangle()
+        lattice = (
+            Point((bounds.x + (i + 0.5) * 0.05, bounds.y + (j + 0.5) * 0.05))
+            for i in range(round(bounds.width / 0.05))
+            for j in range(round(bounds.height / 0.05))
+        )
+        points_inside = numpy.array([point for point in lattice if point in area])
+        for i in range(round((bounds.width + 4) / 0.3)):
+            for j in range(round((bounds.height + 4) / 0.3)):
+                probe = Point((bounds.x - 2 + i * 0.3, bounds.y - 2 + j * 0.3))
+                point, distance = area.closest_point_to(probe)
+                assert distance == pytest.approx(point.distance_to(probe)), probe
+                sampled = numpy.hypot(*(points_inside - numpy.asarray(probe)).T).min()
+                assert distance <= sampled + 1e-9, probe
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
