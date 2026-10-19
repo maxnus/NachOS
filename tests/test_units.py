@@ -341,6 +341,16 @@ class TestWhatAUnitReads:
             with pytest.raises(NotReportedError):
                 getattr(mine, name)
 
+    def test_an_enemy_hallucination_stays_one_once_detected(self) -> None:
+        """The game flags it only while a detector is near (in game)."""
+        game = _Game()
+        stalker = {"alliance": _ENEMY, "at": (5.0, 5.0)}
+        (unit,) = game.observe(0, make_unit(1, UnitTypeId.STALKER, is_hallucination=False, **stalker))
+        assert not unit.is_hallucination
+        game.observe(16, make_unit(1, UnitTypeId.STALKER, is_hallucination=True, **stalker))
+        game.observe(32, make_unit(1, UnitTypeId.STALKER, is_hallucination=False, **stalker))
+        assert unit.is_hallucination
+
     def test_flying_and_burrowing_of_a_remembered_structure_are_as_last_seen(self) -> None:
         game = _Game()
         (depot,) = game.observe(0, _depot(1, is_flying=False))

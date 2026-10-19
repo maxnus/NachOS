@@ -57,6 +57,7 @@ class Unit[K: UnitType.AnyType]:
     __slots__ = (
         "__weakref__",
         "_dead",
+        "_hallucination",
         "_id",
         "_latest_report",
         "_last_seen",
@@ -90,6 +91,8 @@ class Unit[K: UnitType.AnyType]:
     _previous_step: int
     _stale: bool
     _dead: bool
+    # Whether the enemy's unit was once reported a hallucination, which it is only while a detector is near (in game).
+    _hallucination: bool
     # The square its radius spans, kept once made, for a type of the map's own with no footprint measured.
     _radius_footprint: Footprint | None
     # For each ability, the unit this unit's latest order of that ability was aimed at, kept while the game names
@@ -112,6 +115,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_step = step
         self._stale = False
         self._dead = False
+        self._hallucination = not self._own and report.display_type == _IN_VISION and report.is_hallucination
         self._radius_footprint = None
         self._order_targets = None
         self._update_unit_type(report.unit_type)
@@ -138,6 +142,8 @@ class Unit[K: UnitType.AnyType]:
             self._position = Point((x, y))
         if report.display_type == _IN_VISION:
             self._latest_report_in_vision = report
+            if not self._own and not self._hallucination:
+                self._hallucination = report.is_hallucination
         elif self._latest_report_in_vision is self._latest_report:
             # Just went out of sight: the last sighting must outlive the observation it came in.
             self._latest_report_in_vision = _copy(self._latest_report)
@@ -354,8 +360,10 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_hallucination(self) -> bool:
-        """Whether the unit is a hallucination. Always known for this player's own units; for an enemy's, only once
-        detected."""
+        """Whether the unit is a hallucination. Always known for this player's own units; an enemy's reads true once a
+        detector has shown it to be one, and stays true."""
+        if self._hallucination:
+            return True
         if (report := self._latest_report_in_vision) is None:
             raise self._never_seen_error("hallucination")
         return report.is_hallucination
