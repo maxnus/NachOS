@@ -125,11 +125,12 @@ class _UnitTracker:
         """
         previous = self._present_units_by_tag
         present, new = self._update_known_tags(reports, previous, step)
+        dead_tags = set(dead)
         if new:
-            self._identify_new_tags(new, previous, present, step, set(dead))
+            self._identify_new_tags(new, previous, present, step, dead_tags)
             # New units were added after the rest, so restore the game's order.
             present = {report.tag: present[report.tag] for report in reports if report.tag in present}
-        self._handle_departed_units(previous, present, step)
+        self._handle_departed_units(previous, present, step, dead_tags)
         return present
 
     def _update_deaths(self, dead: Iterable[int], present: _UnitsByTag) -> None:
@@ -261,13 +262,14 @@ class _UnitTracker:
                 del self._unfinished[unit_id]
                 self._tracker.last_changes.own_units_finished.append(unit)
 
-    def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int) -> None:
-        """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be."""
+    def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]) -> None:
+        """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be. A
+        unit among `dead`, the tags the observation reports dead, is left for the reported death."""
         for tag, unit in departed.items():
             if tag in self._in_fog_tags:
                 self._in_fog_tags.discard(tag)
                 del self._by_tag[tag]
-                if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS:
+                if unit._step != step and unit._raw_type not in _MOVABLE_UNIT_TYPE_IDS and not _among(unit, dead):
                     # Its spot came into vision without it. The game reports no death it cannot see (in game).
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
@@ -324,6 +326,14 @@ class _UnitTracker:
             unit._mark_stale()
         self._set_present_units({})
         self._unfinished = {}
+
+
+def _among(unit: Unit[Any], tags: set[int]) -> bool:
+    """Whether `tags` holds the tag `unit` was last reported under, or the one it was last in vision under."""
+    if unit._tag in tags:
+        return True
+    sighting = unit._latest_report_in_vision
+    return sighting is not None and sighting.tag in tags
 
 
 def _continues(unit: Unit[Any], display: int) -> bool:

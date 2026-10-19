@@ -271,6 +271,16 @@ class TestTheFog:
         assert game.tracker.last_changes.units_found_dead == [depot]
         assert not game.tracker.last_changes.units_died
 
+    def test_a_structure_the_game_reports_dead_as_its_spot_comes_back_into_sight_died(self) -> None:
+        """The report wins over finding it missing, as for a structure that can move."""
+        game = _Game()
+        (depot,) = game.observe(0, _depot(1))
+        game.observe(16, _depot(900, visibility=_IN_FOG))
+        game.observe(32, dead=(1,))
+        assert depot.is_dead
+        assert (game.tracker.last_changes.units_died, game.tracker.last_changes.units_found_dead) == ([depot], [])
+        assert not game.tracker.last_changes.enemy_units_left_sight
+
     def test_a_structure_that_can_move_missing_from_its_spot_is_stale_until_it_turns_up(self) -> None:
         game = _Game()
         at = {"at": (20.5, 20.5), "alliance": _ENEMY}
