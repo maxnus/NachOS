@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates
+from sc2nachos.geometry._point import Point, checked_ground_offset
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ class Circle(Area):
         """A circle of `radius` around `center`."""
         if radius <= 0:
             raise ValueError("a circle must have a positive radius")
-        self._center = Point(coordinates(center)[:2])
+        self._center = Point(center[:2])
         self._radius = radius
 
     @property
@@ -84,7 +84,7 @@ class Circle(Area):
 
         A point inside the circle is its own nearest point, at distance zero.
         """
-        position = Point(coordinates(point)[:2])
+        position = Point(point[:2])
         offset = position - self._center
         distance = offset.length
         if distance <= self._radius:
@@ -99,8 +99,7 @@ class Circle(Area):
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
         origin, tiles_in_circle = self._tile_mask()
-        xs, ys = numpy.nonzero(tiles_in_circle)
-        return TileSet._of_addresses(zip((xs + origin.x).tolist(), (ys + origin.y).tolist(), strict=True))
+        return TileSet._of_mask(origin, tiles_in_circle)
 
     def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
         """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given,

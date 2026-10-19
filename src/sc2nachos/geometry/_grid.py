@@ -12,8 +12,7 @@ from scipy.sparse.csgraph import dijkstra
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
-from sc2nachos.geometry._point import coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile, tile_address_of
+from sc2nachos.geometry._shapes import Rectangle, Tile
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -119,8 +118,9 @@ class Grid[T: float]:
 
     def _index_if_covered(self, point: PointLike | Tile) -> tuple[int, int] | None:
         """The index into `values` of the tile holding `point`, or `None` for a point the grid does not cover."""
-        tile_x, tile_y = tile_address_of(point)
-        x, y = tile_x - self._origin.x, tile_y - self._origin.y
+        tile_x, tile_y = Tile._address_containing(point)
+        x = tile_x - self._origin.x
+        y = tile_y - self._origin.y
         if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
             return x, y
         return None
@@ -130,7 +130,7 @@ class Grid[T: float]:
         x, y = index
         if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
             raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
-        return Tile(self._origin.x + x, self._origin.y + y)
+        return self._origin.translated((x, y))
 
     @property
     def outside(self) -> T | None:
@@ -359,14 +359,13 @@ class Grid[T: float]:
     def cropped(self, rectangle: Rectangle) -> Grid[T]:
         """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
         x, y = self._slices(rectangle)
-        origin = Tile(self._origin.x + x.start, self._origin.y + y.start)
+        origin = self._origin.translated((x.start, y.start))
         return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
     def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The distance from each tile's center to `point`."""
-        position = coordinates(point)
-        xs = numpy.arange(self.width) + self._origin.x + 0.5 - position[0]
-        ys = numpy.arange(self.height) + self._origin.y + 0.5 - position[1]
+        xs = numpy.arange(self.width) + self._origin.x + 0.5 - point[0]
+        ys = numpy.arange(self.height) + self._origin.y + 0.5 - point[1]
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:

@@ -11,7 +11,6 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.gamemap._image_data import image_array, image_tiles
 from sc2nachos.gamemap._ramp import Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
@@ -121,8 +120,7 @@ class GameMap:
         A unit standing at `point` is within 0.03 of it nine times in ten, but as far off as `height` is on a map that
         raises its ramps. Raises `IndexError` outside the playable area.
         """
-        position = coordinates(point)
-        x, y = position[0], position[1]
+        x, y = point[0], point[1]
         column, row = math.floor(x), math.floor(y)
         origin = self._height.origin
         i, j = column - origin.x, row - origin.y

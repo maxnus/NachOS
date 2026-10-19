@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Self, Union, final
 
 import numpy
 
-# Imported for the check in `coordinates`. Safe at runtime: `_area` only imports this module for annotations.
+# Imported for the checks in `not_a_point_error` and `checked_ground_offset`. Safe at runtime: `_area` only imports
+# this module for annotations.
 from sc2nachos.geometry._area import Area
 from sc2nachos.util._math import _rounded_half_up
 
@@ -33,13 +34,6 @@ PointLike = Union["Point", "Point3D", tuple[float, float], tuple[float, float, f
 SCALAR_TYPES = (int, float, numbers.Real)
 
 
-def coordinates(value: PointLike) -> PointLike:
-    """`value` itself, checked to be coordinates. Raises `TypeError` for anything else, a `Tile` among them."""
-    if isinstance(value, tuple):
-        return value
-    raise not_a_point_error(value)
-
-
 def not_a_point_error(value: object) -> TypeError:
     """The error for `value` given where a point is wanted, which tells an area to pass its center."""
     if isinstance(value, Area):
@@ -48,15 +42,14 @@ def not_a_point_error(value: object) -> TypeError:
 
 
 def checked_ground_offset(offset: PointLike) -> PointLike:
-    """`offset`, checked as `coordinates` checks it, as a shift along the ground. Raises `TypeError` for an area, a
-    `Tile` among them, and `ValueError` for anything but two coordinates."""
+    """`offset`, checked to be a shift along the ground. Raises `TypeError` for an area, a `Tile` among them, and
+    `ValueError` for anything but two coordinates."""
     if isinstance(offset, Area):
         raise TypeError(f"a {type(offset).__name__} is an area, not an offset")
-    ground_offset = coordinates(offset)
-    if len(ground_offset) != 2:
-        height_hint = "; drop a height with .ground" if len(ground_offset) == 3 else ""
-        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(ground_offset)}{height_hint}")
-    return ground_offset
+    if len(offset) != 2:
+        height_hint = "; drop a height with .ground" if len(offset) == 3 else ""
+        raise ValueError(f"a shape on the ground shifts by two coordinates, not {tuple(offset)}{height_hint}")
+    return offset
 
 
 class _PointND(tuple[float, ...]):
@@ -93,8 +86,7 @@ class _PointND(tuple[float, ...]):
 
     def dot(self, other: PointLike) -> float:
         """The dot product on the ground plane."""
-        position = coordinates(other)
-        return self[0] * position[0] + self[1] * position[1]
+        return self[0] * other[0] + self[1] * other[1]
 
     @property
     def normalized(self) -> Self:
@@ -107,13 +99,11 @@ class _PointND(tuple[float, ...]):
 
     def distance_to(self, other: PointLike) -> float:
         """Distance to another point, on the ground plane."""
-        position = coordinates(other)
-        return math.hypot(self[0] - position[0], self[1] - position[1])
+        return math.hypot(self[0] - other[0], self[1] - other[1])
 
     def distance_to_squared(self, other: PointLike) -> float:
         """Squared ground-plane distance, for when only the ordering matters."""
-        position = coordinates(other)
-        return (self[0] - position[0]) ** 2 + (self[1] - position[1]) ** 2
+        return (self[0] - other[0]) ** 2 + (self[1] - other[1]) ** 2
 
     def is_closer_than(self, distance: float, other: PointLike) -> bool:
         """Whether another point lies strictly within `distance`."""
@@ -124,35 +114,32 @@ class _PointND(tuple[float, ...]):
 
         `distance` is measured on the ground plane. With `limit`, it never overshoots. A negative distance moves away.
         """
-        position = coordinates(other)
         # Checked here because the zero-separation early return would skip the zip below.
-        if len(position) != len(self):
-            raise self._dimension_error(position)
-        separation = self.distance_to(position)
+        if len(other) != len(self):
+            raise self._dimension_error(other)
+        separation = self.distance_to(other)
         if not separation:
             return self
         if limit:
             distance = min(distance, separation)
         fraction = distance / separation
-        return type(self)(value + fraction * (target - value) for value, target in zip(self, position, strict=True))
+        return type(self)(value + fraction * (target - value) for value, target in zip(self, other, strict=True))
 
     def direction_vector(self, other: PointLike) -> Point:
         """The unit vector on the ground plane pointing from this point to another. Raises `ZeroDivisionError` where
         the two meet on the ground plane."""
-        position = coordinates(other)
-        return Point((position[0] - self[0], position[1] - self[1])).normalized
+        return Point((other[0] - self[0], other[1] - self[1])).normalized
 
     def angle_to(self, other: PointLike) -> float:
         """The angle in radians to another point, from the positive x-axis."""
-        position = coordinates(other)
-        return math.atan2(position[1] - self[1], position[0] - self[0])
+        return math.atan2(other[1] - self[1], other[0] - self[0])
 
     def rotated(self, angle: float, *, around: PointLike | None = None) -> Self:
         """The point rotated by `angle` radians about the vertical axis through `around`, or the origin.
 
         Only the pivot's x and y are read, so it may be of any dimensionality. Height is carried through.
         """
-        pivot = (0.0, 0.0) if around is None else coordinates(around)
+        pivot = (0.0, 0.0) if around is None else around
         sin, cos = math.sin(angle), math.cos(angle)
         dx, dy = self[0] - pivot[0], self[1] - pivot[1]
         rotated = (pivot[0] + cos * dx - sin * dy, pivot[1] + sin * dx + cos * dy)
@@ -211,7 +198,7 @@ class _PointND(tuple[float, ...]):
         elif isinstance(other, SCALAR_TYPES):
             return type(self)([operation(value, other) for value in self])
         else:
-            position = coordinates(other)
+            raise not_a_point_error(other)
         try:
             return type(self)([operation(a, b) for a, b in zip(self, position, strict=True)])
         except ValueError:
@@ -272,8 +259,7 @@ class Point(_PointND, tuple[float, float]):
     def _rounded_to_float32(cls, point: PointLike) -> Self:
         """`point` on the ground as the protocol carries it: its height dropped, and each coordinate cut to a 32-bit
         float."""
-        at = coordinates(point)
-        return cls((float(numpy.float32(at[0])), float(numpy.float32(at[1]))))
+        return cls((float(numpy.float32(point[0])), float(numpy.float32(point[1]))))
 
     def with_height(self, z: float = 0.0) -> Point3D:
         """The point lifted to height `z`."""

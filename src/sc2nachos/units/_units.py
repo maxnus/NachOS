@@ -7,7 +7,6 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
 from sc2nachos.geometry import Area, Point
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
@@ -368,9 +367,8 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
     """The ground positions of `of`: a point, a unit, or several of either."""
     if isinstance(of, Unit):
         return [(of._position[0], of._position[1])]
-    # A point is a tuple of numbers, and an area is no point, which `_ground` refuses; several are anything else
-    # that iterates.
-    if isinstance(of, Area) or (isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit))):
+    # A point is a tuple of numbers; several are anything else that iterates.
+    if isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit)):
         return [_ground(cast("PointLike", of))]
     several = cast("Iterable[PointLike | Unit[Any]]", of)
     return [_ground(item._position if isinstance(item, Unit) else item) for item in several]
@@ -378,5 +376,4 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
 
 def _ground(point: PointLike) -> tuple[float, float]:
     """The ground-plane coordinates of `point`."""
-    position = coordinates(point)
-    return position[0], position[1]
+    return point[0], point[1]

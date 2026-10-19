@@ -13,7 +13,7 @@ import numpy
 from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, checked_ground_offset, coordinates, not_a_point_error
+from sc2nachos.geometry._point import Point, checked_ground_offset, not_a_point_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -45,8 +45,19 @@ class Tile(Area):
     @classmethod
     def containing(cls, point: PointLike | Tile) -> Self:
         """The tile a point falls in, or the tile itself."""
-        x, y = tile_address_of(point)
+        x, y = Tile._address_containing(point)
         return cls(x, y)
+
+    @staticmethod
+    def _address_containing(point: PointLike | Tile) -> tuple[int, int]:
+        """The x and y of the tile `point` falls in, or of the tile itself, without a tile built for them. Raises
+        `TypeError` on anything but a point or a tile."""
+        # Points first: this runs for every lookup of a tile set and a grid.
+        if isinstance(point, tuple):
+            return math.floor(point[0]), math.floor(point[1])
+        if type(point) is Tile:
+            return point.x, point.y
+        raise not_a_point_error(point)
 
     @property
     def center(self) -> Point:
@@ -84,7 +95,7 @@ class Tile(Area):
     def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether a point falls on this tile, on the lower edges but not the upper ones, a tile reading as itself.
         Raises `TypeError` on anything but a point or a tile."""
-        return tile_address_of(point) == (self.x, self.y)
+        return Tile._address_containing(point) == (self.x, self.y)
 
     def translated(self, offset: PointLike) -> Tile:
         """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
@@ -94,14 +105,13 @@ class Tile(Area):
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the tile nearest to `point`, and the distance to it."""
-        position = coordinates(point)
         closest = Point(
             (
-                max(self.x, min(position[0], self.x + 1)),
-                max(self.y, min(position[1], self.y + 1)),
+                max(self.x, min(point[0], self.x + 1)),
+                max(self.y, min(point[1], self.y + 1)),
             )
         )
-        return closest, closest.distance_to(position)
+        return closest, closest.distance_to(point)
 
     def bounding_rectangle(self) -> Rectangle:
         """The tile as a unit rectangle."""
@@ -115,20 +125,10 @@ class Tile(Area):
         return f"Tile({self.x}, {self.y})"
 
 
-def tile_address_of(point: PointLike | Tile) -> tuple[int, int]:
-    """The x and y of the tile `point` falls in, or of the tile itself. Raises `TypeError` on anything but a point or a
-    tile."""
-    # Points first, as `coordinates` has them: this runs for every lookup of a tile set and a grid.
-    if isinstance(point, tuple):
-        return math.floor(point[0]), math.floor(point[1])
-    if type(point) is Tile:
-        return point.x, point.y
-    raise not_a_point_error(point)
-
-
 def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
-    """`value` checked as `coordinates` checks it, or a `Tile` read as its center: what `in` takes on every area."""
-    # Points first, as `coordinates` has them, so a point pays nothing for the tile check.
+    """`value`, a point, or a `Tile` read as its center: what `in` takes on every area. Raises `TypeError` for anything
+    else."""
+    # Points first, so a point pays nothing for the tile check.
     if isinstance(value, tuple):
         return value
     if type(value) is Tile:
@@ -159,8 +159,7 @@ class Rectangle(Area):
     @classmethod
     def from_center(cls, center: PointLike, width: float, height: float) -> Rectangle:
         """The rectangle of the given size centered on a point."""
-        position = coordinates(center)
-        return cls(position[0] - width / 2, position[1] - height / 2, width, height)
+        return cls(center[0] - width / 2, center[1] - height / 2, width, height)
 
     @classmethod
     def _from_proto(cls, data: common_pb2.RectangleI) -> Rectangle:
@@ -292,14 +291,13 @@ class Rectangle(Area):
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the rectangle nearest to `point`, and the distance to it."""
         self._raise_if_empty("closest point")
-        position = coordinates(point)
         closest = Point(
             (
-                max(self.left, min(position[0], self.right)),
-                max(self.bottom, min(position[1], self.top)),
+                max(self.left, min(point[0], self.right)),
+                max(self.bottom, min(point[1], self.top)),
             )
         )
-        return closest, closest.distance_to(position)
+        return closest, closest.distance_to(point)
 
     def bounding_rectangle(self) -> Rectangle:
         """The rectangle itself."""
@@ -319,10 +317,9 @@ class Rectangle(Area):
         Laid out like the tiles themselves, so a mask over the same region indexes it directly. `offset`
         shifts every point without changing which tiles are covered.
         """
-        ground_offset = coordinates(offset)
         x_range, y_range = self.tile_range()
-        xs = numpy.arange(x_range.start, x_range.stop) + 0.5 + ground_offset[0]
-        ys = numpy.arange(y_range.start, y_range.stop) + 0.5 + ground_offset[1]
+        xs = numpy.arange(x_range.start, x_range.stop) + 0.5 + offset[0]
+        ys = numpy.arange(y_range.start, y_range.stop) + 0.5 + offset[1]
         return numpy.stack(numpy.meshgrid(xs, ys, indexing="ij"), axis=-1)
 
     def tiles(self) -> TileSet:
@@ -365,6 +362,13 @@ class TileSet(Area):
         tile_set._tile_addresses = frozenset(addresses)
         return tile_set
 
+    @classmethod
+    def _of_mask(cls, origin: Tile, mask: ndarray) -> TileSet:
+        """A tile set covering the true entries of `mask`, indexed `[x, y]`, whose `[0, 0]` entry is the tile at
+        `origin`."""
+        xs, ys = numpy.nonzero(mask)
+        return cls._of_addresses(zip((xs + origin.x).tolist(), (ys + origin.y).tolist(), strict=True))
+
     @property
     def center(self) -> Point:
         """The mean of the covered tile centers."""
@@ -402,7 +406,7 @@ class TileSet(Area):
 
     def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether the tile containing `point` is covered."""
-        return tile_address_of(point) in self._tile_addresses
+        return Tile._address_containing(point) in self._tile_addresses
 
     @cached_property
     def _spatial_index(self) -> tuple[KDTree, list[Tile]]:
@@ -414,8 +418,8 @@ class TileSet(Area):
         """The point of the covered ground nearest to `point`, and the distance to it."""
         if not self._tile_addresses:
             raise ValueError("an empty tile set has no closest point")
-        position = Point(coordinates(point)[:2])
-        if tile_address_of(position) in self._tile_addresses:
+        position = Point(point[:2])
+        if Tile._address_containing(position) in self._tile_addresses:
             return position, 0.0
         tree, tiles = self._spatial_index
         nearest_center_distance, _ = tree.query(position)
