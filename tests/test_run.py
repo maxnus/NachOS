@@ -30,7 +30,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
     bot = ApiBot(Api(), Race.TERRAN)
     args = ["--opponent-race", "ZERG", "--opponent-difficulty", "VERY_EASY", "--opponent-build", "RANDOM"]
-    result = run_from_command_line(bot, [*args, "--map", "torchesaie_v4", "--time-limit", "0"])
+    result = run_from_command_line(bot, [*args, "--map", "TorchesAIE_v4", "--time-limit", "0"])
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RANDOM)
     assert played["map_file"].name == "TorchesAIE_v4"

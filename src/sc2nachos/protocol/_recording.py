@@ -62,8 +62,9 @@ class RecordingTransport:
     already written, which misses the last stretch of the game, or all of a short one.
     """
 
-    def __init__(self, transport: Transport, path: Path) -> None:
+    def __init__(self, transport: Transport, path: Path | str) -> None:
         """Forward to `transport`, recording into `path`. An existing file at `path` is overwritten."""
+        path = Path(path)
         self._transport = transport
         self._recording = Recording(path)
         self._exchanges = 0

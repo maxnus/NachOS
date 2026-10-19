@@ -34,16 +34,20 @@ def run_local(
     realtime: bool = False,
     time_limit: float | None = None,
     random_seed: int | None = None,
-    record_to: Path | None = None,
+    record_to: Path | str | None = None,
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
 ) -> Result:
     """Start a game client, create a match on `map_file` for `bot` against `opponent`, and play it out.
 
     `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
-    `opponent` it plays the map alone. However the game ends, the client is stopped and its temporary directory
-    removed.
+    `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. `record_to` is a file
+    to record the whole conversation into, in a folder that exists, or `FileNotFoundError` is raised before the game
+    starts, and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its
+    temporary directory removed.
     """
+    if record_to is not None:
+        _check_recording_path(Path(record_to))
     if isinstance(map_file, str):
         installation = installation or Installation.find()
         map_file = MapFile.find(map_file, installation=installation)
@@ -68,13 +72,14 @@ def run_ladder(
     start_port: int | None = None,
     steps_per_turn: int = 1,
     realtime: bool = False,
-    record_to: Path | None = None,
+    record_to: Path | str | None = None,
 ) -> Result:
     """Join the game a ladder has set up, and play it out.
 
     The ladder starts the client, creates the match, and passes the bot the client's address and `start_port` on
-    the command line. A game against the built-in computer has no `start_port`. There is no time limit: a bot can
-    only end a game early by leaving it, which concedes.
+    the command line. A game against the built-in computer has no `start_port`. `realtime` must match the ladder's
+    `--RealTime` flag, as `Api.play` says. There is no time limit: a bot can only end a game early by leaving it,
+    which concedes.
     """
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
@@ -134,9 +139,22 @@ def _command_line() -> ArgumentParser:
     return parser
 
 
-def _connect(url: str, record_to: Path | None) -> Client:
-    """A client connected to the game at `url`, recording the whole conversation to `record_to` if given."""
+def _check_recording_path(path: Path) -> None:
+    """Raise `FileNotFoundError` if `path` is in no folder that exists, and `IsADirectoryError` if it is a folder."""
+    if not path.parent.is_dir():
+        raise FileNotFoundError(f"there is no folder {path.parent} to record into")
+    if path.is_dir():
+        raise IsADirectoryError(f"{path} is a folder, not a file to record into")
+
+
+def _connect(url: str, record_to: Path | str | None) -> Client:
+    """A client connected to the game at `url`, recording the whole conversation to `record_to` if given. A recording
+    that fails to open closes the connection."""
     transport: Transport = WebSocketTransport.connect(url)
     if record_to is not None:
-        transport = RecordingTransport(transport, record_to)
+        try:
+            transport = RecordingTransport(transport, record_to)
+        except BaseException:
+            transport.close()
+            raise
     return Client(transport)

@@ -4,7 +4,8 @@ from sc2nachos._errors import NachOSError
 
 
 class ProtocolError(NachOSError):
-    """The game refused a request, or answered with something other than what was asked for."""
+    """Talking to a game failed: it refused a request or answered something other than what was asked, the
+    connection to it failed, or a recording of one could not be read or played back."""
 
 
 class GameEndedError(ProtocolError):

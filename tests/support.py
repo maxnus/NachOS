@@ -83,7 +83,8 @@ class FakeTransport:
 
 
 class FakeWebSocket:
-    """The three methods `WebSocketTransport` uses, over prepared payloads, or raising `failure` from `recv`."""
+    """The three methods `WebSocketTransport` uses, over prepared payloads, or raising `failure` from `recv`; once
+    closed, it refuses to send."""
 
     def __init__(self, *payloads: str | bytes, failure: Exception | None = None) -> None:
         self.sent: list[bytes] = []
@@ -104,7 +105,7 @@ class FakeWebSocket:
             raise WebSocketConnectionClosedException("Connection to remote host was lost.")
         return self._payloads.popleft()
 
-    def close(self) -> None:
+    def close(self, *, timeout: float | None = 3) -> None:
         self.closed = True
 
 

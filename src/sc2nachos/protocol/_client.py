@@ -201,17 +201,22 @@ class Client:
     def observation(self, *, game_loop: int | None = None) -> sc2api_pb2.ResponseObservation:
         """What this player can see now, or once the game reaches `game_loop`.
 
-        When the game is over, each player's result is stored in `results`.
+        When the game is over, each player's result is stored in `results`, and kept until the next game, though later
+        observations report none.
         """
         observation = self._observe(game_loop)
-        if self.in_game and not observation.player_result:
-            return observation
         if not observation.player_result:
+            if self.in_game or self._results:
+                return observation
             # The game reports itself ended one step before it says who won, so ask once more.
             observation = self._observe(None)
-        self._results = {entry.player_id: Result(entry.result) for entry in observation.player_result}
-        if self._results:
-            logger.info("The game ended: {}", self._results)
+        # An unset result reads as the first the proto declares, a victory, so only the set ones count.
+        results = {
+            entry.player_id: Result(entry.result) for entry in observation.player_result if entry.HasField("result")
+        }
+        if results:
+            self._results = results
+            logger.info("The game ended: {}", results)
         return observation
 
     def step(self, count: int) -> sc2api_pb2.ResponseStep:
@@ -273,7 +278,7 @@ class Client:
 
     def _send(self, request: sc2api_pb2.Request, answer: _Answer | None = None) -> sc2api_pb2.Response:
         """Send `request` and return the response, checking that it holds `answer` and that the game did not refuse
-        it."""
+        it. What the game says beside the answer asked for is a warning, which is logged."""
         response = self._transport.request(request)
         # An unset status field reads as `launched`, the first value the proto declares, so check that it is set.
         if response.HasField("status"):
@@ -287,7 +292,10 @@ class Client:
                 raise GameEndedError(f"the game is over: {'; '.join(errors)}")
             if _NOT_STARTED_ERRORS.intersection(errors):
                 raise GameNotStartedError(f"no game has started: {'; '.join(errors)}")
-            raise ProtocolError(f"the game refused the request: {'; '.join(errors)}")
+            # With the answer there, the proto calls these warnings; without it, the reason there is none.
+            if answer is None or not response.HasField(answer):
+                raise ProtocolError(f"the game refused the request: {'; '.join(errors)}")
+            logger.warning("The game answered {} with warnings: {}", answer, "; ".join(errors))
         if answer is not None and not response.HasField(answer):
             asked = response.WhichOneof("response") or "nothing"
             raise ProtocolError(f"the game was asked for {answer} and answered {asked}")

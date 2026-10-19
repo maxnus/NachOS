@@ -1,10 +1,13 @@
 """The protocol layer, driven entirely through the transport seam."""
 
 import lzma
+import socket
+import time
 from pathlib import Path
 from typing import cast
 
 import pytest
+from loguru import logger
 from s2clientprotocol import debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketException, WebSocketTimeoutException
 
@@ -65,9 +68,26 @@ class TestStatus:
 
 class TestErrors:
     def test_a_refused_request_raises(self) -> None:
-        client, _ = make_client(make_response(error=["Doh!"], ping=sc2api_pb2.ResponsePing()))
+        client, _ = make_client(make_response(error=["Doh!"]))
         with pytest.raises(ProtocolError, match="Doh!"):
             client.ping()
+
+    def test_what_the_game_says_beside_the_answer_is_a_warning_and_the_answer_comes_back(self) -> None:
+        """The proto: "If command is missing, this will contain the error. Otherwise this will contain any
+        warnings." """
+        client, _ = make_client(make_response(error=["Careful"], ping=sc2api_pb2.ResponsePing(base_build=75689)))
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}", level="WARNING")
+        try:
+            assert client.ping().base_build == 75689
+        finally:
+            logger.remove(sink)
+        assert messages == ["The game answered ping with warnings: Careful\n"]
+
+    def test_a_request_with_no_answer_to_read_raises_on_anything_the_game_says(self) -> None:
+        client, _ = make_client(make_response(error=["Doh!"]))
+        with pytest.raises(ProtocolError, match="Doh!"):
+            client.debug([])
 
     def test_a_finished_game_raises_its_own_error(self) -> None:
         client, _ = make_client(make_response(Status.ENDED, error=["Game has already ended"]))
@@ -186,6 +206,28 @@ class TestObservation:
         client.observation()
         assert len(transport.requests) == 2
         assert client.results == {1: Result.DEFEAT}
+
+    def test_the_results_are_kept_through_observations_that_report_none(self) -> None:
+        """The proto fills `player_result` only in the step the game ended, so the next observation has none."""
+        client, transport = make_client(
+            make_response(Status.ENDED, observation=make_observation(0, (1, Result.VICTORY))),
+            make_response(Status.ENDED, observation=sc2api_pb2.ResponseObservation()),
+        )
+        client.observation()
+        client.observation()
+        assert len(transport.requests) == 2
+        assert client.results == {1: Result.VICTORY}
+
+    def test_a_result_the_game_left_unset_is_not_read_as_a_victory(self) -> None:
+        ended = sc2api_pb2.ResponseObservation(
+            player_result=[
+                sc2api_pb2.PlayerResult(player_id=1),
+                sc2api_pb2.PlayerResult(player_id=2, result=sc2api_pb2.Defeat),
+            ]
+        )
+        client, _ = make_client(make_response(Status.ENDED, observation=ended))
+        client.observation()
+        assert client.results == {2: Result.DEFEAT}
 
     def test_joining_clears_the_results_of_the_last_game(self) -> None:
         client, _ = make_client(
@@ -314,6 +356,41 @@ class TestWebSocketTransport:
         websocket = FakeWebSocket(b"\xff\xff\xff")
         with pytest.raises(ProtocolError, match="does not parse"):
             self._transport(websocket).request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
+    @pytest.mark.parametrize(
+        "websocket",
+        [
+            FakeWebSocket(failure=WebSocketTimeoutException("timed out")),
+            FakeWebSocket(failure=ConnectionResetError(104, "Connection reset by peer")),
+            FakeWebSocket("Bad Request"),
+            FakeWebSocket(b"\xff\xff\xff"),
+        ],
+        ids=["timeout", "reset", "text", "garbage"],
+    )
+    def test_a_request_that_fails_once_sent_closes_the_connection(self, websocket: FakeWebSocket) -> None:
+        """An answer still to come would otherwise be read as the next request's."""
+        transport = self._transport(websocket)
+        with pytest.raises(ProtocolError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        assert websocket.closed
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo()))
+
+    def test_a_real_websocket_that_times_out_is_closed_without_waiting_for_the_game(self) -> None:
+        """Over a socket pair whose far end, the game, never answers."""
+        ours, game = socket.socketpair()
+        ours.settimeout(0.05)
+        websocket = WebSocket()
+        websocket.sock, websocket.connected = ours, True
+        transport = WebSocketTransport(websocket)
+        start = time.monotonic()
+        with pytest.raises(ConnectionTimeoutError, match="so the connection is closed"):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        assert time.monotonic() - start < 1
+        assert not websocket.connected
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+        game.close()
 
     def test_closing_closes_the_socket(self) -> None:
         websocket = FakeWebSocket()

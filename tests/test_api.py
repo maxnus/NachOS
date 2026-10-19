@@ -1,5 +1,6 @@
 """The api and the two runners, tested without a game wherever possible."""
 
+import itertools
 from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
@@ -203,6 +204,13 @@ class TestPlaying:
         asked = [request.observation.game_loop for request in transport.requests if request.HasField("observation")]
         assert asked == [0, 4, 8]
         assert not any(request.HasField("step") for request in transport.requests)
+
+    def test_a_stepped_game_played_in_real_time_is_refused_on_its_first_turn(self) -> None:
+        """It never moves: asked for a step it has not reached, a stepped game answers at once, where it stands."""
+        client, transport = _joined(*_game(*[0] * 20, stepped=False))
+        with pytest.raises(ValueError, match="answered at step 0 when asked for step 4"):
+            Api().play(client, steps_per_turn=4, realtime=True)
+        assert sum(request.HasField("observation") for request in transport.requests) == 2
 
     def test_a_bot_that_leaves_sends_its_turn_then_leaves_and_loses(self) -> None:
         client, transport = _joined(
@@ -605,6 +613,31 @@ class TestRunningLocally:
             "leave_game",
         ]
 
+    @pytest.mark.parametrize(
+        ("recording", "error"),
+        [("missing/game.sc2rec", FileNotFoundError), (".", IsADirectoryError)],
+        ids=["no folder", "a folder"],
+    )
+    def test_a_recording_with_no_file_to_go_in_is_refused_before_the_game_starts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, recording: str, error: type[OSError]
+    ) -> None:
+        launched: list[bool] = []
+        monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
+        with pytest.raises(error, match="to record into"):
+            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), record_to=str(tmp_path / recording))
+        assert not launched
+
+    def test_a_recording_named_by_a_string_is_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        _no_real_game(monkeypatch, _local_transport())
+        path = tmp_path / "game.sc2rec"
+        assert run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2, record_to=str(path)) is (
+            Result.VICTORY
+        )
+        assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][:2] == [
+            "create_game",
+            "join_game",
+        ]
+
 
 class TestRunningOnALadder:
     def test_the_join_carries_the_ports_the_ladder_handed_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -632,6 +665,15 @@ class TestRunningOnALadder:
         run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2)
         assert not any(request.HasField("quit") for request in transport.requests)
         assert any(request.HasField("leave_game") for request in transport.requests)
+        assert transport.closed
+
+    def test_a_recording_that_fails_to_open_closes_the_connection(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        with pytest.raises(FileNotFoundError):
+            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, record_to=tmp_path / "missing" / "x")
         assert transport.closed
 
     def test_the_connection_is_closed_even_when_leaving_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -722,3 +764,29 @@ def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
 
     assert result is Result.DEFEAT
     assert api.step == 16
+
+
+@pytest.mark.integration
+def test_in_a_real_realtime_game_each_turn_comes_at_or_after_the_step_asked_for() -> None:
+    """Run with `pytest -m integration`. Plays some ten seconds of a realtime game, whose turns the game paces."""
+    try:
+        MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+
+    api, steps = Api(), []
+    api.on(TurnEvent)(lambda event: steps.append(event.step))
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(
+        _LADDER_MAP,
+        ApiBot(api, Race.TERRAN),
+        opponent,
+        steps_per_turn=8,
+        realtime=True,
+        time_limit=10,
+        window=(640, 480),
+    )
+
+    assert result is Result.TIE
+    assert len(steps) > 10
+    assert all(later - earlier >= 8 for earlier, later in itertools.pairwise(steps))
