@@ -54,7 +54,7 @@ class Api:
 
     Time is counted in steps. One step is one game loop, 22.4 steps make a second, and the bot takes a turn every
     `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
-    the events its observation reports, in the order `sc2nachos.events` gives, then a `TurnEvent`.
+    the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
     Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
     answering from it until the next one starts.

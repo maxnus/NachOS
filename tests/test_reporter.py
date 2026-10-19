@@ -843,6 +843,21 @@ class TestAreas:
             (OwnUnitLeftAreaEvent, 32, _AREA),
         ]
 
+    def test_a_turn_hands_out_the_entered_of_both_sides_before_the_left(self) -> None:
+        game = _Game()
+        events = (OwnUnitEnteredAreaEvent, EnemyUnitEnteredAreaEvent, OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
+        seen = record(game.events, *(event_type.of(_AREA) for event_type in events))
+        game.observe(0, *_both_sides_at(_OUTSIDE, _INSIDE))
+        game.observe(16, *_both_sides_at(_INSIDE, _OUTSIDE))
+        assert [type(event) for event in seen] == list(events)
+
+
+def _both_sides_at(first: tuple[float, float], second: tuple[float, float]) -> list[raw_pb2.Unit]:
+    """A unit of this player's and one of the enemy's at `first`, tags 1 and 2, and one of each at `second`, tags 3
+    and 4."""
+    places = [(Alliance.OWN, first), (_ENEMY, first), (Alliance.OWN, second), (_ENEMY, second)]
+    return [make_unit(tag, alliance=alliance, at=at) for tag, (alliance, at) in enumerate(places, start=1)]
+
 
 def _moving() -> raw_pb2.UnitOrder:
     return raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=20.0, y=20.0))

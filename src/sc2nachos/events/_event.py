@@ -412,16 +412,16 @@ class OwnUnitEnteredAreaEvent(AnyAreaEvent):
     unit: OwnUnit[Any]
 
 
+class EnemyUnitEnteredAreaEvent(AnyAreaEvent):
+    """A unit of the enemy's in sight is inside the area given to `of`, having last been seen in sight outside it, or
+    first seen in sight inside it once the area has been watched for a turn. One in the fog counts for neither."""
+
+
 class OwnUnitLeftAreaEvent(AnyAreaEvent):
     """A unit of this player's is outside the area given to `of`, having last been seen inside it. One that dies inside
     it, or leaves the observation there, has not left it."""
 
     unit: OwnUnit[Any]
-
-
-class EnemyUnitEnteredAreaEvent(AnyAreaEvent):
-    """A unit of the enemy's in sight is inside the area given to `of`, having last been seen in sight outside it, or
-    first seen in sight inside it once the area has been watched for a turn. One in the fog counts for neither."""
 
 
 class EnemyUnitLeftAreaEvent(AnyAreaEvent):

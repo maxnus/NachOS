@@ -270,8 +270,8 @@ class _Game:
         add_wanted(EnemyUnitLeftSightEvent, changes.enemy_units_left_sight)
         if watched:
             add_wanted(OwnUnitEnteredAreaEvent, own.entered_area, tuples=True)
-            add_wanted(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
             add_wanted(EnemyUnitEnteredAreaEvent, enemy.entered_area, tuples=True)
+            add_wanted(OwnUnitLeftAreaEvent, own.left_area, tuples=True)
             add_wanted(EnemyUnitLeftAreaEvent, enemy.left_area, tuples=True)
 
     def _report_idle_units_and_deaths(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
