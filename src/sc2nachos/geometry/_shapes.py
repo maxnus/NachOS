@@ -39,7 +39,8 @@ class Tile(tuple[int, int], Area):
         return super().__new__(cls, (operator.index(x), operator.index(y)))
 
     def __reduce__(self) -> tuple[type[Tile], tuple[int, int]]:
-        # A tuple's own hands `__new__` one tuple, where it takes x and y, so a tile could not be copied or pickled.
+        # How `copy`, `deepcopy` and `pickle` rebuild a tile: as `Tile(x, y)`. A tuple's own reduction hands `__new__`
+        # one tuple, which it cannot take.
         return Tile, (self[0], self[1])
 
     @classmethod
