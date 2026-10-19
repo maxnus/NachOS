@@ -107,6 +107,16 @@ class TestIds:
         assert list(game.tracker.unit_tracker.present.enemy) == [unit]
         assert not game.tracker.last_changes.units_alliance_changed
 
+    def test_a_units_orders_are_read_once_per_report(self) -> None:
+        game = _Game()
+        moving = raw_pb2.UnitOrder(ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=9.0, y=9.0))
+        (marine,) = game.observe(0, make_unit(1, orders=[moving]))
+        assert isinstance(marine, OwnUnit)
+        orders = marine.orders
+        assert marine.orders is orders and len(orders) == 1
+        game.observe(16, make_unit(1))
+        assert marine.orders == ()
+
     def test_running_out_of_ids_raises(self) -> None:
         game = _Game()
         game.tracker.unit_tracker._units_seen_per_alliance[Alliance.OWN] = 99_998

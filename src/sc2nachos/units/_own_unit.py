@@ -23,7 +23,10 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def orders(self) -> tuple[UnitOrder, ...]:
         """The unit's current order, then its queued orders."""
-        return tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in self._latest_report.orders)
+        if (report := self._latest_report) is not self._orders_report:
+            self._orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in report.orders)
+            self._orders_report = report
+        return self._orders
 
     def _unit_target_of_order(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
         """The unit `order` names: the one the game reported under its tag, or, for a tag the game never reports, the

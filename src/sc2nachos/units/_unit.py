@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.geometry import PointLike
     from sc2nachos.units._tracking import _Tracker
+    from sc2nachos.units._values import UnitOrder
 
 _IN_VISION = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
@@ -63,6 +64,8 @@ class Unit[K: UnitType.AnyType]:
         "_last_seen",
         "_latest_report_in_vision",
         "_order_targets",
+        "_orders",
+        "_orders_report",
         "_own",
         "_position",
         "_previous_position",
@@ -102,6 +105,9 @@ class Unit[K: UnitType.AnyType]:
     # that unit by a tag it reports. Read when an order names a tag the game never reports. Keyed by the ability's raw
     # id; `None` until an order is aimed at a unit.
     _order_targets: dict[int, Unit[Any]] | None
+    # `OwnUnit.orders` as read from `_orders_report`, kept here since `OwnUnit` declares no slots of its own.
+    _orders: tuple[UnitOrder, ...]
+    _orders_report: raw_pb2.Unit | None
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -122,6 +128,8 @@ class Unit[K: UnitType.AnyType]:
         self._hallucination = not self._own and report.display_type == _IN_VISION and report.is_hallucination
         self._radius_footprint = None
         self._order_targets = None
+        self._orders = ()
+        self._orders_report = None
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> None:
