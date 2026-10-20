@@ -1,6 +1,5 @@
 """The upgrade tables: what the sweep's findings generate, what the tables then say, and what units reveal."""
 
-import importlib.util
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -33,10 +32,9 @@ from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeReader
-from support import RealGame, make_observation, make_unit
+from support import RealGame, load_tool, make_observation, make_unit
 
 _REPO = Path(__file__).parents[1]
-_GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 _NO_LEVELS = {"attack": [], "armor": [], "shield": []}
 # A zergling's speed with Metabolic Boost: the game's rows give 4.6992188 per second at Normal speed.
@@ -44,12 +42,8 @@ _BOOSTED_ZERGLING_SPEED = 4.6992188 * FASTER_PER_NORMAL_SPEED
 
 
 def _generator() -> ModuleType:
-    """The `tools/generate_tech_tree.py` module, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location("generate_tech_tree", _GENERATOR)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The `tools/generate_tech_tree.py` module."""
+    return load_tool("generate_tech_tree")
 
 
 def _findings(*research: dict[str, object], unexplained: tuple[str, ...] = ()) -> dict[str, object]:

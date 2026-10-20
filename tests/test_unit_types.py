@@ -3,7 +3,6 @@
 # Each `pyright: ignore` below marks an error the type checker must keep reporting.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
-import importlib.util
 from pathlib import Path
 from typing import Any, assert_type
 
@@ -19,23 +18,12 @@ from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
 from sc2nachos.units._tracking import _Tracker
-from support import make_observation, make_tables, make_unit
-
-_TOOLS = Path(__file__).parents[1] / "tools"
-
-
-def _tool(name: str) -> Any:
-    """The module `tools/<name>.py`, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location(name, _TOOLS / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from support import load_tool, make_observation, make_tables, make_unit
 
 
 def _generator() -> Any:
     """The `tools/generate_unit_types.py` module."""
-    return _tool("generate_unit_types")
+    return load_tool("generate_unit_types")
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +34,7 @@ def tables() -> GameData:
 @pytest.fixture(scope="module")
 def form_of() -> dict[UnitTypeId, UnitTypeId]:
     """The type the corpus's tables call each type a form of, as the sweeps read it."""
-    return _tool("_sandbox").unit_aliases(_generator().corpus_answer())
+    return load_tool("_sandbox").unit_aliases(_generator().corpus_answer())
 
 
 def test_the_sweeps_read_the_type_a_form_is_of_where_both_are_curated(form_of: dict[UnitTypeId, UnitTypeId]) -> None:

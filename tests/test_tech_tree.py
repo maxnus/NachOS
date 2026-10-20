@@ -1,6 +1,5 @@
 """The tech tree: what the sweep's findings generate, and what a recorded game's tables then say."""
 
-import importlib.util
 import json
 from contextlib import closing
 from pathlib import Path
@@ -20,15 +19,13 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, Recording, WebSocketTransport
+from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.units import Unit
-from support import RealGame
+from support import TOOLS, RealGame, load_tool
 
 _REPO = Path(__file__).parents[1]
-_TOOLS = _REPO / "tools"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
-_CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 # The abilities unit types are offered that no curated ability names, none of which a player gives. A force field a
 # sentry makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered
 # Shatter. Once Burrow is researched, every zerg unit that burrows is offered the infested terran's burrow, which
@@ -37,18 +34,9 @@ _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 _UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
 
 
-def _tool(name: str) -> ModuleType:
-    """The module `tools/<name>.py`, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location(name, _TOOLS / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _generator() -> ModuleType:
     """The `tools/generate_tech_tree.py` module."""
-    return _tool("generate_tech_tree")
+    return load_tool("generate_tech_tree")
 
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
@@ -306,16 +294,10 @@ def _sweep() -> TechTree:
     return _generator().read(_findings_file(), _upgrade_findings_file())
 
 
-def _corpus_answer() -> sc2api_pb2.ResponseData:
-    """The tables of the first corpus game, as the game answered them; every game on the current ladder shares them."""
-    recording = Recording(_CORPUS[0])
-    return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
-
-
 @pytest.fixture(scope="module")
 def tables() -> GameData:
     """The game data of the first corpus game, which every game on the current ladder shares."""
-    return GameData(_corpus_answer())
+    return load_tool("generate_unit_types").corpus_tables()
 
 
 class TestWhatTheTablesSay:
@@ -501,8 +483,10 @@ class TestWhatTheSweepFound:
     ) -> None:
         """A barracks is offered the id its tech lab's row names, not the curated one standing for every tech lab; a
         liberator the curated id, not the one its sieged form's row names. A custom id is none of the game's."""
-        monkeypatch.syspath_prepend(str(_TOOLS))
-        offered = _tool("sweep_tech_tree").creation_abilities_offered(_corpus_answer())
+        monkeypatch.syspath_prepend(str(TOOLS))
+        offered = load_tool("sweep_tech_tree").creation_abilities_offered(
+            load_tool("generate_unit_types").corpus_answer()
+        )
         assert offered[UnitTypeId.TECH_LAB_BARRACKS] == {
             RawAbilityId.Build_TechLab_Barracks,
             RawAbilityId.Build_TechLab,
