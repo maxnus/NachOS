@@ -39,7 +39,6 @@ from support import (
     make_response,
     make_tables,
     make_unit,
-    require_enemy,
 )
 
 _TABLES = make_tables(
@@ -1075,16 +1074,16 @@ class TestThroughTheApi:
     def test_the_enemy_holds_what_it_is_assumed_to_have_and_is_new_for_each_game(self) -> None:
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY)))
-        enemy = require_enemy(api.enemy)
+        enemy = api.enemy
         assert not enemy.upgrades
         enemy.assume_upgrades(UpgradeId.STIMPACK)
         enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
         enemy.forget_upgrades(UpgradeId.STIMPACK)
         assert enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
-        assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None, upgrades={COMBAT_SHIELD})"
+        assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None)"
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         assert api.enemy is not enemy
-        assert not require_enemy(api.enemy).upgrades
+        assert not api.enemy.upgrades
 
     def test_the_last_games_units_are_stale_once_the_next_game_starts(self) -> None:
         api = Api()

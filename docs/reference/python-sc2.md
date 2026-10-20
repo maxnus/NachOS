@@ -382,7 +382,7 @@ it.
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
 | `bot.enemy_race` | `api.enemy.race`, `None` until known; `api.enemy.requested_race` reads `RANDOM` |
-| `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; `api.enemy` is `None` in a game with no other player |
+| `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | nothing yet |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |

@@ -4,14 +4,14 @@
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos import Api, ApiBot, Computer, Difficulty, Race, Result, UnitTypeId, run_local
+from sc2nachos import Api, ApiBot, Computer, Difficulty, NoEnemyError, Race, Result, UnitTypeId, run_local
 from sc2nachos.debug import Cheat
 from sc2nachos.events import EnemyRaceKnownEvent, TurnEvent
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.player import Player
 from sc2nachos.protocol import Client, Status
 from sc2nachos.units import Alliance
-from support import FakeTransport, make_game_info, make_observation, make_response, make_unit, require_enemy
+from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 _ME = 1
 _OTHER = 2
@@ -91,21 +91,21 @@ class TestTheEnemy:
     def test_one_that_asked_for_a_race_plays_it_from_the_start(self) -> None:
         api = Api()
         _play(api, [_ME_AS_TERRAN, _computer(_OTHER, Race.ZERG)], *_short_game())
-        enemy = require_enemy(api.enemy)
+        enemy = api.enemy
         assert (enemy.id, enemy.race, enemy.requested_race, enemy.name) == (_OTHER, Race.ZERG, Race.ZERG, None)
 
     def test_a_game_of_two_gives_a_random_players_race_from_the_start(self) -> None:
         api = Api()
         other = _participant(_OTHER, Race.RANDOM, actual=Race.TERRAN, name="Beta")
         _play(api, [_ME_AS_TERRAN, other], *_short_game())
-        enemy = require_enemy(api.enemy)
+        enemy = api.enemy
         assert (enemy.race, enemy.requested_race, enemy.name) == (Race.TERRAN, Race.RANDOM, "Beta")
 
     def test_a_random_computers_race_is_known_once_its_first_unit_is_seen(self) -> None:
         api = Api()
         races: list[Race | None] = []
         known: list[EnemyRaceKnownEvent] = []
-        api.on(TurnEvent)(lambda _: races.append(require_enemy(api.enemy).race))
+        api.on(TurnEvent)(lambda _: races.append(api.enemy.race))
         api.on(EnemyRaceKnownEvent)(lambda event: known.append(event))
         zergling = make_unit(5, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY)
         _play(
@@ -124,14 +124,15 @@ class TestTheEnemy:
     def test_an_observer_is_no_enemy(self) -> None:
         api = Api()
         _play(api, [_ME_AS_TERRAN, _observer(3), _computer(_OTHER, Race.ZERG)], *_short_game())
-        assert require_enemy(api.enemy).id == _OTHER
+        assert api.enemy.id == _OTHER
 
-    def test_a_game_of_one_player_has_none_and_no_race_comes(self) -> None:
+    def test_a_game_of_one_player_has_no_enemy_to_read_and_no_race_comes(self) -> None:
         api = Api()
         known: list[EnemyRaceKnownEvent] = []
         api.on(EnemyRaceKnownEvent)(lambda event: known.append(event))
         _play(api, [_ME_AS_TERRAN], *_short_game(make_observation(16)))
-        assert api.enemy is None
+        with pytest.raises(NoEnemyError, match="no other player"):
+            _ = api.enemy
         assert not known
 
 
@@ -154,7 +155,7 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
     @api.on(TurnEvent)
     def read_race(event: TurnEvent) -> None:
         if not known:
-            races_before.append(require_enemy(api.enemy).race)
+            races_before.append(api.enemy.race)
 
     @api.on(EnemyRaceKnownEvent)
     def found(event: EnemyRaceKnownEvent) -> None:
@@ -171,7 +172,7 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
 
     assert api.player.requested_race is Race.RANDOM
     assert api.player.race in (Race.TERRAN, Race.ZERG, Race.PROTOSS)
-    enemy = require_enemy(api.enemy)
+    enemy = api.enemy
     assert enemy.requested_race is Race.RANDOM
     assert set(races_before) == {None}
     (event,) = known

@@ -2,7 +2,7 @@
 
 from sc2nachos.__about__ import __version__
 from sc2nachos._errors import NachOSError
-from sc2nachos.api import Api, NotPlayingError
+from sc2nachos.api import Api, NoEnemyError, NotPlayingError
 from sc2nachos.enemy import UpgradeInference
 from sc2nachos.gamedata import Cost, Resources
 from sc2nachos.gamemap import Expansion
@@ -25,6 +25,7 @@ __all__ = [
     "Expansion",
     "Footprint",
     "NachOSError",
+    "NoEnemyError",
     "NotPlayingError",
     "OwnUnit",
     "Point",

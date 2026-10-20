@@ -617,13 +617,13 @@ def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, inference: 
     """The computer researches during a corpus game, and its units carry the levels NachOS reads. They reveal nothing
     more, since none of this player's units leaves its base to see it."""
     api = Api(enemy_upgrade_inference=inference)
-    assert require_enemy(_replay(path, api).enemy).upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+    assert _replay(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
 @pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
 def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path: Path) -> None:
     api = Api(enemy_upgrade_inference=UpgradeInference.NONE)
-    assert not require_enemy(_replay(path, api).enemy).upgrades
+    assert not _replay(path, api).enemy.upgrades
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Self, final
+
+from sc2nachos.match import Race
 
 if TYPE_CHECKING:
-    from sc2nachos.match import Race
+    from s2clientprotocol import sc2api_pb2
 
 
 @final
@@ -23,3 +25,16 @@ class Player:
     name: str | None
     """Its name as the game gives it, and `None` where the game gives none, as in every game seen so far, though it
     joined with one (tool `sweep_requests`)."""
+
+    @classmethod
+    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self:
+        """The player `player_id` of the game `info` describes. Raises `ValueError` if `info` lists no such player."""
+        entry = next((entry for entry in info.player_info if entry.player_id == player_id), None)
+        if entry is None:
+            raise ValueError(f"the game lists no player {player_id}, the one this client joined as")
+        return cls(
+            id=player_id,
+            race=Race(entry.race_actual),
+            requested_race=Race(entry.race_requested),
+            name=entry.player_name or None,
+        )

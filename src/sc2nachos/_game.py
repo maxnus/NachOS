@@ -119,8 +119,8 @@ class _Game:
     _researching: _Snapshot[Mapping[UpgradeId, Research]] = field(default_factory=lambda: _Snapshot({}))
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
-    # The step of the observation the enemy's race became known in, which hands out `EnemyRaceKnownEvent`.
-    _enemy_race_known_at: int | None = None
+    # Whether the enemy's race became known since the last report, which then hands out `EnemyRaceKnownEvent`.
+    _enemy_race_to_report: bool = False
     # The turn's chat, in the order given, as the actions that send it.
     _chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
@@ -137,7 +137,7 @@ class _Game:
         game_data = GameData(data)
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
-        enemy = _enemy_of(info, player_id)
+        enemy = Enemy._of_game(info, player_id)
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
@@ -149,7 +149,7 @@ class _Game:
             game_map=game_map,
             expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=game_data,
-            player=_player_of(info, player_id),
+            player=Player._of_game(info, player_id),
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
@@ -168,7 +168,7 @@ class _Game:
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None if enemy is None else enemy.id, step=step),
             _chat_event_types=_chat_event_types_by_player(info, player_id),
-            _enemy_race_known_at=None if enemy is None or enemy.race is None else step,
+            _enemy_race_to_report=enemy is not None and enemy.race is not None,
             step=step,
         )
         game._read(observation, step)
@@ -198,25 +198,25 @@ class _Game:
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
         self.orders._observe(step, lost)
         if self.enemy is not None:
-            self._read_enemy(self.enemy, changes.enemy_units_first_seen, step)
+            self._read_enemy(self.enemy, changes.enemy_units_first_seen)
 
-    def _read_enemy(self, enemy: Enemy, first_seen: Sequence[Unit[Any]], step: int) -> None:
-        """Read into `enemy` its race, if not known yet, from the units `first_seen` at `step`, and the upgrades its
-        units show if inference is on."""
+    def _read_enemy(self, enemy: Enemy, first_seen: Sequence[Unit[Any]]) -> None:
+        """Read into `enemy` its race, if not known yet, from the units `first_seen`, and the upgrades its units show
+        if inference is on."""
         if enemy.race is None:
-            self._learn_enemy_race(enemy, first_seen, step)
+            self._learn_enemy_race(enemy, first_seen)
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
             enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
 
-    def _learn_enemy_race(self, enemy: Enemy, first_seen: Sequence[Unit[Any]], step: int) -> None:
-        """Take the race of the first of `first_seen` that has one as `enemy`'s, seen at `step`."""
+    def _learn_enemy_race(self, enemy: Enemy, first_seen: Sequence[Unit[Any]]) -> None:
+        """Take the race of the first of `first_seen` that has one as `enemy`'s."""
         for unit in first_seen:
-            if (row := self.game_data.units.get(unit.type_id)) is not None and row.race in _PLAYED_RACES:
+            if (row := self.game_data.units.get(unit.type_id)) is not None and row.race is not Race.NONE:
                 enemy._learn_race(row.race)
-                self._enemy_race_known_at = step
+                self._enemy_race_to_report = True
                 return
 
     def report(self, events: _EventBus) -> list[Event]:
@@ -234,10 +234,11 @@ class _Game:
         return happened
 
     def _report_enemy_race(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
-        """Add to `happened` the enemy's race, if it became known in the last observation and a handler wants it."""
+        """Add to `happened` the enemy's race, if it became known since the last report and a handler wants it."""
         enemy = self.enemy
-        if enemy is None or enemy.race is None or self._enemy_race_known_at != self.step:
+        if not self._enemy_race_to_report or enemy is None or enemy.race is None:
             return
+        self._enemy_race_to_report = False
         if subscriptions.wants_every(EnemyRaceKnownEvent):
             happened.append(EnemyRaceKnownEvent(enemy.race, step=self.step))
 
@@ -506,45 +507,6 @@ class _Game:
         seconds = steps_to_seconds(self.step)
         logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
         return result
-
-
-# The races a player plays, as against `RANDOM`, which one asks for, and `NONE`.
-_PLAYED_RACES: Final = frozenset({Race.TERRAN, Race.ZERG, Race.PROTOSS})
-
-
-def _player_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Player:
-    """This player, `player`, as the game `info` describes it. Raises `ValueError` if `info` lists no such player."""
-    entry = next((entry for entry in info.player_info if entry.player_id == player), None)
-    if entry is None:
-        raise ValueError(f"the game lists no player {player}, the one this client joined as")
-    return Player(
-        id=player,
-        race=Race(entry.race_actual),
-        requested_race=Race(entry.race_requested),
-        name=_name_of(entry),
-    )
-
-
-def _enemy_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Enemy | None:
-    """The one player of the game `info` describes, observers aside, who is not `player`, or `None` if there is
-    not one. Its race is the one the game gives, else the one it asked for unless that is Random."""
-    others = [
-        entry
-        for entry in info.player_info
-        if entry.player_id != player and entry.type != sc2api_pb2.PlayerType.Observer
-    ]
-    if len(others) != 1:
-        return None
-    (entry,) = others
-    requested = Race(entry.race_requested)
-    actual = Race(entry.race_actual)
-    race = actual if actual in _PLAYED_RACES else requested if requested in _PLAYED_RACES else None
-    return Enemy(player_id=entry.player_id, requested_race=requested, name=_name_of(entry), race=race)
-
-
-def _name_of(entry: sc2api_pb2.PlayerInfo) -> str | None:
-    """The name the game gives the player `entry` describes, or `None` where it gives none."""
-    return entry.player_name or None
 
 
 def _step(observation: sc2api_pb2.ResponseObservation) -> int:

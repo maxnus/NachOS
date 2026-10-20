@@ -11,7 +11,7 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos._game import _chat_event_types_by_player, _enemy_of, _Game, _player_of
+from sc2nachos._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
@@ -405,8 +405,8 @@ class RealGame:
         self.events = events or _EventBus()
         info = client.game_info()
         self.map = GameMap._of_game(info, client.observation())
-        self.own_player = _player_of(info, player)
-        self.enemy = _enemy_of(info, player)
+        self.own_player = Player._of_game(info, player)
+        self.enemy = Enemy._of_game(info, player)
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()

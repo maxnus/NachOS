@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Self, final
+
+from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from sc2nachos.ids import UpgradeId
-    from sc2nachos.match import Race
 
 
 class UpgradeInference(ReadableIntEnum):
@@ -42,11 +44,24 @@ class Enemy:
 
     def __repr__(self) -> str:
         race = None if self._race is None else self._race.name
-        upgrades = ", ".join(sorted(upgrade.name for upgrade in self._upgrades))
-        return (
-            f"Enemy(id={self._id}, race={race}, requested_race={self._requested_race.name}, name={self._name!r}, "
-            f"upgrades={{{upgrades}}})"
-        )
+        return f"Enemy(id={self._id}, race={race}, requested_race={self._requested_race.name}, name={self._name!r})"
+
+    @classmethod
+    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self | None:
+        """The one player of the game `info` describes, observers aside, who is not `player_id`, or `None` if there is
+        not one. Its race is the one the game gives, else the one it asked for unless that is Random."""
+        others = [
+            entry
+            for entry in info.player_info
+            if entry.player_id != player_id and entry.type != sc2api_pb2.PlayerType.Observer
+        ]
+        if len(others) != 1:
+            return None
+        (entry,) = others
+        played = (Race.TERRAN, Race.ZERG, Race.PROTOSS)
+        requested, actual = Race(entry.race_requested), Race(entry.race_actual)
+        race = actual if actual in played else requested if requested in played else None
+        return cls(player_id=entry.player_id, requested_race=requested, name=entry.player_name or None, race=race)
 
     @property
     def id(self) -> int:

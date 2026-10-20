@@ -46,6 +46,10 @@ class NotPlayingError(NachOSError, RuntimeError):
     """No game has been joined, so there is nothing to answer from."""
 
 
+class NoEnemyError(NachOSError, RuntimeError):
+    """The game has no other player, as a mini-game has not, so there is no enemy to answer about."""
+
+
 class Api:
     """Everything a bot talks to. It is built before there is a game.
 
@@ -293,14 +297,17 @@ class Api:
         return self._current_game().player
 
     @property
-    def enemy(self) -> Enemy | None:
-        """The other player, and what is known of it, or `None` in a game with no other player, such as a mini-game.
+    def enemy(self) -> Enemy:
+        """The other player, and what is known of it. Raises `NoEnemyError` in a game with no other player, such as a
+        mini-game.
 
         `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
         which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,
         `Unit.weapons` and `Unit.speed` among them, counts them.
         """
-        return self._current_game().enemy
+        if (enemy := self._current_game().enemy) is None:
+            raise NoEnemyError("this game has no other player")
+        return enemy
 
     @property
     def vision(self) -> Grid[bool]:

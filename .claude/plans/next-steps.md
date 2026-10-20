@@ -267,8 +267,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `api.enemy` gains `id`, `requested_race`, `name` and `race`. Its `race` reads `None` until known, never `RANDOM`:
     a game of two gives it from the start (tool `sweep_requests`, `players`), and a Random computer's is its first
     unit's.
-  - `api.enemy` itself is `None` in a game with no other player, such as a mini-game, over raising there or optional
-    fields.
+  - Reading `api.enemy` raises `NoEnemyError` in a game with no other player, such as a mini-game (the owner, review of
+    #143, so that no bot has to check for one), over `Enemy | None` and over optional fields; the game itself holds
+    no enemy there.
   - `EnemyRaceKnownEvent(race)` comes once a game for any race, on the first turn where it is known from the start.
   - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
   - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
