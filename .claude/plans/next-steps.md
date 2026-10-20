@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #137. `uv run pytest` passes 2383 tests on branch `claude/game-data-statements`;
-  `uv run pytest -m integration` passes 33 against a real game (run 2026-10-19, on that branch).
+- nachOS `main` has every PR to #138. `uv run pytest` passes 2384 tests on branch `claude/sweep-folded-ids`;
+  `uv run pytest -m integration` passes 33 against a real game (run 2026-10-20, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -266,14 +266,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   and `AnyZergTownhall`. Each group is in every group that holds all its types, so `AnyDrone` is a `Worker` and
   `CollapsibleTower` a `Structure`.
 
-## Next, after #138
+## Next
 
-- **The tech-tree sweep looks each creation ability up by the game's own id** (the owner, review of #138). Since
-  b069800 folded the per-type ids (2026-10-07), `sweep_makers` looks for units offered the folded id's name, which the
-  game never offers, and skips every trial of a folded id: a run on 2026-10-20 kept 124 of the 239 trials. The fix, a
-  re-sweep that reproduces the committed trials, and the regenerated tree, which records a liberator's siege, so
-  `MORPH_SOURCES_FALLBACK` goes.
-- **The tech tree's sub-records**, as decided above.
+- **The tech tree's sub-records**, as decided above, once the tech-tree sweep tries every creation ability by the
+  game's own ids (branch `claude/sweep-folded-ids`).
 
 ## 1. Waiting until something needs them
 

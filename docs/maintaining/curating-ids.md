@@ -60,7 +60,9 @@ order and runs its own (in game). NachOS curates `Lift` as `LIFT` and reads each
 `AbilityId._REMAPPED_IDS`. Where the game's table gives a `remaps_to`, it says which; collapse a family only where its
 members do one thing for different performers. A leveled research keeps one id per level, since each makes its own
 upgrade, and its general id is not curated: nothing is offered it. The generic cancel's members are one action too:
-a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
+a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`). A tool that compares an
+id with what the game offers compares the game's own: once the tech labs collapsed into `BUILD_TECH_LAB`, the tech-tree
+sweep looked for units offered `Build_TechLab`, which none is, and skipped every trial of a collapsed family.
 
 **A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but read
 as the one ordered, from the same table, as a sieging liberator's is
