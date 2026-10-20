@@ -8,7 +8,7 @@
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and `docs/maintaining/`
-holds how to curate the game's ids and what reviews keep finding.
+holds how to curate the game's ids, the code style and what reviews keep finding.
 
 ## Keep this file small
 
@@ -63,45 +63,19 @@ These are the non-negotiables. They exist because this library is published for 
   against recorded observation fixtures.
 - **Performance matters.** This code sits in the bot's hot loop. Do not add abstraction layers that cost step time.
 
-## Conventions
+## Code style
 
-Carried over from AvocaDOS, so the two codebases read alike:
-
-- **Keyword-only args**: use `*` in signatures liberally.
-- **One class per file** (except small data classes). File named after the class, snake-cased.
-- **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
-  accurate: a plain name a reader can predict beats a clever synonym.
-- **A constant, a function or a variable is named for what it holds or returns**, so its name needs no comment.
-- **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
-- **Type hints** on all parameters and return types.
-- **Docstrings** on all public functions and classes, but without parameter/return sections.
-- **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
-- **`TYPE_CHECKING` guard** for imports that would otherwise be circular.
-- **loguru**, not stdlib `logging`.
-- **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
-- **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
-- **Short functions**: extract a named helper rather than growing the caller.
-- **Errors**: a failure of the library's own raises a subclass of `NachOSError`, which also subclasses the
-  built-in it is a case of, where one fits: `ConnectionClosedError` is a `ConnectionError`. Misuse, such as a bad
-  argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
-  where it enters, with `raise ... from`, and never reaches the caller.
-- **US spelling** everywhere in code, comments, docstrings and docs — `behavior`, `initialize`, `summarize`,
-  `color`, `center`. Two exceptions: generated identifiers, where `ids/raw/` mirrors Blizzard's own names verbatim
-  (`BuildinProgressNonCancellable`); those are data, never to be "corrected". And **"cancelled"**, which the code,
-  the tests and the docs spell with two l's throughout.
-- **One game loop is a step.** Above the protocol layer, time is counted in steps -- `Api.step`,
-  `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
-  layer keeps Blizzard's `game_loop`, since the messages it hands back carry that field, and `Api.play` is the one
-  place the two meet. Never write "frame" for either.
-- **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two. A fact about one
-  piece of code goes beside that code, in its docstring or a comment. What the game was seen to do goes in its
-  topic's page under `docs/reference/game-behavior/`, with how it was seen, and only there: the code states only the
-  part it relies on, tagged `(in game)` or `(corpus)`, and the guides, `docs/reference/python-sc2.md` and
-  `docs/maintaining/` say what NachOS does and link there, rather than retell the evidence. The steps for one kind of
-  task go in `docs/`, and measurements in the commit message or PR.
+`docs/maintaining/code-style.md` says how code here is named and written, carried over from AvocaDOS. Read it before
+writing code or docs.
 
 ## Docs and comments
 
+- **Where a finding goes**: a rule that shapes code not yet written goes here, in a line or two, and a rule of style
+  in `docs/maintaining/code-style.md`. A fact about one piece of code goes beside that code, in its docstring or a
+  comment. What the game was seen to do goes in its topic's page under `docs/reference/game-behavior/`, with how it
+  was seen, and only there: the code states only the part it relies on, tagged `(in game)` or `(corpus)`, and the
+  guides, `docs/reference/python-sc2.md` and `docs/maintaining/` say what NachOS does and link there, rather than
+  retell the evidence. The steps for one kind of task go in `docs/`, and measurements in the commit message or PR.
 - **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
   code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
   cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
