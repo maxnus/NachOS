@@ -17,6 +17,7 @@ from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     AnyChatEvent,
+    EnemyRaceKnownEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitDiedEvent,
@@ -66,10 +67,11 @@ from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId, UpgradeId
-from sc2nachos.match import Result
+from sc2nachos.match import Race, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert, Research
 from sc2nachos.state._state import _State
@@ -97,7 +99,8 @@ class _Game:
     game_map: Final[GameMap]
     expansions: Final[tuple[Expansion, ...]]
     game_data: Final[GameData]
-    enemy: Final[Enemy]
+    player: Final[Player]
+    enemy: Final[Enemy | None]
     enemy_upgrade_inference: Final[UpgradeInference]
     tracker: Final[_Tracker]
     orders: Final[OrderBook]
@@ -116,6 +119,8 @@ class _Game:
     _researching: _Snapshot[Mapping[UpgradeId, Research]] = field(default_factory=lambda: _Snapshot({}))
     # Whether a handler has asked to leave the game once the turn's requests have gone out.
     leaving: bool = False
+    # The step of the observation the enemy's race became known in, which hands out `EnemyRaceKnownEvent`.
+    _enemy_race_known_at: int | None = None
     # The turn's chat, in the order given, as the actions that send it.
     _chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
     # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
@@ -130,7 +135,9 @@ class _Game:
         observation = client.observation()
         step = _step(observation)
         game_data = GameData(data)
-        enemy = Enemy()
+        if (player_id := client.player_id) is None:
+            raise ValueError("the client has joined no game")
+        enemy = _enemy_of(info, player_id)
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._of_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
@@ -142,6 +149,7 @@ class _Game:
             game_map=game_map,
             expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=game_data,
+            player=_player_of(info, player_id),
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
@@ -158,8 +166,9 @@ class _Game:
             ),
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
-            debug=DebugCommands(client, game_map, opponent_id=_the_other_player(info, client.player_id), step=step),
+            debug=DebugCommands(client, game_map, opponent_id=None if enemy is None else enemy.id, step=step),
             _chat_event_types=_chat_event_types_by_player(info, client.player_id),
+            _enemy_race_known_at=None if enemy is None or enemy.race is None else step,
             step=step,
         )
         game._read(observation, step)
@@ -188,11 +197,23 @@ class _Game:
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
         self.orders._observe(step, lost)
+        if (enemy := self.enemy) is None:
+            return
+        if enemy.race is None:
+            self._learn_enemy_race(enemy, changes.enemy_units_first_seen, step)
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
-            self.enemy.assume_upgrades(*reader.read_basic_upgrades(units))
+            enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
-            self.enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
+            enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
+
+    def _learn_enemy_race(self, enemy: Enemy, first_seen: Sequence[Unit[Any]], step: int) -> None:
+        """Take the race of the first of `first_seen` that has one as `enemy`'s, seen at `step`."""
+        for unit in first_seen:
+            if (row := self.game_data.units.get(unit.type_id)) is not None and row.race in _PLAYED_RACES:
+                enemy._learn_race(row.race)
+                self._enemy_race_known_at = step
+                return
 
     def report(self, events: _EventBus) -> list[Event]:
         """The events the last observation reports, in the order they are handed out, limited to what a handler of
@@ -200,12 +221,21 @@ class _Game:
         through `only` or `of`."""
         subscriptions = events._subscriptions
         happened: list[Event] = []
+        self._report_enemy_race(subscriptions, happened)
         self._report_units_coming_and_changing(subscriptions, happened)
         self._report_construction_and_research(subscriptions, happened)
         self._report_what_units_went_through(subscriptions, happened)
         self._report_idle_units_and_deaths(subscriptions, happened)
         self._report_actions_chat_and_alerts(subscriptions, happened)
         return happened
+
+    def _report_enemy_race(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
+        """Add to `happened` the enemy's race, if it became known in the last observation and a handler wants it."""
+        enemy = self.enemy
+        if enemy is None or enemy.race is None or self._enemy_race_known_at != self.step:
+            return
+        if subscriptions.wants_every(EnemyRaceKnownEvent):
+            happened.append(EnemyRaceKnownEvent(enemy.race, step=self.step))
 
     def _report_units_coming_and_changing(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` the units first seen, and those that changed type or sides, that a handler wants."""
@@ -474,15 +504,36 @@ class _Game:
         return result
 
 
-def _the_other_player(info: sc2api_pb2.ResponseGameInfo, player: int | None) -> int | None:
-    """The id of the one player of the game `info` describes, observers aside, who is not `player`, or `None` if
-    there is not one."""
+# The races a player plays, as against `RANDOM`, which one asks for, and `NONE`.
+_PLAYED_RACES: Final = frozenset({Race.TERRAN, Race.ZERG, Race.PROTOSS})
+
+
+def _player_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Player:
+    """This player, `player`, as the game `info` describes it."""
+    entry = next(entry for entry in info.player_info if entry.player_id == player)
+    return Player(
+        id=player,
+        race=Race(entry.race_actual),
+        requested_race=Race(entry.race_requested),
+        name=entry.player_name or None,
+    )
+
+
+def _enemy_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Enemy | None:
+    """The one player of the game `info` describes, observers aside, who is not `player`, or `None` if there is
+    not one. Its race is the one the game gives, else the one it asked for unless that is Random."""
     others = [
-        entry.player_id
+        entry
         for entry in info.player_info
         if entry.player_id != player and entry.type != sc2api_pb2.PlayerType.Observer
     ]
-    return others[0] if len(others) == 1 else None
+    if len(others) != 1:
+        return None
+    (entry,) = others
+    requested = Race(entry.race_requested)
+    actual = Race(entry.race_actual)
+    race = actual if actual in _PLAYED_RACES else requested if requested in _PLAYED_RACES else None
+    return Enemy(player_id=entry.player_id, requested_race=requested, name=entry.player_name or None, race=race)
 
 
 def _step(observation: sc2api_pb2.ResponseObservation) -> int:

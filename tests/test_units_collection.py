@@ -8,12 +8,11 @@ from typing import Any
 import pytest
 from s2clientprotocol import data_pb2, raw_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Circle, Point, Rectangle, Tile
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import make_observation, make_tables, make_unit
+from support import make_enemy, make_observation, make_tables, make_unit
 
 _TYPES = (UnitTypeId.MARINE, UnitTypeId.SCV, UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT)
 _STRUCTURES = {UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT}
@@ -29,7 +28,7 @@ _TABLES = make_tables(
 
 def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
     """`protos` observed once."""
-    tracker = _Tracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, make_enemy())
     tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
     return tracker.unit_tracker.present
 

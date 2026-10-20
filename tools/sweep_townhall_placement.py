@@ -31,7 +31,6 @@ from numpy.lib.stride_tricks import sliding_window_view
 from record_corpus import GAMES
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
@@ -230,7 +229,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         game.client.step(4)
         observation = game.client.observation()
         game_map = GameMap._of_game(game.client.game_info(), observation)
-        tracker = _Tracker(GameData(game.client.game_data()), Enemy())
+        tracker = _Tracker(GameData(game.client.game_data()), None)
         raw, uncurated = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral

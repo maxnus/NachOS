@@ -12,7 +12,6 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
@@ -26,7 +25,7 @@ from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
 from sc2nachos.units import Alliance, OwnUnit, UnitType
 from sc2nachos.units._tracking import _Tracker
-from support import make_client, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import make_client, make_enemy, make_game_info, make_observation, make_response, make_tables, make_unit
 
 _MOVE = AbilityId.MOVE
 # The id a unit reports a move under, which reads as the move.
@@ -107,7 +106,7 @@ class _Game:
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(tables, Enemy())
+        self.tracker = _Tracker(tables, make_enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(tables)
 

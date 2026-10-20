@@ -8,7 +8,6 @@ from typing import Any
 import pytest
 from s2clientprotocol import data_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
@@ -18,7 +17,7 @@ from sc2nachos.protocol import Recording
 from sc2nachos.units import Alliance, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._tracking._unit_tracker import _UnitTracker
-from support import make_game_info, make_observation, make_tables, make_unit
+from support import make_enemy, make_game_info, make_observation, make_tables, make_unit
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -86,7 +85,7 @@ class _MapAtStart:
 
     def __init__(self, rows: Sequence[str], neutral_units: _NeutralUnits, *, start: tuple[float, float]) -> None:
         self.map = GameMap(make_game_info(*rows), start_location=Point(start))
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy())
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
     @property
@@ -348,7 +347,7 @@ def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(GameData(data), Enemy())
+            tracker = _Tracker(GameData(data), make_enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
             return GameMap._of_game(info, observation), tracker.unit_tracker
     raise AssertionError(f"{path.name} holds no observation")

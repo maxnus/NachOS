@@ -11,7 +11,7 @@ from s2clientprotocol import common_pb2, debug_pb2, raw_pb2
 
 from sc2nachos import Api
 from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import Enemy, UpgradeInference
+from sc2nachos.enemy import UpgradeInference
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -32,7 +32,7 @@ from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeReader
-from support import RealGame, load_tool, make_observation, make_unit
+from support import RealGame, load_tool, make_enemy, make_observation, make_unit, require_enemy
 
 _REPO = Path(__file__).parents[1]
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
@@ -321,12 +321,14 @@ class TestWhatTheTablesSay:
 
 
 def _tracker(tables: GameData) -> _Tracker:
-    return _Tracker(tables, Enemy())
+    return _Tracker(tables, make_enemy())
 
 
 def _observe(tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
-    tracker.enemy.assume_upgrades(*tracker.upgrade_tracker.reader.read_basic_upgrades(tracker.unit_tracker.present))
+    require_enemy(tracker.enemy).assume_upgrades(
+        *tracker.upgrade_tracker.reader.read_basic_upgrades(tracker.unit_tracker.present)
+    )
     by_tag = {unit.tag: unit for unit in tracker.unit_tracker.present}
     return [by_tag[unit.tag] for unit in units]
 
@@ -341,33 +343,33 @@ class TestWhatAUnitReads:
         """This player's units report only this player's upgrades, so nothing is inferred from them."""
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, attack_upgrade_level=3))
-        assert not tracker.enemy.upgrades
+        assert not require_enemy(tracker.enemy).upgrades
 
     def test_a_unit_taken_from_this_player_shows_nothing(self, tables: GameData) -> None:
         """A neural parasite puts it on the enemy's side, but the levels it reports may be this player's."""
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, attack_upgrade_level=3))
         _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=3), step=1)
-        assert not tracker.enemy.upgrades
+        assert not require_enemy(tracker.enemy).upgrades
 
     def test_a_negative_level_shows_nothing(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=-1, armor_upgrade_level=-2))
-        assert not tracker.enemy.upgrades
+        assert not require_enemy(tracker.enemy).upgrades
 
     def test_the_enemys_units_read_with_what_it_is_assumed_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
         base = tables.units[UnitTypeId.ZERGLING].speed
         assert zergling.speed == base
-        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
-        tracker.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
+        require_enemy(tracker.enemy).forget_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == base
 
     def test_a_neutral_unit_reads_with_no_upgrade(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
         (zergling,) = _observe(
             tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL), upgrades=(UpgradeId.ZERGLING_SPEED,)
         )
@@ -376,7 +378,10 @@ class TestWhatAUnitReads:
     def test_a_visible_enemy_unit_shows_the_levels_of_its_own_lines(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2))
-        assert tracker.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_WEAPONS_2}
+        assert require_enemy(tracker.enemy).upgrades == {
+            UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
+            UpgradeId.TERRAN_INFANTRY_WEAPONS_2,
+        }
 
     def test_what_one_unit_shows_counts_for_every_type_of_its_line(self, tables: GameData) -> None:
         """A marine's attack level is Terran Infantry Weapons, which a marauder has too and a viking does not."""
@@ -401,7 +406,7 @@ class TestWhatAUnitReads:
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=1))
         _observe(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=0))
-        assert tracker.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1}
+        assert require_enemy(tracker.enemy).upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1}
 
     @pytest.mark.parametrize("level", [0, 1, 2, 3])
     def test_an_enemy_marauder_reads_the_damage_and_bonus_of_the_level_it_shows(
@@ -417,7 +422,7 @@ class TestWhatAUnitReads:
     def test_the_armor_a_zergling_shows_is_the_ground_armor_levels(self, tables: GameData) -> None:
         tracker = _tracker(tables)
         _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, armor_upgrade_level=2))
-        assert tracker.enemy.upgrades == {UpgradeId.ZERG_GROUND_ARMOR_1, UpgradeId.ZERG_GROUND_ARMOR_2}
+        assert require_enemy(tracker.enemy).upgrades == {UpgradeId.ZERG_GROUND_ARMOR_1, UpgradeId.ZERG_GROUND_ARMOR_2}
 
     def test_the_armor_an_ultralisk_shows_says_nothing_about_the_levels(self, tables: GameData) -> None:
         """Its 2 could be two levels or Chitinous Plating, and reading it as levels would armor every zergling."""
@@ -425,7 +430,7 @@ class TestWhatAUnitReads:
         (ultralisk,) = _observe(
             tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=2)
         )
-        assert not tracker.enemy.upgrades
+        assert not require_enemy(tracker.enemy).upgrades
         assert ultralisk.armor == tables.units[UnitTypeId.ULTRALISK].armor + 2
 
     def test_a_visible_unit_reads_the_armor_it_reports(self, tables: GameData) -> None:
@@ -439,13 +444,13 @@ class TestWhatAUnitReads:
     def test_a_visible_unit_reads_the_armor_it_reports_alone(self, tables: GameData) -> None:
         """Though its owner is known to have more."""
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
         (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
         assert marine.armor == tables.units[UnitTypeId.MARINE].armor
 
     def test_a_unit_out_of_sight_reads_the_more_of_its_last_report_and_its_owners(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
         (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
         tracker.update(make_observation(16, units=[]).observation.raw_data, 16)
         assert marine.is_stale
@@ -453,7 +458,7 @@ class TestWhatAUnitReads:
 
     def test_a_unit_never_shown_visible_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrades(UpgradeId.BUILDING_ARMOR)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
         assert _observe(tracker, remembered)[0].armor == tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
 
@@ -461,7 +466,7 @@ class TestWhatAUnitReads:
         tracker = _tracker(tables)
         (zealot,) = _observe(tracker, make_unit(1, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=2))
         assert zealot.shield_armor == 2
-        assert tracker.enemy.upgrades == {UpgradeId.PROTOSS_SHIELDS_1, UpgradeId.PROTOSS_SHIELDS_2}
+        assert require_enemy(tracker.enemy).upgrades == {UpgradeId.PROTOSS_SHIELDS_1, UpgradeId.PROTOSS_SHIELDS_2}
         never_seen = make_unit(2, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
         assert _observe(tracker, never_seen)[0].shield_armor == 2
         visible = make_unit(3, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=0)
@@ -469,7 +474,7 @@ class TestWhatAUnitReads:
 
     def test_a_unit_without_shields_has_no_shield_armor(self, tables: GameData) -> None:
         tracker = _tracker(tables)
-        tracker.enemy.assume_upgrades(UpgradeId.PROTOSS_SHIELDS_1)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.PROTOSS_SHIELDS_1)
         (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
         assert marine.shield_armor == 0
 
@@ -612,13 +617,13 @@ def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, inference: 
     """The computer researches during a corpus game, and its units carry the levels NachOS reads. They reveal nothing
     more, since none of this player's units leaves its base to see it."""
     api = Api(enemy_upgrade_inference=inference)
-    assert _replay(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+    assert require_enemy(_replay(path, api).enemy).upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
 @pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
 def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path: Path) -> None:
     api = Api(enemy_upgrade_inference=UpgradeInference.NONE)
-    assert not _replay(path, api).enemy.upgrades
+    assert not require_enemy(_replay(path, api).enemy).upgrades
 
 
 def _upgraded(row: UnitTypeData) -> list[float]:

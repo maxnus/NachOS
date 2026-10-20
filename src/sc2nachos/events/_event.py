@@ -8,7 +8,7 @@ from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_meta import _EventMeta
 from sc2nachos.geometry import Area
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
-from sc2nachos.match import Result
+from sc2nachos.match import Race, Result
 from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 from sc2nachos.units._units import _unit_type_ids_in
@@ -65,6 +65,15 @@ class GameEndEvent(Event):
 
 # What an observation reports since the one before, handed out in this order between `TurnStartEvent` and
 # `TurnEvent`. What happened out of sight is reported when next seen.
+
+
+class EnemyRaceKnownEvent(Event):
+    """The enemy's race is known: on the first turn, wherever the game gives it or the enemy did not ask for Random,
+    and against a computer that did, on the turn its first unit is seen. It comes once a game, and never in a game with
+    no other player."""
+
+    race: Race
+    """The race the enemy plays."""
 
 
 class AnyUnitEvent(Event):

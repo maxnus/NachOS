@@ -21,11 +21,12 @@ _ENEMY = raw_pb2.Alliance.Enemy
 @final
 class _UpgradeTracker:
     """This player's finished upgrades, as of the last observation, and each unit's type with its owner's upgrades
-    applied: this player's own for its units, `Enemy.upgrades` for the enemy's, and none for anyone else's."""
+    applied: this player's own for its units, `Enemy.upgrades` for the enemy's, and none for anyone else's or in a
+    game with no other player."""
 
     __slots__ = ("_enemy", "_game_data", "_own", "_reader", "_rows")
 
-    def __init__(self, game_data: GameData, enemy: Enemy) -> None:
+    def __init__(self, game_data: GameData, enemy: Enemy | None) -> None:
         self._game_data = game_data
         self._enemy = enemy
         self._own: frozenset[UpgradeId] = frozenset()
@@ -97,4 +98,4 @@ class _UpgradeTracker:
         alliance = unit._raw_alliance
         if alliance == _OWN:
             return self._own
-        return self._enemy.upgrades if alliance == _ENEMY else frozenset()
+        return self._enemy.upgrades if alliance == _ENEMY and self._enemy is not None else frozenset()

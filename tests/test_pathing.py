@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from s2clientprotocol import data_pb2, query_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId
@@ -17,7 +16,16 @@ from sc2nachos.pathing import Pathing
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
 from sc2nachos.units import Unit
 from sc2nachos.units._tracking import _Tracker
-from support import FakeTransport, RealGame, make_client, make_observation, make_response, make_tables, make_unit
+from support import (
+    FakeTransport,
+    RealGame,
+    make_client,
+    make_enemy,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.REAPER))
 
@@ -31,7 +39,7 @@ def _answering(*distances: float) -> tuple[Pathing, FakeTransport]:
 
 def _reaper(*, at: tuple[float, float] = (10.0, 10.0), left_out_since: bool = False) -> Unit[Any]:
     """This player's reaper under tag 7, which the last observation left out if `left_out_since`."""
-    tracker = _Tracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, make_enemy())
     tracker.update(make_observation(0, units=[make_unit(7, UnitTypeId.REAPER, at=at)]).observation.raw_data, 0)
     (reaper,) = tracker.unit_tracker.present
     if left_out_since:

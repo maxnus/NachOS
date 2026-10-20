@@ -32,6 +32,7 @@ from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
@@ -287,8 +288,13 @@ class Api:
         return game.orders._refusals + game.state.action_failures
 
     @property
-    def enemy(self) -> Enemy:
-        """The other player, and what is known of it.
+    def player(self) -> Player:
+        """This player: its id, its race and the one it asked for, and its name."""
+        return self._current_game().player
+
+    @property
+    def enemy(self) -> Enemy | None:
+        """The other player, and what is known of it, or `None` in a game with no other player, such as a mini-game.
 
         `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
         which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,

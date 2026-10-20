@@ -380,6 +380,10 @@ it.
 | `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.resources.covers(cost.resources)` against a cost |
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
+| `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
+| `bot.enemy_race` | `api.enemy.race`, `None` until known; `api.enemy.requested_race` reads `RANDOM` |
+| `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; `api.enemy` is `None` in a game with no other player |
+| `opponent_id`, a ladder argument | nothing yet |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `steps_left`; once done, `u in api.upgrades` |
@@ -390,6 +394,10 @@ it.
 | `state.dead_units`, `chat`, `actions`, `alerts` | events: see Events |
 | `state.action_errors` | `api.action_failures`, each an `ActionFailure`, which is a report and not an exception |
 
+- **The enemy's race is `None` until it is known, never `RANDOM`.** A game of two gives it from the start, as it
+  does a Random player's, and `EnemyRaceKnownEvent` comes on the first turn; only a computer that asked for Random
+  shows its race with its first unit ([game behavior](game-behavior/protocol.md)). No player has a name, so
+  python-sc2's `name` reads empty where NachOS's reads `None`.
 - **Each read answers from the last observation, and nothing is read until asked for.** There is no `state`
   object to hold on to; `api.score` read next turn is next turn's score.
 - **Half a supply is kept.** The game rounds the supply in use, and the army's, down: one zergling leaves it where

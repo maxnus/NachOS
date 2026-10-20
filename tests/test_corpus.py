@@ -11,7 +11,6 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     EnemyUnitDamagedEvent,
@@ -42,7 +41,7 @@ from sc2nachos.protocol import Client, PlaybackTransport, Recording
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
-from support import HAPPENINGS
+from support import HAPPENINGS, make_enemy
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -115,7 +114,7 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), make_enemy())
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(_observations(recording)):
         step = observation.observation.game_loop
@@ -260,7 +259,7 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), make_enemy())
     game_map = _map(recording)
     for observation in _observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)
