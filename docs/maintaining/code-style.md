@@ -1,12 +1,23 @@
 # Code style
 
-How code here is named and written, carried over from AvocaDOS so that the two codebases read alike.
+How code here is named and written, carried over from AvocaDOS so that the two codebases read alike. A new rule of
+style goes here, with an example from the code.
 
 ## Names
 
 - **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
   accurate: a plain name a reader can predict beats a clever synonym.
-- **A constant, a function or a variable is named for what it holds or returns**, so its name needs no comment.
+- **A constant, a function or a variable is named for what it holds or returns**, so its name needs no comment:
+  `_MIN_MINERAL_FIELDS_PER_EXPANSION`, never `_FEWEST`. A comment that explains a name means the name is wrong.
+- **Never a one-word name** for a constant, a helper or a variable, private or public, in `tools/` too. A predicate
+  reads as a clause where it is called: `_holds_a_tag_of(dead, unit)`, `_new_tag_is_same_unit(unit, display)`. A
+  lambda's parameter, which lives for one line beside what it iterates, is the one exception. A pull request renames
+  a one-word name in the code it touches, not only in the code it adds.
+- **A name that holds an instance of a NachOS class follows the class**: `order_book: OrderBook`, never `orders`. A
+  constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
+- **A classmethod that builds an instance is named `from_` what it is built from**: `Footprint.from_rows`,
+  `GamePorts.from_start_port`, `Player._from_game`. `of` names what selects part of a whole: `Units.of_type`,
+  `AnyAreaEvent.of(area)`.
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 
 ## Signatures
@@ -21,6 +32,9 @@ How code here is named and written, carried over from AvocaDOS so that the two c
 - **One class per file** (except small data classes). File named after the class, snake-cased.
 - **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
 - **Short functions**: extract a named helper rather than growing the caller.
+- **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
+  `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
+  (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **loguru**, not stdlib `logging`.
