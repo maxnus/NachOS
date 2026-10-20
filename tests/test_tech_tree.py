@@ -26,7 +26,7 @@ from sc2nachos.units import Unit
 from support import RealGame
 
 _REPO = Path(__file__).parents[1]
-_GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
+_TOOLS = _REPO / "tools"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
@@ -38,13 +38,18 @@ _CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 _UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
 
 
-def _generator() -> ModuleType:
-    """The `tools/generate_tech_tree.py` module, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location("generate_tech_tree", _GENERATOR)
+def _tool(name: str) -> ModuleType:
+    """The module `tools/<name>.py`, loaded by path since `tools` is not a package."""
+    spec = importlib.util.spec_from_file_location(name, _TOOLS / f"{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _generator() -> ModuleType:
+    """The `tools/generate_tech_tree.py` module."""
+    return _tool("generate_tech_tree")
 
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
@@ -302,11 +307,16 @@ def _sweep() -> TechTree:
     return _generator().read(_findings_file(), _upgrade_findings_file())
 
 
+def _corpus_answer() -> sc2api_pb2.ResponseData:
+    """The tables of the first corpus game, as the game answered them; every game on the current ladder shares them."""
+    recording = Recording(_CORPUS[0])
+    return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
+
+
 @pytest.fixture(scope="module")
 def tables() -> GameData:
     """The game data of the first corpus game, which every game on the current ladder shares."""
-    recording = Recording(_CORPUS[0])
-    return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
+    return GameData(_corpus_answer())
 
 
 class TestWhatTheTablesSay:
@@ -488,6 +498,25 @@ class TestWhatTheSweepFound:
     def test_what_is_offered_that_no_curated_id_names_is_known(self) -> None:
         """Anything else a unit type is offered must be curated, or the tables leave it out."""
         assert _generator().uncurated(_findings_file()) == _UNCURATED_OFFERED
+
+    def test_what_makes_a_unit_type_is_tried_by_every_game_id_a_unit_may_be_offered_it_by(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A barracks is offered the id its tech lab's row names, not the curated one standing for every tech lab; a
+        liberator the curated id, not the one its sieged form's row names. A custom id is none of the game's."""
+        monkeypatch.syspath_prepend(str(_TOOLS))
+        offered = _tool("sweep_tech_tree").creation_abilities_offered(_corpus_answer())
+        assert offered[UnitTypeId.TECH_LAB_BARRACKS] == {
+            RawAbilityId.Build_TechLab_Barracks,
+            RawAbilityId.Build_TechLab,
+        }
+        assert offered[UnitTypeId.LIBERATOR_SIEGED] == {
+            RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode,
+            RawAbilityId.Morph_LiberatorAGMode,
+        }
+        assert offered[UnitTypeId.SIEGE_TANK_SIEGED] == {RawAbilityId.SiegeMode_SiegeMode}
+        assert offered[UnitTypeId.REFINERY_RICH] == {RawAbilityId.TerranBuild_Refinery}
+        assert offered[UnitTypeId.MARINE] == {RawAbilityId.BarracksTrain_Marine}
 
 
 def _offered(transport: WebSocketTransport, unit: Unit) -> set[int]:
