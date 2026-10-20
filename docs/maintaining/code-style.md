@@ -27,11 +27,12 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Keyword-only args**: use `*` in signatures liberally.
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
-- **`TYPE_CHECKING` guard** for imports that would otherwise be circular.
 
 ## Structure
 
 - **One class per file** (except small data classes). File named after the class, snake-cased.
+- **No circular imports.** Where two modules would import each other, move what both need into a module of its own.
+  A `TYPE_CHECKING` guard around an import that would be circular is the last resort.
 - **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
 - **Short functions**: extract a named helper rather than growing the caller.
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
