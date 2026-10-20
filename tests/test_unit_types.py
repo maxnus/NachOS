@@ -3,14 +3,12 @@
 # Each `pyright: ignore` below marks an error the type checker must keep reporting.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
-import importlib.util
 from pathlib import Path
 from typing import Any, assert_type
 
 import pytest
 from s2clientprotocol import data_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
@@ -19,23 +17,30 @@ from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
 from sc2nachos.units._tracking import _Tracker
-from support import make_observation, make_tables, make_unit
-
-_GENERATOR = Path(__file__).parents[1] / "tools" / "generate_unit_types.py"
+from support import load_tool, make_enemy, make_observation, make_tables, make_unit
 
 
 def _generator() -> Any:
-    """The `tools/generate_unit_types.py` module, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location("generate_unit_types", _GENERATOR)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The `tools/generate_unit_types.py` module."""
+    return load_tool("generate_unit_types")
 
 
 @pytest.fixture(scope="module")
 def tables() -> GameData:
     return _generator().corpus_tables()
+
+
+@pytest.fixture(scope="module")
+def form_of() -> dict[UnitTypeId, UnitTypeId]:
+    """The type the corpus's tables call each type a form of, as the sweeps read it."""
+    return load_tool("_sandbox").unit_aliases(_generator().corpus_answer())
+
+
+def test_the_sweeps_read_the_type_a_form_is_of_where_both_are_curated(form_of: dict[UnitTypeId, UnitTypeId]) -> None:
+    assert form_of[UnitTypeId.SIEGE_TANK_SIEGED] is UnitTypeId.SIEGE_TANK
+    assert form_of[UnitTypeId.BARRACKS_FLYING] is UnitTypeId.BARRACKS
+    assert UnitTypeId.SIEGE_TANK not in form_of
+    assert UnitTypeId.MARINE not in form_of
 
 
 def _types() -> list[Any]:
@@ -73,19 +78,21 @@ def _named(prefix: str) -> set[UnitTypeId]:
 
 class TestUnitType:
     @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
-    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(self, group: str, tables: GameData) -> None:
+    def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(
+        self, group: str, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
-        base type. The factory trains a hellion and a hellbat both, so neither links them; each performs the morph to
-        the other."""
+        call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
+        performs the morph to the other."""
         first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
         if group == "AnyHellion":
             assert UnitTypeId.HELLION in tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
             assert UnitTypeId.HELLBAT in tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
             return
         linked = [
-            TECH_TREE.morph_sources.get(one) is other
+            TECH_TREE.unit_types.morph_sources.get(one) is other
             or other in tables.units[one].tech_aliases
-            or tables.units[one].base_type is other
+            or form_of.get(one) is other
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
@@ -149,12 +156,14 @@ class TestUnitType:
             UnitTypeId.OVERSEER_SIEGED,
         }
 
-    def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(self, tables: GameData) -> None:
-        """Its base type and its tech aliases. An adept's shade has the adept as its base type, but is a unit of its
-        own beside the adept."""
+    def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(
+        self, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
+        """Its tech aliases, and the type the tables call it a form of. They call an adept's shade a form of the
+        adept, but it is a unit of its own beside the adept."""
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
             row = tables.units[unit_type]
-            for linked in {*row.tech_aliases, *filter(None, [row.base_type])}:
+            for linked in {*row.tech_aliases, *filter(None, [form_of.get(unit_type)])}:
                 shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
                 assert shared, (unit_type, linked)
 
@@ -216,7 +225,7 @@ _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
 def _unit(unit_type: int) -> Unit[Any]:
-    tracker = _Tracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, make_enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
     return tracker.unit_tracker.present[0]
 
@@ -245,7 +254,7 @@ def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnU
     assert_type(units.own.of_type(UnitType.Worker), Units[OwnUnit[UnitType.Worker]])
     assert_type(units.of_type(UnitType.AnyMineralField), Units[Unit[UnitType.AnyMineralField]])
     assert_type(own.excluding_type(UnitType.Marine), Units[OwnUnit[Any]])
-    units.of_type(UnitType.Marine, UnitTypeId.MARINE)  # pyright: ignore[reportArgumentType]
+    assert_type(units.of_type(UnitType.Marine, UnitTypeId.MARAUDER), Units[Unit[Any]])
 
 
 def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], other: OwnUnit[Any]) -> None:
@@ -258,6 +267,15 @@ def _a_unit_is_narrowed_by_unit_type(unit: Unit[Any], own_unit: OwnUnit[Any], ot
         assert_type(other, OwnUnit[UnitType.Marine] | OwnUnit[UnitType.Marauder])
     assert_type(UnitType.Marine.id, UnitTypeId)
     _ = UnitType.Terran.id  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _what_a_structure_of_this_players_builds_and_carries_is_its_own(structure: OwnUnit[Any]) -> None:
+    """What the type checker makes of the units an own structure names. Never run."""
+    assert_type(structure.add_on, OwnUnit[Any] | None)
+    assert_type(structure.construction, OwnUnit[Any] | None)
+    assert_type(structure.builder, OwnUnit[Any] | None)
+    if (builder := structure.builder) is not None:
+        _ = builder.orders
 
 
 def _a_group_is_typed_as_in_the_groups_all_its_types_are_in(

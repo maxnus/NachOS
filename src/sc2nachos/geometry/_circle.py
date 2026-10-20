@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._area import Area
-from sc2nachos.geometry._point import Point, coordinates
-from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+from sc2nachos.geometry._point import Point, checked_ground_offset
+from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
 
 if TYPE_CHECKING:
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import PointLike
 
 
@@ -30,7 +32,7 @@ class Circle(Area):
         """A circle of `radius` around `center`."""
         if radius <= 0:
             raise ValueError("a circle must have a positive radius")
-        self._center = Point(coordinates(center)[:2])
+        self._center = Point(center[:2])
         self._radius = radius
 
     @property
@@ -53,22 +55,23 @@ class Circle(Area):
         """The length of the boundary."""
         return 2 * math.pi * self._radius
 
-    def __contains__(self, point: PointLike) -> bool:
+    def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether `point` lies in the circle, boundary included."""
-        position = coordinates(point)
+        position = coordinates_or_tile_center(point)
         dx = position[0] - self._center[0]
         dy = position[1] - self._center[1]
         return dx * dx + dy * dy <= self._radius**2
 
     def translated(self, offset: PointLike) -> Circle:
-        """The circle shifted by `offset`, keeping its radius."""
-        return Circle(self._center + offset, self._radius)
+        """The circle shifted by `offset`, keeping its radius. Raises `ValueError` for an offset with a height."""
+        return Circle(self._center + checked_ground_offset(offset), self._radius)
 
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the circle."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the circle, by `rng` or the `random` module's own generator."""
+        random_fraction = random.random if rng is None else rng.random
         # sqrt, because a uniform radius would crowd the points toward the center.
-        distance = self._radius * math.sqrt(random.random())
-        angle = random.uniform(0, 2 * math.pi)
+        distance = self._radius * math.sqrt(random_fraction())
+        angle = 2 * math.pi * random_fraction()
         return Point(
             (
                 self._center[0] + distance * math.cos(angle),
@@ -81,7 +84,7 @@ class Circle(Area):
 
         A point inside the circle is its own nearest point, at distance zero.
         """
-        position = Point(coordinates(point)[:2])
+        position = Point(point[:2])
         offset = position - self._center
         distance = offset.length
         if distance <= self._radius:
@@ -95,6 +98,12 @@ class Circle(Area):
 
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
+        origin, tiles_in_circle = self._tile_mask()
+        return TileSet._from_mask(origin, tiles_in_circle)
+
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given,
+        as a mask indexed `[x, y]`, and first the tile at its `[0, 0]` entry."""
         # Derived from the circle, not from its bounding rectangle: that rectangle is half-open, so it would
         # drop a tile center sitting exactly on the circle's rightmost or topmost point.
         center_x, center_y = self._center[0], self._center[1]
@@ -102,13 +111,14 @@ class Circle(Area):
         first_y = math.ceil(center_y - self._radius - 0.5)
         last_x = math.floor(center_x + self._radius - 0.5)
         last_y = math.floor(center_y + self._radius - 0.5)
+        if within is not None:
+            first_x, first_y = max(first_x, int(within.x)), max(first_y, int(within.y))
+            last_x = min(last_x, int(within.x + within.width) - 1)
+            last_y = min(last_y, int(within.y + within.height) - 1)
         offsets_x = numpy.arange(first_x, last_x + 1) + 0.5 - center_x
         offsets_y = numpy.arange(first_y, last_y + 1) + 0.5 - center_y
-        inside = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
-        rows, columns = numpy.nonzero(inside)
-        return TileSet(
-            Tile(first_x + row, first_y + column) for row, column in zip(rows.tolist(), columns.tolist(), strict=True)
-        )
+        tiles_in_circle = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
+        return Tile(first_x, first_y), tiles_in_circle
 
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.

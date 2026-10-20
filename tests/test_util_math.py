@@ -78,6 +78,15 @@ class TestStickyRound:
     def test_custom_tolerance(self):
         assert sticky_round(4.4, 4, tolerance=0.1) == 4
 
+    def test_a_tie_rounds_up(self):
+        """Python's `round` sends a tie to the even integer, so 2.5 gave 2."""
+        assert [sticky_round(value, 0) for value in (2.5, 3.5, -2.5)] == [3, 4, -2]
+
+    def test_what_lies_below_a_tie_rounds_down(self):
+        """`math.floor(value + 0.5)` took the largest float below 0.5 to 1, and an odd float above 2**52 up one."""
+        assert sticky_round(math.nextafter(0.5, 0), 9) == 0
+        assert sticky_round(2.0**52 + 1, 0) == 2**52 + 1
+
 
 class TestDamp:
     def test_moves_from_start_toward_end(self):
@@ -134,10 +143,15 @@ class TestLogistic:
 
 
 class TestSCurve:
-    def test_fixes_the_endpoints_and_the_middle(self):
-        assert s_curve(0.0) == pytest.approx(0.0)
-        assert s_curve(0.5) == pytest.approx(0.5)
-        assert s_curve(1.0) == pytest.approx(1.0)
+    @pytest.mark.parametrize("k", [1.0, 7.0, -3.0, 1000.0])
+    def test_fixes_the_endpoints_and_the_middle_exactly(self, k):
+        """The logistic form gave `s_curve(0.5)` as 0.4999999999999999."""
+        assert [s_curve(x, k=k) for x in (0.0, 0.5, 1.0)] == [0.0, 0.5, 1.0]
+
+    def test_no_steepness_is_the_identity(self):
+        """It divided by zero."""
+        assert s_curve(0.3, k=0) == 0.3
+        assert s_curve(0.3, k=1e-6) == pytest.approx(0.3)
 
     def test_monotonic(self):
         values = [s_curve(x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]

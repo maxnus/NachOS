@@ -9,13 +9,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #125. `uv run pytest` passes 2073 tests on branch `claude/remove-hold`; `uv run
-  pytest -m integration` passes 26 against a real game (run 2026-10-16).
-- **The queue per unit (#115 to #120) is reversed** on branch `claude/remove-hold` (the owner, 2026-10-16):
-  NachOS holds no order.
-- **M4 is done but for slices 6 and 7** (below): slice 4, orders (#42 to #46), one id per action (#103 to #107),
-  slice 5, the derived reads (#121), the expansions (#122), the placement grids (#123) and slice 8, the demo bot
-  (#125).
+- nachOS `main` has every PR to #143. `uv run pytest` passes 2405 tests on branch `claude/players`;
+  `uv run pytest -m integration` passes 34 against a real game (run 2026-10-20, on that branch).
+- **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
+- **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
+  (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
+  bot (#125). Slice 7, typed order methods on `OwnUnit`, is deferred (below). Next is M5, in AvocaDOS.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR; its
   `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
@@ -33,6 +32,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replace would leave a structure idle for a turn (#43).
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
+- **A unit type names what makes it, not what the tables alias it to** (#75; the owner, 2026-09-26 and 2026-10-19).
+  `UnitTypeData.producers` holds every type that makes one, from the tech tree, with the archon's templar written by
+  hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
+  tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
+  `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
+- **The tech tree splits into what each data class reads** (the owner, review of #138, and 2026-10-20, one question
+  at a time): `TechTree(base_build, unit_types, abilities, upgrades)`, of `TechTreeUnitTypes`, `TechTreeAbilities` and
+  `TechTreeUpgrades`, each holding the mappings its data class reads under shorter names
+  (`tech_tree.abilities.products`), and each data class's reader taking only its own. `tools/generate_tech_tree.py`
+  works out the performers, the producers and the research abilities and writes them into the module, so that the
+  records are plain, over the tree working them out at import.
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
   refuses is listed in `api.action_failures` on the next turn, once for each unit it named, under the id ordered,
   ahead of what the game gave up on. The `Order` stays as a handle: its `data`, `withdraw()`, and what `issued_to`
@@ -97,6 +107,85 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A liberator's siege is `LIBERATOR_SIEGE_AT`, the game's defender mode at a point, out of the custom `SIEGE`:
     abilities that behave differently are not one id. `UNSIEGE` stays one for all four. `RECALL` is refused for any
     group, since two motherships never stand.
+- **Debug, chat, the camera, pathing distances and leaving** (slice 6, the owner, 2026-10-16 and the reviews of #127,
+  one question at a time):
+  - `api.debug` is one `DebugCommands` per game, on `_Game` like `Camera` (the owner, review of #127, over one for the
+    api's life). `refresh_steps`, `default_color` and `default_text_size` are set in a game, a `GameStartEvent` handler
+    setting them for every game; there are no default steps, so that `None` has one meaning (the owner's second round:
+    defaults for size and color only).
+  - Shapes are values with offsets (the owner's second round, over offsets on `draw_*` methods and a group handle):
+    `DebugText`, `DebugBox`, `DebugSphere`, `DebugMark` and `DebugLine(to=)`, each with `offset=` and `color=`, and
+    `DebugGroup(*shapes, offset=, color=)`, itself a shape. `api.debug.draw(at, *shapes, color=, steps=)` returns one
+    `Drawing`; the `draw_*` methods went but for `draw_text_on_screen`. A figure made once is drawn at any number of
+    units.
+  - A drawing lasts `steps=`, 1 by default, chosen over one turn and over until cleared; `steps=None` lasts until
+    `drawing.remove()`. `refresh_steps` sends it at most that often, and only when it changed. A drawing at a unit, or a
+    line to one, follows it, and ends once the unit is dead (the second review). Everything goes out after the turn's
+    `RequestAction`, in one `RequestDebug`, and a request the game refuses raises out of `play` (the code review, over
+    catching it).
+  - `Marker` holds `CROSS = "x"`, `PLUS = "+"`, `STAR = "*"`, and `TRIANGLE`, `SQUARE`, `PENTAGON` and `HEXAGON`, each
+    with a level base, polygons being wanted only as marks (the owner's second round, over a `Polygon` of any sides).
+    Colors are a `Color` enum, or any red, green and blue.
+  - Cheats are on and off, tracked (`cheats`, `turn_on`, `turn_off`), over a raw toggle. The givers are `give_minerals`,
+    `give_resources` and `give_upgrades`; `gas`, which gives nothing, is left out.
+  - `api.chat(text, team_only=False)` is on the api itself, over `api.orders.chat`, and goes in the turn's
+    `RequestAction`. A text of 1040 bytes or more raises `ValueError`, since it kills the game client.
+  - `api.leave_game()` leaves at the end of the turn, always at once, over waiting for the turn's chat to arrive: a
+    goodbye goes two steps before. `play` returns `Result.DEFEAT`, since the game tells a client that left nothing
+    (review of #127, over `UNDECIDED`).
+  - `sc2nachos.pathing.Pathing`, as `api.pathing.query_distance` and `query_distances`, named for asking the game
+    (review of #127), is a package of its own, which an up-to-date pathing grid and NachOS's own pathfinding may join.
+  - `sc2nachos.camera.Camera`, as `api.camera`, holds `center` and `move_to`, in place of `api.orders.camera`; and
+    `Unit.is_selected` is read, both for a bot's debug tools.
+- **More events before M5** (the owner, 2026-10-18, from the Discussions #62, #65 and #67, one question at a time):
+  - `OwnUnitBecameIdleEvent`: a finished unit of this player's with no orders and none sent that may not show yet,
+    having had orders or such an order, been unfinished, or not been listed in the observation before. Chosen over
+    reported orders alone, which reports a unit just ordered on the ladder, and over a change from busy alone.
+  - `OwnWarpInStartedEvent`, and `OwnUpgradeStartedEvent` and `OwnUpgradeStoppedEvent`, both `(upgrade, unit)`, under
+    a new base `AnyUpgradeEvent` with `OwnUpgradeFinishedEvent`. Started counts a queued research; stopped is a cancel
+    or the structure's death, never a finish (tool `sweep_orders`, `research-ends`).
+  - `OwnChatEvent` and `OpponentChatEvent` (review of #131: "opponent" for the other player, as
+    `opponent_start_locations` has it, "enemy" for units): the opponent is any other player but one the game's info
+    lists as an observer, an ally included in a larger game, since the protocol names no teams.
+  - `OwnUnitDiedEvent` and `EnemyUnitDiedEvent`, `OwnUnitTypeChangedEvent` and `EnemyUnitTypeChangedEvent`, the
+    owner's addition, and `NeutralUnitDiedEvent` for the map's units, whose deaths matter to a bot: a mineral field
+    gone, a rock broken.
+  - Every base is an `Any…` event, which NachOS never hands out itself (review of #131): `AnyUnitEvent`,
+    `AnyBuffEvent`, `AnyVitalEvent`, `AnyAreaEvent`, `AnyUpgradeEvent`, `AnyUnitTypeChangedEvent`, `AnyUnitDiedEvent`
+    and `AnyChatEvent`. Chosen over handing out a base for the units and players neither side's kind takes, since a
+    bot wants one side and can subscribe to both: an ally's unit and an observer's message get no event.
+  - `api.researches` (reviews of #131): a mapping from each upgrade running or queued to its `Research` record, with
+    `unit`, the table's time as `total_steps`, `steps_left`, and `progress` worked out from the two, chosen over a
+    tuple of records and over a mapping to the structure alone. It replaces `api.research_progress`, which answered
+    one upgrade. The steps are whole (the owner): the tables' research times are, and the game's progress rounds to
+    the steps left exactly (tool `sweep_orders`, `research-ends`).
+  - An event's side is the side the unit is on at the time, which its class follows (`Unit._update_alliance`), as the
+    existing pairs had it; `unit.first_alliance` says whose it was.
+  - A neural parasite's takeover is handled by nothing but `UnitAllianceChangedEvent` and the class switch; the other
+    events take it by their own rules, as `docs/events.md` says (the owner, 2026-10-19). As a rule, a niche case of
+    one spell gets its behavior documented, never event generation made more complicated for it.
+  - Not done: own and enemy as a selector over one class (Discussion #66), which would lose the `OwnUnit` typing of
+    the own events.
+- **Subscribing is on the api** (#128, the owner, 2026-10-18): `api.on`, `api.subscribe`, `api.unsubscribe`,
+  `api.emit` and `api.handler_timings`, over `api.events.on` and the rest, so that marking a method and subscribing its
+  instance sit on one object. The bus is private (`_EventBus`), and `api.events` is gone. `api.on` returns an
+  `EventSubscriber`, as `where` does, public and exported from `sc2nachos.events`: one class, the type a bot sees and
+  the object it gets, over a public Protocol beside a private class, and named for what it does over `EventDecorator`.
+- **The docs** (the owner, 2026-10-18, one question at a time): the guides for bot authors stay in `docs/`;
+  `docs/reference/` holds `python-sc2.md`, every python-sc2 name and difference, and `game-behavior/`, the catalog,
+  one page per topic, with `cheats.md` its cheats topic; `docs/maintaining/` holds `curating-ids.md` and
+  `code-review.md`. `migrating-from-python-sc2.md` is a short page for people: the same bot in both, the main changes
+  and the commonest pitfalls. A measurement lives only in the catalog; everything else links there.
+- **Typed order methods are deferred** (slice 7, the owner, 2026-10-18): `api.orders.issue` stays the one way to
+  order. Of the 312 abilities offered to some type, a type is offered at most 24, and pyright's completion would offer
+  every unit all of them; AvocaDOS's build orders hold ids, so it would order through `issue` anyway.
+- **`issue` gives every unit its order** (the owner, 2026-10-18): one method taking one unit or many, over a second
+  `issue_all` for groups. An ability every unit of a command carries out goes out as one command naming them all;
+  any other as a command to each, so three barracks given a marine train three, which raised before. A research, or a
+  structure placed at a point or on a geyser, given to several raises `ValueError`, since only one of them can carry
+  it out: chosen over sending them as given, which the game answers by researching once and by charging every builder
+  until all but one give up, and over raising for the build alone. So does a landing, a rooting or a warp-in given to
+  several at one point (review of #130), which the tables do not mark: `ABILITIES_PLACING_AT_THE_TARGET`.
 - **The derived reads** (#121, the owner, 2026-10-07):
   - The unit sets are `UnitType` groups, read through `of_type`, with no second spelling on `Api`: `Worker` (no
     MULE), `Townhall` (lifted forms too), `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, the last three
@@ -106,8 +195,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall.
   - `api.in_production(types)` gives what the game has started or charged for, one `InProduction` per unit with its
     progress, and not the turn's orders, which are in `issued_to`; a count is its `len`. A morph other than a larva's
-    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)` is from 0 to
-    1, or `None`.
+    reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)`, from 0 to
+    1 or `None`, gave way to `api.researches` in #131.
   - No `api.enemy.units`: the enemy's units stay `api.units.enemy`.
 - **The expansions** (#122, the owner, 2026-10-08 and review of #122):
   - `api.expansions` is found once at the start, on the api and not the map, so that `GameMap` stays a pure reading of
@@ -158,6 +247,42 @@ Keep this file current: when a step is done, say so here in the same pull reques
     several areas; the main nouns import from `sc2nachos` itself, the events staying in `sc2nachos.events`. Not done:
     a callable target per unit (reconsider with slice 7), `issue` with no units (it keeps raising), and `UnitOrder`'s
     `_target` field and its `_NotReported` marker stay.
+- **A tile is a frozen dataclass, not a tuple** (the owner, 2026-10-19, after #2 removed the round trip that made a
+  tuple's hashing matter). As a tuple, a tile passed pyright as a point, equalled and hashed like its corner point,
+  indexed numpy as an array index and needed its tuple behavior patched out. `@dataclass(frozen=True, slots=True,
+  order=True, init=False)` with its own `__init__` (the owner's idea): `operator.index` makes a numpy integer an
+  int, and a float raises. No arithmetic methods: Python's own `TypeError` stands. The generated equality and hash
+  are kept; a bot's own `set[Tile]` pays for them, a 10,000-tile flood fill taking 10.8 ms against 7.1 with tuple
+  tiles, and keys on `(tile.x, tile.y)` where that matters. `TileSet` holds `(x, y)` pairs, so its own lookups stay
+  a tuple's, but its constructor takes tiles: the pairs stay private to the library (review of #137).
+  `Tile.shifted(dx, dy)` moves a tile by whole tiles, refusing a fraction, where `translated` moves its center by
+  any offset. This supersedes the note of 2026-09-07 in AvocaDOS's plan, "A tile is a tuple for hashing".
+- **No runtime check that a point is a point** (the owner, review of #137): `coordinates()` went, and a method that
+  takes a point reads its coordinates. pyright catches a tile or a unit given as one, and anything else gets
+  Python's own error. What must refuse a non-point to work at all, `in`, a grid's index and `Point`'s arithmetic,
+  raises `not_a_point_error`.
+- **The players** (the owner, 2026-10-20, one question at a time):
+  - `api.player` is a `Player` record of this player, with `id`, `race`, `requested_race` and `name`, over a lone
+    `api.race`.
+  - `api.enemy` gains `id`, `requested_race`, `name` and `race`. Its `race` reads `None` until known, never `RANDOM`:
+    a game of two gives it from the start (tool `sweep_requests`, `players`), and a Random computer's is its first
+    unit's.
+  - Reading `api.enemy` raises `NoEnemyError` in a game with no other player, such as a mini-game (the owner, review of
+    #143, so that no bot has to check for one), over `Enemy | None` and over optional fields; the game itself holds
+    no enemy there.
+  - `EnemyRaceKnownEvent(race)` comes once a game for any race, on the first turn where it is known from the start.
+  - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
+  - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
+- **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
+  "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
+  to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
+  the rule on which functions have one (the owner, review of #144). A classmethod that turns a value of another kind
+  into an instance is named `from_` that value, and `of` names what selects part of a whole or reads something of a
+  value.
+- **The corpus is played on the repo's maps** (the owner, 2026-10-20): it was recorded again once the old one turned
+  out to hold the tables of older map copies, and `tools/sweep_requests.py tables` finds no difference from a game
+  today. The zone groups follow the tables: an acceleration zone and a flying inhibitor zone are no structure, the
+  ground inhibitor zones are, chosen over keeping both groups structures by hand.
 - **The unit type groups** (review of #125, the owner): a group for each structure and unit with a second form
   (`AnySupplyDepot`, `AnyRoach` burrowed or not, `AnyOrbitalCommand`, `AnyCommandCenter` the plain one only...);
   `AnySpire` and `AnyOverlord`, overseers included, as the tables count them, but no `AnyHatchery` or `AnyLair`; the
@@ -166,19 +291,26 @@ Keep this file current: when a step is done, say so here in the same pull reques
   and `AnyZergTownhall`. Each group is in every group that holds all its types, so `AnyDrone` is a `Worker` and
   `CollapsibleTower` a `Structure`.
 
-## 1. The rest of M4
+## Next
 
-From AvocaDOS's `docs/plans/nachOS-plan.md`, section "M4 slices". Each slice is one nachOS PR; the owner chooses
-when each starts.
+- **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
+  players (#143), running on the ladder (its command line, a bot's own arguments in
+  `run_from_command_line`, replay saving), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps),
+  a playback mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
+- M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
-6. **Debug and chat**: typed debug commands, drawing, sending chat, `query_pathing` and leaving a game.
-7. **Typed order methods on `OwnUnit`**, or the decision to defer them.
+## 1. Waiting until something needs them
 
-Waiting until something needs them:
-
+- Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
+- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
+  as a remembered copy, which the tracker assumes (the owner, review of #71).
+- The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
+  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
+- When the corpus is next recorded, `run_ladder` pings the client for its build and warns of one the tech tree was not
+  swept on, as `run_local` warns from the installation without asking the game (the owner, #75).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though
   an unburrow's autocast is the performer's: a burrowed roach comes up by autocast, a drone does not. A family id
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the
@@ -191,12 +323,15 @@ settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS check
 `tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push only when the owner
 says so.
 
-## 3. Later, at M5 (AvocaDOS runs on NachOS)
+## 3. Next, M5 (AvocaDOS runs on NachOS)
 
 In AvocaDOS's plan, section "M5 — The swap". Already known:
 
-- AvocaDOS's own `api.event` and `api.order` become NachOS's `api.events` and `api.orders`; its `OrderManager` keeps
-  the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is `api.orders.issued_to(unit)`.
+- AvocaDOS's own `api.event.on` becomes NachOS's `api.on`, and `api.event.listener`, which subscribes each instance
+  of a class as it is made, an `api.subscribe(self)` in the class's `__init__`. Its `api.order` becomes `api.orders`;
+  its `OrderManager` keeps the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is
+  `api.orders.issued_to(unit)`. `OrderManager._order`, which splits a `Units` into one order per unit, gives a group
+  one `issue`, but for a research or a build at a target, which go to one unit.
 - `phase=` becomes `priority=`, with the handlers that forget the dead at `HIGHEST`.
 - The bot's `MEDIVACINCREASESPEEDBOOST`, `DUTCHMARAUDERSLOW` and `IMMORTALOVERLOAD` take their curated names;
   AvocaDOS's `tests/test_nachos_id_parity.py` fails on those three until then, as expected.

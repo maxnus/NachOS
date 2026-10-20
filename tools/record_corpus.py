@@ -1,7 +1,11 @@
 """Record the games the tests replay: a bare api against the computer, on maps from the current ladder pool.
 
-Needs StarCraft II installed. Records every game, or only those named, into `tests/corpus`, replacing any
-recording of the same name::
+The bare api gives no orders, so the only orders in the corpus are the game's own, nearly all of them workers mining,
+and since nothing leaves its base the corpus shows the computer's army but none of its buildings.
+
+Needs StarCraft II installed, with this repository's `sc2maps/AIE` the copies it finds of the pool's maps: it refuses
+to record on any other copy, since a map file carries data of its own. Records every game, or only those named, into
+`tests/corpus`, replacing any recording of the same name::
 
     uv run python tools/record_corpus.py
     uv run python tools/record_corpus.py PylonAIE_v4-TvZ
@@ -15,9 +19,11 @@ from pathlib import Path
 from loguru import logger
 
 from sc2nachos import Api, ApiBot, run_local
+from sc2nachos.launch import MapFile
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 
 CORPUS = Path(__file__).parents[1] / "tests" / "corpus"
+REPO_MAPS = Path(__file__).parents[1] / "sc2maps" / "AIE"
 STEPS_PER_TURN = 16
 
 _LETTERS = {Race.TERRAN: "T", Race.ZERG: "Z", Race.PROTOSS: "P", Race.RANDOM: "R"}
@@ -56,10 +62,13 @@ GAMES = (
 
 def record(game: CorpusGame) -> None:
     """Play `game` with an api that does nothing, and record it."""
+    map_file = MapFile.find(game.map)
+    if map_file.path.resolve() != (REPO_MAPS / f"{game.map}.SC2Map").resolve():
+        raise SystemExit(f"{game.map} is found at {map_file.path}, which is not this repository's copy in {REPO_MAPS}")
     api = Api()
     bot = ApiBot(api, game.race, "NachOS")
     result = run_local(
-        game.map,
+        map_file,
         bot,
         game.opponent,
         steps_per_turn=STEPS_PER_TURN,

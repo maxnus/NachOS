@@ -125,10 +125,12 @@ class TestVersions:
         install = make_install(tmp_path, 75689, 95841, 93333)
         assert install.builds() == {75689, 93333, 95841}
         assert install.executable().parent.name == "Base95841"
+        assert install.build_to_launch() == 95841
 
     def test_a_build_can_be_asked_for(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 75689, 95841, system="Linux")
         assert install.executable(base_build=75689).parent.name == "Base75689"
+        assert install.build_to_launch(base_build=75689) == 75689
 
     def test_an_absent_build_lists_what_is_there(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 95841)
@@ -177,10 +179,14 @@ class TestMaps:
         assert found.name == "AcropolisLE"
         assert found.path == install.maps / "Ladder2019Season3" / "AcropolisLE.SC2Map"
 
-    def test_the_extension_is_optional_and_the_case_is_not_read(self, tmp_path: Path) -> None:
-        install = make_install(tmp_path, map_files=["PylonAIE.SC2Map"])
-        for asked in ("PylonAIE", "PylonAIE.SC2Map", "pylonaie", "PYLONAIE.sc2map"):
+    def test_the_extension_is_optional_and_the_case_is_read(self, tmp_path: Path) -> None:
+        """On every platform, so a name that works on Windows works on a Linux ladder."""
+        install = make_install(tmp_path, map_files=["PylonAIE.SC2Map", "Handmade.sc2map"])
+        for asked in ("PylonAIE", "PylonAIE.SC2Map"):
             assert MapFile.find(asked, installation=install).name == "PylonAIE"
+        for asked in ("pylonaie", "PYLONAIE.sc2map", "PylonAIE.sc2map", "Handmade"):
+            with pytest.raises(MapNotFoundError, match=r"it has \['PylonAIE'\]"):
+                MapFile.find(asked, installation=install)
 
     def test_the_shallowest_of_several_copies_wins(self, tmp_path: Path) -> None:
         """Map packs install alongside the maps they replace, so one name can match twice."""

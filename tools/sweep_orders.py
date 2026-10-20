@@ -36,7 +36,13 @@ and runs its trials in turn::
   prices, so that the refund is recorded too.
 - `producer-dies` kills what is making something, and reads what the observations after say.
 - `one-command-many-makers` plays without `free`, and gives one train, one research and one add-on to several
-  structures at once, to find whether each carries it out or only one.
+  structures at once, to find whether each carries it out or only one. `one-command-each` gives each of several
+  structures the same train, research, add-on, morph or MULE, each of two SCVs a depot at one site and at sites of
+  their own, and two flying barracks a landing, two spine crawlers a rooting and two warp gates a zealot's warp-in,
+  each at one point, one command each in one request, to find what each carries out and what is charged.
+- `research-ends` reads a research every step to its end, to find whether its order leaves the structure in the
+  observation the upgrade arrives in, which rounding of its progress gives the steps it has left, and what a cancel and
+  the structure's death leave.
 - `add-on-while-flying` plays without `free`, and tells a flying barracks, factory and starport to build a reactor
   with no point, at ground with room beside it, and at ground whose add-on place a depot fills.
 - `queue-cases` plays without `free`, and has an SCV, a probe and a drone build 30 away, an SCV whose site a depot
@@ -72,6 +78,8 @@ and runs its trials in turn::
 - `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
   done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
   come.
+- `gas-buildings` has an SCV, a probe and a drone each build its race's gas building on a rich geyser and on a plain
+  one, and reads the building every step until it is done.
 - `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
   reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
   offered the warp-in by the abilities query, ignoring costs and counting them.
@@ -86,7 +94,7 @@ and runs its trials in turn::
 
 The findings are written as JSON, one entry per trial: every verdict the game answered, one list per request sent,
 the orders of the units the trial read and when, what the game reported it carried out, every action error, and what
-the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in game while writing this:
+the trial measured. `docs/reference/game-behavior/` holds the conclusions. Measured in game while writing this:
 
 - A unit made out of sight is not found made, so a unit of this player's is made first where it would stand.
 - A vital set to 0 by debug command is set to its maximum instead, so a unit is drained to 1 energy.
@@ -105,6 +113,7 @@ the trial measured. `docs/game-behavior.md` holds the conclusions. Measured in g
 
 import argparse
 import json
+import math
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -112,7 +121,7 @@ from functools import partial
 from pathlib import Path
 from typing import Self, cast
 
-from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing, unit_aliases
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
@@ -246,9 +255,10 @@ class _Game:
         self.player = sandbox.player
         self.enemy = 3 - sandbox.player
         self.realtime = realtime
-        self.map = GameMap._of_game(self.client.game_info(), self.client.observation())
+        self.map = GameMap._from_game(self.client.game_info(), self.client.observation())
         raw_data = self.client.game_data()
         self.data = GameData(raw_data)
+        self.form_of = unit_aliases(raw_data)
         self.aims = {entry.ability_id: entry.target for entry in raw_data.abilities}
         self.step = 0
         self.units: dict[int, raw_pb2.Unit] = {}
@@ -257,6 +267,7 @@ class _Game:
         self.minerals = 0
         self.vespene = 0
         self.supply = (0, 0)
+        self.upgrades: frozenset[int] = frozenset()
         self.running: Trial | None = None
         # Every unit made by debug command, the enemy's included; a trial kills them once done.
         self.made: set[int] = set()
@@ -288,6 +299,7 @@ class _Game:
         self.minerals = common.minerals
         self.vespene = common.vespene
         self.supply = (common.food_used, common.food_cap)
+        self.upgrades = frozenset(observation.raw_data.player.upgrade_ids)
         if self.running is not None:
             self.running.reported.extend(_reported(action, self.step) for action in response.actions)
             self.running.errors.extend(_error(error, self.step) for error in response.action_errors)
@@ -503,14 +515,14 @@ _READS = (1, 6, 48)
 
 def _keeps(game: _Game, race: Race) -> list[Trial]:
     trials: list[Trial] = []
-    makers = {row.creation_ability for row in game.data.units.values() if row.base_type is None}
+    makers = {row.creation_ability for row in game.data.units.values() if row.id not in game.form_of}
     performers = [
         row.id
         for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
         if row.race is race
         and row.speed > 0
         and Attribute.STRUCTURE not in row.attributes
-        and row.base_type is None
+        and row.id not in game.form_of
         and row.id not in _NOT_PERFORMERS
     ]
     pad = game.spot(game.toward(12), 4)
@@ -1877,7 +1889,7 @@ def _structure_abilities(game: _Game, race: Race) -> list[Trial]:
     structures = [
         row.id
         for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
-        if row.race is race and Attribute.STRUCTURE in row.attributes and row.base_type is None
+        if row.race is race and Attribute.STRUCTURE in row.attributes and row.id not in game.form_of
     ]
     for structure in structures:
         work = _puts_to_work(game, structure)
@@ -3826,6 +3838,92 @@ def _inject_read(game: _Game, trial: Trial) -> None:
     trial.notes["step, buffs, buff_duration_remain, buff_duration_max, larvae beside"] = reads
 
 
+# --- How long each gas building takes on a rich geyser and on a plain one
+
+# Each race's worker and the ability it builds its gas building by.
+_GAS_BUILDS = (
+    (UnitTypeId.SCV, AbilityId.SCV_BUILD_REFINERY),
+    (UnitTypeId.PROBE, AbilityId.PROBE_BUILD_ASSIMILATOR),
+    (UnitTypeId.DRONE, AbilityId.DRONE_MORPH_EXTRACTOR),
+)
+_GAS_BUILDINGS = (
+    UnitTypeId.REFINERY,
+    UnitTypeId.REFINERY_RICH,
+    UnitTypeId.ASSIMILATOR,
+    UnitTypeId.ASSIMILATOR_RICH,
+    UnitTypeId.EXTRACTOR,
+    UnitTypeId.EXTRACTOR_RICH,
+)
+_PLAIN_GEYSERS = (
+    UnitTypeId.VESPENE_GEYSER,
+    UnitTypeId.VESPENE_GEYSER_PROTOSS,
+    UnitTypeId.VESPENE_GEYSER_PURIFIER,
+    UnitTypeId.VESPENE_GEYSER_SHAKURAS,
+    UnitTypeId.VESPENE_GEYSER_SPACE_PLATFORM,
+)
+
+
+def _gas_buildings(game: _Game) -> list[Trial]:
+    """Have an SCV, a probe and a drone each build its race's gas building on the rich geyser nearest home and on the
+    plain geyser nearest home, and read the building every step until it is done."""
+    table_build_steps = {row.unit_id: row.build_time for row in game.client.game_data().units}
+    return [
+        game.trial(
+            f"{worker_type.name} given {ability.name} on a {'rich' if rich else 'plain'} geyser",
+            partial(_gas_building_read, game, worker_type, ability, rich, table_build_steps),
+        )
+        for worker_type, ability in _GAS_BUILDS
+        for rich in (True, False)
+    ]
+
+
+def _gas_building_read(
+    game: _Game,
+    worker_type: UnitTypeId,
+    ability: AbilityId,
+    rich: bool,
+    table_build_steps: dict[int, float],
+    trial: Trial,
+) -> None:
+    geyser_types = (UnitTypeId.VESPENE_GEYSER_RICH,) if rich else _PLAIN_GEYSERS
+    geysers = [unit for unit in game.units.values() if unit.unit_type in geyser_types]
+    site = _at(min(geysers, key=lambda unit: _at(unit).distance_to(game.home)))
+    (worker,) = game.create(worker_type, site.towards(game.home, 3))
+    # The worker brings the geyser into sight, under the tag it is ordered by.
+    geyser = next(
+        unit
+        for unit in game.units.values()
+        if unit.unit_type in geyser_types and _at(unit).distance_to(site) < 1 and unit.display_type != _SNAPSHOT
+    )
+    trial.notes["verdict"] = game.order(ability, [worker], geyser.tag)
+    trial.notes["ordered at"] = game.step
+
+    def building_on_the_geyser() -> raw_pb2.Unit | None:
+        # Not the placeholder shown while the worker walks there, which the building replaces under a tag of its own.
+        on_the_geyser = (
+            unit
+            for unit in game.own(*_GAS_BUILDINGS)
+            if _at(unit).distance_to(site) < 1 and unit.display_type != _PLACEHOLDER
+        )
+        return next(on_the_geyser, None)
+
+    if not game.until(lambda: building_on_the_geyser() is not None, limit=300):
+        return
+    started = cast("raw_pb2.Unit", building_on_the_geyser())
+    first_read = [game.step, round(started.build_progress, 4)]
+    trial.notes["built"] = _type_name(started.unit_type)
+    trial.notes["first read: step, build progress"] = first_read
+    trial.notes["table's build time"] = table_build_steps.get(started.unit_type)
+    while (unit := game.unit(started.tag)) is not None and unit.build_progress < 1:
+        if game.step > first_read[0] + _PROGRESS_LIMIT:
+            logger.warning("Gave up waiting at step {}", game.step)
+            trial.notes["last read: step, build progress"] = [game.step, round(unit.build_progress, 4)]
+            return
+        game.turn(1)
+    trial.notes["first read done"] = None if unit is None else game.step
+    trial.notes["steps from the first read to done"] = None if unit is None else game.step - first_read[0]
+
+
 # --- What one command naming two units does with an ability: whether one of them carries it out or both
 
 # Where the two units stand, around the sweep's pad, apart enough for two structures of 5x5, and the pylon between
@@ -4450,7 +4548,7 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
     """Whether one command naming several structures is carried out by each or by one.
 
     A group move sends every unit; a spell, a structure and a morph are carried out by one of the group
-    (docs/game-behavior.md). A train, a research and an add-on had not been tried.
+    (docs/reference/game-behavior/abilities-and-orders.md). A train, a research and an add-on had not been tried.
     """
     trials: list[Trial] = []
 
@@ -4513,6 +4611,289 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
     return trials
 
 
+def _one_command_each(game: _Game) -> list[Trial]:
+    """What several units each given the same order, one command each in one request, carry out, and what is charged.
+
+    One command naming them has only one carry out a train, a research, an add-on, a morph, a spell or a build
+    (docs/reference/game-behavior/abilities-and-orders.md). The SCVs the game starts with are stopped first, so that
+    nothing mined comes into the purse.
+    """
+    game.order(AbilityId.STOP, game.own(UnitTypeId.SCV))
+    game.turn(16)
+    trials: list[Trial] = []
+
+    def each(ability: int, units: Sequence[raw_pb2.Unit], target: Target = None) -> list[str]:
+        """Give each of `units` `ability` in a command of its own, all in one request."""
+        return game.act(*(game.command(ability, [unit], target) for unit in units))
+
+    def made_since(before: set[int], unit_type: UnitTypeId) -> list[raw_pb2.Unit]:
+        """The units of `unit_type` the observation lists that `before` does not hold."""
+        return [unit for tag, unit in game.units.items() if tag not in before and unit.unit_type == unit_type]
+
+    def given(label: str, ability: int, units: Sequence[raw_pb2.Unit], target: Target, trial: Trial) -> None:
+        """Give `units` `ability` one command each, and record the purse and their orders 4 and 24 steps on."""
+        purse = [[game.minerals, game.vespene]]
+        trial.notes["verdicts"] = each(ability, units, target)
+        for steps, since in ((4, 4), (20, 24)):
+            game.turn(steps)
+            purse.append([game.minerals, game.vespene])
+            game.read(f"{label}, {since} steps on", units)
+        trial.notes["purse before, 4 and 24 steps on"] = purse
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in units]
+
+    def trains(trial: Trial) -> None:
+        made = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(12), 4), count=3)
+        given("a marine to each of three barracks", _MARINE, made, None, trial)
+
+    trials.append(game.trial("a train to each of three barracks", trains))
+
+    def researches(trial: Trial) -> None:
+        made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(16), 4), count=2)
+        given(
+            "one research to each of two bays", AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, made, None, trial
+        )
+
+    trials.append(game.trial("the same research to each of two engineering bays", researches))
+
+    def reactors(trial: Trial) -> None:
+        made: list[raw_pb2.Unit] = []
+        for index in range(2):
+            made += game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20 + 9 * index), 4))
+        before = set(game.units)
+        given("a reactor to each of two barracks", RawAbilityId.Build_Reactor_Barracks, made, None, trial)
+        trial.notes["reactors seen, 24 steps on"] = len(made_since(before, UnitTypeId.REACTOR_BARRACKS))
+
+    trials.append(game.trial("a reactor to each of two barracks", reactors))
+
+    def orbitals(trial: Trial) -> None:
+        # What an orbital command needs.
+        game.create(UnitTypeId.BARRACKS, game.spot(game.toward(8), 3))
+        made = [game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(14), 3))[0] for _ in range(2)]
+        given("an orbital to each of two command centers", _ORBITAL, made, None, trial)
+
+    trials.append(game.trial("an orbital to each of two command centers", orbitals))
+
+    def depots(trial: Trial, *, one_site: bool) -> None:
+        sites = [_depot_site(game, trial)] * 2 if one_site else [_depot_site(game, trial) for _ in range(2)]
+        trial.notes["sites"] = [[site.x, site.y] for site in sites]
+        builders = [game.create(UnitTypeId.SCV, site + (3, 0))[0] for site in sites]
+        purse = [game.minerals]
+        trial.notes["verdicts"] = game.act(
+            *(
+                game.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, [builder], site)
+                for builder, site in zip(builders, sites, strict=True)
+            )
+        )
+        for steps, since in ((1, 1), (3, 4), (60, 64)):
+            game.turn(steps)
+            purse.append(game.minerals)
+            game.read(f"the SCVs, {since} steps on", builders)
+        trial.notes["minerals before, 1, 4 and 64 steps on"] = purse
+        trial.notes["orders each, 64 steps on"] = [
+            [_order(order) for order in (game.unit(u.tag) or u).orders] for u in builders
+        ]
+        trial.notes["depots at the sites, 64 steps on"] = [
+            [unit.tag, raw_pb2.DisplayType.Name(unit.display_type), round(unit.build_progress, 2)]
+            for unit in game.units.values()
+            if unit.unit_type == UnitTypeId.SUPPLY_DEPOT and any(_at(unit).distance_to(site) < 1.5 for site in sites)
+        ]
+
+    trials.append(game.trial("a depot at one site to each of two SCVs", partial(depots, one_site=True)))
+    trials.append(game.trial("a depot at a site of its own to each of two SCVs", partial(depots, one_site=False)))
+
+    def mules(trial: Trial) -> None:
+        made = [game.create(UnitTypeId.ORBITAL_COMMAND, game.spot(game.toward(14), 3))[0] for _ in range(2)]
+        game.set_energy(50, made)
+        game.turn(2)
+        before = set(game.units)
+        ordered = game.step
+        given(
+            "a MULE at one field from each of two orbitals",
+            AbilityId.ORBITAL_COMMAND_CALLDOWN_MULE,
+            made,
+            _nearest_field(game),
+            trial,
+        )
+        trial.notes["energy each, 24 steps on"] = [round((game.unit(u.tag) or u).energy, 1) for u in made]
+        # A MULE lands a while after it is called down.
+        game.until(lambda: len(made_since(before, UnitTypeId.MULE)) >= 2, steps=4, limit=240)
+        trial.notes["MULEs seen, and steps since the order"] = [
+            len(made_since(before, UnitTypeId.MULE)),
+            game.step - ordered,
+        ]
+
+    trials.append(game.trial("a MULE at one field from each of two orbital commands", mules))
+
+    def at_one_point(
+        made: Sequence[raw_pb2.Unit], ability: int, point: Point, product: UnitTypeId, trial: Trial
+    ) -> None:
+        """Give each of `made` `ability` at `point`, a command each, and record the verdicts, the purse, the action
+        errors, the `product`s near the point as they settle, every 16 steps for 320, and each unit's orders then."""
+        purse = [[game.minerals, game.vespene]]
+        trial.notes["verdicts"] = each(ability, made, point)
+        near: list[list[object]] = []
+        for _ in range(20):
+            game.turn(16)
+            purse.append([game.minerals, game.vespene])
+            near.append(
+                [
+                    [unit.tag, raw_pb2.DisplayType.Name(unit.display_type), round(_at(unit).distance_to(point), 1)]
+                    for unit in game.units.values()
+                    if unit.unit_type == product and _at(unit).distance_to(point) < 6
+                ]
+            )
+        trial.notes["purse every 16 steps"] = purse
+        trial.notes[f"{product.name}s within 6 of the point, every 16 steps: tag, display, distance"] = near
+        trial.notes["orders each"] = [[_order(order) for order in (game.unit(u.tag) or u).orders] for u in made]
+        trial.notes["types each"] = [_type_name((game.unit(u.tag) or u).unit_type) for u in made]
+
+    def landings(trial: Trial) -> None:
+        point = game.spot(game.toward(24), 4)
+        made = [game.create(UnitTypeId.BARRACKS_FLYING, point + (0, dy))[0] for dy in (-3, 3)]
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(made, AbilityId.LAND, point, UnitTypeId.BARRACKS, trial)
+
+    trials.append(game.trial("a landing at one point to each of two flying barracks", landings))
+
+    def rootings(trial: Trial) -> None:
+        hatchery = game.create(UnitTypeId.HATCHERY, game.spot(game.toward(20), 6))[0]
+        candidates = [_at(hatchery) + offset for offset in ((6, 0), (-6, 0), (0, 6), (0, -6))]
+        # Creep spreads from a new hatchery over a while; a spine crawler needs it under all four of its tiles.
+        game.turn(400)
+        placeable = game.sandbox.placeable(AbilityId.DRONE_MORPH_SPINE_CRAWLER, candidates)
+        trial.notes["placeable"] = placeable
+        if not any(placeable):
+            trial.notes["class"] = "no place to root"
+            return
+        point = candidates[placeable.index(True)]
+        made = game.create(UnitTypeId.SPINE_CRAWLER_UPROOTED, point + (0, 3), count=2)
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(made, AbilityId.ROOT, point, UnitTypeId.SPINE_CRAWLER, trial)
+
+    trials.append(game.trial("a rooting at one point to each of two spine crawlers", rootings))
+
+    def warp_ins(trial: Trial) -> None:
+        pad = game.spot(game.toward(16), 5)
+        spawned = game.sandbox.spawn(
+            [
+                (UnitTypeId.PYLON, game.player, pad),
+                *((UnitTypeId.WARP_GATE, game.player, pad + (dx, 4)) for dx in (-3, 3)),
+            ]
+        )
+        game.made.update(unit.tag for unit in spawned)
+        game.turn(4)
+        gates = [unit for unit in spawned if unit.unit_type == UnitTypeId.WARP_GATE]
+        point = pad + (3.5, -1)
+        trial.notes["point"] = [point.x, point.y]
+        at_one_point(gates, AbilityId.WARP_GATE_WARP_IN_ZEALOT, point, UnitTypeId.ZEALOT, trial)
+
+    trials.append(game.trial("a zealot warped in at one point by each of two warp gates", warp_ins))
+
+    return trials
+
+
+def _research_ends(game: _Game) -> list[Trial]:
+    """How a research ends, read every step: when its order leaves the structure against when the upgrade arrives,
+    and what a cancel and the structure's death leave. The research takes its full time."""
+    weapons = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1
+    armor = AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1
+
+    def researching(tag: int, ability: AbilityId) -> bool:
+        return progress_of(tag, ability) is not None
+
+    def progress_of(tag: int, ability: AbilityId) -> float | None:
+        unit = game.unit(tag)
+        orders = [] if unit is None else [order for order in unit.orders if order.ability_id == ability]
+        return orders[0].progress if orders else None
+
+    def bay(trial: Trial, ability: AbilityId) -> raw_pb2.Unit | None:
+        made = game.create(UnitTypeId.ENGINEERING_BAY, game.spot(game.toward(12), 4))
+        if not made:
+            trial.notes["class"] = "not made"
+            return None
+        trial.notes["verdict"] = game.order(ability, made)
+        trial.notes["ordered at"] = game.step
+        return made[0]
+
+    def ended(trial: Trial, *, cancel: bool) -> None:
+        if (structure := bay(trial, armor)) is None:
+            return
+        if not game.until(lambda: researching(structure.tag, armor), limit=16):
+            trial.notes["class"] = "never shown"
+            return
+        trial.notes["first shown at"] = game.step
+        game.turn(64)
+        purse = [game.minerals, game.vespene]
+        if cancel:
+            trial.notes["cancel"] = game.order(AbilityId.CANCEL_LAST, [structure])
+        else:
+            game.kill([structure])
+        rows: list[list[object]] = []
+        for _ in range(16):
+            game.turn(1)
+            rows.append([game.step, researching(structure.tag, armor), game.unit(structure.tag) is not None])
+        trial.notes["purse before, and 16 steps after"] = [purse, [game.minerals, game.vespene]]
+        trial.notes["step, still researching, bay listed"] = rows
+        trial.notes["upgrade arrived"] = UpgradeId.TERRAN_INFANTRY_ARMOR_1 in game.upgrades
+
+    trials = [
+        game.trial("a research cancelled 64 steps in", partial(ended, cancel=True)),
+        game.trial("a research whose structure dies 64 steps in", partial(ended, cancel=False)),
+    ]
+
+    def finished(trial: Trial, ability: AbilityId, upgrade: UpgradeId) -> None:
+        if (structure := bay(trial, ability)) is None:
+            return
+        research_steps = game.data.upgrades[upgrade].research_steps
+        trial.notes["research steps in the tables"] = research_steps
+        last_shown = arrived = None
+        shown: list[tuple[int, float]] = []
+        end = game.step + research_steps + 400
+        while game.step < end and arrived is None:
+            game.turn(1)
+            if (progress := progress_of(structure.tag, ability)) is not None:
+                last_shown = game.step
+                shown.append((game.step, progress))
+            if upgrade in game.upgrades:
+                arrived = game.step
+        trial.notes["last step it was shown"] = last_shown
+        trial.notes["first step the upgrade was listed"] = arrived
+        trial.notes["first and last progress shown"] = [shown[0], shown[-1]] if shown else None
+        if arrived is not None:
+            trial.notes["steps left against the progress"] = _steps_left_fits(shown, arrived, research_steps)
+
+    trials.append(
+        game.trial(
+            "a research to its end", partial(finished, ability=weapons, upgrade=UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+        )
+    )
+    hisec = AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING
+    trials.append(
+        game.trial(
+            "a shorter research to its end", partial(finished, ability=hisec, upgrade=UpgradeId.HISEC_AUTO_TRACKING)
+        )
+    )
+    return trials
+
+
+def _steps_left_fits(shown: Sequence[tuple[int, float]], arrived: int, research_steps: int) -> dict[str, object]:
+    """How each rounding of `(1 - progress) * research_steps` fits the steps a research had left until its upgrade
+    was listed at `arrived`, over `shown`, the steps it showed at with its progress: how many steps it missed, and the
+    first misses as the step, the steps left, and what the rounding gave."""
+    fits: dict[str, object] = {}
+    roundings: dict[str, Callable[[float], int]] = {"floor": math.floor, "ceil": math.ceil, "round": round}
+    for name, rounding in roundings.items():
+        misses = [
+            (step, arrived - step, rounding((1 - progress) * research_steps))
+            for step, progress in shown
+            if rounding((1 - progress) * research_steps) != arrived - step
+        ]
+        fits[name] = {"misses": len(misses), "first misses": misses[:4]}
+    left_less_estimate = [arrived - step - (1 - progress) * research_steps for step, progress in shown]
+    fits["steps left less the estimate, least and most"] = [min(left_less_estimate), max(left_less_estimate)]
+    return fits
+
+
 _SWEEPS: dict[str, _Sweep] = {
     "keeps-terran": _Sweep(Race.TERRAN, lambda g: _keeps(g, Race.TERRAN), _KEEPS_CHEATS),
     "keeps-protoss": _Sweep(Race.PROTOSS, lambda g: _keeps(g, Race.PROTOSS), _KEEPS_CHEATS),
@@ -4546,6 +4927,10 @@ _SWEEPS: dict[str, _Sweep] = {
     "producer-dies": _Sweep(Race.TERRAN, _producer_dies),
     # Not `free`, so that what one command naming several structures charges counts.
     "one-command-many-makers": _Sweep(Race.TERRAN, _one_command_many_makers, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    # Not `free`, so that what each command charges counts.
+    "one-command-each": _Sweep(Race.TERRAN, _one_command_each, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
+    # Not `fast_build`, so that a research takes its own time.
+    "research-ends": _Sweep(Race.TERRAN, _research_ends, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what a flying structure's add-on charges counts.
     "add-on-while-flying": _Sweep(Race.TERRAN, _add_on_while_flying, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     # Not `free`, so that what each order charges, and when, counts.
@@ -4570,6 +4955,7 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
     # instead.
     "progress": _Sweep(Race.ZERG, _progress),
+    "gas-buildings": _Sweep(Race.TERRAN, _gas_buildings),
     "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "larvae": _Sweep(Race.ZERG, _larvae),
     "group-abilities-terran": _Sweep(Race.TERRAN, lambda g: _group_abilities(g, Race.TERRAN), _GROUP_ABILITY_CHEATS),

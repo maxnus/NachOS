@@ -24,6 +24,7 @@ class _Handler:
         "function",
         "instance",
         "last_step",
+        "name",
         "once",
         "order",
         "priority",
@@ -43,6 +44,8 @@ class _Handler:
         instance: object | None = None,
     ) -> None:
         self.function = function
+        self.name = f"{function.__module__}.{function.__qualname__}"
+        """The function's module and qualified name, shared by every instance of a class."""
         self.selects = selects
         """The events it is handed: those of a type, or what `only`, `of` and `where` select of them."""
         self.priority = priority
@@ -69,21 +72,3 @@ class _Handler:
         if self.catch_exceptions:
             details.append("catch_exceptions=True")
         return f"_Handler({', '.join(details)})"
-
-    @property
-    def name(self) -> str:
-        """The function's module and qualified name, shared by every instance of a class."""
-        return f"{self.function.__module__}.{self.function.__qualname__}"
-
-    def bound_to(self, instance: object) -> _Handler:
-        """A copy of this handler, of a method marked in a class body, bound to `instance` with nothing done yet."""
-        return _Handler(
-            self.function,
-            self.selects,
-            priority=self.priority,
-            every_steps=self.every_steps,
-            at_step=self.at_step,
-            once=self.once,
-            catch_exceptions=self.catch_exceptions,
-            instance=instance,
-        )

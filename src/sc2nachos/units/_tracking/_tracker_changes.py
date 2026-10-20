@@ -37,7 +37,7 @@ class _TrackerChanges:
 
     def __init__(self, update: int) -> None:
         self.update = update
-        """The number of this update, 1 for a game's first."""
+        """The number of this update, 1 for a game's first: one per observation taken in, not a step."""
         self.own_units_created: list[OwnUnit[Any]] = []
         """This player's units seen for the first time."""
         self.enemy_units_first_seen: list[Unit[Any]] = []

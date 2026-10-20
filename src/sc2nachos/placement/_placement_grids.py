@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Self, final
 
+from sc2nachos._checks import is_whole_number
 from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid, Point, Rectangle
-from sc2nachos.geometry._footprint import _is_count, _margin_sides
-from sc2nachos.geometry._point import coordinates
+from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.placement._build_sites import _BuildSites, _placement_key, _standing_centers
 from sc2nachos.placement._placement_reservation import PlacementReservation
 from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
@@ -171,7 +171,7 @@ class PlacementGrids:
         footprint = self._footprint_of(unit_type)
         _margin_sides(margin)
         if max_steps is not None:
-            if not _is_count(max_steps):
+            if not is_whole_number(max_steps):
                 raise TypeError(f"max_steps is a whole number of steps, not {max_steps!r}")
             if max_steps < 1:
                 raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
@@ -216,7 +216,7 @@ class PlacementGrids:
             raise ValueError(f"max_distance is a distance, at least 0, not {max_distance}")
         footprint = self._footprint_of(unit_type)
         sides = _margin_sides(margin)
-        x, y = coordinates(near)[:2]
+        x, y = near[0], near[1]
         if math.isinf(max_distance):
             window = self._static.bounds
         else:

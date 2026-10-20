@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
+from sc2nachos.state._research import Research
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable
+    from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata import AbilityData, GameData
     from sc2nachos.units import OwnUnit
@@ -26,12 +28,12 @@ class _Production:
     the structure itself. An order not yet sent is nowhere.
     """
 
-    __slots__ = ("_items", "_progress")
+    __slots__ = ("_items", "_researches")
 
     def __init__(self, units: Iterable[OwnUnit[Any]], game_data: GameData) -> None:
         """Read what `units` are making, by what `game_data` says each ability makes."""
         self._items: list[InProduction] = []
-        self._progress: dict[UpgradeId, float] = {}
+        self._researches: dict[UpgradeId, Research] = {}
         for unit in units:
             self._read(unit, game_data)
 
@@ -39,9 +41,11 @@ class _Production:
         """What is being made of `unit_types`, in the order the observation lists the units it is read from."""
         return tuple(item for item in self._items if item.type_id in unit_types)
 
-    def progress(self, upgrade: UpgradeId) -> float | None:
-        """How far along a research of `upgrade` is, from 0 to 1, or `None` if nothing researches it."""
-        return self._progress.get(upgrade)
+    @property
+    def researches(self) -> Mapping[UpgradeId, Research]:
+        """Each research running or queued, by upgrade, in the order the observation lists the structures and each its
+        orders."""
+        return MappingProxyType(self._researches)
 
     def _read(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
@@ -54,7 +58,10 @@ class _Production:
                 continue
             product = _ability_product(row, unit.type_id)
             if isinstance(product, UpgradeId):
-                self._progress[product] = max(self._progress.get(product, 0.0), order.progress)
+                if product not in self._researches:
+                    total = game_data.upgrades[product].research_steps
+                    # The game's progress is the steps done over the total, as a 32-bit float (in game).
+                    self._researches[product] = Research(product, unit, total, round((1 - order.progress) * total))
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
 

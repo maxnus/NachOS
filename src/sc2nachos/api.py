@@ -1,30 +1,53 @@
 """Everything a bot talks to."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, overload
 
 from loguru import logger
 
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
+from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
-from sc2nachos.events import EventBus, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
+from sc2nachos.events import (
+    Event,
+    EventFilter,
+    EventPriority,
+    EventSubscriber,
+    GameEndEvent,
+    GameStartEvent,
+    HandlerTiming,
+    ParameterizedEvent,
+    TurnEvent,
+    TurnStartEvent,
+)
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client, GameEndedError
-from sc2nachos.state import ActionFailure, Effect, InProduction, Score, Supply, UiUnitCounts
+from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids
+
+# The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
+_MOST_CHAT_BYTES = 1039
 
 
 class NotPlayingError(NachOSError, RuntimeError):
     """No game has been joined, so there is nothing to answer from."""
+
+
+class NoEnemyError(NachOSError, RuntimeError):
+    """The game has no other player, as a mini-game has not, so there is no enemy to answer about."""
 
 
 class Api:
@@ -36,7 +59,7 @@ class Api:
 
     Time is counted in steps. One step is one game loop, 22.4 steps make a second, and the bot takes a turn every
     `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
-    the events its observation reports, in the order `sc2nachos.events` gives, then a `TurnEvent`.
+    the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
     Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
     answering from it until the next one starts.
@@ -48,20 +71,102 @@ class Api:
         enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC,
         time_handlers: bool = False,
     ) -> None:
-        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call if
-        `time_handlers`. This connects to nothing."""
+        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call, read
+        as `handler_timings`, if `time_handlers`. This connects to nothing."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
-        self._events = EventBus(time_handlers=time_handlers)
+        self._events = _EventBus(time_handlers=time_handlers)
         # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
         self._game: _Game | None = None
 
-    @property
-    def events(self) -> EventBus:
-        """The event bus: the events the api hands out, and the handlers subscribed to them.
+    # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
+    @overload
+    def on[E: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
+        self,
+        event_type: type[E],
+        /,
+        *,
+        priority: EventPriority = ...,
+        every_steps: int | None = ...,
+        at_step: int | None = ...,
+        once: bool = ...,
+        catch_exceptions: bool = ...,
+    ) -> None: ...
 
-        Available before any game, so handlers can subscribe as their modules are imported.
+    @overload
+    def on[E: Event](
+        self,
+        event_type: type[E] | EventFilter[E],
+        /,
+        *,
+        priority: EventPriority = ...,
+        every_steps: int | None = ...,
+        at_step: int | None = ...,
+        once: bool = ...,
+        catch_exceptions: bool = ...,
+    ) -> EventSubscriber[E]: ...
+
+    def on(self, event_type: type[Event] | EventFilter[Any], /, **options: Any) -> Any:
+        """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`. This works
+        before any game, so handlers can subscribe as their modules are imported.
+
+        `event_type` is an event type, whose events and its subclasses' the handler is handed, or a filter from `only`
+        or `of`. `where` on the `EventSubscriber` it returns narrows further. A type that has `of` is subscribed to only
+        through it, and a type checker refuses it bare. A handler of `Event` is handed every event, which makes NachOS
+        produce every type of event it otherwise would not, including comparing every unit with the observation
+        before; a parameterized event comes only with the parameters other handlers asked for.
+
+        A method is marked, and subscribed for each instance passed to `subscribe`: a function defined in a class body
+        that takes at least two positional arguments without defaults, the instance and the event, or wraps one through
+        `functools.wraps`. Any other function is subscribed at once, wherever it is defined, a static method taking the
+        event alone included, and so is a method already bound to its instance. Either stays subscribed until it is
+        passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it alive.
+
+        `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
+        among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
+        before any handler of the next. The handler runs on every event unless held back: `every_steps` waits until
+        that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that
+        step, and `once` on the first event; `every_steps` with either of the others raises `ValueError`. These count
+        only the events selected, and start afresh each game, as does a handler that returned `Done`. An exception it
+        raises ends the game, unless `catch_exceptions`, which logs it and goes on.
+
+        The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
+        types takes an `Event`.
         """
-        return self._events
+        return self._events.on(event_type, **options)
+
+    def subscribe(self, instance: object) -> None:
+        """Subscribe every method of `instance` marked with `on`, until `instance` is passed to `unsubscribe`.
+
+        An unmarked override leaves the method it overrides unsubscribed. Raises `ValueError` if `instance` has no
+        marked method, or one of them is subscribed for it already, a method subscribed bound through `on` aside; and
+        `TypeError` if a marked function is under a `classmethod` or a `staticmethod`.
+        """
+        self._events.subscribe(instance)
+
+    def unsubscribe(self, target: object) -> None:
+        """Unsubscribe `target`: a function, a bound method, or every method of an instance.
+
+        Raises `ValueError` if nothing of it is subscribed.
+        """
+        self._events.unsubscribe(target)
+
+    def emit(self, event: Event) -> None:
+        """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
+        when this returns. A handler may itself emit an event.
+
+        An event made without a step is handed out as a copy with the current step, and the one passed in keeps none,
+        so it can be emitted again. Raises `ValueError` for one when no game is being played.
+        """
+        self._events.emit(event)
+
+    @property
+    def handler_timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
+        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
+
+        A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
+        `RuntimeError` unless the api was made with `time_handlers=True`.
+        """
+        return self._events.timings
 
     def _current_game(self) -> _Game:
         """The game being played, or the one played last."""
@@ -170,10 +275,11 @@ class Api:
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids(types, unit_types)
         return self._current_game().state.production.of_types(wanted)
 
-    def research_progress(self, upgrade: UpgradeId) -> float | None:
-        """How far along this player's research of `upgrade` is, from 0 to 1, or `None` if nothing researches it. A
-        finished one is in `upgrades`."""
-        return self._current_game().state.production.progress(upgrade)
+    @property
+    def researches(self) -> Mapping[UpgradeId, Research]:
+        """Each research this player has running or queued in the last observation, by upgrade, in the order the
+        observation lists the structures and each its orders. A finished one is in `upgrades`."""
+        return self._current_game().state.production.researches
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:
@@ -186,14 +292,22 @@ class Api:
         return game.orders._refusals + game.state.action_failures
 
     @property
+    def player(self) -> Player:
+        """This player: its id, its race and the one it asked for, and its name."""
+        return self._current_game().player
+
+    @property
     def enemy(self) -> Enemy:
-        """The other player, and what is known of it.
+        """The other player, and what is known of it. Raises `NoEnemyError` in a game with no other player, such as a
+        mini-game.
 
         `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
         which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,
         `Unit.weapons` and `Unit.speed` among them, counts them.
         """
-        return self._current_game().enemy
+        if (enemy := self._current_game().enemy) is None:
+            raise NoEnemyError("this game has no other player")
+        return enemy
 
     @property
     def vision(self) -> Grid[bool]:
@@ -212,6 +326,21 @@ class Api:
         return self._current_game().placement
 
     @property
+    def debug(self) -> DebugCommands:
+        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders."""
+        return self._current_game().debug
+
+    @property
+    def camera(self) -> Camera:
+        """This player's camera: where it is centered, and moving it."""
+        return self._current_game().camera
+
+    @property
+    def pathing(self) -> Pathing:
+        """How units get around the map as it stands now, as the game answers."""
+        return self._current_game().pathing
+
+    @property
     def creep(self) -> Grid[bool]:
         """Where creep covers the ground, over the playable area."""
         return self._current_game().state.creep
@@ -221,6 +350,32 @@ class Api:
         """Every effect this player can see. Raises `UncuratedIdError` if one is an effect the curated ids leave out."""
         return self._current_game().state.effects
 
+    def chat(self, text: str, *, team_only: bool = False) -> None:
+        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's orders: after
+        them and the camera's move, each message of the turn in the order given. The game drops chat that comes too
+        fast without a word, once some 500 bytes have gone out in a row, counting by the clock rather than in steps
+        (in game).
+
+        Raises `ValueError` for an empty text, and for one of 1040 bytes or more in UTF-8, which would kill the game
+        client (in game).
+        """
+        game = self._current_game()
+        if not text:
+            raise ValueError("a chat message cannot be empty")
+        if (size := len(text.encode())) > _MOST_CHAT_BYTES:
+            raise ValueError(
+                f"a chat message of {_MOST_CHAT_BYTES + 1} bytes or more kills the game client, and this one is {size}"
+            )
+        game.queue_chat(text, team_only=team_only)
+
+    def leave_game(self) -> None:
+        """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
+        gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
+        nothing to a client that has left, even when both players leave in the same step (in game). Asking again in
+        the turn changes nothing.
+        """
+        self._current_game().leaving = True
+
     def play(
         self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
     ) -> Result:
@@ -228,7 +383,8 @@ class Api:
         for this player.
 
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
-        recording. `time_limit`, in game seconds, calls a game that reaches it a tie.
+        recording. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
+        was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
 
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
@@ -261,15 +417,33 @@ class Api:
             events.emit(TurnStartEvent(step=game.step))
             events._hand_out([*game.report(events), TurnEvent(step=game.step)])
             try:
-                # The turn's handlers have all returned, so their orders go out now as one request.
-                game.orders._send(client)
+                # The turn's handlers have all returned, so what they asked for goes out now.
+                game.send_turn()
+                if game.leaving:
+                    logger.info("Leaving the game")
+                    client.leave_game()
+                    return game.finish(Result.DEFEAT)
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:
                 # The game ended while the handlers ran, as a realtime game can. Its last observation says how.
                 game.observe()
             else:
-                # A realtime game runs on its own, so each turn asks for the step it wants.
-                game.observe(game.step + steps_per_turn if realtime else None)
+                if realtime:
+                    # A realtime game runs on its own, so each turn asks for the step it wants.
+                    _observe_realtime(game, game.step + steps_per_turn)
+                else:
+                    game.observe()
             events._set_step(game.step)
         return result
+
+
+def _observe_realtime(game: _Game, step: int) -> None:
+    """Observe a realtime `game` once it reaches `step`. Raises `ValueError` if a game still in progress answers short
+    of it, as a game created stepped does."""
+    game.observe(step)
+    if game.client.in_game and game.step < step:
+        raise ValueError(
+            f"the game answered at step {game.step} when asked for step {step}, as only a stepped game does: "
+            "play it with realtime=False"
+        )

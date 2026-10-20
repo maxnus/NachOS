@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 class EventFilter[E: Event]:
     """The events of one type a handler is handed: those with some keys, those a predicate passes, or both.
 
-    `only` and `of` on an event class make one, and `on` takes it in place of an event type; `where` on the decorator
-    `on` returns adds a predicate. The events handed out are of the type itself.
+    `only` and `of` on an event class make one, and `api.on` takes it in place of an event type; `where` on the
+    `EventSubscriber` that `api.on` returns adds a predicate. The events handed out are of the type itself.
     """
 
     __slots__ = ("event_type", "keys", "predicate")
@@ -27,6 +27,8 @@ class EventFilter[E: Event]:
         keys: frozenset[Hashable] | None = None,
         predicate: Callable[[E], bool] | None = None,
     ) -> None:
+        """The events of `event_type` with one of `keys`, if given, that `predicate` passes, if given. Made by `only`,
+        `of` and `where`, never by a bot."""
         self.event_type = event_type
         """The type of the events it hands on."""
         self.keys = keys

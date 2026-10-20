@@ -13,6 +13,7 @@ from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
+from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
-    from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._techtree import TechTreeUnitTypes
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
 
@@ -112,7 +113,8 @@ class UnitTypeData:
     """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
     400 included."""
     build_steps: float
-    """Steps to make one; for a morph, only the last stage."""
+    """Steps to make one; for a morph, only the last stage. A type the table gives none takes the build time of the one
+    other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int
@@ -129,6 +131,9 @@ class UnitTypeData:
     """Its attacks."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` if nothing does."""
+    producers: frozenset[UnitTypeId]
+    """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
+    Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
@@ -142,8 +147,6 @@ class UnitTypeData:
     geyser, an add-on, or a form a structure morphs into."""
     tech_aliases: tuple[UnitTypeId, ...]
     """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
-    base_type: UnitTypeId | None
-    """The type this is a temporary form of: a siege tank, for a sieged tank."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
@@ -183,8 +186,8 @@ class UnitTypeData:
         )
 
     @classmethod
-    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
-        """Read one unit type from the game's table, with what `tech_tree` found about it in game."""
+    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree_unit_types: TechTreeUnitTypes) -> Self:
+        """Read one unit type from the game's table, with what `tech_tree_unit_types` says about it."""
         unit_type = UnitTypeId(unit.unit_id)
         return cls(
             id=unit_type,
@@ -199,17 +202,16 @@ class UnitTypeData:
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
-            creation_ability=tech_tree.creation_abilities.get(unit_type),
-            morphed_from=tech_tree.morph_sources.get(unit_type),
-            ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
-            needs_power=unit_type in tech_tree.power_consumers,
+            creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
+            producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
+            ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
+            needs_power=unit_type in tech_tree_unit_types.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
             # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
-            # The game calls this the morphed variant, though it names the type morphed from.
-            base_type=UnitTypeId.get(unit.unit_alias),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
-            upgrades=tech_tree.unit_type_upgrades.get(unit_type, MappingProxyType({})),
+            upgrades=tech_tree_unit_types.upgrades.get(unit_type, MappingProxyType({})),
         )

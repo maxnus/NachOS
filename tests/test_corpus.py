@@ -11,8 +11,8 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
+    AnyUnitDiedEvent,
     EnemyUnitDamagedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredAreaEvent,
@@ -30,7 +30,6 @@ from sc2nachos.events import (
     OwnUnitLeftAreaEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
@@ -42,7 +41,7 @@ from sc2nachos.protocol import Client, PlaybackTransport, Recording
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
-from support import HAPPENINGS
+from support import HAPPENINGS, make_enemy
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -115,7 +114,7 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), make_enemy())
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(_observations(recording)):
         step = observation.observation.game_loop
@@ -147,7 +146,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     api = Api()
     seen: list[Event] = []
     for event_type in HAPPENINGS:
-        api.events.on(event_type)(lambda event: seen.append(event))
+        api.on(event_type)(lambda event: seen.append(event))
     api.play(client)
 
     tracker = api._current_game().tracker
@@ -160,7 +159,7 @@ def test_what_happened_holds_together_over_a_whole_game(path: Path) -> None:
     first_seen = [event.unit for event in seen if isinstance(event, EnemyUnitFirstSeenEvent)]
     assert sorted(unit.id for unit in created) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 1]
     assert sorted(unit.id for unit in first_seen) == [unit_id for unit_id in sorted(ever) if unit_id // 100_000 == 4]
-    assert all(event.unit.is_dead for event in seen if isinstance(event, UnitDiedEvent | UnitFoundDeadEvent))
+    assert all(event.unit.is_dead for event in seen if isinstance(event, AnyUnitDiedEvent | UnitFoundDeadEvent))
     in_sight: dict[int, bool] = {}
     for event in seen:
         if isinstance(event, EnemyUnitEnteredSightEvent | EnemyUnitLeftSightEvent):
@@ -192,7 +191,7 @@ _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 def _map(recording: Recording) -> GameMap:
     """The map of a recorded game, read as a game reads it from its answers."""
     info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    return GameMap._of_game(info, next(iter(_observations(recording))))
+    return GameMap._from_game(info, next(iter(_observations(recording))))
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
@@ -228,7 +227,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
 
     for vital_type, value in _VALUES.items():
         for event_type in _REACHED + _DROPPED:
-            api.events.on(event_type.of(vital_type, value))(vital)
+            api.on(event_type.of(vital_type, value))(vital)
     # The starting units stand around this player's main base, and its workers cross a circle around them as they
     # mine.
     starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]
@@ -240,7 +239,7 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
         *(Circle(at, 20) for at in game_map.opponent_start_locations),
     ):
         for event_type in _ENTERED + _LEFT:
-            api.events.on(event_type.of(watched))(area)
+            api.on(event_type.of(watched))(area)
     api.play(client)
 
     assert not wrong, wrong[:5]
@@ -260,7 +259,7 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), Enemy())
+    tracker = _Tracker(_tables(recording), make_enemy())
     game_map = _map(recording)
     for observation in _observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)

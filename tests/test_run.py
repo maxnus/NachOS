@@ -3,10 +3,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from loguru import logger
 
 import sc2nachos.run
-from sc2nachos import AIBuild, Api, ApiBot, Computer, Difficulty, Race, Result, run_from_command_line
-from sc2nachos.launch import Installation, MapFile, MapNotFoundError
+from sc2nachos import AIBuild, Api, ApiBot, Computer, Difficulty, Race, Result, run_from_command_line, run_local
+from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
 
 
 @pytest.fixture
@@ -30,7 +32,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
     bot = ApiBot(Api(), Race.TERRAN)
     args = ["--opponent-race", "ZERG", "--opponent-difficulty", "VERY_EASY", "--opponent-build", "RANDOM"]
-    result = run_from_command_line(bot, [*args, "--map", "torchesaie_v4", "--time-limit", "0"])
+    result = run_from_command_line(bot, [*args, "--map", "TorchesAIE_v4", "--time-limit", "0"])
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RANDOM)
     assert played["map_file"].name == "TorchesAIE_v4"
@@ -67,3 +69,34 @@ def test_an_installation_without_maps_is_reported(tmp_path: Path, monkeypatch: p
     assert Installation.find().maps == tmp_path / "Maps"
     with pytest.raises(MapNotFoundError, match="no maps"):
         run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+
+
+class _ClientStarted(Exception):
+    """Raised where a client would have started."""
+
+
+@pytest.mark.parametrize(("base_build", "warned"), [(TECH_TREE.base_build, False), (TECH_TREE.base_build + 1, True)])
+def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, base_build: int, warned: bool
+) -> None:
+    (tmp_path / "Versions" / f"Base{base_build}").mkdir(parents=True)
+    launched: list[int | None] = []
+
+    def launch(installation: Installation, **kwargs: Any) -> GameProcess:
+        launched.append(kwargs.get("base_build"))
+        raise _ClientStarted
+
+    monkeypatch.setattr(GameProcess, "launch", launch)
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}", level="WARNING")
+    try:
+        with pytest.raises(_ClientStarted):
+            run_local(
+                MapFile(tmp_path / "Pylon.SC2Map"),
+                ApiBot(Api(), Race.TERRAN),
+                installation=Installation(tmp_path, "Linux"),
+            )
+    finally:
+        logger.remove(sink)
+    assert launched == [base_build]
+    assert any("tech tree" in message for message in messages) is warned

@@ -64,13 +64,13 @@ class _ExpansionLocations:
         max_offset = _MAX_TOWNHALL_OFFSET_FROM_RESOURCES
         origin = self._allowed.origin
         mean_x, mean_y = positions.mean(axis=0)
-        column, row = math.floor(mean_x) - origin[0], math.floor(mean_y) - origin[1]
+        column, row = math.floor(mean_x) - origin.x, math.floor(mean_y) - origin.y
         x0, y0 = max(column - max_offset, 0), max(row - max_offset, 0)
         searched = self._allowed.values[x0 : column + max_offset + 1, y0 : row + max_offset + 1]
         xs, ys = numpy.nonzero(searched)
         if not len(xs):
             return None
-        centers = numpy.stack((xs + x0 + origin[0] + 0.5, ys + y0 + origin[1] + 0.5), axis=-1)
+        centers = numpy.stack((xs + x0 + origin.x + 0.5, ys + y0 + origin.y + 0.5), axis=-1)
         summed_distances = numpy.linalg.norm(centers[:, numpy.newaxis] - positions[numpy.newaxis], axis=-1).sum(axis=1)
         x, y = centers[int(numpy.argmin(summed_distances))].tolist()
         return Point((x, y))

@@ -8,12 +8,11 @@ from typing import Any
 import pytest
 from s2clientprotocol import data_pb2, raw_pb2
 
-from sc2nachos.enemy import Enemy
-from sc2nachos.geometry import Circle, Point, Rectangle
+from sc2nachos.geometry import Circle, Point, Rectangle, Tile
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import make_observation, make_tables, make_unit
+from support import make_enemy, make_observation, make_tables, make_unit
 
 _TYPES = (UnitTypeId.MARINE, UnitTypeId.SCV, UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT)
 _STRUCTURES = {UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT}
@@ -29,7 +28,7 @@ _TABLES = make_tables(
 
 def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
     """`protos` observed once."""
-    tracker = _Tracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, make_enemy())
     tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
     return tracker.unit_tracker.present
 
@@ -131,6 +130,11 @@ class TestById:
         assert _tags(units.with_ids([100004, 100002, 100009])) == [2, 4]
         assert _tags(units.without_ids({100004, 100002})) == [1, 3, 5]
 
+    def test_picking_by_one_id(self) -> None:
+        units = _mine(5)
+        assert _tags(units.with_ids(100004)) == [4]
+        assert _tags(units.without_ids(100004)) == [1, 2, 3, 5]
+
 
 class TestFilters:
     @pytest.mark.parametrize("wanted", [UnitTypeId.MARINE, [UnitTypeId.MARINE, UnitTypeId.BARRACKS], set()])
@@ -155,6 +159,37 @@ class TestFilters:
         first, *rest = wanted
         assert _tags(units.of_type(first, *rest)) == [unit.tag for unit in units if unit.type_id in types]
         assert _tags(units.excluding_type(first, *rest)) == [unit.tag for unit in units if unit.type_id not in types]
+
+    @pytest.mark.parametrize(
+        "wanted",
+        [
+            (UnitTypeId.MARINE, UnitTypeId.BARRACKS),
+            (UnitType.Marine, UnitTypeId.BARRACKS),
+            (UnitTypeId.MARINE, UnitType.TerranStructure),
+        ],
+        ids=["two ids", "a type and an id", "an id and a group"],
+    )
+    def test_by_several_types_ids_and_groups_mixed(
+        self, wanted: tuple[type[UnitType.AnyType] | UnitTypeId, ...]
+    ) -> None:
+        """As `only` takes them."""
+        units = _mine(40)
+        types = set[UnitTypeId]().union(*({w} if isinstance(w, UnitTypeId) else w._type_ids for w in wanted))
+        first, *rest = wanted
+        assert _tags(units.of_type(first, *rest)) == [unit.tag for unit in units if unit.type_id in types]
+        assert _tags(units.excluding_type(first, *rest)) == [unit.tag for unit in units if unit.type_id not in types]
+
+    @pytest.mark.parametrize(
+        "given",
+        [("MARINE",), ([UnitTypeId.MARINE], UnitTypeId.BARRACKS), ([UnitTypeId.MARINE, "BARRACKS"],), (1,)],
+        ids=["a name", "a collection and more", "a collection of names", "a number"],
+    )
+    def test_by_anything_but_types_ids_and_groups_is_refused(self, given: tuple[Any, ...]) -> None:
+        units = _mine(5)
+        with pytest.raises(TypeError, match="UnitTypeId"):
+            units.of_type(*given)
+        with pytest.raises(TypeError, match="UnitTypeId"):
+            units.excluding_type(*given)
 
     def test_by_type_takes_a_one_shot_iterable(self) -> None:
         units = _mine(40)
@@ -191,8 +226,8 @@ class TestFilters:
         assert _tags(units.gas_buildings) == [6]
         assert _tags(units.own.workers) == [1]
 
-    def test_a_filter_over_what_was_never_shown_in_sight_raises(self) -> None:
-        """The hidden enemy was never in sight, so its build progress was never reported."""
+    def test_a_filter_over_what_was_never_shown_visible_raises(self) -> None:
+        """The hidden enemy was never visible, so its build progress was never reported."""
         with pytest.raises(NotReportedError):
             _ = _mixed().complete
         assert _tags(_mixed().own.idle) == [1]
@@ -241,6 +276,10 @@ class TestWhereTheyAre:
         assert _tags(units.within(distance, of=[anchor, points[1]])) == near(anchor.position, points[1])
         assert _tags(units.within(distance, of=units[:3])) == near(*(unit.position for unit in units[:3]))
 
+    def test_within_a_distance_of_a_tile_raises(self) -> None:
+        with pytest.raises(TypeError):
+            _mine(3).within(5, of=Tile(1, 2))  # pyright: ignore[reportArgumentType]
+
     @pytest.mark.parametrize("distance", [-1.0, math.nan])
     def test_within_a_negative_distance_raises(self, distance: float) -> None:
         with pytest.raises(ValueError, match="a distance is at least 0"):
@@ -277,7 +316,7 @@ class TestWhereTheyAre:
             query(Units())
 
     def test_an_area_is_not_a_point(self) -> None:
-        with pytest.raises(TypeError, match="pass its .center"):
+        with pytest.raises(TypeError):
             _mine(3).closest_to(Circle((0, 0), 1))  # pyright: ignore[reportArgumentType]
 
 

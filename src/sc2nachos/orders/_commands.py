@@ -66,10 +66,3 @@ def _unit_command_action(ability: int, tags: list[int], target: Target | None, *
             ability_id=ability, unit_tags=tags, queue_command=queued, target_unit_tag=target.tag
         )
     return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=command))
-
-
-def create_camera_move_action(at: Point) -> sc2api_pb2.Action:
-    """The action that moves this player's camera."""
-    center = common_pb2.Point(x=at[0], y=at[1])
-    move = raw_pb2.ActionRawCameraMove(center_world_space=center)
-    return sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(camera_move=move))

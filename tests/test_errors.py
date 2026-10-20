@@ -8,8 +8,15 @@ import pytest
 
 import sc2nachos
 from sc2nachos import NachOSError, NotPlayingError
-from sc2nachos.launch import MapNotFoundError
+from sc2nachos.launch import (
+    GameLaunchError,
+    GameVersionError,
+    InstallationNotFoundError,
+    MapNotFoundError,
+    UnsupportedPlatformError,
+)
 from sc2nachos.protocol import ConnectionClosedError, ConnectionTimeoutError
+from sc2nachos.units import UnitIdsExhaustedError
 
 
 def test_every_exception_the_library_defines_is_one_of_its_own() -> None:
@@ -29,8 +36,13 @@ def test_every_exception_the_library_defines_is_one_of_its_own() -> None:
     [
         (ConnectionClosedError, ConnectionError),
         (ConnectionTimeoutError, TimeoutError),
+        (GameLaunchError, OSError),
+        (GameVersionError, LookupError),
+        (InstallationNotFoundError, FileNotFoundError),
         (MapNotFoundError, LookupError),
         (NotPlayingError, RuntimeError),
+        (UnitIdsExhaustedError, OverflowError),
+        (UnsupportedPlatformError, ValueError),
     ],
 )
 def test_an_error_that_is_a_case_of_a_builtin_is_caught_as_one(

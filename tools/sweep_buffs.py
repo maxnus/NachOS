@@ -1,7 +1,8 @@
 """Find the buffs a melee game puts on units, by triggering everything that could put one there.
 
 Needs StarCraft II installed. Plays one game as each race, or only those named, under the `all_resources` and
-`fast_build` cheats, never `tech_tree`, which waives the research a player needs first (`docs/curating-ids.md`).
+`fast_build` cheats, never `tech_tree`, which waives the research a player needs first
+(`docs/maintaining/curating-ids.md`).
 Each game researches every upgrade of its race for real, then creates each of the race's unit types in turn beside a
 set of targets and orders every ability the unit is offered, one at a time, recording each buff that appears on a
 unit nearby::
@@ -131,7 +132,7 @@ class Sweep:
         self._client = client
         self._player = player
         self._race = race
-        self._map = GameMap._of_game(client.game_info(), client.observation())
+        self._map = GameMap._from_game(client.game_info(), client.observation())
         raw_data = client.game_data()
         self._data = GameData(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}

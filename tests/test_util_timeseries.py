@@ -51,6 +51,13 @@ class TestEmpty:
         with pytest.raises(IndexError, match="empty series"):
             TimeSeries.empty(float)[0]
 
+    def test_slicing_an_empty_series_gives_an_empty_series(self):
+        """It raised `TypeError`, doing arithmetic on the missing start."""
+        series = TimeSeries.empty(float)
+        assert series[5:10].size == 0
+        series[5:10] = 3.0
+        assert series.size == 0
+
     def test_derivative_of_an_empty_series_is_none(self):
         assert TimeSeries.empty(float).derivative_at(0) is None
 
@@ -78,8 +85,22 @@ class TestAppend:
         assert series[2] == pytest.approx(2.0)
         assert series[4] == pytest.approx(4.0)
 
+    def test_a_gap_in_an_integer_series_is_rounded(self):
+        """It was truncated: 0 to 2 over 3 steps gave 0, 0, 1, 2."""
+        series = TimeSeries.empty(int)
+        series.append(0, 0)
+        series.append(3, 2)
+        assert series.values.tolist() == [0, 1, 1, 2]
+
+    def test_a_tie_in_an_integer_gap_rounds_up(self):
+        """As `sticky_round` has it, where `numpy.rint` gave 0 to 1 over 2 steps as 0, 0, 1."""
+        series = TimeSeries.empty(int)
+        series.append(0, 0)
+        series.append(2, 1)
+        series.append(4, -1)
+        assert series.values.tolist() == [0, 1, 1, 0, -1]
+
     def test_grows_a_sliced_series(self):
-        # A slice's buffer is a view, which ndarray.resize refuses to grow.
         source = TimeSeries.empty(float, initial_size=8)
         for step in range(8):
             source.append(step, float(step))
@@ -170,6 +191,12 @@ class TestIndexing:
         with pytest.raises(NotImplementedError):
             ramp[0:10:2]
 
+    def test_a_slice_is_a_copy(self, ramp):
+        """A slice shared its source's memory, so writing to one changed the other."""
+        window = ramp[2:4]
+        window[3] = 99.0
+        assert ramp[3] == 3.0
+
     def test_setitem_slice(self, ramp):
         ramp[2:5] = 0.0
         assert list(ramp.values[2:5]) == [0.0, 0.0, 0.0]
@@ -239,6 +266,12 @@ class TestDerivativeAt:
 
     def test_insufficient_history_is_none(self, ramp):
         assert ramp.derivative_at(9, window=100) is None
+
+    @pytest.mark.parametrize("window", [0, -10])
+    def test_a_window_of_no_steps_raises(self, ramp, window):
+        """A negative window read the unrecorded buffer and answered -11.2; no window divided by zero."""
+        with pytest.raises(ValueError, match="at least one step"):
+            ramp.derivative_at(5, window=window)
 
     def test_measures_before_the_last_step(self, ramp):
         assert ramp.derivative_at(5, window=5) == pytest.approx(STEPS_PER_SECOND)

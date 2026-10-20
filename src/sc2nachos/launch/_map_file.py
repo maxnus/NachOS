@@ -35,13 +35,14 @@ class MapFile:
     def find(cls, name: str, *, installation: Installation | None = None) -> Self:
         """The map called `name`, anywhere under the installation's map directory, linked directories included.
 
-        The extension is optional and the match ignores case. Map packs install alongside the maps they replace, so
-        a name can match more than once: the shallowest match wins, ties alphabetically.
+        The extension `.SC2Map` is optional, and the name and extension match exactly, case included, on every
+        platform. Map packs install alongside the maps they replace, so a name can match more than once: the shallowest
+        match wins, ties alphabetically.
         """
         installation = installation or Installation.find()
-        wanted = name[: -len(_SUFFIX)] if name.lower().endswith(_SUFFIX.lower()) else name
+        wanted = name.removesuffix(_SUFFIX)
         matches = sorted(
-            (path for path in cls._paths(installation) if path.stem.lower() == wanted.lower()),
+            (path for path in cls._paths(installation) if path.stem == wanted),
             key=lambda path: (len(path.parts), path),
         )
         if not matches:
@@ -64,4 +65,4 @@ class MapFile:
             # round it.
             inside = {path.resolve() for path in (directory, *directory.parents) if path.is_relative_to(maps)}
             subdirectories[:] = [name for name in subdirectories if (directory / name).resolve() not in inside]
-            yield from (directory / name for name in files if name.lower().endswith(_SUFFIX.lower()))
+            yield from (directory / name for name in files if name.endswith(_SUFFIX))

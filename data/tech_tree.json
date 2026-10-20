@@ -11668,6 +11668,12 @@
    "result": "morph"
   },
   {
+   "performer": "Liberator",
+   "ability": "Morph_LiberatorAGMode",
+   "product": "LiberatorAG",
+   "result": "morph"
+  },
+  {
    "performer": "LurkerMP",
    "ability": "BurrowDown_Lurker",
    "product": "LurkerMPBurrowed",

@@ -6,7 +6,7 @@ import math
 import numpy
 import pytest
 
-from sc2nachos.geometry import Circle, Footprint, Grid, Point, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TileSet
 from test_geometry_footprint import DIAGONAL, SHAPES
 
 
@@ -45,6 +45,24 @@ class TestAddressing:
     def test_a_point_a_tile_and_a_tuple_reach_the_same_value(self) -> None:
         grid = playable_grid()
         assert grid[Point((5.7, 7.3))] == grid[Tile(5, 7)] == grid[(5.7, 7.3)]
+
+    def test_a_point_with_a_height_reads_the_tile_under_it(self) -> None:
+        grid = playable_grid()
+        assert grid[Point3D((5.7, 7.3, 12.0))] == grid[Tile(5, 7)]
+        assert grid.index_of(Point3D((5.7, 7.3, 12.0))) == (1, 1)
+
+    def test_a_negative_coordinate_floors_rather_than_truncating(self) -> None:
+        grid = Grid(numpy.arange(4.0).reshape(2, 2), origin=Tile(-2, -2))
+        assert grid[(-0.5, -1.5)] == grid.values[1, 0]
+        assert grid.index_of((-0.5, -1.5)) == (1, 0)
+
+    @pytest.mark.parametrize("key", ["5,7", None, 5, numpy.array([5.7, 7.3])], ids=repr)
+    def test_a_key_that_is_no_point_is_refused(self, key: object) -> None:
+        grid = playable_grid()
+        with pytest.raises(TypeError):
+            _ = grid[key]  # pyright: ignore[reportCallIssue, reportArgumentType]
+        with pytest.raises(TypeError):
+            grid.index_of(key)  # pyright: ignore[reportArgumentType]
 
     def test_the_origin_is_the_first_entry(self) -> None:
         grid = playable_grid()
@@ -196,6 +214,11 @@ class TestArrayIndices:
         assert grid.index_of(Point((5.7, 7.3))) == (1, 1)
         assert grid.values[grid.index_of(Point((5.7, 7.3)))] == grid[Point((5.7, 7.3))]
 
+    def test_tile_at_refuses_an_index_that_is_not_whole(self) -> None:
+        """It floored one while it shifted the origin by `Tile.translated`."""
+        with pytest.raises(TypeError):
+            playable_grid().tile_at((1.5, 2))  # pyright: ignore[reportArgumentType]
+
     def test_tile_at_inverts_index_of(self) -> None:
         grid = playable_grid()
         for point in (Point((4.0, 6.0)), Point((5.7, 7.3)), Point((13.9, 13.9))):
@@ -250,6 +273,38 @@ class TestAreaAccess:
         assert grid[nothing].size == 0
         grid[nothing] = 1.0
         assert not grid.values.any()
+
+    @pytest.mark.parametrize(
+        "area",
+        [
+            Circle((5.3, 7.8), 3.5),
+            Circle((4.2, 6.1), 2.5),  # hangs off the grid's lower left corner
+            TileSet([Tile(5, 7), Tile(13, 13), Tile(2, 2), Tile(9, 6)]),  # Tile(2, 2) lies off the grid
+            Circle((60, 60), 3),  # wholly off the grid
+        ],
+        ids=repr,
+    )
+    def test_every_area_reads_and_writes_its_tiles_on_the_grid_by_ascending_x_then_y(self, area: Area) -> None:
+        """The values once came from Python tiles turned back into indices (#2); they come from a mask now, and must
+        still be each tile's value in the order the tiles sort in."""
+        grid = playable_grid()
+        bounds = grid.bounds
+        on_grid = [tile for tile in sorted(area.tiles()) if tile.center in bounds]
+        read = grid[area]
+        assert numpy.atleast_1d(read).tolist() == [grid[tile] for tile in on_grid]
+        grid[area] = -numpy.arange(1.0, len(on_grid) + 1)
+        assert [grid[tile] for tile in on_grid] == [-float(n) for n in range(1, len(on_grid) + 1)]
+        assert int((grid.values < 0).sum()) == len(on_grid)
+
+    def test_an_area_reaching_far_beyond_the_grid_reads_and_writes_only_what_the_grid_holds(self) -> None:
+        """A mask over the whole of either would need more memory than there is: `numpy.zeros` refuses one of
+        10**18 entries."""
+        grid = Grid.zeros(10, 10)
+        sparse = TileSet([Tile(1, 1), Tile(10**9, 10**9)])
+        grid[sparse] = 1.0
+        grid[Circle((5.5, 5.5), 10**8)] += 1.0
+        assert grid[sparse].tolist() == [2.0]
+        assert grid.sum() == 101.0
 
     def test_a_tile_set_writes_exactly_its_tiles(self) -> None:
         grid = Grid.zeros(10, 10, dtype=bool)
@@ -401,6 +456,32 @@ class TestDerivedGrids:
         assert distances[Tile(2, 2)] == pytest.approx(2.0)
         assert distances[Tile(1, 1)] == pytest.approx(1.0)
         assert distances[Tile(0, 0)] == 0.0
+
+    def test_distance_transform_counts_the_ground_past_a_false_edge_as_false(self) -> None:
+        """The map's pathing grid reads false past its edge, so a tile on the edge is 1 from the nearest false tile."""
+        pathable = Grid(numpy.ones((5, 3), dtype=bool), origin=Tile(2, 4), outside=False)
+        pathable[Tile(6, 5)] = False
+        distances = pathable.distance_transform()
+        assert distances.values.tolist() == [
+            [1.0, 1.0, 1.0],
+            [1.0, 2.0, 1.0],
+            [1.0, 2.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ]
+        assert distances.origin == Tile(2, 4)
+
+    @pytest.mark.parametrize("outside", [None, True])
+    def test_distance_transform_ignores_an_edge_that_is_not_false(self, outside: bool | None) -> None:
+        pathable = Grid(numpy.ones((5, 1), dtype=bool), outside=outside)
+        pathable[Tile(4, 0)] = False
+        assert pathable.distance_transform().values[:, 0].tolist() == [4.0, 3.0, 2.0, 1.0, 0.0]
+
+    @pytest.mark.parametrize("outside", [None, True])
+    def test_distance_transform_with_no_false_tile_is_inf(self, outside: bool | None) -> None:
+        """scipy alone gives an all-true 1x7 grid the distances 1 to 7."""
+        pathable = Grid(numpy.ones((1, 7), dtype=bool), outside=outside)
+        assert pathable.distance_transform().values.tolist() == [[math.inf] * 7]
 
     def test_a_path_distance_goes_around_what_is_false(self) -> None:
         """A wall at x = 12 from y = 20 to 23 leaves one way round, over the top row: up 3 and a diagonal to (11, 24),

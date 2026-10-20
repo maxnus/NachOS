@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.units._values import VitalType
@@ -30,6 +30,7 @@ class _Watches[U: Unit[Any]]:
         "_dropped_keys",
         "_reached_keys",
         "_vital_ids",
+        "_vital_types",
         "_vital_watches_by_type",
         "watching",
     )
@@ -39,9 +40,10 @@ class _Watches[U: Unit[Any]]:
         # only when they change.
         self._reached_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
         self._dropped_keys: Collection[tuple[VitalType, float, UnitTypeId]] = ()
-        # The unit ids of each vital watch, shared across the unit types it is watched for, and the watches by raw
-        # unit type.
+        # The unit ids of each vital watch, shared across the unit types it is watched for, those raw unit types, and
+        # the watches by raw unit type.
         self._vital_ids: dict[tuple[VitalType, float, bool], set[int]] = {}
+        self._vital_types: dict[tuple[VitalType, float, bool], set[int]] = {}
         self._vital_watches_by_type: dict[int, list[_VitalWatch]] = {}
         self._area_watches: dict[Area, _AreaWatch] = {}
         self.watching = False
@@ -51,12 +53,15 @@ class _Watches[U: Unit[Any]]:
         reached: Collection[tuple[VitalType, float, UnitTypeId]],
         dropped: Collection[tuple[VitalType, float, UnitTypeId]],
         areas: Collection[Area],
+        *,
+        units_by_id: Mapping[int, Unit[Any]],
     ) -> None:
-        """Watch these from now on, keeping what was last seen for watches that continue."""
+        """Watch these from now on, keeping what was last seen for watches that continue. `units_by_id` holds every
+        unit by id, to tell the type of each unit a watch has seen."""
         # The bus passes the same sets while its handlers stay the same, which saves comparing hundreds of keys a turn.
         if reached is not self._reached_keys or dropped is not self._dropped_keys:
             if reached != self._reached_keys or dropped != self._dropped_keys:
-                self._watch_vitals(reached, dropped)
+                self._watch_vitals(reached, dropped, units_by_id)
             self._reached_keys, self._dropped_keys = reached, dropped
         _keep_only(self._area_watches, areas)
         self.watching = bool(self._vital_ids or self._area_watches)
@@ -65,24 +70,31 @@ class _Watches[U: Unit[Any]]:
         self,
         reached: Collection[tuple[VitalType, float, UnitTypeId]],
         dropped: Collection[tuple[VitalType, float, UnitTypeId]],
+        units_by_id: Mapping[int, Unit[Any]],
     ) -> None:
-        """Rebuild the vital watches from `reached` and `dropped`, keeping the unit ids of each watch that
-        continues."""
+        """Rebuild the vital watches from `reached` and `dropped`. A watch that continues keeps the unit ids it has seen
+        of the types it watched before and still does, so it starts afresh on a type it watches anew."""
         kept: dict[tuple[VitalType, float, bool], set[int]] = {}
+        types: dict[tuple[VitalType, float, bool], set[int]] = {}
         by_type: dict[int, list[_VitalWatch]] = {}
         for keys, reaching in ((reached, True), (dropped, False)):
             # Sorted, since a set of keys iterates in an order that differs from one process to the next, and this
             # order is the order of one unit's crossings in a turn.
             for vital, value, unit_type in sorted(keys, key=lambda key: (key[0].name, key[1], key[2])):
-                if (ids := kept.get((vital, value, reaching))) is None:
-                    ids = kept[vital, value, reaching] = self._vital_ids.get((vital, value, reaching), set())
+                watch = (vital, value, reaching)
+                ids = kept.setdefault(watch, set())
+                types.setdefault(watch, set()).add(int(unit_type))
                 by_type.setdefault(int(unit_type), []).append((_VITAL_READERS[vital], vital, value, reaching, ids))
-        self._vital_ids, self._vital_watches_by_type = kept, by_type
+        for watch, ids in kept.items():
+            if (seen := self._vital_ids.get(watch)) is not None:
+                still = self._vital_types[watch] & types[watch]
+                ids.update(unit_id for unit_id in seen if _type_of(units_by_id, unit_id) in still)
+        self._vital_ids, self._vital_types, self._vital_watches_by_type = kept, types, by_type
 
-    def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, in_vision: bool) -> None:
+    def compare(self, unit: U, report: raw_pb2.Unit, found: _ComparedChanges[U], *, visible: bool) -> None:
         """Record into `found` what `unit`, in sight with `report`, crossed since it was last seen."""
         unit_id = unit._id
-        if in_vision and (watches := self._vital_watches_by_type.get(report.unit_type)) is not None:
+        if visible and (watches := self._vital_watches_by_type.get(report.unit_type)) is not None:
             for read, vital, value, reaching, ids in watches:
                 if (now := read(report)) is None:
                     continue
@@ -144,6 +156,12 @@ def _keep_only(watches: dict[Area, _AreaWatch], wanted: Collection[Area]) -> Non
     for area in wanted:
         if area not in watches:
             watches[area] = _AreaWatch(area)
+
+
+def _type_of(units_by_id: Mapping[int, Unit[Any]], unit_id: int) -> int | None:
+    """The raw type the unit with `unit_id` was last reported as, or `None` if there is none."""
+    unit = units_by_id.get(unit_id)
+    return None if unit is None else unit._latest_report.unit_type
 
 
 def _fraction(amount: float, most: float) -> float | None:

@@ -5,7 +5,7 @@ handler returns, so a turn that orders nothing sends nothing. Every order goes o
 and the game charges what costs then.
 
 ```python
-@api.events.on(TurnEvent)
+@api.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.orders.issue(marine, AbilityId.ATTACK, target=enemy_base)
@@ -22,20 +22,21 @@ api.orders.issue(squad, AbilityId.MOVE, target=ramp)
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 api.orders.issue(marine, AbilityId.ATTACK, target=drone, data=Defending(base))
 api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
-api.orders.camera(base)
 ```
 
-- **`units`** is one unit or any number of them. They are ordered together, in one command, so the game spreads a group
-  around the target point; ordering each separately stacks them on the point instead. Only an ability every unit of a
-  command carries out goes to several: a move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an
-  unload (`AbilityData.multi_unit`, from what the game was seen to do). Any other, given to several units, raises
-  `ValueError`: a build, an add-on, a train, a research, a morph that costs, every spell but a toggle, a landing, a load
-  or a liberator's siege, which the game has only one unit of a command carry out, and an ability not seen given to a
-  group. So the bot picks the unit: the nearest worker, the barracks with room beside it, the caster with the energy.
+- **`units`** is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
+  ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
+  lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
+  The game spreads such a group around the target point, where ordering each separately stacks them on the point. Any
+  other ability goes out as a command to each unit, since one command naming several has only one of them carry it
+  out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
+  research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
+  add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
+  carry out (`AbilityData.is_research`, `places_at_target`): the bot picks the unit.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
-  is the point the game was given, not quite the one passed in. `camera` stores its point the same way.
+  is the point the game was given, not quite the one passed in.
 - **`queued`** puts the order behind each unit's current orders instead of replacing them.
 - **`force`** sends the order even to units already carrying it out, which are otherwise left out
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
@@ -43,7 +44,10 @@ api.orders.camera(base)
   turn's other orders.
 - **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
   reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
-- **`api.orders.camera`** moves this player's camera with the turn's orders. Only the last move of a turn is sent.
+
+The turn's request also carries `api.camera.move_to(point)`, which centers this player's camera on a point after the
+turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
+`api.camera.center` is where the turn's observation has the camera.
 
 ## One order a unit a turn
 
@@ -83,9 +87,10 @@ takes a point, its zone, and only one of two liberators given one carries it out
 `LIBERATOR_SIEGE_AT`, the game's. A custom id given a type it has nothing to be sent as for raises `ValueError`;
 `AbilityId.is_custom` tells one from the game's.
 
-An order goes out as one command for each ability it is sent as, or one per unit where that is aimed at the unit
-itself. A command the game refuses is listed in `api.action_failures` once for each unit it named, under the id
-ordered. An unload at a point aimed at one of the transports ordered raises `TypeError`, naming `UNLOAD`.
+An order goes out as one command for each ability it is sent as, or one per unit where the ability is not one every
+unit of a command carries out, or where it is aimed at the unit itself. A command the game refuses is listed in
+`api.action_failures` once for each unit it named, under the id ordered. An unload at a point aimed at one of the
+transports ordered raises `TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -103,7 +108,7 @@ Orders have no priority of their own. Handlers already run highest priority firs
 `api.orders.issued_to(unit)` to leave alone a unit an earlier one has ordered:
 
 ```python
-@api.events.on(TurnEvent, priority=EventPriority.LOW)
+@api.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         if not api.orders.issued_to(marine):
@@ -185,7 +190,8 @@ an order like any other. `api.data.abilities[ability].cancelled_by` names the ca
 structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
 tech lab included, and a morph's or an add-on's own cancel, since those answer `CANCEL_LAST` with `ERROR`. A
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
-neither a slot nor a mineral within the same step ([game behavior](game-behavior.md#abilities-and-orders)).
+neither a slot nor a mineral within the same step
+([game behavior](reference/game-behavior/abilities-and-orders.md#cancels-and-refunds)).
 
 ## What the game did
 
@@ -200,7 +206,7 @@ another. What happened shows in the game itself:
 
 - **`unit.orders`**: what each unit is doing now, its current order and then its queued ones.
 - **`OwnConstructionStartedEvent`** and **`OwnUnitCreatedEvent`**: a structure placed, a unit made.
-- **`UnitDiedEvent`**: a unit died, and with a producer, whatever it was making was lost.
+- **`OwnUnitDiedEvent`**: a unit of yours died, and with a producer, whatever it was making was lost.
 - **`api.action_failures`**: every order the game refused when the last turn's were sent, and every one it accepted
   earlier and gave up on since the previous observation, with the unit and why.
 

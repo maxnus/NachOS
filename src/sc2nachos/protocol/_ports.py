@@ -25,7 +25,7 @@ class GamePorts:
 
     @classmethod
     def from_start_port(cls, start_port: int) -> Self:
-        """The ladder's layout: five consecutive ports from `start_port`, the first of them unused."""
+        """The ladder's layout from `start_port` N: the server on N+2 and N+3, and the one guest on N+4 and N+5."""
         return cls(
             server=PortPair(start_port + 2, start_port + 3),
             players=(PortPair(start_port + 4, start_port + 5),),

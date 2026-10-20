@@ -34,7 +34,8 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
 # What the game charges when each of these is ordered, as opposed to what its type's row holds. A morph, an add-on
 # and a structure were each measured from the refund a cancel gives back, three quarters of the charge rounded up
-# (tool `sweep_orders`, docs/game-behavior.md); the rest are the game's long-standing prices (stated).
+# (tool `sweep_orders`, docs/reference/game-behavior/abilities-and-orders.md); the rest are the game's long-standing
+# prices (stated).
 _CHARGED = {
     AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: Cost(100, 100),
     AbilityId.BARRACKS_TRAIN_MARINE: Cost(50, 0, 1),
@@ -52,6 +53,7 @@ _CHARGED = {
     AbilityId.HATCHERY_MORPH_LAIR: Cost(150, 100),
     AbilityId.LAIR_MORPH_HIVE: Cost(200, 150),
     AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1),
+    AbilityId.LIBERATOR_SIEGE_AT: Cost(0, 0),
     AbilityId.NEXUS_TRAIN_PROBE: Cost(50, 0, 1),
     AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25),
     AbilityId.PROBE_BUILD_PYLON: Cost(100, 0),
@@ -78,7 +80,6 @@ _RESEARCHED_BY_A_DEAD_ID = frozenset(MISNAMED_RESEARCH_ABILITIES)
 # `gamedata/_techtree/_overrides.py` names the ability that works for each.
 _DEAD_MAKERS = {
     UnitTypeId.LURKER: RawAbilityId.LurkerAspectMPFromHydraliskBurrowed_LurkerMPFromHydraliskBurrowed,
-    UnitTypeId.REFINERY_RICH: RawAbilityId.TerranBuild_Refinery_325,
     UnitTypeId.BANELING: RawAbilityId.MorphZerglingToBaneling_Baneling,
     UnitTypeId.AUTO_TURRET: RawAbilityId.RavenBuild_AutoTurret,
     UnitTypeId.LOCUST: RawAbilityId.SpawnInfestedTerran_LocustMP,
@@ -232,12 +233,19 @@ class TestReadingTheTables:
     def test_an_id_of_zero_names_nothing(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         marine = data.units[UnitTypeId.MARINE]
-        assert marine.base_type is None
         assert marine.tech_aliases == ()
 
     def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         assert data.units[UnitTypeId.MARINE].build_steps == 400.0
+
+    def test_a_type_the_table_gives_no_build_time_takes_that_of_what_its_creation_ability_builds(self) -> None:
+        """A rich refinery's row reads no build time on the ladder, and the refinery an SCV's build puts up on a rich
+        geyser takes a refinery's (tool `sweep_orders`)."""
+        refinery = data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY, build_time=480.0)
+        rich = data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY_RICH, unit_alias=UnitTypeId.REFINERY)
+        data = GameData(sc2api_pb2.ResponseData(units=[refinery, rich]))
+        assert data.units[UnitTypeId.REFINERY_RICH].build_steps == 480.0
 
     def test_a_weapon_says_what_it_hits_and_how_long_it_waits(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
@@ -255,6 +263,26 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[marauder]))
         (weapon,) = data.units[UnitTypeId.MARAUDER].weapons
         assert weapon.damage_bonuses == {Attribute.ARMORED: 10.0}
+
+    @pytest.mark.parametrize(
+        ("ability", "is_research", "places_at_target"),
+        [
+            (AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1, True, False),
+            (AbilityId.SCV_BUILD_SUPPLY_DEPOT, False, True),
+            (AbilityId.LAND, False, True),
+            (AbilityId.WARP_GATE_WARP_IN_ZEALOT, False, True),
+            (AbilityId.BARRACKS_TRAIN_MARINE, False, False),
+            (AbilityId.MOVE, False, False),
+        ],
+    )
+    def test_an_ability_says_whether_it_researches_and_whether_it_places_at_its_target(
+        self, ability: AbilityId, is_research: bool, places_at_target: bool
+    ) -> None:
+        row = data_pb2.AbilityData(ability_id=ability, is_building=ability is AbilityId.SCV_BUILD_SUPPLY_DEPOT)
+        data = GameData(sc2api_pb2.ResponseData(abilities=[row]))
+
+        assert data.abilities[ability].is_research is is_research
+        assert data.abilities[ability].places_at_target is places_at_target
 
     def test_an_ability_that_places_a_structure_says_how_much_room_it_takes(self) -> None:
         depot = data_pb2.AbilityData(
@@ -334,7 +362,7 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
         assert row.cost == Cost(minerals=100, vespene=100)
-        assert row.research_steps == 2240.0
+        assert row.research_steps == 2240 and isinstance(row.research_steps, int)
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
@@ -346,6 +374,14 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         with pytest.raises(TypeError):
             data.units[UnitTypeId.MARINE] = data.units[UnitTypeId.MARINE]  # type: ignore[index]
+
+
+# Each gas building on a rich geyser, and the one on a plain geyser it is built as.
+_RICH_GAS_BUILDINGS = {
+    UnitTypeId.REFINERY_RICH: UnitTypeId.REFINERY,
+    UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
+    UnitTypeId.EXTRACTOR_RICH: UnitTypeId.EXTRACTOR,
+}
 
 
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
@@ -399,6 +435,16 @@ class TestARecordedGamesTables:
         named = {row.unit_id: row.ability_id for row in answer.units if row.ability_id}
         lost = {unit: named[unit] for unit in UnitTypeId if unit in named and data.units[unit].creation_ability is None}
         assert lost == _NO_MAKER
+
+    def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
+        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing."""
+        answer = _answer(path)
+        data = GameData(answer)
+        tabled = {row.unit_id: row.build_time for row in answer.units}
+        borrowed = {unit_type for unit_type, row in data.units.items() if row.build_steps != tabled[unit_type]}
+        assert borrowed <= set(_RICH_GAS_BUILDINGS)
+        for rich, plain in _RICH_GAS_BUILDINGS.items():
+            assert data.units[rich].build_steps == data.units[plain].build_steps == 480.0, rich.name
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
@@ -582,7 +628,8 @@ class TestARecordedGamesTables:
             assert data.abilities[ability].order_behavior is OrderBehavior.NEEDS_IDLE, ability.name
 
     def test_what_a_structure_does_besides_making_something_leaves_its_orders_alone(self, path: Path) -> None:
-        """Measured for a rally and a cancel, and taken to hold for the rest (docs/game-behavior.md)."""
+        """Measured for a rally and a cancel, and taken to hold for the rest
+        (docs/reference/game-behavior/abilities-and-orders.md)."""
         data = _tables(path)
         for ability in (AbilityId.RALLY_UNITS, AbilityId.RALLY_WORKERS, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
@@ -739,6 +786,9 @@ class TestARecordedGamesTables:
         ):
             assert data.abilities[ability].multi_unit, ability.name
 
+    def test_every_research_time_is_a_whole_number_of_steps(self, path: Path) -> None:
+        assert all(upgrade.research_time == round(upgrade.research_time) for upgrade in _answer(path).upgrades)
+
     def test_every_curated_upgrade_names_the_ability_that_researches_it(self, path: Path) -> None:
         data = _tables(path)
         for upgrade in UpgradeId:
@@ -758,15 +808,6 @@ class TestARecordedGamesTables:
             # Without the product it would read as an ability that makes nothing, which keeps a unit's orders.
             assert data.abilities[ability].order_behavior is OrderBehavior.QUEUES
         assert _RESEARCHED_BY_A_DEAD_ID
-
-    def test_a_transient_form_of_a_unit_names_the_one_it_is_a_form_of(self, path: Path) -> None:
-        data = _tables(path)
-        for unit, base in (
-            (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
-            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitTypeId.SUPPLY_DEPOT),
-            (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
-        ):
-            assert data.units[unit].base_type is base
 
 
 def _answer_row(path: Path, ability: int) -> data_pb2.AbilityData:

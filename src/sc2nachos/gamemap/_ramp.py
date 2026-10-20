@@ -8,15 +8,17 @@ from typing import TYPE_CHECKING, cast, final
 import numpy
 import scipy.ndimage
 
-from sc2nachos.geometry import Tile, TileSet
+from sc2nachos.geometry import TileSet
 
 if TYPE_CHECKING:
     from numpy import ndarray
 
     from sc2nachos.geometry import Grid
 
-# Ground touching at a corner is one patch, so a ramp that runs diagonally is one ramp.
-_TOUCHING = numpy.ones((3, 3), dtype=bool)
+# The neighbors `scipy.ndimage.label` joins into one patch, a tile's `neighbors8`: ground touching at a corner is one
+# patch, so a ramp that runs diagonally is one ramp. Read-only, since every api in the process shares it.
+_NEIGHBORS8 = numpy.ones((3, 3), dtype=bool)
+_NEIGHBORS8.flags.writeable = False
 
 # Levels are two apart in height, so ground spanning this much climbs from one to the next.
 _HALF_A_LEVEL = 1.0
@@ -50,7 +52,7 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
     """
     unbuildable = pathing.values & ~placement.values
     # `label` is unannotated, and pyright reads the return type off an early-return branch of its body.
-    patches, count = cast("tuple[ndarray, int]", scipy.ndimage.label(unbuildable, structure=_TOUCHING))
+    patches, count = cast("tuple[ndarray, int]", scipy.ndimage.label(unbuildable, structure=_NEIGHBORS8))
     heights = height.values
     origin = pathing.origin
     ramps: list[Ramp] = []
@@ -61,16 +63,11 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
         if high - low >= _HALF_A_LEVEL:
             ramps.append(
                 Ramp(
-                    tiles=TileSet(_tiles(patch, origin)),
-                    # A ramp climbs a whole level and each end reaches a byte into it, so top and bottom cannot overlap.
-                    top=TileSet(_tiles(patch & (heights >= high - _A_BYTE), origin)),
-                    bottom=TileSet(_tiles(patch & (heights <= low + _A_BYTE), origin)),
+                    tiles=TileSet._from_mask(origin, patch),
+                    # A ramp climbs at least half a level, more than the two bytes its ends reach into it, so top
+                    # and bottom cannot overlap.
+                    top=TileSet._from_mask(origin, patch & (heights >= high - _A_BYTE)),
+                    bottom=TileSet._from_mask(origin, patch & (heights <= low + _A_BYTE)),
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))
-
-
-def _tiles(mask: ndarray, origin: Tile) -> list[Tile]:
-    """The tiles where `mask` is true, addressed from the grid's `origin`."""
-    xs, ys = numpy.nonzero(mask)
-    return [Tile(origin[0] + x, origin[1] + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)]

@@ -10,7 +10,6 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
@@ -24,7 +23,16 @@ from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import make_bits, make_client, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import (
+    make_bits,
+    make_client,
+    make_enemy,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -61,6 +69,7 @@ _TABLES = make_tables(
     _row(UnitTypeId.DESTRUCTIBLE_4X4_ROCK_EX1),
     _row(UnitTypeId.COLLAPSIBLE_TOWER_DIAGONAL_ROCK),
     _row(UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
+    _row(UnitTypeId.HEALING_SHRINE_XEL_NAGA),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
     abilities=[
         data_pb2.AbilityData(ability_id=AbilityId.MOVE, target=data_pb2.AbilityData.Target.PointOrUnit),
@@ -81,7 +90,7 @@ class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy())
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
@@ -360,6 +369,15 @@ class TestReservingASite:
         assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
         assert not grids.is_free(_DEPOT, at=(8.0, 8.0))
         assert not grids.free[Point((8.0, 8.0))]
+
+    def test_a_type_that_covers_no_tile_reserves_none_where_it_snaps(self) -> None:
+        """A Xel'Naga healing shrine's footprint is empty, and its bounding box a rectangle with no center."""
+        grids = _Game().observe(0, _scv(1))
+
+        reservation = grids.reserve(UnitTypeId.HEALING_SHRINE_XEL_NAGA, at=(3.4, 7.6))
+
+        assert reservation.at == Point((3.0, 8.0))
+        assert not grids.reserved.any()
 
     def test_a_margin_reserves_the_tiles_within_it_too(self) -> None:
         """Two tiles on a depot's right, as a barracks keeps them for its add-on."""
@@ -640,9 +658,9 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(data, Enemy())
+            tracker = _Tracker(data, make_enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker, data, observation
+            return GameMap._from_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")
 
 
@@ -755,7 +773,7 @@ class TestAgainstTheRealGame:
             client.join_game(Race.TERRAN)
             api = Api()
             bot = _DepotBot(api, transport)
-            api.events.on(TurnEvent)(bot.turn)
+            api.on(TurnEvent)(bot.turn)
             api.play(client, steps_per_turn=8, time_limit=60)
 
         print("the site, turn by turn (depot stands, reserved, open):", bot.turns)

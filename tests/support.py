@@ -1,52 +1,67 @@
 """Fakes and builders shared by the tests that run the library without a game."""
 
+import importlib.util
 from collections import deque
 from collections.abc import Iterable
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
-from sc2nachos._game import _Game
+from sc2nachos._game import _chat_event_types_by_player, _Game
+from sc2nachos.camera import Camera
+from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
-    ChatEvent,
     EnemyUnitCloakChangedEvent,
     EnemyUnitDamagedEvent,
+    EnemyUnitDiedEvent,
     EnemyUnitEnergyLostEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitFirstSeenEvent,
     EnemyUnitGainedBuffEvent,
     EnemyUnitLeftSightEvent,
     EnemyUnitLostBuffEvent,
+    EnemyUnitTypeChangedEvent,
     Event,
-    EventBus,
     EventFilter,
+    NeutralUnitDiedEvent,
+    OpponentChatEvent,
     OwnActionEvent,
+    OwnChatEvent,
     OwnConstructionFinishedEvent,
     OwnConstructionStartedEvent,
+    OwnUnitBecameIdleEvent,
     OwnUnitCloakChangedEvent,
     OwnUnitCreatedEvent,
     OwnUnitDamagedEvent,
+    OwnUnitDiedEvent,
     OwnUnitEnergyLostEvent,
     OwnUnitGainedBuffEvent,
     OwnUnitLostBuffEvent,
+    OwnUnitTypeChangedEvent,
     OwnUpgradeFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnWarpInFinishedEvent,
+    OwnWarpInStartedEvent,
     UnitAllianceChangedEvent,
-    UnitDiedEvent,
     UnitFoundDeadEvent,
-    UnitTypeChangedEvent,
 )
+from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.match import Result
+from sc2nachos.match import Race, Result
 from sc2nachos.orders import OrderBook
+from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
@@ -72,7 +87,8 @@ class FakeTransport:
 
 
 class FakeWebSocket:
-    """The three methods `WebSocketTransport` uses, over prepared payloads, or raising `failure` from `recv`."""
+    """The three methods `WebSocketTransport` uses, over prepared payloads, or raising `failure` from `recv`; once
+    closed, it refuses to send."""
 
     def __init__(self, *payloads: str | bytes, failure: Exception | None = None) -> None:
         self.sent: list[bytes] = []
@@ -93,8 +109,21 @@ class FakeWebSocket:
             raise WebSocketConnectionClosedException("Connection to remote host was lost.")
         return self._payloads.popleft()
 
-    def close(self) -> None:
+    def close(self, *, timeout: float | None = 3) -> None:
         self.closed = True
+
+
+TOOLS = Path(__file__).parents[1] / "tools"
+
+
+def load_tool(name: str) -> ModuleType:
+    """The module `tools/<name>.py`, loaded by path since `tools` is not a package. One that imports another tool, as
+    a sweep imports `_sandbox`, needs `TOOLS` on `sys.path`."""
+    spec = importlib.util.spec_from_file_location(name, TOOLS / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2api_pb2.Response:
@@ -123,8 +152,10 @@ def make_game_info(
     playable: tuple[int, int, int, int] | None = None,
     heights: common_pb2.ImageData | None = None,
     start_locations: tuple[tuple[float, float], ...] = (),
+    players: Iterable[sc2api_pb2.PlayerInfo] | None = None,
 ) -> sc2api_pb2.ResponseGameInfo:
-    """A map drawn in `rows`, top row first, or eight by eight of open ground.
+    """A map drawn in `rows`, top row first, or eight by eight of open ground, in a game of `players`, or of
+    `PLAYER_ID` playing Terran against a Zerg computer, `ENEMY_ID`.
 
     `#` is open ground, `~` is pathable but not buildable, and `.` is neither. The whole map is playable unless
     `playable` gives a smaller area as `(x0, y0, x1, y1)`, and flat unless `heights` is given.
@@ -142,6 +173,7 @@ def make_game_info(
             playable_area=common_pb2.RectangleI(p0=common_pb2.PointI(x=x0, y=y0), p1=common_pb2.PointI(x=x1, y=y1)),
             start_locations=[common_pb2.Point2D(x=x, y=y) for x, y in start_locations],
         ),
+        player_info=_AGAINST_THE_COMPUTER if players is None else players,
     )
 
 
@@ -160,11 +192,12 @@ def make_observation(
     actions: Iterable[sc2api_pb2.Action] = (),
     action_errors: Iterable[sc2api_pb2.ActionError] = (),
     alerts: Iterable[sc2api_pb2.Alert.ValueType] = (),
+    camera: tuple[float, float] = (0.0, 0.0),
 ) -> sc2api_pb2.ResponseObservation:
     """An observation at `game_loop` with `units`, the tags of the `dead`, the `results` if the game is over, and the
     rest of what an observation reports. `chat` holds each message as the sender's player id and the text."""
     raw = raw_pb2.ObservationRaw(
-        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades),
+        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades, camera=common_pb2.Point(x=camera[0], y=camera[1])),
         units=units,
         map_state=raw_pb2.MapState(visibility=visibility, creep=creep),
         event=raw_pb2.Event(dead_units=dead),
@@ -188,7 +221,7 @@ def make_unit(
     *,
     at: tuple[float, float] = (10.0, 10.0),
     alliance: Alliance = Alliance.OWN,
-    visibility: Visibility = Visibility.IN_VISION,
+    visibility: Visibility = Visibility.VISIBLE,
     **fields: Any,
 ) -> raw_pb2.Unit:
     """A unit as the game reports it: this player's marine, in sight, unless the arguments say otherwise."""
@@ -202,15 +235,57 @@ def make_unit(
     )
 
 
-# Every event a turn can report, in the order it reports them.
+# The player a game `played` builds plays as, and the one observer it has.
+PLAYER_ID = 1
+ENEMY_ID = 2
+OBSERVER_ID = 3
+# This player in a game `played` builds, as against the computer of `make_game_info`.
+PLAYER = Player(id=PLAYER_ID, race=Race.TERRAN, requested_race=Race.TERRAN, name=None)
+_AGAINST_THE_COMPUTER = (
+    sc2api_pb2.PlayerInfo(
+        player_id=PLAYER_ID,
+        type=sc2api_pb2.PlayerType.Participant,
+        race_requested=common_pb2.Race.Terran,
+        race_actual=common_pb2.Race.Terran,
+    ),
+    sc2api_pb2.PlayerInfo(
+        player_id=ENEMY_ID,
+        type=sc2api_pb2.PlayerType.Computer,
+        race_requested=common_pb2.Race.Zerg,
+        difficulty=sc2api_pb2.Difficulty.VeryEasy,
+    ),
+)
+
+
+def make_enemy() -> Enemy:
+    """The Zerg computer of `make_game_info`, as a game reads it."""
+    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG)
+
+
+def require_enemy(enemy: Enemy | None) -> Enemy:
+    """`enemy`, which a game of two players always has."""
+    assert enemy is not None, "the game has no other player"
+    return enemy
+
+
+_WITH_AN_OBSERVER = sc2api_pb2.ResponseGameInfo(
+    player_info=[sc2api_pb2.PlayerInfo(player_id=OBSERVER_ID, type=sc2api_pb2.PlayerType.Observer)]
+)
+
+# Every event a turn can report, in the order it reports them, but `EnemyRaceKnownEvent`, which comes once a game,
+# first of its turn's events.
 HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitCreatedEvent,
     EnemyUnitFirstSeenEvent,
-    UnitTypeChangedEvent,
+    OwnUnitTypeChangedEvent,
+    EnemyUnitTypeChangedEvent,
     UnitAllianceChangedEvent,
     OwnConstructionStartedEvent,
+    OwnWarpInStartedEvent,
     OwnConstructionFinishedEvent,
     OwnWarpInFinishedEvent,
+    OwnUpgradeStartedEvent,
+    OwnUpgradeStoppedEvent,
     OwnUpgradeFinishedEvent,
     OwnUnitDamagedEvent,
     EnemyUnitDamagedEvent,
@@ -224,19 +299,30 @@ HAPPENINGS: tuple[type[Event], ...] = (
     EnemyUnitLostBuffEvent,
     EnemyUnitEnteredSightEvent,
     EnemyUnitLeftSightEvent,
-    UnitDiedEvent,
+    OwnUnitBecameIdleEvent,
+    OwnUnitDiedEvent,
+    EnemyUnitDiedEvent,
+    NeutralUnitDiedEvent,
     UnitFoundDeadEvent,
     OwnActionEvent,
-    ChatEvent,
+    OwnChatEvent,
+    OpponentChatEvent,
     AlertEvent,
 )
 
 
-def record(events: EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
-    """A list that collects every event of `event_types`, or matching the filters, handed out from now on."""
+def record(events: _EventBus, *event_types: type[Event] | EventFilter[Any]) -> list[Any]:
+    """A list that collects every event of `event_types`, or matching the filters, handed out from now on, each once
+    though several of them take it: a kind and its base."""
     seen: list[Any] = []
+
+    def keep(event: Event) -> None:
+        # Handlers of one priority, as these all are, are handed an event one after another.
+        if not seen or seen[-1] is not event:
+            seen.append(event)
+
     for event_type in event_types:
-        events.on(event_type)(lambda event: seen.append(event))
+        events.on(event_type)(lambda event: keep(event))
     return seen
 
 
@@ -255,12 +341,14 @@ def played(
     game_map: GameMap,
     tracker: _Tracker,
     observation: sc2api_pb2.ResponseObservation,
-    events: EventBus,
+    events: _EventBus,
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
+    player: Player = PLAYER,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
-    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client."""
+    `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
+    `PLAYER_ID` with `OBSERVER_ID` watching."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
@@ -272,6 +360,7 @@ def played(
             game_map=game_map,
             expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=tracker.game_data,
+            player=player,
             enemy=tracker.enemy,
             enemy_upgrade_inference=infer,
             tracker=tracker,
@@ -286,6 +375,10 @@ def played(
                 game_data=tracker.game_data,
                 order_book=order_book,
             ),
+            pathing=Pathing(client),
+            camera=Camera._from_player(observation.observation.raw_data.player),
+            debug=DebugCommands(client, game_map, opponent_id=None, step=step),
+            _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
         )
         game._read(observation, step)
@@ -306,12 +399,14 @@ class RealGame:
     """A game against the computer, stepped by hand, with its units tracked and each observation's events handed to
     `events`."""
 
-    def __init__(self, client: Client, player: int, events: EventBus | None = None) -> None:
+    def __init__(self, client: Client, player: int, events: _EventBus | None = None) -> None:
         self.client = client
         self.player = player
-        self.events = events or EventBus()
-        self.map = GameMap._of_game(client.game_info(), client.observation())
-        self.enemy = Enemy()
+        self.events = events or _EventBus()
+        info = client.game_info()
+        self.map = GameMap._from_game(info, client.observation())
+        self.own_player = Player._from_game(info, player)
+        self.enemy = Enemy._from_game(info, player)
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()
@@ -320,7 +415,9 @@ class RealGame:
         response = self.client.observation()
         self.step = response.observation.game_loop
         basic = UpgradeInference.BASIC
-        self.game = played(self.game, self.client, self.map, self.tracker, response, self.events, infer=basic)
+        self.game = played(
+            self.game, self.client, self.map, self.tracker, response, self.events, infer=basic, player=self.own_player
+        )
         return self.game.state
 
     def turn(self, steps: int) -> Units[Unit[Any]]:

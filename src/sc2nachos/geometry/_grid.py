@@ -12,7 +12,6 @@ from scipy.sparse.csgraph import dijkstra
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.geometry._shapes import Rectangle, Tile
 
 if TYPE_CHECKING:
@@ -99,7 +98,7 @@ class Grid[T: float]:
     @property
     def bounds(self) -> Rectangle:
         """The ground the grid covers."""
-        return Rectangle(self._origin[0], self._origin[1], self.width, self.height)
+        return Rectangle(self._origin.x, self._origin.y, self.width, self.height)
 
     @property
     def values(self) -> ndarray:
@@ -108,24 +107,30 @@ class Grid[T: float]:
         view.flags.writeable = False
         return view
 
-    def index_of(self, point: PointLike) -> tuple[int, int]:
-        """The index into `values` of the tile holding `point`.
+    def index_of(self, point: PointLike | Tile) -> tuple[int, int]:
+        """The index into `values` of the tile holding `point`, a tile reading as itself.
 
         Raises `IndexError` for a point the grid does not cover, whatever `outside` is.
         """
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
-        if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
-        return x, y
+        if (index := self._index_if_covered(point)) is None:
+            raise IndexError(f"{Tile.containing(point)!r} lies outside {self.bounds!r}")
+        return index
+
+    def _index_if_covered(self, point: PointLike | Tile) -> tuple[int, int] | None:
+        """The index into `values` of the tile holding `point`, or `None` for a point the grid does not cover."""
+        tile_x, tile_y = Tile._address_containing(point)
+        x = tile_x - self._origin.x
+        y = tile_y - self._origin.y
+        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
+            return x, y
+        return None
 
     def tile_at(self, index: tuple[int, int]) -> Tile:
         """The tile an index into `values` addresses. The inverse of `index_of`."""
         x, y = index
         if not (0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]):
             raise IndexError(f"{index} lies outside a {self.width} by {self.height} grid")
-        return Tile(self._origin[0] + x, self._origin[1] + y)
+        return self._origin.shifted(x, y)
 
     @property
     def outside(self) -> T | None:
@@ -144,15 +149,12 @@ class Grid[T: float]:
         """
         return Grid(self._data, origin=self._origin, outside=value, readonly=self._readonly)
 
-    def _value_at(self, point: PointLike) -> T:
+    def _value_at(self, point: PointLike | Tile) -> T:
         """The value at `point`, or `outside` for a point the grid does not cover."""
-        tile = Tile.containing(point)
-        x = tile[0] - self._origin[0]
-        y = tile[1] - self._origin[1]
-        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
-            return self._data.item(x, y)
+        if (index := self._index_if_covered(point)) is not None:
+            return self._data.item(index)
         if self._outside is None:
-            raise IndexError(f"{tile!r} lies outside {self.bounds!r}")
+            raise IndexError(f"{Tile.containing(point)!r} lies outside {self.bounds!r}")
         return self._outside
 
     def _aligned(self, other: Grid) -> ndarray:
@@ -177,10 +179,10 @@ class Grid[T: float]:
 
     def __getitem__(self, key: PointLike | Area | Grid[bool]) -> T | ndarray:
         """The value at a point, the values over an area, or the values a mask selects. The values over a rectangle
-        are a view, read-only when the grid is; the others are a copy."""
-        # Points first, checked as tuples: `Tile` is the only `Area` that is a tuple, and it addresses a single tile
-        # like any other point. A miss here is cheap; a miss against an `Area` subclass is not.
-        if isinstance(key, tuple):
+        are a view, read-only when the grid is; the others are a copy, by ascending x, then y."""
+        # Points first, checked as tuples, then a tile, which addresses a single tile like any point. A miss here is
+        # cheap; a miss against an `Area` subclass is not.
+        if isinstance(key, tuple) or type(key) is Tile:
             return self._value_at(key)
         if isinstance(key, Rectangle):
             view = self._data[self._slices(key)]
@@ -188,7 +190,8 @@ class Grid[T: float]:
                 view.flags.writeable = False
             return view
         if isinstance(key, Area):
-            return self._data[self._scatter(key)]
+            grid_slices, area_mask_on_grid = self._slices_and_mask_for_area(key)
+            return self._data[grid_slices][area_mask_on_grid]
         if isinstance(key, Grid):
             return self._data[self._mask(key)]
         return self._value_at(key)
@@ -196,12 +199,13 @@ class Grid[T: float]:
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
         self._refuse_readonly()
-        if isinstance(key, tuple):
+        if isinstance(key, tuple) or type(key) is Tile:
             self._data[self.index_of(key)] = value
         elif isinstance(key, Rectangle):
             self._data[self._slices(key)] = value
         elif isinstance(key, Area):
-            self._data[self._scatter(key)] = value
+            grid_slices, area_mask_on_grid = self._slices_and_mask_for_area(key)
+            self._data[grid_slices][area_mask_on_grid] = value
         elif isinstance(key, Grid):
             self._data[self._mask(key)] = value
         else:
@@ -248,34 +252,36 @@ class Grid[T: float]:
         under its bounding box, clipped to the grid, then those of its mask over the same tiles. A 3x3 footprint
         centered on the grid's lower left tile meets the values in `[0:2, 0:2]` with its mask's `[1:3, 1:3]`. Both are
         empty where it lies wholly beyond the grid."""
-        box = footprint.bounding_box(at=center)
-        grid_xs, grid_ys = self._slices(box)
-        box_x, box_y = int(box.x) - self._origin[0], int(box.y) - self._origin[1]
-        mask_slices = (
-            slice(grid_xs.start - box_x, grid_xs.stop - box_x),
-            slice(grid_ys.start - box_y, grid_ys.stop - box_y),
-        )
-        return (grid_xs, grid_ys), mask_slices
+        left, bottom = footprint._lower_left_tile(at=center)
+        return self._slices_for_mask(left, bottom, footprint.mask.shape)
+
+    def _slices_and_mask_for_area(self, area: Area) -> tuple[tuple[slice, slice], ndarray]:
+        """The slices of the grid's values over the tiles `area` covers, clipped to the grid, and the mask of those
+        tiles over the same slices."""
+        origin, area_mask = area._tile_mask(self.bounds)
+        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, area_mask.shape)
+        return grid_slices, area_mask[mask_slices]
+
+    def _slices_for_mask(
+        self, left: int, bottom: int, shape: tuple[int, ...]
+    ) -> tuple[tuple[slice, slice], tuple[slice, slice]]:
+        """The slices that line a mask of `shape`, whose `[0, 0]` entry is the tile at `left` and `bottom`, up with the
+        grid: first those of the grid's values under it, clipped to the grid, then those of the mask over the same
+        tiles. Both are empty where it lies wholly beyond the grid."""
+        width, height = self._data.shape
+        mask_x, mask_y = left - self._origin.x, bottom - self._origin.y
+        x = min(max(mask_x, 0), width)
+        y = min(max(mask_y, 0), height)
+        stop_x = min(max(mask_x + shape[0], x), width)
+        stop_y = min(max(mask_y + shape[1], y), height)
+        grid_slices = (slice(x, stop_x), slice(y, stop_y))
+        return grid_slices, (slice(x - mask_x, stop_x - mask_x), slice(y - mask_y, stop_y - mask_y))
 
     def _slices(self, rectangle: Rectangle) -> tuple[slice, slice]:
         """The array slices covering the tiles of `rectangle`, clipped to the grid."""
         x_range, y_range = rectangle.tile_range()
-        width, height = self._data.shape
-        x = min(max(x_range.start - self._origin[0], 0), width)
-        y = min(max(y_range.start - self._origin[1], 0), height)
-        stop_x = min(max(x_range.stop - self._origin[0], x), width)
-        stop_y = min(max(y_range.stop - self._origin[1], y), height)
-        return slice(x, stop_x), slice(y, stop_y)
-
-    def _scatter(self, area: Area) -> tuple[ndarray, ndarray]:
-        """The array indices of the area's tiles that the grid covers, as a pair of index arrays."""
-        tiles = area.tiles()
-        if not tiles:
-            return numpy.empty(0, dtype=int), numpy.empty(0, dtype=int)
-        addresses = numpy.array([(tile[0], tile[1]) for tile in tiles]) - numpy.array(self._origin)
-        covered = ((addresses >= 0) & (addresses < self._data.shape)).all(axis=1)
-        addresses = addresses[covered]
-        return addresses[:, 0], addresses[:, 1]
+        grid_slices, _ = self._slices_for_mask(x_range.start, y_range.start, (len(x_range), len(y_range)))
+        return grid_slices
 
     def _mask(self, mask: Grid[bool]) -> ndarray:
         """The values of `mask`, which must cover the same tiles and hold booleans; numpy would read any other dtype
@@ -353,20 +359,27 @@ class Grid[T: float]:
     def cropped(self, rectangle: Rectangle) -> Grid[T]:
         """An independent grid over the tiles `rectangle` covers, clipped to the ones this grid holds."""
         x, y = self._slices(rectangle)
-        origin = Tile(self._origin[0] + x.start, self._origin[1] + y.start)
+        origin = self._origin.shifted(x.start, y.start)
         return Grid(self._data[x, y].copy(), origin=origin, outside=self._outside)
 
     def distance_from(self, point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The distance from each tile's center to `point`."""
-        position = coordinates(point)
-        xs = numpy.arange(self.width) + self._origin[0] + 0.5 - position[0]
-        ys = numpy.arange(self.height) + self._origin[1] + 0.5 - position[1]
+        xs = numpy.arange(self.width) + self._origin.x + 0.5 - point[0]
+        ys = numpy.arange(self.height) + self._origin.y + 0.5 - point[1]
         return Grid(numpy.hypot(xs[:, None], ys[None, :]), origin=self._origin, outside=outside)
 
     def distance_transform(self: Grid[bool], *, outside: float | None = None) -> Grid[float]:
-        """For each true tile, the distance to the nearest false one; zero on a false tile."""
-        distances = scipy.ndimage.distance_transform_edt(self._data, return_indices=False)
-        return Grid(numpy.asarray(distances), origin=self._origin, outside=outside)
+        """For each true tile, the distance from its center to the nearest false tile's; zero on a false tile. Where
+        this grid reads false beyond its edge, the tiles beyond it count as false; where no false tile is found, every
+        distance is `inf`."""
+        if self._outside is not None and not self._outside:
+            padded = numpy.pad(self._data, 1, constant_values=False)
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(padded, return_indices=False))[1:-1, 1:-1]
+        elif self._data.all():
+            distances = numpy.full(self._data.shape, math.inf)
+        else:
+            distances = numpy.asarray(scipy.ndimage.distance_transform_edt(self._data, return_indices=False))
+        return Grid(distances, origin=self._origin, outside=outside)
 
     def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
         """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
@@ -558,7 +571,7 @@ class Grid[T: float]:
         return self._combine(other, numpy.greater_equal)
 
     def __bool__(self) -> bool:
-        """Refused: `grid == other` compares per tile, so `if grid == other` would always be true."""
+        """Raises `TypeError`: a grid has no truth value. `any` and `all` say whether any tile is true, or every one."""
         raise TypeError("a grid has no truth value; use .any() or .all()")
 
     def any(self) -> bool:

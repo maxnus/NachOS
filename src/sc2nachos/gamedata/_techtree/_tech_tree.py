@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-from types import MappingProxyType
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
-
-from sc2nachos.ids import UpgradeId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -15,7 +11,59 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._tech_requirements import TechRequirements
     from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
     from sc2nachos.gamedata._upgrade_data import UpgradeType
-    from sc2nachos.ids import AbilityId, UnitTypeId
+    from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class TechTreeUnitTypes:
+    """What the tech tree says about each unit type."""
+
+    ability_requirements: Mapping[UnitTypeId, Mapping[AbilityId, TechRequirements]]
+    """The abilities each unit type can be offered, with the tech each needs first. An action several types perform is
+    under its one id, though the game offers each type its own."""
+    creation_abilities: Mapping[UnitTypeId, AbilityId]
+    """The ability that makes each unit type."""
+    producers: Mapping[UnitTypeId, frozenset[UnitTypeId]]
+    """The unit types that make each unit type, and for a type whose creation ability names another product, the types
+    that carry that ability out: an SCV makes a rich refinery, which a refinery's build puts up on a rich geyser."""
+    morph_sources: Mapping[UnitTypeId, UnitTypeId]
+    """The source type of each unit type morphed from another."""
+    power_consumers: frozenset[UnitTypeId]
+    """The unit types that need to be powered by a pylon or a warp prism."""
+    upgrades: Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]
+    """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
+    `tools/sweep_upgrades.py` found it."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class TechTreeAbilities:
+    """What the tech tree says about each ability."""
+
+    performers: Mapping[AbilityId, frozenset[UnitTypeId]]
+    """The unit types offered each ability."""
+    products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]]
+    """The unit type or upgrade each ability makes, by the unit type that carries it out: a barracks lifts into a
+    flying barracks and a starport into a flying starport. A structure that turns itself into another, as a gateway
+    becomes a warp gate, carries it out though it is offered nothing."""
+    cancels: Mapping[AbilityId, AbilityId]
+    """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke. It depends on the product: a
+    command center morphing to an orbital command is offered a different cancel from one morphing to a planetary
+    fortress."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class TechTreeUpgrades:
+    """What the tech tree says about each upgrade."""
+
+    research_abilities: Mapping[UpgradeId, AbilityId]
+    """The ability that researches each upgrade."""
+    types: Mapping[UpgradeId, UpgradeType]
+    """The upgrade level each upgrade adds to, for the upgrades a unit reports. The rest are `OTHER` and left out."""
+    levels: Mapping[UpgradeId, int]
+    """The level of each leveled upgrade within its line."""
 
 
 @final
@@ -25,45 +73,9 @@ class TechTree:
 
     base_build: int
     """The game build that was swept."""
-    ability_requirements: Mapping[UnitTypeId, Mapping[AbilityId, TechRequirements]]
-    """The abilities each unit type can be offered, with the tech each needs first. An action several types perform is
-    under its one id, though the game offers each type its own."""
-    ability_cancels: Mapping[AbilityId, AbilityId]
-    """The cancel a structure is offered while it morphs, builds an add-on or arms a nuke. It depends on the product: a
-    command center morphing to an orbital command is offered a different cancel from one morphing to a planetary
-    fortress."""
-    creation_abilities: Mapping[UnitTypeId, AbilityId]
-    """The ability that makes each unit type."""
-    ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]]
-    """The unit type or upgrade each ability makes, by the unit type that carries it out: a barracks lifts into a
-    flying barracks and a starport into a flying starport. A structure that turns itself into another, as a gateway
-    becomes a warp gate, carries it out though it is offered nothing."""
-    morph_sources: Mapping[UnitTypeId, UnitTypeId]
-    """The source type of each unit type morphed from another."""
-    power_consumers: frozenset[UnitTypeId]
-    """The unit types that need to be powered by a pylon or a warp prism."""
-    unit_type_upgrades: Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]
-    """Every upgrade that affects each unit type, with what it adds to the type's weapons, armor and speed, as
-    `tools/sweep_upgrades.py` found it."""
-    upgrade_types: Mapping[UpgradeId, UpgradeType]
-    """The upgrade level each upgrade adds to, for the upgrades a unit reports. The rest are `OTHER` and left out."""
-    upgrade_levels: Mapping[UpgradeId, int]
-    """The level of each leveled upgrade within its line."""
-    ability_performers: Mapping[AbilityId, frozenset[UnitTypeId]] = field(init=False)
-    """The unit types offered each ability."""
-    research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
-    """The ability that researches each upgrade, inverted from `ability_products`."""
-
-    def __post_init__(self) -> None:
-        performers: defaultdict[AbilityId, set[UnitTypeId]] = defaultdict(set)
-        for unit_type, abilities in self.ability_requirements.items():
-            for ability in abilities:
-                performers[ability].add(unit_type)
-        by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
-        object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
-        researched: dict[UpgradeId, AbilityId] = {}
-        for ability, products in self.ability_products.items():
-            for product in products.values():
-                if isinstance(product, UpgradeId):
-                    researched[product] = ability
-        object.__setattr__(self, "research_abilities", MappingProxyType(researched))
+    unit_types: TechTreeUnitTypes
+    """What it says about each unit type."""
+    abilities: TechTreeAbilities
+    """What it says about each ability."""
+    upgrades: TechTreeUpgrades
+    """What it says about each upgrade."""

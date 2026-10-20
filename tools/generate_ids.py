@@ -9,7 +9,7 @@ Regenerate after a patch changes stableid.json::
     uv run python tools/generate_ids.py
 
 `data/stableid.json` is vendored, so this runs without StarCraft II. The game rewrites the file from whichever map it
-last loaded, so refresh it from a current ladder map, as `docs/curating-ids.md` says.
+last loaded, so refresh it from a current ladder map, as `docs/maintaining/curating-ids.md` says.
 """
 
 import json

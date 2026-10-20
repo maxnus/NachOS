@@ -106,6 +106,23 @@ class TestCoverage:
     def test_an_empty_path_covers_nothing(self) -> None:
         assert Tile(0, 0) not in TilePath([])
 
+    def test_index_and_count_read_a_position_as_its_tile(self) -> None:
+        """`in` found (5.5, 5.5) on a path through Tile(5, 5), while `index` raised and `count` gave 0."""
+        path = TilePath([Tile(0, 0), Tile(1, 1), Tile(2, 2), Tile(1, 1)])
+        assert path.index(Point((1.5, 1.7))) == 1
+        assert path.index((1.2, 1.9), 2) == 3
+        assert path.index(Tile(2, 2)) == 2
+        assert path.count(Point((1.5, 1.5))) == 2
+        with pytest.raises(ValueError):
+            path.index(Point((5.5, 5.5)))
+        with pytest.raises(ValueError):
+            path.index(Tile(1, 1), 0, 1)
+
+    def test_it_iterates_its_tiles_either_way(self) -> None:
+        path = diagonal()
+        assert list(path) == [Tile(0, 0), Tile(1, 1), Tile(2, 2), Tile(3, 3)]
+        assert list(reversed(path)) == [Tile(3, 3), Tile(2, 2), Tile(1, 1), Tile(0, 0)]
+
     def test_anything_that_is_not_a_position_is_rejected(self) -> None:
         with pytest.raises(TypeError, match="expected a point"):
             "somewhere" in diagonal()  # type: ignore[operator]  # noqa: B015

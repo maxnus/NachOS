@@ -7,7 +7,6 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
 from sc2nachos.geometry import Area, Point
-from sc2nachos.geometry._point import coordinates
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
@@ -95,14 +94,14 @@ class Units[U: Unit[Any]](Sequence[U]):
         """The unit with `unit_id`, or `None` if there is none."""
         return self._index().get(unit_id)
 
-    def with_ids(self, unit_ids: Iterable[int]) -> Units[U]:
-        """The units whose id is in `unit_ids`."""
-        wanted = set(unit_ids)
+    def with_ids(self, unit_ids: int | Iterable[int]) -> Units[U]:
+        """The units whose id is `unit_ids`, one id, or in it, a collection of them."""
+        wanted = {unit_ids} if isinstance(unit_ids, int) else set(unit_ids)
         return Units(unit for unit in self._units if unit.id in wanted)
 
-    def without_ids(self, unit_ids: Iterable[int]) -> Units[U]:
-        """The units whose id is not in `unit_ids`."""
-        unwanted = set(unit_ids)
+    def without_ids(self, unit_ids: int | Iterable[int]) -> Units[U]:
+        """The units whose id is not `unit_ids`, one id, or not in it, a collection of them."""
+        unwanted = {unit_ids} if isinstance(unit_ids, int) else set(unit_ids)
         return Units(unit for unit in self._units if unit.id not in unwanted)
 
     # By what they are.
@@ -122,43 +121,50 @@ class Units[U: Unit[Any]](Sequence[U]):
     ) -> Units[Unit[K]]: ...
 
     @overload
-    def of_type(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> Units[U]: ...
+    def of_type(
+        self, unit_type: type[UnitType.AnyType] | UnitTypeId, /, *unit_types: type[UnitType.AnyType] | UnitTypeId
+    ) -> Units[U]: ...
+
+    @overload
+    def of_type(self, type_ids: Iterable[UnitTypeId], /) -> Units[U]: ...
 
     def of_type(
         self,
         types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
         /,
-        *unit_types: type[UnitType.AnyType],
+        *unit_types: type[UnitType.AnyType] | UnitTypeId,
     ) -> Units[Any]:
-        """The units of one or more `UnitType`s, each a type or a group, typed as those.
-
-        Also takes one or more `UnitTypeId`s, for a type chosen at run time. The collection then keeps its type.
+        """The units of the given types, each a `UnitType`, a group of them, or a `UnitTypeId`, or of the
+        `UnitTypeId`s in one collection given alone. Typed as those types when every one is a `UnitType`; the
+        collection keeps its type otherwise. Raises `TypeError` for anything else.
         """
-        if isinstance(types, UnitTypeId):
+        if isinstance(types, UnitTypeId) and not unit_types:
             return Units(unit for unit in self._units if unit.type_id is types)
         wanted = _type_ids(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id in wanted)
 
     @overload
-    def excluding_type(self, unit_type: type[UnitType.AnyType], /, *unit_types: type[UnitType.AnyType]) -> Units[U]: ...
+    def excluding_type(
+        self, unit_type: type[UnitType.AnyType] | UnitTypeId, /, *unit_types: type[UnitType.AnyType] | UnitTypeId
+    ) -> Units[U]: ...
 
     @overload
-    def excluding_type(self, type_ids: UnitTypeId | Iterable[UnitTypeId], /) -> Units[U]: ...
+    def excluding_type(self, type_ids: Iterable[UnitTypeId], /) -> Units[U]: ...
 
     def excluding_type(
         self,
         types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
         /,
-        *unit_types: type[UnitType.AnyType],
+        *unit_types: type[UnitType.AnyType] | UnitTypeId,
     ) -> Units[U]:
-        """The units not of any of the given `UnitType`s, each a type or a group, or `UnitTypeId`s."""
-        if isinstance(types, UnitTypeId):
+        """The units not of any of the given types, taken as `of_type` takes them."""
+        if isinstance(types, UnitTypeId) and not unit_types:
             return Units(unit for unit in self._units if unit.type_id is not types)
         unwanted = _type_ids(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id not in unwanted)
 
     def _of_alliance(self, alliance: Alliance) -> Units[U]:
-        return Units(unit for unit in self._units if unit.alliance is alliance)
+        return Units(unit for unit in self._units if unit._raw_alliance == alliance)
 
     @property
     def own[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
@@ -182,8 +188,9 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def structures(self) -> Units[U]:
-        """The units whose type is a structure."""
-        return Units(unit for unit in self._units if unit.is_structure)
+        """The structures, as `UnitType.Structure` has them: the types the game's tables give the structure
+        attribute."""
+        return self._in_group(UnitType.Structure)
 
     @property
     def workers(self) -> Units[U]:
@@ -217,7 +224,8 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     @property
     def complete(self) -> Units[U]:
-        """The units that have finished building or warping in. Raises `NotReportedError` for a unit never in sight."""
+        """The units that have finished building or warping in. Raises `NotReportedError` for a unit never shown
+        visible."""
         return Units(unit for unit in self._units if unit.is_complete)
 
     @property
@@ -319,15 +327,40 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Point((x / count, y / count))
 
 
+def _unit_tuple[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:
+    """The units given, one unit or any number of them, as a tuple."""
+    return (units,) if isinstance(units, Unit) else tuple(units)
+
+
 def _type_ids(
-    types: type[UnitType.AnyType] | Iterable[UnitTypeId], unit_types: tuple[type[UnitType.AnyType], ...]
+    types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
+    unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...],
 ) -> frozenset[UnitTypeId]:
-    """The type ids the given `UnitType`s name, or the ids in an iterable of them."""
-    if not isinstance(types, type):
-        return frozenset(types)
-    if not unit_types:
+    """The ids `types` and `unit_types` stand for, as `of_type` takes them: each a `UnitType` or a group, expanded to
+    its types, or a `UnitTypeId`; or a collection of `UnitTypeId`s as `types` alone. Raises `TypeError` for anything
+    else."""
+    if isinstance(types, type) and issubclass(types, UnitType.AnyType) and not unit_types:
         return types._type_ids
-    return types._type_ids.union(*(unit_type._type_ids for unit_type in unit_types))
+    if unit_types or isinstance(types, UnitTypeId | type | str) or not isinstance(types, Iterable):
+        return _unit_type_ids_in((types, *unit_types))
+    ids = frozenset(types)
+    if not all(isinstance(type_id, UnitTypeId) for type_id in ids):
+        raise TypeError(f"a collection of unit types holds UnitTypeIds alone, not {sorted(map(repr, ids))}")
+    return ids
+
+
+def _unit_type_ids_in(unit_types: Iterable[object]) -> frozenset[UnitTypeId]:
+    """The ids `unit_types` stand for, each a `UnitTypeId`, or a `UnitType` or a group expanded to its types. Raises
+    `TypeError` for anything else, a collection among them."""
+    ids: set[UnitTypeId] = set()
+    for unit_type in unit_types:
+        if isinstance(unit_type, UnitTypeId):
+            ids.add(unit_type)
+        elif isinstance(unit_type, type) and issubclass(unit_type, UnitType.AnyType):
+            ids.update(unit_type._type_ids)
+        else:
+            raise TypeError(f"a unit type is a UnitTypeId, a UnitType or a group of them, not {unit_type!r}")
+    return frozenset(ids)
 
 
 def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> list[tuple[float, float]]:
@@ -343,5 +376,4 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
 
 def _ground(point: PointLike) -> tuple[float, float]:
     """The ground-plane coordinates of `point`."""
-    position = coordinates(point)
-    return position[0], position[1]
+    return point[0], point[1]

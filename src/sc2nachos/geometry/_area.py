@@ -6,8 +6,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
+    import random
+
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import Point, PointLike
-    from sc2nachos.geometry._shapes import Rectangle, TileSet
+    from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 
 
 class Area(ABC):
@@ -31,16 +35,19 @@ class Area(ABC):
         """The ground covered, in square game units."""
 
     @abstractmethod
-    def random_point(self) -> Point:
-        """A point drawn uniformly from the area."""
+    def random_point(self, *, rng: random.Random | None = None) -> Point:
+        """A point drawn uniformly from the area, by `rng`, or if none is given by the `random` module's own
+        generator, which the whole process shares."""
 
     @abstractmethod
-    def __contains__(self, point: PointLike) -> bool:
-        """Whether `point` lies inside. Raises `TypeError` on anything but a point."""
+    def __contains__(self, point: PointLike | Tile) -> bool:
+        """Whether `point` lies inside, a `Tile` read as its center. Raises `TypeError` on anything but a point or a
+        tile."""
 
     @abstractmethod
     def translated(self, offset: PointLike) -> Self:
-        """The area shifted by `offset`, keeping its shape."""
+        """The area shifted by `offset`, keeping its shape. Raises `TypeError` for a `Tile`, and `ValueError` for an
+        offset with a height."""
 
     @abstractmethod
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
@@ -56,3 +63,9 @@ class Area(ABC):
     @abstractmethod
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
+
+    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
+        """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed
+        `[x, y]`, and first the tile at its `[0, 0]` entry, as a grid has its `origin`: entry `[i, j]` is the tile `i`
+        across and `j` up from it."""
+        return self.tiles()._tile_mask(within)

@@ -14,10 +14,10 @@ constantly. Answer it from these.
   vehicle and ship plating, and nothing else -- vehicle plating and ship plating are dead halves of a 2012 merge.
 - **Ask without the `tech_tree` cheat on, and research the real prerequisites first.** The cheat waives every
   requirement, so what it offers is not the command card a player has. Under it a hydralisk den is offered
-  `ResearchFrenzy`, which looks like a campaign leftover but is not: 5.0.14 reused the campaign's ids for
-  Nanomuscular Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under
-  `fast_build` a debug-created structure researches in seconds; that is how `tools/sweep_buffs.py` researches
-  everything a race has. `docs/cheats.md` lists what else the cheats and debug-created units get wrong.
+  `ResearchFrenzy`, which looks like a campaign leftover but is not: 5.0.14 reused the campaign's ids for Nanomuscular
+  Swell and the Lunge it unlocks, and a den offers the research only once a Hive stands. Under `fast_build` a
+  debug-created structure researches in seconds; that is how `tools/sweep_buffs.py` researches everything a race has.
+  `docs/reference/game-behavior/cheats.md` lists what else the cheats and debug-created units get wrong.
 - **A price is not evidence.** Dead upgrades keep theirs: vehicle plating still answers ability 852 at 100/100
   after fourteen years. Only an entry with no ability, no cost and no research time (Enhanced Shockwaves) can be
   caught from `RequestData` alone.
@@ -37,13 +37,12 @@ id nobody can order, because the game no longer honors it or does it by itself. 
 `tests/test_gamedata.py` list the rows left without a maker, and fail when a new one turns up.
 
 **A buff is curated when the game puts it on a unit.** `tools/sweep_buffs.py` finds those by making it happen: it
-researches everything a race has, orders every ability each unit type is offered at a set of targets, and records
-each buff that appears and which unit wears it. Buff names mislead more than any other kind: a marauder's
-concussive shells put `Slow` on their target, never `DutchMarauderSlow`; an immortal's Barrier is `TakenDamage`,
-never `ImmortalOverload`; and a ghost holding fire wears `GhostHoldFireB`, not `GhostHoldFire`. A buff the game
-reports is curated even if its raw name suggests it is only a tint: `RavenShredderMissileTint` marks the target
-of an anti-armor missile. The sweep never warps a unit in, so it missed `WARP_GATE_WARPING_IN`, which a unit
-wears while warping in; the buff events' in-game test found it.
+researches everything a race has, orders every ability each unit type is offered at a set of targets, and records each
+buff that appears and which unit wears it. Buff names mislead more than any other kind
+([game behavior](../reference/game-behavior/damage-and-buffs.md#buffs)). A buff the game reports is curated even if its
+raw name suggests it is only a tint: `RavenShredderMissileTint` marks the target of an anti-armor missile. The sweep
+never warps a unit in, so it missed `WARP_GATE_WARPING_IN`, which a unit wears while warping in; the buff events'
+in-game test found it.
 
 **A buff or an effect is named after the one unit type that causes it, then what a player sees**, as an
 ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,
@@ -51,10 +50,9 @@ ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_
 carries, the name has no unit in it. Each race's worker carries gas under its own buff, so those are
 `SCV_CARRYING_GAS` and its two siblings.
 
-**A table can name an ability the game no longer honors; the upgrade table does.** It says the three terran
-vehicle-and-ship plating levels are researched by `ArmoryResearchSwarm`, which an armory is never offered and
-which does nothing when ordered; `ArmoryResearch` is what it offers and runs. Curate what the game offers, and
-let the field that names the dead one stay empty.
+**A table can name an ability the game no longer honors**, as the upgrade table does for the vehicle-and-ship plating
+levels ([game behavior](../reference/game-behavior/upgrades-and-tables.md)). Curate what the game offers, and let the
+field that names the dead one stay empty.
 
 **An action several unit types perform has one id, and each type's own is not curated.** The game offers a barracks
 `Lift_Barracks` and a starport `Lift_Starport`, each reports its own while it runs it, and either takes `Lift` as an
@@ -62,35 +60,29 @@ order and runs its own (in game). NachOS curates `Lift` as `LIFT` and reads each
 `AbilityId._REMAPPED_IDS`. Where the game's table gives a `remaps_to`, it says which; collapse a family only where its
 members do one thing for different performers. A leveled research keeps one id per level, since each makes its own
 upgrade, and its general id is not curated: nothing is offered it. The generic cancel's members are one action too:
-a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
+a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`). A tool that looks for a
+curated id among what the game offers looks for each game id the id stands for, and for its own: a barracks is offered
+`Build_TechLab_Barracks`, never `BUILD_TECH_LAB`'s `Build_TechLab`, and a liberator `LIBERATOR_SIEGE_AT`'s own
+`Morph_LiberatorAGMode`, never the `LiberatorMorphtoAG_LiberatorAGMode` its sieged form's row names
+([game behavior](../reference/game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)).
 
-**A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but
-read as the one ordered, from the same table: a liberator ordered `LIBERATOR_SIEGE_AT` reports
-`LiberatorMorphtoAG_LiberatorAGMode`, which is never offered and does nothing when ordered, and reads
-`LIBERATOR_SIEGE_AT`. The only way to find such a pair is to order the ability in game and read the performer's
-orders. A spell has no such twin: ordered at a target out of reach, a storm, a neural parasite and each of the
-raven's and viper's spells show in the caster's orders under the id ordered.
+**A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but read
+as the one ordered, from the same table, as a sieging liberator's is
+([game behavior](../reference/game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)). The
+only way to find such a pair is to order the ability in game and read the performer's orders; a spell has none.
 
-**The upgrade table also keeps upgrades the game has removed.** `MicrobialShroud` still carries its 150/150
-price and its `EvolveAmorphousArmorcloud` research id, but 4.12.0 made the infestor's shroud free: an
-infestation pit is never offered that research, whether a pit, a lair or a hive stands, and ordering it puts no
-order on the pit and grants nothing, while an infestor with no upgrades at all is offered the cast and runs it.
-An upgrade nobody can ever hold is not in the game, so neither it nor its research is curated. Rapid Reignition
-System is another, replaced by Caduceus Reactor in 5.0.12, and so is Ventral Sacs: a lair is offered only
-Pneumatized Carapace and Burrow, and an overlord morphing into a transport grants no upgrade.
+**The upgrade table also keeps upgrades the game has removed**, Microbial Shroud, Rapid Reignition System and Ventral
+Sacs among them ([game behavior](../reference/game-behavior/upgrades-and-tables.md)). An upgrade nobody can ever hold is
+not in the game, so neither it nor its research is curated.
 
 **A structure offered a research is proof the research exists**, whatever the tables say. Researching everything
 a race's structures offer, as `tools/sweep_buffs.py` does, found five upgrades the curation had missed, each
 added or brought back in a patch: Interference Matrix, Caduceus Reactor, Mag-Field Accelerator, Tectonic
 Destabilizers and Nanomuscular Swell.
 
-**A `friendly_name` of `<link_name>_<index>` means the game has no name for the row**, so test before curating
-it. Index 30 of every build menu is the command card's cancel slot, and only the terran one is an ability: a
-building SCV is offered `Halt_TerranBuild` (348, named "Halt TerranBuild"), and ordering it clears the SCV's
-orders and leaves the structure at the progress it reached. The zerg, protoss, queen, raven and nydus rows in
-that slot are named `ZergBuild_30` and the like, are offered to nobody in any state -- idle, building, or the
-half-built structure a drone became -- and ordering one does nothing. Only terran has anything to halt: a probe
-warps its building in and walks away, and a drone becomes the building.
+**A `friendly_name` of `<link_name>_<index>` means the game has no name for the row**, so test before curating it.
+Index 30 of every build menu is the command card's cancel slot, and only the terran one, `Halt_TerranBuild`, is an
+ability ([game behavior](../reference/game-behavior/abilities-and-orders.md#what-a-unit-is-offered)).
 
 **A raw name ending in a bare id, like `TerranBuild_Refinery_325`, marks a duplicate row**: two entries share a
 `link_name` and `button_name`. The suffix does not say which of the pair is live -- `BunkerTransport` is, and so
@@ -116,10 +108,9 @@ as what it does, and who does it where one unit type does, except `NULL`, which 
 
 ## Refreshing `data/tech_tree.json`
 
-What each unit type is offered, what each ability requires and which abilities consume the unit ordered are swept
-in game, since `RequestData` has none of it: it names no performer for any ability, gives the ghost, thor,
-battlecruiser and mothership no requirement though they have one, and holds no upgrade requirements at all. After
-a patch, or after curating ids, run the sweep and then the generator, which writes the build's tech tree to
+What each unit type is offered, what each ability requires and which abilities consume the unit ordered are swept in
+game, since `RequestData` has none of it ([game behavior](../reference/game-behavior/upgrades-and-tables.md)). After a
+patch, or after curating ids, run the sweep and then the generator, which writes the build's tech tree to
 `sc2nachos/gamedata/_techtree/_build_<build>.py` and reports how many offered abilities no curated id names yet:
 
     uv run python tools/sweep_tech_tree.py
@@ -138,37 +129,30 @@ game, and the generator refuses to write the tech tree unless the sweep saw it m
 Add an entry only with an in-game trial behind it, never to paper over something the sweep cannot reach.
 
 **What every unit of a command carries out is `MULTI_UNIT_ABILITIES` in the same file**, which `AbilityData.multi_unit`
-reads; any other ability goes to one unit at a time. After a patch, `uv run python tools/sweep_orders.py
+reads; any other ability goes out as a command to each unit. After a patch, `uv run python tools/sweep_orders.py
 group-abilities-terran group-abilities-protoss group-abilities-zerg` gives each ability that costs nothing to two units
 at once: one it classes `both` belongs there, one it classes `one` does not, and one it classes `no trace` or
-differently from run to run needs a closer look. A new ability is refused for a group until it is listed.
+differently from run to run needs a closer look. A new ability goes to a group a command each until it is listed.
 
-The sweep reads everything off `RequestQueryAvailableAbilities`, which answers as follows:
+The sweep reads everything off `RequestQueryAvailableAbilities`, whose answers are in
+[game behavior](../reference/game-behavior/abilities-and-orders.md#what-a-unit-is-offered). What it does about them:
 
-- **It leaves out what a unit lacks the tech for**, and an add-on counts only for the structure it is attached to:
-  a bare barracks is not offered a marauder while another barracks stands with a tech lab. It ignores energy and
-  cooldowns.
-- **A cancel and a halt are offered only in the state they undo**: a barracks is offered its cancel while it trains,
-  an SCV a halt while it builds, and a structure going up both; a cocoon or a lurker egg its cancel while it
-  morphs, a phoenix lifting, an infestor controlling and a ghost sniping theirs, likewise an adept whose shade is
-  out and a ghost academy arming a nuke. So the sweep sets every structure making something and a worker building
-  each structure it can, reads a unit mid-morph, arms every nuke, and orders every ability aimed at a unit or a point
-  on a fresh unit, reading what it is offered 6 steps later.
-- **An unpowered structure is offered nothing that needs power.** That is `needs_power`, not a requirement on a
-  pylon: a probe is offered a gateway with a nexus standing and no pylon at all.
+- **A cancel and a halt are offered only in the state they undo**, so the sweep sets every structure making something
+  and a worker building each structure it can, reads a unit mid-morph, arms every nuke, and orders every ability aimed
+  at a unit or a point on a fresh unit, reading what it is offered 6 steps later.
+- **An unpowered structure is offered nothing that needs power**, which becomes `needs_power`, not a requirement on a
+  pylon.
 - **A requirement drops out of the answer within 4 steps of its structure leaving the observation**, and a lifted
-  barracks still counts as a barracks, as its `tech_aliases` say. The sweep kills one structure type at a time,
-  together with the types whose `tech_aliases` name it, so a requirement that either of two unrelated structures
-  would meet is found as neither. None is known.
-- **Once Burrow is researched, every burrowing zerg unit is offered every zerg unit's burrow**, and given any of
-  them burrows as itself. So the sweep orders each ability that makes a unit type on every type offered it, and a
-  type that turns into something other than the product does not count as offered it.
-- **The other half of a toggle is offered once the unit has switched**, up to 22 steps after the order, and unload
-  once a transport carries something.
+  barracks still counts as a barracks, so the sweep kills one structure type at a time, together with the types whose
+  `tech_aliases` name it. A requirement that either of two unrelated structures would meet is found as neither; none
+  is known.
+- **Every burrowing zerg unit is offered every zerg unit's burrow once Burrow is researched**, and burrows as itself,
+  so the sweep orders each ability that makes a unit type on every type offered it, and a type that turns into
+  something other than the product does not count as offered it.
 - **A gateway turns into a warp gate by itself once Warp Gate is researched**, so the sweep tries what a gateway
   trains before any research; no ability was found that makes a warp gate out of a gateway.
-- **A ghost is offered its calldown only while a nuke is armed.** An armed nuke is neither a structure nor an
-  upgrade, so the tables say the calldown needs nothing.
+- **A ghost is offered its calldown only while a nuke is armed**, which is neither a structure nor an upgrade, so the
+  tables say the calldown needs nothing.
 
 Three things got in the way of running it, each reading as a requirement until dealt with: the computer, which
 attacks at some point (`god`); workers carrying minerals, which are offered a return that fresh ones are not (the
@@ -187,27 +171,23 @@ after a patch run both sweeps before it:
     uv run python tools/sweep_upgrades.py
     uv run python tools/generate_tech_tree.py
 
-What the rows include:
+What the rows include and leave out is in [game behavior](../reference/game-behavior/upgrades-and-tables.md). Two things
+follow for the sweep and the code:
 
-- **Weapon damage, damage bonuses and range, armor and speed.** A bonus can be new: Infernal Pre-Igniter gives a
-  hellbat one against light. Each level of a leveled upgrade adds the same as the last, for every unit type.
-- **Nothing else an upgrade does.** Adrenal Glands and Resonating Glaives change no weapon's cooldown in the rows,
-  and shield levels, Combat Shield's health, Stim, Concussive Shells and researched spells leave them as they were.
-  Anabolic Synthesis is in them, though in play it counts only off creep.
-- **A unit reports how many attack levels it has, but `armor_upgrade_level` is the armor its upgrades add**: an
-  ultralisk with Chitinous Plating and three levels reports 5. The sweep records which reported level each upgrade
-  raises, which becomes `UpgradeData.upgrade_type`. An upgrade is a level when its curated name ends in the
-  number, so Chitinous Plating raises the armor report but is no level. A leveled upgrade's name has to keep its
-  number for this.
-- **Shield armor is the shields level, and no row holds it.** Each level takes one more off every hit a protoss
-  unit's shields take. Nothing in `RequestData` says so, so `Unit.shield_armor` counts the levels instead.
+- **A unit reports how many attack levels it has, but `armor_upgrade_level` is the armor its upgrades add**, so the
+  sweep records which reported level each upgrade raises, which becomes `UpgradeData.upgrade_type`. An upgrade is a
+  level when its curated name ends in the number, so Chitinous Plating raises the armor report but is no level. A
+  leveled upgrade's name has to keep its number for this.
+- **No row holds shield armor**, which is the shields level
+  ([game behavior](../reference/game-behavior/damage-and-buffs.md#damage-energy-and-spells)), so `Unit.shield_armor`
+  counts the levels.
 
 Every run checks its findings two ways, and the generator refuses to write while either fails: once everything is
 researched, each row has to equal the first row plus every change found; and after each upgrade, every unit's type
 armor plus the armor it reports from upgrades has to equal its row's armor.
 
-The `god` cheat multiplies every weapon's damage in the rows (`docs/cheats.md`), so this sweep never turns it on,
-and reads the baseline rows before any cheat.
+The `god` cheat multiplies every weapon's damage in the rows (`docs/reference/game-behavior/cheats.md`), so this sweep
+never turns it on, and reads the baseline rows before any cheat.
 
 ## Refreshing `data/footprints.json`
 
@@ -225,8 +205,7 @@ center on where the unit stood as a footprint centers.
 
 ## Refreshing `data/stableid.json`
 
-**The file depends on the map.** The game rewrites it on every launch from the loaded map's mod dependencies:
-BerlingradAIE (2022) yields 518 ability ids that MagannathaAIE does not, and shifts a couple of dozen shared names
-by +312 or +316. So after a patch, launch a current ladder map, copy the file the game wrote
-(`~/Documents/StarCraft II/stableid.json` on Windows) over `data/stableid.json`, and run
-`uv run python tools/generate_ids.py`.
+**The file depends on the map**: the game rewrites it on every launch from the loaded map's mod dependencies
+([game behavior](../reference/game-behavior/protocol.md#launching-maps-and-players)). So after a patch, launch a current
+ladder map, copy the file the game wrote (`~/Documents/StarCraft II/stableid.json` on Windows) over
+`data/stableid.json`, and run `uv run python tools/generate_ids.py`.

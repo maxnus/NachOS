@@ -131,6 +131,15 @@ class TestCentering:
         assert Footprint.square(2).snapped_center(at=Point((10.3, 20.7))) == Point((10.0, 21.0))
 
     @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
+    def test_it_centers_in_its_bounding_box(self, footprint: Footprint) -> None:
+        at = Point((10.3, 20.7))
+        assert footprint.snapped_center(at=at) == footprint.bounding_box(at=at).center
+
+    def test_the_empty_footprint_centers_on_the_nearest_corner(self) -> None:
+        """Its bounding box covers no ground, so has no center to read."""
+        assert Footprint.empty().snapped_center(at=Point((3.4, 7.6))) == Point((3.0, 8.0))
+
+    @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
     def test_center_in_tile_is_where_the_footprint_centers(self, footprint: Footprint) -> None:
         center = footprint.center_in_tile(Tile(10, 20))
         assert Tile.containing(center) == Tile(10, 20)

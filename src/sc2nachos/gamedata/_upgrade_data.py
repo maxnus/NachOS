@@ -12,7 +12,7 @@ from sc2nachos.ids import AbilityId, UpgradeId
 if TYPE_CHECKING:
     from s2clientprotocol import data_pb2
 
-    from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._techtree import TechTreeUpgrades
 
 
 class UpgradeType(ReadableIntEnum):
@@ -37,8 +37,9 @@ class UpgradeData:
     """The upgrade described."""
     cost: Cost
     """The cost of researching it."""
-    research_steps: float
-    """Steps it takes to research."""
+    research_steps: int
+    """Steps it takes to research: a whole number for every upgrade in the game's tables, and above 0 for every curated
+    one (corpus)."""
     research_ability: AbilityId | None
     """The ability that researches it."""
     upgrade_type: UpgradeType
@@ -47,14 +48,14 @@ class UpgradeData:
     """Its level within its line, from 1; 0 for an upgrade that is no level, such as Chitinous Plating."""
 
     @classmethod
-    def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree: TechTree) -> Self:
-        """Read one upgrade from the game's table, with what `tech_tree` found about it in game."""
+    def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree_upgrades: TechTreeUpgrades) -> Self:
+        """Read one upgrade from the game's table, with what `tech_tree_upgrades` says about it."""
         upgrade = UpgradeId(data.upgrade_id)
         return cls(
             id=upgrade,
             cost=Cost(data.mineral_cost, data.vespene_cost),
-            research_steps=data.research_time,
-            research_ability=AbilityId.get(data.ability_id) or tech_tree.research_abilities.get(upgrade),
-            upgrade_type=tech_tree.upgrade_types.get(upgrade, UpgradeType.OTHER),
-            level=tech_tree.upgrade_levels.get(upgrade, 0),
+            research_steps=round(data.research_time),
+            research_ability=AbilityId.get(data.ability_id) or tech_tree_upgrades.research_abilities.get(upgrade),
+            upgrade_type=tech_tree_upgrades.types.get(upgrade, UpgradeType.OTHER),
+            level=tech_tree_upgrades.levels.get(upgrade, 0),
         )

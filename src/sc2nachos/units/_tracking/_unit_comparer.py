@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.ids import BuffId
+from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._values import CloakState
 
 if TYPE_CHECKING:
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from sc2nachos.units._tracking._tracker_changes import _ComparedChanges
     from sc2nachos.units._unit import Unit
 
-_IN_VISION = raw_pb2.DisplayType.Visible
+_VISIBLE = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
@@ -27,19 +28,17 @@ class _UnitComparer:
     """Records, on request, what each of this player's and the enemy's units lost since the tracker's previous
     update, how its cloak changed, and the buffs it gained and lost, into the tracker's last changes."""
 
-    __slots__ = ("_compared", "_compared_update", "_tracker", "_worn", "_worn_update")
+    __slots__ = ("_compared", "_tracker", "_worn")
 
     def __init__(self, tracker: _Tracker) -> None:
         self._tracker = tracker
         # The report of each of this player's and the enemy's units in sight, by id, as of the update `compare` last
         # ran on.
-        self._compared: dict[int, raw_pb2.Unit] = {}
-        self._compared_update = 0
-        # The buffs of each of those units in vision that has any, by id, as of the update `compare` last compared
+        self._compared: _Snapshot[dict[int, raw_pb2.Unit]] = _Snapshot({})
+        # The buffs of each of those visible units that has any, by id, as of the update `compare` last compared
         # buffs on. Kept separately, and only for units with buffs, since reading a unit's buffs costs some five times
         # what reading another field does.
-        self._worn: dict[int, tuple[int, ...]] = {}
-        self._worn_update = 0
+        self._worn: _Snapshot[dict[int, tuple[int, ...]]] = _Snapshot({})
 
     def compare(
         self, *, damage: bool, energy: bool, cloak: bool, buffs: bool, only_buffs: Collection[int] | None = None
@@ -49,34 +48,36 @@ class _UnitComparer:
         `only_buffs`, or every buff), provided this ran on that update too. Keep each unit's report for the next
         update.
 
-        Cloak is compared for a unit in sight in both updates, since an enemy unit nothing detects is listed cloaked
-        but not in vision. Buffs are compared for a unit in vision in both, since such an enemy unit shows none (in
-        game). Loss is compared for a unit in vision in both and of the same type.
+        Cloak is compared for a unit in sight in both updates, an enemy unit nothing detects being listed cloaked and
+        invisible. Buffs are compared for a unit visible in both, since an invisible enemy unit shows none (in game).
+        Loss is compared for a unit visible in both and of the same type.
 
         Raises `UncuratedIdError` for a buff the curated ids leave out. Such a buff belongs among them.
         """
         tracker = self._tracker
         changes = tracker.last_changes
         update = changes.update
-        before = self._compared if self._compared_update == update - 1 else None
-        worn_before = self._worn if buffs and self._worn_update == update - 1 else None
+        before = self._compared.at(update - 1, default=None)
+        worn_before = self._worn.at(update - 1, default=None) if buffs else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
         for unit in tracker.unit_tracker.present:
+            alliance = unit._raw_alliance
+            if alliance != _OWN and alliance != _ENEMY:
+                continue
             report = unit._latest_report
-            alliance = report.alliance
-            if (alliance != _OWN and alliance != _ENEMY) or report.display_type == _IN_FOG:
+            if report.display_type == _IN_FOG:
                 continue
             compared[unit._id] = report
-            in_vision = report.display_type == _IN_VISION
+            visible = report.display_type == _VISIBLE
             side: _ComparedChanges[Any] = changes.own if alliance == _OWN else changes.enemy
-            if buffs and in_vision and (listed := report.buff_ids):
+            if buffs and visible and (listed := report.buff_ids):
                 worn[unit._id] = tuple(listed)
             if before is None or (then := before.get(unit._id)) is None:
                 continue
             if cloak and report.cloak != then.cloak:
                 side.cloak_changed.append((unit, CloakState(then.cloak)))
-            if not in_vision or then.display_type != _IN_VISION:
+            if not visible or then.display_type != _VISIBLE:
                 continue
             if worn_before is not None and (now := worn.get(unit._id, ())) != (was := worn_before.get(unit._id, ())):
                 self._record_buffs(side, unit, was, now, only_buffs)
@@ -86,16 +87,14 @@ class _UnitComparer:
                 side.damaged.append((unit, lost))
             if energy and (drained := then.energy - report.energy) > 0.0:
                 side.energy_lost.append((unit, drained))
-        self._compared = compared
-        self._compared_update = update
+        self._compared = _Snapshot(compared, update)
         if buffs:
-            self._worn = worn
-            self._worn_update = update
+            self._worn = _Snapshot(worn, update)
 
     def stop(self) -> None:
         """Drop the reports and buffs kept."""
-        self._compared = {}
-        self._worn = {}
+        self._compared = _Snapshot({})
+        self._worn = _Snapshot({})
 
     def _record_buffs(
         self,

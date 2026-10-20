@@ -1,6 +1,9 @@
 """Geometry primitives."""
 
+import copy
 import math
+import pickle
+import random
 from collections.abc import Callable
 
 import numpy
@@ -85,6 +88,16 @@ class TestPoint2:
     ) -> None:
         """A half-tile lattice is corners, edge midpoints and centers -- not centers alone."""
         assert Point(probe).snapped(step=0.5) == expected, kind
+
+    def test_snapped_rounds_a_tie_up(self) -> None:
+        """Python's `round` sends a tie to the even value, so `Point((0.5, 1.5)).snapped(step=1)` gave (0, 2)."""
+        assert Point((0.5, 1.5)).snapped(step=1) == (1, 2)
+        assert Point((-0.5, -1.5)).snapped(step=1) == (0, -1)
+        assert Point((0.25, 0.75)).snapped(step=0.5) == (0.5, 1.0)
+
+    def test_snapped_rounds_what_lies_below_a_tie_down(self) -> None:
+        """`math.floor(value + 0.5)` took the largest float below 0.5 to 1, and an odd float above 2**52 up one."""
+        assert Point((math.nextafter(0.5, 0), 2.0**52 + 1)).snapped(step=1) == (0, 2**52 + 1)
 
     def test_snapped_to_whole_tiles_gives_corners_not_centers(self) -> None:
         assert Point((3.4, 4.6)).snapped(step=1) == (3.0, 5.0)
@@ -355,6 +368,24 @@ class TestRectangle:
         assert (10, 10) not in rect, "the upper edges belong to the next rectangle"
         assert (11, 5) not in rect
 
+    @pytest.mark.parametrize("rect", [Rectangle(3, 3, 0, 0), Rectangle(1, 1, 0, 3), Rectangle(1, 1, 3, 0)])
+    def test_one_with_no_width_or_no_height_is_empty(self, rect: Rectangle) -> None:
+        """`Rectangle(3, 3, 0, 0).random_point()` returned (3, 3), which is not in it, and `Rectangle(1, 1, 0, 3)`
+        intersected `Rectangle(0, 0, 5, 5)` though their intersection was `None`."""
+        assert rect.area == 0
+        assert not rect.tiles()
+        for read in (
+            lambda: rect.center,
+            rect.random_point,
+            lambda: rect.closest_point_to((0, 0)),
+            rect.bounding_rectangle,
+        ):
+            with pytest.raises(ValueError, match="covers no ground"):
+                read()
+        assert not rect.intersects(Rectangle(0, 0, 5, 5))
+        assert not Rectangle(0, 0, 5, 5).intersects(rect)
+        assert rect.intersection(Rectangle(0, 0, 5, 5)) is None
+
     def test_encloses(self) -> None:
         assert Rectangle(0, 0, 10, 10).encloses(Rectangle(2, 2, 4, 4))
         assert not Rectangle(0, 0, 10, 10).encloses(Rectangle(2, 2, 40, 4))
@@ -465,9 +496,22 @@ class TestTile:
         ],
     )
     def test_arithmetic_is_refused(self, operation: Callable[[Tile], object]) -> None:
-        """As a tuple it would concatenate or repeat, and `grid[tile + (1, 0)]` read the tile it started from."""
-        with pytest.raises(TypeError, match="is an address"):
+        """A tile has none. As a tuple it concatenated or repeated, so `grid[tile + (1, 0)]` read the tile it started
+        from."""
+        with pytest.raises(TypeError):
             operation(Tile(3, 4))
+
+    def test_takes_whole_number_coordinates_alone(self) -> None:
+        """`Tile(3.7, 4.2)` was accepted, and then missed every tile set and raised inside a grid lookup."""
+        with pytest.raises(TypeError):
+            Tile(3.7, 4.2)  # pyright: ignore[reportArgumentType]
+        with pytest.raises(TypeError):
+            Tile(3, 4.0)  # pyright: ignore[reportArgumentType]
+
+    def test_a_numpy_integer_becomes_an_int(self) -> None:
+        tile = Tile(numpy.int64(3), numpy.int32(4))  # pyright: ignore[reportArgumentType]
+        assert tile == Tile(3, 4)
+        assert (type(tile.x), type(tile.y)) == (int, int)
 
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
@@ -476,9 +520,33 @@ class TestTile:
     def test_center_is_where_a_unit_stands(self) -> None:
         assert Tile(3, 4).center == Point((3.5, 4.5))
 
-    def test_indexes_numpy_directly(self) -> None:
-        grid = numpy.arange(100).reshape(10, 10)
-        assert grid[Tile(3, 4)] == grid[3, 4]
+    def test_it_is_neither_a_tuple_nor_its_corner_point(self) -> None:
+        """As a tuple, a tile equalled the point at its corner and hashed like it, and indexed a numpy array as an
+        array index, which is wrong for any grid whose origin is not (0, 0)."""
+        tile = Tile(3, 4)
+        assert not isinstance(tile, tuple)
+        assert tile != (3, 4)
+        assert tile != Point((3, 4))
+        assert Point((3, 4)) not in {tile}
+        with pytest.raises(IndexError):
+            numpy.arange(100).reshape(10, 10)[tile]  # pyright: ignore[reportCallIssue, reportArgumentType]
+
+    def test_a_tile_set_is_built_of_tiles_alone(self) -> None:
+        """A pair was taken, by chance, while a tile was one."""
+        with pytest.raises(TypeError, match="built of tiles"):
+            TileSet([(1, 2)])  # pyright: ignore[reportArgumentType]
+
+    def test_shifted_moves_it_by_whole_tiles_alone(self) -> None:
+        assert Tile(3, 4).shifted(2, -1) == Tile(5, 3)
+        with pytest.raises(TypeError):
+            Tile(3, 4).shifted(1.5, 0)  # pyright: ignore[reportArgumentType]
+
+    def test_sorts_by_x_then_y(self) -> None:
+        assert sorted([Tile(2, 0), Tile(1, 5), Tile(1, 2)]) == [Tile(1, 2), Tile(1, 5), Tile(2, 0)]
+
+    def test_is_frozen(self) -> None:
+        with pytest.raises(AttributeError):
+            Tile(3, 4).x = 5  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_is_an_area(self) -> None:
         tile = Tile(3, 4)
@@ -492,19 +560,40 @@ class TestTile:
         assert (3.0, 4.0) in tile, "the lower edges are inside"
         assert (4.0, 4.5) not in tile, "the upper edges belong to the next tile"
         with pytest.raises(TypeError):
-            _ = 3 in tile
+            _ = 3 in tile  # pyright: ignore[reportOperatorIssue]
 
     def test_translated(self) -> None:
         assert Tile(3, 4).translated((2, -1)) == Tile(5, 3)
 
-    def test_it_is_an_address_not_a_point(self) -> None:
-        """A tile is a patch of ground with a center, so point math must be given that center.
+    @pytest.mark.parametrize(
+        "copy_of",
+        [copy.copy, copy.deepcopy, lambda tile: pickle.loads(pickle.dumps(tile))],
+        ids=["copy", "deep", "pickle"],
+    )
+    def test_copies_and_pickles(self, copy_of: Callable[[Tile], Tile]) -> None:
+        """A tuple's own reduction handed `__new__` one tuple, where it takes x and y, so each of these raised."""
+        assert copy_of(Tile(3, 4)) == Tile(3, 4)
+        assert copy.deepcopy(TileSet([Tile(3, 4)])) == TileSet([Tile(3, 4)])
 
-        Its tuple is the grid address. Read as a point it would measure from the tile's corner, half a tile out and
-        silently, so it is refused.
-        """
-        tile = Tile(3, 4)
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda tile: Point((1, 0)) + tile,
+            lambda tile: Point((1, 0)) - tile,
+            lambda tile: Point((1, 0)) * tile,
+            lambda tile: Point((1, 0)) / tile,
+        ],
+    )
+    def test_a_point_refuses_to_combine_with_one(self, operation: Callable[[Tile], object]) -> None:
+        """`point + tile` once added the tile's corner, through the two-coordinate fast path."""
         with pytest.raises(TypeError, match="a Tile is an area, not a point"):
+            operation(Tile(3, 4))
+
+    def test_it_is_an_address_not_a_point(self) -> None:
+        """A tile is a patch of ground with a center, so point math must be given that center. Read as a point it
+        would measure from the tile's corner, half a tile out and silently, so it is refused."""
+        tile = Tile(3, 4)
+        with pytest.raises(TypeError):
             _ = Point((0, 0)).distance_to(tile)  # pyright: ignore[reportArgumentType]
         assert Point((3.5, 4.5)).distance_to(tile.center) == 0.0
         assert Point((3, 4)).distance_to(tile.center) == pytest.approx(math.sqrt(0.5))
@@ -513,7 +602,7 @@ class TestTile:
         """Both readings stay available, and neither is the default."""
         grid = numpy.arange(100).reshape(10, 10)
         tile = Tile(3, 4)
-        assert grid[tile] == grid[3, 4], "the tuple is the array index"
+        assert grid[tile.x, tile.y] == grid[3, 4], "the address is x and y"
         assert tile.center == (3.5, 4.5), "the center is where a unit stands"
         assert Point((0, 0)).towards(tile.center, 1.0) == pytest.approx(tile.center.normalized)
 
@@ -544,6 +633,9 @@ class TestAreaLayout:
     def test_tile_sets_keep_one_for_their_caches(self) -> None:
         """TileSet deliberately opts back in: cached_property needs somewhere to write."""
         assert hasattr(TileSet([Tile(0, 0)]), "__dict__")
+
+
+EVERY_SHAPE = (Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(2, 1)]))
 
 
 class TestAreaAgreement:
@@ -597,6 +689,76 @@ class TestAreaAgreement:
         """Their docstring promises a mask over one indexes the other, so they cannot round differently."""
         centers = rect.tile_centers().reshape(-1, 2)
         assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_no_point_of_any_shape_is_nearer_than_its_closest_point(self, area: Area) -> None:
+        """A tile set answered from the tile with the nearest center, up to 0.2 farther than its nearest point: from
+        (0.35, 3.2), 2.20 to `Tile(0, 0)`, whose center is nearer, rather than 2.04 to `Tile(2, 1)`. Checked against a
+        lattice of the shape's points 0.05 apart."""
+        bounds = area.bounding_rectangle()
+        lattice = (
+            Point((bounds.x + (i + 0.5) * 0.05, bounds.y + (j + 0.5) * 0.05))
+            for i in range(round(bounds.width / 0.05))
+            for j in range(round(bounds.height / 0.05))
+        )
+        points_inside = numpy.array([point for point in lattice if point in area])
+        for i in range(round((bounds.width + 4) / 0.3)):
+            for j in range(round((bounds.height + 4) / 0.3)):
+                probe = Point((bounds.x - 2 + i * 0.3, bounds.y - 2 + j * 0.3))
+                point, distance = area.closest_point_to(probe)
+                assert distance == pytest.approx(point.distance_to(probe)), probe
+                sampled = numpy.hypot(*(points_inside - numpy.asarray(probe)).T).min()
+                assert distance <= sampled + 1e-9, probe
+
+    @pytest.mark.parametrize(
+        "area",
+        [*EVERY_SHAPE, TileSet([]), Circle((5.9, 5.9), 0.4), Rectangle(0.6, 0.6, 0.3, 0.3), TileSet([Tile(-3, 9)])],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_tile_mask_holds_its_tiles(self, area: Area) -> None:
+        """A grid reads an area through its mask, so the mask must hold exactly the tiles `tiles` gives."""
+        origin, tiles_mask = area._tile_mask()
+        xs, ys = numpy.nonzero(tiles_mask)
+        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        assert masked == set(area.tiles())
+
+    @pytest.mark.parametrize("area", [*EVERY_SHAPE, TileSet([Tile(1, 2), Tile(40, 40)])], ids=lambda area: repr(area))
+    @pytest.mark.parametrize("within", [Rectangle(1, 1, 3, 2), Rectangle(-5, -5, 4, 4), Rectangle(0, 0, 50, 50)])
+    def test_every_shapes_tile_mask_within_a_window_holds_its_tiles_there(self, area: Area, within: Rectangle) -> None:
+        """A grid asks for the mask within its own bounds, so a mask never outgrows the grid it is read on."""
+        origin, tiles_mask = area._tile_mask(within)
+        xs, ys = numpy.nonzero(tiles_mask)
+        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        assert masked == {tile for tile in area.tiles() if tile.center in within}
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
+        """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""
+        around = area.bounding_rectangle().rounded_out()
+        tiles = Rectangle(around.x - 1, around.y - 1, around.width + 2, around.height + 2).tiles()
+        assert any(tile in area for tile in tiles), area
+        for tile in tiles:
+            assert (tile in area) == (tile.center in area), (area, tile)
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_every_shape_shifts_by_a_point_on_the_ground_alone(self, area: Area) -> None:
+        """A circle took a tile's corner and refused a height, while a rectangle did the reverse."""
+        assert area.translated(Point((1, 2))) == area.translated((1, 2))
+        with pytest.raises(TypeError):
+            area.translated(Tile(1, 1))  # pyright: ignore[reportArgumentType]
+        with pytest.raises(ValueError, match=r"drop a height with \.ground"):
+            area.translated(Point3D((1, 2, 3)))
+        with pytest.raises(ValueError, match=r"not \(1\.0,\)$"):
+            area.translated((1.0,))  # pyright: ignore[reportArgumentType]
+
+    @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
+    def test_every_shape_draws_its_random_point_by_the_generator_given(self, area: Area) -> None:
+        """Every draw came from the `random` module's own generator, so two apis in one process shared one."""
+        untouched = random.getstate()
+        first = [area.random_point(rng=random.Random(3)) for _ in range(3)]
+        assert [area.random_point(rng=random.Random(3)) for _ in range(3)] == first
+        assert random.getstate() == untouched
+        assert all(point in area for point in first)
 
     def test_random_point_spreads_over_the_ground(self) -> None:
         """A tile set once answered with tile centers, so this one-tile area returned one point forever."""
