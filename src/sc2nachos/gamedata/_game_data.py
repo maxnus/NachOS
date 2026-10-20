@@ -92,7 +92,9 @@ def _with_build_steps_borrowed(
             continue
         products = tech_tree_abilities.products.get(row.creation_ability, {}).values()
         types_made = {product for product in products if isinstance(product, UnitTypeId)}
-        if len(types_made) == 1 and unit_type not in types_made and (built_as := units.get(types_made.pop())):
+        if len(types_made) != 1 or unit_type in types_made:
+            continue
+        if (built_as := units.get(types_made.pop())) is not None:
             rows_with_build_steps[unit_type] = replace(row, build_steps=built_as.build_steps)
     return MappingProxyType(rows_with_build_steps)
 

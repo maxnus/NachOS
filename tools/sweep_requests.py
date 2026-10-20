@@ -1,5 +1,5 @@
 """Find what the game does with the requests a bot makes besides its orders: debug commands from a client that did not
-create the game, the cheats that hand something out, chat, leaving, and the pathing query.
+create the game, the cheats that hand something out, chat, leaving, the pathing query, and the tables it answers.
 
 Needs StarCraft II installed. Each sweep plays its own games on the sandbox's map:
 
@@ -31,6 +31,9 @@ Needs StarCraft II installed. Each sweep plays its own games on the sandbox's ma
   - into and out of a ring of supply depots, raised and lowered, every 2 steps, observing each time or not at all.
 
   It times one pair and 100, and compares 100 random pairs with `Grid.path_distance_from`.
+- `tables` asks for the tables in a game against the computer, and in a game of two of each player, and records each
+  row that differs from the first corpus game's, with the fields that differ, and how many rows differ only in which
+  empty fields they set.
 
 Run it as::
 
@@ -54,6 +57,7 @@ from typing import Any
 import numpy
 import scipy.ndimage
 from _sandbox import Cheat, OpenGround, Rivals, Sandbox, playing, playing_rivals
+from generate_unit_types import corpus_answer
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
 
@@ -629,12 +633,83 @@ def pathing(installation: Installation) -> dict[str, Any]:
     return findings
 
 
+# Each table of `ResponseData`, and the field its rows are keyed by.
+_TABLE_KEYS = {
+    "units": "unit_id",
+    "abilities": "ability_id",
+    "upgrades": "upgrade_id",
+    "buffs": "buff_id",
+    "effects": "effect_id",
+}
+
+
+def _field_value(value: Any) -> Any:
+    """A row's field as JSON holds it: a repeated field as a list."""
+    return value if isinstance(value, bool | int | float | str) else [str(item) for item in value]
+
+
+def _row_differences(corpus_row: Any, answered_row: Any) -> dict[str, list[Any]]:
+    """The fields where `answered_row` reads otherwise than `corpus_row`, each as the corpus has it and as answered."""
+    names = {field.name for field, _ in corpus_row.ListFields()} | {
+        field.name for field, _ in answered_row.ListFields()
+    }
+    return {
+        name: [_field_value(getattr(corpus_row, name)), _field_value(getattr(answered_row, name))]
+        for name in sorted(names)
+        if getattr(answered_row, name) != getattr(corpus_row, name)
+    }
+
+
+def _table_differences(corpus: sc2api_pb2.ResponseData, answer: sc2api_pb2.ResponseData) -> dict[str, Any]:
+    """How each table of `answer` differs from `corpus`'s: the rows whose fields read otherwise, by id and the name
+    the corpus gives them, how many differ only in which empty fields they set, and the ids only one of them has."""
+    differences: dict[str, Any] = {}
+    for table, key in _TABLE_KEYS.items():
+        corpus_rows = {getattr(row, key): row for row in getattr(corpus, table)}
+        answered_rows = {getattr(row, key): row for row in getattr(answer, table)}
+        changed: dict[str, dict[str, list[Any]]] = {}
+        differing_in_empty_fields = 0
+        for row_id in corpus_rows.keys() & answered_rows.keys():
+            corpus_row, answered_row = corpus_rows[row_id], answered_rows[row_id]
+            if answered_row == corpus_row:
+                continue
+            if fields := _row_differences(corpus_row, answered_row):
+                name = getattr(corpus_row, "name", "") or getattr(corpus_row, "friendly_name", "")
+                changed[f"{row_id} {name}"] = fields
+            else:
+                differing_in_empty_fields += 1
+        differences[table] = {
+            "rows differing": dict(sorted(changed.items(), key=lambda entry: int(entry[0].split()[0]))),
+            "rows differing only in which empty fields they set": differing_in_empty_fields,
+            "ids only in the corpus": sorted(corpus_rows.keys() - answered_rows.keys()),
+            "ids only answered": sorted(answered_rows.keys() - corpus_rows.keys()),
+        }
+    return differences
+
+
+def tables(installation: Installation) -> dict[str, Any]:
+    """Ask for the tables in a game against the computer, and in a game of two of each player, and record how each
+    differs from the first corpus game's."""
+    corpus = corpus_answer()
+    with playing(Race.TERRAN, installation) as sandbox:
+        against_the_computer = _table_differences(corpus, sandbox.client.game_data())
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        of_two = {
+            "creator": _table_differences(corpus, rivals.me.client.game_data()),
+            "joiner": _table_differences(corpus, rivals.enemy.client.game_data()),
+        }
+    findings = {"against the computer": against_the_computer, "in a game of two": of_two}
+    logger.info("tables: {} unit rows differ", len(against_the_computer["units"]["rows differing"]))
+    return findings
+
+
 _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "debug-joined": debug_joined,
     "cheats-given": cheats_given,
     "chat": chat,
     "leave": leave,
     "pathing": pathing,
+    "tables": tables,
 }
 
 

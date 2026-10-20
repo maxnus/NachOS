@@ -3911,17 +3911,17 @@ def _gas_building_read(
         return
     started = cast("raw_pb2.Unit", building_on_the_geyser())
     first_read = [game.step, round(started.build_progress, 4)]
+    trial.notes["built"] = _type_name(started.unit_type)
+    trial.notes["first read: step, build progress"] = first_read
+    trial.notes["table's build time"] = table_build_steps.get(started.unit_type)
     while (unit := game.unit(started.tag)) is not None and unit.build_progress < 1:
         if game.step > first_read[0] + _PROGRESS_LIMIT:
             logger.warning("Gave up waiting at step {}", game.step)
+            trial.notes["last read: step, build progress"] = [game.step, round(unit.build_progress, 4)]
             return
         game.turn(1)
-    built = _type_name(started.unit_type)
-    trial.notes["built"] = built
-    trial.notes["first read: step, build progress"] = first_read
     trial.notes["first read done"] = None if unit is None else game.step
     trial.notes["steps from the first read to done"] = None if unit is None else game.step - first_read[0]
-    trial.notes["table's build time"] = table_build_steps.get(started.unit_type)
 
 
 # --- What one command naming two units does with an ability: whether one of them carries it out or both

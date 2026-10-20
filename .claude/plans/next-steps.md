@@ -273,8 +273,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 - **Record the corpus again**, planned with the owner first (the owner, 2026-10-20, after the fix of AvocaDOS #44 went
   first). Its tables are older than the repo's maps (docs/reference/game-behavior/upgrades-and-tables.md), so the tests
-  read a rich refinery's build time and an acceleration zone as a structure where a game today and the ladder read
-  neither. Regenerating `UnitType` from the new tables may drop the zones from `Structure`.
+  read rows a game today and the ladder no longer answer: a rich refinery's ability, and an acceleration zone as an
+  available structure. Regenerating `UnitType` from the new tables may drop the zones from `Structure`, and
+  `tools/sweep_requests.py tables` should find no difference afterwards.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
