@@ -47,8 +47,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Every map in use seats two. The game silently drops extra players, and `PlayerSetup` cannot set teams (#11).
   `create_game` ignores a participant's race and name: the join sets them. `PlayerSetup.race` counts only for a
   computer (#9).
-- After `create_game` the status is `init_game`, the join returns player 1, and `game_info` gives only the joining
-  player's own `race_actual` (#9; tested).
+- After `create_game` the status is `init_game`, the join returns player 1, and against the computer `game_info`
+  gives only the joining player's own `race_actual` (#9; tested). In a game of two it gives both players' to either
+  player, a Random one's included, from the start. No player has a `player_name` in either, though each joined with
+  one (tool `sweep_requests`, `players`, build 75689).
 - A game with no opponent is won the moment it starts (#22).
 - On every launch the game rewrites `stableid.json`, in `Documents/StarCraft II` on Windows, from the loaded map's
   mod dependencies, so its ids differ from map to map: BerlingradAIE (2022) yields 518 ability ids MagannathaAIE
