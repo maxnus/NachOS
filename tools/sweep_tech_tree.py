@@ -209,7 +209,7 @@ class TechSweep:
             for entry in raw_data.upgrades
             if entry.ability_id
         }
-        self._makers = creation_abilities_offered(raw_data)
+        self._abilities_making = creation_abilities_offered(raw_data)
         # `free` rather than `all_resources`, which runs dry after a few hundred add-on rebuilds. `god`, since the
         # computer attacks eventually, which the sweep would read as a requirement lost.
         game.cheat(*cheats)
@@ -224,7 +224,9 @@ class TechSweep:
         self._on_the_way: set[Pair] = set()
         # The pylons put up to power a unit, by its tag, for `_clear`.
         self._powering: dict[int, list[int]] = {}
-        self._creation_abilities = {int(ability) for abilities in self._makers.values() for ability in abilities}
+        self._creation_abilities = {
+            int(ability) for abilities in self._abilities_making.values() for ability in abilities
+        }
         self._creation_abilities |= {int(ability) for ability in UNNAMED_CREATION_ABILITIES}
 
     # --- Reading the game
@@ -807,19 +809,21 @@ class TechSweep:
         """What a worker and each structure it can put up are offered while the structure goes up, one structure at a
         time, with `fast_build` off: a structure is offered its cancel only until it is finished."""
         worker = _WORKERS[self._race]
-        makers = {ability: unit_type for unit_type, abilities in self._makers.items() for ability in abilities}
+        products_by_ability = {
+            ability: unit_type for unit_type, abilities in self._abilities_making.items() for ability in abilities
+        }
         found: set[Pair] = set()
         self._game.cheat(Cheat.FAST_BUILD)
         try:
-            builds = self._builds(worker, makers)
+            builds = self._builds(worker, products_by_ability)
             for build in builds:
-                found |= self._read_going_up(worker, build, makers[build])
+                found |= self._read_going_up(worker, build, products_by_ability[build])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
             self._game.cheat(Cheat.FAST_BUILD)
         return found
 
-    def _builds(self, worker: UnitTypeId, makers: dict[RawAbilityId, UnitTypeId]) -> list[RawAbilityId]:
+    def _builds(self, worker: UnitTypeId, products_by_ability: dict[RawAbilityId, UnitTypeId]) -> list[RawAbilityId]:
         """The abilities a new `worker` is offered that put up a structure on a point, in id order."""
         (builder,) = [
             u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
@@ -827,7 +831,8 @@ class TechSweep:
         builds = sorted(
             RawAbilityId(ability)
             for ability in self._game.offered([builder.tag])[builder.tag]
-            if ability in makers and self._data.abilities[AbilityId.read(ability)].target_type is TargetType.POINT
+            if ability in products_by_ability
+            and self._data.abilities[AbilityId.read(ability)].target_type is TargetType.POINT
         )
         self._clear({builder.tag})
         return builds
@@ -1000,14 +1005,14 @@ class TechSweep:
         """
         if self._pad == self._sandbox:
             self._pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
-        makers = sorted(
+        products_and_abilities = sorted(
             {
-                *((product, ability) for product, abilities in self._makers.items() for ability in abilities),
+                *((product, ability) for product, abilities in self._abilities_making.items() for ability in abilities),
                 *((product, RawAbilityId(ability)) for ability, product in UNNAMED_CREATION_ABILITIES.items()),
             },
-            key=lambda maker: (maker[0].name, maker[1].name),
+            key=lambda pair: (pair[0].name, pair[1].name),
         )
-        for product, ability in makers:
+        for product, ability in products_and_abilities:
             if self._data.units[product].race is not self._race:
                 continue
             name = _ability_name(ability)
@@ -1266,19 +1271,25 @@ def creation_abilities_offered(tables: sc2api_pb2.ResponseData) -> dict[UnitType
 
     A barracks is offered `Build_TechLab_Barracks`, which its tech lab's row names, never `Build_TechLab`, the curated
     id standing for it; a liberator is offered `Morph_LiberatorAGMode`, the curated id, never
-    `LiberatorMorphtoAG_LiberatorAGMode`, which its sieged form's row names.
+    `LiberatorMorphtoAG_LiberatorAGMode`, which its sieged form's row names (tool `sweep_tech_tree`).
     """
-    unnamed = {unit_type: RawAbilityId(ability) for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
-    offered: dict[UnitTypeId, frozenset[RawAbilityId]] = {}
-    for row in tables.units:
-        if (unit_type := UnitTypeId.get(row.unit_id)) is None:
+    unnamed_by_type = {unit_type: RawAbilityId(ability) for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
+    abilities_by_type: dict[UnitTypeId, frozenset[RawAbilityId]] = {}
+    for unit_row in tables.units:
+        try:
+            unit_type = UnitTypeId(unit_row.unit_id)
+        except ValueError:
+            # An uncurated id, which most are.
             continue
-        if (curated := AbilityId.get(row.ability_id)) is not None:
-            named = RawAbilityId(row.ability_id)
-            offered[unit_type] = frozenset({named} if curated.is_custom else {named, RawAbilityId(curated)})
-        elif (ability := unnamed.get(unit_type)) is not None:
-            offered[unit_type] = frozenset({ability})
-    return offered
+        if (curated_ability := AbilityId.get(unit_row.ability_id)) is not None:
+            row_ability = RawAbilityId(unit_row.ability_id)
+            game_abilities = (
+                {row_ability} if curated_ability.is_custom else {row_ability, RawAbilityId(curated_ability)}
+            )
+            abilities_by_type[unit_type] = frozenset(game_abilities)
+        elif (unnamed_ability := unnamed_by_type.get(unit_type)) is not None:
+            abilities_by_type[unit_type] = frozenset({unnamed_ability})
+    return abilities_by_type
 
 
 def _unit_name(unit_type: int) -> str:
