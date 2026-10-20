@@ -119,7 +119,7 @@ from functools import partial
 from pathlib import Path
 from typing import Self, cast
 
-from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing, unit_aliases
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
@@ -256,6 +256,7 @@ class _Game:
         self.map = GameMap._of_game(self.client.game_info(), self.client.observation())
         raw_data = self.client.game_data()
         self.data = GameData(raw_data)
+        self.form_of = unit_aliases(raw_data)
         self.aims = {entry.ability_id: entry.target for entry in raw_data.abilities}
         self.step = 0
         self.units: dict[int, raw_pb2.Unit] = {}
@@ -512,14 +513,14 @@ _READS = (1, 6, 48)
 
 def _keeps(game: _Game, race: Race) -> list[Trial]:
     trials: list[Trial] = []
-    makers = {row.creation_ability for row in game.data.units.values() if row.base_type is None}
+    makers = {row.creation_ability for row in game.data.units.values() if row.id not in game.form_of}
     performers = [
         row.id
         for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
         if row.race is race
         and row.speed > 0
         and Attribute.STRUCTURE not in row.attributes
-        and row.base_type is None
+        and row.id not in game.form_of
         and row.id not in _NOT_PERFORMERS
     ]
     pad = game.spot(game.toward(12), 4)
@@ -1886,7 +1887,7 @@ def _structure_abilities(game: _Game, race: Race) -> list[Trial]:
     structures = [
         row.id
         for row in sorted(game.data.units.values(), key=lambda row: row.id.name)
-        if row.race is race and Attribute.STRUCTURE in row.attributes and row.base_type is None
+        if row.race is race and Attribute.STRUCTURE in row.attributes and row.id not in game.form_of
     ]
     for structure in structures:
         work = _puts_to_work(game, structure)

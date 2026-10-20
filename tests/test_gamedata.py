@@ -53,6 +53,7 @@ _CHARGED = {
     AbilityId.HATCHERY_MORPH_LAIR: Cost(150, 100),
     AbilityId.LAIR_MORPH_HIVE: Cost(200, 150),
     AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1),
+    AbilityId.LIBERATOR_SIEGE_AT: Cost(0, 0),
     AbilityId.NEXUS_TRAIN_PROBE: Cost(50, 0, 1),
     AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25),
     AbilityId.PROBE_BUILD_PYLON: Cost(100, 0),
@@ -233,7 +234,6 @@ class TestReadingTheTables:
     def test_an_id_of_zero_names_nothing(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         marine = data.units[UnitTypeId.MARINE]
-        assert marine.base_type is None
         assert marine.tech_aliases == ()
 
     def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
@@ -783,15 +783,6 @@ class TestARecordedGamesTables:
             # Without the product it would read as an ability that makes nothing, which keeps a unit's orders.
             assert data.abilities[ability].order_behavior is OrderBehavior.QUEUES
         assert _RESEARCHED_BY_A_DEAD_ID
-
-    def test_a_transient_form_of_a_unit_names_the_one_it_is_a_form_of(self, path: Path) -> None:
-        data = _tables(path)
-        for unit, base in (
-            (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
-            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitTypeId.SUPPLY_DEPOT),
-            (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
-        ):
-            assert data.units[unit].base_type is base
 
 
 def _answer_row(path: Path, ability: int) -> data_pb2.AbilityData:

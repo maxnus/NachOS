@@ -64,10 +64,15 @@ class UpgradeReader:
     # --- The levels a unit reports
 
     def read_basic_upgrades(self, units: Iterable[Unit[Any]]) -> frozenset[UpgradeId]:
-        """The enemy's upgrades that its visible units show through the levels they report."""
+        """The enemy's upgrades that its visible units show through the levels they report. A unit a neural parasite
+        took from this player shows nothing."""
         shown: set[UpgradeId] = set()
         for unit in units:
-            if unit.alliance is not Alliance.ENEMY or unit.visibility is not Visibility.VISIBLE:
+            if (
+                unit.alliance is not Alliance.ENEMY
+                or unit.first_alliance is not Alliance.ENEMY
+                or unit.visibility is not Visibility.VISIBLE
+            ):
                 continue
             shown |= self._levels_of(
                 unit.type_id, unit.attack_upgrade_level, unit.armor_upgrade_level, unit.shield_upgrade_level
@@ -79,8 +84,9 @@ class UpgradeReader:
 
         A unit reports how many attack and shield levels it has, and how much armor its upgrades add. Each belongs to
         its owner and to the unit's own line: a marine at attack level 2 shows the first two Terran Infantry Weapons,
-        which every infantry unit of that player has.
+        which every infantry unit of that player has. A negative level counts as none.
         """
+        attack, armor, shield = max(attack, 0), max(armor, 0), max(shield, 0)
         if not attack and not armor and not shield:
             return frozenset()
         lines = self._lines_of(unit_type)
@@ -129,9 +135,10 @@ class UpgradeReader:
         """The upgrades `unit` shows its owner has: by its type, and while visible, by its buffs and its health.
 
         A unit under a neural parasite shows only that its controller has Neural Parasite: its buffs and type belong to
-        the player it was taken from.
+        the player it was taken from. One on another side than when first seen shows nothing by its type, even out of
+        sight.
         """
-        shown = self._of_type(unit.type_id)
+        shown = self._of_type(unit.type_id) if unit.alliance is unit.first_alliance else frozenset()
         if unit.visibility is not Visibility.VISIBLE:
             return shown
         buffs = unit.buffs

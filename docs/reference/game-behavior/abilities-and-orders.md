@@ -16,7 +16,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - The archon: `Morph_Archon` (1766) given to two templar in one command, high or dark, even 6 apart, walks them to
   each other and merges them, each reporting `Archon_Warp_Target` (1767) targeting the other; given to one alone it
   is refused. 1767 given to both, targeting one of them, merges them too; given to one it does nothing, though it
-  answers `Success` (#37; tested).
+  answers `Success` (#37; tested). No templar the tech-tree sweep asked about, high or dark, was offered 1766 (tool
+  `sweep_tech_tree`).
 - `ATTACK` at a point runs `attack_Attack` (23) for a high templar, a lurker, an oracle and an adept's
   shade, which are offered `Scan_Move` (19) too, as it does for a marine. At an enemy drone it is refused
   `NotSupported` by the lurker, the oracle without its beam, and the shade, and taken by the templar and the marine.

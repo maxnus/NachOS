@@ -13,6 +13,7 @@ from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
+from sc2nachos.gamedata._techtree._overrides import MORPH_SOURCES_FALLBACK, PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
@@ -129,6 +130,9 @@ class UnitTypeData:
     """Its attacks."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` if nothing does."""
+    producers: frozenset[UnitTypeId]
+    """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
+    Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
@@ -142,8 +146,6 @@ class UnitTypeData:
     geyser, an add-on, or a form a structure morphs into."""
     tech_aliases: tuple[UnitTypeId, ...]
     """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
-    base_type: UnitTypeId | None
-    """The type this is a temporary form of: a siege tank, for a sieged tank."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
@@ -200,14 +202,13 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree.creation_abilities.get(unit_type),
-            morphed_from=tech_tree.morph_sources.get(unit_type),
+            producers=tech_tree.unit_type_producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            morphed_from=tech_tree.morph_sources.get(unit_type) or MORPH_SOURCES_FALLBACK.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
             # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
-            # The game calls this the morphed variant, though it names the type morphed from.
-            base_type=UnitTypeId.get(unit.unit_alias),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),

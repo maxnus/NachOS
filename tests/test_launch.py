@@ -125,10 +125,12 @@ class TestVersions:
         install = make_install(tmp_path, 75689, 95841, 93333)
         assert install.builds() == {75689, 93333, 95841}
         assert install.executable().parent.name == "Base95841"
+        assert install.build_to_launch() == 95841
 
     def test_a_build_can_be_asked_for(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 75689, 95841, system="Linux")
         assert install.executable(base_build=75689).parent.name == "Base75689"
+        assert install.build_to_launch(base_build=75689) == 75689
 
     def test_an_absent_build_lists_what_is_there(self, tmp_path: Path) -> None:
         install = make_install(tmp_path, 95841)

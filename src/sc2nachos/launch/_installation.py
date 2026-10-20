@@ -104,6 +104,12 @@ class Installation:
 
     def executable(self, *, base_build: int | None = None) -> Path:
         """The client binary, for `base_build` or for the newest build installed."""
+        base_build = self.build_to_launch(base_build=base_build)
+        return self.base / _VERSIONS / f"{_BASE_PREFIX}{base_build}" / _settings(self.system).executable
+
+    def build_to_launch(self, *, base_build: int | None = None) -> int:
+        """`base_build`, or the newest build installed. Raises `GameVersionError` for a build not installed or older
+        than the raw interface."""
         builds = self.builds()
         if not builds:
             raise GameVersionError(f"{self.base / _VERSIONS} holds no {_BASE_PREFIX}<build> directory")
@@ -115,7 +121,7 @@ class Installation:
             raise GameVersionError(
                 f"build {base_build} predates the raw interface; {MINIMUM_BASE_BUILD} or newer is required"
             )
-        return self.base / _VERSIONS / f"{_BASE_PREFIX}{base_build}" / _settings(self.system).executable
+        return base_build
 
     def builds(self) -> frozenset[int]:
         """Every base build installed, by number."""

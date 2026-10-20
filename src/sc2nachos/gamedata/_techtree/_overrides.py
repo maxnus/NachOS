@@ -69,6 +69,24 @@ SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
 )
 """The unit type that carries out each ability it is never offered, turning itself into the ability's product."""
 
+PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
+    {
+        # A templar alone is never offered `MORPH_ARCHON` (tool `sweep_tech_tree`), so the tech tree records nothing
+        # making an archon, though two given it in one command, high or dark, merge into one (in game).
+        UnitTypeId.ARCHON: frozenset({UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}),
+    }
+)
+"""The unit types that make each unit type the tech tree records nothing making."""
+
+MORPH_SOURCES_FALLBACK: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
+    {
+        # The tech tree records no source for a sieged liberator, though a liberator ordered to siege at a point is a
+        # sieged liberator by the next observation (in game).
+        UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
+    }
+)
+"""The source type of each unit type morphed from another, where the tech tree records none."""
+
 # Each of these, ordered unqueued while a unit moved, was carried out while the move went on; every other ability a
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
@@ -199,8 +217,9 @@ for each ability it goes out as, or one per unit where that is aimed at the unit
 
 COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {
-        # Interceptors are not a curated unit type, so nothing is derived for them. Each costs 15, charged when the
-        # carrier is ordered to build it.
+        # Nothing makes an interceptor in the tech tree: the table names no ability for it, and the sweep never saw a
+        # carrier offered Build Interceptors (tool `sweep_tech_tree`). Each costs 15, charged when the carrier is
+        # ordered to build it.
         AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
         # The nova's row carries the disruptor's 3 supply; a nova takes none.
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),
@@ -222,9 +241,10 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
 )
 """The cost of ordering an ability, where the tables get it wrong. Every other cost is derived as the product's cost
 less its source type's, which is right for every other morph: an orbital command 150 of its row's 550, with its cancel
-giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke and an interceptor have no row
-to derive from. These are the prices the game has always charged (stated). `tests/test_gamedata.py` checks that every
-entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
+giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke has no row to derive from, and an
+interceptor no ability that makes it. These are the prices the game has always charged (stated).
+`tests/test_gamedata.py` checks that every entry differs from what the tables derive, so an entry goes as soon as a
+patch makes it unnecessary."""
 
 # The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
 # units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool
