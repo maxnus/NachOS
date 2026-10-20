@@ -255,7 +255,7 @@ class _Game:
         self.player = sandbox.player
         self.enemy = 3 - sandbox.player
         self.realtime = realtime
-        self.map = GameMap._of_game(self.client.game_info(), self.client.observation())
+        self.map = GameMap._from_game(self.client.game_info(), self.client.observation())
         raw_data = self.client.game_data()
         self.data = GameData(raw_data)
         self.form_of = unit_aliases(raw_data)

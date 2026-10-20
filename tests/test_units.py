@@ -9,7 +9,6 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.enemy import Enemy
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
@@ -31,7 +30,16 @@ from sc2nachos.units import (
 )
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._tracking._unit_tracker import _MOVABLE_UNIT_TYPE_IDS
-from support import FakeTransport, RealGame, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import (
+    FakeTransport,
+    RealGame,
+    make_enemy,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=[data_pb2.Attribute.Structure]),
@@ -57,7 +65,7 @@ class _Game:
     """A tracker fed one observation at a time, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy())
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
         """Observe `units` at `step` and return the tracked unit for each, in the order given."""
@@ -967,7 +975,7 @@ class TestWhatChanged:
         assert not game.tracker.unit_tracker._unfinished
 
     def test_upgrades_new_to_the_observation_come_in_the_order_of_their_ids(self) -> None:
-        tracker = _Tracker(_TABLES, Enemy())
+        tracker = _Tracker(_TABLES, make_enemy())
         held = [UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.STIMPACK]
         tracker.update(make_observation(0, upgrades=held).observation.raw_data, 0)
         assert tracker.last_changes.own_upgrades_finished == sorted(held)
@@ -1068,11 +1076,11 @@ class TestThroughTheApi:
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         enemy = api.enemy
         assert not enemy.upgrades
-        api.enemy.assume_upgrades(UpgradeId.STIMPACK)
-        api.enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
-        api.enemy.forget_upgrades(UpgradeId.STIMPACK)
-        assert api.enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
-        assert repr(api.enemy) == "Enemy(upgrades={COMBAT_SHIELD})"
+        enemy.assume_upgrades(UpgradeId.STIMPACK)
+        enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
+        enemy.forget_upgrades(UpgradeId.STIMPACK)
+        assert enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
+        assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None)"
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         assert api.enemy is not enemy
         assert not api.enemy.upgrades

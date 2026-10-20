@@ -57,10 +57,11 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.match import Result
+from sc2nachos.match import Race, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
@@ -151,8 +152,10 @@ def make_game_info(
     playable: tuple[int, int, int, int] | None = None,
     heights: common_pb2.ImageData | None = None,
     start_locations: tuple[tuple[float, float], ...] = (),
+    players: Iterable[sc2api_pb2.PlayerInfo] | None = None,
 ) -> sc2api_pb2.ResponseGameInfo:
-    """A map drawn in `rows`, top row first, or eight by eight of open ground.
+    """A map drawn in `rows`, top row first, or eight by eight of open ground, in a game of `players`, or of
+    `PLAYER_ID` playing Terran against a Zerg computer, `ENEMY_ID`.
 
     `#` is open ground, `~` is pathable but not buildable, and `.` is neither. The whole map is playable unless
     `playable` gives a smaller area as `(x0, y0, x1, y1)`, and flat unless `heights` is given.
@@ -170,6 +173,7 @@ def make_game_info(
             playable_area=common_pb2.RectangleI(p0=common_pb2.PointI(x=x0, y=y0), p1=common_pb2.PointI(x=x1, y=y1)),
             start_locations=[common_pb2.Point2D(x=x, y=y) for x, y in start_locations],
         ),
+        player_info=_AGAINST_THE_COMPUTER if players is None else players,
     )
 
 
@@ -233,12 +237,43 @@ def make_unit(
 
 # The player a game `played` builds plays as, and the one observer it has.
 PLAYER_ID = 1
+ENEMY_ID = 2
 OBSERVER_ID = 3
+# This player in a game `played` builds, as against the computer of `make_game_info`.
+PLAYER = Player(id=PLAYER_ID, race=Race.TERRAN, requested_race=Race.TERRAN, name=None)
+_AGAINST_THE_COMPUTER = (
+    sc2api_pb2.PlayerInfo(
+        player_id=PLAYER_ID,
+        type=sc2api_pb2.PlayerType.Participant,
+        race_requested=common_pb2.Race.Terran,
+        race_actual=common_pb2.Race.Terran,
+    ),
+    sc2api_pb2.PlayerInfo(
+        player_id=ENEMY_ID,
+        type=sc2api_pb2.PlayerType.Computer,
+        race_requested=common_pb2.Race.Zerg,
+        difficulty=sc2api_pb2.Difficulty.VeryEasy,
+    ),
+)
+
+
+def make_enemy() -> Enemy:
+    """The Zerg computer of `make_game_info`, as a game reads it."""
+    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG)
+
+
+def require_enemy(enemy: Enemy | None) -> Enemy:
+    """`enemy`, which a game of two players always has."""
+    assert enemy is not None, "the game has no other player"
+    return enemy
+
+
 _WITH_AN_OBSERVER = sc2api_pb2.ResponseGameInfo(
     player_info=[sc2api_pb2.PlayerInfo(player_id=OBSERVER_ID, type=sc2api_pb2.PlayerType.Observer)]
 )
 
-# Every event a turn can report, in the order it reports them.
+# Every event a turn can report, in the order it reports them, but `EnemyRaceKnownEvent`, which comes once a game,
+# first of its turn's events.
 HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitCreatedEvent,
     EnemyUnitFirstSeenEvent,
@@ -309,6 +344,7 @@ def played(
     events: _EventBus,
     *,
     infer: UpgradeInference = UpgradeInference.NONE,
+    player: Player = PLAYER,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
@@ -324,6 +360,7 @@ def played(
             game_map=game_map,
             expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=tracker.game_data,
+            player=player,
             enemy=tracker.enemy,
             enemy_upgrade_inference=infer,
             tracker=tracker,
@@ -339,7 +376,7 @@ def played(
                 order_book=order_book,
             ),
             pathing=Pathing(client),
-            camera=Camera._of_player(observation.observation.raw_data.player),
+            camera=Camera._from_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
             _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
@@ -366,8 +403,10 @@ class RealGame:
         self.client = client
         self.player = player
         self.events = events or _EventBus()
-        self.map = GameMap._of_game(client.game_info(), client.observation())
-        self.enemy = Enemy()
+        info = client.game_info()
+        self.map = GameMap._from_game(info, client.observation())
+        self.own_player = Player._from_game(info, player)
+        self.enemy = Enemy._from_game(info, player)
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()
@@ -376,7 +415,9 @@ class RealGame:
         response = self.client.observation()
         self.step = response.observation.game_loop
         basic = UpgradeInference.BASIC
-        self.game = played(self.game, self.client, self.map, self.tracker, response, self.events, infer=basic)
+        self.game = played(
+            self.game, self.client, self.map, self.tracker, response, self.events, infer=basic, player=self.own_player
+        )
         return self.game.state
 
     def turn(self, steps: int) -> Units[Unit[Any]]:

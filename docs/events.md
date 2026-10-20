@@ -130,6 +130,7 @@ base its events share, for a handler that wants the whole kind.
 | `TurnStartEvent` | `step` | as a turn starts, before anything else of it |
 | `TurnEvent` | `step` | a bot's turn, after what the observation reports |
 | `GameEndEvent` | `step`, `result` | once the game has ended and its last observation has been read |
+| `EnemyRaceKnownEvent` | `step`, `race` | once the enemy's race is known: on the first turn, unless the enemy is a computer that asked for Random, which comes on the turn its first unit is seen; never in a game with no other player |
 
 ### Units coming and changing
 

@@ -32,6 +32,7 @@ from sc2nachos.match import Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
+from sc2nachos.player import Player
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
@@ -43,6 +44,10 @@ _MOST_CHAT_BYTES = 1039
 
 class NotPlayingError(NachOSError, RuntimeError):
     """No game has been joined, so there is nothing to answer from."""
+
+
+class NoEnemyError(NachOSError, RuntimeError):
+    """The game has no other player, as a mini-game has not, so there is no enemy to answer about."""
 
 
 class Api:
@@ -287,14 +292,22 @@ class Api:
         return game.orders._refusals + game.state.action_failures
 
     @property
+    def player(self) -> Player:
+        """This player: its id, its race and the one it asked for, and its name."""
+        return self._current_game().player
+
+    @property
     def enemy(self) -> Enemy:
-        """The other player, and what is known of it.
+        """The other player, and what is known of it. Raises `NoEnemyError` in a game with no other player, such as a
+        mini-game.
 
         `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
         which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,
         `Unit.weapons` and `Unit.speed` among them, counts them.
         """
-        return self._current_game().enemy
+        if (enemy := self._current_game().enemy) is None:
+            raise NoEnemyError("this game has no other player")
+        return enemy
 
     @property
     def vision(self) -> Grid[bool]:

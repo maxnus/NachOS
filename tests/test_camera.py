@@ -11,7 +11,6 @@ from s2clientprotocol import data_pb2, error_pb2, sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos.camera import Camera
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -21,7 +20,16 @@ from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, Status, WebSocketTransport
 from sc2nachos.units import Unit
 from sc2nachos.units._tracking import _Tracker
-from support import FakeTransport, RealGame, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import (
+    FakeTransport,
+    RealGame,
+    make_enemy,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -95,13 +103,13 @@ def test_in_the_corpus_the_camera_starts_on_this_players_main(path: Path) -> Non
     recording = Recording(path)
     info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
     first = next(exchange.response.observation for exchange in recording if exchange.response.HasField("observation"))
-    camera = Camera._of_player(first.observation.raw_data.player)
-    assert math.dist(camera.center, GameMap._of_game(info, first).start_location) < 4
+    camera = Camera._from_player(first.observation.raw_data.player)
+    assert math.dist(camera.center, GameMap._from_game(info, first).start_location) < 4
 
 
 class TestSelected:
     def _one(self, **fields: Any) -> Unit[Any]:
-        tracker = _Tracker(make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE)), Enemy())
+        tracker = _Tracker(make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE)), make_enemy())
         tracker.update(make_observation(0, units=[make_unit(1, **fields)]).observation.raw_data, 0)
         return tracker.unit_tracker.present[0]
 

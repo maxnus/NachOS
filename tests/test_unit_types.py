@@ -9,7 +9,6 @@ from typing import Any, assert_type
 import pytest
 from s2clientprotocol import data_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
@@ -18,7 +17,7 @@ from sc2nachos.match import Race
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
 from sc2nachos.units._tracking import _Tracker
-from support import load_tool, make_observation, make_tables, make_unit
+from support import load_tool, make_enemy, make_observation, make_tables, make_unit
 
 
 def _generator() -> Any:
@@ -226,7 +225,7 @@ _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
 def _unit(unit_type: int) -> Unit[Any]:
-    tracker = _Tracker(_TABLES, Enemy())
+    tracker = _Tracker(_TABLES, make_enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
     return tracker.unit_tracker.present[0]
 

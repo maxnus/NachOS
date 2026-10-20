@@ -111,11 +111,11 @@ class TestReadingAMap:
             make_unit(2, UnitTypeId.NEXUS, at=(3.5, 4.5)),
         )
         observation = make_observation(0, units=(make_unit(3, UnitTypeId.PROBE), *townhalls))
-        assert GameMap._of_game(make_game_info(), observation).start_location == Point((3.5, 4.5))
+        assert GameMap._from_game(make_game_info(), observation).start_location == Point((3.5, 4.5))
 
     def test_a_game_that_gives_this_player_no_townhall_starts_it_in_the_middle(self) -> None:
         info = make_game_info(*["#" * 8] * 6, playable=(1, 2, 7, 5))
-        assert GameMap._of_game(info, make_observation(0)).start_location == Point((4.0, 3.5))
+        assert GameMap._from_game(info, make_observation(0)).start_location == Point((4.0, 3.5))
 
     def test_the_grids_refuse_writes_but_a_copy_does_not(self) -> None:
         game_map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
@@ -214,7 +214,7 @@ def _own_townhall(observation: sc2api_pb2.ResponseObservation) -> Point:
 class TestARecordedMap:
     def test_every_unit_on_flat_ground_stands_at_its_height(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         for unit in observation.observation.raw_data.units:
             tile = Tile(int(unit.pos.x), int(unit.pos.y))
             around = {game_map.height[Tile(tile.x + dx, tile.y + dy)] for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
@@ -227,7 +227,7 @@ class TestARecordedMap:
 
     def test_nothing_open_is_left_off_the_playable_area(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         for grid, image in (
             (game_map.pathing, info.start_raw.pathing_grid),
             (game_map.placement, info.start_raw.placement_grid),
@@ -236,21 +236,21 @@ class TestARecordedMap:
 
     def test_this_players_own_townhall_blocks_pathing_but_not_placement(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         townhall = _own_townhall(observation)
         assert not game_map.pathing[townhall]
         assert game_map.placement[townhall]
 
     def test_this_player_starts_at_its_own_townhall_which_no_opponent_start_location_is(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         assert game_map.opponent_start_locations
         assert game_map.start_location == _own_townhall(observation)
         assert game_map.start_location not in game_map.opponent_start_locations
 
     def test_a_ramp_is_walkable_ground_no_structure_can_stand_on(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         assert game_map.ramps
         for ramp in game_map.ramps:
             for tile in ramp.tiles:
@@ -259,7 +259,7 @@ class TestARecordedMap:
 
     def test_a_ramp_climbs_one_level_and_no_more(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         for ramp in game_map.ramps:
             climb = game_map.height[min(ramp.top)] - game_map.height[min(ramp.bottom)]
             assert 1.0 <= climb < 2.0
@@ -267,13 +267,13 @@ class TestARecordedMap:
     def test_a_ramp_has_two_ends_that_do_not_meet(self, path: Path) -> None:
         """Each end reaches a byte into a ramp that climbs at least half a level, so the ends cannot overlap."""
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         for ramp in game_map.ramps:
             assert ramp.top and ramp.bottom
             assert not set(ramp.top) & set(ramp.bottom)
 
     def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
         info, observation = _start(path)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         townhall = _own_townhall(observation)
         assert min(ramp.top.center.distance_to(townhall) for ramp in game_map.ramps) < 20

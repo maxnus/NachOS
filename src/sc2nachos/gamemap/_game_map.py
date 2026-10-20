@@ -63,7 +63,7 @@ class GameMap:
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
 
     @classmethod
-    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
+    def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
         """The map of a game whose first observation is `observation`: this player starts where its townhall stands
         in it, or in the middle of the playable area on a map that gives it none."""
         townhalls = (

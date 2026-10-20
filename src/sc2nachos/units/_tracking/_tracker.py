@@ -35,7 +35,7 @@ class _Tracker:
         "_upgrade_tracker",
     )
 
-    def __init__(self, game_data: GameData, enemy: Enemy) -> None:
+    def __init__(self, game_data: GameData, enemy: Enemy | None) -> None:
         self._game_data = game_data
         self._enemy = enemy
         # What the last update found changed, numbered by update.
@@ -52,8 +52,8 @@ class _Tracker:
         return self._game_data
 
     @property
-    def enemy(self) -> Enemy:
-        """The other player, and what is known of it."""
+    def enemy(self) -> Enemy | None:
+        """The other player, and what is known of it, or `None` in a game with no other player."""
         return self._enemy
 
     @property

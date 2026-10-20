@@ -45,7 +45,6 @@ from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import data_pb2, error_pb2, raw_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import Attribute, GameData, TargetType
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
@@ -371,7 +370,7 @@ def _measuring_ground(game: Sandbox) -> _MeasuringGround:
     game.cheat(Cheat.SHOW_MAP, Cheat.FREE, Cheat.FAST_BUILD)
     game.client.step(4)
     game.remove(unit.tag for unit in game.units() if unit.unit_type in _RESOURCES | {UnitTypeId.SCV})
-    return _MeasuringGround(game, GameMap._of_game(game.client.game_info(), game.client.observation()))
+    return _MeasuringGround(game, GameMap._from_game(game.client.game_info(), game.client.observation()))
 
 
 def measure_footprints(installation: Installation) -> FootprintFindings:
@@ -433,7 +432,7 @@ def _wait_for_creep(game: Sandbox, around: Point) -> None:
     """Step the game until creep covers the 5x5 tiles around `around`, as a townhall's ground."""
     for _ in range(_CREEP_COVERING_STEPS // _SETTLING_STEPS):
         observation = game.client.observation()
-        game_map = GameMap._of_game(game.client.game_info(), observation)
+        game_map = GameMap._from_game(game.client.game_info(), observation)
         creep = image_tiles(observation.observation.raw_data.map_state.creep, game_map.playable_area)
         x, y = game_map.placement.index_of(around)
         if creep[x - 2 : x + 3, y - 2 : y + 3].all():
@@ -540,7 +539,7 @@ def _check_ground_on(
         game.cheat(Cheat.SHOW_MAP)
         game.client.step(4)
         observation = game.client.observation()
-        game_map = GameMap._of_game(game.client.game_info(), observation)
+        game_map = GameMap._from_game(game.client.game_info(), observation)
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         blockers = [unit for unit in raw.units if unit.owner == NEUTRAL_REPORTED and unit.unit_type not in _RESOURCES]
         for blocker in blockers:
@@ -638,8 +637,8 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
             and structure not in data.units[unit_type].attributes
         )
         observation = game.client.observation()
-        game_map = GameMap._of_game(game.client.game_info(), observation)
-        tracker = _Tracker(data, Enemy())
+        game_map = GameMap._from_game(game.client.game_info(), observation)
+        tracker = _Tracker(data, None)
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)

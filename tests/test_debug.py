@@ -46,7 +46,7 @@ class _ScriptedGame:
     ) -> None:
         self.observations = deque(observations)
         self.requests: list[sc2api_pb2.Request] = []
-        self.info = make_game_info()
+        self.info = make_game_info(players=())
         for player in range(1, players + 1):
             self.info.player_info.add(player_id=player, type=sc2api_pb2.PlayerType.Participant)
         for observer in range(players + 1, players + observers + 1):

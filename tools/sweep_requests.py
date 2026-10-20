@@ -1,5 +1,6 @@
 """Find what the game does with the requests a bot makes besides its orders: debug commands from a client that did not
-create the game, the cheats that hand something out, chat, leaving, the pathing query, and the tables it answers.
+create the game, the cheats that hand something out, chat, leaving, the pathing query, the tables it answers, and
+what it says of each player.
 
 Needs StarCraft II installed. Each sweep plays its own games on the sandbox's map:
 
@@ -34,6 +35,9 @@ Needs StarCraft II installed. Each sweep plays its own games on the sandbox's ma
 - `tables` asks for the tables in a game against the computer, and in a game of two of each player, and records each
   row that differs from the first corpus game's, with the fields that differ, and how many rows differ only in which
   empty fields they set.
+- `players` plays a game of two players, joined as "Alpha", playing Terran, and "Beta", asking for Random, and a game
+  against a computer asking for Random, joined as "Alpha". It records the player list each client is answered: each
+  player's id, type, races requested and actual, and name.
 
 Run it as::
 
@@ -51,12 +55,14 @@ import statistics
 import sys
 import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, closing
 from pathlib import Path
 from typing import Any
 
 import numpy
 import scipy.ndimage
-from _sandbox import Cheat, OpenGround, Rivals, Sandbox, playing, playing_rivals
+from _sandbox import MAP, Cheat, OpenGround, Rivals, Sandbox, playing, playing_rivals
 from generate_unit_types import corpus_answer
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
@@ -65,9 +71,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUpgradeId
-from sc2nachos.launch import Installation
-from sc2nachos.match import Race
-from sc2nachos.protocol import Client, ConnectionClosedError
+from sc2nachos.launch import GameProcess, Installation, MapFile, free_port
+from sc2nachos.match import Computer, Difficulty, Participant, Race
+from sc2nachos.protocol import Client, ConnectionClosedError, GamePorts, PortPair, WebSocketTransport
 
 _OWN = raw_pb2.Alliance.Self
 _BROADCAST = sc2api_pb2.ActionChat.Channel.Broadcast
@@ -508,7 +514,7 @@ def pathing(installation: Installation) -> dict[str, Any]:
     findings: dict[str, Any] = {}
     with playing(Race.TERRAN, installation) as sandbox:
         client = sandbox.client
-        game_map = GameMap._of_game(client.game_info(), client.observation())
+        game_map = GameMap._from_game(client.game_info(), client.observation())
         grid = game_map.pathing
         start = game_map.start_location
         origin = (grid.origin.x, grid.origin.y)
@@ -703,6 +709,53 @@ def tables(installation: Installation) -> dict[str, Any]:
     return findings
 
 
+def _player_list(client: Client) -> list[dict[str, Any]]:
+    """The player list `client`'s game answers it with."""
+    return [
+        {
+            "id": entry.player_id,
+            "type": sc2api_pb2.PlayerType.Name(entry.type),
+            "race requested": Race(entry.race_requested).name,
+            "race actual": Race(entry.race_actual).name,
+            "name": entry.player_name,
+        }
+        for entry in client.game_info().player_info
+    ]
+
+
+def players(installation: Installation) -> dict[str, Any]:
+    """Record the player list each client is answered in a game of two, joined with names, one asking for Random, and
+    in a game against a computer asking for Random."""
+    game_map = MapFile.find(MAP, installation=installation)
+    joining = (("Alpha", Race.TERRAN), ("Beta", Race.RANDOM))
+    with ExitStack() as stack, ThreadPoolExecutor(2) as pool:
+        games = [stack.enter_context(GameProcess.launch(installation, window=(640, 480))) for _ in joining]
+        clients = [stack.enter_context(closing(Client(WebSocketTransport.connect(game.url)))) for game in games]
+        clients[0].create_game(game_map.path, [Participant(), Participant()])
+        ports = GamePorts(PortPair(free_port(), free_port()), (PortPair(free_port(), free_port()),))
+        # Each join waits for the other, so they are sent together.
+        joins = [
+            pool.submit(client.join_game, race, name=name, ports=ports)
+            for client, (name, race) in zip(clients, joining, strict=True)
+        ]
+        for join in joins:
+            join.result()
+        of_two = {name: _player_list(client) for client, (name, _) in zip(clients, joining, strict=True)}
+        for client in clients:
+            client.leave_game()
+    with (
+        GameProcess.launch(installation, window=(640, 480)) as game,
+        closing(Client(WebSocketTransport.connect(game.url))) as client,
+    ):
+        client.create_game(game_map.path, [Participant(), Computer(Race.RANDOM, Difficulty.VERY_EASY)])
+        client.join_game(Race.TERRAN, name="Alpha")
+        against_the_computer = _player_list(client)
+        client.leave_game()
+    findings = {"in a game of two": of_two, "against the computer": against_the_computer}
+    logger.info("players: {}", findings)
+    return findings
+
+
 _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "debug-joined": debug_joined,
     "cheats-given": cheats_given,
@@ -710,6 +763,7 @@ _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "leave": leave,
     "pathing": pathing,
     "tables": tables,
+    "players": players,
 }
 
 

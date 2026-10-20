@@ -10,7 +10,6 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
@@ -24,7 +23,16 @@ from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import make_bits, make_client, make_game_info, make_observation, make_response, make_tables, make_unit
+from support import (
+    make_bits,
+    make_client,
+    make_enemy,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -82,7 +90,7 @@ class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy())
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
@@ -650,9 +658,9 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(data, Enemy())
+            tracker = _Tracker(data, make_enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker, data, observation
+            return GameMap._from_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")
 
 

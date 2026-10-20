@@ -8,7 +8,6 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import _game
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     AnyAreaEvent,
@@ -79,6 +78,7 @@ from support import (
     PLAYER_ID,
     RealGame,
     make_client,
+    make_enemy,
     make_game_info,
     make_observation,
     make_response,
@@ -114,7 +114,7 @@ class _Game:
 
     def __init__(self, events: _EventBus | None = None) -> None:
         self.events = events or _EventBus()
-        self.tracker = _Tracker(_TABLES, Enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy())
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
         self._client, _ = make_client()
