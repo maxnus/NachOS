@@ -558,6 +558,9 @@ it.
   are stale, since the game's rows now price a reactor 50/50 and a tech lab 50/25, and its `cost_zerg_corrected` is
   wrong for the hatchery, whose row is 325 rather than the drone's 50 and a hatchery's 300. An action several types
   perform costs the same whichever does it, every tech lab 50/25.
+- **A rich gas building takes as long to build as its plain one.** The game's rows give a rich assimilator and a rich
+  extractor no build time, and on the ladder a rich refinery none either, so python-sc2's `cost.time` reads 0 for them;
+  NachOS's `build_steps` reads the 480 steps each takes ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData` holds
   little of them ([game behavior](game-behavior/upgrades-and-tables.md)). python-sc2's dicts come from
   sc2-techtree, which read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which asks the
