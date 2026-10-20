@@ -32,6 +32,9 @@ _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
 # burrows it as itself, reporting its own burrow running. A cyclone locked on is offered `Cancel_LockOn`, which takes
 # back a cast rather than anything a structure is making, and no curated id names it.
 _UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
+# The creation abilities some unit type is offered that the sweep has no trial of, by product: a burrowed creep tumor
+# was refused its spread for its cooldown, and a nydus network found no site for a worm (tool `sweep_tech_tree`).
+_UNTRIED_CREATIONS = frozenset({("CreepTumor", "Build_CreepTumor_Tumor"), ("NydusCanal", "Build_NydusWorm")})
 
 
 def _generator() -> ModuleType:
@@ -482,7 +485,8 @@ class TestWhatTheSweepFound:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A barracks is offered the id its tech lab's row names, not the curated one standing for every tech lab; a
-        liberator the curated id, not the one its sieged form's row names. A custom id is none of the game's."""
+        liberator the curated id, not the one its sieged form's row names (tool `sweep_tech_tree`). A custom id is
+        none of the game's."""
         monkeypatch.syspath_prepend(str(TOOLS))
         offered = load_tool("sweep_tech_tree").creation_abilities_offered(
             load_tool("generate_unit_types").corpus_answer()
@@ -498,6 +502,29 @@ class TestWhatTheSweepFound:
         assert offered[UnitTypeId.SIEGE_TANK_SIEGED] == {RawAbilityId.SiegeMode_SiegeMode}
         assert offered[UnitTypeId.REFINERY_RICH] == {RawAbilityId.TerranBuild_Refinery}
         assert offered[UnitTypeId.MARINE] == {RawAbilityId.BarracksTrain_Marine}
+
+    def test_every_creation_ability_a_unit_type_is_offered_was_tried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A trial a sweep loses drops what the tech tree reads from it, as every trial of a collapsed family was once
+        dropped."""
+        monkeypatch.syspath_prepend(str(TOOLS))
+        abilities_making = load_tool("sweep_tech_tree").creation_abilities_offered(
+            load_tool("generate_unit_types").corpus_answer()
+        )
+        products_and_abilities = {
+            (product, ability) for product, abilities in abilities_making.items() for ability in abilities
+        }
+        products_and_abilities |= {
+            (product, RawAbilityId(ability)) for ability, product in UNNAMED_CREATION_ABILITIES.items()
+        }
+        findings = json.loads(_FINDINGS.read_text(encoding="utf-8"))
+        offered_anywhere = {ability for abilities in findings["offered"].values() for ability in abilities}
+        tried = {(trial["product"], trial["ability"]) for trial in findings["made"]}
+        untried = {
+            (RawUnitTypeId(product).name, ability.name)
+            for product, ability in products_and_abilities
+            if ability.name in offered_anywhere
+        } - tried
+        assert untried == _UNTRIED_CREATIONS
 
 
 def _offered(transport: WebSocketTransport, unit: Unit) -> set[int]:
