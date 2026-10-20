@@ -6,6 +6,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
   with the point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup,
   build 75689).
+- **Why the corpus's tables differ from those a game answers now**, in 38 unit rows
+  ([the tables](upgrades-and-tables.md)). The map files the corpus was recorded on are gone, so whether they made the
+  difference cannot be checked.
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
