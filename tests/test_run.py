@@ -1,14 +1,24 @@
 import json
+from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from loguru import logger
+from s2clientprotocol import sc2api_pb2
 
 import sc2nachos.run
 from sc2nachos import AIBuild, Api, ApiBot, Computer, Difficulty, Race, Result, run_from_command_line, run_local
+from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
+from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
+from sc2nachos.match import Participant
+from sc2nachos.protocol import Client, WebSocketTransport
+
+# A map from the current AIE ladder pool, for the test games.
+_LADDER_MAP = "PylonAIE_v4"
 
 
 @pytest.fixture
@@ -27,6 +37,103 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
     monkeypatch.setattr(Api, "time", property(lambda self: 754.3841))
     return calls
+
+
+@pytest.fixture
+def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """What `run_ladder` was asked to play, with no game joined."""
+    calls: dict[str, Any] = {}
+
+    def run_ladder(bot: ApiBot, **kwargs: Any) -> Result:
+        calls.update(bot=bot, **kwargs)
+        return Result.DEFEAT
+
+    monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
+    monkeypatch.setattr(Api, "time", property(lambda self: 61.25))
+    monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
+    return calls
+
+
+@pytest.fixture
+def logged() -> Iterator[list[str]]:
+    """What is logged while the test runs, from info up, each message without its line end."""
+    messages: list[str] = []
+    sink = logger.add(lambda message: messages.append(message.rstrip("\n")), format="{message}", level="INFO")
+    yield messages
+    logger.remove(sink)
+
+
+class TestALadderGame:
+    def test_it_joins_with_the_ladders_arguments(self, ladder_played: dict[str, Any], tmp_path: Path) -> None:
+        bot = ApiBot(Api(), Race.TERRAN)
+        argv = ["--LadderServer", "10.0.0.7", "--GamePort", "5000", "--StartPort", "5100", "--OpponentId", "5a1f"]
+        replay = tmp_path / "game.SC2Replay"
+        result = run_from_command_line(bot, [*argv, "--RealTime", "--replay-file", str(replay)], steps_per_turn=2)
+        assert result is Result.DEFEAT
+        assert ladder_played == {
+            "bot": bot,
+            "host": "10.0.0.7",
+            "port": 5000,
+            "start_port": 5100,
+            "enemy_ladder_id": "5a1f",
+            "steps_per_turn": 2,
+            "realtime": True,
+            "replay_to": replay,
+        }
+
+    def test_against_the_computer_it_has_no_start_port_and_takes_the_computers_arguments_unused(
+        self, ladder_played: dict[str, Any], logged: list[str]
+    ) -> None:
+        computer = ["--ComputerOpponent", "1", "--ComputerRace", "Zerg", "--ComputerDifficulty", "VeryHard"]
+        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--GamePort", "5000", *computer])
+        assert (ladder_played["host"], ladder_played["start_port"]) == ("127.0.0.1", None)
+        assert (ladder_played["enemy_ladder_id"], ladder_played["realtime"]) == (None, False)
+        assert not [message for message in logged if "ignores" in message or "left to the bot" in message]
+
+    def test_a_local_games_argument_is_logged_as_ignored(
+        self, ladder_played: dict[str, Any], logged: list[str]
+    ) -> None:
+        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--GamePort", "5000", "--map", "Pylon", "--time-limit", "0"])
+        assert "A ladder game ignores --map, --time-limit" in logged
+        assert ladder_played
+
+    def test_the_result_file_names_the_map_as_the_game_does(
+        self, ladder_played: dict[str, Any], tmp_path: Path
+    ) -> None:
+        result_file = tmp_path / "result.json"
+        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--GamePort", "5000", "--result-file", str(result_file)])
+        assert json.loads(result_file.read_text(encoding="utf-8")) == {
+            "result": "DEFEAT",
+            "map": "Pylon AIE",
+            "game_time": 61.25,
+        }
+
+
+def test_a_ladder_games_argument_in_a_local_game_is_logged_as_ignored(
+    played: dict[str, Any], logged: list[str]
+) -> None:
+    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--OpponentId", "5a1f", "--RealTime"])
+    assert "A local game ignores --OpponentId, --RealTime" in logged
+    assert played
+
+
+def test_an_argument_nachos_does_not_read_is_left_for_the_bot(played: dict[str, Any], logged: list[str]) -> None:
+    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--build", "bio", "--debug", "--map", "PylonAIE_v4"])
+    assert "Not NachOS's arguments, left to the bot: --build bio --debug" in logged
+    assert played["map_file"].name == "PylonAIE_v4"
+
+
+def test_a_local_game_takes_the_turn_length_realtime_and_the_replay_file(
+    played: dict[str, Any], tmp_path: Path
+) -> None:
+    replay = tmp_path / "game.SC2Replay"
+    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--realtime", "--replay-file", str(replay)], steps_per_turn=4)
+    assert (played["steps_per_turn"], played["realtime"], played["replay_to"]) == (4, True, replay)
+
+
+def test_by_default_a_local_game_is_stepped_and_saves_no_replay(played: dict[str, Any]) -> None:
+    run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+    assert (played["steps_per_turn"], played["realtime"], played["replay_to"]) == (1, False, None)
 
 
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
@@ -100,3 +207,37 @@ def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
         logger.remove(sink)
     assert launched == [base_build]
     assert any("tech tree" in message for message in messages) is warned
+
+
+@pytest.mark.integration
+def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_replay_are_read(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins."""
+    try:
+        game_map = MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    api = Api()
+
+    @api.on(TurnEvent)
+    def give_up(event: TurnEvent) -> None:
+        if event.step >= 16:
+            api.leave_game()
+
+    port = free_port()
+    replay = tmp_path / "game.SC2Replay"
+    with GameProcess.launch(port=port, window=(640, 480)) as game:
+        # The ladder creates the match and disconnects; the client serves one connection at a time.
+        with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
+            ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
+        argv = ["--GamePort", str(port), "--OpponentId", "5a1f", "--replay-file", str(replay)]
+        result = run_from_command_line(ApiBot(api, Race.TERRAN), argv, steps_per_turn=8)
+
+        with closing(WebSocketTransport.connect(game.url)) as transport:
+            request = sc2api_pb2.Request(replay_info=sc2api_pb2.RequestReplayInfo(replay_data=replay.read_bytes()))
+            read_back = transport.request(request).replay_info
+
+    assert result is Result.DEFEAT
+    assert api.enemy.ladder_id == "5a1f"
+    assert not read_back.HasField("error")
+    assert read_back.game_duration_loops >= 8
+    assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]

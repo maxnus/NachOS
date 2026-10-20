@@ -906,6 +906,22 @@ class TestAgainstTheRealGame:
 
 
 @pytest.mark.integration
+def test_in_a_real_game_called_a_tie_at_its_time_limit_the_replay_is_saved(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays ten seconds of a game."""
+    try:
+        MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    replay = tmp_path / "game.SC2Replay"
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(
+        _LADDER_MAP, ApiBot(Api(), Race.TERRAN), opponent, steps_per_turn=16, time_limit=10, replay_to=replay
+    )
+    assert result is Result.TIE
+    assert replay.read_bytes()[:4] == b"MPQ\x1b"
+
+
+@pytest.mark.integration
 def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
     """Run with `pytest -m integration`. Plays a second of a game."""
     try:

@@ -2,8 +2,8 @@
 
 import json
 import random
-from argparse import ArgumentParser
-from collections.abc import Sequence
+from argparse import ArgumentParser, Namespace
+from collections.abc import Iterable, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -110,18 +110,84 @@ def run_ladder(
             client.leave_game()
 
 
-def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Result:
-    """Play one game against the built-in computer as the command line asks, and write how it went.
+def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, steps_per_turn: int = 1) -> Result:
+    """Play one game as the command line asks, a ladder's or a local one against the built-in computer, a turn every
+    `steps_per_turn` steps, and write how it went.
 
-    This is the game script NachOS's match workflow runs, `.github/workflows/match.yml`: the arguments are the ones it
-    passes, `--opponent-race`, `--opponent-difficulty` and `--opponent-build` as member names of `Race`, `Difficulty`
-    and `AIBuild` (`ZERG`, `VERY_EASY`, `RANDOM`), `--map`, `--time-limit` in game seconds, and `--result-file`, which
-    gets the JSON the workflow reads. Without `--map`, a map is picked at random from the installation's. `argv`
-    defaults to `sys.argv[1:]`.
+    With `--GamePort` it joins the game a ladder has set up, as `run_ladder` does, and reads the ladder's arguments:
+    `--LadderServer` (127.0.0.1 if not given), `--GamePort`, `--StartPort`, `--OpponentId`, which `Enemy.ladder_id`
+    reads, and `--RealTime`. It takes the ladder's `--ComputerOpponent`, `--ComputerRace` and `--ComputerDifficulty`
+    and uses none of them, since the ladder has created that game.
+
+    Without it, it plays a local game against the built-in computer, as NachOS's match workflow,
+    `.github/workflows/match.yml`, asks: `--opponent-race`, `--opponent-difficulty` and `--opponent-build` as member
+    names of `Race`, `Difficulty` and `AIBuild` (`ZERG`, `VERY_EASY`, `RANDOM`; by default `RANDOM`, `VERY_HARD` and
+    `RANDOM`), `--map`, by default one at random from the installation's, `--time-limit` in game seconds, and
+    `--realtime`.
+
+    In either, `--replay-file` is a file to save the game's replay to, and `--result-file` one to write the JSON the
+    match workflow reads: the result, the map, as its file's name in a local game and as its display name in a ladder
+    game, and the game time. An argument of the other kind of game is logged as ignored, and one NachOS does not read
+    is left for the bot, listed in the log. `argv` defaults to `sys.argv[1:]`.
     """
-    args = _command_line().parse_args(argv)
-    if args.replay_file is not None:
-        logger.warning("No replay is saved: --replay-file is accepted, not yet supported")
+    args, not_read = _command_line().parse_known_args(argv)
+    if not_read:
+        logger.info("Not NachOS's arguments, left to the bot: {}", " ".join(not_read))
+    if args.GamePort is not None:
+        result, map_name = _play_ladder_game(bot, args, steps_per_turn=steps_per_turn)
+    else:
+        result, map_name = _play_local_game(bot, args, steps_per_turn=steps_per_turn)
+    if args.result_file is not None:
+        outcome = {
+            "result": result.name,
+            "map": map_name,
+            "game_time": round(bot.api.time, 3),
+        }
+        args.result_file.write_text(json.dumps(outcome), encoding="utf-8")
+    return result
+
+
+# The arguments that only a ladder game reads and those that only a local game does, each by its name on the parsed
+# arguments and its option.
+_LADDER_GAME_ARGUMENTS = (
+    ("LadderServer", "--LadderServer"),
+    ("StartPort", "--StartPort"),
+    ("OpponentId", "--OpponentId"),
+    ("RealTime", "--RealTime"),
+    ("ComputerOpponent", "--ComputerOpponent"),
+    ("ComputerRace", "--ComputerRace"),
+    ("ComputerDifficulty", "--ComputerDifficulty"),
+)
+_LOCAL_GAME_ARGUMENTS = (
+    ("opponent_race", "--opponent-race"),
+    ("opponent_difficulty", "--opponent-difficulty"),
+    ("opponent_build", "--opponent-build"),
+    ("map", "--map"),
+    ("time_limit", "--time-limit"),
+    ("realtime", "--realtime"),
+)
+
+
+def _play_ladder_game(bot: ApiBot, args: Namespace, *, steps_per_turn: int) -> tuple[Result, str]:
+    """Join the ladder's game as `args` say, and return how it ended and the map's display name."""
+    _log_ignored_arguments(args, _LOCAL_GAME_ARGUMENTS, "a ladder game")
+    result = run_ladder(
+        bot,
+        host=args.LadderServer or "127.0.0.1",
+        port=args.GamePort,
+        start_port=args.StartPort,
+        enemy_ladder_id=args.OpponentId,
+        steps_per_turn=steps_per_turn,
+        realtime=bool(args.RealTime),
+        replay_to=args.replay_file,
+    )
+    return result, bot.api.map.name
+
+
+def _play_local_game(bot: ApiBot, args: Namespace, *, steps_per_turn: int) -> tuple[Result, str]:
+    """Play a local game against the built-in computer as `args` say, and return how it ended and the map file's
+    name."""
+    _log_ignored_arguments(args, _LADDER_GAME_ARGUMENTS, "a local game")
     installation = Installation.find()
     if args.map is not None:
         map_file = MapFile.find(args.map, installation=installation)
@@ -130,31 +196,55 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None) -> Res
         if not names:
             raise MapNotFoundError(f"{installation.maps} holds no maps to pick from")
         map_file = MapFile.find(random.choice(names), installation=installation)
-    opponent = Computer(Race[args.opponent_race], Difficulty[args.opponent_difficulty], AIBuild[args.opponent_build])
-    result = run_local(map_file, bot, opponent, time_limit=args.time_limit, installation=installation)
-    if args.result_file is not None:
-        outcome = {
-            "result": result.name,
-            "map": map_file.name,
-            "game_time": round(bot.api.time, 3),
-        }
-        args.result_file.write_text(json.dumps(outcome), encoding="utf-8")
-    return result
+    opponent = Computer(
+        Race.RANDOM if args.opponent_race is None else Race[args.opponent_race],
+        Difficulty.VERY_HARD if args.opponent_difficulty is None else Difficulty[args.opponent_difficulty],
+        AIBuild.RANDOM if args.opponent_build is None else AIBuild[args.opponent_build],
+    )
+    result = run_local(
+        map_file,
+        bot,
+        opponent,
+        steps_per_turn=steps_per_turn,
+        realtime=bool(args.realtime),
+        time_limit=args.time_limit,
+        replay_to=args.replay_file,
+        installation=installation,
+    )
+    return result, map_file.name
+
+
+def _log_ignored_arguments(args: Namespace, arguments: Iterable[tuple[str, str]], game: str) -> None:
+    """Log a warning naming each of `arguments` given in `args`, which `game` ignores."""
+    if given := [option for name, option in arguments if getattr(args, name) is not None]:
+        logger.warning("{} ignores {}", game.capitalize(), ", ".join(given))
 
 
 def _command_line() -> ArgumentParser:
-    """The arguments `run_from_command_line` reads, with the enums' member names as the choices."""
+    """The arguments `run_from_command_line` reads, with the enums' member names as the choices. Each reads `None`
+    when not given."""
+    # A flag's default too, to tell a flag given to the other kind of game.
     races = [race.name for race in Race if race is not Race.NONE]
-    parser = ArgumentParser(description="Play one game against the built-in computer and write how it went.")
-    parser.add_argument("--opponent-race", choices=races, default=Race.RANDOM.name)
+    parser = ArgumentParser(description="Play one game, a ladder's or one against the built-in computer.")
+    parser.add_argument("--LadderServer", help="the ladder's game client's host (default: 127.0.0.1)")
+    parser.add_argument("--GamePort", type=int, help="the ladder's game client's port; a ladder game when given")
+    parser.add_argument("--StartPort", type=int, help="the first of the ports the ladder handed out")
+    parser.add_argument("--OpponentId", help="the ladder's id for the opponent")
+    parser.add_argument("--RealTime", action="store_true", default=None, help="the ladder plays in real time")
+    for unused in ("--ComputerOpponent", "--ComputerRace", "--ComputerDifficulty"):
+        parser.add_argument(unused, help="passed by the ladder, which creates that game itself; not used")
+    parser.add_argument("--opponent-race", choices=races, help="the computer's race (default: RANDOM)")
     parser.add_argument(
-        "--opponent-difficulty", choices=[d.name for d in Difficulty], default=Difficulty.VERY_HARD.name
+        "--opponent-difficulty", choices=[d.name for d in Difficulty], help="the computer's (default: VERY_HARD)"
     )
-    parser.add_argument("--opponent-build", choices=[b.name for b in AIBuild], default=AIBuild.RANDOM.name)
+    parser.add_argument(
+        "--opponent-build", choices=[b.name for b in AIBuild], help="the computer's build (default: RANDOM)"
+    )
     parser.add_argument("--map", help="a map under the installation's maps folder (default: one at random)")
     parser.add_argument("--time-limit", type=float, help="end the game as a tie after this many game seconds")
+    parser.add_argument("--realtime", action="store_true", default=None, help="play the local game in real time")
     parser.add_argument("--result-file", type=Path, help="where to write the result, as JSON")
-    parser.add_argument("--replay-file", type=Path, help="accepted for the match workflow; no replay is saved yet")
+    parser.add_argument("--replay-file", type=Path, help="where to save the game's replay")
     return parser
 
 
