@@ -37,6 +37,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
   tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
   `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
+- **The tech tree splits into what each data class reads** (the owner, review of #138): `TechTree(base_build,
+  unit_types, abilities, upgrades)`, each sub-record holding the mappings its data class reads, under shorter names
+  (`tech_tree.abilities.products`). Its own pull request, planned with the owner before it is built.
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
   refuses is listed in `api.action_failures` on the next turn, once for each unit it named, under the id ordered,
   ahead of what the game gave up on. The `Order` stays as a handle: its `data`, `withdraw()`, and what `issued_to`
@@ -262,6 +265,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   of the debris alone), without `ROCKS_2X2_NON_CONJOINED`; `InhibitorZone`, `AccelerationZone`, `AnyTerranTownhall`
   and `AnyZergTownhall`. Each group is in every group that holds all its types, so `AnyDrone` is a `Worker` and
   `CollapsibleTower` a `Structure`.
+
+## Next, after #138
+
+- **The tech-tree sweep looks each creation ability up by the game's own id** (the owner, review of #138). Since
+  b069800 folded the per-type ids (2026-10-07), `sweep_makers` looks for units offered the folded id's name, which the
+  game never offers, and skips every trial of a folded id: a run on 2026-10-20 kept 124 of the 239 trials. The fix, a
+  re-sweep that reproduces the committed trials, and the regenerated tree, which records a liberator's siege, so
+  `MORPH_SOURCES_FALLBACK` goes.
+- **The tech tree's sub-records**, as decided above.
 
 ## 1. Waiting until something needs them
 
