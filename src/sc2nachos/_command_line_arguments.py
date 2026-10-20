@@ -1,40 +1,40 @@
-"""The command line `run_from_command_line` reads."""
+"""The arguments `run_from_command_line` reads from the command line."""
 
 from argparse import ArgumentParser
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import final
+from typing import ClassVar, final
 
 from loguru import logger
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 
-# The options only a ladder game reads and those only a local game reads, each by its name on the parsed arguments.
-# `--ComputerRace` and `--ComputerDifficulty` are in neither: a ladder passes them for its game against the computer,
-# and a local game reads them.
-_LADDER_GAME_OPTIONS = (
-    ("LadderServer", "--LadderServer"),
-    ("StartPort", "--StartPort"),
-    ("OpponentId", "--OpponentId"),
-    ("ComputerOpponent", "--ComputerOpponent"),
-)
-_LOCAL_GAME_OPTIONS = (
-    ("ComputerBuild", "--ComputerBuild"),
-    ("Map", "--Map"),
-    ("TimeLimit", "--TimeLimit"),
-)
-
 
 @final
-class _CommandLine:
+class _CommandLineArguments:
     """The arguments of one run: a ladder's game when they give `--GamePort`, else a local one against the built-in
     computer. None is read from a prefix of its name, and those NachOS does not read are left for the bot."""
 
     __slots__ = ("_arguments", "_not_read", "_parser")
 
+    # The options only a ladder game reads and those only a local game reads, each by its name on the parsed
+    # arguments. `--ComputerRace` and `--ComputerDifficulty` are in neither: a ladder passes them for its game against
+    # the computer, and a local game reads them.
+    _LADDER_GAME_OPTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("LadderServer", "--LadderServer"),
+        ("StartPort", "--StartPort"),
+        ("OpponentId", "--OpponentId"),
+        ("ComputerOpponent", "--ComputerOpponent"),
+    )
+    _LOCAL_GAME_OPTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("ComputerBuild", "--ComputerBuild"),
+        ("Map", "--Map"),
+        ("TimeLimit", "--TimeLimit"),
+    )
+
     def __init__(self, argv: Sequence[str] | None) -> None:
         """Read `argv`, by default `sys.argv[1:]`."""
-        self._parser = _argument_parser()
+        self._parser = self._argument_parser()
         self._arguments, self._not_read = self._parser.parse_known_args(argv)
 
     @property
@@ -48,9 +48,11 @@ class _CommandLine:
         return self._arguments.LadderServer
 
     @property
-    def game_port(self) -> int | None:
-        """The port of the ladder's game client."""
-        return self._arguments.GamePort
+    def game_port(self) -> int:
+        """The port of the ladder's game client. Raises `ValueError` outside a ladder game."""
+        if (port := self._arguments.GamePort) is None:
+            raise ValueError("a local game has no ladder's game port")
+        return port
 
     @property
     def start_port(self) -> int | None:
@@ -113,9 +115,9 @@ class _CommandLine:
         if self._not_read:
             logger.info("Not NachOS's arguments, left to the bot: {}", " ".join(self._not_read))
         if self.is_ladder_game:
-            self._warn_of_ignored(_LOCAL_GAME_OPTIONS, "a ladder game")
+            self._warn_of_ignored(self._LOCAL_GAME_OPTIONS, "a ladder game")
         else:
-            self._warn_of_ignored(_LADDER_GAME_OPTIONS, "a local game")
+            self._warn_of_ignored(self._LADDER_GAME_OPTIONS, "a local game")
 
     def _named_member[M](self, option: str, name: str, members_by_name: Mapping[str, M]) -> M:
         """The member `name` names among `members_by_name`, or the run stopped, naming `option` and the names it
@@ -133,26 +135,28 @@ class _CommandLine:
         ]:
             logger.warning("{} ignores {}", game.capitalize(), ", ".join(given))
 
-
-def _argument_parser() -> ArgumentParser:
-    """The parser of the arguments `_CommandLine` reads, none of them from a prefix of its name."""
-    parser = ArgumentParser(
-        description="Play one game, a ladder's or one against the built-in computer.", allow_abbrev=False
-    )
-    parser.add_argument("--LadderServer", default="127.0.0.1", help="the ladder's game client's host (%(default)s)")
-    parser.add_argument("--GamePort", type=int, help="the ladder's game client's port; a ladder game when given")
-    parser.add_argument("--StartPort", type=int, help="the first of the ports the ladder handed out")
-    parser.add_argument("--OpponentId", help="the ladder's id for the opponent")
-    parser.add_argument("--ComputerOpponent", help="passed by the ladder for its game against the computer; not used")
-    # Read, in a local game, as member names, and checked there alone: the ladder passes them in a form of its own.
-    parser.add_argument("--ComputerRace", default=Race.RANDOM.name, help="the computer's race (%(default)s)")
-    parser.add_argument(
-        "--ComputerDifficulty", default=Difficulty.VERY_HARD.name, help="the computer's difficulty (%(default)s)"
-    )
-    parser.add_argument("--ComputerBuild", default=AIBuild.RANDOM.name, help="the computer's build (%(default)s)")
-    parser.add_argument("--Map", help="a map under the installation's maps folder (default: one at random)")
-    parser.add_argument("--TimeLimit", type=float, help="end the game as a tie after this many game seconds")
-    parser.add_argument("--RealTime", action="store_true", help="play the game in real time")
-    parser.add_argument("--ResultFile", type=Path, help="where to write the result, as JSON")
-    parser.add_argument("--ReplayFile", type=Path, help="where to save the game's replay")
-    return parser
+    @staticmethod
+    def _argument_parser() -> ArgumentParser:
+        """The parser of the arguments read, none of them from a prefix of its name."""
+        parser = ArgumentParser(
+            description="Play one game, a ladder's or one against the built-in computer.", allow_abbrev=False
+        )
+        parser.add_argument("--LadderServer", default="127.0.0.1", help="the ladder's game client's host (%(default)s)")
+        parser.add_argument("--GamePort", type=int, help="the ladder's game client's port; a ladder game when given")
+        parser.add_argument("--StartPort", type=int, help="the first of the ports the ladder handed out")
+        parser.add_argument("--OpponentId", help="the ladder's id for the opponent")
+        parser.add_argument(
+            "--ComputerOpponent", help="passed by the ladder for its game against the computer; not used"
+        )
+        # Read, in a local game, as member names, and checked there alone: the ladder passes them in a form of its own.
+        parser.add_argument("--ComputerRace", default=Race.RANDOM.name, help="the computer's race (%(default)s)")
+        parser.add_argument(
+            "--ComputerDifficulty", default=Difficulty.VERY_HARD.name, help="the computer's difficulty (%(default)s)"
+        )
+        parser.add_argument("--ComputerBuild", default=AIBuild.RANDOM.name, help="the computer's build (%(default)s)")
+        parser.add_argument("--Map", help="a map under the installation's maps folder (default: one at random)")
+        parser.add_argument("--TimeLimit", type=float, help="end the game as a tie after this many game seconds")
+        parser.add_argument("--RealTime", action="store_true", help="play the game in real time")
+        parser.add_argument("--ResultFile", type=Path, help="where to write the result, as JSON")
+        parser.add_argument("--ReplayFile", type=Path, help="where to save the game's replay")
+        return parser

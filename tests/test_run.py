@@ -11,6 +11,7 @@ from s2clientprotocol import sc2api_pb2
 
 import sc2nachos.run
 from sc2nachos import AIBuild, Api, ApiBot, Computer, Difficulty, Race, Result, run_from_command_line, run_local
+from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
@@ -108,6 +109,11 @@ class TestALadderGame:
             "map": "Pylon AIE",
             "game_time": 61.25,
         }
+
+
+def test_a_local_game_has_no_ladders_game_port() -> None:
+    with pytest.raises(ValueError, match="a local game has no ladder's game port"):
+        _ = _CommandLineArguments([]).game_port
 
 
 def test_a_ladder_games_argument_in_a_local_game_is_logged_as_ignored(

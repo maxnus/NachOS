@@ -10,7 +10,7 @@ from pathlib import Path
 from loguru import logger
 
 from sc2nachos._checks import check_file_to_write
-from sc2nachos._command_line import _CommandLine
+from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.api import Api
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
@@ -134,47 +134,48 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
     as ignored, and one NachOS does not read is left for the bot, listed in the log. `argv` defaults to
     `sys.argv[1:]`.
     """
-    command_line = _CommandLine(argv)
-    command_line.log_arguments_not_used()
-    if (game_port := command_line.game_port) is not None:
-        result, map_name = _play_ladder_game(bot, command_line, game_port, steps_per_turn=steps_per_turn)
+    command_line_arguments = _CommandLineArguments(argv)
+    command_line_arguments.log_arguments_not_used()
+    if command_line_arguments.is_ladder_game:
+        result, map_name = _play_ladder_game(bot, command_line_arguments, steps_per_turn=steps_per_turn)
     else:
-        result, map_name = _play_local_game(bot, command_line, steps_per_turn=steps_per_turn)
-    if command_line.result_file is not None:
+        result, map_name = _play_local_game(bot, command_line_arguments, steps_per_turn=steps_per_turn)
+    if command_line_arguments.result_file is not None:
         outcome = {
             "result": result.name,
             "map": map_name,
             "game_time": round(bot.api.time, 3),
         }
-        command_line.result_file.write_text(json.dumps(outcome), encoding="utf-8")
+        command_line_arguments.result_file.write_text(json.dumps(outcome), encoding="utf-8")
     return result
 
 
 def _play_ladder_game(
-    bot: ApiBot, command_line: _CommandLine, game_port: int, *, steps_per_turn: int
+    bot: ApiBot, command_line_arguments: _CommandLineArguments, *, steps_per_turn: int
 ) -> tuple[Result, str]:
-    """Join the ladder's game on `game_port` as `command_line` says, and return how it ended and the map's display
-    name."""
+    """Join the ladder's game as `command_line_arguments` say, and return how it ended and the map's display name."""
     result = run_ladder(
         bot,
-        host=command_line.ladder_server,
-        port=game_port,
-        start_port=command_line.start_port,
-        enemy_ladder_id=command_line.opponent_id,
+        host=command_line_arguments.ladder_server,
+        port=command_line_arguments.game_port,
+        start_port=command_line_arguments.start_port,
+        enemy_ladder_id=command_line_arguments.opponent_id,
         steps_per_turn=steps_per_turn,
-        realtime=command_line.realtime,
-        save_replay_to=command_line.replay_file,
+        realtime=command_line_arguments.realtime,
+        save_replay_to=command_line_arguments.replay_file,
     )
     return result, bot.api.map.name
 
 
-def _play_local_game(bot: ApiBot, command_line: _CommandLine, *, steps_per_turn: int) -> tuple[Result, str]:
-    """Play a local game against the built-in computer as `command_line` says, and return how it ended and the map
-    file's name."""
-    opponent = command_line.create_computer_opponent()
+def _play_local_game(
+    bot: ApiBot, command_line_arguments: _CommandLineArguments, *, steps_per_turn: int
+) -> tuple[Result, str]:
+    """Play a local game against the built-in computer as `command_line_arguments` say, and return how it ended and
+    the map file's name."""
+    opponent = command_line_arguments.create_computer_opponent()
     installation = Installation.find()
-    if command_line.map_name is not None:
-        map_file = MapFile.find(command_line.map_name, installation=installation)
+    if command_line_arguments.map_name is not None:
+        map_file = MapFile.find(command_line_arguments.map_name, installation=installation)
     else:
         names = MapFile._names(installation)
         if not names:
@@ -185,9 +186,9 @@ def _play_local_game(bot: ApiBot, command_line: _CommandLine, *, steps_per_turn:
         bot,
         opponent,
         steps_per_turn=steps_per_turn,
-        realtime=command_line.realtime,
-        time_limit=command_line.time_limit,
-        save_replay_to=command_line.replay_file,
+        realtime=command_line_arguments.realtime,
+        time_limit=command_line_arguments.time_limit,
+        save_replay_to=command_line_arguments.replay_file,
         installation=installation,
     )
     return result, map_file.name
