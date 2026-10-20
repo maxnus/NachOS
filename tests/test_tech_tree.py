@@ -12,8 +12,8 @@ from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
 from sc2nachos.gamedata._techtree import (
-    MAKERS_NEVER_SWEPT,
-    MORPH_SOURCES_NEVER_SWEPT,
+    MORPH_SOURCES_FALLBACK,
+    PRODUCERS_FALLBACK,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
 )
@@ -406,12 +406,12 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.REFINERY_RICH].producers == {UnitTypeId.SCV}
         assert units[UnitTypeId.LARVA].producers == frozenset()
 
-    def test_a_maker_or_a_source_written_by_hand_is_one_the_sweep_never_saw(self) -> None:
-        """Once a sweep sees it, the entry can go."""
+    def test_a_fallback_is_only_for_what_the_tech_tree_records_nothing_of(self) -> None:
+        """Once the tech tree records it, the entry can go."""
         sweep = _sweep()
-        for unit_type, producers in MAKERS_NEVER_SWEPT.items():
-            assert not sweep.unit_type_producers.get(unit_type, frozenset()) & producers, unit_type.name
-        for unit_type in MORPH_SOURCES_NEVER_SWEPT:
+        for unit_type in PRODUCERS_FALLBACK:
+            assert unit_type not in sweep.unit_type_producers, unit_type.name
+        for unit_type in MORPH_SOURCES_FALLBACK:
             assert unit_type not in sweep.morph_sources, unit_type.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:

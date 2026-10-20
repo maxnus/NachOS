@@ -13,7 +13,7 @@ from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
-from sc2nachos.gamedata._techtree._overrides import MAKERS_NEVER_SWEPT, MORPH_SOURCES_NEVER_SWEPT
+from sc2nachos.gamedata._techtree._overrides import MORPH_SOURCES_FALLBACK, PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
@@ -202,9 +202,8 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree.creation_abilities.get(unit_type),
-            producers=tech_tree.unit_type_producers.get(unit_type, frozenset())
-            | MAKERS_NEVER_SWEPT.get(unit_type, frozenset()),
-            morphed_from=tech_tree.morph_sources.get(unit_type) or MORPH_SOURCES_NEVER_SWEPT.get(unit_type),
+            producers=tech_tree.unit_type_producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            morphed_from=tech_tree.morph_sources.get(unit_type) or MORPH_SOURCES_FALLBACK.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),

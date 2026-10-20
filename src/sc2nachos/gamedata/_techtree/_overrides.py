@@ -69,23 +69,23 @@ SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
 )
 """The unit type that carries out each ability it is never offered, turning itself into the ability's product."""
 
-MAKERS_NEVER_SWEPT: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
+PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
-        # The sweep never saw a templar offered `MORPH_ARCHON` (tool `sweep_tech_tree`), though two given it in one
-        # command, high or dark, merge into an archon (in game).
+        # A templar alone is never offered `MORPH_ARCHON` (tool `sweep_tech_tree`), so the tech tree records nothing
+        # making an archon, though two given it in one command, high or dark, merge into one (in game).
         UnitTypeId.ARCHON: frozenset({UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}),
     }
 )
-"""The unit types that make each unit type, where the sweep never saw them make it."""
+"""The unit types that make each unit type the tech tree records nothing making."""
 
-MORPH_SOURCES_NEVER_SWEPT: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
+MORPH_SOURCES_FALLBACK: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
     {
-        # The sweep holds no trial of a liberator's siege, though a liberator ordered to siege at a point is a sieged
-        # liberator by the next observation (in game).
+        # The tech tree records no source for a sieged liberator, though a liberator ordered to siege at a point is a
+        # sieged liberator by the next observation (in game).
         UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
     }
 )
-"""The source type of each unit type morphed from another, where the sweep never saw it morph."""
+"""The source type of each unit type morphed from another, where the tech tree records none."""
 
 # Each of these, ordered unqueued while a unit moved, was carried out while the move went on; every other ability a
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
