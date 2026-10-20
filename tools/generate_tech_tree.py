@@ -67,9 +67,9 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     Raises `ValueError` where a requirement is something no curated id names; where a required add-on was not seen to
     count only on the unit's own structure; where a unit type is offered an ability whose requirements were never read,
     which would otherwise read as needing nothing; where the sweep did not see an ability in
-    `gamedata/_techtree/_overrides.py` make its unit type; or where that file lists more than one ability for a type the
-    table names no working ability for. Also raises for whatever `read_upgrades` raises for, and where the two sweeps
-    played different builds.
+    `gamedata/_techtree/_overrides.py` make its unit type; where that file lists more than one ability for a type the
+    table names no working ability for; or where two abilities research one upgrade. Also raises for whatever
+    `read_upgrades` raises for, and where the two sweeps played different builds.
     """
     if findings["base_build"] != upgrade_findings["base_build"]:
         raise ValueError(
@@ -366,13 +366,14 @@ def _performers_by_ability(
 def _research_abilities(
     ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]],
 ) -> dict[UpgradeId, AbilityId]:
-    """The ability that researches each upgrade, inverted from what each ability makes."""
-    return {
-        product: ability
-        for ability, products_by_maker in ability_products.items()
-        for product in products_by_maker.values()
-        if isinstance(product, UpgradeId)
-    }
+    """The ability that researches each upgrade, inverted from what each ability makes. Raises `ValueError` where two
+    abilities research one upgrade."""
+    research_abilities: dict[UpgradeId, AbilityId] = {}
+    for ability, products_by_maker in ability_products.items():
+        for product in products_by_maker.values():
+            if isinstance(product, UpgradeId) and research_abilities.setdefault(product, ability) is not ability:
+                raise ValueError(f"{product.name} is researched by two abilities")
+    return research_abilities
 
 
 def _producers_by_unit_type(
@@ -380,17 +381,17 @@ def _producers_by_unit_type(
     creation_abilities: Mapping[UnitTypeId, AbilityId],
 ) -> dict[UnitTypeId, frozenset[UnitTypeId]]:
     """The unit types that make each unit type, inverted from what each ability makes, and for a type whose creation
-    ability names another product, the types that carry that ability out."""
+    ability names another product, the types that carry that ability out. A type nothing makes is left out."""
     producers_by_type: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
     for products_by_maker in ability_products.values():
-        for maker, product in products_by_maker.items():
+        for producer, product in products_by_maker.items():
             if isinstance(product, UnitTypeId):
-                producers_by_type[product].add(maker)
+                producers_by_type[product].add(producer)
     for unit_type, ability in creation_abilities.items():
         products_by_maker = ability_products.get(ability, {})
-        if not any(product is unit_type for product in products_by_maker.values()):
+        if products_by_maker and not any(product is unit_type for product in products_by_maker.values()):
             producers_by_type[unit_type].update(products_by_maker)
-    return {unit_type: frozenset(makers) for unit_type, makers in producers_by_type.items()}
+    return {unit_type: frozenset(type_producers) for unit_type, type_producers in producers_by_type.items()}
 
 
 def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
@@ -442,10 +443,7 @@ def _literal(value: object, indent: int) -> str:
     if is_dataclass(value) and not isinstance(value, type):
         if not isinstance(value, _RECORDS_WRITTEN_A_FIELD_PER_LINE):
             return _inline(value)
-        # Defaults are not given.
-        given = [(field.name, getattr(value, field.name)) for field in fields(value)]
-        given = [(name, member) for name, member in given if member != _default(value, name)]
-        lines = "".join(f"{inner}{name}={_literal(member, indent + 4)},\n" for name, member in given)
+        lines = "".join(f"{inner}{name}={_literal(member, indent + 4)},\n" for name, member in _given_fields(value))
         return f"{type(value).__name__}(\n{lines}{pad})"
     raise TypeError(f"no literal for {value!r}")
 
@@ -478,10 +476,16 @@ def _inline(value: object) -> str:
         entries = sorted(value.items(), key=lambda entry: _order(entry[0]))
         return f"MappingProxyType({{{', '.join(f'{_inline(k)}: {_inline(v)}' for k, v in entries)}}})"
     if is_dataclass(value) and not isinstance(value, type):
-        given = [(field.name, getattr(value, field.name)) for field in fields(value)]
-        given = [(name, member) for name, member in given if member != _default(value, name)]
-        return f"{type(value).__name__}({', '.join(f'{name}={_inline(member)}' for name, member in given)})"
+        given = ", ".join(f"{name}={_inline(member)}" for name, member in _given_fields(value))
+        return f"{type(value).__name__}({given})"
     raise TypeError(f"no literal for {value!r}")
+
+
+def _given_fields(value: object) -> list[tuple[str, object]]:
+    """The fields the dataclass `value` is constructed with, by name: those its constructor takes, but for those at
+    their defaults."""
+    taken = [(field.name, getattr(value, field.name)) for field in fields(value) if field.init]  # type: ignore[arg-type]
+    return [(name, member) for name, member in taken if member != _default(value, name)]
 
 
 def _default(value: object, name: str) -> object:

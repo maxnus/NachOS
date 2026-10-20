@@ -148,6 +148,23 @@ class TestGeneratingTheTables:
         stimpack = tree.abilities.products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
         assert stimpack == {UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK}
         assert UpgradeId.STIMPACK not in tree.unit_types.producers
+        assert tree.upgrades.research_abilities == {UpgradeId.STIMPACK: AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK}
+
+    def test_a_unit_type_whose_creation_ability_nothing_carries_out_has_no_producers(self) -> None:
+        tree = _generator().read(_findings(creation_abilities={"Marine": "BarracksTrain_Marine"}), _no_upgrades())
+        assert UnitTypeId.MARINE not in tree.unit_types.producers
+
+    def test_two_abilities_researching_one_upgrade_are_refused(self) -> None:
+        """The plating's misnamed research stands in beside the research the findings name for it."""
+        findings = _findings(
+            offered={
+                "Armory": ["ArmoryResearch_TerranVehicleAndShipPlatingLevel1"],
+                "BarracksTechLab": ["BarracksTechLabResearch_Stimpack"],
+            },
+            research_abilities={"TerranVehicleAndShipArmorsLevel1": "BarracksTechLabResearch_Stimpack"},
+        )
+        with pytest.raises(ValueError, match="TERRAN_VEHICLE_AND_SHIP_ARMOR_1 is researched by two abilities"):
+            _generator().read(findings, _no_upgrades())
 
     def test_an_action_several_types_perform_makes_what_each_one_s_own_id_makes(self) -> None:
         """A barracks offered its own lift becomes a flying barracks, and a starport a flying starport."""

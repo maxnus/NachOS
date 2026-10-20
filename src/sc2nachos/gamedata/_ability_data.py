@@ -97,14 +97,14 @@ def order_behaviors(
         | KEEPS_ORDERS_BY_TYPE.keys()
     ):
         products_by_maker = tech_tree_abilities.products.get(ability, {})
-        makers = _performers_of(ability, tech_tree_abilities) | products_by_maker.keys()
-        kinds = {
+        carried_out_by = _performers_of(ability, tech_tree_abilities) | products_by_maker.keys()
+        behavior_by_type = {
             unit_type: _behavior(ability, unit_type, products_by_maker.get(unit_type), structures, order_holders)
-            for unit_type in makers | KEEPS_ORDERS_BY_TYPE.get(ability, frozenset())
+            for unit_type in carried_out_by | KEEPS_ORDERS_BY_TYPE.get(ability, frozenset())
         }
-        shared = {kinds[unit_type] for unit_type in makers}
-        own = shared.pop() if len(shared) == 1 else OrderBehavior.REPLACES
-        by_type = {unit_type: kind for unit_type, kind in kinds.items() if kind is not own}
+        shared_behaviors = {behavior_by_type[unit_type] for unit_type in carried_out_by}
+        own = shared_behaviors.pop() if len(shared_behaviors) == 1 else OrderBehavior.REPLACES
+        by_type = {unit_type: kind for unit_type, kind in behavior_by_type.items() if kind is not own}
         if own is not OrderBehavior.REPLACES or by_type:
             behaviors[ability] = OrderBehaviors(own, MappingProxyType(by_type))
     return behaviors
