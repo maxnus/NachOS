@@ -265,6 +265,7 @@ class TestTheFog:
         (remembered,) = game.observe(60, lowered)
         assert remembered is depot
         assert depot.type_id is UnitTypeId.SUPPLY_DEPOT_LOWERED
+        assert game.tracker.last_changes.units_type_changed == [(depot, UnitTypeId.SUPPLY_DEPOT)]
 
     @pytest.mark.parametrize(
         "copy",

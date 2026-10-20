@@ -46,7 +46,8 @@ def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
 
 
 class _SideOrTypeChange(NamedTuple):
-    """What a report changed of a unit's side and type: what each was before, `None` for one that did not change."""
+    """What a report changed of a unit's side and type: what each was before, `None` for one that did not change. Its
+    side changes when it changes to or from this player's, not between the others' alliances."""
 
     previous_alliance: Alliance | None
     previous_type: UnitTypeId | None
