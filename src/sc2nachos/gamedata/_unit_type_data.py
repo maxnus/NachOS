@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
-    from sc2nachos.gamedata._techtree import TechTree
+    from sc2nachos.gamedata._techtree import TechTreeUnitTypes
     from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
 
@@ -185,8 +185,8 @@ class UnitTypeData:
         )
 
     @classmethod
-    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
-        """Read one unit type from the game's table, with what `tech_tree` found about it in game."""
+    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree_unit_types: TechTreeUnitTypes) -> Self:
+        """Read one unit type from the game's table, with what `tech_tree_unit_types` says about it."""
         unit_type = UnitTypeId(unit.unit_id)
         return cls(
             id=unit_type,
@@ -201,16 +201,16 @@ class UnitTypeData:
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
-            creation_ability=tech_tree.creation_abilities.get(unit_type),
-            producers=tech_tree.unit_type_producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
-            morphed_from=tech_tree.morph_sources.get(unit_type),
-            ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),
-            needs_power=unit_type in tech_tree.power_consumers,
+            creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
+            producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
+            ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
+            needs_power=unit_type in tech_tree_unit_types.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
             # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
             tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
-            upgrades=tech_tree.unit_type_upgrades.get(unit_type, MappingProxyType({})),
+            upgrades=tech_tree_unit_types.upgrades.get(unit_type, MappingProxyType({})),
         )

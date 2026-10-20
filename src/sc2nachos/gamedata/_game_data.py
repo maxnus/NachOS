@@ -31,24 +31,24 @@ class GameData:
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
         self._units = _read_table(
-            data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id
+            data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
+        behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
-            data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
+            data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE.upgrades), lambda row: row.id
         )
         # An ability's cost is derived from its product, so the other tables come first.
-        costs = ability_costs(self._units, self._upgrades, TECH_TREE)
-        cancels = cancel_abilities(TECH_TREE, behaviors)
+        costs = ability_costs(self._units, self._upgrades, TECH_TREE.abilities)
+        cancels = cancel_abilities(TECH_TREE.abilities, behaviors)
         rows = _read_table(
             data.abilities,
-            lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
+            lambda ability: AbilityData._from_proto(ability, TECH_TREE.abilities, behaviors, costs, cancels),
             lambda row: row.id,
         )
         game_rows = {row.ability_id: row for row in data.abilities}
         custom = {
-            ability: AbilityData._custom(ability, TECH_TREE, behaviors, costs, cancels)
+            ability: AbilityData._custom(ability, TECH_TREE.abilities, behaviors, costs, cancels)
             for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }

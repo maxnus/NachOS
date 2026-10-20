@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #138. `uv run pytest` passes 2384 tests on branch `claude/sweep-folded-ids`;
+- nachOS `main` has every PR to #139. `uv run pytest` passes 2387 tests on branch `claude/tech-tree-sub-records`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-20, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -37,9 +37,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
   tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
   `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
-- **The tech tree splits into what each data class reads** (the owner, review of #138): `TechTree(base_build,
-  unit_types, abilities, upgrades)`, each sub-record holding the mappings its data class reads, under shorter names
-  (`tech_tree.abilities.products`). Its own pull request, planned with the owner before it is built.
+- **The tech tree splits into what each data class reads** (the owner, review of #138, and 2026-10-20, one question
+  at a time): `TechTree(base_build, unit_types, abilities, upgrades)`, of `TechTreeUnitTypes`, `TechTreeAbilities` and
+  `TechTreeUpgrades`, each holding the mappings its data class reads under shorter names
+  (`tech_tree.abilities.products`), and each data class's reader taking only its own. `tools/generate_tech_tree.py`
+  works out the performers, the producers and the research abilities and writes them into the module, so that the
+  records are plain, over the tree working them out at import.
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
   refuses is listed in `api.action_failures` on the next turn, once for each unit it named, under the id ordered,
   ahead of what the game gave up on. The `Order` stays as a handle: its `data`, `withdraw()`, and what `issued_to`
@@ -268,8 +271,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Next
 
-- **The tech tree's sub-records**, as decided above, once the tech-tree sweep tries every creation ability by the
-  game's own ids (branch `claude/sweep-folded-ids`).
+- M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
 
