@@ -1,7 +1,10 @@
 """Fakes and builders shared by the tests that run the library without a game."""
 
+import importlib.util
 from collections import deque
 from collections.abc import Iterable
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import numpy
@@ -107,6 +110,19 @@ class FakeWebSocket:
 
     def close(self, *, timeout: float | None = 3) -> None:
         self.closed = True
+
+
+TOOLS = Path(__file__).parents[1] / "tools"
+
+
+def load_tool(name: str) -> ModuleType:
+    """The module `tools/<name>.py`, loaded by path since `tools` is not a package. One that imports another tool, as
+    a sweep imports `_sandbox`, needs `TOOLS` on `sys.path`."""
+    spec = importlib.util.spec_from_file_location(name, TOOLS / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def make_response(status: Status | None = Status.IN_GAME, **fields: Any) -> sc2api_pb2.Response:

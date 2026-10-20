@@ -1,6 +1,5 @@
 """The tech tree: what the sweep's findings generate, and what a recorded game's tables then say."""
 
-import importlib.util
 import json
 from contextlib import closing
 from pathlib import Path
@@ -12,7 +11,6 @@ from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import GameData, TechRequirements
 from sc2nachos.gamedata._techtree import (
-    MORPH_SOURCES_FALLBACK,
     PRODUCERS_FALLBACK,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
@@ -21,30 +19,27 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, Recording, WebSocketTransport
+from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.units import Unit
-from support import RealGame
+from support import TOOLS, RealGame, load_tool
 
 _REPO = Path(__file__).parents[1]
-_GENERATOR = _REPO / "tools" / "generate_tech_tree.py"
 _FINDINGS = _REPO / "data" / "tech_tree.json"
 _UPGRADE_FINDINGS = _REPO / "data" / "upgrades.json"
-_CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
 # The abilities unit types are offered that no curated ability names, none of which a player gives. A force field a
 # sentry makes belongs to no player and is offered nothing; only one a debug command makes for a player is offered
 # Shatter. Once Burrow is researched, every zerg unit that burrows is offered the infested terran's burrow, which
 # burrows it as itself, reporting its own burrow running. A cyclone locked on is offered `Cancel_LockOn`, which takes
 # back a cast rather than anything a structure is making, and no curated id names it.
 _UNCURATED_OFFERED = frozenset({"BurrowDown_InfestorTerran", "BurrowUp_InfestorTerran", "Cancel_LockOn", "Shatter"})
+# The creation abilities some unit type is offered that the sweep has no trial of, by product: a burrowed creep tumor
+# was refused its spread for its cooldown, and a nydus network found no site for a worm (tool `sweep_tech_tree`).
+_UNTRIED_CREATIONS = frozenset({("CreepTumor", "Build_CreepTumor_Tumor"), ("NydusCanal", "Build_NydusWorm")})
 
 
 def _generator() -> ModuleType:
-    """The `tools/generate_tech_tree.py` module, loaded by path since `tools` is not a package."""
-    spec = importlib.util.spec_from_file_location("generate_tech_tree", _GENERATOR)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The `tools/generate_tech_tree.py` module."""
+    return load_tool("generate_tech_tree")
 
 
 def _findings(*, unread: bool = False, unconfirmed: bool = False, **parts: object) -> dict[str, object]:
@@ -305,8 +300,7 @@ def _sweep() -> TechTree:
 @pytest.fixture(scope="module")
 def tables() -> GameData:
     """The game data of the first corpus game, which every game on the current ladder shares."""
-    recording = Recording(_CORPUS[0])
-    return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
+    return load_tool("generate_unit_types").corpus_tables()
 
 
 class TestWhatTheTablesSay:
@@ -411,8 +405,6 @@ class TestWhatTheTablesSay:
         sweep = _sweep()
         for unit_type in PRODUCERS_FALLBACK:
             assert unit_type not in sweep.unit_type_producers, unit_type.name
-        for unit_type in MORPH_SOURCES_FALLBACK:
-            assert unit_type not in sweep.morph_sources, unit_type.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, tables: GameData) -> None:
         zealot = tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
@@ -488,6 +480,51 @@ class TestWhatTheSweepFound:
     def test_what_is_offered_that_no_curated_id_names_is_known(self) -> None:
         """Anything else a unit type is offered must be curated, or the tables leave it out."""
         assert _generator().uncurated(_findings_file()) == _UNCURATED_OFFERED
+
+    def test_what_makes_a_unit_type_is_tried_by_every_game_id_a_unit_may_be_offered_it_by(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A barracks is offered the id its tech lab's row names, not the curated one standing for every tech lab; a
+        liberator the curated id, not the one its sieged form's row names (tool `sweep_tech_tree`). A custom id is
+        none of the game's."""
+        monkeypatch.syspath_prepend(str(TOOLS))
+        offered = load_tool("sweep_tech_tree").creation_abilities_offered(
+            load_tool("generate_unit_types").corpus_answer()
+        )
+        assert offered[UnitTypeId.TECH_LAB_BARRACKS] == {
+            RawAbilityId.Build_TechLab_Barracks,
+            RawAbilityId.Build_TechLab,
+        }
+        assert offered[UnitTypeId.LIBERATOR_SIEGED] == {
+            RawAbilityId.LiberatorMorphtoAG_LiberatorAGMode,
+            RawAbilityId.Morph_LiberatorAGMode,
+        }
+        assert offered[UnitTypeId.SIEGE_TANK_SIEGED] == {RawAbilityId.SiegeMode_SiegeMode}
+        assert offered[UnitTypeId.REFINERY_RICH] == {RawAbilityId.TerranBuild_Refinery}
+        assert offered[UnitTypeId.MARINE] == {RawAbilityId.BarracksTrain_Marine}
+
+    def test_every_creation_ability_a_unit_type_is_offered_was_tried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A trial a sweep loses drops what the tech tree reads from it, as every trial of a collapsed family was once
+        dropped."""
+        monkeypatch.syspath_prepend(str(TOOLS))
+        abilities_making = load_tool("sweep_tech_tree").creation_abilities_offered(
+            load_tool("generate_unit_types").corpus_answer()
+        )
+        products_and_abilities = {
+            (product, ability) for product, abilities in abilities_making.items() for ability in abilities
+        }
+        products_and_abilities |= {
+            (product, RawAbilityId(ability)) for ability, product in UNNAMED_CREATION_ABILITIES.items()
+        }
+        findings = json.loads(_FINDINGS.read_text(encoding="utf-8"))
+        offered_anywhere = {ability for abilities in findings["offered"].values() for ability in abilities}
+        tried = {(trial["product"], trial["ability"]) for trial in findings["made"]}
+        untried = {
+            (RawUnitTypeId(product).name, ability.name)
+            for product, ability in products_and_abilities
+            if ability.name in offered_anywhere
+        } - tried
+        assert untried == _UNTRIED_CREATIONS
 
 
 def _offered(transport: WebSocketTransport, unit: Unit) -> set[int]:

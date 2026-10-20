@@ -43,7 +43,7 @@ from pathlib import Path
 
 from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing, unit_aliases
 from loguru import logger
-from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2
+from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetType
 from sc2nachos.gamedata._techtree import UNNAMED_CREATION_ABILITIES
@@ -209,14 +209,7 @@ class TechSweep:
             for entry in raw_data.upgrades
             if entry.ability_id
         }
-        # What makes each unit type: the table's ability where that works, else the unnamed creation ability.
-        table = {entry.unit_id: AbilityId.get(entry.ability_id) for entry in raw_data.units}
-        unnamed = {unit_type: ability for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
-        self._makers = {
-            row.id: ability
-            for row in self._data.units.values()
-            if (ability := table.get(row.id) or unnamed.get(row.id))
-        }
+        self._abilities_making = creation_abilities_offered(raw_data)
         # `free` rather than `all_resources`, which runs dry after a few hundred add-on rebuilds. `god`, since the
         # computer attacks eventually, which the sweep would read as a requirement lost.
         game.cheat(*cheats)
@@ -231,7 +224,10 @@ class TechSweep:
         self._on_the_way: set[Pair] = set()
         # The pylons put up to power a unit, by its tag, for `_clear`.
         self._powering: dict[int, list[int]] = {}
-        self._creation_abilities = {int(ability) for ability in [*self._makers.values(), *UNNAMED_CREATION_ABILITIES]}
+        self._creation_abilities = {
+            int(ability) for abilities in self._abilities_making.values() for ability in abilities
+        }
+        self._creation_abilities |= {int(ability) for ability in UNNAMED_CREATION_ABILITIES}
 
     # --- Reading the game
 
@@ -681,7 +677,7 @@ class TechSweep:
         trial put up is cleared however it ends."""
         before = {unit.tag for unit in self._game.units()}
         try:
-            unit = self._performer(unit_type, AbilityId.read(raw))
+            unit = self._performer(unit_type, raw)
             if unit is None:
                 return set()
             kind = _kind_of_work(raw)
@@ -813,29 +809,35 @@ class TechSweep:
         """What a worker and each structure it can put up are offered while the structure goes up, one structure at a
         time, with `fast_build` off: a structure is offered its cancel only until it is finished."""
         worker = _WORKERS[self._race]
-        makers = {ability: unit_type for unit_type, ability in self._makers.items()}
+        products_by_ability = {
+            ability: unit_type for unit_type, abilities in self._abilities_making.items() for ability in abilities
+        }
         found: set[Pair] = set()
         self._game.cheat(Cheat.FAST_BUILD)
         try:
-            builds = self._builds(worker, makers)
+            builds = self._builds(worker, products_by_ability)
             for build in builds:
-                found |= self._read_going_up(worker, build, makers[build])
+                found |= self._read_going_up(worker, build, products_by_ability[build])
         finally:
             # A cheat is a toggle, so the same command turns it back on.
             self._game.cheat(Cheat.FAST_BUILD)
         return found
 
-    def _builds(self, worker: UnitTypeId, makers: dict[AbilityId, UnitTypeId]) -> list[AbilityId]:
+    def _builds(self, worker: UnitTypeId, products_by_ability: dict[RawAbilityId, UnitTypeId]) -> list[RawAbilityId]:
         """The abilities a new `worker` is offered that put up a structure on a point, in id order."""
         (builder,) = [
             u for u in self._game.spawn([(worker, self._player, self._home + (0, -6))]) if u.unit_type == worker
         ]
-        offered = filter(None, (AbilityId.get(ability) for ability in self._game.offered([builder.tag])[builder.tag]))
-        builds = sorted(a for a in offered if a in makers and self._data.abilities[a].target_type is TargetType.POINT)
+        builds = sorted(
+            RawAbilityId(ability)
+            for ability in self._game.offered([builder.tag])[builder.tag]
+            if ability in products_by_ability
+            and self._data.abilities[AbilityId.read(ability)].target_type is TargetType.POINT
+        )
         self._clear({builder.tag})
         return builds
 
-    def _read_going_up(self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId) -> set[Pair]:
+    def _read_going_up(self, worker: UnitTypeId, build: int, structure: UnitTypeId) -> set[Pair]:
         """What a new `worker` and the `structure` it puts up with `build` are offered while the structure goes up.
 
         The structure goes up at the site nearest home that the game accepts, where a zerg structure finds creep;
@@ -862,7 +864,7 @@ class TechSweep:
         return found or set()
 
     def _try_going_up(
-        self, worker: UnitTypeId, build: AbilityId, structure: UnitTypeId, site: Point | bool
+        self, worker: UnitTypeId, build: int, structure: UnitTypeId, site: Point | bool
     ) -> set[Pair] | None:
         """What a new `worker` beside `site` and the `structure` it puts up there with `build` are offered while the
         structure goes up, or `None` where there is no site or nothing went up, with the reason logged."""
@@ -1003,11 +1005,14 @@ class TechSweep:
         """
         if self._pad == self._sandbox:
             self._pad = self._ground.claim(self._sandbox, _STRUCTURE_ROOM + 2)
-        makers = sorted(
-            {*self._makers.items(), *((product, ability) for ability, product in UNNAMED_CREATION_ABILITIES.items())},
-            key=lambda maker: (maker[0].name, maker[1].name),
+        products_and_abilities = sorted(
+            {
+                *((product, ability) for product, abilities in self._abilities_making.items() for ability in abilities),
+                *((product, RawAbilityId(ability)) for ability, product in UNNAMED_CREATION_ABILITIES.items()),
+            },
+            key=lambda pair: (pair[0].name, pair[1].name),
         )
-        for product, ability in makers:
+        for product, ability in products_and_abilities:
             if self._data.units[product].race is not self._race:
                 continue
             name = _ability_name(ability)
@@ -1022,7 +1027,7 @@ class TechSweep:
         self._seen |= self._on_the_way
         self.read_requirements(self._on_the_way)
 
-    def _make(self, product: UnitTypeId, performer: UnitTypeId, ability: AbilityId) -> str | None:
+    def _make(self, product: UnitTypeId, performer: UnitTypeId, ability: int) -> str | None:
         """What ordering `ability` on a new `performer` did, as `_watch` classes it, or `None` where no performer could
         be made."""
         before = {unit.tag for unit in self._game.units()}
@@ -1043,7 +1048,7 @@ class TechSweep:
                 break
         self._client.step(22 * 2)
 
-    def _performer(self, performer: UnitTypeId, ability: AbilityId) -> raw_pb2.Unit | None:
+    def _performer(self, performer: UnitTypeId, ability: int) -> raw_pb2.Unit | None:
         """A `performer` offered `ability`: a hatchery's larva, or a new unit on the pad kept for these, powered, with
         a tech lab where that is what it lacks."""
         if performer is UnitTypeId.LARVA:
@@ -1063,7 +1068,7 @@ class TechSweep:
         # Room for an add-on on the right, as the structures put up at the start have. A worker starts near home, where
         # what it builds goes: the walk from the pad can outlast the watch.
         spot = self._pad - ((1, 0) if performer in _ADD_ONS else (0, 0))
-        if performer not in self._structure_types and self._data.abilities[ability].needs_placement:
+        if performer not in self._structure_types and self._data.abilities[AbilityId.read(ability)].needs_placement:
             spot = self._home + (0, -6)
         unit = self._put_up(performer, spot)
         if unit is None:
@@ -1144,7 +1149,7 @@ class TechSweep:
                 break
         self._client.step(4)
 
-    def _watch(self, product: UnitTypeId, unit: raw_pb2.Unit, ability: AbilityId) -> str | None:
+    def _watch(self, product: UnitTypeId, unit: raw_pb2.Unit, ability: int) -> str | None:
         """Order `ability` on `unit` and class what it did: `morph` where the unit became a `product` or was used up
         making one, `build` where it made one beside itself, `other` where it became something else, and `None` where
         the order was refused or nothing came of it.
@@ -1191,10 +1196,10 @@ class TechSweep:
         logger.warning("Nothing came of {} on a {}", _ability_name(ability), _unit_name(unit.unit_type))
         return None
 
-    def _target(self, ability: AbilityId, unit: raw_pb2.Unit, product: UnitTypeId) -> Point | int | None | bool:
+    def _target(self, ability: int, unit: raw_pb2.Unit, product: UnitTypeId) -> Point | int | None | bool:
         """A target for `ability` to make `product`, other than a new structure's site, or `False` where none will
         do."""
-        row = self._data.abilities[ability]
+        row = self._data.abilities[AbilityId.read(ability)]
         if row.target_type is TargetType.UNIT:
             return self._geyser(rich=product.name.endswith("_RICH"))
         if row.target_type in (TargetType.NOTHING, TargetType.POINT_OR_NOTHING):
@@ -1228,7 +1233,7 @@ class TechSweep:
             return False
         return min(geysers, key=lambda u: (u.pos.x - self._home.x) ** 2 + (u.pos.y - self._home.y) ** 2).tag
 
-    def _site(self, ability: AbilityId, near: Point | None = None, reach: int = 20) -> Point | bool:
+    def _site(self, ability: int, near: Point | None = None, reach: int = 20) -> Point | bool:
         """The nearest point to `near`, home by default, within `reach` tiles each way where the game would put up what
         `ability` makes, or `False` where it would not."""
         near = near or self._home
@@ -1257,6 +1262,34 @@ _POINT_OR_NOTHING = data_pb2.AbilityData.Target.Value("PointOrNone")
 _AIMED = frozenset({_UNIT, _POINT, data_pb2.AbilityData.Target.Value("PointOrUnit")})
 _RAW_UNITS = {member.name for member in RawUnitTypeId}
 _RAW_ABILITIES = {member.name for member in RawAbilityId}
+
+
+def creation_abilities_offered(tables: sc2api_pb2.ResponseData) -> dict[UnitTypeId, frozenset[RawAbilityId]]:
+    """The game's ids a unit may be offered for the ability that makes each curated unit type: the one its table row
+    names where a curated id stands for it, with that curated id unless it is a custom one; else its unnamed creation
+    ability.
+
+    A barracks is offered `Build_TechLab_Barracks`, which its tech lab's row names, never `Build_TechLab`, the curated
+    id standing for it; a liberator is offered `Morph_LiberatorAGMode`, the curated id, never
+    `LiberatorMorphtoAG_LiberatorAGMode`, which its sieged form's row names (tool `sweep_tech_tree`).
+    """
+    unnamed_by_type = {unit_type: RawAbilityId(ability) for ability, unit_type in UNNAMED_CREATION_ABILITIES.items()}
+    abilities_by_type: dict[UnitTypeId, frozenset[RawAbilityId]] = {}
+    for unit_row in tables.units:
+        try:
+            unit_type = UnitTypeId(unit_row.unit_id)
+        except ValueError:
+            # An uncurated id, which most are.
+            continue
+        if (curated_ability := AbilityId.get(unit_row.ability_id)) is not None:
+            row_ability = RawAbilityId(unit_row.ability_id)
+            game_abilities = (
+                {row_ability} if curated_ability.is_custom else {row_ability, RawAbilityId(curated_ability)}
+            )
+            abilities_by_type[unit_type] = frozenset(game_abilities)
+        elif (unnamed_ability := unnamed_by_type.get(unit_type)) is not None:
+            abilities_by_type[unit_type] = frozenset({unnamed_ability})
+    return abilities_by_type
 
 
 def _unit_name(unit_type: int) -> str:

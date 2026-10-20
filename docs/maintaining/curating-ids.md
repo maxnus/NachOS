@@ -60,7 +60,11 @@ order and runs its own (in game). NachOS curates `Lift` as `LIFT` and reads each
 `AbilityId._REMAPPED_IDS`. Where the game's table gives a `remaps_to`, it says which; collapse a family only where its
 members do one thing for different performers. A leveled research keeps one id per level, since each makes its own
 upgrade, and its general id is not curated: nothing is offered it. The generic cancel's members are one action too:
-a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`).
+a unit is offered one at a time, and `Cancel` does it (tool `sweep_orders`, `cancels-whole`). A tool that looks for a
+curated id among what the game offers looks for each game id the id stands for, and for its own: a barracks is offered
+`Build_TechLab_Barracks`, never `BUILD_TECH_LAB`'s `Build_TechLab`, and a liberator `LIBERATOR_SIEGE_AT`'s own
+`Morph_LiberatorAGMode`, never the `LiberatorMorphtoAG_LiberatorAGMode` its sieged form's row names
+([game behavior](../reference/game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)).
 
 **A unit can report another id than the one it was ordered, which nothing links to it.** That id is not curated but read
 as the one ordered, from the same table, as a sieging liberator's is
