@@ -114,10 +114,10 @@ class UnitType:
     class CollapsibleTowerDebris(Destructible):
         """The debris a collapsible tower leaves where it lands once felled."""
 
-    class InhibitorZone(Structure):
+    class InhibitorZone(AnyType):
         """An inhibitor zone generator, of any size, plain or flying."""
 
-    class AccelerationZone(Structure):
+    class AccelerationZone(AnyType):
         """An acceleration zone generator, of any size, plain or flying."""
 
     class Critter(AnyType):
@@ -702,13 +702,13 @@ class UnitType:
     class InhibitorZoneFlyingSmall(InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_SMALL
 
-    class InhibitorZoneLarge(InhibitorZone):
+    class InhibitorZoneLarge(Structure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_LARGE
 
-    class InhibitorZoneMedium(InhibitorZone):
+    class InhibitorZoneMedium(Structure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_MEDIUM
 
-    class InhibitorZoneSmall(InhibitorZone):
+    class InhibitorZoneSmall(Structure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_SMALL
 
     class Interceptor(Protoss):

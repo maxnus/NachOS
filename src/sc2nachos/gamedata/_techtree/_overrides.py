@@ -44,9 +44,7 @@ UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxy
         AbilityId.SWARM_HOST_SPAWN_LOCUST: UnitTypeId.LOCUST,
         # The table names PurificationNovaMorph (2546), which no disruptor is ever offered.
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: UnitTypeId.PURIFICATION_NOVA,
-        # A structure on a rich geyser is built by the same ability as on any other geyser. The tables name none a
-        # worker is offered: the rich refinery's names nothing or, in the corpus, TerranBuild_Refinery_325, a duplicate
-        # an SCV is never offered.
+        # A structure on a rich geyser is built by the same ability as on any other geyser, and the tables name none.
         AbilityId.SCV_BUILD_REFINERY: UnitTypeId.REFINERY_RICH,
         AbilityId.PROBE_BUILD_ASSIMILATOR: UnitTypeId.ASSIMILATOR_RICH,
         AbilityId.DRONE_MORPH_EXTRACTOR: UnitTypeId.EXTRACTOR_RICH,
