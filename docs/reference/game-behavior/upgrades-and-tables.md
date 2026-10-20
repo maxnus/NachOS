@@ -58,6 +58,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
   and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
   longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
+- Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
+  done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker. The rows give the
+  rich assimilator and the rich extractor no build time, and the rich refinery none in the tables a game answers on
+  the repo's maps (tool `sweep_orders`, `gas-buildings`, build 75689).
 - `unit_alias` names the type a form is of, a siege tank for a sieged tank, but also links types that are not forms
   of each other: an adept's shade names the adept, the queen's creep tumor the creep tumor, four geyser variants the
   plain geyser, the icy and `_EX1` rocks a plain one, and each changeling the plain changeling (corpus).
