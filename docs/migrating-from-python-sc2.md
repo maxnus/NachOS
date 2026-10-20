@@ -93,6 +93,8 @@ run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficult
   `api.action_failures` ([orders](orders.md), [in detail](reference/python-sc2.md#orders)).
 - **Drawing, cheats and debug commands go through `api.debug`**, and chat through `api.chat`
   ([debugging](debugging.md), [in detail](reference/python-sc2.md#debug-chat-the-camera-and-leaving)).
+- **One script plays the ladder's games and local ones**: `run_from_command_line` reads the ladder's arguments, which a
+  python-sc2 bot's `run.py` reads itself ([playing on the ladder](ladder.md)).
 
 ## Where a translation goes wrong
 

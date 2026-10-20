@@ -69,6 +69,7 @@ run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficult
 - [Orders](docs/orders.md): how a bot orders its units, and what it learns about each order.
 - [Debugging](docs/debugging.md): drawing on the game's screen, cheats, and creating units.
 - [Running StarCraft II on GitHub Actions](docs/github-actions.md): playing matches in a bot repository's workflows.
+- [Playing on the ladder](docs/ladder.md): one script for the ladder and for local games, and what the ladder passes.
 - [Migrating from python-sc2](docs/migrating-from-python-sc2.md): the same bot in both, and where a translation goes
   wrong; [python-sc2 and NachOS](docs/reference/python-sc2.md) has every name and every difference.
 - [How the game behaves](docs/reference/game-behavior/README.md): what StarCraft II was seen to do through the API,
