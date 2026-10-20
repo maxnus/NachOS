@@ -205,7 +205,8 @@ class _Game:
         if inference is on."""
         if enemy.race is None:
             self._learn_enemy_race(enemy, first_seen)
-        units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
+        units = self.tracker.unit_tracker.present
+        reader = self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             enemy.assume_upgrades(*reader.read_basic_upgrades(units))
         if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:

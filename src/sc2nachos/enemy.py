@@ -59,7 +59,8 @@ class Enemy:
             return None
         (entry,) = others
         played = (Race.TERRAN, Race.ZERG, Race.PROTOSS)
-        requested, actual = Race(entry.race_requested), Race(entry.race_actual)
+        requested = Race(entry.race_requested)
+        actual = Race(entry.race_actual)
         race = actual if actual in played else requested if requested in played else None
         return cls(player_id=entry.player_id, requested_race=requested, name=entry.player_name or None, race=race)
 
