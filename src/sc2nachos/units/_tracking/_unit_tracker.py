@@ -11,7 +11,7 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._errors import UnitIdsExhaustedError, UnknownTagError
 from sc2nachos.units._own_unit import OwnUnit
-from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit
+from sc2nachos.units._unit import _IDS_PER_ALLIANCE, Unit, _SideOrTypeChange
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
 
@@ -191,11 +191,20 @@ class _UnitTracker:
                     self._ignore_structure_fog_copy(unit._tag, previous, present)
                     self._record_entered_sight(unit, report)
                 unit._tag = tag
-            unit._update(report, step)
+            if (side_or_type_change := unit._update(report, step)) is not None:
+                self._record_side_or_type_change(unit, side_or_type_change)
             present[tag] = unit
         if ignored:
             self._ignored_tags = set(still_ignored)
         return present, new
+
+    def _record_side_or_type_change(self, unit: Unit[Any], side_or_type_change: _SideOrTypeChange) -> None:
+        """Record what a report changed of `unit`'s side and type."""
+        tracker_changes = self._tracker.last_changes
+        if (previous_alliance := side_or_type_change.previous_alliance) is not None:
+            tracker_changes.units_alliance_changed.append((unit, previous_alliance))
+        if (previous_type := side_or_type_change.previous_type) is not None:
+            tracker_changes.units_type_changed.append((unit, previous_type))
 
     def _record_entered_sight(self, unit: Unit[Any], report: raw_pb2.Unit) -> None:
         """Record an enemy unit back in sight after being out of the observation or in the fog."""
@@ -247,7 +256,8 @@ class _UnitTracker:
                     sight = changes.enemy_units_entered_sight if entered else changes.enemy_units_left_sight
                     sight.append(unit)
                 unit._tag = report.tag
-                unit._update(report, step)
+                if (side_or_type_change := unit._update(report, step)) is not None:
+                    self._record_side_or_type_change(unit, side_or_type_change)
             else:
                 unit = self._create_unit(report, step)
                 if ordered and isinstance(unit, OwnUnit):
