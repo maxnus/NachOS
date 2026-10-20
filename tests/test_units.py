@@ -947,6 +947,14 @@ class TestWhatChanged:
         game.observe(32, make_unit(1, alliance=_ENEMY))
         assert game.tracker.last_changes.units_alliance_changed == [(marine, Alliance.OWN)]
 
+    def test_a_report_changing_both_side_and_type_notes_each(self) -> None:
+        game = _Game()
+        (tank,) = game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK, alliance=_ENEMY))
+        game.observe(16, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED, alliance=Alliance.OWN))
+        assert game.tracker.last_changes.units_alliance_changed == [(tank, _ENEMY)]
+        assert game.tracker.last_changes.units_type_changed == [(tank, UnitTypeId.SIEGE_TANK)]
+        assert isinstance(tank, OwnUnit)
+
     def test_a_unit_first_seen_unfinished_finishes_once(self) -> None:
         game = _Game()
         barracks, zealot, marine = game.observe(

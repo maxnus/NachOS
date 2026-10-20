@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from s2clientprotocol import raw_pb2
 
@@ -43,6 +43,13 @@ def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
     copy = raw_pb2.Unit()
     copy.CopyFrom(report)
     return copy
+
+
+class _SideOrTypeChange(NamedTuple):
+    """What a report changed of a unit's side and type: what each was before, `None` for one that did not change."""
+
+    previous_alliance: Alliance | None
+    previous_type: UnitTypeId | None
 
 
 class Unit[K: UnitType.AnyType]:
@@ -132,20 +139,21 @@ class Unit[K: UnitType.AnyType]:
         self._orders = _Snapshot(())
         self._update_unit_type(report.unit_type)
 
-    def _update(self, report: raw_pb2.Unit, step: int) -> None:
-        """Read this unit's report from the observation at `step`, under the tag it had before.
+    def _update(self, report: raw_pb2.Unit, step: int) -> _SideOrTypeChange | None:
+        """Read this unit's report from the observation at `step`, under the tag it had before. Returns what the report
+        changed of its side and type, or `None` if it changed neither.
 
         The tracker sets `_tag` itself when the unit is observed under a new one.
         """
         position = self._position
-        last = self._step
+        last_step = self._step
         if self._stale:
             # Back in the observation. How it moved while away is not known.
             self._stale = False
             self._previous_position = None
-        elif step != last:
+        elif step != last_step:
             self._previous_position = position
-            self._previous_step = last
+            self._previous_step = last_step
         self._step = step
         reported = report.pos
         x, y = reported.x, reported.y
@@ -159,20 +167,22 @@ class Unit[K: UnitType.AnyType]:
         elif self._latest_visible_report is self._latest_report:
             # Just stopped being visible: the last sighting must outlive the observation it came in.
             self._latest_visible_report = _copy(self._latest_report)
-            self._last_seen = last
+            self._last_seen = last_step
+        previous_alliance = None
         if (alliance := report.alliance) != self._raw_alliance:
             if (alliance == _OWN) is not self._own:
-                self._tracker.last_changes.units_alliance_changed.append((self, _ALLIANCES[self._raw_alliance]))
+                previous_alliance = _ALLIANCES[self._raw_alliance]
                 self._update_alliance()
             self._raw_alliance = alliance
         # The game reports orders for this player's units alone.
         if self._own and (orders := self._latest_report.orders):
             self._remember_order_targets(orders)
         self._latest_report = report
-        if report.unit_type != self._raw_type:
-            previous = self._type_id
-            self._update_unit_type(report.unit_type)
-            self._tracker.last_changes.units_type_changed.append((self, previous))
+        if report.unit_type == self._raw_type:
+            return None if previous_alliance is None else _SideOrTypeChange(previous_alliance, None)
+        previous_type = self._type_id
+        self._update_unit_type(report.unit_type)
+        return _SideOrTypeChange(previous_alliance, previous_type)
 
     def _remember_order_targets(self, orders: Iterable[raw_pb2.UnitOrder]) -> None:
         """Keep, by ability, the unit each of `orders`, the latest report's, names under a tag the game has reported."""
