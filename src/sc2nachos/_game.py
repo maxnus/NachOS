@@ -167,7 +167,7 @@ class _Game:
             pathing=Pathing(client),
             camera=Camera._of_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None if enemy is None else enemy.id, step=step),
-            _chat_event_types=_chat_event_types_by_player(info, client.player_id),
+            _chat_event_types=_chat_event_types_by_player(info, player_id),
             _enemy_race_known_at=None if enemy is None or enemy.race is None else step,
             step=step,
         )
@@ -197,10 +197,14 @@ class _Game:
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
         self.orders._observe(step, lost)
-        if (enemy := self.enemy) is None:
-            return
+        if self.enemy is not None:
+            self._read_enemy(self.enemy, changes.enemy_units_first_seen, step)
+
+    def _read_enemy(self, enemy: Enemy, first_seen: Sequence[Unit[Any]], step: int) -> None:
+        """Read into `enemy` its race, if not known yet, from the units `first_seen` at `step`, and the upgrades its
+        units show if inference is on."""
         if enemy.race is None:
-            self._learn_enemy_race(enemy, changes.enemy_units_first_seen, step)
+            self._learn_enemy_race(enemy, first_seen, step)
         units, reader = self.tracker.unit_tracker.present, self.tracker.upgrade_tracker.reader
         if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
             enemy.assume_upgrades(*reader.read_basic_upgrades(units))
@@ -509,13 +513,15 @@ _PLAYED_RACES: Final = frozenset({Race.TERRAN, Race.ZERG, Race.PROTOSS})
 
 
 def _player_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Player:
-    """This player, `player`, as the game `info` describes it."""
-    entry = next(entry for entry in info.player_info if entry.player_id == player)
+    """This player, `player`, as the game `info` describes it. Raises `ValueError` if `info` lists no such player."""
+    entry = next((entry for entry in info.player_info if entry.player_id == player), None)
+    if entry is None:
+        raise ValueError(f"the game lists no player {player}, the one this client joined as")
     return Player(
         id=player,
         race=Race(entry.race_actual),
         requested_race=Race(entry.race_requested),
-        name=entry.player_name or None,
+        name=_name_of(entry),
     )
 
 
@@ -533,7 +539,12 @@ def _enemy_of(info: sc2api_pb2.ResponseGameInfo, player: int) -> Enemy | None:
     requested = Race(entry.race_requested)
     actual = Race(entry.race_actual)
     race = actual if actual in _PLAYED_RACES else requested if requested in _PLAYED_RACES else None
-    return Enemy(player_id=entry.player_id, requested_race=requested, name=entry.player_name or None, race=race)
+    return Enemy(player_id=entry.player_id, requested_race=requested, name=_name_of(entry), race=race)
+
+
+def _name_of(entry: sc2api_pb2.PlayerInfo) -> str | None:
+    """The name the game gives the player `entry` describes, or `None` where it gives none."""
+    return entry.player_name or None
 
 
 def _step(observation: sc2api_pb2.ResponseObservation) -> int:

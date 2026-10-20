@@ -76,6 +76,10 @@ class TestThisPlayer:
         _play(api, [_participant(_ME, Race.RANDOM, actual=Race.PROTOSS), _computer(_OTHER, Race.ZERG)], *_short_game())
         assert api.player == Player(id=_ME, race=Race.PROTOSS, requested_race=Race.RANDOM, name=None)
 
+    def test_a_game_that_lists_no_entry_for_it_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="the game lists no player 1"):
+            _play(Api(), [_computer(_OTHER, Race.ZERG)], *_short_game())
+
     def test_its_name_is_the_one_the_game_gives(self) -> None:
         api = Api()
         me = _participant(_ME, Race.TERRAN, actual=Race.TERRAN, name="Alpha")

@@ -272,7 +272,8 @@ _WITH_AN_OBSERVER = sc2api_pb2.ResponseGameInfo(
     player_info=[sc2api_pb2.PlayerInfo(player_id=OBSERVER_ID, type=sc2api_pb2.PlayerType.Observer)]
 )
 
-# Every event a turn can report, in the order it reports them.
+# Every event a turn can report, in the order it reports them, but `EnemyRaceKnownEvent`, which comes once a game,
+# first of its turn's events.
 HAPPENINGS: tuple[type[Event], ...] = (
     OwnUnitCreatedEvent,
     EnemyUnitFirstSeenEvent,

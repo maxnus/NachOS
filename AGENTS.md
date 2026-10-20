@@ -130,7 +130,7 @@ reviewing code.
 - **Debug cheats change more than their names say**: `god` changes the weapons in `ResponseData`, among other
   things. Read `docs/reference/game-behavior/cheats.md` before turning one on.
 - **`race_actual` in `ResponseGameInfo` is filled for both players of a game of two, but never for a computer**,
-  and no player has a `player_name`.
+  and no game swept so far gave a player a `player_name` (the ladder unverified).
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
 - **An `Order` is what the bot asked for; a `UnitOrder` is what the game reports a unit doing.** Never name one
