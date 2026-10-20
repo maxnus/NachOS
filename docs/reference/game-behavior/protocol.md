@@ -65,6 +65,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `DebugEndGame` ends a game at the next step as any ending does: the observation reads `ended` with the results, a
   defeat for a surrender and a victory for a declared victory, the computer taking the other (tool `sweep_requests`,
   build 75689).
+- A replay can be saved while a game runs and after it has ended: on the client that created the game and on the one
+  that joined it, and in a realtime game. For a game with nothing built it is 8 to 9 KB, an MPQ archive (`MPQ\x1b`),
+  and takes 1.5 to 3 ms. The game reads each one back, with its map, build and players; saved after the end, with the
+  results and the whole game's length. Once the client has left the game, ended or not, the game answers "Not in a
+  game" and gives none (tool `sweep_requests`, `replay`, build 75689).
 
 ## Time and steps
 

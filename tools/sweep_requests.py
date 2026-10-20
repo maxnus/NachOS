@@ -1,6 +1,6 @@
 """Find what the game does with the requests a bot makes besides its orders: debug commands from a client that did not
-create the game, the cheats that hand something out, chat, leaving, the pathing query, the tables it answers, and
-what it says of each player.
+create the game, the cheats that hand something out, chat, leaving, the pathing query, the tables it answers, what it
+says of each player, and saving a replay.
 
 Needs StarCraft II installed. Each sweep plays its own games on the sandbox's map:
 
@@ -38,6 +38,10 @@ Needs StarCraft II installed. Each sweep plays its own games on the sandbox's ma
 - `players` plays a game of two players, joined as "Alpha", playing Terran, and "Beta", asking for Random, and a game
   against a computer asking for Random, joined as "Alpha". It records the player list each client is answered: each
   player's id, type, races requested and actual, and name.
+- `replay` saves a replay in a game against the computer at steps 16, 2240 and 6720, after surrendering it and after
+  leaving it; in another such game after leaving it while it goes on; in a game of two on each client, then on each
+  after the joined one leaves; and in a realtime game two seconds in. For each replay given it records its size, its
+  first bytes, how long the save took, and what the game reads back from it.
 
 Run it as::
 
@@ -756,6 +760,131 @@ def players(installation: Installation) -> dict[str, Any]:
     return findings
 
 
+# --- Saving a replay
+
+_SURRENDER_COMMAND = debug_pb2.DebugCommand(
+    end_game=debug_pb2.DebugEndGame(end_result=debug_pb2.DebugEndGame.Surrender)
+)
+# Steps into a game at which a replay is saved, to see how its size and the time a save takes grow.
+_REPLAY_STEPS = (16, 2240, 6720)
+
+
+def _replay_read_back(transport: WebSocketTransport, data: bytes) -> dict[str, Any]:
+    """What the game reads from the replay `data`: its map, length, build and players, or its refusal."""
+    request = sc2api_pb2.Request(replay_info=sc2api_pb2.RequestReplayInfo(replay_data=data))
+    try:
+        response = transport.request(request)
+    except Exception as error:  # noqa: BLE001 -- the sweep records whatever the game does
+        return {"raised": f"{type(error).__name__}: {error}"}
+    info = response.replay_info
+    if info.HasField("error"):
+        return {"error": sc2api_pb2.ResponseReplayInfo.Error.Name(info.error), "details": info.error_details}
+    return {
+        "map": info.map_name,
+        "steps": info.game_duration_loops,
+        "base build": info.base_build,
+        "players": [
+            {
+                "id": entry.player_info.player_id,
+                "race": Race(entry.player_info.race_actual).name,
+                "result": sc2api_pb2.Result.Name(entry.player_result.result),
+            }
+            for entry in info.player_info
+        ],
+    }
+
+
+def _replay_saved(transport: WebSocketTransport) -> dict[str, Any]:
+    """What the game answers a replay save, and for a replay it gives, its size, its first bytes, how long the save
+    took and what the game reads back from it."""
+    started = time.perf_counter()
+    try:
+        response = transport.request(sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay()))
+    except Exception as error:  # noqa: BLE001 -- the sweep records whatever the game does
+        return {"raised": f"{type(error).__name__}: {error}"}
+    milliseconds = (time.perf_counter() - started) * 1000
+    data = response.save_replay.data
+    finding: dict[str, Any] = {
+        "errors": list(response.error),
+        "answered": response.WhichOneof("response"),
+        "status": sc2api_pb2.Status.Name(response.status) if response.HasField("status") else None,
+        "bytes": len(data),
+        "first bytes": data[:4].hex(),
+        "ms": round(milliseconds, 1),
+    }
+    if data:
+        finding["read back"] = _replay_read_back(transport, data)
+    return finding
+
+
+def _replay_against_the_computer(installation: Installation) -> dict[str, Any]:
+    """Save a replay of a game against the computer at each of the replay steps, then after surrendering it, then
+    after leaving it."""
+    findings: dict[str, Any] = {}
+    with playing(Race.TERRAN, installation) as sandbox:
+        transport = sandbox.transport
+        for step in _REPLAY_STEPS:
+            sandbox.client.step(step - sandbox.client.observation().observation.game_loop)
+            findings[f"in game at step {step}"] = _replay_saved(transport)
+        findings["surrender answered"] = _debug(sandbox, _SURRENDER_COMMAND)
+        findings["after surrendering"] = [_observe(transport.request) for _ in range(2)]
+        for _ in range(8):
+            if transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing())).status == sc2api_pb2.Status.ended:
+                break
+            transport.request(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=2)))
+        findings["after the game ended"] = _replay_saved(transport)
+        findings["leave answered"] = _response(
+            transport.request, sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame())
+        )
+        findings["after leaving the ended game"] = _replay_saved(transport)
+    return findings
+
+
+def _replay_after_leaving(installation: Installation) -> dict[str, Any]:
+    """Leave a game against the computer while it goes on, as `api.leave_game()` does, then save a replay."""
+    with playing(Race.TERRAN, installation) as sandbox:
+        transport = sandbox.transport
+        sandbox.client.step(_SETTLE)
+        left = _response(transport.request, sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame()))
+        return {"leave answered": left, "after leaving": _replay_saved(transport)}
+
+
+def _replay_of_two(installation: Installation) -> dict[str, Any]:
+    """In a game of two, save a replay on the client that joined and on the one that created the game, then have the
+    joined one leave, and save on each again."""
+    findings: dict[str, Any] = {}
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        rivals.step(_SETTLE)
+        sides = {"joined": rivals.enemy, "created": rivals.me}
+        for name, side in sides.items():
+            findings[f"{name}, in game"] = _replay_saved(side.transport)
+        leaving = sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame())
+        findings["joined leaves"] = _response(rivals.enemy.transport.request, leaving)
+        findings["created, after the other left"] = [_observe(rivals.me.transport.request) for _ in range(2)]
+        findings["created, saved after the other left"] = _replay_saved(rivals.me.transport)
+        findings["joined, saved after leaving"] = _replay_saved(rivals.enemy.transport)
+    return findings
+
+
+def _replay_realtime(installation: Installation) -> dict[str, Any]:
+    """Save a replay of a realtime game two seconds in, which the game does not wait for."""
+    with playing(Race.TERRAN, installation, realtime=True) as sandbox:
+        time.sleep(2.0)
+        return {"in a realtime game": _replay_saved(sandbox.transport)}
+
+
+def replay(installation: Installation) -> dict[str, Any]:
+    """What the game answers a replay save in each of the cases the module docstring lists."""
+    findings = {
+        "against the computer": _replay_against_the_computer(installation),
+        "left while it goes on": _replay_after_leaving(installation),
+        "in a game of two": _replay_of_two(installation),
+        "realtime": _replay_realtime(installation),
+    }
+    logger.info("replay: {}", findings)
+    return findings
+
+
 _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "debug-joined": debug_joined,
     "cheats-given": cheats_given,
@@ -764,6 +893,7 @@ _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "pathing": pathing,
     "tables": tables,
     "players": players,
+    "replay": replay,
 }
 
 
