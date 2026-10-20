@@ -56,7 +56,7 @@ def run_local(
     # A participant tells the game a client will fill the slot; who fills it is settled at the join.
     players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
     base_build = installation.build_to_launch()
-    _warn_unless_the_tech_tree_was_swept_on(base_build)
+    _check_tech_tree_build(base_build)
 
     with (
         GameProcess.launch(installation, base_build=base_build, window=window) as game,
@@ -146,8 +146,8 @@ def _command_line() -> ArgumentParser:
     return parser
 
 
-def _warn_unless_the_tech_tree_was_swept_on(base_build: int) -> None:
-    """Log a warning if `base_build` is not the build the tech tree was swept on."""
+def _check_tech_tree_build(base_build: int) -> None:
+    """Log a warning if `base_build` is not the tech tree's."""
     if base_build != TECH_TREE.base_build:
         logger.warning(
             "Playing build {}, but the tech tree is build {}'s: what each ability needs, who is offered it, how it "
