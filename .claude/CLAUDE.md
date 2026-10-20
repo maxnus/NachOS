@@ -2,8 +2,9 @@
 
 @../AGENTS.md
 
-`AGENTS.md` holds the rules for writing code and docs here, for any agent. This file holds how the repo owner works
-with an agent, and `.claude/plans/next-steps.md` holds the work in progress. Read it before starting anything.
+`AGENTS.md` holds the rules for writing code and docs here, for any agent, and points to the code style in
+`docs/maintaining/code-style.md`. This file holds how the repo owner works with an agent, and
+`.claude/plans/next-steps.md` holds the work in progress. Read it before starting anything.
 
 ## Pace
 

@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #142. `uv run pytest` passes 2405 tests on branch `claude/players`;
-  `uv run pytest -m integration` passes 33 against a real game (run 2026-10-20, on that branch).
+- nachOS `main` has every PR to #143. `uv run pytest` passes 2405 tests on branch `claude/players`;
+  `uv run pytest -m integration` passes 34 against a real game (run 2026-10-20, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -273,6 +273,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `EnemyRaceKnownEvent(race)` comes once a game for any race, on the first turn where it is known from the start.
   - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
   - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
+- **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
+  "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
+  to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
+  the rule on which functions have one (the owner, review of #144). A classmethod that turns a value of another kind
+  into an instance is named `from_` that value, and `of` names what selects part of a whole or reads something of a
+  value.
 - **The corpus is played on the repo's maps** (the owner, 2026-10-20): it was recorded again once the old one turned
   out to hold the tables of older map copies, and `tools/sweep_requests.py tables` finds no difference from a game
   today. The zone groups follow the tables: an acceleration zone and a flying inhibitor zone are no structure, the
@@ -288,7 +294,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
-  players (done, this branch), running on the ladder (its command line, a bot's own arguments in
+  players (#143), running on the ladder (its command line, a bot's own arguments in
   `run_from_command_line`, replay saving), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps),
   a playback mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
