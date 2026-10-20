@@ -18,9 +18,10 @@ from sc2nachos.events import (
     TurnEvent,
     TurnStartEvent,
 )
+from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError, free_port
+from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
     Client,
@@ -119,8 +120,11 @@ def _local_transport() -> FakeTransport:
 
 
 def _no_real_game(monkeypatch: pytest.MonkeyPatch, transport: FakeTransport) -> _FakeGame:
-    """Replace the game process and the socket with fakes, so a local game needs neither."""
+    """Replace the installation, the game process and the socket with fakes, so a local game needs none of them. The
+    installation holds the one build the tech tree was swept on."""
     game = _FakeGame()
+    monkeypatch.setattr(Installation, "find", classmethod(lambda cls, **kwargs: Installation(Path("StarCraftII"))))
+    monkeypatch.setattr(Installation, "builds", lambda self: frozenset({TECH_TREE.base_build}))
     monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: game))
     monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
     return game
