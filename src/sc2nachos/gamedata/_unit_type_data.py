@@ -130,7 +130,7 @@ class UnitTypeData:
     """Its attacks."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` if nothing does."""
-    made_by: frozenset[UnitTypeId]
+    producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
     morphed_from: UnitTypeId | None
@@ -202,7 +202,7 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree.creation_abilities.get(unit_type),
-            made_by=tech_tree.unit_type_makers.get(unit_type, frozenset())
+            producers=tech_tree.unit_type_producers.get(unit_type, frozenset())
             | MAKERS_NEVER_SWEPT.get(unit_type, frozenset()),
             morphed_from=tech_tree.morph_sources.get(unit_type) or MORPH_SOURCES_NEVER_SWEPT.get(unit_type),
             ability_requirements=tech_tree.ability_requirements.get(unit_type, MappingProxyType({})),

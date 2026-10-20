@@ -53,7 +53,7 @@ class TechTree:
     """The unit types offered each ability."""
     research_abilities: Mapping[UpgradeId, AbilityId] = field(init=False)
     """The ability that researches each upgrade, inverted from `ability_products`."""
-    unit_type_makers: Mapping[UnitTypeId, frozenset[UnitTypeId]] = field(init=False)
+    unit_type_producers: Mapping[UnitTypeId, frozenset[UnitTypeId]] = field(init=False)
     """The unit types that make each unit type, inverted from `ability_products`, and for a type whose creation ability
     names another product, the types that carry that ability out: an SCV makes a rich refinery, which a refinery's
     build puts up on a rich geyser."""
@@ -66,17 +66,17 @@ class TechTree:
         by_ability = {ability: frozenset(unit_types) for ability, unit_types in performers.items() if unit_types}
         object.__setattr__(self, "ability_performers", MappingProxyType(by_ability))
         researched: dict[UpgradeId, AbilityId] = {}
-        makers_of: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
+        producers_of: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
         for ability, products in self.ability_products.items():
-            for maker, product in products.items():
+            for producer, product in products.items():
                 if isinstance(product, UpgradeId):
                     researched[product] = ability
                 else:
-                    makers_of[product].add(maker)
+                    producers_of[product].add(producer)
         object.__setattr__(self, "research_abilities", MappingProxyType(researched))
         for unit_type, ability in self.creation_abilities.items():
-            products_by_maker = self.ability_products.get(ability, {})
-            if not any(product is unit_type for product in products_by_maker.values()):
-                makers_of[unit_type].update(products_by_maker)
-        makers_by_type = {unit_type: frozenset(unit_types) for unit_type, unit_types in makers_of.items()}
-        object.__setattr__(self, "unit_type_makers", MappingProxyType(makers_by_type))
+            products_by_producer = self.ability_products.get(ability, {})
+            if not any(product is unit_type for product in products_by_producer.values()):
+                producers_of[unit_type].update(products_by_producer)
+        producers_by_type = {unit_type: frozenset(unit_types) for unit_type, unit_types in producers_of.items()}
+        object.__setattr__(self, "unit_type_producers", MappingProxyType(producers_by_type))

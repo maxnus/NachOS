@@ -149,10 +149,10 @@ class TestGeneratingTheTables:
         # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
         assert tree.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
         assert tree.ability_products[AbilityId.BARRACKS_TRAIN_MARINE] == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
-        assert tree.unit_type_makers[UnitTypeId.MARINE] == {UnitTypeId.BARRACKS}
+        assert tree.unit_type_producers[UnitTypeId.MARINE] == {UnitTypeId.BARRACKS}
         stimpack = tree.ability_products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
         assert stimpack == {UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK}
-        assert UpgradeId.STIMPACK not in tree.unit_type_makers
+        assert UpgradeId.STIMPACK not in tree.unit_type_producers
 
     def test_an_action_several_types_perform_makes_what_each_one_s_own_id_makes(self) -> None:
         """A barracks offered its own lift becomes a flying barracks, and a starport a flying starport."""
@@ -395,22 +395,22 @@ class TestWhatTheTablesSay:
 
     def test_a_unit_type_names_every_type_that_makes_one(self, tables: GameData) -> None:
         units = tables.units
-        assert units[UnitTypeId.ZEALOT].made_by == {UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}
-        assert units[UnitTypeId.ARCHON].made_by == {UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}
-        assert units[UnitTypeId.ORBITAL_COMMAND].made_by == {UnitTypeId.COMMAND_CENTER}
-        assert units[UnitTypeId.SCV].made_by == {
+        assert units[UnitTypeId.ZEALOT].producers == {UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}
+        assert units[UnitTypeId.ARCHON].producers == {UnitTypeId.HIGH_TEMPLAR, UnitTypeId.DARK_TEMPLAR}
+        assert units[UnitTypeId.ORBITAL_COMMAND].producers == {UnitTypeId.COMMAND_CENTER}
+        assert units[UnitTypeId.SCV].producers == {
             UnitTypeId.COMMAND_CENTER,
             UnitTypeId.ORBITAL_COMMAND,
             UnitTypeId.PLANETARY_FORTRESS,
         }
-        assert units[UnitTypeId.REFINERY_RICH].made_by == {UnitTypeId.SCV}
-        assert units[UnitTypeId.LARVA].made_by == frozenset()
+        assert units[UnitTypeId.REFINERY_RICH].producers == {UnitTypeId.SCV}
+        assert units[UnitTypeId.LARVA].producers == frozenset()
 
     def test_a_maker_or_a_source_written_by_hand_is_one_the_sweep_never_saw(self) -> None:
         """Once a sweep sees it, the entry can go."""
         sweep = _sweep()
-        for unit_type, makers in MAKERS_NEVER_SWEPT.items():
-            assert not sweep.unit_type_makers.get(unit_type, frozenset()) & makers, unit_type.name
+        for unit_type, producers in MAKERS_NEVER_SWEPT.items():
+            assert not sweep.unit_type_producers.get(unit_type, frozenset()) & producers, unit_type.name
         for unit_type in MORPH_SOURCES_NEVER_SWEPT:
             assert unit_type not in sweep.morph_sources, unit_type.name
 

@@ -33,7 +33,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
 - **A unit type names what makes it, not what the tables alias it to** (#75; the owner, 2026-09-26 and 2026-10-19).
-  `UnitTypeData.made_by` holds every type that makes one, from the tech tree, with the archon's templar written by
+  `UnitTypeData.producers` holds every type that makes one, from the tech tree, with the archon's templar written by
   hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
   tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
   `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
