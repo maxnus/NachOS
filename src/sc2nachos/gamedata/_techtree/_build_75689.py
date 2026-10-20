@@ -2261,6 +2261,7 @@ TECH_TREE: Final = TechTree(
         UnitTypeId.INFESTOR: UnitTypeId.LARVA,
         UnitTypeId.INFESTOR_BURROWED: UnitTypeId.INFESTOR,
         UnitTypeId.LAIR: UnitTypeId.HATCHERY,
+        UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
         UnitTypeId.LURKER: UnitTypeId.HYDRALISK,
         UnitTypeId.LURKER_BURROWED: UnitTypeId.LURKER,
         UnitTypeId.LURKER_DEN: UnitTypeId.DRONE,
