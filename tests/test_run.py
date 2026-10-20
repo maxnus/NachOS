@@ -123,6 +123,14 @@ def test_an_argument_nachos_does_not_read_is_left_for_the_bot(played: dict[str, 
     assert played["map_file"].name == "PylonAIE_v4"
 
 
+def test_a_bots_argument_that_begins_like_one_of_nachoss_is_left_for_the_bot(
+    played: dict[str, Any], logged: list[str]
+) -> None:
+    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--replay", "x.txt", "--real", "--opponent", "abc"])
+    assert "Not NachOS's arguments, left to the bot: --replay x.txt --real --opponent abc" in logged
+    assert (played["replay_to"], played["realtime"], played["opponent"]) == (None, False, Computer())
+
+
 def test_a_local_game_takes_the_turn_length_realtime_and_the_replay_file(
     played: dict[str, Any], tmp_path: Path
 ) -> None:
@@ -225,11 +233,13 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_re
 
     port = free_port()
     replay = tmp_path / "game.SC2Replay"
+    result_file = tmp_path / "result.json"
     with GameProcess.launch(port=port, window=(640, 480)) as game:
         # The ladder creates the match and disconnects; the client serves one connection at a time.
         with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
             ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
         argv = ["--GamePort", str(port), "--OpponentId", "5a1f", "--replay-file", str(replay)]
+        argv += ["--result-file", str(result_file)]
         result = run_from_command_line(ApiBot(api, Race.TERRAN), argv, steps_per_turn=8)
 
         with closing(WebSocketTransport.connect(game.url)) as transport:
@@ -238,6 +248,8 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_re
 
     assert result is Result.DEFEAT
     assert api.enemy.ladder_id == "5a1f"
+    written = json.loads(result_file.read_text(encoding="utf-8"))
+    assert (written["result"], written["map"]) == ("DEFEAT", api.map.name)
     assert not read_back.HasField("error")
     assert read_back.game_duration_loops >= 8
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]

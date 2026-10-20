@@ -117,7 +117,7 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
     With `--GamePort` it joins the game a ladder has set up, as `run_ladder` does, and reads the ladder's arguments:
     `--LadderServer` (127.0.0.1 if not given), `--GamePort`, `--StartPort`, `--OpponentId`, which `Enemy.ladder_id`
     reads, and `--RealTime`. It takes the ladder's `--ComputerOpponent`, `--ComputerRace` and `--ComputerDifficulty`
-    and uses none of them, since the ladder has created that game.
+    and uses none of them.
 
     Without it, it plays a local game against the built-in computer, as NachOS's match workflow,
     `.github/workflows/match.yml`, asks: `--opponent-race`, `--opponent-difficulty` and `--opponent-build` as member
@@ -222,20 +222,25 @@ def _log_ignored_arguments(args: Namespace, arguments: Iterable[tuple[str, str]]
 
 def _command_line() -> ArgumentParser:
     """The arguments `run_from_command_line` reads, with the enums' member names as the choices. Each reads `None`
-    when not given."""
-    # A flag's default too, to tell a flag given to the other kind of game.
+    when not given, and none is read from a prefix of its name."""
     races = [race.name for race in Race if race is not Race.NONE]
-    parser = ArgumentParser(description="Play one game, a ladder's or one against the built-in computer.")
+    parser = ArgumentParser(
+        description="Play one game, a ladder's or one against the built-in computer.", allow_abbrev=False
+    )
     parser.add_argument("--LadderServer", help="the ladder's game client's host (default: 127.0.0.1)")
     parser.add_argument("--GamePort", type=int, help="the ladder's game client's port; a ladder game when given")
     parser.add_argument("--StartPort", type=int, help="the first of the ports the ladder handed out")
     parser.add_argument("--OpponentId", help="the ladder's id for the opponent")
+    # A flag reads `None` rather than `False` when not given, as every argument does, so that one given to the other
+    # kind of game can be logged as ignored.
     parser.add_argument("--RealTime", action="store_true", default=None, help="the ladder plays in real time")
-    for unused in ("--ComputerOpponent", "--ComputerRace", "--ComputerDifficulty"):
-        parser.add_argument(unused, help="passed by the ladder, which creates that game itself; not used")
+    for computer_option in ("--ComputerOpponent", "--ComputerRace", "--ComputerDifficulty"):
+        parser.add_argument(computer_option, help="passed by the ladder, which creates that game itself; not used")
     parser.add_argument("--opponent-race", choices=races, help="the computer's race (default: RANDOM)")
     parser.add_argument(
-        "--opponent-difficulty", choices=[d.name for d in Difficulty], help="the computer's (default: VERY_HARD)"
+        "--opponent-difficulty",
+        choices=[d.name for d in Difficulty],
+        help="the computer's difficulty (default: VERY_HARD)",
     )
     parser.add_argument(
         "--opponent-build", choices=[b.name for b in AIBuild], help="the computer's build (default: RANDOM)"

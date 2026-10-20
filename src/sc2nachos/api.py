@@ -421,7 +421,7 @@ class Api:
             result = self._play_saving_the_replay(
                 game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit, replay_to=replay_path
             )
-            if game.leaving:
+            if game.leaving and client.in_game:
                 logger.info("Leaving the game")
                 client.leave_game()
             events.emit(GameEndEvent(result, step=game.step))

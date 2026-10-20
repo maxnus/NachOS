@@ -270,6 +270,25 @@ class TestPlaying:
         assert api.result is Result.VICTORY
         assert ended == [Result.VICTORY]
 
+    def test_a_bot_that_asks_to_leave_as_the_game_ends_gets_its_result_and_sends_no_leave(self) -> None:
+        over = make_response(Status.ENDED, error=["Game has already ended"])
+        client, transport = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0)),
+            over,
+            make_response(Status.ENDED, observation=make_observation(4, (1, Result.VICTORY))),
+        )
+        api = Api()
+
+        @api.on(TurnEvent)
+        def look_and_give_up(event: TurnEvent) -> None:
+            api.camera.move_to((4, 4))
+            api.leave_game()
+
+        assert api.play(client, steps_per_turn=4) is Result.VICTORY
+        assert not any(request.HasField("leave_game") for request in transport.requests)
+
     def test_a_step_that_says_the_game_is_over_is_followed_by_asking_how(self) -> None:
         """Only an observation carries the result, so the status on a step response does not end the game."""
         client, _ = _joined(
@@ -544,7 +563,9 @@ class TestEvents:
 
 
 _REPLAY = b"MPQ\x1b and the rest of a replay"
-_SAVED = make_response(Status.ENDED, save_replay=sc2api_pb2.ResponseSaveReplay(data=_REPLAY))
+# The game answers a save with its status: in game while the game goes on, ended after it (in game).
+_SAVED_IN_GAME = make_response(Status.IN_GAME, save_replay=sc2api_pb2.ResponseSaveReplay(data=_REPLAY))
+_SAVED_AFTER_THE_END = make_response(Status.ENDED, save_replay=sc2api_pb2.ResponseSaveReplay(data=_REPLAY))
 
 
 @pytest.fixture
@@ -563,7 +584,7 @@ def _requests_asked(transport: FakeTransport) -> list[str | None]:
 
 class TestSavingAReplay:
     def test_a_game_that_ends_is_saved_once_it_has_ended(self, tmp_path: Path) -> None:
-        client, transport = _joined(*_game(0, 2), _SAVED)
+        client, transport = _joined(*_game(0, 2), _SAVED_AFTER_THE_END)
         path = tmp_path / "game.SC2Replay"
         assert Api().play(client, steps_per_turn=2, replay_to=path) is Result.VICTORY
         assert path.read_bytes() == _REPLAY
@@ -571,7 +592,9 @@ class TestSavingAReplay:
 
     def test_a_game_the_bot_leaves_is_saved_before_it_leaves(self, tmp_path: Path) -> None:
         """The game gives no replay to a client that has left (in game)."""
-        client, transport = _joined(*_game(0, ending=None, stepped=False), _SAVED, make_response(Status.LAUNCHED))
+        client, transport = _joined(
+            *_game(0, ending=None, stepped=False), _SAVED_IN_GAME, make_response(Status.LAUNCHED)
+        )
         api = Api()
         api.on(TurnEvent)(lambda _: api.leave_game())
         path = tmp_path / "game.SC2Replay"
@@ -580,13 +603,13 @@ class TestSavingAReplay:
         assert _requests_asked(transport)[-3:] == ["observation", "save_replay", "leave_game"]
 
     def test_a_game_called_a_tie_at_its_time_limit_is_saved(self, tmp_path: Path) -> None:
-        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED)
+        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
         path = tmp_path / "game.SC2Replay"
         assert Api().play(client, time_limit=0, replay_to=path) is Result.TIE
         assert path.read_bytes() == _REPLAY
 
     def test_a_game_a_handler_ends_by_raising_is_saved_and_the_error_raised(self, tmp_path: Path) -> None:
-        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED)
+        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
         api = Api()
 
         @api.on(TurnEvent)
@@ -640,7 +663,7 @@ class TestSavingAReplay:
             make_response(create_game=sc2api_pb2.ResponseCreateGame()),
             make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
             *_game(0, 2),
-            _SAVED,
+            _SAVED_AFTER_THE_END,
             make_response(),
             make_response(),
         )
@@ -660,7 +683,10 @@ class TestSavingAReplay:
 
     def test_run_ladder_saves_it(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         transport = FakeTransport(
-            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)), *_game(0, 2), _SAVED, make_response()
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            *_game(0, 2),
+            _SAVED_AFTER_THE_END,
+            make_response(),
         )
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
         path = tmp_path / "game.SC2Replay"

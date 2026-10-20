@@ -347,7 +347,7 @@ def _chat_longest(installation: Installation) -> dict[str, str]:
     return findings
 
 
-def chat(installation: Installation) -> dict[str, Any]:
+def sweep_chat(installation: Installation) -> dict[str, Any]:
     """What comes back of chat: sent fast, by length, to the team, non-ASCII; its results; and chat sent as a player
     leaves."""
     findings: dict[str, Any] = {
@@ -430,7 +430,7 @@ def _both_leave(installation: Installation) -> dict[str, Any]:
     return {"how": "both leave", "answer": answers, "after": [after]}
 
 
-def leave(installation: Installation) -> list[dict[str, Any]]:
+def sweep_leaving(installation: Installation) -> list[dict[str, Any]]:
     """Leave a game against the computer, surrender one and win one, both leave a game of two in the same step, and
     what the game answers after each."""
     findings = [_end(installation, how) for how in ("leave", "Surrender", "DeclareVictory")]
@@ -512,7 +512,7 @@ def _timed(call: Callable[[], object]) -> float:
     return statistics.median(times)
 
 
-def pathing(installation: Installation) -> dict[str, Any]:
+def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
     """What the pathing query answers in the cases the module docstring lists, how long it takes, and how it compares
     with `Grid.path_distance_from`."""
     findings: dict[str, Any] = {}
@@ -697,7 +697,7 @@ def _table_differences(corpus: sc2api_pb2.ResponseData, answer: sc2api_pb2.Respo
     return differences
 
 
-def tables(installation: Installation) -> dict[str, Any]:
+def sweep_tables(installation: Installation) -> dict[str, Any]:
     """Ask for the tables in a game against the computer, and in a game of two of each player, and record how each
     differs from the first corpus game's."""
     corpus = corpus_answer()
@@ -727,7 +727,7 @@ def _player_list(client: Client) -> list[dict[str, Any]]:
     ]
 
 
-def players(installation: Installation) -> dict[str, Any]:
+def sweep_player_list(installation: Installation) -> dict[str, Any]:
     """Record the player list each client is answered in a game of two, joined with names, one asking for Random, and
     in a game against a computer asking for Random."""
     game_map = MapFile.find(MAP, installation=installation)
@@ -873,7 +873,7 @@ def _replay_realtime(installation: Installation) -> dict[str, Any]:
         return {"in a realtime game": _replay_saved(sandbox.transport)}
 
 
-def replay(installation: Installation) -> dict[str, Any]:
+def sweep_replay_saves(installation: Installation) -> dict[str, Any]:
     """What the game answers a replay save in each of the cases the module docstring lists."""
     findings = {
         "against the computer": _replay_against_the_computer(installation),
@@ -888,12 +888,12 @@ def replay(installation: Installation) -> dict[str, Any]:
 _SWEEPS: dict[str, Callable[[Installation], object]] = {
     "debug-joined": debug_joined,
     "cheats-given": cheats_given,
-    "chat": chat,
-    "leave": leave,
-    "pathing": pathing,
-    "tables": tables,
-    "players": players,
-    "replay": replay,
+    "chat": sweep_chat,
+    "leave": sweep_leaving,
+    "pathing": sweep_pathing_queries,
+    "tables": sweep_tables,
+    "players": sweep_player_list,
+    "replay": sweep_replay_saves,
 }
 
 

@@ -29,8 +29,9 @@ against the built-in computer, with the arguments [the match workflow](github-ac
 | `--ComputerOpponent`, `--ComputerRace`, `--ComputerDifficulty` | nothing: the ladder has created that game |
 
 `api.enemy.ladder_id` is the one way to tell opponents apart: it stays the same in every game against the same bot,
-and no game seen so far gives a player's name, so `api.enemy.name` reads `None`. Outside a ladder game,
-`ladder_id` is `None`.
+while `api.enemy.name` reads `None` wherever the game gives no name, as in every game seen so far
+([game behavior](reference/game-behavior/protocol.md#launching-maps-and-players)). Outside a ladder game, `ladder_id` is
+`None`.
 
 ## Your own arguments
 
