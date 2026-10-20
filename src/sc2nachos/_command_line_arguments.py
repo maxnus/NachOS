@@ -17,20 +17,16 @@ class _CommandLineArguments:
 
     __slots__ = ("_arguments", "_not_read", "_parser")
 
-    # The options only a ladder game reads and those only a local game reads, each by its name on the parsed
-    # arguments. `--ComputerRace` and `--ComputerDifficulty` are in neither: a ladder passes them for its game against
-    # the computer, and a local game reads them.
-    _LADDER_GAME_OPTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
-        ("LadderServer", "--LadderServer"),
-        ("StartPort", "--StartPort"),
-        ("OpponentId", "--OpponentId"),
-        ("ComputerOpponent", "--ComputerOpponent"),
+    # The options only a ladder game reads and those only a local game reads. Each is read as its name without the
+    # dashes. `--ComputerRace` and `--ComputerDifficulty` are in neither: a ladder passes them for its game against the
+    # computer, and a local game reads them.
+    _LADDER_GAME_OPTIONS: ClassVar[tuple[str, ...]] = (
+        "--LadderServer",
+        "--StartPort",
+        "--OpponentId",
+        "--ComputerOpponent",
     )
-    _LOCAL_GAME_OPTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
-        ("ComputerBuild", "--ComputerBuild"),
-        ("Map", "--Map"),
-        ("TimeLimit", "--TimeLimit"),
-    )
+    _LOCAL_GAME_OPTIONS: ClassVar[tuple[str, ...]] = ("--ComputerBuild", "--Map", "--TimeLimit")
 
     def __init__(self, argv: Sequence[str] | None) -> None:
         """Read `argv`, by default `sys.argv[1:]`."""
@@ -128,12 +124,14 @@ class _CommandLineArguments:
             )
         return member
 
-    def _warn_of_ignored(self, options: Iterable[tuple[str, str]], game: str) -> None:
+    def _warn_of_ignored(self, options: Iterable[str], game: str) -> None:
         """Warn of each of `options` given other than its default, which `game` ignores."""
-        if given := [
-            option for name, option in options if getattr(self._arguments, name) != self._parser.get_default(name)
-        ]:
+        if given := [option for option in options if self._given_other_than_its_default(option.removeprefix("--"))]:
             logger.warning("{} ignores {}", game.capitalize(), ", ".join(given))
+
+    def _given_other_than_its_default(self, name: str) -> bool:
+        """Whether the argument read as `name` was given, other than its default."""
+        return getattr(self._arguments, name) != self._parser.get_default(name)
 
     @staticmethod
     def _argument_parser() -> ArgumentParser:
@@ -148,7 +146,7 @@ class _CommandLineArguments:
         parser.add_argument(
             "--ComputerOpponent", help="passed by the ladder for its game against the computer; not used"
         )
-        # Read, in a local game, as member names, and checked there alone: the ladder passes them in a form of its own.
+        # Read as member names in a local game, and checked there alone: what the ladder passes in them was not checked.
         parser.add_argument("--ComputerRace", default=Race.RANDOM.name, help="the computer's race (%(default)s)")
         parser.add_argument(
             "--ComputerDifficulty", default=Difficulty.VERY_HARD.name, help="the computer's difficulty (%(default)s)"

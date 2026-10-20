@@ -11,11 +11,18 @@ from loguru import logger
 
 from sc2nachos._checks import check_file_to_write
 from sc2nachos._command_line_arguments import _CommandLineArguments
-from sc2nachos.api import Api
+from sc2nachos.api import Api, NotPlayingError
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Participant, Player, Race, Result
-from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport, WebSocketTransport
+from sc2nachos.protocol import (
+    Client,
+    ConnectionClosedError,
+    GamePorts,
+    RecordingTransport,
+    Transport,
+    WebSocketTransport,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +127,8 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
 
     With `--GamePort` it joins the game a ladder has set up, as `run_ladder` does, with the ladder's `--LadderServer`
     (127.0.0.1 if not given), `--StartPort` and `--OpponentId`, which `Enemy.ladder_id` reads. It takes the ladder's
-    `--ComputerOpponent`, `--ComputerRace` and `--ComputerDifficulty` and uses none of them.
+    `--ComputerOpponent`, `--ComputerRace` and `--ComputerDifficulty` and uses none of them. A connection the ladder
+    closes before the game ends is logged as a warning, and the game's result is `Result.UNDECIDED`.
 
     Without it, it plays a local game against the built-in computer, as NachOS's match workflow,
     `.github/workflows/match.yml`, asks: `--ComputerRace`, `--ComputerDifficulty` and `--ComputerBuild` as member names
@@ -130,7 +138,8 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
 
     In either, `--RealTime` plays the game in real time, `--ReplayFile` is a file to save its replay to, and
     `--ResultFile` one to write the JSON the match workflow reads: the result, the map, as its file's name in a local
-    game and as its display name in a ladder game, and the game time. An argument of the other kind of game is logged
+    game and as its display name in a ladder game, and the game time, each of those two `null` if the ladder closed the
+    connection before the game began. An argument of the other kind of game is logged
     as ignored, and one NachOS does not read is left for the bot, listed in the log. `argv` defaults to
     `sys.argv[1:]`.
     """
@@ -144,7 +153,7 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
         outcome = {
             "result": result.name,
             "map": map_name,
-            "game_time": round(bot.api.time, 3),
+            "game_time": _game_time(bot.api),
         }
         command_line_arguments.result_file.write_text(json.dumps(outcome), encoding="utf-8")
     return result
@@ -152,19 +161,37 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
 
 def _play_ladder_game(
     bot: ApiBot, command_line_arguments: _CommandLineArguments, *, steps_per_turn: int
-) -> tuple[Result, str]:
-    """Join the ladder's game as `command_line_arguments` say, and return how it ended and the map's display name."""
-    result = run_ladder(
-        bot,
-        host=command_line_arguments.ladder_server,
-        port=command_line_arguments.game_port,
-        start_port=command_line_arguments.start_port,
-        enemy_ladder_id=command_line_arguments.opponent_id,
-        steps_per_turn=steps_per_turn,
-        realtime=command_line_arguments.realtime,
-        save_replay_to=command_line_arguments.replay_file,
-    )
-    return result, bot.api.map.name
+) -> tuple[Result, str | None]:
+    """Join the ladder's game as `command_line_arguments` say, and return how it ended and the map's display name,
+    `None` if the ladder closed the connection before the game began."""
+    try:
+        result = run_ladder(
+            bot,
+            host=command_line_arguments.ladder_server,
+            port=command_line_arguments.game_port,
+            start_port=command_line_arguments.start_port,
+            enemy_ladder_id=command_line_arguments.opponent_id,
+            steps_per_turn=steps_per_turn,
+            realtime=command_line_arguments.realtime,
+            save_replay_to=command_line_arguments.replay_file,
+        )
+    except ConnectionClosedError as closed:
+        # A ladder ends a game early by closing the connection, as when either bot crashes or fails to start, and its
+        # own result says whose fault it was (AvocaDOS, on the ladder).
+        logger.warning("The ladder closed the connection before the game ended: {}", closed)
+        result = Result.UNDECIDED
+    try:
+        return result, bot.api.map.name
+    except NotPlayingError:
+        return result, None
+
+
+def _game_time(api: Api) -> float | None:
+    """The game seconds `api`'s last game lasted, to the millisecond, `None` if it began none."""
+    try:
+        return round(api.time, 3)
+    except NotPlayingError:
+        return None
 
 
 def _play_local_game(
@@ -172,7 +199,7 @@ def _play_local_game(
 ) -> tuple[Result, str]:
     """Play a local game against the built-in computer as `command_line_arguments` say, and return how it ended and
     the map file's name."""
-    opponent = command_line_arguments.create_computer_opponent()
+    computer_opponent = command_line_arguments.create_computer_opponent()
     installation = Installation.find()
     if command_line_arguments.map_name is not None:
         map_file = MapFile.find(command_line_arguments.map_name, installation=installation)
@@ -184,7 +211,7 @@ def _play_local_game(
     result = run_local(
         map_file,
         bot,
-        opponent,
+        computer_opponent,
         steps_per_turn=steps_per_turn,
         realtime=command_line_arguments.realtime,
         time_limit=command_line_arguments.time_limit,

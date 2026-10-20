@@ -59,3 +59,5 @@ An argument of the other kind of game, such as `--Map` given to a ladder game, i
 map's display name in a ladder game, where no map file is known.
 
 A ladder game has no time limit. A bot ends one early only by leaving it, with `api.leave_game()`, which concedes it.
+A ladder may end one early by closing the connection, as AvocaDOS has seen when a bot crashes or fails to start: the
+run logs a warning and its result is `Result.UNDECIDED`, leaving the ladder's own result to say whose fault it was.

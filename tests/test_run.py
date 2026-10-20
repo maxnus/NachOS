@@ -16,7 +16,7 @@ from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
-from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.protocol import Client, ConnectionClosedError, WebSocketTransport
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -109,6 +109,47 @@ class TestALadderGame:
             "map": "Pylon AIE",
             "game_time": 61.25,
         }
+
+
+class TestTheLadderClosingTheConnection:
+    @staticmethod
+    def _closed_by_the_ladder(monkeypatch: pytest.MonkeyPatch) -> None:
+        def run_ladder(bot: ApiBot, **kwargs: Any) -> Result:
+            raise ConnectionClosedError("the connection to the game closed")
+
+        monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
+
+    def test_ends_a_ladder_game_undecided_with_a_warning(
+        self, ladder_played: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, logged: list[str]
+    ) -> None:
+        self._closed_by_the_ladder(monkeypatch)
+        result_file = tmp_path / "result.json"
+        argv = ["--GamePort", "5000", "--ResultFile", str(result_file)]
+        assert run_from_command_line(ApiBot(Api(), Race.TERRAN), argv) is Result.UNDECIDED
+        assert any(message.startswith("The ladder closed the connection") for message in logged)
+        written = json.loads(result_file.read_text(encoding="utf-8"))
+        assert (written["result"], written["map"]) == ("UNDECIDED", "Pylon AIE")
+
+    def test_before_the_game_began_leaves_the_map_unknown(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        self._closed_by_the_ladder(monkeypatch)
+        result_file = tmp_path / "result.json"
+        argv = ["--GamePort", "5000", "--ResultFile", str(result_file)]
+        assert run_from_command_line(ApiBot(Api(), Race.TERRAN), argv) is Result.UNDECIDED
+        assert json.loads(result_file.read_text(encoding="utf-8")) == {
+            "result": "UNDECIDED",
+            "map": None,
+            "game_time": None,
+        }
+
+    def test_in_a_local_game_is_raised(self, played: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+        def run_local(*args: Any, **kwargs: Any) -> Result:
+            raise ConnectionClosedError("the connection to the game closed")
+
+        monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
+        with pytest.raises(ConnectionClosedError):
+            run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
 
 
 def test_a_local_game_has_no_ladders_game_port() -> None:

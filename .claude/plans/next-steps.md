@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #145. On branch `claude/ladder-running`, `uv run pytest` passes 2434 tests and
+- nachOS `main` has every PR to #145. On branch `claude/ladder-running`, `uv run pytest` passes 2438 tests and
   `uv run pytest -m integration` passes 36 against a real game (run 2026-10-20).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -285,10 +285,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     saving after it returns, which would lose a game the bot left, and over `play` no longer leaving.
   - The command line's names follow the ladder's (review of #146): `--RealTime` for both kinds of game; a local game's
     computer `--ComputerRace`, `--ComputerDifficulty` and a `--ComputerBuild` of our own, checked by hand in a local
-    game alone since the ladder passes its own in a form of its own; and `--Map`, `--TimeLimit`, `--ResultFile` and
+    game alone, since what the ladder passes in them was not checked; and `--Map`, `--TimeLimit`, `--ResultFile` and
     `--ReplayFile`. Chosen over the match workflow's kebab-case names and over a `nachos` prefix: a bot's parser can
     read the same argument as NachOS's.
   - `save_replay_to`, over `replay_to` and `save_replay_as`; the save stays in `api.py`, over a method of `Client`.
+  - A ladder game whose connection the ladder closes ends `Result.UNDECIDED` with a warning in `run_from_command_line`,
+    as AvocaDOS's ladder `run.py` had it; `run_ladder` and a local game still raise `ConnectionClosedError`. A save
+    after an interrupted request reads that request's answer and is logged as failed, which stays (my review of #146).
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
   "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
   to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
