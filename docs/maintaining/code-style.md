@@ -8,11 +8,12 @@ style goes here, with an example from the code.
 - **Name a class for what it is responsible for**, so the name says what it does. Every name is descriptive and
   accurate: a plain name a reader can predict beats a clever synonym.
 - **A constant, a function or a variable is named for what it holds or returns**, so its name needs no comment:
-  `_MIN_MINERAL_FIELDS_PER_EXPANSION`, never `_FEWEST`. A comment that explains a name means the name is wrong.
-- **Never a one-word name** for a constant, a helper or a variable, private or public, in `tools/` too. A predicate
-  reads as a clause where it is called: `_holds_a_tag_of(dead, unit)`, `_new_tag_is_same_unit(unit, display)`. A
-  lambda's parameter, which lives for one line beside what it iterates, is the one exception. A pull request renames
-  a one-word name in the code it touches, not only in the code it adds.
+  `_MIN_MINERAL_FIELDS_PER_EXPANSION`, never `_FEWEST`, and `ground_offset`, never `shift`. A comment that explains a
+  name means the name is wrong. A lambda's parameter, which lives for one line beside what it iterates, may be short:
+  `lambda exp: exp.center`.
+- **Never a one-word name for a constant or a helper function**, in `tools/` too. A predicate reads as a clause
+  where it is called: `_holds_a_tag_of(dead, unit)`, `_new_tag_is_same_unit(unit, display)`. A pull request renames a
+  one-word name in the code it touches, not only in the code it adds.
 - **A name that holds an instance of a NachOS class follows the class**: `order_book: OrderBook`, never `orders`. A
   constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
 - **A classmethod that builds an instance is named `from_` what it is built from**: `Footprint.from_rows`,
