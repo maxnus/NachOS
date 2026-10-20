@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #139. `uv run pytest` passes 2387 tests on branch `claude/tech-tree-sub-records`;
+- nachOS `main` has every PR to #140. `uv run pytest` passes 2395 tests on branch `claude/rich-gas-build-time`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-20, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -271,6 +271,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Next
 
+- **Record the corpus again**, planned with the owner first (the owner, 2026-10-20, after the fix of AvocaDOS #44 went
+  first). Its tables are older than the repo's maps (docs/reference/game-behavior/upgrades-and-tables.md), so the tests
+  read rows a game today and the ladder no longer answer: a rich refinery's ability, and an acceleration zone as an
+  available structure. Regenerating `UnitType` from the new tables may drop the zones from `Structure`, and
+  `tools/sweep_requests.py tables` should find no difference afterwards.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them

@@ -78,6 +78,8 @@ and runs its trials in turn::
 - `progress` starts every morph, a larva's drone and an SCV in one request and reads each every 16 steps until it is
   done, to find what a unit reports of how far it has got; then injects a hatchery and reads its buff until its larva
   come.
+- `gas-buildings` has an SCV, a probe and a drone each build its race's gas building on a rich geyser and on a plain
+  one, and reads the building every step until it is done.
 - `warp-gate-cooldown` gives a fresh warp gate a warp-in of each unit type every step, until three are taken, and
   reads each step what the game answered, what was charged, and whether the gate reads active, wears a buff, or is
   offered the warp-in by the abilities query, ignoring costs and counting them.
@@ -3836,6 +3838,92 @@ def _inject_read(game: _Game, trial: Trial) -> None:
     trial.notes["step, buffs, buff_duration_remain, buff_duration_max, larvae beside"] = reads
 
 
+# --- How long each gas building takes on a rich geyser and on a plain one
+
+# Each race's worker and the ability it builds its gas building by.
+_GAS_BUILDS = (
+    (UnitTypeId.SCV, AbilityId.SCV_BUILD_REFINERY),
+    (UnitTypeId.PROBE, AbilityId.PROBE_BUILD_ASSIMILATOR),
+    (UnitTypeId.DRONE, AbilityId.DRONE_MORPH_EXTRACTOR),
+)
+_GAS_BUILDINGS = (
+    UnitTypeId.REFINERY,
+    UnitTypeId.REFINERY_RICH,
+    UnitTypeId.ASSIMILATOR,
+    UnitTypeId.ASSIMILATOR_RICH,
+    UnitTypeId.EXTRACTOR,
+    UnitTypeId.EXTRACTOR_RICH,
+)
+_PLAIN_GEYSERS = (
+    UnitTypeId.VESPENE_GEYSER,
+    UnitTypeId.VESPENE_GEYSER_PROTOSS,
+    UnitTypeId.VESPENE_GEYSER_PURIFIER,
+    UnitTypeId.VESPENE_GEYSER_SHAKURAS,
+    UnitTypeId.VESPENE_GEYSER_SPACE_PLATFORM,
+)
+
+
+def _gas_buildings(game: _Game) -> list[Trial]:
+    """Have an SCV, a probe and a drone each build its race's gas building on the rich geyser nearest home and on the
+    plain geyser nearest home, and read the building every step until it is done."""
+    table_build_steps = {row.unit_id: row.build_time for row in game.client.game_data().units}
+    return [
+        game.trial(
+            f"{worker_type.name} given {ability.name} on a {'rich' if rich else 'plain'} geyser",
+            partial(_gas_building_read, game, worker_type, ability, rich, table_build_steps),
+        )
+        for worker_type, ability in _GAS_BUILDS
+        for rich in (True, False)
+    ]
+
+
+def _gas_building_read(
+    game: _Game,
+    worker_type: UnitTypeId,
+    ability: AbilityId,
+    rich: bool,
+    table_build_steps: dict[int, float],
+    trial: Trial,
+) -> None:
+    geyser_types = (UnitTypeId.VESPENE_GEYSER_RICH,) if rich else _PLAIN_GEYSERS
+    geysers = [unit for unit in game.units.values() if unit.unit_type in geyser_types]
+    site = _at(min(geysers, key=lambda unit: _at(unit).distance_to(game.home)))
+    (worker,) = game.create(worker_type, site.towards(game.home, 3))
+    # The worker brings the geyser into sight, under the tag it is ordered by.
+    geyser = next(
+        unit
+        for unit in game.units.values()
+        if unit.unit_type in geyser_types and _at(unit).distance_to(site) < 1 and unit.display_type != _SNAPSHOT
+    )
+    trial.notes["verdict"] = game.order(ability, [worker], geyser.tag)
+    trial.notes["ordered at"] = game.step
+
+    def building_on_the_geyser() -> raw_pb2.Unit | None:
+        # Not the placeholder shown while the worker walks there, which the building replaces under a tag of its own.
+        on_the_geyser = (
+            unit
+            for unit in game.own(*_GAS_BUILDINGS)
+            if _at(unit).distance_to(site) < 1 and unit.display_type != _PLACEHOLDER
+        )
+        return next(on_the_geyser, None)
+
+    if not game.until(lambda: building_on_the_geyser() is not None, limit=300):
+        return
+    started = cast("raw_pb2.Unit", building_on_the_geyser())
+    first_read = [game.step, round(started.build_progress, 4)]
+    trial.notes["built"] = _type_name(started.unit_type)
+    trial.notes["first read: step, build progress"] = first_read
+    trial.notes["table's build time"] = table_build_steps.get(started.unit_type)
+    while (unit := game.unit(started.tag)) is not None and unit.build_progress < 1:
+        if game.step > first_read[0] + _PROGRESS_LIMIT:
+            logger.warning("Gave up waiting at step {}", game.step)
+            trial.notes["last read: step, build progress"] = [game.step, round(unit.build_progress, 4)]
+            return
+        game.turn(1)
+    trial.notes["first read done"] = None if unit is None else game.step
+    trial.notes["steps from the first read to done"] = None if unit is None else game.step - first_read[0]
+
+
 # --- What one command naming two units does with an ability: whether one of them carries it out or both
 
 # Where the two units stand, around the sweep's pad, apart enough for two structures of 5x5, and the pylon between
@@ -4867,6 +4955,7 @@ _SWEEPS: dict[str, _Sweep] = {
     # Not `tech_tree`, under which a barracks without an add-on trains two at once; what each morph needs is made
     # instead.
     "progress": _Sweep(Race.ZERG, _progress),
+    "gas-buildings": _Sweep(Race.TERRAN, _gas_buildings),
     "warp-gate-cooldown": _Sweep(Race.PROTOSS, _warp_gate_cooldown, (Cheat.FOOD, Cheat.ALL_RESOURCES)),
     "larvae": _Sweep(Race.ZERG, _larvae),
     "group-abilities-terran": _Sweep(Race.TERRAN, lambda g: _group_abilities(g, Race.TERRAN), _GROUP_ABILITY_CHEATS),

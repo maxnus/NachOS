@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
@@ -10,13 +11,15 @@ from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
+from sc2nachos.ids import UnitTypeId
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from s2clientprotocol import sc2api_pb2
 
-    from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
+    from sc2nachos.gamedata._techtree import TechTreeAbilities
+    from sc2nachos.ids import AbilityId, EffectId, UpgradeId
 
 
 @final
@@ -30,9 +33,10 @@ class GameData:
 
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
-        self._units = _read_table(
+        unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
+        self._units = _with_build_steps_borrowed(unit_rows, TECH_TREE.abilities)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
@@ -74,6 +78,25 @@ class GameData:
     def effects(self) -> Mapping[EffectId, EffectData]:
         """The effects, by id."""
         return self._effects
+
+
+def _with_build_steps_borrowed(
+    units: Mapping[UnitTypeId, UnitTypeData], tech_tree_abilities: TechTreeAbilities
+) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`units`, where a type the table gives no build time takes the build time of the one other type its creation
+    ability makes: a rich gas building, which builds in the same time as its plain one, takes its plain one's (tool
+    `sweep_orders`)."""
+    rows_with_build_steps = dict(units)
+    for unit_type, row in units.items():
+        if row.build_steps or row.creation_ability is None:
+            continue
+        products = tech_tree_abilities.products.get(row.creation_ability, {}).values()
+        types_made = {product for product in products if isinstance(product, UnitTypeId)}
+        if len(types_made) != 1 or unit_type in types_made:
+            continue
+        if (built_as := units.get(types_made.pop())) is not None:
+            rows_with_build_steps[unit_type] = replace(row, build_steps=built_as.build_steps)
+    return MappingProxyType(rows_with_build_steps)
 
 
 def _read_table[MessageT, IdT, RowT](

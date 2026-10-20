@@ -240,6 +240,14 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         assert data.units[UnitTypeId.MARINE].build_steps == 400.0
 
+    def test_a_type_the_table_gives_no_build_time_takes_that_of_what_its_creation_ability_builds(self) -> None:
+        """A rich refinery's row reads no build time on the ladder, and the refinery an SCV's build puts up on a rich
+        geyser takes a refinery's (tool `sweep_orders`)."""
+        refinery = data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY, build_time=480.0)
+        rich = data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY_RICH, unit_alias=UnitTypeId.REFINERY)
+        data = GameData(sc2api_pb2.ResponseData(units=[refinery, rich]))
+        assert data.units[UnitTypeId.REFINERY_RICH].build_steps == 480.0
+
     def test_a_weapon_says_what_it_hits_and_how_long_it_waits(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         (weapon,) = data.units[UnitTypeId.MARINE].weapons
@@ -369,6 +377,14 @@ class TestReadingTheTables:
             data.units[UnitTypeId.MARINE] = data.units[UnitTypeId.MARINE]  # type: ignore[index]
 
 
+# Each gas building on a rich geyser, and the one on a plain geyser it is built as.
+_RICH_GAS_BUILDINGS = {
+    UnitTypeId.REFINERY_RICH: UnitTypeId.REFINERY,
+    UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
+    UnitTypeId.EXTRACTOR_RICH: UnitTypeId.EXTRACTOR,
+}
+
+
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
     """The `ResponseData` of a recorded game."""
     for exchange in Recording(path):
@@ -420,6 +436,16 @@ class TestARecordedGamesTables:
         named = {row.unit_id: row.ability_id for row in answer.units if row.ability_id}
         lost = {unit: named[unit] for unit in UnitTypeId if unit in named and data.units[unit].creation_ability is None}
         assert lost == _NO_MAKER
+
+    def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
+        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing."""
+        answer = _answer(path)
+        data = GameData(answer)
+        tabled = {row.unit_id: row.build_time for row in answer.units}
+        borrowed = {unit_type for unit_type, row in data.units.items() if row.build_steps != tabled[unit_type]}
+        assert borrowed <= set(_RICH_GAS_BUILDINGS)
+        for rich, plain in _RICH_GAS_BUILDINGS.items():
+            assert data.units[rich].build_steps == data.units[plain].build_steps == 480.0, rich.name
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.

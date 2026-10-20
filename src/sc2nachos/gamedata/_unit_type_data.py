@@ -113,7 +113,8 @@ class UnitTypeData:
     """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
     400 included."""
     build_steps: float
-    """Steps to make one; for a morph, only the last stage."""
+    """Steps to make one; for a morph, only the last stage. A type the table gives none takes the build time of the one
+    other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int

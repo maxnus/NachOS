@@ -145,7 +145,7 @@ class TestGeneratingTheUpgrades:
 
 @pytest.fixture(scope="module")
 def tables() -> GameData:
-    """The game data of the first corpus game, which every game on the current ladder shares."""
+    """The game data of the first corpus game."""
     recording = Recording(_CORPUS[0])
     return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
 

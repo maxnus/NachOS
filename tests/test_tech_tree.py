@@ -318,7 +318,7 @@ def _sweep() -> TechTree:
 
 @pytest.fixture(scope="module")
 def tables() -> GameData:
-    """The game data of the first corpus game, which every game on the current ladder shares."""
+    """The game data of the first corpus game."""
     return load_tool("generate_unit_types").corpus_tables()
 
 

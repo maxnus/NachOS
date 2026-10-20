@@ -364,7 +364,7 @@ def render(tables: GameData) -> str:
 
 
 def corpus_answer() -> sc2api_pb2.ResponseData:
-    """The tables of the first corpus game, as the game answered them; every game on the current ladder shares them."""
+    """The tables of the first corpus game, as the game answered them."""
     recording = Recording(sorted(CORPUS.glob("*.sc2rec"))[0])
     return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
 
