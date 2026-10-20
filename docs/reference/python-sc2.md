@@ -21,8 +21,14 @@ difference that rests on what the game does links there for its evidence.
 - **A map name can resolve to a different file.** NachOS searches every folder under `Maps`. When several copies
   match, it takes the shallowest, and the first alphabetically among copies at the same depth. python-sc2 searches
   two levels deep and takes whichever match the filesystem lists first.
-- **`run_ladder` takes the address and ports as arguments.** Reading `--LadderServer`, `--GamePort` and
-  `--StartPort` from the ladder's command line is up to you.
+- **`run_from_command_line` reads the ladder's command line**, `--LadderServer`, `--GamePort`, `--StartPort`,
+  `--OpponentId` and `--RealTime`, and joins the ladder's game; without `--GamePort` it plays a local game. A
+  python-sc2 bot reads them in a `run.py` of its own. `run_ladder` takes the same as arguments
+  ([playing on the ladder](../ladder.md)).
+- **`save_replay_as` is `save_replay_to`**, on `run_local`, `run_ladder` and `Api.play`, and `--ReplayFile` on the
+  command line. The replay is saved however the game ends, after a handler raises too, and before leaving a game the bot
+  leaves, since the game gives none to a client that has left ([game behavior](game-behavior/protocol.md)). A save
+  that fails is logged, not raised.
 - **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
   belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
@@ -383,7 +389,7 @@ it.
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
 | `bot.enemy_race` | `api.enemy.race`, `None` until known; `api.enemy.requested_race` reads `RANDOM` |
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
-| `opponent_id`, a ladder argument | nothing yet |
+| `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `steps_left`; once done, `u in api.upgrades` |

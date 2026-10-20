@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #144. On branch `claude/unit-update-returns-changes`, `uv run pytest` passes 2406
-  tests and `uv run pytest -m integration` passes 34 against a real game (run 2026-10-20).
+- nachOS `main` has every PR to #145. On branch `claude/ladder-running`, `uv run pytest` passes 2438 tests and
+  `uv run pytest -m integration` passes 36 against a real game (run 2026-10-20).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -273,6 +273,25 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `EnemyRaceKnownEvent(race)` comes once a game for any race, on the first turn where it is known from the start.
   - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
   - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
+- **Ladder running** (the owner, 2026-10-20, one question at a time):
+  - one `run_from_command_line` plays a ladder's game when the ladder passes `--GamePort`, and a local one against the
+    computer otherwise, over a second function and over leaving the ladder's command line to the bot;
+  - the ladder's `--OpponentId` is `api.enemy.ladder_id: str | None`, over an `api.ladder` record and over leaving it
+    to the bot;
+  - an argument NachOS does not read is left for the bot and listed in the log, over refusing it and over handing out
+    the parser;
+  - a replay is saved however the game ends, after an error too, a failing save logged. The game gives none to a
+    client that has left (tool `sweep_requests`, `replay`), so `Api.play` saves it before leaving, over the runners
+    saving after it returns, which would lose a game the bot left, and over `play` no longer leaving.
+  - The command line's names follow the ladder's (review of #146): `--RealTime` for both kinds of game; a local game's
+    computer `--ComputerRace`, `--ComputerDifficulty` and a `--ComputerBuild` of our own, checked by hand in a local
+    game alone, since what the ladder passes in them was not checked; and `--Map`, `--TimeLimit`, `--ResultFile` and
+    `--ReplayFile`. Chosen over the match workflow's kebab-case names and over a `nachos` prefix: a bot's parser can
+    read the same argument as NachOS's.
+  - `save_replay_to`, over `replay_to` and `save_replay_as`; the save stays in `api.py`, over a method of `Client`.
+  - A ladder game whose connection the ladder closes ends `Result.UNDECIDED` with a warning in `run_from_command_line`,
+    as AvocaDOS's ladder `run.py` had it; `run_ladder` and a local game still raise `ConnectionClosedError`. A save
+    after an interrupted request reads that request's answer and is logged as failed, which stays (my review of #146).
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
   "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
   to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
@@ -294,9 +313,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
-  players (#143), running on the ladder (its command line, a bot's own arguments in
-  `run_from_command_line`, replay saving), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps),
-  a playback mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
+  players (#143), running on the ladder (its command line, a bot's own arguments in `run_from_command_line`, replay
+  saving; done, this branch), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps), a playback
+  mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
+- The runners take the api with `race` and `name` keywords, and `ApiBot` goes (review of #146): a pull request of its
+  own after #146. They stay functions, over methods of `Api`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

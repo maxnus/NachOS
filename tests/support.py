@@ -259,7 +259,7 @@ _AGAINST_THE_COMPUTER = (
 
 def make_enemy() -> Enemy:
     """The Zerg computer of `make_game_info`, as a game reads it."""
-    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG)
+    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG, ladder_id=None)
 
 
 def require_enemy(enemy: Enemy | None) -> Enemy:

@@ -25,7 +25,9 @@ if __name__ == "__main__":
     run_from_command_line(ApiBot(api, Race.TERRAN, "MyBot"))
 ```
 
-[`examples/run_game.py`](../examples/run_game.py) is the same, with a bot that does nothing.
+[`examples/run_game.py`](../examples/run_game.py) is the same, with a bot that does nothing. `run_from_command_line`
+reads the arguments below, saves the replay, and leaves any other argument to your script; the same script plays a
+ladder's games ([playing on the ladder](ladder.md)).
 
 What the workflow asks of the script, for a bot not built on NachOS or a script of your own: it runs
 `uv run python <script>` with these arguments, any of which may be left out, the values being NachOS's member names
@@ -33,13 +35,13 @@ of `Race`, `Difficulty` and `AIBuild`.
 
 | Argument | Values |
 |---|---|
-| `--opponent-race` | `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
-| `--opponent-difficulty` | `VERY_EASY`, `EASY`, `MEDIUM`, `MEDIUM_HARD`, `HARD`, `HARDER`, `VERY_HARD`, `CHEAT_VISION`, `CHEAT_MONEY`, `CHEAT_INSANE` |
-| `--opponent-build` | `RANDOM`, `RUSH`, `TIMING`, `POWER`, `MACRO`, `AIR` |
-| `--map` | a map name; when absent, the script picks one |
-| `--time-limit` | game seconds after which the game ends as a tie |
-| `--result-file` | where to write the result |
-| `--replay-file` | where to save the replay, if the script can |
+| `--ComputerRace` | `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
+| `--ComputerDifficulty` | `VERY_EASY`, `EASY`, `MEDIUM`, `MEDIUM_HARD`, `HARD`, `HARDER`, `VERY_HARD`, `CHEAT_VISION`, `CHEAT_MONEY`, `CHEAT_INSANE` |
+| `--ComputerBuild` | `RANDOM`, `RUSH`, `TIMING`, `POWER`, `MACRO`, `AIR` |
+| `--Map` | a map name; when absent, the script picks one |
+| `--TimeLimit` | game seconds after which the game ends as a tie |
+| `--ResultFile` | where to write the result |
+| `--ReplayFile` | where to save the replay, if the script can |
 
 The result file is JSON. `result` and `map` are required; the rest are optional:
 

@@ -6,9 +6,9 @@ name: match
 #
 # The bot repository describes itself in a config file, .github/sc2-games.yml unless `config` says otherwise:
 #
-#   run: scripts/run_game.py      # the game script; takes --opponent-race, --opponent-difficulty, --opponent-build
-#                                 # (NachOS's member names: ZERG, VERY_EASY, RANDOM), --map, --time-limit,
-#                                 # --result-file and --replay-file
+#   run: scripts/run_game.py      # the game script; takes --ComputerRace, --ComputerDifficulty, --ComputerBuild
+#                                 # (NachOS's member names: ZERG, VERY_EASY, RANDOM), --Map, --TimeLimit,
+#                                 # --ResultFile and --ReplayFile
 #   install: uv sync              # optional, the default
 #   maps: sc2maps/AIE             # optional, copied into the client's maps/<folder name>
 #   checkouts:                    # optional, repositories placed next to the bot's own checkout
@@ -232,13 +232,13 @@ jobs:
           OPPONENT_DIFFICULTY: ${{ inputs.opponent-difficulty }}
           OPPONENT_BUILD: ${{ inputs.opponent-build }}
         run: |
-          args=(--opponent-race "$RACE"
-                --opponent-difficulty "$OPPONENT_DIFFICULTY"
-                --opponent-build "$OPPONENT_BUILD"
-                --result-file "$RESULT_FILE"
-                --replay-file "$REPLAY_FILE")
-          [ -n "$MAP" ] && args+=(--map "$MAP")
-          [ -n "$TIME_LIMIT" ] && args+=(--time-limit "$TIME_LIMIT")
+          args=(--ComputerRace "$RACE"
+                --ComputerDifficulty "$OPPONENT_DIFFICULTY"
+                --ComputerBuild "$OPPONENT_BUILD"
+                --ResultFile "$RESULT_FILE"
+                --ReplayFile "$REPLAY_FILE")
+          [ -n "$MAP" ] && args+=(--Map "$MAP")
+          [ -n "$TIME_LIMIT" ] && args+=(--TimeLimit "$TIME_LIMIT")
           uv run python "$RUN" "${args[@]}"
 
       # A game that crashed writes no result; the report counts it from the missing file.

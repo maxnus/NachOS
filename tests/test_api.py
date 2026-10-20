@@ -1,11 +1,12 @@
 """The api and the two runners, tested without a game wherever possible."""
 
 import itertools
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import closing
 from pathlib import Path
 
 import pytest
+from loguru import logger
 from s2clientprotocol import error_pb2, sc2api_pb2
 
 from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
@@ -268,6 +269,25 @@ class TestPlaying:
         assert api.play(client, steps_per_turn=4, realtime=realtime) is Result.VICTORY
         assert api.result is Result.VICTORY
         assert ended == [Result.VICTORY]
+
+    def test_a_bot_that_asks_to_leave_as_the_game_ends_gets_its_result_and_sends_no_leave(self) -> None:
+        over = make_response(Status.ENDED, error=["Game has already ended"])
+        client, transport = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0)),
+            over,
+            make_response(Status.ENDED, observation=make_observation(4, (1, Result.VICTORY))),
+        )
+        api = Api()
+
+        @api.on(TurnEvent)
+        def look_and_give_up(event: TurnEvent) -> None:
+            api.camera.move_to((4, 4))
+            api.leave_game()
+
+        assert api.play(client, steps_per_turn=4) is Result.VICTORY
+        assert not any(request.HasField("leave_game") for request in transport.requests)
 
     def test_a_step_that_says_the_game_is_over_is_followed_by_asking_how(self) -> None:
         """Only an observation carries the result, so the status on a step response does not end the game."""
@@ -542,6 +562,138 @@ class TestEvents:
             api.emit(TurnEvent())
 
 
+_REPLAY = b"MPQ\x1b and the rest of a replay"
+# The game answers a save with its status: in game while the game goes on, ended after it (in game).
+_SAVED_IN_GAME = make_response(Status.IN_GAME, save_replay=sc2api_pb2.ResponseSaveReplay(data=_REPLAY))
+_SAVED_AFTER_THE_END = make_response(Status.ENDED, save_replay=sc2api_pb2.ResponseSaveReplay(data=_REPLAY))
+
+
+@pytest.fixture
+def warnings_logged() -> Iterator[list[str]]:
+    """The warnings logged while the test runs."""
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}", level="WARNING")
+    yield messages
+    logger.remove(sink)
+
+
+def _requests_asked(transport: FakeTransport) -> list[str | None]:
+    """The kind of each request `transport` was sent, in order."""
+    return [request.WhichOneof("request") for request in transport.requests]
+
+
+class TestSavingAReplay:
+    def test_a_game_that_ends_is_saved_once_it_has_ended(self, tmp_path: Path) -> None:
+        client, transport = _joined(*_game(0, 2), _SAVED_AFTER_THE_END)
+        path = tmp_path / "game.SC2Replay"
+        assert Api().play(client, steps_per_turn=2, save_replay_to=path) is Result.VICTORY
+        assert path.read_bytes() == _REPLAY
+        assert _requests_asked(transport)[-2:] == ["observation", "save_replay"]
+
+    def test_a_game_the_bot_leaves_is_saved_before_it_leaves(self, tmp_path: Path) -> None:
+        """The game gives no replay to a client that has left (in game)."""
+        client, transport = _joined(
+            *_game(0, ending=None, stepped=False), _SAVED_IN_GAME, make_response(Status.LAUNCHED)
+        )
+        api = Api()
+        api.on(TurnEvent)(lambda _: api.leave_game())
+        path = tmp_path / "game.SC2Replay"
+        assert api.play(client, save_replay_to=str(path)) is Result.DEFEAT
+        assert path.read_bytes() == _REPLAY
+        assert _requests_asked(transport)[-3:] == ["observation", "save_replay", "leave_game"]
+
+    def test_a_game_called_a_tie_at_its_time_limit_is_saved(self, tmp_path: Path) -> None:
+        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
+        path = tmp_path / "game.SC2Replay"
+        assert Api().play(client, time_limit=0, save_replay_to=path) is Result.TIE
+        assert path.read_bytes() == _REPLAY
+
+    def test_a_game_a_handler_ends_by_raising_is_saved_and_the_error_raised(self, tmp_path: Path) -> None:
+        client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
+        api = Api()
+
+        @api.on(TurnEvent)
+        def fail(event: TurnEvent) -> None:
+            raise RuntimeError("the bot's own bug")
+
+        path = tmp_path / "game.SC2Replay"
+        with pytest.raises(RuntimeError, match="the bot's own bug"):
+            api.play(client, save_replay_to=path)
+        assert path.read_bytes() == _REPLAY
+
+    def test_a_save_the_game_refuses_is_logged_and_the_game_ends_as_it_did(
+        self, tmp_path: Path, warnings_logged: list[str]
+    ) -> None:
+        client, _ = _joined(*_game(0, 2), make_response(Status.LAUNCHED, error=["Not in a game"]))
+        path = tmp_path / "game.SC2Replay"
+        assert Api().play(client, steps_per_turn=2, save_replay_to=path) is Result.VICTORY
+        assert not path.exists()
+        assert any("No replay was saved" in message and "Not in a game" in message for message in warnings_logged)
+
+    def test_a_save_that_fails_after_an_error_leaves_the_error_raised(
+        self, tmp_path: Path, warnings_logged: list[str]
+    ) -> None:
+        refused = make_response(Status.LAUNCHED, error=["Not in a game"])
+        client, _ = _joined(*_game(0, ending=None, stepped=False), refused)
+        api = Api()
+
+        @api.on(TurnEvent)
+        def fail(event: TurnEvent) -> None:
+            raise RuntimeError("the bot's own bug")
+
+        with pytest.raises(RuntimeError, match="the bot's own bug"):
+            api.play(client, save_replay_to=tmp_path / "game.SC2Replay")
+        assert any("No replay was saved" in message for message in warnings_logged)
+
+    @pytest.mark.parametrize(
+        ("replay", "error"),
+        [("missing/game.SC2Replay", FileNotFoundError), (".", IsADirectoryError)],
+        ids=["no folder", "a folder"],
+    )
+    def test_a_replay_with_no_file_to_go_in_is_refused_before_the_game_starts(
+        self, tmp_path: Path, replay: str, error: type[OSError]
+    ) -> None:
+        client, transport = _joined(*_game(0, 2))
+        with pytest.raises(error, match="to save the replay into"):
+            Api().play(client, save_replay_to=tmp_path / replay)
+        assert _requests_asked(transport) == ["join_game"]
+
+    def test_run_local_saves_it(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        transport = FakeTransport(
+            make_response(create_game=sc2api_pb2.ResponseCreateGame()),
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            *_game(0, 2),
+            _SAVED_AFTER_THE_END,
+            make_response(),
+            make_response(),
+        )
+        _no_real_game(monkeypatch, transport)
+        path = tmp_path / "game.SC2Replay"
+        run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2, save_replay_to=path)
+        assert path.read_bytes() == _REPLAY
+
+    def test_run_local_refuses_a_replay_with_no_file_to_go_in_before_the_game_starts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        launched: list[bool] = []
+        monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
+        with pytest.raises(FileNotFoundError, match="to save the replay into"):
+            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), save_replay_to=tmp_path / "missing" / "game.SC2Replay")
+        assert not launched
+
+    def test_run_ladder_saves_it(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        transport = FakeTransport(
+            make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+            *_game(0, 2),
+            _SAVED_AFTER_THE_END,
+            make_response(),
+        )
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        path = tmp_path / "game.SC2Replay"
+        run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2, save_replay_to=path)
+        assert path.read_bytes() == _REPLAY
+
+
 class TestRunningLocally:
     def test_the_bot_is_a_bare_slot_and_the_opponent_carries_how_it_plays(
         self, monkeypatch: pytest.MonkeyPatch
@@ -655,6 +807,13 @@ class TestRunningOnALadder:
         assert (joined.server_ports.game_port, joined.server_ports.base_port) == (1002, 1003)
         assert [(pair.game_port, pair.base_port) for pair in joined.client_ports] == [(1004, 1005)]
 
+    def test_the_opponents_ladder_id_is_the_enemys(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        api = Api()
+        run_ladder(ApiBot(api, Race.TERRAN), host="127.0.0.1", port=8000, enemy_ladder_id="5a1f", steps_per_turn=2)
+        assert api.enemy.ladder_id == "5a1f"
+
     def test_no_game_is_created_because_the_ladder_already_made_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
@@ -676,9 +835,33 @@ class TestRunningOnALadder:
     ) -> None:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
-        with pytest.raises(FileNotFoundError):
-            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, record_to=tmp_path / "missing" / "x")
+
+        def refuse_to_open(*_: object) -> None:
+            raise PermissionError("the file cannot be opened")
+
+        monkeypatch.setattr("sc2nachos.run.RecordingTransport", refuse_to_open)
+        with pytest.raises(PermissionError):
+            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, record_to=tmp_path / "game.sc2rec")
         assert transport.closed
+
+    @pytest.mark.parametrize("file_for", ["recording", "replay"])
+    def test_a_file_with_no_folder_to_go_in_is_refused_before_connecting(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, file_for: str
+    ) -> None:
+        connected: list[str] = []
+        monkeypatch.setattr(
+            WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: connected.append(url))
+        )
+        missing = tmp_path / "missing" / "x"
+        with pytest.raises(FileNotFoundError, match="there is no folder"):
+            run_ladder(
+                ApiBot(Api(), Race.TERRAN),
+                host="127.0.0.1",
+                port=8000,
+                record_to=missing if file_for == "recording" else None,
+                save_replay_to=missing if file_for == "replay" else None,
+            )
+        assert not connected
 
     def test_the_connection_is_closed_even_when_leaving_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = FakeTransport(
@@ -746,6 +929,22 @@ class TestAgainstTheRealGame:
             with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
                 ladder.ping()
                 assert ladder.status is Status.LAUNCHED
+
+
+@pytest.mark.integration
+def test_in_a_real_game_called_a_tie_at_its_time_limit_the_replay_is_saved(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays ten seconds of a game."""
+    try:
+        MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    replay = tmp_path / "game.SC2Replay"
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(
+        _LADDER_MAP, ApiBot(Api(), Race.TERRAN), opponent, steps_per_turn=16, time_limit=10, save_replay_to=replay
+    )
+    assert result is Result.TIE
+    assert replay.read_bytes()[:4] == b"MPQ\x1b"
 
 
 @pytest.mark.integration

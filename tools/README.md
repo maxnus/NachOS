@@ -9,7 +9,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 |---|---|---|
 | Find what the game does with an order, and how long a gas building takes to build | `uv run python tools/sweep_orders.py`, which writes its trials as JSON | yes |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py` | yes |
-| Find what the game does with debug commands, chat, leaving and the pathing query, how its tables differ from the corpus's, and what it says of each player | `uv run python tools/sweep_requests.py` | yes |
+| Find what the game does with debug commands, chat, leaving, the pathing query and saving a replay, how its tables differ from the corpus's, and what it says of each player | `uv run python tools/sweep_requests.py` | yes |
 | Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py` | yes |
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, a game as each race, then `uv run python tools/generate_tech_tree.py` | yes |
 | Find what each upgrade adds to each unit type | `uv run python tools/sweep_upgrades.py`, then `uv run python tools/generate_tech_tree.py` | yes |
