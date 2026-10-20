@@ -29,7 +29,7 @@ _ENEMY = raw_pb2.Alliance.Enemy
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
     unit_type
     for ability in (AbilityId.LIFT, AbilityId.UPROOT)
-    for unit_type in TECH_TREE.ability_performers.get(ability, ())
+    for unit_type in TECH_TREE.abilities.performers.get(ability, ())
 )
 
 type _UnitsByTag = dict[int, Unit[Any]]

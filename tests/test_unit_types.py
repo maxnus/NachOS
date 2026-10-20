@@ -91,7 +91,7 @@ class TestUnitType:
             assert UnitTypeId.HELLBAT in tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
             return
         linked = [
-            TECH_TREE.morph_sources.get(one) is other
+            TECH_TREE.unit_types.morph_sources.get(one) is other
             or other in tables.units[one].tech_aliases
             or form_of.get(one) is other
             for one, other in ((first, second), (second, first))
