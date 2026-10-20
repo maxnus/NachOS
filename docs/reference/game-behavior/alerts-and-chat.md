@@ -31,8 +31,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `sweep_alerts`, #37).
 - `AlertError` and `TrainError` were never raised, not even by failed orders (tool `sweep_alerts`, #37).
 - The camera starts 2.15 from the main townhall, with the workers, mineral fields and geysers on screen, and on
-  MagannathaAIE_v2 the game moves it once at the start, by 1.25; on the older map copies it did so on every map. So
-  until something moves it, an attack on the main raises no alert, and the corpus has none (#37; corpus).
+  MagannathaAIE_v2 the game moves it once at the start, by 1.25. So until something moves it, an attack on the main
+  raises no alert, and the corpus has none (#37; corpus).
 
 ## Chat
 

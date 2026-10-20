@@ -61,12 +61,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
   done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
   give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).
-- The tables are the same in a game against the computer and in a game of two, to either player, as on the ladder,
-  where a rich refinery's row read no build time too (AvocaDOS #44) (tool `sweep_requests`, `tables`, build 75689).
-  The corpus recorded on 2026-09-12 was played on older copies of the AIE maps, which placed acceleration zones on
+- The tables are the same in a game against the computer and in a game of two, to either player (tool
+  `sweep_requests`, `tables`, build 75689). On the ladder a rich refinery's row read no build time too (AvocaDOS #44).
+- The corpus recorded on 2026-09-12 was played on older copies of the AIE maps, which placed acceleration zones on
   Magannatha and Persephone and answered other tables in 38 unit rows: the rich refinery's named
   `TerranBuild_Refinery_325` and 480 steps, and 35 rows the tables now mark unavailable were available, the
-  acceleration and flying inhibitor zones among them, as structures that saw 22.
+  acceleration and flying inhibitor zones among them, as structures that saw 22. The map data and every other neutral
+  unit are the same in both corpora (the old corpus and the new compared).
 - `unit_alias` names the type a form is of, a siege tank for a sieged tank, but also links types that are not forms
   of each other: an adept's shade names the adept, the queen's creep tumor the creep tumor, four geyser variants the
   plain geyser, each rich gas building its plain one, the icy and `_EX1` rocks a plain one, and each changeling the

@@ -33,7 +33,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 ## What is reported of a unit
 
 - The game zeroes what the player cannot know: a remembered copy's health, contents and buffs, an unseen mineral
-  field's contents, a hidden unit's owner. An undetected cloaked enemy reports its position and cloak, and no
+  field's contents, a hidden unit's owner. An undetected enemy listed `INVISIBLE` reports its position and cloak, and no
   health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
   player's own units (#25; corpus).
