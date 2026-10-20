@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #141. `uv run pytest` passes 2395 tests on branch `claude/record-corpus-again`;
+- nachOS `main` has every PR to #142. `uv run pytest` passes 2404 tests on branch `claude/players`;
   `uv run pytest -m integration` passes 33 against a real game (run 2026-10-20, on that branch).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -261,6 +261,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
   takes a point reads its coordinates. pyright catches a tile or a unit given as one, and anything else gets
   Python's own error. What must refuse a non-point to work at all, `in`, a grid's index and `Point`'s arithmetic,
   raises `not_a_point_error`.
+- **The players** (the owner, 2026-10-20, one question at a time):
+  - `api.player` is a `Player` record of this player, with `id`, `race`, `requested_race` and `name`, over a lone
+    `api.race`.
+  - `api.enemy` gains `id`, `requested_race`, `name` and `race`. Its `race` reads `None` until known, never `RANDOM`:
+    a game of two gives it from the start (tool `sweep_requests`, `players`), and a Random computer's is its first
+    unit's.
+  - `api.enemy` itself is `None` in a game with no other player, such as a mini-game, over raising there or optional
+    fields.
+  - `EnemyRaceKnownEvent(race)` comes once a game for any race, on the first turn where it is known from the start.
+  - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
+  - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
 - **The corpus is played on the repo's maps** (the owner, 2026-10-20): it was recorded again once the old one turned
   out to hold the tables of older map copies, and `tools/sweep_requests.py tables` finds no difference from a game
   today. The zone groups follow the tables: an acceleration zone and a flying inhibitor zone are no structure, the
@@ -275,7 +286,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Next
 
-- M5, in AvocaDOS (section 3).
+- **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
+  players (done, this branch), running on the ladder (its command line, a bot's own arguments in
+  `run_from_command_line`, replay saving), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps),
+  a playback mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
+- M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them
 
