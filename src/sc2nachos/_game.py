@@ -128,16 +128,16 @@ class _Game:
     result: Result | None = None
 
     @classmethod
-    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference) -> Self:
+    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference, enemy_ladder_id: str | None) -> Self:
         """Start the game `client` has joined: fetch its map and pre-upgrade tables once, observe it, and find its
-        expansions."""
+        expansions. `enemy_ladder_id` is the ladder's id for the enemy, in a ladder game."""
         info, data = client.game_info(), client.game_data()
         observation = client.observation()
         step = _step(observation)
         game_data = GameData(data)
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
-        enemy = Enemy._from_game(info, player_id)
+        enemy = Enemy._from_game(info, player_id, ladder_id=enemy_ladder_id)
         tracker = _Tracker(game_data, enemy)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)

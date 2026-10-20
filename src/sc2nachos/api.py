@@ -377,7 +377,13 @@ class Api:
         self._current_game().leaving = True
 
     def play(
-        self, client: Client, *, steps_per_turn: int = 1, realtime: bool = False, time_limit: float | None = None
+        self,
+        client: Client,
+        *,
+        steps_per_turn: int = 1,
+        realtime: bool = False,
+        time_limit: float | None = None,
+        enemy_ladder_id: str | None = None,
     ) -> Result:
         """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
         for this player.
@@ -385,13 +391,16 @@ class Api:
         `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
         recording. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
         was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
+        `enemy_ladder_id` is the ladder's id for the opponent, which `enemy.ladder_id` reads.
 
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
         """
         if self._game is not None:
             self._game.tracker.end()
-        game = _Game.start(client, enemy_upgrade_inference=self._enemy_upgrade_inference)
+        game = _Game.start(
+            client, enemy_upgrade_inference=self._enemy_upgrade_inference, enemy_ladder_id=enemy_ladder_id
+        )
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._events

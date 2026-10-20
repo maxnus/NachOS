@@ -48,8 +48,14 @@ _ME_AS_TERRAN = _participant(_ME, Race.TERRAN, actual=Race.TERRAN)
 _ZERGLING_ROW = data_pb2.UnitTypeData(unit_id=UnitTypeId.ZERGLING, race=common_pb2.Race.Zerg)
 
 
-def _play(api: Api, players: list[sc2api_pb2.PlayerInfo], *observations: sc2api_pb2.ResponseObservation) -> None:
-    """Play a game of `players`, as player 1, through `observations`, the last ending it."""
+def _play(
+    api: Api,
+    players: list[sc2api_pb2.PlayerInfo],
+    *observations: sc2api_pb2.ResponseObservation,
+    enemy_ladder_id: str | None = None,
+) -> None:
+    """Play a game of `players`, as player 1, through `observations`, the last ending it, as a ladder game if given
+    the ladder's id for the enemy."""
     responses = [
         make_response(game_info=make_game_info(players=players)),
         make_response(data=sc2api_pb2.ResponseData(units=[_ZERGLING_ROW])),
@@ -62,7 +68,7 @@ def _play(api: Api, players: list[sc2api_pb2.PlayerInfo], *observations: sc2api_
     transport = FakeTransport(make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=_ME)), *responses)
     client = Client(transport)
     client.join_game(Race.TERRAN)
-    api.play(client)
+    api.play(client, enemy_ladder_id=enemy_ladder_id)
 
 
 def _short_game(*later: sc2api_pb2.ResponseObservation) -> tuple[sc2api_pb2.ResponseObservation, ...]:
@@ -120,6 +126,16 @@ class TestTheEnemy:
         api.on(EnemyRaceKnownEvent)(lambda event: known.append(event))
         _play(api, [_ME_AS_TERRAN, _computer(_OTHER, Race.PROTOSS)], *_short_game(make_observation(16)))
         assert known == [EnemyRaceKnownEvent(Race.PROTOSS, step=0)]
+
+    def test_a_ladder_game_gives_the_ladders_id_for_it(self) -> None:
+        api = Api()
+        _play(api, [_ME_AS_TERRAN, _participant(_OTHER, Race.ZERG)], *_short_game(), enemy_ladder_id="5a1f")
+        assert api.enemy.ladder_id == "5a1f"
+
+    def test_outside_a_ladder_game_it_has_no_ladder_id(self) -> None:
+        api = Api()
+        _play(api, [_ME_AS_TERRAN, _computer(_OTHER, Race.ZERG)], *_short_game())
+        assert api.enemy.ladder_id is None
 
     def test_an_observer_is_no_enemy(self) -> None:
         api = Api()

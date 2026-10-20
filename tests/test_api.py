@@ -655,6 +655,13 @@ class TestRunningOnALadder:
         assert (joined.server_ports.game_port, joined.server_ports.base_port) == (1002, 1003)
         assert [(pair.game_port, pair.base_port) for pair in joined.client_ports] == [(1004, 1005)]
 
+    def test_the_opponents_ladder_id_is_the_enemys(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        api = Api()
+        run_ladder(ApiBot(api, Race.TERRAN), host="127.0.0.1", port=8000, enemy_ladder_id="5a1f", steps_per_turn=2)
+        assert api.enemy.ladder_id == "5a1f"
+
     def test_no_game_is_created_because_the_ladder_already_made_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))

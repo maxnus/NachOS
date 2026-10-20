@@ -1089,7 +1089,7 @@ class TestThroughTheApi:
         enemy.assume_upgrades(UpgradeId.COMBAT_SHIELD)
         enemy.forget_upgrades(UpgradeId.STIMPACK)
         assert enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
-        assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None)"
+        assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None, ladder_id=None)"
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         assert api.enemy is not enemy
         assert not api.enemy.upgrades
