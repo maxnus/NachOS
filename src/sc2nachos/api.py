@@ -1,10 +1,12 @@
 """Everything a bot talks to."""
 
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any, overload
 
 from loguru import logger
 
+from sc2nachos._checks import check_file_to_write
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
@@ -384,6 +386,7 @@ class Api:
         realtime: bool = False,
         time_limit: float | None = None,
         enemy_ladder_id: str | None = None,
+        replay_to: Path | str | None = None,
     ) -> Result:
         """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
         for this player.
@@ -393,9 +396,17 @@ class Api:
         was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
         `enemy_ladder_id` is the ladder's id for the opponent, which `enemy.ladder_id` reads.
 
+        `replay_to` is a file to save the game's replay to, however the game ends: at its end, at the time limit,
+        before leaving it for `leave_game`, and after a handler raises. A save that fails is logged, never raised.
+        Before the game starts, a `replay_to` in no folder that exists raises `FileNotFoundError`, and one that names a
+        folder `IsADirectoryError`.
+
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
         """
+        replay_path = None if replay_to is None else Path(replay_to)
+        if replay_path is not None:
+            check_file_to_write(replay_path, "save the replay into")
         if self._game is not None:
             self._game.tracker.end()
         game = _Game.start(
@@ -407,16 +418,32 @@ class Api:
         events._start_game()
         events._set_step(game.step)
         try:
-            events.emit(GameStartEvent(step=game.step))
-            result = self._play_turns(game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
+            result = self._play_saving_the_replay(
+                game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit, replay_to=replay_path
+            )
+            if game.leaving:
+                logger.info("Leaving the game")
+                client.leave_game()
             events.emit(GameEndEvent(result, step=game.step))
         finally:
             # Ended, or ended by a handler that raised: no game is being played to give an event its step.
             events._set_step(None)
         return result
 
+    def _play_saving_the_replay(
+        self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: float | None, replay_to: Path | None
+    ) -> Result:
+        """Start `game` and take its turns until it ends, or the bot asks to leave it, and return how it ended. Then,
+        however the turns ended, save its replay to `replay_to` if given, while the client is still in the game."""
+        try:
+            self._events.emit(GameStartEvent(step=game.step))
+            return self._play_turns(game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
+        finally:
+            if replay_to is not None:
+                _save_replay(game.client, replay_to)
+
     def _play_turns(self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: float | None) -> Result:
-        """Take the turns of `game` until it ends, and return how it ended."""
+        """Take the turns of `game` until it ends or the bot asks to leave it, and return how it ended."""
         events, client = self._events, game.client
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
@@ -429,8 +456,7 @@ class Api:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
                 if game.leaving:
-                    logger.info("Leaving the game")
-                    client.leave_game()
+                    # Left once the replay is saved, which the game gives no client that has left (in game).
                     return game.finish(Result.DEFEAT)
                 if not realtime:
                     client.step(steps_per_turn)
@@ -445,6 +471,17 @@ class Api:
                     game.observe()
             events._set_step(game.step)
         return result
+
+
+def _save_replay(client: Client, path: Path) -> None:
+    """Save the replay of the game `client` is in to `path`, logging rather than raising if the game gives none or the
+    file cannot be written."""
+    try:
+        path.write_bytes(client.save_replay())
+    except (NachOSError, OSError) as error:
+        logger.warning("No replay was saved to {}: {}", path, error)
+    else:
+        logger.info("Saved the replay to {}", path)
 
 
 def _observe_realtime(game: _Game, step: int) -> None:

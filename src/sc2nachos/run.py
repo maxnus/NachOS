@@ -10,6 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from sc2nachos._checks import check_file_to_write
 from sc2nachos.api import Api
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
@@ -36,6 +37,7 @@ def run_local(
     time_limit: float | None = None,
     random_seed: int | None = None,
     record_to: Path | str | None = None,
+    replay_to: Path | str | None = None,
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
 ) -> Result:
@@ -43,13 +45,12 @@ def run_local(
 
     `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
     `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. `record_to` is a file
-    to record the whole conversation into, in a folder that exists, or `FileNotFoundError` is raised before the game
-    starts, and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its
-    temporary directory removed. The newest build installed is played, with a warning if it is not the one the tech
-    tree was swept on.
+    to record the whole conversation into, and `replay_to` one to save the game's replay to, as `Api.play` says. Each
+    must be in a folder that exists, or `FileNotFoundError` is raised before the game starts, and `IsADirectoryError`
+    if it names a folder. However the game ends, the client is stopped and its temporary directory removed. The newest
+    build installed is played, with a warning if it is not the one the tech tree was swept on.
     """
-    if record_to is not None:
-        _check_recording_path(Path(record_to))
+    _check_output_files(record_to, replay_to)
     installation = installation or Installation.find()
     if isinstance(map_file, str):
         map_file = MapFile.find(map_file, installation=installation)
@@ -65,7 +66,9 @@ def run_local(
         try:
             client.create_game(map_file.path, players, realtime=realtime, random_seed=random_seed)
             client.join_game(bot.race, name=bot.name)
-            return bot.api.play(client, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
+            return bot.api.play(
+                client, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit, replay_to=replay_to
+            )
         finally:
             client.leave_game()
             client.quit()
@@ -81,20 +84,26 @@ def run_ladder(
     steps_per_turn: int = 1,
     realtime: bool = False,
     record_to: Path | str | None = None,
+    replay_to: Path | str | None = None,
 ) -> Result:
     """Join the game a ladder has set up, and play it out.
 
     The ladder starts the client, creates the match, and passes the bot the client's address, `start_port` and the
     opponent's `enemy_ladder_id` on the command line. A game against the built-in computer has no `start_port`.
     `realtime` must match the ladder's `--RealTime` flag, as `Api.play` says. There is no time limit: a bot can only
-    end a game early by leaving it, which concedes.
+    end a game early by leaving it, which concedes. `record_to` and `replay_to` are as for `run_local`.
     """
+    _check_output_files(record_to, replay_to)
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
             ports = GamePorts.from_start_port(start_port) if start_port is not None else None
             client.join_game(bot.race, name=bot.name, ports=ports)
             return bot.api.play(
-                client, steps_per_turn=steps_per_turn, realtime=realtime, enemy_ladder_id=enemy_ladder_id
+                client,
+                steps_per_turn=steps_per_turn,
+                realtime=realtime,
+                enemy_ladder_id=enemy_ladder_id,
+                replay_to=replay_to,
             )
         finally:
             # The client is the ladder's, so it is left running.
@@ -160,12 +169,13 @@ def _check_tech_tree_build(base_build: int) -> None:
         )
 
 
-def _check_recording_path(path: Path) -> None:
-    """Raise `FileNotFoundError` if `path` is in no folder that exists, and `IsADirectoryError` if it is a folder."""
-    if not path.parent.is_dir():
-        raise FileNotFoundError(f"there is no folder {path.parent} to record into")
-    if path.is_dir():
-        raise IsADirectoryError(f"{path} is a folder, not a file to record into")
+def _check_output_files(record_to: Path | str | None, replay_to: Path | str | None) -> None:
+    """Raise `FileNotFoundError` or `IsADirectoryError`, before a game starts, for a file to record into or to save
+    the replay into that cannot be written."""
+    if record_to is not None:
+        check_file_to_write(Path(record_to), "record into")
+    if replay_to is not None:
+        check_file_to_write(Path(replay_to), "save the replay into")
 
 
 def _connect(url: str, record_to: Path | str | None) -> Client:
