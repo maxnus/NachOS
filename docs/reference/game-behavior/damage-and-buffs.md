@@ -22,7 +22,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race and
   another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
   `sweep_buffs`, #24).
-- Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 14 of the corpus's 16,882
+- Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
 - Buff names mislead: concussive shells put `Slow` on what they hit, never `DutchMarauderSlow`; an immortal's
   Barrier is `TakenDamage`, never `ImmortalOverload`, starting on the first hit, lasting 48 steps, with the shields

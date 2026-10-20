@@ -59,25 +59,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
   longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
-  done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker. The rows give the
-  rich assimilator and the rich extractor no build time, and the rich refinery none in the tables a game answers on
-  the repo's maps (tool `sweep_orders`, `gas-buildings`, build 75689).
-- The tables a game answers on the repo's AIE maps differ from the corpus's in 38 unit rows, in a game against the
-  computer and in a game of two alike, and to either player (tool `sweep_requests`, `tables`, build 75689). The corpus
-  was recorded on 2026-09-12, before those map files were added; a game recorded as its first one, on the same map,
-  seed and opponent, answers the new tables (in game).
-  - The rich refinery's row names no ability and no build time, and the refinery as its alias, as on the ladder
-    (AvocaDOS #44), where the corpus's names `TerranBuild_Refinery_325` and 480.
-  - The rich assimilator's and the rich extractor's name their plain buildings as aliases.
-  - 35 rows the corpus has available are not, and their names are blank: the Mengsk dummies, the sprays, and the
-    acceleration and flying inhibitor zones, which also lose the structure attribute and their sight range of 22.
-  - Ability 325 loses its placement fields, the 14 sprays' abilities their friendly names, one buff row its name,
-    and 299 ability rows differ only in which empty fields they set. The upgrades and the effects are the same.
-
-  Why is [not understood yet](not-understood-yet.md).
+  done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
+  give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).
+- The tables are the same in a game against the computer and in a game of two, to either player, as on the ladder,
+  where a rich refinery's row read no build time too (AvocaDOS #44) (tool `sweep_requests`, `tables`, build 75689).
+  The corpus recorded on 2026-09-12 was played on older copies of the AIE maps, which placed acceleration zones on
+  Magannatha and Persephone and answered other tables in 38 unit rows: the rich refinery's named
+  `TerranBuild_Refinery_325` and 480 steps, and 35 rows the tables now mark unavailable were available, the
+  acceleration and flying inhibitor zones among them, as structures that saw 22.
 - `unit_alias` names the type a form is of, a siege tank for a sieged tank, but also links types that are not forms
   of each other: an adept's shade names the adept, the queen's creep tumor the creep tumor, four geyser variants the
-  plain geyser, the icy and `_EX1` rocks a plain one, and each changeling the plain changeling (corpus).
+  plain geyser, each rich gas building its plain one, the icy and `_EX1` rocks a plain one, and each changeling the
+  plain changeling (corpus).
 - `is_building` means "needs placing"; an add-on's `footprint_radius` is 3.5, the reach past its host's far side; a
   bare tech lab or reactor is a requirement, and no unit is ever built as one (#23).
 - The tables count `AUTO_TURRET` and `REAPER_GRENADE` as terran structures and `STASIS_WARD` as protoss; map units

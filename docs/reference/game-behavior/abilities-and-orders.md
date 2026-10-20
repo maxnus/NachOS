@@ -38,11 +38,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A spell ordered at a target out of reach (storm, neural parasite, the raven's and viper's) shows in the caster's
   orders under the id ordered. Hallucinations, Guardian Shield, Chrono Boost, Supply Drop, warp-ins, bunker orders
   and cancels finish at once and show nothing (#33).
-- Creation abilities the tables name that are never offered and do nothing: the lurker's 2104 (2332 works), the rich
-  refinery's 325 (a plain refinery on a rich geyser works), the baneling's 80 (4121), the auto-turret's 349 (1764,
-  for 50 energy), the locust's 2018 (2704) and purification nova's 2546 (2346). Of the refinery rows 320 and 325,
-  only 320 works. The rich assimilator's and rich extractor's rows name no creation ability; the plain one builds
-  on a rich geyser (#23, #29).
+- Creation abilities the tables name that are never offered and do nothing: the lurker's 2104 (2332 works), the
+  baneling's 80 (4121), the auto-turret's 349 (1764, for 50 energy), the locust's 2018 (2704) and purification nova's
+  2546 (2346). Of the refinery rows 320 and 325, only 320 works. The rich refinery's, rich assimilator's and rich
+  extractor's rows name no creation ability; the plain one builds on a rich geyser (#23, #29; corpus).
 - Ability 0 is no ability, and Smart is the right-click order. `Cancel_Queue5` and
   `Cancel_QueueCancelToSelection` both remap to `Cancel_Last` (stated).
 

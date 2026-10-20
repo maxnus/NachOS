@@ -9,7 +9,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   goes negative once supply providers are lost (stated).
 - `larva_count` reads 0 with three larva at the hatchery; `warp_gate_count` counts warp gates (#28).
 - The score's idle production and idle worker times are in Normal seconds, summed over the idle units (two idle
-  drones added 20 over 160 steps), and all 10,232 values in the corpus are whole steps (#28; corpus).
+  drones added 20 over 160 steps), and all 10,158 values in the corpus are whole steps (#28; corpus).
 - The score is the value of every unit and structure, finished or not, plus the resources banked; `total_value`
   counts only what is finished, `collection_rate` is per minute, and `spent` counts an order when it is queued and
   refunds it when cancelled. `used_*` leaves out what was destroyed, and `total_used_*` counts it (stated).

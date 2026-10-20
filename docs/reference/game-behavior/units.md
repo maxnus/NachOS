@@ -21,7 +21,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   passenger returns under its tag when unloaded (#25; tested).
 - Deaths come in `raw_data.event.dead_units`, and only deaths this player sees. A unit reported dead is already gone
   from that observation's units, and is reported once. Most reported deaths name tags no observation ever listed:
-  77 of 81 in one corpus game (#25, #28; corpus; tested).
+  66 of 69 in one corpus game (#25, #28; corpus; tested).
 - A structure killed or burned down out of sight is never reported dead, not even once its spot is seen; its copy
   disappears (#25; tested).
 - An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
@@ -52,7 +52,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   names the unit a marine attacks (#25).
 - A unit lifted by a graviton beam wears `PHOENIX_GRAVITON_BEAM` and reports `is_flying` false (#26; tested).
 - Visible enemy units report their armor and shield levels, and armed ones their attack level too; an undetected
-  cloaked observer reports none (#12; corpus).
+  enemy listed `INVISIBLE` reports none (#12; corpus).
 - Order and rally points have height 0. A rally onto a unit that is gone, such as a mined-out mineral field, holds
   tag 2³², which names no unit (#25; corpus). So does a rally onto a mineral field out of sight: a command center
   rallied onto one in the fog by its copy's tag, or onto one in sight that then went into the fog, held 2³² and the
@@ -145,7 +145,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A ghost cloaks and uncloaks one step after the order (#37; tested).
 - Burrowing is no cloak: a burrowed zergling reads `NOT_CLOAKED`, and an undetected burrowed enemy zergling is not
   listed (#37).
-- An enemy's burrowed widow mine was listed `INVISIBLE` with its cloak `UNKNOWN`, in 28 reports of one game,
+- An enemy's burrowed widow mine was listed `INVISIBLE` with its cloak `UNKNOWN`, in 8 reports of one game,
   MagannathaAIE_v2-TvT; no other unit was listed so (corpus).
 - A unit that burrows reads `is_burrowed` false for up to 3 observations after its type turned burrowed: a widow mine
   for 3, a lurker for 2 (corpus).
