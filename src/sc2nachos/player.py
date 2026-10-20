@@ -27,7 +27,7 @@ class Player:
     joined with one (tool `sweep_requests`)."""
 
     @classmethod
-    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self:
+    def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self:
         """The player `player_id` of the game `info` describes. Raises `ValueError` if `info` lists no such player."""
         entry = next((entry for entry in info.player_info if entry.player_id == player_id), None)
         if entry is None:

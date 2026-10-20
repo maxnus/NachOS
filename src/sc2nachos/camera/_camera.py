@@ -34,7 +34,7 @@ class Camera:
         self._move_to = Point._rounded_to_float32(at)
 
     @classmethod
-    def _of_player(cls, player: raw_pb2.PlayerRaw) -> Camera:
+    def _from_player(cls, player: raw_pb2.PlayerRaw) -> Camera:
         """The camera as `player`, an observation's own player, reports it."""
         return cls(Point((player.camera.x, player.camera.y)))
 

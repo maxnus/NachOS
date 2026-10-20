@@ -137,9 +137,9 @@ class _Game:
         game_data = GameData(data)
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
-        enemy = Enemy._of_game(info, player_id)
+        enemy = Enemy._from_game(info, player_id)
         tracker = _Tracker(game_data, enemy)
-        game_map = GameMap._of_game(info, observation)
+        game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
         order_book = OrderBook(game_data)
@@ -149,7 +149,7 @@ class _Game:
             game_map=game_map,
             expansions=Expansion._find_all(game_map, tracker.unit_tracker),
             game_data=game_data,
-            player=Player._of_game(info, player_id),
+            player=Player._from_game(info, player_id),
             enemy=enemy,
             enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
@@ -165,7 +165,7 @@ class _Game:
                 order_book=order_book,
             ),
             pathing=Pathing(client),
-            camera=Camera._of_player(observation.observation.raw_data.player),
+            camera=Camera._from_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None if enemy is None else enemy.id, step=step),
             _chat_event_types=_chat_event_types_by_player(info, player_id),
             _enemy_race_to_report=enemy is not None and enemy.race is not None,

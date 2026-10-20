@@ -514,7 +514,7 @@ def pathing(installation: Installation) -> dict[str, Any]:
     findings: dict[str, Any] = {}
     with playing(Race.TERRAN, installation) as sandbox:
         client = sandbox.client
-        game_map = GameMap._of_game(client.game_info(), client.observation())
+        game_map = GameMap._from_game(client.game_info(), client.observation())
         grid = game_map.pathing
         start = game_map.start_location
         origin = (grid.origin.x, grid.origin.y)

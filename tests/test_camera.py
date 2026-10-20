@@ -103,8 +103,8 @@ def test_in_the_corpus_the_camera_starts_on_this_players_main(path: Path) -> Non
     recording = Recording(path)
     info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
     first = next(exchange.response.observation for exchange in recording if exchange.response.HasField("observation"))
-    camera = Camera._of_player(first.observation.raw_data.player)
-    assert math.dist(camera.center, GameMap._of_game(info, first).start_location) < 4
+    camera = Camera._from_player(first.observation.raw_data.player)
+    assert math.dist(camera.center, GameMap._from_game(info, first).start_location) < 4
 
 
 class TestSelected:

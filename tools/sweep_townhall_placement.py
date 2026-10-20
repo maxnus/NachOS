@@ -192,7 +192,7 @@ def measure_resource_refusals(installation: Installation) -> list[ResourceRefusa
         # Workers wander onto the ground asked about, and the only open ground wide enough is beside resources.
         resources = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
         game.remove(unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV})
-        game_map = GameMap._of_game(game.client.game_info(), game.client.observation())
+        game_map = GameMap._from_game(game.client.game_info(), game.client.observation())
         at = _clear_open_ground(game, game_map, game.units())
         for unit_type, size in resource_kinds:
             refusals = _measure_refusals(game, at, unit_type, size)
@@ -228,7 +228,7 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         game.cheat(Cheat.SHOW_MAP)
         game.client.step(4)
         observation = game.client.observation()
-        game_map = GameMap._of_game(game.client.game_info(), observation)
+        game_map = GameMap._from_game(game.client.game_info(), observation)
         tracker = _Tracker(GameData(game.client.game_data()), None)
         raw, uncurated = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)

@@ -191,7 +191,7 @@ _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 def _map(recording: Recording) -> GameMap:
     """The map of a recorded game, read as a game reads it from its answers."""
     info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    return GameMap._of_game(info, next(iter(_observations(recording))))
+    return GameMap._from_game(info, next(iter(_observations(recording))))
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)

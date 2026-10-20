@@ -660,7 +660,7 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
             observation = response.observation
             tracker = _Tracker(data, make_enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker, data, observation
+            return GameMap._from_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")
 
 

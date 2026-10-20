@@ -349,7 +349,7 @@ def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
             observation = response.observation
             tracker = _Tracker(GameData(data), make_enemy())
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
-            return GameMap._of_game(info, observation), tracker.unit_tracker
+            return GameMap._from_game(info, observation), tracker.unit_tracker
     raise AssertionError(f"{path.name} holds no observation")
 
 

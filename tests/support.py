@@ -376,7 +376,7 @@ def played(
                 order_book=order_book,
             ),
             pathing=Pathing(client),
-            camera=Camera._of_player(observation.observation.raw_data.player),
+            camera=Camera._from_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
             _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
@@ -404,9 +404,9 @@ class RealGame:
         self.player = player
         self.events = events or _EventBus()
         info = client.game_info()
-        self.map = GameMap._of_game(info, client.observation())
-        self.own_player = Player._of_game(info, player)
-        self.enemy = Enemy._of_game(info, player)
+        self.map = GameMap._from_game(info, client.observation())
+        self.own_player = Player._from_game(info, player)
+        self.enemy = Enemy._from_game(info, player)
         self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()

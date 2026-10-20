@@ -47,7 +47,7 @@ class Enemy:
         return f"Enemy(id={self._id}, race={race}, requested_race={self._requested_race.name}, name={self._name!r})"
 
     @classmethod
-    def _of_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self | None:
+    def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, player_id: int) -> Self | None:
         """The one player of the game `info` describes, observers aside, who is not `player_id`, or `None` if there is
         not one. Its race is the one the game gives, else the one it asked for unless that is Random."""
         others = [
