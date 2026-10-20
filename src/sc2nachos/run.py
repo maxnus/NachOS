@@ -2,8 +2,7 @@
 
 import json
 import random
-from argparse import ArgumentParser, Namespace
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,10 +10,11 @@ from pathlib import Path
 from loguru import logger
 
 from sc2nachos._checks import check_file_to_write
+from sc2nachos._command_line import _CommandLine
 from sc2nachos.api import Api
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
-from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Player, Race, Result
+from sc2nachos.match import Computer, Participant, Player, Race, Result
 from sc2nachos.protocol import Client, GamePorts, RecordingTransport, Transport, WebSocketTransport
 
 
@@ -134,66 +134,47 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
     as ignored, and one NachOS does not read is left for the bot, listed in the log. `argv` defaults to
     `sys.argv[1:]`.
     """
-    parser = _command_line()
-    args, not_read = parser.parse_known_args(argv)
-    if not_read:
-        logger.info("Not NachOS's arguments, left to the bot: {}", " ".join(not_read))
-    if args.GamePort is not None:
-        _log_ignored_arguments(parser, args, _LOCAL_GAME_OPTIONS, "a ladder game")
-        result, map_name = _play_ladder_game(bot, args, steps_per_turn=steps_per_turn)
+    command_line = _CommandLine(argv)
+    command_line.log_arguments_not_used()
+    if (game_port := command_line.game_port) is not None:
+        result, map_name = _play_ladder_game(bot, command_line, game_port, steps_per_turn=steps_per_turn)
     else:
-        _log_ignored_arguments(parser, args, _LADDER_GAME_OPTIONS, "a local game")
-        opponent = _computer_asked_for(parser, args)
-        result, map_name = _play_local_game(bot, args, opponent, steps_per_turn=steps_per_turn)
-    if args.ResultFile is not None:
+        result, map_name = _play_local_game(bot, command_line, steps_per_turn=steps_per_turn)
+    if command_line.result_file is not None:
         outcome = {
             "result": result.name,
             "map": map_name,
             "game_time": round(bot.api.time, 3),
         }
-        args.ResultFile.write_text(json.dumps(outcome), encoding="utf-8")
+        command_line.result_file.write_text(json.dumps(outcome), encoding="utf-8")
     return result
 
 
-# The options only a ladder game reads and those only a local game reads, each by its name on the parsed arguments.
-# `--ComputerRace` and `--ComputerDifficulty` are in neither: a ladder passes them for its game against the computer,
-# and a local game reads them.
-_LADDER_GAME_OPTIONS = (
-    ("LadderServer", "--LadderServer"),
-    ("StartPort", "--StartPort"),
-    ("OpponentId", "--OpponentId"),
-    ("ComputerOpponent", "--ComputerOpponent"),
-)
-_LOCAL_GAME_OPTIONS = (
-    ("ComputerBuild", "--ComputerBuild"),
-    ("Map", "--Map"),
-    ("TimeLimit", "--TimeLimit"),
-)
-_RACES_BY_NAME = {race.name: race for race in Race if race is not Race.NONE}
-_DIFFICULTIES_BY_NAME = {difficulty.name: difficulty for difficulty in Difficulty}
-_BUILDS_BY_NAME = {build.name: build for build in AIBuild}
-
-
-def _play_ladder_game(bot: ApiBot, args: Namespace, *, steps_per_turn: int) -> tuple[Result, str]:
-    """Join the ladder's game as `args` say, and return how it ended and the map's display name."""
+def _play_ladder_game(
+    bot: ApiBot, command_line: _CommandLine, game_port: int, *, steps_per_turn: int
+) -> tuple[Result, str]:
+    """Join the ladder's game on `game_port` as `command_line` says, and return how it ended and the map's display
+    name."""
     result = run_ladder(
         bot,
-        host=args.LadderServer,
-        port=args.GamePort,
-        start_port=args.StartPort,
-        enemy_ladder_id=args.OpponentId,
+        host=command_line.ladder_server,
+        port=game_port,
+        start_port=command_line.start_port,
+        enemy_ladder_id=command_line.opponent_id,
         steps_per_turn=steps_per_turn,
-        realtime=args.RealTime,
-        save_replay_to=args.ReplayFile,
+        realtime=command_line.realtime,
+        save_replay_to=command_line.replay_file,
     )
     return result, bot.api.map.name
 
 
-def _play_local_game(bot: ApiBot, args: Namespace, opponent: Computer, *, steps_per_turn: int) -> tuple[Result, str]:
-    """Play a local game against `opponent` as `args` say, and return how it ended and the map file's name."""
+def _play_local_game(bot: ApiBot, command_line: _CommandLine, *, steps_per_turn: int) -> tuple[Result, str]:
+    """Play a local game against the built-in computer as `command_line` says, and return how it ended and the map
+    file's name."""
+    opponent = command_line.create_computer_opponent()
     installation = Installation.find()
-    if args.Map is not None:
-        map_file = MapFile.find(args.Map, installation=installation)
+    if command_line.map_name is not None:
+        map_file = MapFile.find(command_line.map_name, installation=installation)
     else:
         names = MapFile._names(installation)
         if not names:
@@ -204,61 +185,12 @@ def _play_local_game(bot: ApiBot, args: Namespace, opponent: Computer, *, steps_
         bot,
         opponent,
         steps_per_turn=steps_per_turn,
-        realtime=args.RealTime,
-        time_limit=args.TimeLimit,
-        save_replay_to=args.ReplayFile,
+        realtime=command_line.realtime,
+        time_limit=command_line.time_limit,
+        save_replay_to=command_line.replay_file,
         installation=installation,
     )
     return result, map_file.name
-
-
-def _computer_asked_for(parser: ArgumentParser, args: Namespace) -> Computer:
-    """The computer a local game's `args` ask for, the run stopped by `parser` for a value that names no member."""
-    return Computer(
-        _named_member(parser, "--ComputerRace", args.ComputerRace, _RACES_BY_NAME),
-        _named_member(parser, "--ComputerDifficulty", args.ComputerDifficulty, _DIFFICULTIES_BY_NAME),
-        _named_member(parser, "--ComputerBuild", args.ComputerBuild, _BUILDS_BY_NAME),
-    )
-
-
-def _named_member[M](parser: ArgumentParser, option: str, name: str, members_by_name: Mapping[str, M]) -> M:
-    """The member `name` names among `members_by_name`, or the run stopped by `parser` naming `option` and the names
-    it takes."""
-    if (member := members_by_name.get(name)) is None:
-        parser.error(f"argument {option}: invalid choice: {name!r} (choose from {', '.join(members_by_name)})")
-    return member
-
-
-def _log_ignored_arguments(
-    parser: ArgumentParser, args: Namespace, options: Iterable[tuple[str, str]], game: str
-) -> None:
-    """Log a warning naming each of `options` that `args` holds other than `parser`'s default, which `game` ignores."""
-    if given := [option for name, option in options if getattr(args, name) != parser.get_default(name)]:
-        logger.warning("{} ignores {}", game.capitalize(), ", ".join(given))
-
-
-def _command_line() -> ArgumentParser:
-    """The arguments `run_from_command_line` reads, none of them from a prefix of its name."""
-    parser = ArgumentParser(
-        description="Play one game, a ladder's or one against the built-in computer.", allow_abbrev=False
-    )
-    parser.add_argument("--LadderServer", default="127.0.0.1", help="the ladder's game client's host (%(default)s)")
-    parser.add_argument("--GamePort", type=int, help="the ladder's game client's port; a ladder game when given")
-    parser.add_argument("--StartPort", type=int, help="the first of the ports the ladder handed out")
-    parser.add_argument("--OpponentId", help="the ladder's id for the opponent")
-    parser.add_argument("--ComputerOpponent", help="passed by the ladder for its game against the computer; not used")
-    # Read, in a local game, as member names, and checked there alone: the ladder passes them in a form of its own.
-    parser.add_argument("--ComputerRace", default=Race.RANDOM.name, help="the computer's race (%(default)s)")
-    parser.add_argument(
-        "--ComputerDifficulty", default=Difficulty.VERY_HARD.name, help="the computer's difficulty (%(default)s)"
-    )
-    parser.add_argument("--ComputerBuild", default=AIBuild.RANDOM.name, help="the computer's build (%(default)s)")
-    parser.add_argument("--Map", help="a map under the installation's maps folder (default: one at random)")
-    parser.add_argument("--TimeLimit", type=float, help="end the game as a tie after this many game seconds")
-    parser.add_argument("--RealTime", action="store_true", help="play the game in real time")
-    parser.add_argument("--ResultFile", type=Path, help="where to write the result, as JSON")
-    parser.add_argument("--ReplayFile", type=Path, help="where to save the game's replay")
-    return parser
 
 
 def _check_tech_tree_build(base_build: int) -> None:
