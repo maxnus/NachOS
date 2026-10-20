@@ -80,7 +80,6 @@ _RESEARCHED_BY_A_DEAD_ID = frozenset(MISNAMED_RESEARCH_ABILITIES)
 # `gamedata/_techtree/_overrides.py` names the ability that works for each.
 _DEAD_MAKERS = {
     UnitTypeId.LURKER: RawAbilityId.LurkerAspectMPFromHydraliskBurrowed_LurkerMPFromHydraliskBurrowed,
-    UnitTypeId.REFINERY_RICH: RawAbilityId.TerranBuild_Refinery_325,
     UnitTypeId.BANELING: RawAbilityId.MorphZerglingToBaneling_Baneling,
     UnitTypeId.AUTO_TURRET: RawAbilityId.RavenBuild_AutoTurret,
     UnitTypeId.LOCUST: RawAbilityId.SpawnInfestedTerran_LocustMP,

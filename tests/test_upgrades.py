@@ -583,7 +583,6 @@ _LEARNED_IN_THE_CORPUS = {
     "LeyLinesAIE_v3-ZvP": set(),
     "MagannathaAIE_v2-TvT": {UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1, UpgradeId.TERRAN_VEHICLE_WEAPONS_1},
     "PersephoneAIE_v4-PvT": {
-        UpgradeId.TERRAN_INFANTRY_ARMOR_1,
         UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
         UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1,
         UpgradeId.TERRAN_VEHICLE_WEAPONS_1,

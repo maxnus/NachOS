@@ -30,9 +30,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   attacked: none after 6069, one after 6524, and one in 24000 steps for a unit attacked every 3000 (tool
   `sweep_alerts`, #37).
 - `AlertError` and `TrainError` were never raised, not even by failed orders (tool `sweep_alerts`, #37).
-- The camera starts within 2 of the main townhall, with the workers, mineral fields and geysers on screen, and the
-  game moves it once, at step 2, by under 2. So until something moves it, an attack on the main raises no alert, and
-  the corpus has none (#37; corpus).
+- The camera starts 2.15 from the main townhall, with the workers, mineral fields and geysers on screen, and on
+  MagannathaAIE_v2 the game moves it once at the start, by 1.25. So until something moves it, an attack on the main
+  raises no alert, and the corpus has none (#37; corpus).
 
 ## Chat
 
