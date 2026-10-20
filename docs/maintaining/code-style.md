@@ -1,7 +1,7 @@
 # Code style
 
-How code here is named and written, carried over from AvocaDOS so that the two codebases read alike. A new rule of
-style goes here, with an example from the code.
+How code and docstrings here are named and written. Much of it is carried over from AvocaDOS, so that the two
+codebases read alike. A new rule of style goes here, with an example from the code.
 
 ## Names
 
@@ -16,9 +16,10 @@ style goes here, with an example from the code.
   one-word name in the code it touches, not only in the code it adds.
 - **A name that holds an instance of a NachOS class follows the class**: `order_book: OrderBook`, never `orders`. A
   constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
-- **A classmethod that builds an instance is named `from_` what it is built from**: `Footprint.from_rows`,
-  `GamePorts.from_start_port`, `Player._from_game`. `of` names what selects part of a whole: `Units.of_type`,
-  `AnyAreaEvent.of(area)`.
+- **A classmethod that turns a value of another kind into an instance of its class is named `from_` that value**:
+  `Footprint.from_rows`, `GamePorts.from_start_port`, `Player._from_game`. One that builds a shape or a state names
+  what it builds: `Footprint.square`, `Grid.zeros`. `of` names what selects part of a whole, `Units.of_type` and
+  `AnyAreaEvent.of(area)`, or what reads something of a value, `_key_of`.
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 
 ## Signatures
@@ -36,13 +37,21 @@ style goes here, with an example from the code.
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.
-- **Docstrings** on all public functions and classes, but without parameter/return sections.
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **loguru**, not stdlib `logging`.
 - **Errors**: a failure of the library's own raises a subclass of `NachOSError`, which also subclasses the
   built-in it is a case of, where one fits: `ConnectionClosedError` is a `ConnectionError`. Misuse, such as a bad
   argument, raises the built-in (`ValueError`, `TypeError`, `IndexError`). A dependency's exception is translated
   where it enters, with `raise ... from`, and never reaches the caller.
+
+## Docstrings
+
+- **Docstrings** on all public functions and classes, but without parameter/return sections.
+- **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
+  code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
+  cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
+  file; if it is worth keeping, it goes in the commit message. After a round of doc edits, list the multi-line
+  docstrings with `uv run python tools/list_multiline_docstrings.py` and check each.
 
 ## Words
 

@@ -274,9 +274,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A name is `str | None`, though no game seen names a player, over a fallback string and over no name at all.
   - A first unit held by a neural parasite reads as the enemy's race; this is documented, not handled.
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
-  "Conventions" moved there, with the naming rules of the reviews, and AGENTS.md points to it, chosen over a line in
-  AGENTS.md and over the review checklist. A classmethod that builds an instance is named `from_` what it is built
-  from, and `of` names what selects part of a whole.
+  "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
+  to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
+  the rule on which functions have one (the owner, review of #144). A classmethod that turns a value of another kind
+  into an instance is named `from_` that value, and `of` names what selects part of a whole or reads something of a
+  value.
 - **The corpus is played on the repo's maps** (the owner, 2026-10-20): it was recorded again once the old one turned
   out to hold the tables of older map copies, and `tools/sweep_requests.py tables` finds no difference from a game
   today. The zone groups follow the tables: an acceleration zone and a flying inhibitor zone are no structure, the

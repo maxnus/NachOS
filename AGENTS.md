@@ -65,8 +65,8 @@ These are the non-negotiables. They exist because this library is published for 
 
 ## Code style
 
-`docs/maintaining/code-style.md` says how code here is named and written, carried over from AvocaDOS. Read it before
-writing code or docs.
+`docs/maintaining/code-style.md` says how code and docstrings here are named and written. Read it before writing or
+reviewing code or docs.
 
 ## Docs and comments
 
@@ -76,11 +76,6 @@ writing code or docs.
   was seen, and only there: the code states only the part it relies on, tagged `(in game)` or `(corpus)`, and the
   guides, `docs/reference/python-sc2.md` and `docs/maintaining/` say what NachOS does and link there, rather than
   retell the evidence. The steps for one kind of task go in `docs/`, and measurements in the commit message or PR.
-- **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
-  code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
-  cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
-  file; if it is worth keeping, it goes in the commit message. After a round of doc edits, list the multi-line
-  docstrings with `uv run python tools/list_multiline_docstrings.py` and check each.
 - **Where the game's answer is a matter of perspective, document what the API reports** and move on: a pylon reads
   unpowered, though it always stands in its own field. Keep `docs/reference/game-behavior/not-understood-yet.md` for
   readings that contradict each other or could not be observed.
