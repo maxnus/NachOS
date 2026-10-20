@@ -9,8 +9,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #143. `uv run pytest` passes 2405 tests on branch `claude/players`;
-  `uv run pytest -m integration` passes 34 against a real game (run 2026-10-20, on that branch).
+- nachOS `main` has every PR to #144. `uv run pytest` passes 2406 tests on branch
+  `claude/unit-update-returns-changes`; `uv run pytest -m integration` passes 34 against a real game (run 2026-10-20,
+  on branch `claude/players`).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -301,6 +302,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## 1. Waiting until something needs them
 
+- A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
+  units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
+  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
 - Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
