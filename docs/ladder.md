@@ -14,8 +14,10 @@ if __name__ == "__main__":
 ```
 
 Given the ladder's `--GamePort`, `run_from_command_line` joins the ladder's game. Without it, it plays a local game
-against the built-in computer, with the arguments [the match workflow](github-actions.md#1-a-game-script) passes, and
-`--realtime`. `steps_per_turn` is yours to choose in the script: the command line never sets it.
+against the built-in computer, with the arguments [the match workflow](github-actions.md#1-a-game-script) passes:
+`--ComputerRace`, `--ComputerDifficulty` and `--ComputerBuild` as NachOS's member names, `--Map` and `--TimeLimit`.
+The names follow the ladder's, and `--RealTime` plays either kind of game in real time. `steps_per_turn` is yours to
+choose in the script: the command line never sets it.
 
 ## What the ladder passes
 
@@ -26,7 +28,7 @@ against the built-in computer, with the arguments [the match workflow](github-ac
 | `--StartPort` | the ports the game's players connect on; a game against the built-in computer has none |
 | `--OpponentId` | the ladder's id for your opponent, read as `api.enemy.ladder_id` |
 | `--RealTime` | plays the game in real time, as the ladder created it |
-| `--ComputerOpponent`, `--ComputerRace`, `--ComputerDifficulty` | nothing: the ladder has created that game |
+| `--ComputerOpponent`, `--ComputerRace`, `--ComputerDifficulty` | nothing in a ladder game, which the ladder has created, whatever form their values take |
 
 `api.enemy.ladder_id` is the one way to tell opponents apart: it stays the same in every game against the same bot,
 while `api.enemy.name` reads `None` wherever the game gives no name, as in every game seen so far
@@ -47,13 +49,13 @@ own = parser.parse_known_args()[0]
 run_from_command_line(ApiBot(make_api(build=own.build), Race.TERRAN, "MyBot"))
 ```
 
-An argument of the other kind of game, such as `--map` given to a ladder game, is logged as ignored.
+An argument of the other kind of game, such as `--Map` given to a ladder game, is logged as ignored.
 
 ## Replays and results
 
-`--replay-file` saves the game's replay there, however the game ends: at its end, before leaving it when the bot calls
+`--ReplayFile` saves the game's replay there, however the game ends: at its end, before leaving it when the bot calls
 `api.leave_game()`, and after a handler raises. The ladder keeps its own replays, so this is for your own runs.
-`--result-file` writes the result as JSON, as for [the match workflow](github-actions.md#1-a-game-script), with the
+`--ResultFile` writes the result as JSON, as for [the match workflow](github-actions.md#1-a-game-script), with the
 map's display name in a ladder game, where no map file is known.
 
 A ladder game has no time limit. A bot ends one early only by leaving it, with `api.leave_game()`, which concedes it.

@@ -35,13 +35,13 @@ of `Race`, `Difficulty` and `AIBuild`.
 
 | Argument | Values |
 |---|---|
-| `--opponent-race` | `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
-| `--opponent-difficulty` | `VERY_EASY`, `EASY`, `MEDIUM`, `MEDIUM_HARD`, `HARD`, `HARDER`, `VERY_HARD`, `CHEAT_VISION`, `CHEAT_MONEY`, `CHEAT_INSANE` |
-| `--opponent-build` | `RANDOM`, `RUSH`, `TIMING`, `POWER`, `MACRO`, `AIR` |
-| `--map` | a map name; when absent, the script picks one |
-| `--time-limit` | game seconds after which the game ends as a tie |
-| `--result-file` | where to write the result |
-| `--replay-file` | where to save the replay, if the script can |
+| `--ComputerRace` | `RANDOM`, `TERRAN`, `ZERG`, `PROTOSS` |
+| `--ComputerDifficulty` | `VERY_EASY`, `EASY`, `MEDIUM`, `MEDIUM_HARD`, `HARD`, `HARDER`, `VERY_HARD`, `CHEAT_VISION`, `CHEAT_MONEY`, `CHEAT_INSANE` |
+| `--ComputerBuild` | `RANDOM`, `RUSH`, `TIMING`, `POWER`, `MACRO`, `AIR` |
+| `--Map` | a map name; when absent, the script picks one |
+| `--TimeLimit` | game seconds after which the game ends as a tie |
+| `--ResultFile` | where to write the result |
+| `--ReplayFile` | where to save the replay, if the script can |
 
 The result file is JSON. `result` and `map` are required; the rest are optional:
 

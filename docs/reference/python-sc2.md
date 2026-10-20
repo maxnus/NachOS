@@ -25,8 +25,8 @@ difference that rests on what the game does links there for its evidence.
   `--OpponentId` and `--RealTime`, and joins the ladder's game; without `--GamePort` it plays a local game. A
   python-sc2 bot reads them in a `run.py` of its own. `run_ladder` takes the same as arguments
   ([playing on the ladder](../ladder.md)).
-- **`save_replay_as` is `replay_to`**, on `run_local`, `run_ladder` and `Api.play`, and `--replay-file` on the command
-  line. The replay is saved however the game ends, after a handler raises too, and before leaving a game the bot
+- **`save_replay_as` is `save_replay_to`**, on `run_local`, `run_ladder` and `Api.play`, and `--ReplayFile` on the
+  command line. The replay is saved however the game ends, after a handler raises too, and before leaving a game the bot
   leaves, since the game gives none to a client that has left ([game behavior](game-behavior/protocol.md)). A save
   that fails is logged, not raised.
 - **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
