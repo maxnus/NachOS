@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #152. On branch `claude/combat-conveniences`, `uv run pytest` passes 2501 tests, and
+- nachOS `main` has every PR to #152. On branch `claude/combat-conveniences`, `uv run pytest` passes 2506 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -366,6 +366,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - The measured weapons and the attack speeds are hand-written in `gamedata/_measured.py` (the owner, 2026-10-21,
     over a generator from the sweep's output), and `Weapon.ignores_armor` says the oracle's beam takes nothing off for
     armor or shield armor (the owner, over leaving the oracle weaponless and over an ordinary weapon).
+  - From the review of #153 (the owner, 2026-10-21): an oracle has its beam only while it wears
+    `ORACLE_PULSAR_BEAM`, which it does exactly while the beam is on (measured); a hallucination does no damage
+    (stated by the owner, not measured); the speed-ups keep subtracting the delay's mean, with a test that none names a
+    type whose weapons were measured, over a `mean_delay_steps` field; and the corpus tables are one shared fixture,
+    `first_corpus_tables` in `tests/conftest.py`.
 
 ## Next
 

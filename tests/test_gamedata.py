@@ -18,7 +18,12 @@ from sc2nachos.gamedata import (
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
-from sc2nachos.gamedata._measured import MEASURED_WEAPON_UPGRADES, MEASURED_WEAPONS
+from sc2nachos.gamedata._measured import (
+    ATTACK_SPEED_BUFFS,
+    ATTACK_SPEED_UPGRADES,
+    MEASURED_WEAPON_UPGRADES,
+    MEASURED_WEAPONS,
+)
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
@@ -27,7 +32,7 @@ from sc2nachos.gamedata._techtree import (
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.geometry import Footprint
-from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
@@ -276,6 +281,13 @@ class TestReadingTheTables:
         row = GameData(sc2api_pb2.ResponseData(units=[sentry])).units[UnitTypeId.SENTRY]
         assert [weapon.damage for weapon in row.weapons] == [9.0]
         assert row.upgrades[UpgradeId.PROTOSS_GROUND_WEAPONS_1] == UnitTypeUpgrade()
+
+    def test_no_attack_speed_names_a_type_whose_weapons_were_measured(self) -> None:
+        """A speed-up takes the delay's mean off a cooldown first, which only a weapon from the tables holds."""
+        wearers = {BuffId.MARINE_STIMMED: UnitTypeId.MARINE, BuffId.MARAUDER_STIMMED: UnitTypeId.MARAUDER}
+        assert ATTACK_SPEED_BUFFS.keys() == wearers.keys()
+        assert ATTACK_SPEED_UPGRADES.keys().isdisjoint(MEASURED_WEAPONS)
+        assert set(wearers.values()).isdisjoint(MEASURED_WEAPONS)
 
     def test_an_oracles_beam_ignores_armor_and_hits_only_the_ground(self) -> None:
         """It took as much off a target with 3 more armor, and off a zealot's shields at shields level 3, and never

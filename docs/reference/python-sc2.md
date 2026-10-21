@@ -350,12 +350,12 @@ it.
   `cooldown_steps`, which holds the random delay the game adds to every attack, half a step on average, and the speed of
   Adrenal Glands and Resonating Glaives; `dps_against` counts stim too. python-sc2's `ground_dps` is per Normal second,
   which leaves it 1.4 times too low, and leaves out the delay. NachOS also gives the battlecruiser, the oracle, the void
-  ray and the sentry the weapons it measured, and takes nothing off an oracle's beam for armor, as the game takes
-  nothing. `weapon_against` picks a weapon as python-sc2 does, the ground one for a colossus where there is one, and
-  `has_in_range` keeps python-sc2's rule: exact for a unit that can move firing at a unit, it reaches some 0.1 too far
-  for an attacker that cannot move and up to some 0.26 for a structure ([game
-  behavior](game-behavior/damage-and-buffs.md)).
-- **`weapon_cooldown_steps` reads 0 while an attack is under way**, for up to 6 steps before it by type, and a move
+  ray and the sentry the weapons it measured, an oracle's only while the beam is on, and takes nothing off that beam for
+  armor, as the game takes nothing. A hallucination does no damage. `weapon_against` picks a weapon as python-sc2 does,
+  the ground one for a colossus where there is one, and `has_in_range` keeps python-sc2's rule: exact for a unit that
+  can move firing at a unit, it reaches some 0.1 too far for an attacker that cannot move and up to some 0.26 for a
+  structure ([game behavior](game-behavior/damage-and-buffs.md)).
+- **`weapon_cooldown_steps` reads 0 while an attack is under way**, for up to 8 steps before it by type, and a move
   ordered then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
   cooldown to rise ([game behavior](game-behavior/damage-and-buffs.md)).
 - **The enemy's upgrades are read off its units, once, for the whole player.** The game reports nothing of the

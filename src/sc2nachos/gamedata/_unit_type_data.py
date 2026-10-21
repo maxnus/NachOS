@@ -116,11 +116,14 @@ class Weapon:
         return replace(self, damage=damage, range=weapon_range, damage_bonuses=MappingProxyType(bonuses))
 
     def _with_attack_speed(self, speed: float) -> Weapon:
-        """This weapon attacking `speed` times as often as the tables have it. What speeds an attack divides the
-        tables' cooldown, and the random delay is added to what is left, as it is (in game), so only a weapon from the
-        tables, whose cooldown holds the delay, is sped up right."""
-        cooldown_steps = (self.cooldown_steps - _MEAN_ATTACK_DELAY_STEPS) / speed + _MEAN_ATTACK_DELAY_STEPS
-        return replace(self, cooldown_steps=cooldown_steps)
+        """This weapon attacking `speed` times as often as the tables have it, as `_sped_up_cooldown_steps` has it."""
+        return replace(self, cooldown_steps=self._sped_up_cooldown_steps(speed))
+
+    def _sped_up_cooldown_steps(self, speed: float) -> float:
+        """The cooldown of this weapon attacking `speed` times as often as the tables have it. What speeds an attack
+        divides the tables' cooldown, and the random delay is added to what is left, as it is (in game), so only a
+        weapon from the tables, whose cooldown holds the delay, is sped up right."""
+        return (self.cooldown_steps - _MEAN_ATTACK_DELAY_STEPS) / speed + _MEAN_ATTACK_DELAY_STEPS
 
 
 @final

@@ -34,24 +34,24 @@ from sc2nachos.units._tracking import _Tracker
 from sc2nachos.upgrade_reader import UpgradeReader
 from support import RealGame, load_tool, make_enemy, make_observation, make_unit, require_enemy
 
-_REPO = Path(__file__).parents[1]
-_CORPUS = sorted((_REPO / "tests" / "corpus").glob("*.sc2rec"))
+_REPOSITORY_ROOT = Path(__file__).parents[1]
+_CORPUS_GAMES = sorted((_REPOSITORY_ROOT / "tests" / "corpus").glob("*.sc2rec"))
 _NO_LEVELS = {"attack": [], "armor": [], "shield": []}
 # A zergling's speed with Metabolic Boost: the game's rows give 4.6992188 per second at Normal speed.
 _BOOSTED_ZERGLING_SPEED = 4.6992188 * FASTER_PER_NORMAL_SPEED
 
 
-def _generator() -> ModuleType:
+def _tech_tree_generator() -> ModuleType:
     """The `tools/generate_tech_tree.py` module."""
     return load_tool("generate_tech_tree")
 
 
-def _findings(*research: dict[str, object], unexplained: tuple[str, ...] = ()) -> dict[str, object]:
+def _upgrade_findings(*research: dict[str, object], unexplained: tuple[str, ...] = ()) -> dict[str, object]:
     """Findings as `tools/sweep_upgrades.py` writes them."""
     return {"base_build": 1, "races": [], "research": list(research), "unexplained": list(unexplained)}
 
 
-def _research(upgrade: str, changes: dict[str, object], **levels: list[str]) -> dict[str, object]:
+def _research_entry(upgrade: str, changes: dict[str, object], **levels: list[str]) -> dict[str, object]:
     return {"upgrades": [upgrade], "changes": changes, "levels": _NO_LEVELS | levels}
 
 
@@ -61,8 +61,8 @@ def _stalker_weapons(damage: float, bonus: float) -> dict[str, object]:
 
 class TestGeneratingTheUpgrades:
     def test_a_change_is_read_under_the_curated_ids_a_bonus_the_weapon_lacked_included(self) -> None:
-        igniter = _research("HighCapacityBarrels", {"HellionTank": {"weapons": [{"bonuses": {"Light": 12.0}}]}})
-        found = _generator().read_upgrades(_findings(igniter))
+        igniter = _research_entry("HighCapacityBarrels", {"HellionTank": {"weapons": [{"bonuses": {"Light": 12.0}}]}})
+        found = _tech_tree_generator().read_upgrades(_upgrade_findings(igniter))
         assert found.unit_types[UnitTypeId.HELLBAT][UpgradeId.BLUE_FLAME] == UnitTypeUpgrade(
             weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 12.0})),)
         )
@@ -71,86 +71,85 @@ class TestGeneratingTheUpgrades:
     def test_a_level_affects_every_type_it_raises_the_report_of_or_changes_the_row_of(self) -> None:
         """A void ray reports its attack level though the rows give it no weapon, and the sweep has no mothership to
         report its level though air weapons change its weapon."""
-        weapons = _research(
+        weapons = _research_entry(
             "ProtossAirWeaponsLevel1",
             {"Phoenix": {"weapons": [{"damage": 1.0}]}, "Mothership": {"weapons": [{"damage": 1.0}]}},
             attack=["Phoenix", "VoidRay"],
         )
-        found = _generator().read_upgrades(_findings(weapons))
+        found = _tech_tree_generator().read_upgrades(_upgrade_findings(weapons))
         assert set(found.unit_types) == {UnitTypeId.PHOENIX, UnitTypeId.VOID_RAY, UnitTypeId.MOTHERSHIP}
         assert found.unit_types[UnitTypeId.VOID_RAY][UpgradeId.PROTOSS_AIR_WEAPONS_1] == UnitTypeUpgrade()
         assert found.types[UpgradeId.PROTOSS_AIR_WEAPONS_1] is UpgradeType.ATTACK
         assert found.levels[UpgradeId.PROTOSS_AIR_WEAPONS_1] == 1
 
     def test_an_upgrade_raising_a_report_with_no_number_in_its_name_is_no_level(self) -> None:
-        plating = _research("ChitinousPlating", {"Ultralisk": {"armor": 2.0}}, armor=["Ultralisk"])
-        found = _generator().read_upgrades(_findings(plating))
+        plating = _research_entry("ChitinousPlating", {"Ultralisk": {"armor": 2.0}}, armor=["Ultralisk"])
+        found = _tech_tree_generator().read_upgrades(_upgrade_findings(plating))
         assert found.types[UpgradeId.ULTRALISK_ARMOR] is UpgradeType.ARMOR
         assert UpgradeId.ULTRALISK_ARMOR not in found.levels
 
     def test_a_shields_level_affects_the_types_that_report_it_and_changes_no_row(self) -> None:
-        shields = _research("ProtossShieldsLevel1", {}, shield=["Zealot", "Pylon"])
-        found = _generator().read_upgrades(_findings(shields))
+        shields = _research_entry("ProtossShieldsLevel1", {}, shield=["Zealot", "Pylon"])
+        found = _tech_tree_generator().read_upgrades(_upgrade_findings(shields))
         assert found.unit_types[UnitTypeId.PYLON] == {UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade()}
         assert found.types[UpgradeId.PROTOSS_SHIELDS_1] is UpgradeType.SHIELD
 
     def test_levels_that_add_different_amounts_to_one_type_are_refused(self) -> None:
         """A unit reports only how many attack levels it has, so each level must add the same amount."""
         levels = [
-            _research("ProtossGroundWeaponsLevel1", {"Stalker": _stalker_weapons(1.0, 1.0)}, attack=["Stalker"]),
-            _research("ProtossGroundWeaponsLevel2", {"Stalker": _stalker_weapons(2.0, 1.0)}, attack=["Stalker"]),
+            _research_entry("ProtossGroundWeaponsLevel1", {"Stalker": _stalker_weapons(1.0, 1.0)}, attack=["Stalker"]),
+            _research_entry("ProtossGroundWeaponsLevel2", {"Stalker": _stalker_weapons(2.0, 1.0)}, attack=["Stalker"]),
         ]
         with pytest.raises(ValueError, match="ATTACK levels of STALKER add different amounts"):
-            _generator().read_upgrades(_findings(*levels))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(*levels))
 
     def test_levels_of_a_type_that_do_not_start_at_1_are_refused(self) -> None:
-        second = _research("ProtossGroundWeaponsLevel2", {"Stalker": _stalker_weapons(1.0, 1.0)}, attack=["Stalker"])
+        second = _research_entry(
+            "ProtossGroundWeaponsLevel2", {"Stalker": _stalker_weapons(1.0, 1.0)}, attack=["Stalker"]
+        )
         with pytest.raises(ValueError, match="ATTACK levels affecting STALKER are not 1 onwards"):
-            _generator().read_upgrades(_findings(second))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(second))
 
     def test_an_upgrade_raising_two_kinds_of_report_is_refused(self) -> None:
-        both = _research("ChitinousPlating", {"Ultralisk": {"armor": 2.0}}, armor=["Ultralisk"], attack=["Ultralisk"])
+        both = _research_entry(
+            "ChitinousPlating", {"Ultralisk": {"armor": 2.0}}, armor=["Ultralisk"], attack=["Ultralisk"]
+        )
         with pytest.raises(ValueError, match="ARMOR and ATTACK"):
-            _generator().read_upgrades(_findings(both))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(both))
 
     def test_what_the_changes_do_not_account_for_is_refused(self) -> None:
         with pytest.raises(ValueError, match="Marine is"):
-            _generator().read_upgrades(_findings(unexplained=("Marine is (0.0, 2.25, [])",)))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(unexplained=("Marine is (0.0, 2.25, [])",)))
 
     def test_a_change_to_a_weapons_cooldown_is_refused(self) -> None:
         """The tables carry no cooldown change, since no upgrade makes one in the game's rows."""
-        glands = _research("zerglingattackspeed", {"Zergling": {"weapons": [{"cooldown": -0.2}]}})
+        glands = _research_entry("zerglingattackspeed", {"Zergling": {"weapons": [{"cooldown": -0.2}]}})
         with pytest.raises(ValueError, match="cooldown"):
-            _generator().read_upgrades(_findings(glands))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(glands))
 
     def test_one_research_finishing_two_upgrades_that_change_something_is_refused(self) -> None:
         both = {"upgrades": ["Charge", "BlinkTech"], "changes": {"Zealot": {"speed": 1.0}}, "levels": _NO_LEVELS}
         with pytest.raises(ValueError, match="Charge, BlinkTech"):
-            _generator().read_upgrades(_findings(both))
+            _tech_tree_generator().read_upgrades(_upgrade_findings(both))
 
     def test_an_uncurated_unit_type_is_left_out_and_named(self) -> None:
-        weapons = _research(
+        weapons = _research_entry(
             "TerranInfantryWeaponsLevel1",
             {"Marine": {"weapons": [{"damage": 1.0}]}, "HERC": {"weapons": [{"damage": 2.0}]}},
             attack=["Marine"],
         )
-        generator = _generator()
-        assert set(generator.read_upgrades(_findings(weapons)).unit_types) == {UnitTypeId.MARINE}
-        assert generator.uncurated_upgraded(_findings(weapons)) == {"HERC"}
+        generator = _tech_tree_generator()
+        assert set(generator.read_upgrades(_upgrade_findings(weapons)).unit_types) == {UnitTypeId.MARINE}
+        assert generator.uncurated_upgraded(_upgrade_findings(weapons)) == {"HERC"}
 
     def test_an_uncurated_upgrade_that_affects_a_curated_unit_type_is_refused(self) -> None:
         with pytest.raises(ValueError, match="CampaignUpgrade affects Marine"):
-            _generator().read_upgrades(_findings(_research("CampaignUpgrade", {"Marine": {"armor": 1.0}})))
+            _tech_tree_generator().read_upgrades(
+                _upgrade_findings(_research_entry("CampaignUpgrade", {"Marine": {"armor": 1.0}}))
+            )
 
 
-@pytest.fixture(scope="module")
-def tables() -> GameData:
-    """The game data of the first corpus game."""
-    recording = Recording(_CORPUS[0])
-    return GameData(next(exchange.response.data for exchange in recording if exchange.response.HasField("data")))
-
-
-def _levels(family: str) -> tuple[UpgradeId, UpgradeId, UpgradeId]:
+def _three_levels_of(family: str) -> tuple[UpgradeId, UpgradeId, UpgradeId]:
     """The three levels of the upgrade `family`, such as `TERRAN_INFANTRY_WEAPONS`."""
     return UpgradeId[f"{family}_1"], UpgradeId[f"{family}_2"], UpgradeId[f"{family}_3"]
 
@@ -210,12 +209,12 @@ _ARMOR_LEVELS = [
 ]
 
 
-def _reports(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeType | None, int]]:
+def _reported_levels(tables: GameData, upgrades: Iterable[UpgradeId]) -> list[tuple[UpgradeType | None, int]]:
     """For each of `upgrades`, the level type units report it under, and which level of its line it is."""
     return [(tables.upgrades[upgrade].upgrade_type, tables.upgrades[upgrade].level) for upgrade in upgrades]
 
 
-def _weapon(row: UnitTypeData, domain: TargetDomain) -> Weapon:
+def _weapon_hitting(row: UnitTypeData, domain: TargetDomain) -> Weapon:
     return next(weapon for weapon in row.weapons if weapon.target_domain is domain)
 
 
@@ -227,7 +226,7 @@ class TestWhatTheTablesSay:
     )
     def test_each_weapons_level_adds_what_it_adds_to_that_type(
         self,
-        tables: GameData,
+        first_corpus_tables: GameData,
         unit_type: UnitTypeId,
         family: str,
         domain: TargetDomain,
@@ -235,12 +234,12 @@ class TestWhatTheTablesSay:
         attribute: Attribute | None,
         bonuses: list[int],
     ) -> None:
-        row = tables.units[unit_type]
-        levels = _levels(family)
-        assert _reports(tables, levels) == [(UpgradeType.ATTACK, level) for level in (1, 2, 3)]
+        row = first_corpus_tables.units[unit_type]
+        levels = _three_levels_of(family)
+        assert _reported_levels(first_corpus_tables, levels) == [(UpgradeType.ATTACK, level) for level in (1, 2, 3)]
         assert set(levels) <= row.upgrades.keys()
         for level in range(4):
-            weapon = _weapon(row.with_upgrades(levels[:level]), domain)
+            weapon = _weapon_hitting(row.with_upgrades(levels[:level]), domain)
             expected = {attribute: bonuses[level]} if attribute is not None else {}
             assert (weapon.damage, dict(weapon.damage_bonuses)) == (damages[level], expected), f"level {level}"
 
@@ -250,39 +249,39 @@ class TestWhatTheTablesSay:
         ids=[f"{unit_type.name}-{family}" for unit_type, family, _ in _ARMOR_LEVELS],
     )
     def test_each_armor_level_adds_one_armor(
-        self, tables: GameData, unit_type: UnitTypeId, family: str, by_level: list[float]
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, family: str, by_level: list[float]
     ) -> None:
-        row = tables.units[unit_type]
-        levels = _levels(family)
-        assert _reports(tables, levels) == [(UpgradeType.ARMOR, level) for level in (1, 2, 3)]
+        row = first_corpus_tables.units[unit_type]
+        levels = _three_levels_of(family)
+        assert _reported_levels(first_corpus_tables, levels) == [(UpgradeType.ARMOR, level) for level in (1, 2, 3)]
         assert [row.with_upgrades(levels[:level]).armor for level in range(4)] == by_level
 
-    def test_one_level_adds_different_amounts_to_different_types(self, tables: GameData) -> None:
+    def test_one_level_adds_different_amounts_to_different_types(self, first_corpus_tables: GameData) -> None:
         first = UpgradeId.TERRAN_INFANTRY_WEAPONS_1
         infantry = (UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.GHOST)
-        changes = {unit: tables.units[unit].upgrades[first].weapons[0] for unit in infantry}
+        changes = {unit: first_corpus_tables.units[unit].upgrades[first].weapons[0] for unit in infantry}
         assert changes == {
             UnitTypeId.MARINE: WeaponUpgrade(damage=1.0),
             UnitTypeId.MARAUDER: WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({_ARMORED: 1.0})),
             UnitTypeId.GHOST: WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({_LIGHT: 1.0})),
         }
 
-    def test_neosteel_armor_adds_two_to_a_terran_structure(self, tables: GameData) -> None:
+    def test_neosteel_armor_adds_two_to_a_terran_structure(self, first_corpus_tables: GameData) -> None:
         structures = (UnitTypeId.COMMAND_CENTER, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MISSILE_TURRET)
-        armor = [tables.units[unit].with_upgrades({UpgradeId.BUILDING_ARMOR}).armor for unit in structures]
+        armor = [first_corpus_tables.units[unit].with_upgrades({UpgradeId.BUILDING_ARMOR}).armor for unit in structures]
         assert armor == [3, 4, 2]
 
-    def test_chitinous_plating_adds_two_on_top_of_the_armor_levels(self, tables: GameData) -> None:
-        ultralisk = tables.units[UnitTypeId.ULTRALISK]
-        assert ultralisk.with_upgrades({*_levels("ZERG_GROUND_ARMOR"), UpgradeId.ULTRALISK_ARMOR}).armor == 7
-        assert _reports(tables, [UpgradeId.ULTRALISK_ARMOR]) == [(UpgradeType.ARMOR, 0)]
+    def test_chitinous_plating_adds_two_on_top_of_the_armor_levels(self, first_corpus_tables: GameData) -> None:
+        ultralisk = first_corpus_tables.units[UnitTypeId.ULTRALISK]
+        assert ultralisk.with_upgrades({*_three_levels_of("ZERG_GROUND_ARMOR"), UpgradeId.ULTRALISK_ARMOR}).armor == 7
+        assert _reported_levels(first_corpus_tables, [UpgradeId.ULTRALISK_ARMOR]) == [(UpgradeType.ARMOR, 0)]
 
-    def test_a_shields_level_affects_protoss_types_and_changes_no_row(self, tables: GameData) -> None:
+    def test_a_shields_level_affects_protoss_types_and_changes_no_row(self, first_corpus_tables: GameData) -> None:
         """The game's rows hold no shield armor, so the levels that add to it change nothing in a row."""
-        shields = _levels("PROTOSS_SHIELDS")
-        assert _reports(tables, shields) == [(UpgradeType.SHIELD, level) for level in (1, 2, 3)]
+        shields = _three_levels_of("PROTOSS_SHIELDS")
+        assert _reported_levels(first_corpus_tables, shields) == [(UpgradeType.SHIELD, level) for level in (1, 2, 3)]
         for unit_type in (UnitTypeId.ZEALOT, UnitTypeId.PYLON, UnitTypeId.VOID_RAY, UnitTypeId.NEXUS):
-            row = tables.units[unit_type]
+            row = first_corpus_tables.units[unit_type]
             assert all(row.upgrades[upgrade] == UnitTypeUpgrade() for upgrade in shields)
             assert row.with_upgrades(shields) is row
 
@@ -295,19 +294,19 @@ class TestWhatTheTablesSay:
         ],
     )
     def test_each_attack_level_adds_one_to_a_measured_weapon(
-        self, tables: GameData, unit_type: UnitTypeId, family: str, damages: list[tuple[int, ...]]
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, family: str, damages: list[tuple[int, ...]]
     ) -> None:
         """The rows give these types no weapon, and the weapons measured gained 3 a hit with the third levels, a void
         ray's bonus against armored nothing (tool `sweep_combat`, `no-weapon`)."""
-        row = tables.units[unit_type]
-        levels = _levels(family)
+        row = first_corpus_tables.units[unit_type]
+        levels = _three_levels_of(family)
         by_level = [[weapon.damage for weapon in row.with_upgrades(levels[:level]).weapons] for level in range(4)]
         assert by_level == [list(level) for level in zip(*damages, strict=True)]
         assert row.with_upgrades(levels).weapons[0].damage_bonuses == row.weapons[0].damage_bonuses
 
-    def test_no_attack_level_adds_to_an_oracles_beam(self, tables: GameData) -> None:
-        oracle = tables.units[UnitTypeId.ORACLE]
-        assert oracle.with_upgrades(_levels("PROTOSS_AIR_WEAPONS")) is oracle
+    def test_no_attack_level_adds_to_an_oracles_beam(self, first_corpus_tables: GameData) -> None:
+        oracle = first_corpus_tables.units[UnitTypeId.ORACLE]
+        assert oracle.with_upgrades(_three_levels_of("PROTOSS_AIR_WEAPONS")) is oracle
 
     @pytest.mark.parametrize(
         ("unit_type", "upgrade", "sped_up"),
@@ -318,41 +317,48 @@ class TestWhatTheTablesSay:
         ],
     )
     def test_an_upgrade_that_speeds_an_attack_divides_the_tables_cooldown_and_keeps_the_delay(
-        self, tables: GameData, unit_type: UnitTypeId, upgrade: UpgradeId, sped_up: float
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, upgrade: UpgradeId, sped_up: float
     ) -> None:
-        row = tables.units[unit_type]
+        row = first_corpus_tables.units[unit_type]
         (weapon,) = row.with_upgrades({upgrade}).weapons
         assert weapon.cooldown_steps == pytest.approx(sped_up + 0.4996, abs=1e-3)
         assert weapon.damage == row.weapons[0].damage
 
-    def test_an_upgrade_no_unit_reports_is_of_no_kind_and_no_level(self, tables: GameData) -> None:
+    def test_an_upgrade_no_unit_reports_is_of_no_kind_and_no_level(self, first_corpus_tables: GameData) -> None:
         other = (UpgradeType.OTHER, 0)
-        assert _reports(tables, [UpgradeId.HYDRALISK_RANGE, UpgradeId.ZERGLING_SPEED]) == [other, other]
+        assert _reported_levels(first_corpus_tables, [UpgradeId.HYDRALISK_RANGE, UpgradeId.ZERGLING_SPEED]) == [
+            other,
+            other,
+        ]
 
-    def test_infernal_pre_igniter_gives_a_hellbat_a_bonus_against_light(self, tables: GameData) -> None:
-        hellbat = tables.units[UnitTypeId.HELLBAT]
+    def test_infernal_pre_igniter_gives_a_hellbat_a_bonus_against_light(self, first_corpus_tables: GameData) -> None:
+        hellbat = first_corpus_tables.units[UnitTypeId.HELLBAT]
         assert Attribute.LIGHT not in hellbat.weapons[0].damage_bonuses
         assert hellbat.with_upgrades({UpgradeId.BLUE_FLAME}).weapons[0].damage_bonuses[Attribute.LIGHT] > 0
 
-    def test_grooved_spines_adds_to_a_hydralisks_range(self, tables: GameData) -> None:
-        hydralisk = tables.units[UnitTypeId.HYDRALISK]
+    def test_grooved_spines_adds_to_a_hydralisks_range(self, first_corpus_tables: GameData) -> None:
+        hydralisk = first_corpus_tables.units[UnitTypeId.HYDRALISK]
         assert hydralisk.with_upgrades({UpgradeId.HYDRALISK_RANGE}).weapons[0].range == hydralisk.weapons[0].range + 1
 
-    def test_metabolic_boost_makes_a_zergling_faster(self, tables: GameData) -> None:
-        zergling = tables.units[UnitTypeId.ZERGLING]
+    def test_metabolic_boost_makes_a_zergling_faster(self, first_corpus_tables: GameData) -> None:
+        zergling = first_corpus_tables.units[UnitTypeId.ZERGLING]
         assert zergling.with_upgrades({UpgradeId.ZERGLING_SPEED}).speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
 
-    def test_upgrades_that_change_nothing_about_a_type_leave_its_row_as_it_is(self, tables: GameData) -> None:
-        marine = tables.units[UnitTypeId.MARINE]
+    def test_upgrades_that_change_nothing_about_a_type_leave_its_row_as_it_is(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        marine = first_corpus_tables.units[UnitTypeId.MARINE]
         assert marine.with_upgrades(()) is marine
         assert marine.with_upgrades({UpgradeId.ADRENAL_GLANDS, UpgradeId.STIMPACK}) is marine
 
 
-def _tracker(tables: GameData) -> _Tracker:
+def _tracker_against_the_computer(tables: GameData) -> _Tracker:
     return _Tracker(tables, make_enemy())
 
 
-def _observe(tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0) -> list[Unit[Any]]:
+def _units_observed(
+    tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = (), step: int = 0
+) -> list[Unit[Any]]:
     tracker.update(make_observation(step, units=units, upgrades=upgrades).observation.raw_data, step)
     require_enemy(tracker.enemy).assume_upgrades(
         *tracker.upgrade_tracker.reader.read_basic_upgrades(tracker.unit_tracker.present)
@@ -362,168 +368,187 @@ def _observe(tracker: _Tracker, *units: raw_pb2.Unit, upgrades: tuple[int, ...] 
 
 
 class TestWhatAUnitReads:
-    def test_this_players_units_read_with_its_upgrades(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=(UpgradeId.ZERGLING_SPEED,))
+    def test_this_players_units_read_with_its_upgrades(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=(UpgradeId.ZERGLING_SPEED,))
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
 
-    def test_this_players_units_attack_as_fast_as_its_upgrades_have_them(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
+    def test_this_players_units_attack_as_fast_as_its_upgrades_have_them(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         upgrades = (UpgradeId.ADRENAL_GLANDS,)
-        (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=upgrades)
-        expected = tables.units[UnitTypeId.ZERGLING].with_upgrades(upgrades).weapons[0].cooldown_steps
+        (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=upgrades)
+        expected = first_corpus_tables.units[UnitTypeId.ZERGLING].with_upgrades(upgrades).weapons[0].cooldown_steps
         assert (
-            zergling.weapons[0].cooldown_steps == expected < tables.units[UnitTypeId.ZERGLING].weapons[0].cooldown_steps
+            zergling.weapons[0].cooldown_steps
+            == expected
+            < first_corpus_tables.units[UnitTypeId.ZERGLING].weapons[0].cooldown_steps
         )
 
-    def test_this_players_units_show_it_nothing_it_has_not_researched(self, tables: GameData) -> None:
+    def test_this_players_units_show_it_nothing_it_has_not_researched(self, first_corpus_tables: GameData) -> None:
         """This player's units report only this player's upgrades, so nothing is inferred from them."""
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, attack_upgrade_level=3))
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, attack_upgrade_level=3))
         assert not require_enemy(tracker.enemy).upgrades
 
-    def test_a_unit_taken_from_this_player_shows_nothing(self, tables: GameData) -> None:
+    def test_a_unit_taken_from_this_player_shows_nothing(self, first_corpus_tables: GameData) -> None:
         """A neural parasite puts it on the enemy's side, but the levels it reports may be this player's."""
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, attack_upgrade_level=3))
-        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=3), step=1)
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, attack_upgrade_level=3))
+        _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=3), step=1)
         assert not require_enemy(tracker.enemy).upgrades
 
-    def test_a_negative_level_shows_nothing(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=-1, armor_upgrade_level=-2))
+    def test_a_negative_level_shows_nothing(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=-1, armor_upgrade_level=-2))
         assert not require_enemy(tracker.enemy).upgrades
 
-    def test_the_enemys_units_read_with_what_it_is_assumed_to_have(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
-        base = tables.units[UnitTypeId.ZERGLING].speed
+    def test_the_enemys_units_read_with_what_it_is_assumed_to_have(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
+        base = first_corpus_tables.units[UnitTypeId.ZERGLING].speed
         assert zergling.speed == base
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
         require_enemy(tracker.enemy).forget_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == base
 
-    def test_a_neutral_unit_reads_with_no_upgrade(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
+    def test_a_neutral_unit_reads_with_no_upgrade(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
-        (zergling,) = _observe(
+        (zergling,) = _units_observed(
             tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL), upgrades=(UpgradeId.ZERGLING_SPEED,)
         )
-        assert zergling.speed == tables.units[UnitTypeId.ZERGLING].speed
+        assert zergling.speed == first_corpus_tables.units[UnitTypeId.ZERGLING].speed
 
-    def test_a_visible_enemy_unit_shows_the_levels_of_its_own_lines(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2))
+    def test_a_visible_enemy_unit_shows_the_levels_of_its_own_lines(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2))
         assert require_enemy(tracker.enemy).upgrades == {
             UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
             UpgradeId.TERRAN_INFANTRY_WEAPONS_2,
         }
 
-    def test_what_one_unit_shows_counts_for_every_type_of_its_line(self, tables: GameData) -> None:
+    def test_what_one_unit_shows_counts_for_every_type_of_its_line(self, first_corpus_tables: GameData) -> None:
         """A marine's attack level is Terran Infantry Weapons, which a marauder has too and a viking does not."""
-        tracker = _tracker(tables)
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         marauder = make_unit(2, UnitTypeId.MARAUDER, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
         viking = make_unit(3, UnitTypeId.VIKING, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-        units = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2), marauder, viking)
-        assert units[1].weapons[0].damage == tables.units[UnitTypeId.MARAUDER].weapons[0].damage + 2
-        assert units[2].weapons[0].damage == tables.units[UnitTypeId.VIKING].weapons[0].damage
+        units = _units_observed(
+            tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=2), marauder, viking
+        )
+        assert units[1].weapons[0].damage == first_corpus_tables.units[UnitTypeId.MARAUDER].weapons[0].damage + 2
+        assert units[2].weapons[0].damage == first_corpus_tables.units[UnitTypeId.VIKING].weapons[0].damage
 
-    def test_a_unit_out_of_sight_counts_a_level_another_showed_since(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
-        base = tables.units[UnitTypeId.MARINE].weapons[0].damage
+    def test_a_unit_out_of_sight_counts_a_level_another_showed_since(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (marine,) = _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY))
+        base = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].damage
         assert marine.weapons[0].damage == base
-        _observe(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1), step=1)
+        _units_observed(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1), step=1)
         assert marine.is_stale
         assert marine.weapons[0].damage == base + 1
 
-    def test_a_level_a_unit_showed_stays_known_once_it_is_gone(self, tables: GameData) -> None:
+    def test_a_level_a_unit_showed_stays_known_once_it_is_gone(self, first_corpus_tables: GameData) -> None:
         """Levels are never lost, so what one unit showed holds for the rest of the game."""
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=1))
-        _observe(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=0))
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY, attack_upgrade_level=1))
+        _units_observed(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=0))
         assert require_enemy(tracker.enemy).upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1}
 
     @pytest.mark.parametrize("level", [0, 1, 2, 3])
     def test_an_enemy_marauder_reads_the_damage_and_bonus_of_the_level_it_shows(
-        self, tables: GameData, level: int
+        self, first_corpus_tables: GameData, level: int
     ) -> None:
-        tracker = _tracker(tables)
-        (marauder,) = _observe(
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (marauder,) = _units_observed(
             tracker, make_unit(1, UnitTypeId.MARAUDER, alliance=Alliance.ENEMY, attack_upgrade_level=level)
         )
         weapon = marauder.weapons[0]
         assert (weapon.damage, dict(weapon.damage_bonuses)) == (10 + level, {Attribute.ARMORED: 10 + level})
 
-    def test_the_armor_a_zergling_shows_is_the_ground_armor_levels(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, armor_upgrade_level=2))
+    def test_the_armor_a_zergling_shows_is_the_ground_armor_levels(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, armor_upgrade_level=2))
         assert require_enemy(tracker.enemy).upgrades == {UpgradeId.ZERG_GROUND_ARMOR_1, UpgradeId.ZERG_GROUND_ARMOR_2}
 
-    def test_the_armor_an_ultralisk_shows_says_nothing_about_the_levels(self, tables: GameData) -> None:
+    def test_the_armor_an_ultralisk_shows_says_nothing_about_the_levels(self, first_corpus_tables: GameData) -> None:
         """Its 2 could be two levels or Chitinous Plating, and reading it as levels would armor every zergling."""
-        tracker = _tracker(tables)
-        (ultralisk,) = _observe(
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (ultralisk,) = _units_observed(
             tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=2)
         )
         assert not require_enemy(tracker.enemy).upgrades
-        assert ultralisk.armor == tables.units[UnitTypeId.ULTRALISK].armor + 2
+        assert ultralisk.armor == first_corpus_tables.units[UnitTypeId.ULTRALISK].armor + 2
 
-    def test_a_visible_unit_reads_the_armor_it_reports(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        base = tables.units[UnitTypeId.ULTRALISK].armor
-        (ultralisk,) = _observe(
+    def test_a_visible_unit_reads_the_armor_it_reports(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        base = first_corpus_tables.units[UnitTypeId.ULTRALISK].armor
+        (ultralisk,) = _units_observed(
             tracker, make_unit(1, UnitTypeId.ULTRALISK, alliance=Alliance.ENEMY, armor_upgrade_level=5)
         )
         assert ultralisk.armor == base + 5
 
-    def test_a_visible_unit_reads_the_armor_it_reports_alone(self, tables: GameData) -> None:
+    def test_a_visible_unit_reads_the_armor_it_reports_alone(self, first_corpus_tables: GameData) -> None:
         """Though its owner is known to have more."""
-        tracker = _tracker(tables)
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
-        (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
-        assert marine.armor == tables.units[UnitTypeId.MARINE].armor
+        (marine,) = _units_observed(
+            tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0)
+        )
+        assert marine.armor == first_corpus_tables.units[UnitTypeId.MARINE].armor
 
-    def test_a_unit_out_of_sight_reads_the_more_of_its_last_report_and_its_owners(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
+    def test_a_unit_out_of_sight_reads_the_more_of_its_last_report_and_its_owners(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.TERRAN_INFANTRY_ARMOR_1)
-        (marine,) = _observe(tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0))
+        (marine,) = _units_observed(
+            tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0)
+        )
         tracker.update(make_observation(16, units=[]).observation.raw_data, 16)
         assert marine.is_stale
-        assert marine.armor == tables.units[UnitTypeId.MARINE].armor + 1
+        assert marine.armor == first_corpus_tables.units[UnitTypeId.MARINE].armor + 1
 
-    def test_a_unit_never_shown_visible_reads_the_armor_the_enemy_is_known_to_have(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
+    def test_a_unit_never_shown_visible_reads_the_armor_the_enemy_is_known_to_have(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.BUILDING_ARMOR)
         remembered = make_unit(1, UnitTypeId.MISSILE_TURRET, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
-        assert _observe(tracker, remembered)[0].armor == tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
+        assert (
+            _units_observed(tracker, remembered)[0].armor
+            == first_corpus_tables.units[UnitTypeId.MISSILE_TURRET].armor + 2
+        )
 
-    def test_shield_armor_is_the_shields_levels(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
-        (zealot,) = _observe(tracker, make_unit(1, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=2))
+    def test_shield_armor_is_the_shields_levels(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        (zealot,) = _units_observed(
+            tracker, make_unit(1, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=2)
+        )
         assert zealot.shield_armor == 2
         assert require_enemy(tracker.enemy).upgrades == {UpgradeId.PROTOSS_SHIELDS_1, UpgradeId.PROTOSS_SHIELDS_2}
         never_seen = make_unit(2, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-        assert _observe(tracker, never_seen)[0].shield_armor == 2
+        assert _units_observed(tracker, never_seen)[0].shield_armor == 2
         visible = make_unit(3, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, shield_upgrade_level=0)
-        assert _observe(tracker, visible)[0].shield_armor == 0
+        assert _units_observed(tracker, visible)[0].shield_armor == 0
 
-    def test_a_unit_without_shields_has_no_shield_armor(self, tables: GameData) -> None:
-        tracker = _tracker(tables)
+    def test_a_unit_without_shields_has_no_shield_armor(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.PROTOSS_SHIELDS_1)
-        (marine,) = _observe(tracker, make_unit(1, alliance=Alliance.ENEMY))
+        (marine,) = _units_observed(tracker, make_unit(1, alliance=Alliance.ENEMY))
         assert marine.shield_armor == 0
 
 
-def _evident(tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...] = ()) -> frozenset[UpgradeId]:
+def _upgrades_revealed(
+    tables: GameData, *units: raw_pb2.Unit, effects: tuple[Effect, ...] = ()
+) -> frozenset[UpgradeId]:
     """The enemy upgrades beyond levels that `units` and `effects` reveal in one observation."""
-    tracker = _tracker(tables)
-    _observe(tracker, *units)
+    tracker = _tracker_against_the_computer(tables)
+    _units_observed(tracker, *units)
     return UpgradeReader(tables).read_intermediate_upgrades(tracker.unit_tracker.present, effects)
 
 
-def _storm(alliance: Alliance) -> Effect:
+def _storm_of(alliance: Alliance) -> Effect:
     position = common_pb2.Point2D(x=10.0, y=10.0)
     return Effect._from_proto(
         raw_pb2.Effect(effect_id=EffectId.HIGH_TEMPLAR_STORM, pos=[position], radius=1.5, alliance=alliance.value)
@@ -531,17 +556,19 @@ def _storm(alliance: Alliance) -> Effect:
 
 
 class TestWhatAUnitGivesAway:
-    def test_an_enemy_warp_gate_shows_warp_gate(self, tables: GameData) -> None:
+    def test_an_enemy_warp_gate_shows_warp_gate(self, first_corpus_tables: GameData) -> None:
         remembered = make_unit(1, UnitTypeId.WARP_GATE, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
-        assert _evident(tables, remembered) == {UpgradeId.WARP_GATE}
+        assert _upgrades_revealed(first_corpus_tables, remembered) == {UpgradeId.WARP_GATE}
 
-    def test_a_burrowed_enemy_shows_burrow_undetected(self, tables: GameData) -> None:
+    def test_a_burrowed_enemy_shows_burrow_undetected(self, first_corpus_tables: GameData) -> None:
         zergling = make_unit(1, UnitTypeId.ZERGLING_BURROWED, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-        assert _evident(tables, zergling) == {UpgradeId.BURROW}
+        assert _upgrades_revealed(first_corpus_tables, zergling) == {UpgradeId.BURROW}
 
     @pytest.mark.parametrize("unit_type", [UnitTypeId.LURKER_BURROWED, UnitTypeId.WIDOW_MINE_BURROWED])
-    def test_what_burrows_without_burrow_shows_nothing(self, tables: GameData, unit_type: UnitTypeId) -> None:
-        assert not _evident(tables, make_unit(1, unit_type, alliance=Alliance.ENEMY))
+    def test_what_burrows_without_burrow_shows_nothing(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId
+    ) -> None:
+        assert not _upgrades_revealed(first_corpus_tables, make_unit(1, unit_type, alliance=Alliance.ENEMY))
 
     @pytest.mark.parametrize(
         ("unit_type", "buff", "upgrade"),
@@ -555,28 +582,35 @@ class TestWhatAUnitGivesAway:
         ],
     )
     def test_a_buff_an_enemy_puts_on_itself_shows_the_upgrade_its_ability_needs(
-        self, tables: GameData, unit_type: UnitTypeId, buff: BuffId, upgrade: UpgradeId
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, buff: BuffId, upgrade: UpgradeId
     ) -> None:
-        assert _evident(tables, make_unit(1, unit_type, alliance=Alliance.ENEMY, buff_ids=[buff])) == {upgrade}
+        assert _upgrades_revealed(
+            first_corpus_tables, make_unit(1, unit_type, alliance=Alliance.ENEMY, buff_ids=[buff])
+        ) == {upgrade}
 
-    def test_a_buff_on_this_players_unit_shows_the_enemy_put_it_on(self, tables: GameData) -> None:
+    def test_a_buff_on_this_players_unit_shows_the_enemy_put_it_on(self, first_corpus_tables: GameData) -> None:
         slowed = make_unit(1, buff_ids=[BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW])
         matrixed = make_unit(2, UnitTypeId.SIEGE_TANK, buff_ids=[BuffId.RAVEN_INTERFERENCE_MATRIX])
-        assert _evident(tables, slowed, matrixed) == {UpgradeId.CONCUSSIVE_SHELLS, UpgradeId.INTERFERENCE_MATRIX}
+        assert _upgrades_revealed(first_corpus_tables, slowed, matrixed) == {
+            UpgradeId.CONCUSSIVE_SHELLS,
+            UpgradeId.INTERFERENCE_MATRIX,
+        }
 
-    def test_a_buff_on_an_enemy_this_player_put_on_shows_nothing_of_the_enemy(self, tables: GameData) -> None:
+    def test_a_buff_on_an_enemy_this_player_put_on_shows_nothing_of_the_enemy(
+        self, first_corpus_tables: GameData
+    ) -> None:
         slowed = make_unit(
             1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, buff_ids=[BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW]
         )
-        assert not _evident(tables, slowed)
+        assert not _upgrades_revealed(first_corpus_tables, slowed)
 
-    def test_an_enemy_marine_with_more_than_45_health_shows_combat_shield(self, tables: GameData) -> None:
+    def test_an_enemy_marine_with_more_than_45_health_shows_combat_shield(self, first_corpus_tables: GameData) -> None:
         shielded = make_unit(1, alliance=Alliance.ENEMY, health=55.0, health_max=55.0)
         plain = make_unit(2, alliance=Alliance.ENEMY, health=45.0, health_max=45.0)
-        assert _evident(tables, shielded) == {UpgradeId.COMBAT_SHIELD}
-        assert not _evident(tables, plain)
+        assert _upgrades_revealed(first_corpus_tables, shielded) == {UpgradeId.COMBAT_SHIELD}
+        assert not _upgrades_revealed(first_corpus_tables, plain)
 
-    def test_a_unit_the_enemy_has_parasited_shows_only_neural_parasite(self, tables: GameData) -> None:
+    def test_a_unit_the_enemy_has_parasited_shows_only_neural_parasite(self, first_corpus_tables: GameData) -> None:
         """Its buffs and its type belong to the player it was taken from."""
         taken = make_unit(
             1,
@@ -584,22 +618,22 @@ class TestWhatAUnitGivesAway:
             health_max=55.0,
             buff_ids=[BuffId.INFESTOR_NEURAL_PARASITE, BuffId.MARINE_STIMMED],
         )
-        assert _evident(tables, taken) == {UpgradeId.NEURAL_PARASITE}
+        assert _upgrades_revealed(first_corpus_tables, taken) == {UpgradeId.NEURAL_PARASITE}
 
-    def test_a_unit_taken_from_this_player_shows_nothing_by_its_type(self, tables: GameData) -> None:
+    def test_a_unit_taken_from_this_player_shows_nothing_by_its_type(self, first_corpus_tables: GameData) -> None:
         """Its type is this player's doing: a burrowed zergling of this player's, now the enemy's and out of sight,
         shows no Burrow."""
-        tracker = _tracker(tables)
-        _observe(tracker, make_unit(1, UnitTypeId.ZERGLING_BURROWED))
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING_BURROWED))
         taken = make_unit(1, UnitTypeId.ZERGLING_BURROWED, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-        _observe(tracker, taken, step=1)
-        assert not UpgradeReader(tables).read_intermediate_upgrades(tracker.unit_tracker.present, ())
+        _units_observed(tracker, taken, step=1)
+        assert not UpgradeReader(first_corpus_tables).read_intermediate_upgrades(tracker.unit_tracker.present, ())
 
-    def test_only_the_enemys_storm_shows_storm(self, tables: GameData) -> None:
-        assert _evident(tables, effects=(_storm(Alliance.ENEMY),)) == {UpgradeId.STORM}
-        assert not _evident(tables, effects=(_storm(Alliance.OWN),))
+    def test_only_the_enemys_storm_shows_storm(self, first_corpus_tables: GameData) -> None:
+        assert _upgrades_revealed(first_corpus_tables, effects=(_storm_of(Alliance.ENEMY),)) == {UpgradeId.STORM}
+        assert not _upgrades_revealed(first_corpus_tables, effects=(_storm_of(Alliance.OWN),))
 
-    def test_nothing_out_of_sight_shows_what_it_wore(self, tables: GameData) -> None:
+    def test_nothing_out_of_sight_shows_what_it_wore(self, first_corpus_tables: GameData) -> None:
         remembered = make_unit(
             1,
             UnitTypeId.MISSILE_TURRET,
@@ -607,11 +641,13 @@ class TestWhatAUnitGivesAway:
             visibility=Visibility.IN_FOG,
             buff_ids=[BuffId.GHOST_CLOAK],
         )
-        assert not _evident(tables, remembered)
+        assert not _upgrades_revealed(first_corpus_tables, remembered)
 
-    def test_a_buff_the_curated_ids_leave_out_raises(self, tables: GameData) -> None:
+    def test_a_buff_the_curated_ids_leave_out_raises(self, first_corpus_tables: GameData) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
-            _evident(tables, make_unit(1, alliance=Alliance.ENEMY, buff_ids=[RawBuffId.DutchMarauderSlow]))
+            _upgrades_revealed(
+                first_corpus_tables, make_unit(1, alliance=Alliance.ENEMY, buff_ids=[RawBuffId.DutchMarauderSlow])
+            )
 
 
 # The upgrades the enemy's units reveal in each recorded game: nothing in the two where the enemy researched nothing.
@@ -639,7 +675,7 @@ _LEARNED_IN_THE_CORPUS = {
 }
 
 
-def _replay(path: Path, api: Api) -> Api:
+def _api_after_replaying(path: Path, api: Api) -> Api:
     """`api` after playing the recorded game at `path` to its end."""
     client = Client(PlaybackTransport(Recording(path)))
     client.create_game("recorded", [Participant(), Computer()])
@@ -649,21 +685,21 @@ def _replay(path: Path, api: Api) -> Api:
 
 
 @pytest.mark.parametrize("inference", [UpgradeInference.BASIC, UpgradeInference.INTERMEDIATE])
-@pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
+@pytest.mark.parametrize("path", _CORPUS_GAMES, ids=lambda path: path.stem)
 def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, inference: UpgradeInference) -> None:
     """The computer researches during a corpus game, and its units carry the levels NachOS reads. They reveal nothing
     more, since none of this player's units leaves its base to see it."""
     api = Api(enemy_upgrade_inference=inference)
-    assert _replay(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+    assert _api_after_replaying(path, api).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
-@pytest.mark.parametrize("path", _CORPUS, ids=lambda path: path.stem)
+@pytest.mark.parametrize("path", _CORPUS_GAMES, ids=lambda path: path.stem)
 def test_an_api_told_to_infer_nothing_leaves_the_enemys_upgrades_to_the_bot(path: Path) -> None:
     api = Api(enemy_upgrade_inference=UpgradeInference.NONE)
-    assert not _replay(path, api).enemy.upgrades
+    assert not _api_after_replaying(path, api).enemy.upgrades
 
 
-def _upgraded(row: UnitTypeData) -> list[float]:
+def _values_upgrades_change(row: UnitTypeData) -> list[float]:
     """The values of `row` that upgrades change, as numbers in a fixed order."""
     values = [row.armor, row.speed]
     for weapon in row.weapons:
@@ -715,7 +751,8 @@ def test_in_a_real_game_the_tables_with_this_players_upgrades_are_what_the_game_
             differ = [
                 unit_type.name
                 for unit_type, row in tables.units.items()
-                if _upgraded(row.with_upgrades(game.state.upgrades)) != pytest.approx(_upgraded(asked.units[unit_type]))
+                if _values_upgrades_change(row.with_upgrades(game.state.upgrades))
+                != pytest.approx(_values_upgrades_change(asked.units[unit_type]))
             ]
             assert not differ
             for unit in game.tracker.unit_tracker.present.own:
@@ -771,7 +808,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, UpgradeReader, Point]]:
             client.leave_game()
 
 
-def _made(game: RealGame, unit_type: UnitTypeId, at: Point, *, owner: int | None = None) -> Unit[Any]:
+def _unit_made(game: RealGame, unit_type: UnitTypeId, at: Point, *, owner: int | None = None) -> Unit[Any]:
     """A new `unit_type` at `at`, with its energy full."""
     game.debug(game.create(unit_type, at, owner=owner))
     game.turn(4)
@@ -786,10 +823,10 @@ def _research_in_game(game: RealGame, *research: tuple[AbilityId, Unit[Any], Upg
     """Research each upgrade in turn, waiting for each to finish."""
     for ability, structure, upgrade in research:
         game.order(ability, structure)
-        _until(game, lambda upgrade=upgrade: upgrade in game.state.upgrades, steps=22)
+        _turn_until(game, lambda upgrade=upgrade: upgrade in game.state.upgrades, steps=22)
 
 
-def _until(game: RealGame, done: Callable[[], bool], *, steps: int = 2, turns: int = 100) -> None:
+def _turn_until(game: RealGame, done: Callable[[], bool], *, steps: int = 2, turns: int = 100) -> None:
     for _ in range(turns):
         if done():
             return
@@ -799,9 +836,9 @@ def _until(game: RealGame, done: Callable[[], bool], *, steps: int = 2, turns: i
 
 def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, at: Point) -> Unit[Any]:
     """The tech lab a new `unit_type` builds, both within the five by five square around `at`."""
-    structure = _made(game, unit_type, at - (1, 0))
+    structure = _unit_made(game, unit_type, at - (1, 0))
     game.order(AbilityId.BUILD_TECH_LAB, structure)
-    _until(game, lambda: bool(game.tracker.unit_tracker.present.own.of_type(tech_lab)), steps=22)
+    _turn_until(game, lambda: bool(game.tracker.unit_tracker.present.own.of_type(tech_lab)), steps=22)
     return game.newest(tech_lab)
 
 
@@ -817,8 +854,8 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         starport_lab = _with_tech_lab(
             game, UnitTypeId.STARPORT, UnitTypeId.TECH_LAB_STARPORT, game.open_ground(toward + (0, 8), size=5)
         )
-        academy = _made(game, UnitTypeId.GHOST_ACADEMY, game.open_ground(toward + (0, -8), size=3))
-        marine = _made(game, UnitTypeId.MARINE, toward + (-6, 0))
+        academy = _unit_made(game, UnitTypeId.GHOST_ACADEMY, game.open_ground(toward + (0, -8), size=3))
+        marine = _unit_made(game, UnitTypeId.MARINE, toward + (-6, 0))
         assert (marine.health_max, reader._of_owner(marine)) == (45.0, frozenset())
 
         _research_in_game(
@@ -836,13 +873,13 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         game.turn(4)
         assert reader._of_owner(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
 
-        marauder = _made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
+        marauder = _unit_made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
         game.order(AbilityId.STIM, marauder)
         game.turn(4)
         assert reader._of_owner(marauder) == {UpgradeId.STIMPACK}
 
-        banshee = _made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
-        ghost = _made(game, UnitTypeId.GHOST, toward + (-6, 6))
+        banshee = _unit_made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
+        ghost = _unit_made(game, UnitTypeId.GHOST, toward + (-6, 6))
         game.order(AbilityId.CLOAK_ON, banshee)
         game.order(AbilityId.CLOAK_ON, ghost)
         game.turn(8)
@@ -851,17 +888,17 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
             {UpgradeId.GHOST_CLOAK},
         )
 
-        roach = _made(game, UnitTypeId.ROACH, toward + (-1, 2), owner=enemy)
+        roach = _unit_made(game, UnitTypeId.ROACH, toward + (-1, 2), owner=enemy)
         game.order(AbilityId.ATTACK, marauder, target=roach)
-        _until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
+        _turn_until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
         assert reader._of_opponent(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
         # Killed, or the marauder would slow the tank too.
         game.debug(game.kill(marauder, roach))
 
-        raven = _made(game, UnitTypeId.RAVEN, toward + (-6, 8))
-        tank = _made(game, UnitTypeId.SIEGE_TANK, toward + (-1, 8), owner=enemy)
+        raven = _unit_made(game, UnitTypeId.RAVEN, toward + (-6, 8))
+        tank = _unit_made(game, UnitTypeId.SIEGE_TANK, toward + (-1, 8), owner=enemy)
         game.order(AbilityId.RAVEN_INTERFERENCE_MATRIX, raven, target=tank)
-        _until(game, lambda: BuffId.RAVEN_INTERFERENCE_MATRIX in tank.buffs)
+        _turn_until(game, lambda: BuffId.RAVEN_INTERFERENCE_MATRIX in tank.buffs)
         assert reader._of_opponent(tank) == {UpgradeId.INTERFERENCE_MATRIX}
 
 
@@ -874,10 +911,10 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
         for spot in spots:
             # Where `tools/sweep_tech_tree.py` puts a pylon to power a structure it has just created.
             game.debug(game.create(UnitTypeId.PYLON, spot + (2.5, 2.5)))
-        core = _made(game, UnitTypeId.CYBERNETICS_CORE, spots[0])
-        council = _made(game, UnitTypeId.TWILIGHT_COUNCIL, spots[1])
-        archive = _made(game, UnitTypeId.TEMPLAR_ARCHIVE, spots[2])
-        gateway = _made(game, UnitTypeId.GATEWAY, spots[3])
+        core = _unit_made(game, UnitTypeId.CYBERNETICS_CORE, spots[0])
+        council = _unit_made(game, UnitTypeId.TWILIGHT_COUNCIL, spots[1])
+        archive = _unit_made(game, UnitTypeId.TEMPLAR_ARCHIVE, spots[2])
+        gateway = _unit_made(game, UnitTypeId.GATEWAY, spots[3])
         assert reader._of_owner(gateway) == frozenset()
 
         _research_in_game(
@@ -886,18 +923,18 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
             (AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE, council, UpgradeId.CHARGE),
             (AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM, archive, UpgradeId.STORM),
         )
-        _until(game, lambda: gateway.type_id is UnitTypeId.WARP_GATE, steps=22)
+        _turn_until(game, lambda: gateway.type_id is UnitTypeId.WARP_GATE, steps=22)
         assert reader._of_owner(gateway) == {UpgradeId.WARP_GATE}
 
-        zealot = _made(game, UnitTypeId.ZEALOT, toward + (-8, 0))
-        roach = _made(game, UnitTypeId.ROACH, toward + (-14, 0), owner=enemy)
+        zealot = _unit_made(game, UnitTypeId.ZEALOT, toward + (-8, 0))
+        roach = _unit_made(game, UnitTypeId.ROACH, toward + (-14, 0), owner=enemy)
         game.order(AbilityId.ATTACK, zealot, target=roach)
-        _until(game, lambda: BuffId.ZEALOT_CHARGING in zealot.buffs, turns=60)
+        _turn_until(game, lambda: BuffId.ZEALOT_CHARGING in zealot.buffs, turns=60)
         assert reader._of_owner(zealot) == {UpgradeId.CHARGE}
 
-        templar = _made(game, UnitTypeId.HIGH_TEMPLAR, toward + (-8, 4))
+        templar = _unit_made(game, UnitTypeId.HIGH_TEMPLAR, toward + (-8, 4))
         game.order(AbilityId.HIGH_TEMPLAR_STORM, templar, target=toward + (-10, 4))
-        _until(game, lambda: any(effect.id is EffectId.HIGH_TEMPLAR_STORM for effect in game.state.effects))
+        _turn_until(game, lambda: any(effect.id is EffectId.HIGH_TEMPLAR_STORM for effect in game.state.effects))
         (storm,) = [effect for effect in game.state.effects if effect.id is EffectId.HIGH_TEMPLAR_STORM]
         assert (storm.alliance, reader._of_effect(storm)) == (Alliance.OWN, {UpgradeId.STORM})
 
@@ -912,8 +949,8 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
         game.debug(game.create(UnitTypeId.HIVE, game.open_ground(near + (6, 0), size=5)))
         game.turn(4)
         hive = game.newest(UnitTypeId.HIVE)
-        den = _made(game, UnitTypeId.HYDRALISK_DEN, game.open_ground(near, size=3))
-        pit = _made(game, UnitTypeId.INFESTATION_PIT, game.open_ground(near + (0, 5), size=3))
+        den = _unit_made(game, UnitTypeId.HYDRALISK_DEN, game.open_ground(near, size=3))
+        pit = _unit_made(game, UnitTypeId.INFESTATION_PIT, game.open_ground(near + (0, 5), size=3))
 
         _research_in_game(
             game,
@@ -921,20 +958,20 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
             (AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE, den, UpgradeId.HYDRALISK_LUNGE),
             (AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE, pit, UpgradeId.NEURAL_PARASITE),
         )
-        zergling = _made(game, UnitTypeId.ZERGLING, near + (-4, 0))
+        zergling = _unit_made(game, UnitTypeId.ZERGLING, near + (-4, 0))
         assert reader._of_owner(zergling) == frozenset()
         game.order(AbilityId.BURROW, zergling)
-        _until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
+        _turn_until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
         assert reader._of_owner(zergling) == {UpgradeId.BURROW}
 
-        hydralisk = _made(game, UnitTypeId.HYDRALISK, near + (-4, 3))
+        hydralisk = _unit_made(game, UnitTypeId.HYDRALISK, near + (-4, 3))
         game.order(AbilityId.HYDRALISK_LUNGE, hydralisk)
-        _until(game, lambda: BuffId.HYDRALISK_LUNGE in hydralisk.buffs)
+        _turn_until(game, lambda: BuffId.HYDRALISK_LUNGE in hydralisk.buffs)
         assert reader._of_owner(hydralisk) == {UpgradeId.HYDRALISK_LUNGE}
 
-        infestor = _made(game, UnitTypeId.INFESTOR, near + (-4, 6))
-        marine = _made(game, UnitTypeId.MARINE, near + (-1, 6), owner=enemy)
+        infestor = _unit_made(game, UnitTypeId.INFESTOR, near + (-4, 6))
+        marine = _unit_made(game, UnitTypeId.MARINE, near + (-1, 6), owner=enemy)
         game.order(AbilityId.INFESTOR_NEURAL_PARASITE, infestor, target=marine)
-        _until(game, lambda: marine.alliance is Alliance.OWN)
+        _turn_until(game, lambda: marine.alliance is Alliance.OWN)
         assert BuffId.INFESTOR_NEURAL_PARASITE in marine.buffs
         assert reader._of_owner(marine) == {UpgradeId.NEURAL_PARASITE}
