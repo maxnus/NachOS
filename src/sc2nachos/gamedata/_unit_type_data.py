@@ -99,34 +99,34 @@ class Weapon:
         return self.damage * self.attacks * STEPS_PER_SECOND / self.average_cooldown_steps
 
     def damage_against(
-        self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shields: float = 0.0
+        self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shield: float = 0.0
     ) -> float:
-        """What one attack takes off a target with these attributes, armor and shields, its shields and health
-        together.
+        """What one attack takes off a target with these attributes, armor and shield, its shield and health together.
 
-        Each hit takes off the damage and its bonus against the target's attributes: from the shields first, less
-        `shield_armor`, and what is more than the shields have left goes on to health less `armor`, at nothing at
-        least; from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the
-        whole hit. Each hit of an attack of several finds the shields the one before left. The damage may come to more
-        than the target has left.
+        Each hit takes off the damage and its bonus against the target's attributes: from the shield first, less
+        `shield_armor`, and what is more than the shield has left goes on to health less `armor`, at nothing at least;
+        from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the whole
+        hit. Each hit of an attack of several finds the shield the one before left. The damage may come to more than
+        the target has left.
         """
-        hit = self.damage + sum(bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes)
+        bonus_damage = sum(bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes)
+        hit_damage = self.damage + bonus_damage
         if self.ignores_armor:
             armor = shield_armor = 0.0
-        damage = 0.0
+        damage_taken = 0.0
         for _ in range(self.attacks):
-            if shields <= 0:
-                damage += max(hit - armor, _MINIMUM_DAMAGE)
+            if shield <= 0:
+                damage_taken += max(hit_damage - armor, _MINIMUM_DAMAGE)
                 continue
             # Taken to be at least 0.5, as off health: no hit seen was small enough to tell.
-            on_shields = max(hit - shield_armor, _MINIMUM_DAMAGE)
-            if on_shields <= shields:
-                damage += on_shields
-                shields -= on_shields
+            off_shield = max(hit_damage - shield_armor, _MINIMUM_DAMAGE)
+            if off_shield <= shield:
+                damage_taken += off_shield
+                shield -= off_shield
             else:
-                damage += shields + max(on_shields - shields - armor, 0.0)
-                shields = 0.0
-        return damage
+                damage_taken += shield + max(off_shield - shield - armor, 0.0)
+                shield = 0.0
+        return damage_taken
 
     @classmethod
     def _from_proto(cls, weapon: data_pb2.Weapon) -> Self:

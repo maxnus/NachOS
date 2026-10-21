@@ -302,27 +302,33 @@ class TestReadingTheTables:
             (data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]), {"armor": 1.0}, 19.0),
             (
                 data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]),
-                {"armor": 1.0, "shields": 80.0},
+                {"armor": 1.0, "shield": 80.0},
                 20.0,
             ),
             (
                 data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]),
-                {"armor": 1.0, "shield_armor": 3.0, "shields": 80.0},
+                {"armor": 1.0, "shield_armor": 3.0, "shield": 80.0},
                 17.0,
             ),
             # A marine's 6 on an ultralisk's armor 7, at least 0.5.
             (data_pb2.Weapon(damage=6.0, attacks=1), {"armor": 7.0}, 0.5),
-            # A zealot's two blades of 11 on 2 shields at level 3 and armor 4: 2 and 2 of the health, then 7.
-            (data_pb2.Weapon(damage=11.0, attacks=2), {"armor": 4.0, "shield_armor": 3.0, "shields": 2.0}, 11.0),
         ],
     )
-    def test_a_weapons_damage_against_a_target_takes_off_its_armor_shields_first(
+    def test_a_weapons_damage_against_an_armored_target_takes_off_its_armor_shields_first(
         self, weapon: data_pb2.Weapon, target: dict[str, float], damage: float
     ) -> None:
-        """As `tools/sweep_combat.py`'s `damage` measured each, against an armored target."""
+        """As `tools/sweep_combat.py`'s `damage` measured each, against a roach, a stalker and an ultralisk."""
         marauder = data_pb2.UnitTypeData(unit_id=UnitTypeId.MARAUDER, weapons=[weapon])
         (read,) = GameData(sc2api_pb2.ResponseData(units=[marauder])).units[UnitTypeId.MARAUDER].weapons
         assert read.damage_against(attributes={Attribute.ARMORED}, **target) == damage
+
+    def test_what_a_hit_has_past_the_shields_goes_on_to_health_less_the_armor(self) -> None:
+        """A zealot's two blades of 11, on a zealot with 2 shields, shields level 3 and armor 4, took the 2 and 2 of its
+        health, and then 7 (tool `sweep_combat`, `damage`)."""
+        zealot = data_pb2.UnitTypeData(unit_id=UnitTypeId.ZEALOT, weapons=[data_pb2.Weapon(damage=11.0, attacks=2)])
+        (blades,) = GameData(sc2api_pb2.ResponseData(units=[zealot])).units[UnitTypeId.ZEALOT].weapons
+        light = {Attribute.LIGHT, Attribute.BIOLOGICAL}
+        assert blades.damage_against(attributes=light, armor=4.0, shield_armor=3.0, shield=2.0) == (2.0 + 2.0) + 7.0
 
     def test_a_weapons_bonus_damage_is_read_by_the_attribute_it_is_earned_by(self) -> None:
         bonus = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Armored, bonus=10.0)

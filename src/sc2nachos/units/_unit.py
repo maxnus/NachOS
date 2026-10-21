@@ -722,5 +722,5 @@ def _damage_of_one_attack(weapon: Weapon, target: Unit[Any]) -> float:
         attributes=target.type_data.attributes,
         armor=target.armor,
         shield_armor=target.shield_armor,
-        shields=target.shield,
+        shield=target.shield,
     )
