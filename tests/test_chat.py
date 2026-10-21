@@ -9,7 +9,7 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
 from sc2nachos.protocol import Client, Status
-from sc2nachos.run import ApiBot, run_local
+from sc2nachos.run import run_local
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 _BROADCAST = sc2api_pb2.ActionChat.Broadcast
@@ -106,6 +106,6 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
         heard.append((event.player_id, event.text))
 
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
-    run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), opponent, steps_per_turn=8, time_limit=5, window=(640, 480))
+    run_local("PylonAIE_v4", api, opponent, race=Race.TERRAN, steps_per_turn=8, time_limit=5, window=(640, 480))
 
     assert heard == [(1, "gl hf ✓")]

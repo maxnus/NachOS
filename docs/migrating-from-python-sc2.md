@@ -36,7 +36,7 @@ run_game(
 and in NachOS:
 
 ```python
-from sc2nachos import Api, ApiBot, Computer, Difficulty, Race, run_local
+from sc2nachos import Api, Computer, Difficulty, Race, run_local
 from sc2nachos.events import TurnEvent
 from sc2nachos.ids import AbilityId
 
@@ -58,7 +58,7 @@ def train_scvs(event: TurnEvent) -> None:
             api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
-run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.EASY), steps_per_turn=4)
+run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TERRAN, steps_per_turn=4)
 ```
 
 - **No subclass and no `async`.** Handlers subscribe to an `Api`, which can be made at import time, anywhere in the bot.

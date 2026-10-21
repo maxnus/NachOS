@@ -4,7 +4,6 @@ import json
 import random
 from collections.abc import Sequence
 from contextlib import closing
-from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -25,20 +24,13 @@ from sc2nachos.protocol import (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class ApiBot:
-    """A player driven by an `Api`, with its race and name. The other kind of player is a `Computer`."""
-
-    api: Api
-    race: Race
-    name: str | None = None
-
-
 def run_local(
     map_file: MapFile | str,
-    bot: ApiBot,
+    api: Api,
     opponent: Computer | None = None,
     *,
+    race: Race,
+    name: str | None = None,
     steps_per_turn: int = 1,
     realtime: bool = False,
     time_limit: float | None = None,
@@ -48,14 +40,15 @@ def run_local(
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
 ) -> Result:
-    """Start a game client, create a match on `map_file` for `bot` against `opponent`, and play it out.
+    """Start a game client, create a match on `map_file` for `api` against `opponent`, and play it out.
 
-    `map_file` is a file or the name of one under the installation. The bot takes the first slot, and without an
-    `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so. `record_to` is a file
-    to record the whole conversation into, and `save_replay_to` one to save the game's replay to, as `Api.play` says.
-    Each must be in a folder that exists, or `FileNotFoundError` is raised before the game starts, and
-    `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its temporary directory
-    removed. The newest build installed is played, with a warning if it is not the one the tech tree was swept on.
+    `map_file` is a file or the name of one under the installation. The api takes the first slot, playing `race` under
+    `name`, and without an `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so.
+    `record_to` is a file to record the whole conversation into, and `save_replay_to` one to save the game's replay to,
+    as `Api.play` says. Each must be in a folder that exists, or `FileNotFoundError` is raised before the game starts,
+    and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its temporary
+    directory removed. The newest build installed is played, with a warning if it is not the one the tech tree was swept
+    on.
     """
     _check_output_files(record_to, save_replay_to)
     installation = installation or Installation.find()
@@ -72,8 +65,8 @@ def run_local(
     ):
         try:
             client.create_game(map_file.path, players, realtime=realtime, random_seed=random_seed)
-            client.join_game(bot.race, name=bot.name)
-            return bot.api.play(
+            client.join_game(race, name=name)
+            return api.play(
                 client,
                 steps_per_turn=steps_per_turn,
                 realtime=realtime,
@@ -86,8 +79,10 @@ def run_local(
 
 
 def run_ladder(
-    bot: ApiBot,
+    api: Api,
     *,
+    race: Race,
+    name: str | None = None,
     host: str,
     port: int,
     start_port: int | None = None,
@@ -97,7 +92,7 @@ def run_ladder(
     record_to: Path | str | None = None,
     save_replay_to: Path | str | None = None,
 ) -> Result:
-    """Join the game a ladder has set up, and play it out.
+    """Join the game a ladder has set up for `api`, playing `race` under `name`, and play it out.
 
     The ladder starts the client, creates the match, and passes the bot the client's address, `start_port` and the
     opponent's `enemy_ladder_id` on the command line. A game against the built-in computer has no `start_port`.
@@ -108,8 +103,8 @@ def run_ladder(
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
             ports = GamePorts.from_start_port(start_port) if start_port is not None else None
-            client.join_game(bot.race, name=bot.name, ports=ports)
-            return bot.api.play(
+            client.join_game(race, name=name, ports=ports)
+            return api.play(
                 client,
                 steps_per_turn=steps_per_turn,
                 realtime=realtime,
@@ -121,9 +116,16 @@ def run_ladder(
             client.leave_game()
 
 
-def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, steps_per_turn: int = 1) -> Result:
-    """Play one game as the command line asks, a ladder's or a local one against the built-in computer, a turn every
-    `steps_per_turn` steps, and write how it went.
+def run_from_command_line(
+    api: Api,
+    argv: Sequence[str] | None = None,
+    *,
+    race: Race,
+    name: str | None = None,
+    steps_per_turn: int = 1,
+) -> Result:
+    """Play one game for `api` as the command line asks, a ladder's or a local one against the built-in computer,
+    playing `race` under `name`, a turn every `steps_per_turn` steps, and write how it went.
 
     With `--GamePort` it joins the game a ladder has set up, as `run_ladder` does, with the ladder's `--LadderServer`
     (127.0.0.1 if not given), `--StartPort` and `--OpponentId`, which `Enemy.ladder_id` reads. It takes the ladder's
@@ -139,34 +141,39 @@ def run_from_command_line(bot: ApiBot, argv: Sequence[str] | None = None, *, ste
     In either, `--RealTime` plays the game in real time, `--ReplayFile` is a file to save its replay to, and
     `--ResultFile` one to write the JSON the match workflow reads: the result, the map, as its file's name in a local
     game and as its display name in a ladder game, and the game time, each of those two `null` if the ladder closed the
-    connection before the game began. An argument of the other kind of game is logged
-    as ignored, and one NachOS does not read is left for the bot, listed in the log. `argv` defaults to
-    `sys.argv[1:]`.
+    connection before the game began. An argument of the other kind of game is logged as ignored, and one NachOS does
+    not read is left for the bot, listed in the log. `argv` defaults to `sys.argv[1:]`.
     """
     command_line_arguments = _CommandLineArguments(argv)
     command_line_arguments.log_arguments_not_used()
     if command_line_arguments.is_ladder_game:
-        result, map_name = _play_ladder_game(bot, command_line_arguments, steps_per_turn=steps_per_turn)
+        result, map_name = _play_ladder_game(
+            api, command_line_arguments, race=race, name=name, steps_per_turn=steps_per_turn
+        )
     else:
-        result, map_name = _play_local_game(bot, command_line_arguments, steps_per_turn=steps_per_turn)
+        result, map_name = _play_local_game(
+            api, command_line_arguments, race=race, name=name, steps_per_turn=steps_per_turn
+        )
     if command_line_arguments.result_file is not None:
         outcome = {
             "result": result.name,
             "map": map_name,
-            "game_time": _game_time(bot.api),
+            "game_time": _game_time(api),
         }
         command_line_arguments.result_file.write_text(json.dumps(outcome), encoding="utf-8")
     return result
 
 
 def _play_ladder_game(
-    bot: ApiBot, command_line_arguments: _CommandLineArguments, *, steps_per_turn: int
+    api: Api, command_line_arguments: _CommandLineArguments, *, race: Race, name: str | None, steps_per_turn: int
 ) -> tuple[Result, str | None]:
     """Join the ladder's game as `command_line_arguments` say, and return how it ended and the map's display name,
     `None` if the ladder closed the connection before the game began."""
     try:
         result = run_ladder(
-            bot,
+            api,
+            race=race,
+            name=name,
             host=command_line_arguments.ladder_server,
             port=command_line_arguments.game_port,
             start_port=command_line_arguments.start_port,
@@ -181,7 +188,7 @@ def _play_ladder_game(
         logger.warning("The ladder closed the connection before the game ended: {}", closed)
         result = Result.UNDECIDED
     try:
-        return result, bot.api.map.name
+        return result, api.map.name
     except NotPlayingError:
         return result, None
 
@@ -195,7 +202,7 @@ def _game_time(api: Api) -> float | None:
 
 
 def _play_local_game(
-    bot: ApiBot, command_line_arguments: _CommandLineArguments, *, steps_per_turn: int
+    api: Api, command_line_arguments: _CommandLineArguments, *, race: Race, name: str | None, steps_per_turn: int
 ) -> tuple[Result, str]:
     """Play a local game against the built-in computer as `command_line_arguments` say, and return how it ended and
     the map file's name."""
@@ -210,8 +217,10 @@ def _play_local_game(
         map_file = MapFile.find(random.choice(names), installation=installation)
     result = run_local(
         map_file,
-        bot,
+        api,
         computer_opponent,
+        race=race,
+        name=name,
         steps_per_turn=steps_per_turn,
         realtime=command_line_arguments.realtime,
         time_limit=command_line_arguments.time_limit,

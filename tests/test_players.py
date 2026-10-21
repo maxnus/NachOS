@@ -4,7 +4,7 @@
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos import Api, ApiBot, Computer, Difficulty, NoEnemyError, Race, Result, UnitTypeId, run_local
+from sc2nachos import Api, Computer, Difficulty, NoEnemyError, Race, Result, UnitTypeId, run_local
 from sc2nachos.debug import Cheat
 from sc2nachos.events import EnemyRaceKnownEvent, TurnEvent
 from sc2nachos.launch import MapFile, MapNotFoundError
@@ -184,7 +184,7 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
         api.debug.turn_on(Cheat.SHOW_MAP)
 
     opponent = Computer(Race.RANDOM, Difficulty.VERY_EASY)
-    run_local(_LADDER_MAP, ApiBot(api, Race.RANDOM), opponent, steps_per_turn=8, time_limit=60, window=(640, 480))
+    run_local(_LADDER_MAP, api, opponent, race=Race.RANDOM, steps_per_turn=8, time_limit=60, window=(640, 480))
 
     assert api.player.requested_race is Race.RANDOM
     assert api.player.race in (Race.TERRAN, Race.ZERG, Race.PROTOSS)

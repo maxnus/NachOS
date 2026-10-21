@@ -10,7 +10,7 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 import sc2nachos.run
-from sc2nachos import AIBuild, Api, ApiBot, Computer, Difficulty, Race, Result, run_from_command_line, run_local
+from sc2nachos import AIBuild, Api, Computer, Difficulty, Race, Result, run_from_command_line, run_local
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
@@ -31,8 +31,8 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setenv("SC2PATH", str(tmp_path))
     calls: dict[str, Any] = {}
 
-    def run_local(map_file: MapFile, bot: ApiBot, opponent: Computer, **kwargs: Any) -> Result:
-        calls.update(map_file=map_file, bot=bot, opponent=opponent, **kwargs)
+    def run_local(map_file: MapFile, api: Api, opponent: Computer, **kwargs: Any) -> Result:
+        calls.update(map_file=map_file, api=api, opponent=opponent, **kwargs)
         return Result.VICTORY
 
     monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
@@ -45,8 +45,8 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """What `run_ladder` was asked to play, with no game joined."""
     calls: dict[str, Any] = {}
 
-    def run_ladder(bot: ApiBot, **kwargs: Any) -> Result:
-        calls.update(bot=bot, **kwargs)
+    def run_ladder(api: Api, **kwargs: Any) -> Result:
+        calls.update(api=api, **kwargs)
         return Result.DEFEAT
 
     monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
@@ -66,13 +66,16 @@ def logged() -> Iterator[list[str]]:
 
 class TestALadderGame:
     def test_it_joins_with_the_ladders_arguments(self, ladder_played: dict[str, Any], tmp_path: Path) -> None:
-        bot = ApiBot(Api(), Race.TERRAN)
+        api = Api()
         argv = ["--LadderServer", "10.0.0.7", "--GamePort", "5000", "--StartPort", "5100", "--OpponentId", "5a1f"]
         replay = tmp_path / "game.SC2Replay"
-        result = run_from_command_line(bot, [*argv, "--RealTime", "--ReplayFile", str(replay)], steps_per_turn=2)
+        argv += ["--RealTime", "--ReplayFile", str(replay)]
+        result = run_from_command_line(api, argv, race=Race.ZERG, name="MyBot", steps_per_turn=2)
         assert result is Result.DEFEAT
         assert ladder_played == {
-            "bot": bot,
+            "api": api,
+            "race": Race.ZERG,
+            "name": "MyBot",
             "host": "10.0.0.7",
             "port": 5000,
             "start_port": 5100,
@@ -86,7 +89,7 @@ class TestALadderGame:
         self, ladder_played: dict[str, Any], logged: list[str]
     ) -> None:
         computer = ["--ComputerOpponent", "1", "--ComputerRace", "Zerg", "--ComputerDifficulty", "VeryHard"]
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--GamePort", "5000", *computer])
+        run_from_command_line(Api(), ["--GamePort", "5000", *computer], race=Race.TERRAN)
         assert (ladder_played["host"], ladder_played["start_port"]) == ("127.0.0.1", None)
         assert (ladder_played["enemy_ladder_id"], ladder_played["realtime"]) == (None, False)
         assert not [message for message in logged if "ignores" in message or "left to the bot" in message]
@@ -95,7 +98,7 @@ class TestALadderGame:
         self, ladder_played: dict[str, Any], logged: list[str]
     ) -> None:
         argv = ["--GamePort", "5000", "--ComputerBuild", "AIR", "--Map", "Pylon", "--TimeLimit", "0"]
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), argv)
+        run_from_command_line(Api(), argv, race=Race.TERRAN)
         assert "A ladder game ignores --ComputerBuild, --Map, --TimeLimit" in logged
         assert ladder_played
 
@@ -103,7 +106,7 @@ class TestALadderGame:
         self, ladder_played: dict[str, Any], tmp_path: Path
     ) -> None:
         result_file = tmp_path / "result.json"
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--GamePort", "5000", "--ResultFile", str(result_file)])
+        run_from_command_line(Api(), ["--GamePort", "5000", "--ResultFile", str(result_file)], race=Race.TERRAN)
         assert json.loads(result_file.read_text(encoding="utf-8")) == {
             "result": "DEFEAT",
             "map": "Pylon AIE",
@@ -114,7 +117,7 @@ class TestALadderGame:
 class TestTheLadderClosingTheConnection:
     @staticmethod
     def _closed_by_the_ladder(monkeypatch: pytest.MonkeyPatch) -> None:
-        def run_ladder(bot: ApiBot, **kwargs: Any) -> Result:
+        def run_ladder(api: Api, **kwargs: Any) -> Result:
             raise ConnectionClosedError("the connection to the game closed")
 
         monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
@@ -125,7 +128,7 @@ class TestTheLadderClosingTheConnection:
         self._closed_by_the_ladder(monkeypatch)
         result_file = tmp_path / "result.json"
         argv = ["--GamePort", "5000", "--ResultFile", str(result_file)]
-        assert run_from_command_line(ApiBot(Api(), Race.TERRAN), argv) is Result.UNDECIDED
+        assert run_from_command_line(Api(), argv, race=Race.TERRAN) is Result.UNDECIDED
         assert any(message.startswith("The ladder closed the connection") for message in logged)
         written = json.loads(result_file.read_text(encoding="utf-8"))
         assert (written["result"], written["map"]) == ("UNDECIDED", "Pylon AIE")
@@ -136,7 +139,7 @@ class TestTheLadderClosingTheConnection:
         self._closed_by_the_ladder(monkeypatch)
         result_file = tmp_path / "result.json"
         argv = ["--GamePort", "5000", "--ResultFile", str(result_file)]
-        assert run_from_command_line(ApiBot(Api(), Race.TERRAN), argv) is Result.UNDECIDED
+        assert run_from_command_line(Api(), argv, race=Race.TERRAN) is Result.UNDECIDED
         assert json.loads(result_file.read_text(encoding="utf-8")) == {
             "result": "UNDECIDED",
             "map": None,
@@ -149,7 +152,7 @@ class TestTheLadderClosingTheConnection:
 
         monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
         with pytest.raises(ConnectionClosedError):
-            run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+            run_from_command_line(Api(), [], race=Race.TERRAN)
 
 
 def test_a_local_game_has_no_ladders_game_port() -> None:
@@ -160,13 +163,13 @@ def test_a_local_game_has_no_ladders_game_port() -> None:
 def test_a_ladder_games_argument_in_a_local_game_is_logged_as_ignored(
     played: dict[str, Any], logged: list[str]
 ) -> None:
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--OpponentId", "5a1f", "--StartPort", "5100"])
+    run_from_command_line(Api(), ["--OpponentId", "5a1f", "--StartPort", "5100"], race=Race.TERRAN)
     assert "A local game ignores --StartPort, --OpponentId" in logged
     assert played
 
 
 def test_an_argument_nachos_does_not_read_is_left_for_the_bot(played: dict[str, Any], logged: list[str]) -> None:
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--build", "bio", "--debug", "--Map", "PylonAIE_v4"])
+    run_from_command_line(Api(), ["--build", "bio", "--debug", "--Map", "PylonAIE_v4"], race=Race.TERRAN)
     assert "Not NachOS's arguments, left to the bot: --build bio --debug" in logged
     assert played["map_file"].name == "PylonAIE_v4"
 
@@ -174,7 +177,7 @@ def test_an_argument_nachos_does_not_read_is_left_for_the_bot(played: dict[str, 
 def test_a_bots_argument_that_begins_like_one_of_nachoss_is_left_for_the_bot(
     played: dict[str, Any], logged: list[str]
 ) -> None:
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--Replay", "x.txt", "--Real", "--Computer", "abc"])
+    run_from_command_line(Api(), ["--Replay", "x.txt", "--Real", "--Computer", "abc"], race=Race.TERRAN)
     assert "Not NachOS's arguments, left to the bot: --Replay x.txt --Real --Computer abc" in logged
     assert (played["save_replay_to"], played["realtime"], played["opponent"]) == (None, False, Computer())
 
@@ -183,28 +186,29 @@ def test_a_local_game_takes_the_turn_length_realtime_and_the_replay_file(
     played: dict[str, Any], tmp_path: Path
 ) -> None:
     replay = tmp_path / "game.SC2Replay"
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--RealTime", "--ReplayFile", str(replay)], steps_per_turn=4)
+    run_from_command_line(Api(), ["--RealTime", "--ReplayFile", str(replay)], race=Race.TERRAN, steps_per_turn=4)
     assert (played["steps_per_turn"], played["realtime"], played["save_replay_to"]) == (4, True, replay)
 
 
 def test_by_default_a_local_game_is_stepped_and_saves_no_replay(played: dict[str, Any]) -> None:
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+    run_from_command_line(Api(), [], race=Race.TERRAN)
     assert (played["steps_per_turn"], played["realtime"], played["save_replay_to"]) == (1, False, None)
 
 
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
-    bot = ApiBot(Api(), Race.TERRAN)
+    api = Api()
     args = ["--ComputerRace", "ZERG", "--ComputerDifficulty", "VERY_EASY", "--ComputerBuild", "RUSH"]
-    result = run_from_command_line(bot, [*args, "--Map", "TorchesAIE_v4", "--TimeLimit", "0"])
+    argv = [*args, "--Map", "TorchesAIE_v4", "--TimeLimit", "0"]
+    result = run_from_command_line(api, argv, race=Race.TERRAN, name="MyBot")
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RUSH)
     assert played["map_file"].name == "TorchesAIE_v4"
     assert played["time_limit"] == 0
-    assert played["bot"] is bot
+    assert (played["api"], played["race"], played["name"]) == (api, Race.TERRAN, "MyBot")
 
 
 def test_without_a_map_one_of_the_installations_is_picked(played: dict[str, Any]) -> None:
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+    run_from_command_line(Api(), [], race=Race.TERRAN)
     assert played["map_file"].name in {"PylonAIE_v4", "TorchesAIE_v4"}
     assert played["time_limit"] is None
     assert played["opponent"] == Computer(Race.RANDOM, Difficulty.VERY_HARD, AIBuild.RANDOM)
@@ -212,7 +216,7 @@ def test_without_a_map_one_of_the_installations_is_picked(played: dict[str, Any]
 
 def test_the_result_file_is_what_the_match_workflow_reads(played: dict[str, Any], tmp_path: Path) -> None:
     result_file = tmp_path / "result.json"
-    run_from_command_line(ApiBot(Api(), Race.TERRAN), ["--Map", "PylonAIE_v4", "--ResultFile", str(result_file)])
+    run_from_command_line(Api(), ["--Map", "PylonAIE_v4", "--ResultFile", str(result_file)], race=Race.TERRAN)
     assert json.loads(result_file.read_text(encoding="utf-8")) == {
         "result": "VICTORY",
         "map": "PylonAIE_v4",
@@ -229,7 +233,7 @@ def test_in_a_local_game_a_name_that_is_no_member_is_refused(
     played: dict[str, Any], argv: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:
     with pytest.raises(SystemExit):
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), argv)
+        run_from_command_line(Api(), argv, race=Race.TERRAN)
     assert f"argument {argv[0]}: invalid choice: {argv[1]!r}" in capsys.readouterr().err
     assert not played
 
@@ -239,7 +243,7 @@ def test_an_installation_without_maps_is_reported(tmp_path: Path, monkeypatch: p
     (tmp_path / "Maps").mkdir()
     assert Installation.find().maps == tmp_path / "Maps"
     with pytest.raises(MapNotFoundError, match="no maps"):
-        run_from_command_line(ApiBot(Api(), Race.TERRAN), [])
+        run_from_command_line(Api(), [], race=Race.TERRAN)
 
 
 class _ClientStarted(Exception):
@@ -264,7 +268,8 @@ def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
         with pytest.raises(_ClientStarted):
             run_local(
                 MapFile(tmp_path / "Pylon.SC2Map"),
-                ApiBot(Api(), Race.TERRAN),
+                Api(),
+                race=Race.TERRAN,
                 installation=Installation(tmp_path, "Linux"),
             )
     finally:
@@ -296,7 +301,7 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_re
             ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
         argv = ["--GamePort", str(port), "--OpponentId", "5a1f", "--ReplayFile", str(replay)]
         argv += ["--ResultFile", str(result_file)]
-        result = run_from_command_line(ApiBot(api, Race.TERRAN), argv, steps_per_turn=8)
+        result = run_from_command_line(api, argv, race=Race.TERRAN, steps_per_turn=8)
 
         with closing(WebSocketTransport.connect(game.url)) as transport:
             request = sc2api_pb2.Request(replay_info=sc2api_pb2.RequestReplayInfo(replay_data=replay.read_bytes()))

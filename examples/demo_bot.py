@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from sc2nachos import AbilityId, Api, ApiBot, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
+from sc2nachos import AbilityId, Api, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
 from sc2nachos.events import EventPriority, OwnConstructionFinishedEvent, TurnEvent
 
 if TYPE_CHECKING:
@@ -320,4 +320,4 @@ def _places_to_look() -> list[Point]:
 army = Army()
 
 if __name__ == "__main__":
-    run_from_command_line(ApiBot(api, Race.TERRAN, "NachOS demo"))
+    run_from_command_line(api, race=Race.TERRAN, name="NachOS demo")

@@ -58,9 +58,9 @@ not a pattern to follow — please open an issue.
 your modules load. Connecting happens later, in the runner:
 
 ```python
-from sc2nachos import ApiBot, Computer, Difficulty, Race, run_local
+from sc2nachos import Computer, Difficulty, Race, run_local
 
-run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG, Difficulty.VERY_HARD))
+run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Race.TERRAN)
 ```
 
 ## Documentation

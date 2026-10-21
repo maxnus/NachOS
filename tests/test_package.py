@@ -50,7 +50,7 @@ def test_what_starts_a_game_is_exported_from_the_top_level() -> None:
     assert sc2nachos.AIBuild is match.AIBuild
     assert sc2nachos.Result is match.Result
     assert sc2nachos.UpgradeInference is enemy.UpgradeInference
-    assert set(sc2nachos.__all__) >= {"Api", "ApiBot", "run_local", "run_ladder", "Race", "Computer", "Difficulty"}
+    assert set(sc2nachos.__all__) >= {"Api", "run_local", "run_ladder", "Race", "Computer", "Difficulty"}
 
 
 def test_no_public_signature_names_a_private_type() -> None:

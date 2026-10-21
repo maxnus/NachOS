@@ -6,9 +6,9 @@
 A bot repository's script is the same, with its own `Api` and race; see docs/github-actions.md.
 """
 
-from sc2nachos import Api, ApiBot, Race, run_from_command_line
+from sc2nachos import Api, Race, run_from_command_line
 
 api = Api()
 
 if __name__ == "__main__":
-    run_from_command_line(ApiBot(api, Race.TERRAN, "NachOS"))
+    run_from_command_line(api, race=Race.TERRAN, name="NachOS")

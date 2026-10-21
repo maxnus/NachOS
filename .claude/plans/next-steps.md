@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #145. On branch `claude/ladder-running`, `uv run pytest` passes 2438 tests and
-  `uv run pytest -m integration` passes 36 against a real game (run 2026-10-20).
+- nachOS `main` has every PR to #146. On branch `claude/runners-take-the-api`, `uv run pytest` passes 2439 tests
+  and `uv run pytest -m integration` passes 36 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -292,6 +292,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A ladder game whose connection the ladder closes ends `Result.UNDECIDED` with a warning in `run_from_command_line`,
     as AvocaDOS's ladder `run.py` had it; `run_ladder` and a local game still raise `ConnectionClosedError`. A save
     after an interrupted request reads that request's answer and is logged as failed, which stays (my review of #146).
+  - The runners take the api with `race` and `name` keywords, and `ApiBot` is gone (review of #146, this branch):
+    `run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN)`. They stay functions, over methods of
+    `Api`, which would have `api.py` import `run.py`, which imports it, or move launching and argparse into the class
+    a bot's handlers talk to every turn.
+  - `docs/ladder.md` shows a bot's own arguments read into a settings dataclass of its own, at module level beside its
+    api, with `parse_known_args(namespace=settings)`, and its handlers plain functions that read it (the owner, review
+    of #147). Chosen over an object built from the settings that subscribes its handlers, which makes each a method,
+    over handlers defined in the main block, which does not scale to many settings, and over a function that builds
+    the api, which keeps it from the modules that register handlers. Subclassing `Api` stays out.
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
   "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
   to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
@@ -313,11 +322,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
-  players (#143), running on the ladder (its command line, a bot's own arguments in `run_from_command_line`, replay
-  saving; done, this branch), `Grid.path_to`, combat conveniences on a unit (in range, weapon ready, dps), a playback
-  mode that answers a bot's own actions, and ramp wall-in sites with their sweep.
-- The runners take the api with `race` and `name` keywords, and `ApiBot` goes (review of #146): a pull request of its
-  own after #146. They stay functions, over methods of `Api`.
+  players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
+  replay saving, and the runners taking the api with `race` and `name`, this branch), `Grid.path_to`, combat
+  conveniences on a unit (in range, weapon ready, dps), a playback mode that answers a bot's own actions, and ramp
+  wall-in sites with their sweep.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

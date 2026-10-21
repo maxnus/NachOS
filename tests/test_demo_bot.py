@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 
-from sc2nachos import Api, ApiBot, Computer, Difficulty, Race, Result, run_local
+from sc2nachos import Api, Computer, Difficulty, Race, Result, run_local
 from sc2nachos.launch import MapFile, MapNotFoundError
 
 _DEMO_BOT = Path(__file__).parent.parent / "examples" / "demo_bot.py"
@@ -35,8 +35,9 @@ def test_the_demo_bot_beats_the_computer_at_medium() -> None:
     demo_bot = _load_demo_bot()
     result = run_local(
         game_map,
-        ApiBot(demo_bot.api, Race.TERRAN),
+        demo_bot.api,
         Computer(Race.ZERG, Difficulty.MEDIUM),
+        race=Race.TERRAN,
         time_limit=900,
         window=(640, 480),
     )

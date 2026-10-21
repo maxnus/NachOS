@@ -8,7 +8,7 @@ difference that rests on what the game does links there for its evidence.
 ## Running a game
 
 - **Nothing is subclassed, and nothing is `async`.** Construct an `Api`, at import time if you like, and hand it
-  to a runner with the race it plays: `run_local("PylonAIE_v4", ApiBot(api, Race.TERRAN), Computer(Race.ZERG))`.
+  to a runner with the race it plays: `run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN)`.
 - **A turn is one step unless you say otherwise.** `run_local(..., steps_per_turn=4)` matches python-sc2, whose
   `client.game_step` defaults to 4. It is set for a game and cannot be changed during one.
 - **`Computer()` defaults to very hard, with a random race and build.** python-sc2's `Computer` requires a race
