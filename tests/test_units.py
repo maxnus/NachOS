@@ -451,6 +451,15 @@ class TestWhatAUnitReads:
         assert (unit.height, unit.facing, unit.radius) == pytest.approx((11.99, 1.5, 1.8125))
         assert unit.is_structure
 
+    def test_a_ground_structure_is_one_not_lifted_or_one_remembered_out_of_sight(self) -> None:
+        assert _one(make_unit(1, UnitTypeId.BARRACKS)).is_ground_structure
+        assert not _one(make_unit(1, UnitTypeId.BARRACKS, is_flying=True)).is_ground_structure
+        assert not _one(make_unit(1)).is_ground_structure
+        remembered = _one(make_unit(1, UnitTypeId.BARRACKS, alliance=_ENEMY, visibility=_IN_FOG))
+        assert remembered.is_ground_structure
+        with pytest.raises(NotReportedError):
+            _ = remembered.is_flying
+
     def test_vitals_and_their_fractions(self) -> None:
         unit = _one(make_unit(1, health=30.0, health_max=40.0, shield=0.0, shield_max=0.0, energy=50, energy_max=200))
         assert (unit.health_fraction, unit.shield_fraction, unit.energy_fraction) == (0.75, 0.0, 0.25)

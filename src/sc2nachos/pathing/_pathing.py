@@ -12,12 +12,11 @@ from sc2nachos.gamemap._game_map import _create_pathing_grid
 from sc2nachos.geometry import Point
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.units import Unit, Units
-from sc2nachos.units._units import _is_structure_on_the_ground
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from sc2nachos.geometry import CheapestPaths, Grid, PointLike, TilePath
+    from sc2nachos.geometry import CheapestPaths, Grid, PointLike, Tile, TilePath
     from sc2nachos.protocol import Client
 
 
@@ -52,7 +51,7 @@ class Pathing:
         return self._grid
 
     def cheapest_path(
-        self, start: PointLike | Unit[Any], end: PointLike, *, leave_structure: bool = True
+        self, start: PointLike | Tile | Unit[Any], end: PointLike | Tile, *, leave_structure: bool = True
     ) -> TilePath | None:
         """The shortest path over `grid` from `start` to `end`, as `Grid.cheapest_path` finds it, or `None` if there is
         none. From a unit, it starts where the unit stands.
@@ -62,25 +61,27 @@ class Pathing:
         starts in. A rock blocks more than its footprint covers, so a path from its outer tiles stays inside it. A path
         never enters a structure, so an end inside one has none.
         """
-        return self._grid_leaving_structure(start, leave_structure).cheapest_path(_point_of(start), end)
+        position = start.position if isinstance(start, Unit) else start
+        return self._grid_leaving_structure(start, leave_structure).cheapest_path(position, end)
 
     def cheapest_paths_from(
-        self, start: PointLike | Unit[Any], *, leave_structure: bool = True, outside: float | None = None
+        self, start: PointLike | Tile | Unit[Any], *, leave_structure: bool = True, outside: float | None = None
     ) -> CheapestPaths:
         """The shortest path over `grid` from `start` to every tile, as `Grid.cheapest_paths_from` finds them, leaving
         the structure the start lies in as `cheapest_path` does. `outside` is what their lengths read beyond the grid.
         """
         grid = self._grid_leaving_structure(start, leave_structure)
-        return grid.cheapest_paths_from(_point_of(start), outside=outside)
+        position = start.position if isinstance(start, Unit) else start
+        return grid.cheapest_paths_from(position, outside=outside)
 
-    def _grid_leaving_structure(self, start: PointLike | Unit[Any], leave_structure: bool) -> Grid[bool]:
+    def _grid_leaving_structure(self, start: PointLike | Tile | Unit[Any], leave_structure: bool) -> Grid[bool]:
         """`grid`, with the footprint of the structure `start` lies in open if `leave_structure`, on a copy: a unit
         given is its own, if it is a structure on the ground, and a point's is the one `Units.structure_at` finds among
         the turn's units."""
         if not leave_structure:
             return self.grid
         if isinstance(start, Unit):
-            structure = start if _is_structure_on_the_ground(start) else None
+            structure = start if start.is_ground_structure else None
         else:
             structure = self._present_units.structure_at(start)
         footprint = None if structure is None else structure.footprint
@@ -136,8 +137,3 @@ class Pathing:
             answer.distance if answer.distance > 0 else 0.0 if same else math.inf
             for answer, same in zip(answers, coinciding, strict=True)
         ]
-
-
-def _point_of(start: PointLike | Unit[Any]) -> PointLike:
-    """Where `start` is: the point itself, or where the unit stands."""
-    return start.position if isinstance(start, Unit) else start

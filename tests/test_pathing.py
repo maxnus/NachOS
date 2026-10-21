@@ -160,6 +160,13 @@ class TestPathsOverTheTurnsGrid:
         assert (path.start, path.end) == (Tile(3, 3), Tile(0, 0))
         assert pathing.cheapest_path((3.5, 3.5), (0.5, 0.5), leave_structure=False) is None
 
+    def test_a_tile_inside_a_structure_is_left_too(self) -> None:
+        pathing, _, _ = _pathing_over_a_depot()
+        assert pathing.cheapest_paths_from(Tile(3, 3)).distances[Tile(0, 0)] == pytest.approx(3 * math.sqrt(2))
+        path = pathing.cheapest_path(Tile(3, 3), Tile(0, 0))
+        assert path is not None
+        assert path.end == Tile(0, 0)
+
     def test_a_path_never_enters_a_structure(self) -> None:
         pathing, _, units = _pathing_over_a_depot()
         (marine,) = units.of_type(UnitTypeId.MARINE)

@@ -330,6 +330,11 @@ class TestStructureAt:
         assert units.structure_at((5.5, 4.5)) is None
         assert Units().structure_at((3.5, 3.5)) is None
 
+    def test_a_tile_reads_as_itself(self) -> None:
+        units = _units(make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
+        assert units.structure_at(Tile(3, 3)) is units[0]
+        assert units.structure_at(Tile(5, 4)) is None
+
     def test_a_lifted_structure_covers_no_ground(self) -> None:
         units = _units(make_unit(1, UnitTypeId.BARRACKS, at=(4.5, 4.5), is_flying=True))
         assert units.structure_at((4.5, 4.5)) is None
