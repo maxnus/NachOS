@@ -31,11 +31,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   for, and nothing else in its answer changes. A barracks made 16 steps before, with no observation asked for since,
   blocked none of its tiles; one observation later, all 9. On PylonAIE_v4 the request takes 0.55 ms, for an answer of
   77 kB (tool `sweep_pathing`, build 75689).
-- That grid blocks a structure while this player sees it, its own or the enemy's, from the observation that first
-  reports it to the one that reports it gone, and a mineral field or a geyser as one. A structure out of sight blocks
+- That grid blocks a structure while this player sees it, its own or the enemy's, and a mineral field or a geyser as
+  one. One made or killed changes it in the observation that first reports it or reports it gone; a rock killed, and a
+  structure coming into sight or going out of it, change it an observation earlier. A structure out of sight blocks
   nothing, its snapshot included: `show_map` turned on blocked 471 more tiles of PylonAIE_v4, and turned off opened them
-  again. A rock blocks in sight or not (#17), and opens when it dies. A unit that is no structure blocks nothing, but a
-  sieged tank its own tile (tool `sweep_pathing`, build 75689).
+  again. A rock blocks in sight or not (#17), and one killed in sight opened its ground. A unit that is no structure
+  blocks nothing, but a sieged tank its own tile (tool `sweep_pathing`, build 75689).
 - A structure lifted opens its ground in the observation that reports it flying, and one landing blocks its ground from
   the observation after the order, 31 steps before it is reported landed. A depot lowered opens its ground 19 steps
   after it is reported lowered, and one raised blocks it at once. A depot an SCV builds blocks nothing while it is a
@@ -108,7 +109,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - It answers 0 when there is no path, for an end inside a structure, the computer's townhall included, for an unknown
   tag, and from a point to itself; points 0.1 apart read 0.0999. It paths out of the townhall its start lies in, 7.0 to
   a point 8 away, but never into a structure (tool `sweep_requests`, build 75689). It paths out of each of ten
-  structures of the three races, from its center and from its corner tile alike (tool `sweep_pathing`, build 75689).
+  structures of the three races, from its center and from a tile at its edge alike (tool `sweep_pathing`, build 75689).
 - From a unit's tag it answers for that unit: from atop a cliff on PylonAIE_v4, 63.7 for a marine, by the ramp, 3.3
   for a reaper, which jumps the cliff, 58.0 for a colossus, and the straight line for a medivac. From the marine's
   position the answer was 61.7 (tool `sweep_requests`, build 75689).

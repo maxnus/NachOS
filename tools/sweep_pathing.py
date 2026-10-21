@@ -33,7 +33,7 @@ neutral type that does not move, and records the tiles the grid blocks once it s
 `data/footprints.json` holds for it.
 
 `inside` makes one unit at a time of a few structure types for this player, and asks the pathing query from its center
-and from the lower left tile it blocks to open ground 10 tiles away::
+and from the lowest tile of the leftmost column it blocks to open ground 10 tiles away::
 
     uv run python tools/sweep_pathing.py timeline --out pathing-timeline.json
     uv run python tools/sweep_pathing.py footprints --out pathing-footprints.json
@@ -112,6 +112,13 @@ _SETTLING_STEPS = 8
 def _walkable_now(game: Sandbox, playable: Rectangle) -> numpy.ndarray:
     """Where the game's pathing grid, asked for now, lets a ground unit walk, by tile of `playable`."""
     return image_tiles(game.client.game_info().start_raw.pathing_grid, playable) != 0
+
+
+def _walkable_observed(game: Sandbox, playable: Rectangle) -> numpy.ndarray:
+    """Where the game's pathing grid lets a ground unit walk, by tile of `playable`, asked for after an observation,
+    since the grid shows the game as of the last one."""
+    game.client.observation()
+    return _walkable_now(game, playable)
 
 
 def _tiles_near(mask: numpy.ndarray, playable: Rectangle, near: Point, reach: int) -> list[tuple[int, int]]:
@@ -238,14 +245,15 @@ class _Tracer:
         `whole_map`, a change anywhere on the map is recorded too."""
         game = self._game
         observation, walkable_before = self._observed()
-        recorded = [self._trace_step(-1, observation, walkable_before, walkable_before, near, unit_finder, reach)]
+        unit = unit_finder(observation.raw_data.units)
+        recorded = [self._trace_step(-1, observation, unit, walkable_before, walkable_before, near, reach)]
         answer = act()
-        unit = None
         for step in range(steps + 1):
             if step:
                 game.client.step(1)
             observation, walkable_now = self._observed()
-            seen = self._trace_step(step, observation, walkable_before, walkable_now, near, unit_finder, reach)
+            unit = unit_finder(observation.raw_data.units)
+            seen = self._trace_step(step, observation, unit, walkable_before, walkable_now, near, reach)
             last = recorded[-1]
             watched = (seen.blocked, seen.opened, seen.state)
             if watched != (last.blocked, last.opened, last.state) or (
@@ -253,7 +261,6 @@ class _Tracer:
                 and (seen.blocked_anywhere, seen.opened_anywhere) != (last.blocked_anywhere, last.opened_anywhere)
             ):
                 recorded.append(seen)
-            unit = unit_finder(observation.raw_data.units)
         answer_name = None if answer is None else error_pb2.ActionResult.Name(answer)
         self._findings.traces.append(Trace(action, (near.x, near.y), answer_name, recorded))
         summary = "; ".join(
@@ -273,13 +280,12 @@ class _Tracer:
         self,
         step: int,
         observation: sc2api_pb2.Observation,
+        unit: raw_pb2.Unit | None,
         walkable_before: numpy.ndarray,
         walkable_now: numpy.ndarray,
         near: Point,
-        unit_finder: UnitFinder,
         reach: int,
     ) -> TraceStep:
-        unit = unit_finder(observation.raw_data.units)
         newly_blocked = walkable_before & ~walkable_now
         newly_opened = ~walkable_before & walkable_now
         return TraceStep(
@@ -312,11 +318,6 @@ class _Tracer:
         """Trace `unit` killed."""
         near = Point((unit.pos.x, unit.pos.y))
         self.trace(action, near, _by_tag(unit.tag), lambda: self._game.kill([unit.tag]), **trace)
-
-    def toggled(self, action: str, cheat: Cheat, unit: raw_pb2.Unit, **trace: Any) -> None:
-        """Trace `cheat` switched, around `unit`."""
-        near = Point((unit.pos.x, unit.pos.y))
-        self.trace(action, near, _by_tag(unit.tag), lambda: self._game.cheat(cheat), **trace)
 
 
 def _time_game_info(game: Sandbox) -> tuple[float, int]:
@@ -366,7 +367,7 @@ def _blocked_unobserved(game: Sandbox, ground: OpenGround, start: Point, playabl
     """The tiles a barracks made blocks, read with no observation asked for since it was made, and read again after
     one."""
     at = ground.claim(start, 7)
-    walkable_before = _walkable_now(game, playable)
+    walkable_before = _walkable_observed(game, playable)
     game.debug(game.create(UnitTypeId.BARRACKS, game.player, at))
     game.client.step(_UNOBSERVED_STEPS)
     unobserved = int((walkable_before & ~_walkable_now(game, playable)).sum())
@@ -491,7 +492,7 @@ def _trace_the_maps_units(game: Sandbox, tracer: _Tracer, start: Point, playable
     tracer.killed("the mineral field nearest the start killed", _nearest_to(fields, start))
     farthest = max(fields, key=lambda unit: (unit.pos.x - start.x) ** 2 + (unit.pos.y - start.y) ** 2)
     tracer.killed("the mineral field farthest from the start killed", farthest)
-    walkable = _walkable_now(game, playable)
+    walkable = _walkable_observed(game, playable)
     rocks = [
         unit
         for unit in neutral
@@ -517,7 +518,8 @@ class WalkingFootprint:
 
     blocked: MeasuredFootprint
     steps: int | None
-    """The steps after the unit was made at which the grid blocked them, or None if it blocked nothing."""
+    """The steps at which the grid blocked them, counted from the observation `spawn` asks for 4 steps after the unit
+    was made, or None if it blocked nothing within `_FOOTPRINT_WAITING_STEPS`."""
     placement_rows: list[str] | None
     """The footprint `data/footprints.json` holds, or None where it holds none."""
     same_as_placement: bool
@@ -543,7 +545,7 @@ def _walking_footprint(
 ) -> WalkingFootprint | None:
     """Make one `unit_type` for `owner` at `at`, and read the tiles within `reach` of it the grid blocks once it
     does. None if the game would not make one."""
-    walkable_before = _walkable_now(game, playable)
+    walkable_before = _walkable_observed(game, playable)
     made = game.spawn([(unit_type, owner, at)])
     if not made:
         return None
@@ -553,7 +555,7 @@ def _walking_footprint(
     for step in range(_FOOTPRINT_WAITING_STEPS + 1):
         if step:
             game.client.step(1)
-        blocked = _tiles_near(walkable_before & ~_walkable_now(game, playable), playable, position, reach)
+        blocked = _tiles_near(walkable_before & ~_walkable_observed(game, playable), playable, position, reach)
         if blocked:
             steps = step
             break
@@ -630,12 +632,12 @@ class InsideAnswer:
     """The pathing query's answers from inside one structure to open ground."""
 
     center: tuple[float, float]
-    lower_left_tile: tuple[int, int] | None
-    """The lower left tile the grid blocks under it, or None if it blocks none."""
+    edge_tile: tuple[int, int] | None
+    """The lowest tile of the leftmost column the grid blocks under it, or None if it blocks none."""
     target: tuple[float, float]
     straight: float
     from_center: float
-    from_lower_left_tile: float | None
+    from_edge_tile: float | None
 
 
 def _pathing_query(game: Sandbox, pairs: Sequence[tuple[Point, Point]]) -> list[float]:
@@ -671,28 +673,28 @@ def ask_from_inside(installation: Installation) -> dict[str, InsideAnswer]:
         ground = OpenGround(game_map, game.units())
         for unit_type in _INSIDE_TYPES:
             at = ground.claim(game_map.start_location, _INSIDE_REACH)
-            walkable_before = _walkable_now(game, playable)
+            walkable_before = _walkable_observed(game, playable)
             made = game.spawn([(unit_type, game.player, at)])
             if not made:
                 logger.warning("The game did not make a {}", unit_type.name)
                 continue
             game.client.step(_SETTLING_STEPS)
-            walkable = _walkable_now(game, playable)
+            walkable = _walkable_observed(game, playable)
             center = Point((made[0].pos.x, made[0].pos.y))
             blocked = _tiles_near(walkable_before & ~walkable, playable, center, _INSIDE_REACH)
-            lower_left = min(blocked) if blocked else None
+            edge_tile = min(blocked) if blocked else None
             target = _walkable_target(walkable, playable, center)
             pairs = [(center, target)]
-            if lower_left is not None:
-                pairs.append((Point((lower_left[0] + 0.5, lower_left[1] + 0.5)), target))
+            if edge_tile is not None:
+                pairs.append((Point((edge_tile[0] + 0.5, edge_tile[1] + 0.5)), target))
             distances = _pathing_query(game, pairs)
             answers[unit_type.name] = InsideAnswer(
                 center=(center.x, center.y),
-                lower_left_tile=lower_left,
+                edge_tile=edge_tile,
                 target=(target.x, target.y),
                 straight=center.distance_to(target),
                 from_center=distances[0],
-                from_lower_left_tile=distances[1] if lower_left is not None else None,
+                from_edge_tile=distances[1] if edge_tile is not None else None,
             )
             logger.info("{}: {}", unit_type.name, answers[unit_type.name])
             game.remove(unit.tag for unit in made)
