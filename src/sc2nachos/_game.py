@@ -191,6 +191,7 @@ class _Game:
         self.step = step
         self.state = _State(observation, self.tracker, self.game_map)
         self.placement._update(self.tracker.unit_tracker.present, self.state, step)
+        self.pathing._update(self.tracker.unit_tracker.present)
         self.camera._update(observation.observation.raw_data.player)
         self.debug._update(step)
         changes = self.tracker.last_changes

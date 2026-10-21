@@ -422,14 +422,14 @@ it.
 | python-sc2 | NachOS |
 |---|---|
 | `game_info.map_name` | `api.map.name` |
-| `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` |
+| `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` as the game began; `api.pathing.grid` now, asked of the game once a turn that reads it, blocking the structures in sight |
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` as the game began; `api.placement.free` now |
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
 | nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not ordered yet, with `margin` as `is_free` takes it |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
-| `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.map.pathing.cheapest_paths_from(a).distances[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
+| `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.pathing.cheapest_paths_from(a).distances[b]` over the turn's grid, which leaves a structure `a` lies in as the game does |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |
 | `enemy_start_locations` | `api.map.opponent_start_locations` |
