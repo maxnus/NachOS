@@ -13,7 +13,8 @@ Three files in your bot repository.
 
 ### 1. A game script
 
-For a NachOS bot, the script builds the bot and hands it to `run_from_command_line`, which does the rest:
+For a NachOS bot, the script hands the bot's api to `run_from_command_line`, with the race it plays and its name,
+and that does the rest:
 
 ```python
 # scripts/run_game.py

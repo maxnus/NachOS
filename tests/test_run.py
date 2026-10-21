@@ -198,12 +198,13 @@ def test_by_default_a_local_game_is_stepped_and_saves_no_replay(played: dict[str
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
     api = Api()
     args = ["--ComputerRace", "ZERG", "--ComputerDifficulty", "VERY_EASY", "--ComputerBuild", "RUSH"]
-    result = run_from_command_line(api, [*args, "--Map", "TorchesAIE_v4", "--TimeLimit", "0"], race=Race.TERRAN)
+    argv = [*args, "--Map", "TorchesAIE_v4", "--TimeLimit", "0"]
+    result = run_from_command_line(api, argv, race=Race.TERRAN, name="MyBot")
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RUSH)
     assert played["map_file"].name == "TorchesAIE_v4"
     assert played["time_limit"] == 0
-    assert (played["api"], played["race"], played["name"]) == (api, Race.TERRAN, None)
+    assert (played["api"], played["race"], played["name"]) == (api, Race.TERRAN, "MyBot")
 
 
 def test_without_a_map_one_of_the_installations_is_picked(played: dict[str, Any]) -> None:
