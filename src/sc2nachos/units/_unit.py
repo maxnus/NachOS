@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Attribute
+from sc2nachos.gamedata import Attribute, TargetDomain
+from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
@@ -36,6 +38,11 @@ _CLOAKS = {int(member): member for member in CloakState}
 _LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
 # An id is the alliance's digit followed by a count of that alliance's units, below this.
 _IDS_PER_ALLIANCE = 100_000
+# Air weapons hit these, though they stand on the ground: a viking, which has no ground weapon, fired at a colossus
+# (in game).
+_GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
+# How many times as often each buff has its wearer attack, by raw id, as a report lists its buffs.
+_ATTACK_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in ATTACK_SPEED_BUFFS.items()}
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -645,3 +652,75 @@ class Unit[K: UnitType.AnyType]:
                 self._radius_footprint = Footprint.square(side)
             return self._radius_footprint
         return row.footprint
+
+    # Combat.
+
+    def weapon_against(self, target: Unit[Any]) -> Weapon | None:
+        """The weapon of `weapons` this unit fires at `target`: one that hits the air for a target that flies, and one
+        that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as a viking's
+        did (in game). `None` if it has none that hits `target`, and for an oracle whose beam is off, which wears
+        `BuffId.ORACLE_PULSAR_BEAM` exactly while it is on (in game).
+
+        Raises `NotReportedError` for a target remembered in the fog and never seen visible, as `is_flying` does, and
+        for an oracle never shown visible.
+        """
+        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
+            return None
+        weapons = self.weapons
+        if target.is_flying:
+            return next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.GROUND), None)
+        on_the_ground = next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.AIR), None)
+        if on_the_ground is None and target.type_id in _GROUND_TYPES_HIT_FROM_THE_AIR:
+            return next((weapon for weapon in weapons if weapon.target_domain is TargetDomain.AIR), None)
+        return on_the_ground
+
+    def has_in_range(self, target: Unit[Any], *, margin: float = 0.0) -> bool:
+        """Whether `target` is within the reach of `weapon_against(target)`: their centers no farther apart than its
+        range, both radii and `margin`. False if this unit has no weapon against `target`.
+
+        That is where a unit that can move fires at another unit (in game). An attacker that cannot move, such as a
+        sieged tank or a spine crawler, fires from up to some 0.1 nearer, and any attacker fires at a structure from up
+        to some 0.26 nearer, so pass a negative `margin` to be sure the shot can land. Raises as `weapon_against` does.
+        """
+        weapon = self.weapon_against(target)
+        return weapon is not None and self.distance_to(target) <= weapon.range + self.radius + target.radius + margin
+
+    def damage_against(self, target: Unit[Any]) -> float:
+        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, as
+        `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor` and `shield`. 0 if
+        this unit has no weapon against it or is a hallucination, which does no damage (stated). An enemy's reads as
+        one only once revealed, as `is_hallucination` has it. No buff on either unit counts.
+
+        Raises `NotReportedError` as `weapon_against` does, and for a unit of the two never shown visible, whose
+        shields or hallucination the game never reported.
+        """
+        weapon = self.weapon_against(target)
+        return 0.0 if weapon is None or self.is_hallucination else _damage_of_one_attack(weapon, target)
+
+    def dps_against(self, target: Unit[Any]) -> float:
+        """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`
+        attacking as often as the buffs on this unit have it: stim makes a marine's and a marauder's 1.5 times as often
+        (in game). 0 where `damage_against` is.
+
+        Raises `NotReportedError` as `damage_against` does.
+        """
+        weapon = self.weapon_against(target)
+        if weapon is None or self.is_hallucination:
+            return 0.0
+        damage = _damage_of_one_attack(weapon, target)
+        if (report := self._latest_visible_report) is None:
+            raise self._never_seen_error("buffs")
+        # What speeds an attack divides the base cooldown, and leaves the random delay as it is (in game).
+        attack_speed_multiplier = math.prod(_ATTACK_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in report.buff_ids)
+        cooldown_steps = weapon.base_cooldown_steps / attack_speed_multiplier + weapon.mean_delay_steps
+        return damage * STEPS_PER_SECOND / cooldown_steps
+
+
+def _damage_of_one_attack(weapon: Weapon, target: Unit[Any]) -> float:
+    """What one attack of `weapon` takes off `target` as it stands, as `Weapon.damage_against` has it."""
+    return weapon.damage_against(
+        attributes=target.type_data.attributes,
+        armor=target.armor,
+        shield_armor=target.shield_armor,
+        shield=target.shield,
+    )

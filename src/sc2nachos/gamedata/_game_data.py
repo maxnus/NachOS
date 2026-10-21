@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
+from sc2nachos.gamedata._missing_attacks import with_missing_attacks
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
@@ -36,7 +37,7 @@ class GameData:
         unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
-        self._units = _with_build_steps_borrowed(unit_rows, TECH_TREE.abilities)
+        self._units = with_missing_attacks(_with_build_steps_borrowed(unit_rows, TECH_TREE.abilities))
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(

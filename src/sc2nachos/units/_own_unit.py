@@ -48,7 +48,14 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def weapon_cooldown_steps(self) -> float:
-        """The steps until the unit can attack again. 0 for a unit without a weapon."""
+        """The steps until the unit can attack again, as the game reports it: the cooldown of its last attack, with the
+        random delay drawn for it, counting down by 1 a step. 0 for a unit without a weapon.
+
+        It reads 0 too while an attack is under way, for 0 to 6 steps before it by type and up to 8 for an ultralisk,
+        and a move ordered 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a unit
+        that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
+        `docs/reference/game-behavior/damage-and-buffs.md` has the steps each type reads 0.
+        """
         return self._latest_report.weapon_cooldown
 
     @property

@@ -9,26 +9,32 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND, STEPS_PER_SECOND
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
-from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
+from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
     from sc2nachos.gamedata._techtree import TechTreeUnitTypes
-    from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
 
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
+# What adds nothing to a weapon, from which the changes to one are summed.
+_NO_WEAPON_CHANGE = WeaponUpgrade()
+
+# Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
+_MEAN_ATTACK_DELAY_STEPS = -1 + 3 * (4095 / 2) / 4096
+# The least a hit takes off health, whatever the armor (in game).
+_MINIMUM_DAMAGE = 0.5
 
 
 class Attribute(ReadableIntEnum):
@@ -68,10 +74,60 @@ class Weapon:
     """Hits per attack: two for a colossus."""
     range: float
     """Its range."""
-    cooldown_steps: float
-    """Steps between one attack and the next."""
+    base_cooldown_steps: float
+    """The steps from one attack to the next before the random delay the game adds to each: the tables' cooldown,
+    shortened by an upgrade that speeds the attack."""
     damage_bonuses: Mapping[Attribute, float]
     """The extra damage per hit against a target with each attribute."""
+    ignores_armor: bool = False
+    """Whether a hit takes off its whole damage, whatever the target's armor and shield armor: an oracle's beam's (in
+    game)."""
+    mean_delay_steps: float = _MEAN_ATTACK_DELAY_STEPS
+    """The mean of the random delay the game adds to each attack: 0.4996 steps for a weapon from the tables, whose delay
+    runs from -1 to 2, and nothing for the weapons measured for the types the tables give none (in game)."""
+
+    @property
+    def average_cooldown_steps(self) -> float:
+        """The steps from one attack to the next on average, the random delay counted. A thor's and an ultralisk's
+        attacks were not seen to keep to it. A unit's own `weapon_cooldown_steps` counts down the delay drawn for its
+        last attack."""
+        return self.base_cooldown_steps + self.mean_delay_steps
+
+    @property
+    def dps(self) -> float:
+        """Damage per second of real time at the game's Faster speed: every hit of an attack, each
+        `average_cooldown_steps`, against a target with no armor and no attribute it has a bonus against."""
+        return self.damage * self.attacks * STEPS_PER_SECOND / self.average_cooldown_steps
+
+    def damage_against(
+        self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shield: float = 0.0
+    ) -> float:
+        """What one attack takes off a target with these attributes, armor and shield, its shield and health together.
+
+        Each hit takes off the damage and its bonus against the target's attributes: from the shield first, less
+        `shield_armor`, and what is more than the shield has left goes on to health less `armor`, at nothing at least;
+        from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the whole
+        hit. Each hit of an attack of several finds the shield the one before left. The damage may come to more than
+        the target has left.
+        """
+        bonus_damage = sum(bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes)
+        hit_damage = self.damage + bonus_damage
+        if self.ignores_armor:
+            armor = shield_armor = 0.0
+        damage_taken = 0.0
+        for _ in range(self.attacks):
+            if shield <= 0:
+                damage_taken += max(hit_damage - armor, _MINIMUM_DAMAGE)
+                continue
+            # Taken to be at least 0.5, as off health: no hit seen was small enough to tell.
+            off_shield = max(hit_damage - shield_armor, _MINIMUM_DAMAGE)
+            if off_shield <= shield:
+                damage_taken += off_shield
+                shield -= off_shield
+            else:
+                damage_taken += shield + max(off_shield - shield - armor, 0.0)
+                shield = 0.0
+        return damage_taken
 
     @classmethod
     def _from_proto(cls, weapon: data_pb2.Weapon) -> Self:
@@ -84,20 +140,23 @@ class Weapon:
             range=weapon.range,
             # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
             # seconds at Normal speed, 16 steps a second.
-            cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
+            base_cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
-    def _with_weapon_upgrades(self, changes: Iterable[WeaponUpgrade]) -> Weapon:
-        """This weapon with each of `changes` added."""
-        damage, weapon_range = self.damage, self.range
+    def _with_weapon_upgrade(self, change: WeaponUpgrade) -> Weapon:
+        """This weapon with `change` added, and its base cooldown divided by the change's attack speed multiplier:
+        what speeds an attack leaves the random delay as it is (in game)."""
         bonuses = dict(self.damage_bonuses)
-        for change in changes:
-            damage += change.damage
-            weapon_range += change.range
-            for attribute, bonus in change.damage_bonuses.items():
-                bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
-        return replace(self, damage=damage, range=weapon_range, damage_bonuses=MappingProxyType(bonuses))
+        for attribute, bonus in change.damage_bonuses.items():
+            bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
+        return replace(
+            self,
+            damage=self.damage + change.damage,
+            range=self.range + change.range,
+            base_cooldown_steps=self.base_cooldown_steps / change.attack_speed_multiplier,
+            damage_bonuses=MappingProxyType(bonuses),
+        )
 
 
 @final
@@ -128,7 +187,8 @@ class UnitTypeData:
     attributes: frozenset[Attribute]
     """Its attributes, which weapons deal bonus damage against."""
     weapons: tuple[Weapon, ...]
-    """Its attacks."""
+    """Its attacks: the tables', or for the battlecruiser, the oracle, the void ray and the sentry, which the tables
+    give none, the attacks `tools/sweep_combat.py` measured. An oracle's fires only while its beam is on."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` if nothing does."""
     producers: frozenset[UnitTypeId]
@@ -156,8 +216,8 @@ class UnitTypeData:
     of the map's own. `None` for any other type, such as a unit, an egg or a force field, and for the few the game would
     not create to be measured: the acceleration zones and the flying inhibitor zones."""
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
-    """Every upgrade that affects it, with what each adds to its weapons, armor and speed. An upgrade that only raises
-    a level its units report, such as a shields level, adds nothing."""
+    """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
+    An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
 
     @property
     def abilities(self) -> frozenset[AbilityId]:
@@ -165,17 +225,19 @@ class UnitTypeData:
         return frozenset(self.ability_requirements)
 
     def with_upgrades(self, upgrades: Iterable[UpgradeId]) -> UnitTypeData:
-        """This type with `upgrades` researched: the weapons, armor and speed they change.
+        """This type with `upgrades` researched: the weapons, their attack speed, the armor and the speed they change.
 
-        Nothing else an upgrade does, such as attack speed, is applied. Anabolic Synthesis counts whether or not the
-        unit is on creep, as in the game's rows.
+        Nothing else an upgrade does is applied. Anabolic Synthesis counts whether or not the unit is on creep, as in
+        the game's rows.
         """
         changes = [self.upgrades[upgrade] for upgrade in sorted(set(upgrades) & self.upgrades.keys())]
         changes = [change for change in changes if change != _NO_CHANGE]
         if not changes:
             return self
         weapons = tuple(
-            weapon._with_weapon_upgrades(change.weapons[index] for change in changes if change.weapons)
+            weapon._with_weapon_upgrade(
+                sum((change.weapons[index] for change in changes if change.weapons), _NO_WEAPON_CHANGE)
+            )
             for index, weapon in enumerate(self.weapons)
         )
         return replace(

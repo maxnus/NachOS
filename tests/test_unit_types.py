@@ -20,20 +20,15 @@ from sc2nachos.units._tracking import _Tracker
 from support import load_tool, make_enemy, make_observation, make_tables, make_unit
 
 
-def _generator() -> Any:
+def _unit_types_generator() -> Any:
     """The `tools/generate_unit_types.py` module."""
     return load_tool("generate_unit_types")
 
 
 @pytest.fixture(scope="module")
-def tables() -> GameData:
-    return _generator().corpus_tables()
-
-
-@pytest.fixture(scope="module")
 def form_of() -> dict[UnitTypeId, UnitTypeId]:
     """The type the corpus's tables call each type a form of, as the sweeps read it."""
-    return load_tool("_sandbox").unit_aliases(_generator().corpus_answer())
+    return load_tool("_sandbox").unit_aliases(_unit_types_generator().corpus_answer())
 
 
 def test_the_sweeps_read_the_type_a_form_is_of_where_both_are_curated(form_of: dict[UnitTypeId, UnitTypeId]) -> None:
@@ -43,7 +38,7 @@ def test_the_sweeps_read_the_type_a_form_is_of_where_both_are_curated(form_of: d
     assert UnitTypeId.MARINE not in form_of
 
 
-def _types() -> list[Any]:
+def _classes_of_one_type() -> list[Any]:
     """The classes in `UnitType` that name one type, not a group."""
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
 
@@ -72,39 +67,41 @@ def _curated_groups() -> list[Any]:
     ]
 
 
-def _named(prefix: str) -> set[UnitTypeId]:
+def _types_named_with(prefix: str) -> set[UnitTypeId]:
     return {unit_type for unit_type in UnitTypeId if unit_type.name.startswith(prefix)}
 
 
 class TestUnitType:
-    @pytest.mark.parametrize("group", sorted(_generator().TWO_FORMS), ids=str)
+    @pytest.mark.parametrize("group", sorted(_unit_types_generator().TWO_FORMS), ids=str)
     def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(
-        self, group: str, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+        self, group: str, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
         call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
         performs the morph to the other."""
         first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
         if group == "AnyHellion":
-            assert UnitTypeId.HELLION in tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
-            assert UnitTypeId.HELLBAT in tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
+            assert UnitTypeId.HELLION in first_corpus_tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
+            assert UnitTypeId.HELLBAT in first_corpus_tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
             return
         linked = [
             TECH_TREE.unit_types.morph_sources.get(one) is other
-            or other in tables.units[one].tech_aliases
+            or other in first_corpus_tables.units[one].tech_aliases
             or form_of.get(one) is other
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
 
-    def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self, tables: GameData) -> None:
-        generated = _generator().render(tables)
+    def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        generated = _unit_types_generator().render(first_corpus_tables)
         written = Path(unit_type_module.__file__).read_text(encoding="utf-8")
         assert written == generated, "run tools/generate_unit_types.py"
 
     def test_every_curated_type_has_one_class_named_after_it(self) -> None:
-        assert sorted(unit_type.id for unit_type in _types()) == sorted(UnitTypeId)
-        assert all(unit_type._type_ids == {unit_type.id} for unit_type in _types())
+        assert sorted(unit_type.id for unit_type in _classes_of_one_type()) == sorted(UnitTypeId)
+        assert all(unit_type._type_ids == {unit_type.id} for unit_type in _classes_of_one_type())
         assert UnitType.Marine.id is UnitTypeId.MARINE
         assert UnitType.SiegeTankSieged.id is UnitTypeId.SIEGE_TANK_SIEGED
 
@@ -117,9 +114,13 @@ class TestUnitType:
         ],
     )
     def test_a_group_is_every_type_the_tables_put_in_it(
-        self, tables: GameData, race: Race, group: type[UnitType.AnyType], structures: type[UnitType.AnyType]
+        self,
+        first_corpus_tables: GameData,
+        race: Race,
+        group: type[UnitType.AnyType],
+        structures: type[UnitType.AnyType],
     ) -> None:
-        rows = [tables.units[unit_type] for unit_type in UnitTypeId]
+        rows = [first_corpus_tables.units[unit_type] for unit_type in UnitTypeId]
         assert group._type_ids == {row.id for row in rows if row.race is race}
         assert structures._type_ids == group._type_ids & UnitType.Structure._type_ids
         assert UnitType.Structure._type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
@@ -131,21 +132,25 @@ class TestUnitType:
                 assert issubclass(group, other) == (group._type_ids <= other._type_ids), other
 
     def test_the_curated_groups_hold_every_type_named_for_them(self) -> None:
-        towers = _named("COLLAPSIBLE_TOWER_") - _named("COLLAPSIBLE_TOWER_DEBRIS") - _named("COLLAPSIBLE_TOWER_PUSH")
+        towers = (
+            _types_named_with("COLLAPSIBLE_TOWER_")
+            - _types_named_with("COLLAPSIBLE_TOWER_DEBRIS")
+            - _types_named_with("COLLAPSIBLE_TOWER_PUSH")
+        )
         assert UnitType.CollapsibleTower._type_ids == towers
-        assert UnitType.CollapsibleTowerDebris._type_ids == _named("COLLAPSIBLE_TOWER_DEBRIS")
+        assert UnitType.CollapsibleTowerDebris._type_ids == _types_named_with("COLLAPSIBLE_TOWER_DEBRIS")
         assert len(UnitType.CollapsibleTowerDebris._type_ids) == 7
-        assert UnitType.Critter._type_ids == _named("CRITTER_")
-        assert UnitType.AnyChangeling._type_ids == _named("CHANGELING")
+        assert UnitType.Critter._type_ids == _types_named_with("CRITTER_")
+        assert UnitType.AnyChangeling._type_ids == _types_named_with("CHANGELING")
         assert len(UnitType.AnyChangeling._type_ids) == 6
-        assert UnitType.AnyCreepTumor._type_ids == _named("CREEP_TUMOR")
+        assert UnitType.AnyCreepTumor._type_ids == _types_named_with("CREEP_TUMOR")
         assert len(UnitType.AnyCreepTumor._type_ids) == 3
         counts = [
             len(group._type_ids) for group in (UnitType.Destructible, UnitType.InhibitorZone, UnitType.AccelerationZone)
         ]
         assert counts == [68, 6, 6]
         towers_and_debris = UnitType.CollapsibleTower._type_ids | UnitType.CollapsibleTowerDebris._type_ids
-        assert UnitType.Destructible._type_ids == _named("DESTRUCTIBLE_") | towers_and_debris
+        assert UnitType.Destructible._type_ids == _types_named_with("DESTRUCTIBLE_") | towers_and_debris
 
     def test_a_spire_and_an_overlord_are_a_plain_one_or_what_the_tables_count_as_one(self) -> None:
         assert UnitType.AnySpire._type_ids == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
@@ -157,12 +162,12 @@ class TestUnitType:
         }
 
     def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(
-        self, tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+        self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """Its tech aliases, and the type the tables call it a form of. They call an adept's shade a form of the
         adept, but it is a unit of its own beside the adept."""
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
-            row = tables.units[unit_type]
+            row = first_corpus_tables.units[unit_type]
             for linked in {*row.tech_aliases, *filter(None, [form_of.get(unit_type)])}:
                 shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
                 assert shared, (unit_type, linked)
@@ -192,9 +197,9 @@ class TestUnitType:
         assert UnitType.AnyZergTownhall._type_ids == {UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE}
 
     def test_mineral_fields_geysers_and_gas_buildings_are_what_the_tables_say_holds_minerals_or_vespene(
-        self, tables: GameData
+        self, first_corpus_tables: GameData
     ) -> None:
-        rows = [tables.units[unit_type] for unit_type in UnitTypeId]
+        rows = [first_corpus_tables.units[unit_type] for unit_type in UnitTypeId]
         vespene = {row.id for row in rows if row.has_vespene}
         assert UnitType.AnyMineralField._type_ids == {row.id for row in rows if row.has_minerals}
         assert UnitType.AnyVespeneGeyser._type_ids == vespene - UnitType.GasBuilding._type_ids
@@ -221,18 +226,18 @@ class TestUnitType:
         assert UnitType.AnyAddOn._type_ids == UnitType.AnyTechLab._type_ids | UnitType.AnyReactor._type_ids
 
 
-_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
+_MARINE_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
-def _unit(unit_type: int) -> Unit[Any]:
-    tracker = _Tracker(_TABLES, make_enemy())
+def _unit_observed(unit_type: int) -> Unit[Any]:
+    tracker = _Tracker(_MARINE_TABLES, make_enemy())
     tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
     return tracker.unit_tracker.present[0]
 
 
 class TestIncludes:
     def test_a_type_and_its_groups_include_a_unit_of_it(self) -> None:
-        marine = _unit(UnitTypeId.MARINE)
+        marine = _unit_observed(UnitTypeId.MARINE)
         assert UnitType.Marine.includes(marine)
         assert UnitType.Terran.includes(marine)
         assert not UnitType.Marauder.includes(marine)
@@ -240,7 +245,7 @@ class TestIncludes:
 
     def test_a_unit_of_an_uncurated_type_raises(self) -> None:
         with pytest.raises(UncuratedIdError):
-            UnitType.Marine.includes(_unit(RawUnitTypeId.Viking))
+            UnitType.Marine.includes(_unit_observed(RawUnitTypeId.Viking))
 
 
 def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnUnit[Any]]) -> None:

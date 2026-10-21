@@ -33,8 +33,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - The tables give the battlecruiser, the oracle, the void ray and the sentry no weapon, though they attack: a
   battlecruiser 8 to the ground and 5 to the air every 3 to 4 steps, 3.6 on average, at range 6; a void ray 6, and 4
   more against armored, every 8 steps at 6, to both; a sentry 6 every 16 steps at 5, to both; and an oracle with its
-  beam on, against the ground, 22 to an SCV and 15 to a roach every 14 steps at 4. Each attack level adds 1 to the first
-  three and nothing to the oracle's, and armor comes off as for any weapon (tool `sweep_combat`, build 75689).
+  beam on 15, and 7 more against light, every 14 steps at 4, to the ground alone: it never fired at an overlord. Their
+  shots show no random delay: the battlecruiser's came 4, 3, 4, 4 and 3 steps apart over and over, and the others' every
+  8, 16 and 14 steps after the first. Each attack level adds 1 to the first three's damage, none to a bonus, and nothing
+  to the oracle's. Armor comes off the first three's hits as off any weapon's, 3 more taking 3 off each, but nothing
+  comes off the oracle's: it took 22 off an SCV and 15 off a roach with 3 more armor as without, and 22 off a zealot at
+  shields level 3 with 4 armor, the 16 past its shields included. It wore `OracleWeapon` at every step its beam was on,
+  and with its beam never on, or turned on and off again, wore none and took nothing off an SCV (tool `sweep_combat`,
+  `no-weapon`, build 75689).
 - A hit takes off its weapon's damage and the bonus against the target's attributes, the attacker's upgrades in both.
   From health it takes that less the armor, but at least 0.5; from shields, first, that less the shields level, and what
   is more than the shields goes on to health less the armor, at nothing at least. A marine's 6 took 5 off a roach, with
@@ -42,6 +48,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   blade of 11, on a zealot with 2 shields, shields level 3 and armor 4, took the 2 and 2 of its health: 11 less 3, less
   2, less 4. A marauder's 10 and 10 against armored took 19 off a roach and 20 off a stalker's shields, 17 at level 3
   (tool `sweep_combat`, build 75689).
+- A hallucination's attacks do no damage (stated).
 - A zealot's attack is 2 hits of 8, 4 steps apart, and a colossus's 2 beams land together, 15 each on a zergling (tool
   `sweep_combat`, build 75689).
 - The tables' cooldowns leave out what speeds an attack up. Timed over six shots at a command center, Adrenal Glands

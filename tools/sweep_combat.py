@@ -16,7 +16,8 @@ with neither side upgraded, with the target's side given the `upgrade` cheat thr
 weapon, armor and shield, and then with both sides so. Two trials set a zealot's shields to 2 first.
 
 `no-weapon` does the same for the battlecruiser, the oracle, its beam turned on, the void ray and the sentry, against
-a light target, an armored one and one that flies, before and after this player's upgrades.
+a light target, an armored one and one that flies, with neither side upgraded, with this player's side upgraded, and
+then with both, so that the target's armor is raised too.
 
 `attack-speed`, under `god`, times the first shots of one attacker at a time at a command center of the other
 player's, by the steps at which its cooldown rises, before this player's upgrades and after, a marine and a marauder
@@ -65,11 +66,12 @@ from _sandbox import Cheat, OpenGround, Rivals, Sandbox, playing_rivals
 from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
-from sc2nachos.gamedata import GameData, TargetDomain
+from sc2nachos.gamedata import GameData, TargetDomain, Weapon
+from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.ids.raw import RawAbilityId
+from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.units._unit_type import UnitType
@@ -204,11 +206,17 @@ class RangeFinding:
     """Whether the halving stopped at a displaced sample, so the two distances may not bracket the reach."""
 
 
+def _tables_weapons(game_data: GameData, unit_type: UnitTypeId) -> tuple[Weapon, ...]:
+    """The weapons the game's tables give `unit_type`: none where NachOS gives it the weapons measured here instead."""
+    weapons = game_data.units[unit_type].weapons
+    return () if weapons == MISSING_WEAPONS.get(unit_type) else weapons
+
+
 def _weapon_range(game_data: GameData, attacker: UnitTypeId, *, flying: bool) -> float | None:
     """The range of the attacker's weapon the tables give it against a target that flies or does not, or None."""
-    row = game_data.units[attacker]
     wanted = TargetDomain.AIR if flying else TargetDomain.GROUND
-    ranges = [weapon.range for weapon in row.weapons if weapon.target_domain in (wanted, TargetDomain.ANY)]
+    weapons = _tables_weapons(game_data, attacker)
+    ranges = [weapon.range for weapon in weapons if weapon.target_domain in (wanted, TargetDomain.ANY)]
     return max(ranges) if ranges else None
 
 
@@ -394,11 +402,13 @@ class AttackFinding:
     losses: list[Loss] = field(default_factory=list)
     first_attack: Loss | None = None
     """What the first attack took off in all, its hits within `_ONE_ATTACK_STEPS` of the first."""
+    attacker_buffs: dict[str, int] = field(default_factory=dict)
+    """The buffs the attacker wore while it was set upon the target, each with the steps it wore it."""
 
 
 def _is_melee(game_data: GameData, unit_type: UnitTypeId) -> bool:
     """Whether every weapon the tables give `unit_type` reaches less than 1, as a melee one does."""
-    weapons = game_data.units[unit_type].weapons
+    weapons = _tables_weapons(game_data, unit_type)
     return bool(weapons) and max(weapon.range for weapon in weapons) < 1
 
 
@@ -414,11 +424,12 @@ def _set_upon(
     *,
     shields: float | None = None,
     before: Sequence[tuple[int, int | None]] = (),
-) -> tuple[raw_pb2.Unit, raw_pb2.Unit, list[Loss]]:
+) -> tuple[raw_pb2.Unit, raw_pb2.Unit, list[Loss], dict[str, int]]:
     """Make an attacker of this player's at `at` and a target of the other's across, `_TRIAL_DISTANCE` from it or, from
     a melee attacker, `_MELEE_TRIAL_DISTANCE`, both holding, the target's shields set to `shields` if given and the
-    abilities `before` ordered on the attacker first, each with the energy it needs; and what the target lost at each
-    step for `_ATTACK_STEPS` steps."""
+    abilities `before` ordered on the attacker first, in turn, each with the energy it needs; and what the target lost
+    at each step for `_ATTACK_STEPS` steps, and the buffs the attacker wore over them, each with the steps it wore
+    it."""
     me, enemy = rivals.me, rivals.enemy
     melee = _is_melee(GameData(me.client.game_data()), attacker_type)
     distance = _MELEE_TRIAL_DISTANCE if melee else _TRIAL_DISTANCE
@@ -429,7 +440,7 @@ def _set_upon(
         rivals.step(1)
         for ability, target_tag in before:
             me.order(ability, attacker.tag, target_tag)
-        rivals.step(_SETTLING_STEPS)
+            rivals.step(_SETTLING_STEPS)
     (target,) = _units_made(rivals, [(target_type, _enemy_of(rivals), Point((at.x + distance, at.y)))])
     _hold_position(enemy, target.tag)
     last = (target.health, target.shield)
@@ -441,8 +452,11 @@ def _set_upon(
                 last = (settled.health, settled.shield)
                 break
     losses = []
+    attacker_buffs: Counter[str] = Counter()
     for step in range(1, _ATTACK_STEPS + 1):
         rivals.step(1)
+        if (attacker_now := _unit_tagged(me, attacker.tag)) is not None:
+            attacker_buffs.update(_buff_name(buff) for buff in attacker_now.buff_ids)
         now = _unit_tagged(me, target.tag)
         if now is None:
             losses.append(Loss(step, last[0], last[1]))
@@ -452,7 +466,15 @@ def _set_upon(
             losses.append(Loss(step, health_lost, shields_lost))
         last = (now.health, now.shield)
     _kill_and_wait(rivals, [attacker.tag, target.tag])
-    return attacker, target, losses
+    return attacker, target, losses, dict(attacker_buffs)
+
+
+def _buff_name(buff: int) -> str:
+    """The game's name for the raw buff id `buff`, or the number for one the raw catalog lacks."""
+    try:
+        return RawBuffId(buff).name
+    except ValueError:
+        return str(buff)
 
 
 def _first_attack(losses: Sequence[Loss], attacks: int) -> Loss | None:
@@ -474,10 +496,10 @@ def _weapons_of(game_data: GameData, unit_type: UnitTypeId) -> list[dict[str, An
             "damage": weapon.damage,
             "attacks": weapon.attacks,
             "range": weapon.range,
-            "cooldown_steps": weapon.cooldown_steps,
+            "cooldown_steps": weapon.base_cooldown_steps,
             "damage_bonuses": {attribute.name: bonus for attribute, bonus in weapon.damage_bonuses.items()},
         }
-        for weapon in game_data.units[unit_type].weapons
+        for weapon in _tables_weapons(game_data, unit_type)
     ]
 
 
@@ -495,9 +517,11 @@ def _attack_finding(
     """Set one attacker upon one target and record what it took off, beside the attacker's weapons as this player's
     tables give them now and the target's armor as `base_tables`, read before either side had an upgrade, give it."""
     game_data = GameData(rivals.me.client.game_data())
-    _, target, losses = _set_upon(rivals, attacker_type, target_type, at, shields=shields, before=before)
+    _, target, losses, attacker_buffs = _set_upon(
+        rivals, attacker_type, target_type, at, shields=shields, before=before
+    )
     row = base_tables.units[target_type]
-    weapons = game_data.units[attacker_type].weapons
+    weapons = _tables_weapons(game_data, attacker_type)
     finding = AttackFinding(
         attacker_type.name,
         target_type.name,
@@ -510,6 +534,7 @@ def _attack_finding(
         shields if shields is not None else target.shield,
         losses,
         _first_attack(losses, max((weapon.attacks for weapon in weapons), default=1)),
+        attacker_buffs,
     )
     logger.info(
         "{} on {} ({} upgraded): first attack {}, every loss {}",
@@ -569,13 +594,18 @@ def measure_damage(installation: Installation) -> list[AttackFinding]:
 
 
 # The attackers the tables give no weapon, each against a light target and an armored one, on the ground or in the
-# air, and what each is ordered first: an oracle turns its beam on.
+# air, and what each is ordered first: an oracle turns its beam on. An oracle is set on a zealot too, for the shields,
+# on an overlord, which it is not known to hit, and on an SCV with its beam never on and turned on and off again.
 _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = (
     (UnitTypeId.BATTLECRUISER, UnitTypeId.SCV, ()),
     (UnitTypeId.BATTLECRUISER, UnitTypeId.ROACH, ()),
     (UnitTypeId.BATTLECRUISER, UnitTypeId.OVERLORD, ()),
     (UnitTypeId.ORACLE, UnitTypeId.SCV, (RawAbilityId.Behavior_PulsarBeamOn,)),
     (UnitTypeId.ORACLE, UnitTypeId.ROACH, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.ZEALOT, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.OVERLORD, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.SCV, ()),
+    (UnitTypeId.ORACLE, UnitTypeId.SCV, (RawAbilityId.Behavior_PulsarBeamOn, RawAbilityId.Behavior_PulsarBeamOff)),
     (UnitTypeId.VOID_RAY, UnitTypeId.SCV, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.ROACH, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.OVERLORD, ()),
@@ -586,7 +616,7 @@ _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = 
 
 
 def measure_no_weapon(installation: Installation) -> list[AttackFinding]:
-    """Every trial of `_NO_WEAPON_TRIALS`, with neither side upgraded and then with the attacker's side upgraded."""
+    """Every trial of `_NO_WEAPON_TRIALS` with neither side upgraded, then the attacker's side, then both."""
     findings = []
     with playing_rivals(Race.TERRAN, installation) as rivals:
         me = rivals.me
@@ -594,9 +624,9 @@ def measure_no_weapon(installation: Installation) -> list[AttackFinding]:
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
         base_tables = GameData(me.client.game_data())
-        for upgrades in ("neither", "attacker"):
-            if upgrades == "attacker":
-                _send_upgrade_levels(me, rivals)
+        for upgrades, upgrading in (("neither", None), ("attacker", rivals.me), ("both", rivals.enemy)):
+            if upgrading is not None:
+                _send_upgrade_levels(upgrading, rivals)
             for attacker_type, target_type, abilities in _NO_WEAPON_TRIALS:
                 before = [(ability, None) for ability in abilities]
                 findings.append(
@@ -638,8 +668,8 @@ def _by_a_command_center(
     (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
     away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
     (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
-    weapons = game_data.units[attacker_type].weapons
-    return attacker, target, weapons[0].cooldown_steps if weapons else None
+    weapons = _tables_weapons(game_data, attacker_type)
+    return attacker, target, weapons[0].base_cooldown_steps if weapons else None
 
 
 class _AttackWatch:
