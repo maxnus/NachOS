@@ -26,6 +26,19 @@ class WeaponUpgrade:
     attack_speed_multiplier: float = 1.0
     """How many times as often the weapon attacks: 1.4 for a zergling's with Adrenal Glands (in game)."""
 
+    def __add__(self, other: WeaponUpgrade) -> WeaponUpgrade:
+        """What the two upgrades add to the weapon together: their damage, bonuses and range added, and their attack
+        speed multipliers multiplied."""
+        bonuses = dict(self.damage_bonuses)
+        for attribute, bonus in other.damage_bonuses.items():
+            bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
+        return WeaponUpgrade(
+            damage=self.damage + other.damage,
+            damage_bonuses=MappingProxyType(bonuses),
+            range=self.range + other.range,
+            attack_speed_multiplier=self.attack_speed_multiplier * other.attack_speed_multiplier,
+        )
+
 
 @final
 @dataclass(frozen=True, slots=True)

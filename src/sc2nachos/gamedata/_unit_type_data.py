@@ -14,7 +14,7 @@ from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
-from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
+from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 
@@ -23,12 +23,13 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
     from sc2nachos.gamedata._techtree import TechTreeUnitTypes
-    from sc2nachos.gamedata._unit_type_upgrade import WeaponUpgrade
     from sc2nachos.geometry import Footprint
 
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
+# What adds nothing to a weapon, from which the changes to one are summed.
+_NO_WEAPON_CHANGE = WeaponUpgrade()
 
 # Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
 _MEAN_ATTACK_DELAY_STEPS = -1 + 3 * (4095 / 2) / 4096
@@ -143,22 +144,17 @@ class Weapon:
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
-    def _with_weapon_upgrades(self, changes: Iterable[WeaponUpgrade]) -> Weapon:
-        """This weapon with each of `changes` added, and its base cooldown divided by their attack speed multipliers:
+    def _with_weapon_upgrade(self, change: WeaponUpgrade) -> Weapon:
+        """This weapon with `change` added, and its base cooldown divided by the change's attack speed multiplier:
         what speeds an attack leaves the random delay as it is (in game)."""
-        damage, weapon_range, attack_speed_multiplier = self.damage, self.range, 1.0
         bonuses = dict(self.damage_bonuses)
-        for change in changes:
-            damage += change.damage
-            weapon_range += change.range
-            attack_speed_multiplier *= change.attack_speed_multiplier
-            for attribute, bonus in change.damage_bonuses.items():
-                bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
+        for attribute, bonus in change.damage_bonuses.items():
+            bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
         return replace(
             self,
-            damage=damage,
-            range=weapon_range,
-            base_cooldown_steps=self.base_cooldown_steps / attack_speed_multiplier,
+            damage=self.damage + change.damage,
+            range=self.range + change.range,
+            base_cooldown_steps=self.base_cooldown_steps / change.attack_speed_multiplier,
             damage_bonuses=MappingProxyType(bonuses),
         )
 
@@ -239,7 +235,9 @@ class UnitTypeData:
         if not changes:
             return self
         weapons = tuple(
-            weapon._with_weapon_upgrades(change.weapons[index] for change in changes if change.weapons)
+            weapon._with_weapon_upgrade(
+                sum((change.weapons[index] for change in changes if change.weapons), _NO_WEAPON_CHANGE)
+            )
             for index, weapon in enumerate(self.weapons)
         )
         return replace(

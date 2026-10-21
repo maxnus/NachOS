@@ -88,7 +88,7 @@ def _create_weapon_upgrades(
     return MappingProxyType(dict.fromkeys(levels, change))
 
 
-MISSING_WEAPON_UPGRADES: Final[Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]] = MappingProxyType(
+_MISSING_WEAPON_UPGRADES: Final[Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUpgrade]]] = MappingProxyType(
     {
         UnitTypeId.BATTLECRUISER: _create_weapon_upgrades(
             (UpgradeId.TERRAN_SHIP_WEAPONS_1, UpgradeId.TERRAN_SHIP_WEAPONS_2, UpgradeId.TERRAN_SHIP_WEAPONS_3), 2
@@ -109,7 +109,7 @@ MISSING_WEAPON_UPGRADES: Final[Mapping[UnitTypeId, Mapping[UpgradeId, UnitTypeUp
 """What the attack levels add to `MISSING_WEAPONS`: 1 to each hit's damage, none to a bonus, and nothing to an
 oracle's beam (in game)."""
 
-ATTACK_SPEED_UPGRADES: Final[Mapping[UnitTypeId, Mapping[UpgradeId, float]]] = MappingProxyType(
+_ATTACK_SPEED_UPGRADES: Final[Mapping[UnitTypeId, Mapping[UpgradeId, float]]] = MappingProxyType(
     {
         UnitTypeId.ZERGLING: MappingProxyType({UpgradeId.ADRENAL_GLANDS: 1.4}),
         UnitTypeId.ADEPT: MappingProxyType({UpgradeId.GLAIVES: 1.45}),
@@ -133,9 +133,9 @@ def with_missing_attacks(units: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Un
     rows = dict(units)
     for unit_type, weapons in MISSING_WEAPONS.items():
         if (row := rows.get(unit_type)) is not None and not row.weapons:
-            upgrades = {**row.upgrades, **MISSING_WEAPON_UPGRADES.get(unit_type, {})}
+            upgrades = {**row.upgrades, **_MISSING_WEAPON_UPGRADES.get(unit_type, {})}
             rows[unit_type] = replace(row, weapons=weapons, upgrades=MappingProxyType(upgrades))
-    for unit_type, multipliers in ATTACK_SPEED_UPGRADES.items():
+    for unit_type, multipliers in _ATTACK_SPEED_UPGRADES.items():
         if (row := rows.get(unit_type)) is None or not row.weapons:
             continue
         upgrades = dict(row.upgrades)

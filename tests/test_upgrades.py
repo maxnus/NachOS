@@ -256,6 +256,17 @@ class TestWhatTheTablesSay:
         assert _reported_levels(first_corpus_tables, levels) == [(UpgradeType.ARMOR, level) for level in (1, 2, 3)]
         assert [row.with_upgrades(levels[:level]).armor for level in range(4)] == by_level
 
+    def test_two_changes_to_a_weapon_add_up_and_their_attack_speeds_compound(self) -> None:
+        first = WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({_ARMORED: 1.0}), attack_speed_multiplier=1.4)
+        second = WeaponUpgrade(damage_bonuses=MappingProxyType({_ARMORED: 2.0, _LIGHT: 1.0}), range=1.0)
+        assert first + second == WeaponUpgrade(
+            damage=1.0,
+            damage_bonuses=MappingProxyType({_ARMORED: 3.0, _LIGHT: 1.0}),
+            range=1.0,
+            attack_speed_multiplier=1.4,
+        )
+        assert (first + first).attack_speed_multiplier == pytest.approx(1.96)
+
     def test_one_level_adds_different_amounts_to_different_types(self, first_corpus_tables: GameData) -> None:
         first = UpgradeId.TERRAN_INFANTRY_WEAPONS_1
         infantry = (UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.GHOST)

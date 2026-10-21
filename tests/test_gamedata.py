@@ -18,7 +18,7 @@ from sc2nachos.gamedata import (
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
-from sc2nachos.gamedata._missing_attacks import MISSING_WEAPON_UPGRADES, MISSING_WEAPONS
+from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
@@ -270,7 +270,7 @@ class TestReadingTheTables:
         void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY)
         row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
         assert row.weapons == MISSING_WEAPONS[UnitTypeId.VOID_RAY]
-        assert row.upgrades.items() >= MISSING_WEAPON_UPGRADES[UnitTypeId.VOID_RAY].items()
+        assert row.with_upgrades({UpgradeId.PROTOSS_AIR_WEAPONS_1}).weapons[0].damage == 7.0
 
     def test_a_weapon_the_tables_leave_out_attacks_with_no_random_delay(self) -> None:
         """A void ray's beam hit every 8 steps (tool `sweep_combat`, `no-weapon`)."""
