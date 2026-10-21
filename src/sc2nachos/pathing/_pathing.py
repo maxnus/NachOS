@@ -20,6 +20,11 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
 
 
+# How far from a structure's position, along each axis, a point in its footprint can lie: half the widest footprint, a
+# huge rock's 12 tiles, and the tile it centers on.
+_FOOTPRINT_REACH = 7.0
+
+
 @final
 class Pathing:
     """How units get around the map as it stands now, as the game answers."""
@@ -43,8 +48,8 @@ class Pathing:
 
         Every structure in sight blocks the tiles it stands on, this player's and the enemy's, and so does every mineral
         field and geyser in sight; a rock blocks in sight or not. A structure out of sight blocks nothing, its snapshot
-        included, nor does a lifted structure or a lowered supply depot; a unit that is no structure blocks nothing, but
-        a sieged tank its own tile (in game).
+        included, nor does a lifted structure, nor a lowered supply depot from some 20 steps after it reads lowered; a
+        unit that is no structure blocks nothing, but a sieged tank its own tile (in game).
         """
         if self._grid is None:
             self._grid = _pathing_grid_of(self._client.game_info().start_raw)
@@ -56,9 +61,10 @@ class Pathing:
         """The shortest path over `grid` from `start` to `end`, as `Grid.cheapest_path` finds it, or `None` if there is
         none. From a unit, it starts where the unit stands.
 
-        With `leave_structure`, a path whose start lies in a structure, a structure given as the start among them,
-        leaves it: the structure's footprint is open to it, as the game's pathing query leaves the structure it starts
-        in. A path never enters a structure, so an end inside one has none.
+        With `leave_structure`, a path whose start lies in the footprint of a structure in sight, or that starts from a
+        structure given, leaves it: the footprint is open to it, as the game's pathing query leaves the structure it
+        starts in. A rock blocks more than its footprint covers, so a path from its outer tiles stays inside it. A path
+        never enters a structure, so an end inside one has none.
         """
         return self._grid_leaving(start, leave_structure).cheapest_path(_point_of(start), end)
 
@@ -82,21 +88,21 @@ class Pathing:
         return grid
 
     def _structure_holding(self, start: PointLike | Unit[Any]) -> Unit[Any] | None:
-        """The structure on the ground whose footprint holds `start`: a unit given is its own, if it is one. `None` if
-        there is none."""
+        """The structure on the ground and in sight whose footprint holds `start`: a unit given is its own, if it is
+        one. `None` if there is none."""
         if isinstance(start, Unit):
             return start if _stands_on_the_ground(start) else None
+        x, y = start[0], start[1]
         tile = Tile.containing(start)
-        return next(
-            (
-                unit
-                for unit in self._present_units
-                if _stands_on_the_ground(unit)
-                and (footprint := unit.footprint) is not None
-                and tile in footprint.tiles(at=unit.position)
-            ),
-            None,
-        )
+        for unit in self._present_units:
+            position = unit.position
+            if abs(position.x - x) > _FOOTPRINT_REACH or abs(position.y - y) > _FOOTPRINT_REACH:
+                continue
+            if not unit.is_visible or not _stands_on_the_ground(unit) or (footprint := unit.footprint) is None:
+                continue
+            if tile in footprint.tiles(at=position):
+                return unit
+        return None
 
     def _update(self, present_units: Units[Unit[Any]]) -> None:
         """Take in a new turn's observation, which reports `present_units`: the grid is asked for again when next

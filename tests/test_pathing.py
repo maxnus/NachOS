@@ -2,11 +2,12 @@
 scripted, and in a real game."""
 
 import math
+from collections.abc import Iterable
 from contextlib import closing
 from typing import Any
 
 import pytest
-from s2clientprotocol import data_pb2, query_pb2, sc2api_pb2
+from s2clientprotocol import data_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import UnitTypeId
@@ -15,7 +16,7 @@ from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.pathing import Pathing
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
-from sc2nachos.units import Unit, Units
+from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
@@ -103,16 +104,19 @@ def _map_with_a_depot() -> sc2api_pb2.ResponseGameInfo:
     return make_game_info(*rows)
 
 
-def _pathing_over_a_depot(*, turns: int = 1) -> tuple[Pathing, FakeTransport, Units[Unit[Any]]]:
-    """Pathing over a game that answers `_map_with_a_depot` for `turns` turns, with the depot, under tag 5, and a
-    marine at (1.5, 1.5) present, its transport, and those units."""
+def _pathing_over_a_depot(
+    *, turns: int = 1, also: Iterable[raw_pb2.Unit] = ()
+) -> tuple[Pathing, FakeTransport, Units[Unit[Any]]]:
+    """Pathing over a game that answers `_map_with_a_depot` for `turns` turns, with the units `also` present first,
+    then the depot, under tag 5, and a marine at (1.5, 1.5), its transport, and those units."""
     client, transport = make_client(*(make_response(game_info=_map_with_a_depot()) for _ in range(turns)))
     tables = make_tables(
         data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, attributes=[_STRUCTURE]),
+        data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS_FLYING, attributes=[_STRUCTURE]),
         data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE),
     )
     tracker = _Tracker(tables, make_enemy())
-    units = [make_unit(5, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), make_unit(6, at=(1.5, 1.5))]
+    units = [*also, make_unit(5, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), make_unit(6, at=(1.5, 1.5))]
     tracker.update(make_observation(0, units=units).observation.raw_data, 0)
     pathing = Pathing(client)
     pathing._update(tracker.unit_tracker.present)
@@ -164,6 +168,26 @@ class TestPathsOverTheTurnsGrid:
         assert path is not None
         assert path.start == Tile(1, 1)
         assert not set(_DEPOT_TILES) & {(tile.x, tile.y) for tile in path}
+
+    def test_what_lengths_read_beyond_the_grid_is_passed_on(self) -> None:
+        pathing, _, units = _pathing_over_a_depot()
+        (depot,) = units.of_type(UnitTypeId.SUPPLY_DEPOT)
+        assert pathing.cheapest_paths_from(depot, outside=math.inf).distances[Tile(9, 9)] == math.inf
+
+    def test_a_lifted_structure_is_not_left_but_started_from_where_it_flies(self) -> None:
+        """A barracks flying over the depot starts on the depot's ground, which stays blocked."""
+        flying = make_unit(8, UnitTypeId.BARRACKS_FLYING, at=(3.5, 3.5), is_flying=True)
+        pathing, _, units = _pathing_over_a_depot(also=[flying])
+        (barracks,) = units.of_type(UnitTypeId.BARRACKS_FLYING)
+        assert pathing.cheapest_paths_from(barracks).distances[Tile(0, 0)] == math.inf
+
+    def test_a_structure_in_sight_is_found_under_a_point_before_a_snapshot(self) -> None:
+        snapshot = make_unit(
+            9, UnitTypeId.SUPPLY_DEPOT, at=(5.0, 5.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
+        )
+        pathing, _, units = _pathing_over_a_depot(also=[snapshot])
+        (own_depot,) = units.of_type(UnitTypeId.SUPPLY_DEPOT).filter(lambda unit: unit.is_visible)
+        assert pathing._structure_holding((4.5, 4.5)) is own_depot
 
     def test_leaving_a_structure_leaves_the_turns_grid_as_the_game_has_it(self) -> None:
         pathing, transport, units = _pathing_over_a_depot()
