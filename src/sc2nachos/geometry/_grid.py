@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast, final, overload
@@ -16,7 +17,7 @@ from sc2nachos.geometry._shapes import Rectangle, Tile
 from sc2nachos.geometry._tile_path import TilePath
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from numpy import ndarray
 
@@ -395,8 +396,9 @@ class Grid[T: float]:
         """
         start_index = self.index_of(start)
         end_index = self.index_of(end)
-        found = self._found_by(lambda values: semita.cheapest_path(values, start_index, end_index))
-        return None if found is None else _tile_path_from(found, self._origin)
+        with self._bad_cost_named_by_its_tile():
+            found = semita.cheapest_path(self._data, start_index, end_index)
+        return None if found is None else _semita_path_to_tile_path(found, self._origin)
 
     def cheapest_paths_from(self, start: PointLike | Tile, *, outside: float | None = None) -> CheapestPaths:
         """The cheapest path from the tile holding `start` to every tile, over the steps `cheapest_path` takes, found in
@@ -404,15 +406,18 @@ class Grid[T: float]:
         beyond the grid. Raises as `cheapest_path` does.
         """
         start_index = self.index_of(start)
-        found = self._found_by(lambda values: semita.cheapest_paths_from(values, start_index))
+        with self._bad_cost_named_by_its_tile():
+            found = semita.cheapest_paths_from(self._data, start_index)
         costs = Grid(found.costs, origin=self._origin, outside=outside, readonly=True)
         distances = Grid(found.distances, origin=self._origin, outside=outside, readonly=True)
         return CheapestPaths(costs, distances, found)
 
-    def _found_by[R](self, search: Callable[[ndarray], R]) -> R:
-        """What `search` finds over this grid's values, a negative or NaN cost raising `ValueError` naming its tile."""
+    @contextlib.contextmanager
+    def _bad_cost_named_by_its_tile(self) -> Iterator[None]:
+        """Within it, the `ValueError` a search raises for a negative or NaN cost names the cost's tile rather than its
+        index into `values`."""
         try:
-            return search(self._data)
+            yield
         except ValueError as error:
             bad_costs = numpy.argwhere(~(self._data >= 0))
             if not len(bad_costs):
@@ -612,10 +617,10 @@ class CheapestPaths:
         a value beyond it.
         """
         found = self._found.path_to(self.costs.index_of(end))
-        return None if found is None else _tile_path_from(found, self.costs.origin)
+        return None if found is None else _semita_path_to_tile_path(found, self.costs.origin)
 
 
-def _tile_path_from(found: semita.Path, origin: Tile) -> TilePath:
+def _semita_path_to_tile_path(found: semita.Path, origin: Tile) -> TilePath:
     """`found`, a path by a grid's indices, as the tiles it crosses on a grid whose lower left tile is `origin`."""
     origin_x, origin_y = origin.x, origin.y
     return TilePath([Tile(origin_x + x, origin_y + y) for x, y in found.tiles.tolist()], found.distance)
