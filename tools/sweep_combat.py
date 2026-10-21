@@ -60,48 +60,48 @@ _TOWNHALL_TYPES = UnitType.Townhall._type_ids
 # Half the width of the open ground trials stand on: room for the longest reach searched, a sieged tank's 13 and more.
 _OPEN_GROUND_HALF_WIDTH = 10
 # How far from where it was asked for a unit may stand before its sample is set aside as displaced.
-_DISPLACEMENT = 0.05
+_LARGEST_DISPLACEMENT = 0.05
 # How many times the distance between where an attacker fires and where it does not is halved.
-_HALVINGS = 8
+_HALVINGS_AROUND_A_RANGE = 8
 # How far either side of its range plus both radii the search for where an attacker stops firing begins, and, for an
 # attacker the tables give no weapon, where it searches between instead, in more halvings.
 _SEARCH_SPAN = 1.5
 _NEAREST_SEARCHED = 0.5
 _FARTHEST_SEARCHED = 12.0
 _HALVINGS_WITHOUT_A_RANGE = 11
-_ACROSS = (1.0, 0.0)
-_DIAGONAL = (math.sqrt(0.5), math.sqrt(0.5))
+_ACROSS_DIRECTION = (1.0, 0.0)
+_DIAGONAL_DIRECTION = (math.sqrt(0.5), math.sqrt(0.5))
 # Each attacker against each target it is measured against, and the direction from the attacker to the target: units
 # on the ground and in the air, a colossus, which python-sc2 has air weapons hit, structures as targets and as
 # attackers, and an attacker that cannot move.
 _RANGE_TRIALS = (
-    (UnitTypeId.MARINE, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.SCV, _DIAGONAL),
-    (UnitTypeId.MARINE, UnitTypeId.OVERLORD, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.COLOSSUS, _ACROSS),
-    (UnitTypeId.ZEALOT, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.VIKING, UnitTypeId.OVERLORD, _ACROSS),
-    (UnitTypeId.VIKING, UnitTypeId.COLOSSUS, _ACROSS),
-    (UnitTypeId.SIEGE_TANK, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT, _DIAGONAL),
-    (UnitTypeId.MARINE, UnitTypeId.BARRACKS, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.BARRACKS, _DIAGONAL),
-    (UnitTypeId.MARINE, UnitTypeId.COMMAND_CENTER, _ACROSS),
-    (UnitTypeId.MARINE, UnitTypeId.COMMAND_CENTER, _DIAGONAL),
-    (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, _ACROSS),
-    (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, _DIAGONAL),
-    (UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV, _DIAGONAL),
-    (UnitTypeId.SPINE_CRAWLER, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.BATTLECRUISER, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.BATTLECRUISER, UnitTypeId.OVERLORD, _ACROSS),
-    (UnitTypeId.ORACLE, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.VOID_RAY, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.VOID_RAY, UnitTypeId.OVERLORD, _ACROSS),
-    (UnitTypeId.SENTRY, UnitTypeId.SCV, _ACROSS),
-    (UnitTypeId.SENTRY, UnitTypeId.OVERLORD, _ACROSS),
+    (UnitTypeId.MARINE, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.SCV, _DIAGONAL_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.COLOSSUS, _ACROSS_DIRECTION),
+    (UnitTypeId.ZEALOT, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.VIKING, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
+    (UnitTypeId.VIKING, UnitTypeId.COLOSSUS, _ACROSS_DIRECTION),
+    (UnitTypeId.SIEGE_TANK, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT, _DIAGONAL_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.BARRACKS, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.BARRACKS, _DIAGONAL_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.COMMAND_CENTER, _ACROSS_DIRECTION),
+    (UnitTypeId.MARINE, UnitTypeId.COMMAND_CENTER, _DIAGONAL_DIRECTION),
+    (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
+    (UnitTypeId.MISSILE_TURRET, UnitTypeId.OVERLORD, _DIAGONAL_DIRECTION),
+    (UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.SCV, _DIAGONAL_DIRECTION),
+    (UnitTypeId.SPINE_CRAWLER, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.BATTLECRUISER, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.BATTLECRUISER, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
+    (UnitTypeId.ORACLE, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.VOID_RAY, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.VOID_RAY, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
+    (UnitTypeId.SENTRY, UnitTypeId.SCV, _ACROSS_DIRECTION),
+    (UnitTypeId.SENTRY, UnitTypeId.OVERLORD, _ACROSS_DIRECTION),
 )
 # What an attacker is ordered before it can attack: an oracle turns its beam on, with the energy that takes.
 _ORDERED_FIRST = {UnitTypeId.ORACLE: RawAbilityId.Behavior_PulsarBeamOn}
@@ -112,7 +112,7 @@ def _enemy_of(rivals: Rivals) -> int:
     return rivals.enemy.player
 
 
-def _made(rivals: Rivals, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> list[raw_pb2.Unit]:
+def _units_made(rivals: Rivals, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> list[raw_pb2.Unit]:
     """Make the units requested by debug command, step both players until they settle, and return those made."""
     me = rivals.me
     before = {unit.tag for unit in me.units()}
@@ -122,7 +122,7 @@ def _made(rivals: Rivals, requests: Sequence[tuple[UnitTypeId, int, Point]]) -> 
     return [unit for unit in me.units() if unit.tag not in before and (unit.unit_type, unit.owner) in wanted]
 
 
-def _removed(rivals: Rivals, tags: Sequence[int]) -> None:
+def _kill_and_wait(rivals: Rivals, tags: Sequence[int]) -> None:
     """Kill the units under `tags` and step both players until the game reports none of them."""
     me = rivals.me
     me.kill(tags)
@@ -139,20 +139,22 @@ def _trial_ground(rivals: Rivals) -> Point:
     me = rivals.me
     enemy = _enemy_of(rivals)
     units = me.units()
-    _removed(rivals, [unit.tag for unit in units if unit.owner == enemy and unit.unit_type not in _TOWNHALL_TYPES])
+    _kill_and_wait(
+        rivals, [unit.tag for unit in units if unit.owner == enemy and unit.unit_type not in _TOWNHALL_TYPES]
+    )
     game_map = GameMap._from_game(me.client.game_info(), me.client.observation())
     return OpenGround(game_map, me.units()).claim(game_map.start_location, _OPEN_GROUND_HALF_WIDTH)
 
 
-def _unit(game: Sandbox, tag: int) -> raw_pb2.Unit | None:
+def _unit_tagged(game: Sandbox, tag: int) -> raw_pb2.Unit | None:
     return next((unit for unit in game.units() if unit.tag == tag), None)
 
 
 @dataclass(slots=True)
 class FiringSample:
     """One placing of a target: the distance between the centers, whether the attacker fired, and whether the game
-    made the unit placed beside the other more than `_DISPLACEMENT` from where it was asked for, as it does where
-    something stands in the way."""
+    made the unit placed beside the other more than `_LARGEST_DISPLACEMENT` from where it was asked for, as it does
+    where something stands in the way."""
 
     distance: float
     fired: bool
@@ -193,7 +195,7 @@ def _fixed_center(game_data: GameData, unit_type: UnitTypeId, at: Point) -> Poin
     return at if footprint is None else footprint.snapped_center(at=at)
 
 
-def _fires(
+def _fires_at(
     rivals: Rivals,
     game_data: GameData,
     trial: tuple[UnitTypeId, UnitTypeId, tuple[float, float]],
@@ -215,26 +217,26 @@ def _fires(
     else:
         attacker_at = _fixed_center(game_data, attacker_type, at)
         target_at = Point((attacker_at.x + offset * dx, attacker_at.y + offset * dy))
-    (attacker,) = _made(rivals, [(attacker_type, me.player, attacker_at)])
+    (attacker,) = _units_made(rivals, [(attacker_type, me.player, attacker_at)])
     me.order(RawAbilityId.HoldPosition_Hold, attacker.tag)
     if (first := _ORDERED_FIRST.get(attacker_type)) is not None:
-        me.set_value(_ENERGY, 200, [attacker.tag])
+        me.set_value(_ENERGY_VALUE, 200, [attacker.tag])
         rivals.step(1)
         me.order(first, attacker.tag)
         rivals.step(_SETTLING_STEPS)
-    made = _made(rivals, [(target_type, _enemy_of(rivals), target_at)])
+    made = _units_made(rivals, [(target_type, _enemy_of(rivals), target_at)])
     if not made:
-        _removed(rivals, [attacker.tag])
+        _kill_and_wait(rivals, [attacker.tag])
         raise RuntimeError(f"the game did not make a {target_type.name} at {target_at}")
     (target,) = made
     distance = Point((attacker.pos.x, attacker.pos.y)).distance_to((target.pos.x, target.pos.y))
     placed, asked = (attacker, attacker_at) if attacker_moves else (target, target_at)
-    displaced = asked.distance_to((placed.pos.x, placed.pos.y)) > _DISPLACEMENT
+    displaced = asked.distance_to((placed.pos.x, placed.pos.y)) > _LARGEST_DISPLACEMENT
     fired = False
     for _ in range(_FIRING_STEPS):
         rivals.step(1)
-        now = _unit(me, attacker.tag)
-        hit = _unit(me, target.tag)
+        now = _unit_tagged(me, attacker.tag)
+        hit = _unit_tagged(me, target.tag)
         # An attacker the tables give no weapon shows no cooldown: what its target loses shows its shots.
         if (
             (now is not None and now.weapon_cooldown > 0)
@@ -243,7 +245,7 @@ def _fires(
         ):
             fired = True
             break
-    _removed(rivals, [attacker.tag, target.tag])
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
     return FiringSample(distance, fired, displaced), attacker.radius, target.radius, target.is_flying
 
 
@@ -252,7 +254,7 @@ def _measured_range(
 ) -> RangeFinding:
     """The distance at which the trial's attacker stops firing at its target, found by halving."""
     attacker_type, target_type, direction = trial
-    first, attacker_radius, target_radius, flying = _fires(rivals, game_data, trial, at, 1.5)
+    first, attacker_radius, target_radius, flying = _fires_at(rivals, game_data, trial, at, 1.5)
     # A colossus, on the ground, is measured against an air weapon where the attacker has no other.
     weapon_range = _weapon_range(game_data, attacker_type, flying=flying)
     searched_range = weapon_range if weapon_range is not None else _weapon_range(game_data, attacker_type, flying=True)
@@ -271,10 +273,14 @@ def _measured_range(
     if searched_range is None:
         near, far, halvings = _NEAREST_SEARCHED, _FARTHEST_SEARCHED, _HALVINGS_WITHOUT_A_RANGE
     else:
-        near, far, halvings = max(reach - _SEARCH_SPAN, _NEAREST_SEARCHED), reach + _SEARCH_SPAN, _HALVINGS
+        near, far, halvings = (
+            max(reach - _SEARCH_SPAN, _NEAREST_SEARCHED),
+            reach + _SEARCH_SPAN,
+            _HALVINGS_AROUND_A_RANGE,
+        )
     for _ in range(halvings):
         offset = (near + far) / 2
-        sample, _, _, _ = _fires(rivals, game_data, trial, at, offset)
+        sample, _, _, _ = _fires_at(rivals, game_data, trial, at, offset)
         finding.samples.append(sample)
         if sample.displaced:
             finding.inconclusive = True
@@ -296,7 +302,7 @@ def _measured_range(
         "{} at {} {}: fired out to {}, not at {}; range {} + radii {} + {} = {}",
         attacker_type.name,
         target_type.name,
-        "across" if direction == _ACROSS else "diagonally",
+        "across" if direction == _ACROSS_DIRECTION else "diagonally",
         finding.farthest_fired,
         finding.nearest_not_fired,
         finding.weapon_range,
@@ -322,15 +328,18 @@ def measure_ranges(installation: Installation) -> list[RangeFinding]:
 
 
 _ATTACK_STEPS = 96
-# Within how many steps of an attack's first hit the rest of its hits land: a zealot's second blade and a colossus's
-# second beam land a step or two after the first, and no weapon swept attacks again sooner than 10 steps.
+# Within how many steps of an attack's first hit the rest of its hits land, for a weapon of several: a zealot's second
+# blade lands 4 steps after the first, and a colossus's two beams together, in one loss. A weapon of one hit, or an
+# attacker the tables give none, such as a battlecruiser firing every 3.6 steps, has its first loss as its attack.
 _ONE_ATTACK_STEPS = 8
+# How many steps the target's shields are given to read what a debug command set them to.
+_SHIELDS_SETTLING_STEPS = 8
 _TRIAL_DISTANCE = 3.0
 # How far from a melee attacker its target is made: too close for both, so the game pushes them apart to touching.
 _MELEE_TRIAL_DISTANCE = 0.5
 _UPGRADE_SENDS = 3
-_SHIELDS = debug_pb2.DebugSetUnitValue.Shields
-_ENERGY = debug_pb2.DebugSetUnitValue.Energy
+_SHIELDS_VALUE = debug_pb2.DebugSetUnitValue.Shields
+_ENERGY_VALUE = debug_pb2.DebugSetUnitValue.Energy
 
 
 @dataclass(slots=True)
@@ -349,11 +358,11 @@ class AttackFinding:
     attacker: str
     target: str
     upgrades: str
-    """Which side had the `upgrade` cheat's three sends: `neither`, `target` or `both`."""
+    """Which side had the `upgrade` cheat's three sends: `neither`, `target`, `attacker` or `both`."""
     weapons: list[dict[str, Any]]
     """The attacker's weapons as this player's tables give them, upgrades included."""
     target_armor: float
-    """The armor the tables give the target's type."""
+    """The armor the tables gave the target's type before either side had an upgrade."""
     target_armor_upgrade: int
     target_shield_upgrade: int
     target_attributes: list[str]
@@ -363,7 +372,7 @@ class AttackFinding:
     """What the first attack took off in all, its hits within `_ONE_ATTACK_STEPS` of the first."""
 
 
-def _hold(game: Sandbox, tag: int) -> None:
+def _hold_position(game: Sandbox, tag: int) -> None:
     game.order(RawAbilityId.HoldPosition_Hold, tag)
 
 
@@ -384,23 +393,28 @@ def _set_upon(
     weapons = GameData(me.client.game_data()).units[attacker_type].weapons
     melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
     distance = _MELEE_TRIAL_DISTANCE if melee else _TRIAL_DISTANCE
-    (attacker,) = _made(rivals, [(attacker_type, me.player, at)])
-    _hold(me, attacker.tag)
+    (attacker,) = _units_made(rivals, [(attacker_type, me.player, at)])
+    _hold_position(me, attacker.tag)
     if before:
-        me.set_value(_ENERGY, 200, [attacker.tag])
+        me.set_value(_ENERGY_VALUE, 200, [attacker.tag])
         rivals.step(1)
         for ability, target_tag in before:
             me.order(ability, attacker.tag, target_tag)
         rivals.step(_SETTLING_STEPS)
-    (target,) = _made(rivals, [(target_type, _enemy_of(rivals), Point((at.x + distance, at.y)))])
-    _hold(enemy, target.tag)
+    (target,) = _units_made(rivals, [(target_type, _enemy_of(rivals), Point((at.x + distance, at.y)))])
+    _hold_position(enemy, target.tag)
+    last = (target.health, target.shield)
     if shields is not None:
-        me.set_value(_SHIELDS, shields, [target.tag])
+        me.set_value(_SHIELDS_VALUE, shields, [target.tag])
+        for _ in range(_SHIELDS_SETTLING_STEPS):
+            rivals.step(1)
+            if (settled := _unit_tagged(me, target.tag)) is not None and settled.shield <= shields + 1:
+                last = (settled.health, settled.shield)
+                break
     losses = []
-    last = (target.health, shields if shields is not None else target.shield)
     for step in range(1, _ATTACK_STEPS + 1):
         rivals.step(1)
-        now = _unit(me, target.tag)
+        now = _unit_tagged(me, target.tag)
         if now is None:
             losses.append(Loss(step, last[0], last[1]))
             break
@@ -408,14 +422,17 @@ def _set_upon(
         if health_lost > 0 or shields_lost > 0:
             losses.append(Loss(step, health_lost, shields_lost))
         last = (now.health, now.shield)
-    _removed(rivals, [attacker.tag, target.tag])
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
     return attacker, target, losses
 
 
-def _first_attack(losses: Sequence[Loss]) -> Loss | None:
-    """The losses of the first attack together: its first hit and those within `_ONE_ATTACK_STEPS` of it."""
+def _first_attack(losses: Sequence[Loss], attacks: int) -> Loss | None:
+    """The losses of the first attack together: for a weapon of several `attacks`, its first hit and those within
+    `_ONE_ATTACK_STEPS` of it, and otherwise the first loss alone."""
     if not losses:
         return None
+    if attacks <= 1:
+        return losses[0]
     first = losses[0].step
     hits = [loss for loss in losses if loss.step - first <= _ONE_ATTACK_STEPS]
     return Loss(first, sum(hit.health for hit in hits), sum(hit.shields for hit in hits))
@@ -437,6 +454,7 @@ def _weapons_of(game_data: GameData, unit_type: UnitTypeId) -> list[dict[str, An
 
 def _attack_finding(
     rivals: Rivals,
+    base_tables: GameData,
     attacker_type: UnitTypeId,
     target_type: UnitTypeId,
     at: Point,
@@ -445,10 +463,12 @@ def _attack_finding(
     shields: float | None = None,
     before: Sequence[tuple[int, int | None]] = (),
 ) -> AttackFinding:
-    """Set one attacker upon one target and record what it took off."""
+    """Set one attacker upon one target and record what it took off, beside the attacker's weapons as this player's
+    tables give them now and the target's armor as `base_tables`, read before either side had an upgrade, give it."""
     game_data = GameData(rivals.me.client.game_data())
     _, target, losses = _set_upon(rivals, attacker_type, target_type, at, shields=shields, before=before)
-    row = game_data.units[target_type]
+    row = base_tables.units[target_type]
+    weapons = game_data.units[attacker_type].weapons
     finding = AttackFinding(
         attacker_type.name,
         target_type.name,
@@ -460,7 +480,7 @@ def _attack_finding(
         sorted(attribute.name for attribute in row.attributes),
         shields if shields is not None else target.shield,
         losses,
-        _first_attack(losses),
+        _first_attack(losses, max((weapon.attacks for weapon in weapons), default=1)),
     )
     logger.info(
         "{} on {} ({} upgraded): first attack {}, every loss {}",
@@ -492,7 +512,7 @@ _DAMAGE_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, float | None], ...] = (
 )
 
 
-def _upgraded(game: Sandbox, rivals: Rivals) -> None:
+def _send_upgrade_levels(game: Sandbox, rivals: Rivals) -> None:
     """Send the `upgrade` cheat from `game` `_UPGRADE_SENDS` times, the third level of every weapon, armor and
     shield, and let it take effect."""
     for _ in range(_UPGRADE_SENDS):
@@ -508,11 +528,14 @@ def measure_damage(installation: Installation) -> list[AttackFinding]:
         me.cheat(Cheat.SHOW_MAP)
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
+        base_tables = GameData(me.client.game_data())
         for upgrades, upgrading in (("neither", None), ("target", rivals.enemy), ("both", rivals.me)):
             if upgrading is not None:
-                _upgraded(upgrading, rivals)
+                _send_upgrade_levels(upgrading, rivals)
             for attacker_type, target_type, shields in _DAMAGE_TRIALS:
-                findings.append(_attack_finding(rivals, attacker_type, target_type, at, upgrades, shields=shields))
+                findings.append(
+                    _attack_finding(rivals, base_tables, attacker_type, target_type, at, upgrades, shields=shields)
+                )
     return findings
 
 
@@ -541,12 +564,15 @@ def measure_no_weapon(installation: Installation) -> list[AttackFinding]:
         me.cheat(Cheat.SHOW_MAP)
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
+        base_tables = GameData(me.client.game_data())
         for upgrades in ("neither", "attacker"):
             if upgrades == "attacker":
-                _upgraded(me, rivals)
+                _send_upgrade_levels(me, rivals)
             for attacker_type, target_type, abilities in _NO_WEAPON_TRIALS:
                 before = [(ability, None) for ability in abilities]
-                findings.append(_attack_finding(rivals, attacker_type, target_type, at, upgrades, before=before))
+                findings.append(
+                    _attack_finding(rivals, base_tables, attacker_type, target_type, at, upgrades, before=before)
+                )
     return findings
 
 
@@ -583,9 +609,9 @@ def _attack_interval(
     game_data = GameData(me.client.game_data())
     weapons = game_data.units[attacker_type].weapons
     melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
-    (target,) = _made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
+    (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
     away = _MELEE_FROM_COMMAND_CENTER if melee else _RANGED_FROM_COMMAND_CENTER
-    (attacker,) = _made(rivals, [(attacker_type, me.player, Point((target.pos.x - away, target.pos.y)))])
+    (attacker,) = _units_made(rivals, [(attacker_type, me.player, Point((target.pos.x - away, target.pos.y)))])
     if stim is not None:
         me.order(stim, attacker.tag)
         rivals.step(1)
@@ -595,7 +621,7 @@ def _attack_interval(
     last = 0.0
     for step in range(_ATTACK_SPEED_STEPS):
         rivals.step(1)
-        now = _unit(me, attacker.tag)
+        now = _unit_tagged(me, attacker.tag)
         if now is None:
             break
         if now.weapon_cooldown > last:
@@ -605,7 +631,7 @@ def _attack_interval(
             if len(shots) > _SHOTS_TIMED:
                 break
         last = now.weapon_cooldown
-    _removed(rivals, [attacker.tag, target.tag])
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
     intervals = [later - earlier for earlier, later in itertools.pairwise(shots)]
     finding = AttackIntervalFinding(
         attacker_type.name,
@@ -641,7 +667,7 @@ def measure_attack_speed(installation: Installation) -> list[AttackIntervalFindi
         at = _trial_ground(rivals)
         for upgraded in (False, True):
             if upgraded:
-                _upgraded(me, rivals)
+                _send_upgrade_levels(me, rivals)
             for attacker_type, stim in _ATTACK_SPEED_TRIALS:
                 if stim is not None and not upgraded:
                     continue

@@ -38,15 +38,16 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A hit takes off its weapon's damage and the bonus against the target's attributes, the attacker's upgrades in both.
   From health it takes that less the armor, but at least 0.5; from shields, first, that less the shields level, and what
   is more than the shields goes on to health less the armor, at nothing at least. A marine's 6 took 5 off a roach, with
-  armor 1, and 0.5 off an ultralisk with 7; 6 off a zealot's shields and 3 at shields level 3; and of a zealot's last
-  2.62 shields, those and 2.38 of its health. A marauder's 10 and 10 against armored took 19 off a roach and 20 off a
-  stalker's shields, 17 at level 3 (tool `sweep_combat`, build 75689).
+  armor 1, and 0.5 off an ultralisk with 7; and 6 off a zealot's shields, 3 at shields level 3. An upgraded zealot's
+  blade of 11, on a zealot with 2 shields, shields level 3 and armor 4, took the 2 and 2 of its health: 11 less 3, less
+  2, less 4. A marauder's 10 and 10 against armored took 19 off a roach and 20 off a stalker's shields, 17 at level 3
+  (tool `sweep_combat`, build 75689).
 - A zealot's attack is 2 hits of 8, 4 steps apart, and a colossus's 2 beams land together, 15 each on a zergling (tool
   `sweep_combat`, build 75689).
 - The tables' cooldowns leave out what speeds an attack up. Timed over six shots at a command center, Adrenal Glands
   brought a zergling's from 11.7 steps to 8.0, 1.4 times as fast, Resonating Glaives an adept's from 36.8 to 25.0, 1.45
   times, and stim a marine's from 13.7 to 9.3 and a marauder's from 25.2 to 16.4, 1.5 times. A unit fires on whole
-  steps, so a cooldown of 13.77 steps fires 13 or 14 apart (tool `sweep_combat`, build 75689).
+  steps: a marine, of cooldown 13.77, fired 12 to 15 steps apart, 13.7 on average (tool `sweep_combat`, build 75689).
 
 ## Buffs
 
