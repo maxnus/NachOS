@@ -26,8 +26,8 @@ _FOOTPRINT_REACH = 7.0
 class Units[U: Unit[Any]](Sequence[U]):
     """An immutable, ordered collection of units. Filters keep the order.
 
-    Every filter returns a new collection. A query that picks one unit, such as `closest_to`, raises `ValueError` on
-    an empty collection.
+    Every filter returns a new collection. A query that picks the nearest unit, such as `closest_to`, raises
+    `ValueError` on an empty collection; `structure_at` answers `None` where no structure stands.
     """
 
     __slots__ = ("_by_id", "_units")
