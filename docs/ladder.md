@@ -38,8 +38,9 @@ while `api.enemy.name` reads `None` wherever the game gives no name, as in every
 ## Your own arguments
 
 `run_from_command_line` reads only the arguments above and the match workflow's, and leaves any other for you,
-listing it in the log. Read yours with a parser of your own, and hand them to whatever builds your api and its
-handlers:
+listing it in the log. Read yours with a parser of your own before the game. The api stays where your modules import
+it, and a handler that needs an argument can be a method of an object built from it, which subscribes itself
+([subscribing](events.md#subscribing)):
 
 ```python
 # run.py
@@ -48,25 +49,27 @@ from argparse import ArgumentParser
 from sc2nachos import Api, Race, run_from_command_line
 from sc2nachos.events import TurnEvent
 
+api = Api()
 
-def make_api(*, build: str | None) -> Api:
-    """An api whose handlers play `build`, or the bot's usual build if `None`."""
-    api = Api()
+
+class Opening:
+    """The handlers that play `build`, or the bot's usual build if `None`."""
+
+    def __init__(self, build: str | None) -> None:
+        self.build = build
+        api.subscribe(self)
 
     @api.on(TurnEvent, once=True)
-    def announce_the_build(event: TurnEvent) -> None:
-        api.chat(f"Playing {build or 'the usual build'}")
-
-    # ... the bot's other handlers, each reading `build` as it needs to
-
-    return api
+    def announce_the_build(self, event: TurnEvent) -> None:
+        api.chat(f"Playing {self.build or 'the usual build'}")
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--build")
     own = parser.parse_known_args()[0]
-    run_from_command_line(make_api(build=own.build), race=Race.TERRAN, name="MyBot")
+    Opening(own.build)
+    run_from_command_line(api, race=Race.TERRAN, name="MyBot")
 ```
 
 An argument of the other kind of game, such as `--Map` given to a ladder game, is logged as ignored.
