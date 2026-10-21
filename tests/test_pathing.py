@@ -181,13 +181,13 @@ class TestPathsOverTheTurnsGrid:
         (barracks,) = units.of_type(UnitTypeId.BARRACKS_FLYING)
         assert pathing.cheapest_paths_from(barracks).distances[Tile(0, 0)] == math.inf
 
-    def test_a_structure_in_sight_is_found_under_a_point_before_a_snapshot(self) -> None:
+    def test_a_snapshot_given_as_the_start_is_left_without_asking_whether_it_flies(self) -> None:
         snapshot = make_unit(
-            9, UnitTypeId.SUPPLY_DEPOT, at=(5.0, 5.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
+            9, UnitTypeId.SUPPLY_DEPOT, at=(6.0, 6.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
         )
         pathing, _, units = _pathing_over_a_depot(also=[snapshot])
-        (own_depot,) = units.of_type(UnitTypeId.SUPPLY_DEPOT).filter(lambda unit: unit.is_visible)
-        assert pathing._structure_holding((4.5, 4.5)) is own_depot
+        remembered = units.enemy[0]
+        assert pathing.cheapest_paths_from(remembered).distances[Tile(0, 7)] == pytest.approx(5 + math.sqrt(2))
 
     def test_leaving_a_structure_leaves_the_turns_grid_as_the_game_has_it(self) -> None:
         pathing, transport, units = _pathing_over_a_depot()

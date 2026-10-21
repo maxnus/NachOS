@@ -320,6 +320,39 @@ class TestWhereTheyAre:
             _mine(3).closest_to(Circle((0, 0), 1))  # pyright: ignore[reportArgumentType]
 
 
+class TestStructureAt:
+    def test_it_is_the_structure_whose_footprint_holds_the_point(self) -> None:
+        """A depot at (4, 4) covers the tiles (3, 3) to (4, 4)."""
+        units = _units(make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), make_unit(2, at=(5.5, 4.5)))
+        (depot,) = units.of_type(UnitTypeId.SUPPLY_DEPOT)
+        assert units.structure_at((3.5, 3.5)) is depot
+        assert units.structure_at(Point((4.9, 4.1))) is depot
+        assert units.structure_at((5.5, 4.5)) is None
+        assert Units().structure_at((3.5, 3.5)) is None
+
+    def test_a_lifted_structure_covers_no_ground(self) -> None:
+        units = _units(make_unit(1, UnitTypeId.BARRACKS, at=(4.5, 4.5), is_flying=True))
+        assert units.structure_at((4.5, 4.5)) is None
+
+    def test_one_in_sight_comes_before_a_snapshot_over_the_same_ground(self) -> None:
+        snapshot = make_unit(
+            1, UnitTypeId.SUPPLY_DEPOT, at=(5.0, 5.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
+        )
+        units = _units(snapshot, make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
+        assert units.structure_at((4.5, 4.5)) is units.own[0]
+        assert units.structure_at((5.5, 5.5)) is units.enemy[0]
+
+    def test_a_snapshot_never_seen_in_sight_counts_as_on_the_ground(self) -> None:
+        """The game never said whether it flies, and reading `is_flying` of it raises."""
+        snapshot = make_unit(
+            1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
+        )
+        units = _units(snapshot)
+        with pytest.raises(NotReportedError):
+            _ = units[0].is_flying
+        assert units.structure_at((4.5, 4.5)) is units[0]
+
+
 def test_a_distance_is_measured_on_the_ground() -> None:
     units = _units(make_unit(1, at=(3.0, 4.0)))
     assert units.closest_distance_to(Point((0.0, 0.0)).with_height(100.0)) == pytest.approx(5.0)

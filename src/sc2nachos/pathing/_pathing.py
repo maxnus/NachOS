@@ -8,21 +8,17 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, query_pb2
 
-from sc2nachos.gamemap._game_map import _pathing_grid_of
-from sc2nachos.geometry import Point, Tile
+from sc2nachos.gamemap._game_map import _create_pathing_grid
+from sc2nachos.geometry import Point
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.units import Unit, Units
+from sc2nachos.units._units import _is_structure_on_the_ground
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from sc2nachos.geometry import CheapestPaths, Grid, PointLike, TilePath
     from sc2nachos.protocol import Client
-
-
-# How far from a structure's position, along each axis, a point in its footprint can lie: half the widest footprint, a
-# huge rock's 12 tiles, and the tile it centers on.
-_FOOTPRINT_REACH = 7.0
 
 
 @final
@@ -52,7 +48,7 @@ class Pathing:
         unit that is no structure blocks nothing, but a sieged tank its own tile (in game).
         """
         if self._grid is None:
-            self._grid = _pathing_grid_of(self._client.game_info().start_raw)
+            self._grid = _create_pathing_grid(self._client.game_info().start_raw)
         return self._grid
 
     def cheapest_path(
@@ -66,7 +62,7 @@ class Pathing:
         starts in. A rock blocks more than its footprint covers, so a path from its outer tiles stays inside it. A path
         never enters a structure, so an end inside one has none.
         """
-        return self._grid_leaving(start, leave_structure).cheapest_path(_point_of(start), end)
+        return self._grid_leaving_structure(start, leave_structure).cheapest_path(_point_of(start), end)
 
     def cheapest_paths_from(
         self, start: PointLike | Unit[Any], *, leave_structure: bool = True, outside: float | None = None
@@ -74,35 +70,25 @@ class Pathing:
         """The shortest path over `grid` from `start` to every tile, as `Grid.cheapest_paths_from` finds them, leaving
         the structure the start lies in as `cheapest_path` does. `outside` is what their lengths read beyond the grid.
         """
-        grid = self._grid_leaving(start, leave_structure)
+        grid = self._grid_leaving_structure(start, leave_structure)
         return grid.cheapest_paths_from(_point_of(start), outside=outside)
 
-    def _grid_leaving(self, start: PointLike | Unit[Any], leave_structure: bool) -> Grid[bool]:
-        """`grid`, with the footprint of the structure `start` lies in open if `leave_structure`, on a copy."""
-        structure = self._structure_holding(start) if leave_structure else None
+    def _grid_leaving_structure(self, start: PointLike | Unit[Any], leave_structure: bool) -> Grid[bool]:
+        """`grid`, with the footprint of the structure `start` lies in open if `leave_structure`, on a copy: a unit
+        given is its own, if it is a structure on the ground, and a point's is the one `Units.structure_at` finds among
+        the turn's units."""
+        if not leave_structure:
+            return self.grid
+        if isinstance(start, Unit):
+            structure = start if _is_structure_on_the_ground(start) else None
+        else:
+            structure = self._present_units.structure_at(start)
         footprint = None if structure is None else structure.footprint
         if structure is None or footprint is None:
             return self.grid
         grid = self.grid.copy()
         grid.fill_footprint(footprint, at=structure.position, value=True)
         return grid
-
-    def _structure_holding(self, start: PointLike | Unit[Any]) -> Unit[Any] | None:
-        """The structure on the ground and in sight whose footprint holds `start`: a unit given is its own, if it is
-        one. `None` if there is none."""
-        if isinstance(start, Unit):
-            return start if _stands_on_the_ground(start) else None
-        x, y = start[0], start[1]
-        tile = Tile.containing(start)
-        for unit in self._present_units:
-            position = unit.position
-            if abs(position.x - x) > _FOOTPRINT_REACH or abs(position.y - y) > _FOOTPRINT_REACH:
-                continue
-            if not unit.is_visible or not _stands_on_the_ground(unit) or (footprint := unit.footprint) is None:
-                continue
-            if tile in footprint.tiles(at=position):
-                return unit
-        return None
 
     def _update(self, present_units: Units[Unit[Any]]) -> None:
         """Take in a new turn's observation, which reports `present_units`: the grid is asked for again when next
@@ -155,8 +141,3 @@ class Pathing:
 def _point_of(start: PointLike | Unit[Any]) -> PointLike:
     """Where `start` is: the point itself, or where the unit stands."""
     return start.position if isinstance(start, Unit) else start
-
-
-def _stands_on_the_ground(unit: Unit[Any]) -> bool:
-    """Whether `unit` is a structure that is not flying, and so blocks the ground beneath it."""
-    return unit.is_structure and not unit.is_flying

@@ -53,7 +53,7 @@ class GameMap:
         self._name = info.map_name
         self._playable = playable
         placement = image_tiles(start.placement_grid, playable) != 0
-        self._pathing = _pathing_grid_of(start)
+        self._pathing = _create_pathing_grid(start)
         self._placement = Grid(placement, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
@@ -153,7 +153,7 @@ class GameMap:
         return self._opponent_start_locations
 
 
-def _pathing_grid_of(start: raw_pb2.StartRaw) -> Grid[bool]:
+def _create_pathing_grid(start: raw_pb2.StartRaw) -> Grid[bool]:
     """Where `start`'s pathing grid lets a ground unit walk over the playable area, as a read-only grid that reads false
     beyond it."""
     playable = Rectangle._from_proto(start.playable_area)

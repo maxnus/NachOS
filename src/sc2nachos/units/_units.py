@@ -6,15 +6,20 @@ import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
-from sc2nachos.geometry import Area, Point
+from sc2nachos.geometry import Area, Point, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
-from sc2nachos.units._values import Alliance
+from sc2nachos.units._values import Alliance, Visibility
 
 if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
+
+
+# How far from a structure's position, along each axis, a point in its footprint can lie: half the widest footprint, a
+# huge rock's 12 tiles, and the tile it centers on.
+_FOOTPRINT_REACH = 7.0
 
 
 @final
@@ -313,6 +318,26 @@ class Units[U: Unit[Any]](Sequence[U]):
                 nearest = distance
         return math.sqrt(nearest)
 
+    def structure_at(self, point: PointLike) -> U | None:
+        """The structure on the ground whose footprint holds `point`, or `None` if none of these does. Of one in sight
+        and a snapshot over the same ground, the one in sight; a lifted structure covers no ground."""
+        x, y = _ground(point)
+        tile = Tile.containing(point)
+        remembered = None
+        for unit in self._units:
+            position = unit._position
+            if abs(position[0] - x) > _FOOTPRINT_REACH or abs(position[1] - y) > _FOOTPRINT_REACH:
+                continue
+            if not _is_structure_on_the_ground(unit) or (footprint := unit.footprint) is None:
+                continue
+            if tile not in footprint.tiles(at=position):
+                continue
+            if not unit.is_stale and unit.visibility.in_sight:
+                return unit
+            if remembered is None:
+                remembered = unit
+        return remembered
+
     @property
     def center(self) -> Point:
         """The mean of the units' positions."""
@@ -372,6 +397,12 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
         return [_ground(cast("PointLike", of))]
     several = cast("Iterable[PointLike | Unit[Any]]", of)
     return [_ground(item._position if isinstance(item, Unit) else item) for item in several]
+
+
+def _is_structure_on_the_ground(unit: Unit[Any]) -> bool:
+    """Whether `unit` is a structure standing on the ground: not flying, or remembered out of sight, where the game
+    does not report whether it flies."""
+    return unit.is_structure and (unit.visibility is Visibility.IN_FOG or not unit.is_flying)
 
 
 def _ground(point: PointLike) -> tuple[float, float]:
