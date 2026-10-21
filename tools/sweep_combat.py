@@ -72,7 +72,7 @@ from sc2nachos.gamedata._unit_type_data import _MEAN_ATTACK_DELAY_STEPS
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.ids.raw import RawAbilityId
+from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.units._unit_type import UnitType
@@ -208,8 +208,9 @@ class RangeFinding:
 
 
 def _tables_weapons(game_data: GameData, unit_type: UnitTypeId) -> tuple[Weapon, ...]:
-    """The weapons the game's tables give `unit_type`: none for a type NachOS gives the weapons measured here."""
-    return () if unit_type in MEASURED_WEAPONS else game_data.units[unit_type].weapons
+    """The weapons the game's tables give `unit_type`: none where NachOS gives it the weapons measured here instead."""
+    weapons = game_data.units[unit_type].weapons
+    return () if weapons == MEASURED_WEAPONS.get(unit_type) else weapons
 
 
 def _tables_cooldown_steps(weapon: Weapon) -> float:
@@ -408,6 +409,8 @@ class AttackFinding:
     losses: list[Loss] = field(default_factory=list)
     first_attack: Loss | None = None
     """What the first attack took off in all, its hits within `_ONE_ATTACK_STEPS` of the first."""
+    attacker_buffs: dict[str, int] = field(default_factory=dict)
+    """The buffs the attacker wore while it was set upon the target, each with the steps it wore it."""
 
 
 def _is_melee(game_data: GameData, unit_type: UnitTypeId) -> bool:
@@ -428,11 +431,12 @@ def _set_upon(
     *,
     shields: float | None = None,
     before: Sequence[tuple[int, int | None]] = (),
-) -> tuple[raw_pb2.Unit, raw_pb2.Unit, list[Loss]]:
+) -> tuple[raw_pb2.Unit, raw_pb2.Unit, list[Loss], dict[str, int]]:
     """Make an attacker of this player's at `at` and a target of the other's across, `_TRIAL_DISTANCE` from it or, from
     a melee attacker, `_MELEE_TRIAL_DISTANCE`, both holding, the target's shields set to `shields` if given and the
-    abilities `before` ordered on the attacker first, each with the energy it needs; and what the target lost at each
-    step for `_ATTACK_STEPS` steps."""
+    abilities `before` ordered on the attacker first, in turn, each with the energy it needs; and what the target lost
+    at each step for `_ATTACK_STEPS` steps, and the buffs the attacker wore over them, each with the steps it wore
+    it."""
     me, enemy = rivals.me, rivals.enemy
     melee = _is_melee(GameData(me.client.game_data()), attacker_type)
     distance = _MELEE_TRIAL_DISTANCE if melee else _TRIAL_DISTANCE
@@ -443,7 +447,7 @@ def _set_upon(
         rivals.step(1)
         for ability, target_tag in before:
             me.order(ability, attacker.tag, target_tag)
-        rivals.step(_SETTLING_STEPS)
+            rivals.step(_SETTLING_STEPS)
     (target,) = _units_made(rivals, [(target_type, _enemy_of(rivals), Point((at.x + distance, at.y)))])
     _hold_position(enemy, target.tag)
     last = (target.health, target.shield)
@@ -455,8 +459,11 @@ def _set_upon(
                 last = (settled.health, settled.shield)
                 break
     losses = []
+    attacker_buffs: Counter[str] = Counter()
     for step in range(1, _ATTACK_STEPS + 1):
         rivals.step(1)
+        if (attacker_now := _unit_tagged(me, attacker.tag)) is not None:
+            attacker_buffs.update(_buff_name(buff) for buff in attacker_now.buff_ids)
         now = _unit_tagged(me, target.tag)
         if now is None:
             losses.append(Loss(step, last[0], last[1]))
@@ -466,7 +473,15 @@ def _set_upon(
             losses.append(Loss(step, health_lost, shields_lost))
         last = (now.health, now.shield)
     _kill_and_wait(rivals, [attacker.tag, target.tag])
-    return attacker, target, losses
+    return attacker, target, losses, dict(attacker_buffs)
+
+
+def _buff_name(buff: int) -> str:
+    """The game's name for the raw buff id `buff`, or the number for one the raw catalog lacks."""
+    try:
+        return RawBuffId(buff).name
+    except ValueError:
+        return str(buff)
 
 
 def _first_attack(losses: Sequence[Loss], attacks: int) -> Loss | None:
@@ -509,7 +524,9 @@ def _attack_finding(
     """Set one attacker upon one target and record what it took off, beside the attacker's weapons as this player's
     tables give them now and the target's armor as `base_tables`, read before either side had an upgrade, give it."""
     game_data = GameData(rivals.me.client.game_data())
-    _, target, losses = _set_upon(rivals, attacker_type, target_type, at, shields=shields, before=before)
+    _, target, losses, attacker_buffs = _set_upon(
+        rivals, attacker_type, target_type, at, shields=shields, before=before
+    )
     row = base_tables.units[target_type]
     weapons = _tables_weapons(game_data, attacker_type)
     finding = AttackFinding(
@@ -524,6 +541,7 @@ def _attack_finding(
         shields if shields is not None else target.shield,
         losses,
         _first_attack(losses, max((weapon.attacks for weapon in weapons), default=1)),
+        attacker_buffs,
     )
     logger.info(
         "{} on {} ({} upgraded): first attack {}, every loss {}",
@@ -584,7 +602,7 @@ def measure_damage(installation: Installation) -> list[AttackFinding]:
 
 # The attackers the tables give no weapon, each against a light target and an armored one, on the ground or in the
 # air, and what each is ordered first: an oracle turns its beam on. An oracle is set on a zealot too, for the shields,
-# and on an overlord, which it is not known to hit.
+# on an overlord, which it is not known to hit, and on an SCV with its beam never on and turned on and off again.
 _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = (
     (UnitTypeId.BATTLECRUISER, UnitTypeId.SCV, ()),
     (UnitTypeId.BATTLECRUISER, UnitTypeId.ROACH, ()),
@@ -593,6 +611,8 @@ _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = 
     (UnitTypeId.ORACLE, UnitTypeId.ROACH, (RawAbilityId.Behavior_PulsarBeamOn,)),
     (UnitTypeId.ORACLE, UnitTypeId.ZEALOT, (RawAbilityId.Behavior_PulsarBeamOn,)),
     (UnitTypeId.ORACLE, UnitTypeId.OVERLORD, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.SCV, ()),
+    (UnitTypeId.ORACLE, UnitTypeId.SCV, (RawAbilityId.Behavior_PulsarBeamOn, RawAbilityId.Behavior_PulsarBeamOff)),
     (UnitTypeId.VOID_RAY, UnitTypeId.SCV, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.ROACH, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.OVERLORD, ()),
