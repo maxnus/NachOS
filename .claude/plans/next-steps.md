@@ -357,6 +357,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Attack speed counts upgrades and buffs (over upgrades alone and over neither): Adrenal Glands and Resonating
     Glaives shorten `cooldown_steps` for the side that has them, and `dps_against` counts the buffs a unit has, stim
     among them.
+  - `Weapon.cooldown_steps` and `Weapon.dps` count the random delay on every shot at its mean, the tables' cooldown
+    plus 0.4996 steps (the owner, 2026-10-21, on `tools/sweep_combat.py`'s finding that the delay is -1 + 3r/4096
+    steps, r even over 0 to 4095). A unit's reported cooldown already holds its shot's own delay and stays as reported.
 
 ## Next
 
