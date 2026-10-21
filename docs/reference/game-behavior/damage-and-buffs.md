@@ -69,6 +69,19 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   no less often. An instant attack's damage lands in the step the cooldown rises, a marine's, a zergling's, a zealot's
   first blade and a siege tank's, and a missile's later, from beside a command center a hydralisk's 3 steps later, a
   marauder's 4 and a stalker's and a roach's 5 (tool `sweep_combat`, build 75689).
+- What speeds an attack up divides the tables' cooldown, and the delay is added to what it leaves, as it is. With
+  Adrenal Glands, every one of a zergling's 3,000 cooldowns was 32585/4096 steps, its tables' 11.137 divided by 1.4 to
+  within 3/4096, and a delay of -1 to 3/4096 short of 2, each end drawn; with Resonating Glaives, an adept's 3,000 were
+  its 36 divided by 1.45 and a delay of -0.999 to 1.999. The cooldown still fell by 1 a step, in a probe's trace of
+  ten shots of each. So the mean gap is the sped-up cooldown and half a step (tool `sweep_combat`, `delay-sped-up`,
+  build 75689).
+- A move ordered while an attacker waits to fire cancels the shot if it comes 2 steps or more before it, and not if it
+  comes 1 step before or after the cooldown has risen. In 10 tries each at a command center, a marine, a zergling and
+  a stalker ordered to move 2 or more steps before a shot due neither fired nor did damage within 16 steps, whether
+  their cooldown read 0 then or not yet; ordered 1 step before it they fired at the step due, as did a marauder, and
+  the damage landed. Each began to move 3 steps after the order. A missile already fired still landed, but some 4 steps
+  later than when its attacker stood: a marauder's 8 steps after the rise in 18 tries of 20 and 4 or 6 in the others,
+  against 4, and a stalker's 9, against 5 (tool `sweep_combat`, `move-before-shot`, build 75689).
 
 ## Buffs
 

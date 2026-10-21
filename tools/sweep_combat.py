@@ -28,6 +28,12 @@ cooldown each showed at its shot and the delay added to each shot's cooldown, wo
 same for `_SHOTS_FOR_DELAY_BOUNDS` shots of a zergling, and `delay-weapons` for `_TIMED_SHOTS` shots of each of more
 attackers.
 
+`delay-sped-up` times a zergling's and an adept's shots before the `upgrade` cheat's three sends and after, which
+give them Adrenal Glands and Resonating Glaives, and records the cooldown each shot started from.
+
+`move-before-shot` orders an attacker firing at a command center to move a few steps before a shot due, or lets it
+be, and records whether and when its cooldown rose, the target lost health and the attacker moved.
+
 `cooldown-trace` reads the same attackers' cooldowns and the command center's health at every step over
 `_TRACED_SHOTS` shots after the first, and records how long the cooldown read 0 before each shot and when the target
 lost health::
@@ -40,6 +46,8 @@ lost health::
     uv run python tools/sweep_combat.py delay-bounds --out combat-delay-bounds.json
     uv run python tools/sweep_combat.py delay-weapons --out combat-delay-weapons.json
     uv run python tools/sweep_combat.py cooldown-trace --out combat-cooldown-trace.json
+    uv run python tools/sweep_combat.py delay-sped-up --out combat-delay-sped-up.json
+    uv run python tools/sweep_combat.py move-before-shot --out combat-move-before-shot.json
 """
 
 import argparse
@@ -755,6 +763,8 @@ class ShotTimingFinding:
     attacker's shots may take several trials, each a finding."""
 
     attacker: str
+    upgraded: bool
+    """Whether this player had had the `upgrade` cheat's three sends."""
     table_cooldown_steps: float | None
     shot_steps: list[int]
     """The steps at which its cooldown rose: each shot."""
@@ -766,14 +776,16 @@ class ShotTimingFinding:
     steps_at_zero_before_shots: list[int]
     """For each shot after the first, the steps since the one before less the cooldown shown at that one, rounded up:
     how many steps the cooldown read 0 before it."""
+    cooldowns_started: list[float]
+    """For each shot after the first, the cooldown it started from when the one before ran out, worked back: the
+    cooldown shown at the shot and the steps since the one before, less the cooldown shown at that one."""
     delays: list[float]
-    """For each shot after the first, what was added to the tables' cooldown, worked back: the cooldown shown at the
-    shot, the steps it read 0 before it and the part of a step by which the cooldown before it passed 0, less the
-    tables' cooldown. Empty if the tables give the attacker no weapon."""
+    """Each of `cooldowns_started` less the tables' cooldown, which leaves out what speeds an attack up. Empty if the
+    tables give the attacker no weapon."""
 
 
 def _shot_timing(
-    rivals: Rivals, game_data: GameData, attacker_type: UnitTypeId, at: Point, shots_timed: int
+    rivals: Rivals, game_data: GameData, attacker_type: UnitTypeId, at: Point, shots_timed: int, *, upgraded: bool
 ) -> ShotTimingFinding:
     """Make a command center of the other player's at `at`, healed every `_HEALING_EVERY_STEPS`, and an attacker of
     this player's beside it, and time `shots_timed` of its shots by the steps at which its cooldown rises, or as many
@@ -800,27 +812,26 @@ def _shot_timing(
     _kill_and_wait(rivals, [attacker.tag, target.tag])
     between = [later - earlier for earlier, later in itertools.pairwise(shots)]
     at_zero = [steps - math.ceil(shown) for steps, shown in zip(between, cooldowns[:-1], strict=True)]
-    delays = (
-        []
-        if table_cooldown_steps is None
-        else [
-            shown + steps + math.ceil(before) - before - table_cooldown_steps
-            for before, shown, steps in zip(cooldowns[:-1], cooldowns[1:], at_zero, strict=True)
-        ]
-    )
+    started = [
+        shown + steps - before for before, shown, steps in zip(cooldowns[:-1], cooldowns[1:], between, strict=True)
+    ]
+    delays = [] if table_cooldown_steps is None else [cooldown - table_cooldown_steps for cooldown in started]
     finding = ShotTimingFinding(
         attacker_type.name,
+        upgraded,
         table_cooldown_steps,
         shots,
         cooldowns,
         dict(sorted(Counter(between).items())),
         sum(between) / len(between) if between else None,
         at_zero,
+        started,
         delays,
     )
     logger.info(
-        "{}: {} shots, table {}, mean interval {}, intervals {}, steps at 0 {}, delays {} to {}, mean {}",
+        "{}{}: {} shots, table {}, mean interval {}, intervals {}, steps at 0 {}, delays {} to {}, mean {}",
         attacker_type.name,
+        ", upgraded" if upgraded else "",
         len(shots),
         finding.table_cooldown_steps,
         finding.mean_interval,
@@ -833,28 +844,34 @@ def _shot_timing(
     return finding
 
 
+def _attackers_timed(
+    rivals: Rivals, at: Point, attacker_types: Sequence[UnitTypeId], shots: int, *, upgraded: bool
+) -> list[ShotTimingFinding]:
+    """`shots` shots of each of `attacker_types` at `at`, by this player's tables as they are now, over as many trials
+    of `_LONGEST_TRIAL_STEPS` at most as it takes, each a finding. An attacker that fires fewer than twice in a trial
+    is not tried again."""
+    game_data = GameData(rivals.me.client.game_data())
+    findings = []
+    for attacker_type in attacker_types:
+        timed = 0
+        while timed < shots:
+            finding = _shot_timing(rivals, game_data, attacker_type, at, shots - timed, upgraded=upgraded)
+            findings.append(finding)
+            if len(finding.shot_steps) < 2:
+                break
+            timed += len(finding.shot_steps) - 1
+    return findings
+
+
 def _shots_timed(
     installation: Installation, attacker_types: Sequence[UnitTypeId], shots: int
 ) -> list[ShotTimingFinding]:
-    """`shots` shots of each of `attacker_types`, timed with neither side upgraded and no cheat but `show_map`, over
-    as many trials of `_LONGEST_TRIAL_STEPS` at most as it takes, each a finding. An attacker that fires fewer than
-    twice in a trial is not tried again."""
-    findings = []
+    """`shots` shots of each of `attacker_types`, timed with neither side upgraded and no cheat but `show_map`."""
     with playing_rivals(Race.TERRAN, installation) as rivals:
-        me = rivals.me
-        me.cheat(Cheat.SHOW_MAP)
+        rivals.me.cheat(Cheat.SHOW_MAP)
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
-        game_data = GameData(me.client.game_data())
-        for attacker_type in attacker_types:
-            timed = 0
-            while timed < shots:
-                finding = _shot_timing(rivals, game_data, attacker_type, at, shots - timed)
-                findings.append(finding)
-                if len(finding.shot_steps) < 2:
-                    break
-                timed += len(finding.shot_steps) - 1
-    return findings
+        return _attackers_timed(rivals, at, attacker_types, shots, upgraded=False)
 
 
 def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
@@ -870,6 +887,26 @@ def measure_delay_bounds(installation: Installation) -> list[ShotTimingFinding]:
 def measure_delay_weapons(installation: Installation) -> list[ShotTimingFinding]:
     """`_TIMED_SHOTS` shots of each attacker of `_DELAY_WEAPON_TRIALS`."""
     return _shots_timed(installation, _DELAY_WEAPON_TRIALS, _TIMED_SHOTS)
+
+
+# The attackers the `upgrade` cheat speeds up, a zergling by Adrenal Glands and an adept by Resonating Glaives, and
+# how many of their shots are timed before it and after.
+_SPED_UP_TRIALS = (UnitTypeId.ZERGLING, UnitTypeId.ADEPT)
+_SHOTS_BEFORE_SPEEDING_UP = 500
+_SHOTS_SPED_UP = 3000
+
+
+def measure_delay_sped_up(installation: Installation) -> list[ShotTimingFinding]:
+    """`_SHOTS_BEFORE_SPEEDING_UP` shots of each of `_SPED_UP_TRIALS`, then `_SHOTS_SPED_UP` after the `upgrade`
+    cheat's three sends, in one game with no other cheat but `show_map`."""
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        me = rivals.me
+        me.cheat(Cheat.SHOW_MAP)
+        rivals.step(_SETTLING_STEPS)
+        at = _trial_ground(rivals)
+        findings = _attackers_timed(rivals, at, _SPED_UP_TRIALS, _SHOTS_BEFORE_SPEEDING_UP, upgraded=False)
+        _send_upgrade_levels(me, rivals)
+        return findings + _attackers_timed(rivals, at, _SPED_UP_TRIALS, _SHOTS_SPED_UP, upgraded=True)
 
 
 # How many shots are traced, each from the shot before it: few enough that no attacker kills the command center, which
@@ -971,6 +1008,158 @@ def measure_cooldown_trace(installation: Installation) -> list[CooldownTraceFind
     return findings
 
 
+# The attackers ordered to move just before a shot: of 0, 1 and 3 steps at 0 before each shot, melee and ranged. Each is
+# ordered to move `_MOVES_EACH` times at each number of steps before the shot due, and let fire as many times.
+_MOVE_TRIALS = (UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.ZERGLING, UnitTypeId.STALKER)
+_MOVES_EACH = 10
+# How many steps after the order its outcome is watched, how far left of where it stands the move sends the attacker,
+# how far it must have gone to count as moved, and how many steps it is given to fire again once ordered to attack.
+_STEPS_WATCHED_AFTER_A_MOVE = 16
+_MOVE_DISTANCE = 4.0
+_MOVED_AT_LEAST = 0.05
+_STEPS_TO_FIRE_AGAIN = 120
+
+
+@dataclass(slots=True)
+class MoveBeforeShotFinding:
+    """What came of a shot due when its attacker, firing at a command center, was ordered to move some steps before
+    it, or was let be."""
+
+    attacker: str
+    steps_at_zero: int
+    """How many steps its cooldown read 0 before a shot, found from its second and third."""
+    steps_before_shot: int | None
+    """How many steps before the shot due the move was ordered: 0 in the step its cooldown rose, once the rise was
+    read. None for a shot let be, watched from the step before it."""
+    shot_after: int | None
+    """How many steps after the order its cooldown rose, 0 for the step the order was given in, or None if it did not
+    within `_STEPS_WATCHED_AFTER_A_MOVE`."""
+    loss_after: int | None
+    """How many steps after the order the target lost health, counted the same way, or None."""
+    moved_after: int | None
+    """How many steps after the order the attacker stood `_MOVED_AT_LEAST` from where it was, or None."""
+
+
+class _AttackWatch:
+    """An attacker of this player's and its target, both read after every step."""
+
+    def __init__(self, rivals: Rivals, attacker: raw_pb2.Unit, target: raw_pb2.Unit) -> None:
+        self._rivals = rivals
+        self.attacker = attacker
+        self.target = target
+        self.step = 0
+        self.rose = False
+        """Whether the attacker's cooldown rose in the last step."""
+        self.lost_health = False
+        """Whether the target lost health in the last step."""
+
+    def advance(self) -> bool:
+        """Step once and read both units again; False if either is gone."""
+        self._rivals.step(1)
+        self.step += 1
+        units = {unit.tag: unit for unit in self._rivals.me.units()}
+        attacker, target = units.get(self.attacker.tag), units.get(self.target.tag)
+        if attacker is None or target is None:
+            return False
+        self.rose = attacker.weapon_cooldown > self.attacker.weapon_cooldown
+        self.lost_health = target.health < self.target.health
+        self.attacker, self.target = attacker, target
+        return True
+
+    def until_rise(self, most_steps: int) -> bool:
+        """Step until the attacker's cooldown rises, at most `most_steps` times; whether it rose."""
+        for _ in range(most_steps):
+            if not self.advance():
+                return False
+            if self.rose:
+                return True
+        return False
+
+
+def _moves_before_shots(
+    rivals: Rivals, game_data: GameData, attacker_type: UnitTypeId, at: Point
+) -> list[MoveBeforeShotFinding]:
+    """Make a command center of the other player's at `at` and an attacker of this player's beside it, find how many
+    steps its cooldown reads 0 before a shot, and order it to move `_MOVES_EACH` times at each number of steps before
+    a shot due, from that many and one more down to 0, and let it fire as many times."""
+    me = rivals.me
+    attacker, target, _ = _by_a_command_center(rivals, game_data, attacker_type, at)
+    watch = _AttackWatch(rivals, attacker, target)
+    me.order(RawAbilityId.Attack, attacker.tag, target.tag)
+    rises: list[tuple[int, float]] = []
+    while len(rises) < 3 and watch.until_rise(_STEPS_TO_FIRE_AGAIN):
+        rises.append((watch.step, watch.attacker.weapon_cooldown))
+    if len(rises) < 3:
+        _kill_and_wait(rivals, [attacker.tag, target.tag])
+        return []
+    (earlier, shown), (later, _) = rises[1], rises[2]
+    at_zero = later - earlier - math.ceil(shown)
+    findings = []
+    moved = False
+    for steps_before in [None, *range(at_zero + 1, -1, -1)]:
+        for _ in range(_MOVES_EACH):
+            me.set_value(_LIFE_VALUE, target.health_max, [target.tag])
+            if moved:
+                me.order(RawAbilityId.Attack, attacker.tag, target.tag)
+                if not watch.until_rise(_STEPS_TO_FIRE_AGAIN):
+                    break
+            if not watch.until_rise(_STEPS_TO_FIRE_AGAIN):
+                break
+            due = watch.step + math.ceil(watch.attacker.weapon_cooldown) + at_zero
+            ordered_at = due - (1 if steps_before is None else steps_before)
+            while watch.step < ordered_at and watch.advance():
+                pass
+            shot = 0 if watch.rose and watch.step == ordered_at else None
+            loss = 0 if watch.lost_health and watch.step == ordered_at else None
+            moved_from = Point((watch.attacker.pos.x, watch.attacker.pos.y))
+            moved = steps_before is not None
+            if moved:
+                me.order(RawAbilityId.Move_Move, attacker.tag, Point((moved_from.x - _MOVE_DISTANCE, moved_from.y)))
+            moved_after = None
+            for after in range(1, _STEPS_WATCHED_AFTER_A_MOVE + 1):
+                if not watch.advance():
+                    break
+                if shot is None and watch.rose:
+                    shot = after
+                if loss is None and watch.lost_health:
+                    loss = after
+                if (
+                    moved_after is None
+                    and moved_from.distance_to(Point((watch.attacker.pos.x, watch.attacker.pos.y))) > _MOVED_AT_LEAST
+                ):
+                    moved_after = after
+            findings.append(MoveBeforeShotFinding(attacker_type.name, at_zero, steps_before, shot, loss, moved_after))
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
+    for steps_before in [None, *range(at_zero + 1, -1, -1)]:
+        outcomes = Counter(
+            (finding.shot_after, finding.loss_after, finding.moved_after)
+            for finding in findings
+            if finding.steps_before_shot == steps_before
+        )
+        logger.info(
+            "{}, {} steps at 0, moved {} steps before the shot: (shot, loss, moved) after {}",
+            attacker_type.name,
+            at_zero,
+            steps_before,
+            dict(outcomes),
+        )
+    return findings
+
+
+def measure_moves_before_shots(installation: Installation) -> list[MoveBeforeShotFinding]:
+    """Every attacker of `_MOVE_TRIALS`, with neither side upgraded and no cheat but `show_map`."""
+    findings = []
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        me = rivals.me
+        me.cheat(Cheat.SHOW_MAP)
+        rivals.step(_SETTLING_STEPS)
+        at = _trial_ground(rivals)
+        game_data = GameData(me.client.game_data())
+        for attacker_type in _MOVE_TRIALS:
+            findings.extend(_moves_before_shots(rivals, game_data, attacker_type, at))
+    return findings
+
+
 def main(argv: Sequence[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     measures = {
@@ -982,6 +1171,8 @@ def main(argv: Sequence[str]) -> None:
         "delay-bounds": measure_delay_bounds,
         "delay-weapons": measure_delay_weapons,
         "cooldown-trace": measure_cooldown_trace,
+        "delay-sped-up": measure_delay_sped_up,
+        "move-before-shot": measure_moves_before_shots,
     }
     parser.add_argument("mode", choices=tuple(measures))
     parser.add_argument("--out", type=Path, help="where to write what it found, as JSON")
