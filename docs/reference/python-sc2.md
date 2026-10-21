@@ -499,13 +499,13 @@ it.
 | `unit_data.cost.time` | `unit_data.build_steps` |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
-| `unit_data._proto.weapons` | `unit_data.weapons` |
+| `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
 | `unit_data.unit_alias` | nothing: `unit_data.morphed_from` gives the type a form is made from, a siege tank for a sieged tank |
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
 | `upgrade_data.cost.time` | `upgrade_data.research_steps` |
-| `weapon.speed`, in Normal-speed seconds | `weapon.cooldown_steps` |
+| `weapon.speed`, in Normal-speed seconds | `weapon.cooldown_steps`, the steps between attacks on average, the random delay the game adds to each counted |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
@@ -603,14 +603,16 @@ it.
 - **What an upgrade changes was swept in game too, and is added, not multiplied.** python-sc2 writes
   `DAMAGE_BONUS_PER_UPGRADE` and its speed dicts by hand, the speeds as factors. `unit_data.upgrades` holds what
   `tools/sweep_upgrades.py` read off the game's rows after each upgrade, plus every upgrade that raises a level the
-  type's units report without changing the row: a shields level for every protoss type, and the attack levels for
-  a void ray, a carrier and a sentry, which the rows give no weapon. Those rows take in weapon damage, bonuses and
-  range, armor and speed, and nothing else, not attack speed, and Anabolic Synthesis counts there whether or not
-  the ultralisk is on creep. Where the two disagree, the game says a cyclone's attack level adds 1 where python-sc2
-  says 2; Flux Vanes, Gravitic Boosters, Muscular Augments and Anabolic Synthesis speed up by other factors;
-  Pneumatized Carapace speeds up an overlord transport too; Adaptive Talons changes no lurker's speed; and
-  python-sc2's Rapid Deployment is an upgrade the game no longer has
-  ([game behavior](game-behavior/upgrades-and-tables.md)).
+  type's units report without changing the row: a shields level for every protoss type, and the attack levels for a void
+  ray, a carrier and a sentry, which the rows give no weapon. Those rows take in weapon damage, bonuses and range, armor
+  and speed, and nothing else, and Anabolic Synthesis counts there whether or not the ultralisk is on creep. Where the
+  two disagree, the game says a cyclone's attack level adds 1 where python-sc2 says 2; Flux Vanes, Gravitic Boosters,
+  Muscular Augments and Anabolic Synthesis speed up by other factors; Pneumatized Carapace speeds up an overlord
+  transport too; Adaptive Talons changes no lurker's speed; and python-sc2's Rapid Deployment is an upgrade the game no
+  longer has ([game behavior](game-behavior/upgrades-and-tables.md)). NachOS adds what `tools/sweep_combat.py` measured
+  beside them: 1 a hit for each attack level on the battlecruiser's, void ray's and sentry's measured weapons, and the
+  attack speed of Adrenal Glands, 1.4 times, and Resonating Glaives, 1.45, which divide the tables' cooldown ([game
+  behavior](game-behavior/damage-and-buffs.md)).
 - **A row is as it stands before any upgrade, unless `with_upgrades` made it.** Asked again later in a game, the
   game folds in the asking player's upgrades, and only that player's, though a unit type has one row; NachOS asks
   once.

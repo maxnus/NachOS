@@ -15,8 +15,10 @@ from sc2nachos.gamedata import (
     Resources,
     TargetDomain,
     TargetType,
+    UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
+from sc2nachos.gamedata._measured import MEASURED_WEAPON_UPGRADES, MEASURED_WEAPONS
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
@@ -252,8 +254,35 @@ class TestReadingTheTables:
         (weapon,) = data.units[UnitTypeId.MARINE].weapons
         assert weapon.target_domain is TargetDomain.ANY
         assert (weapon.damage, weapon.attacks, weapon.range) == (6.0, 1, 5.0)
-        assert weapon.cooldown_steps == pytest.approx(0.86 * 16)
+        # The tables' 0.86 seconds at Normal speed, and the mean of the random delay the game adds to every attack.
+        assert weapon.cooldown_steps == pytest.approx(0.86 * 16 + 0.4996, abs=1e-4)
         assert weapon.damage_bonuses == {}
+        assert not weapon.ignores_armor
+
+    def test_a_weapons_dps_is_every_hit_of_an_attack_per_second_at_faster_speed(self) -> None:
+        data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
+        (weapon,) = data.units[UnitTypeId.MARINE].weapons
+        assert weapon.dps == pytest.approx(6 * 22.4 / (0.86 * 16 + 0.4996), abs=1e-3)
+
+    def test_a_type_the_tables_give_no_weapon_takes_the_weapons_measured_with_their_upgrades(self) -> None:
+        void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY)
+        row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
+        assert row.weapons == MEASURED_WEAPONS[UnitTypeId.VOID_RAY]
+        assert row.upgrades.items() >= MEASURED_WEAPON_UPGRADES[UnitTypeId.VOID_RAY].items()
+
+    def test_a_weapon_the_tables_give_stands_over_the_one_measured(self) -> None:
+        weapon = data_pb2.Weapon(type=data_pb2.Weapon.TargetType.Any, damage=9.0, attacks=1, range=5.0, speed=1.0)
+        sentry = data_pb2.UnitTypeData(unit_id=UnitTypeId.SENTRY, weapons=[weapon])
+        row = GameData(sc2api_pb2.ResponseData(units=[sentry])).units[UnitTypeId.SENTRY]
+        assert [weapon.damage for weapon in row.weapons] == [9.0]
+        assert row.upgrades[UpgradeId.PROTOSS_GROUND_WEAPONS_1] == UnitTypeUpgrade()
+
+    def test_an_oracles_beam_ignores_armor_and_hits_only_the_ground(self) -> None:
+        """It took as much off a target with 3 more armor, and off a zealot's shields at shields level 3, and never
+        fired at an overlord (tool `sweep_combat`, `no-weapon`)."""
+        oracle = data_pb2.UnitTypeData(unit_id=UnitTypeId.ORACLE)
+        (beam,) = GameData(sc2api_pb2.ResponseData(units=[oracle])).units[UnitTypeId.ORACLE].weapons
+        assert (beam.target_domain, beam.ignores_armor) == (TargetDomain.GROUND, True)
 
     def test_a_weapons_bonus_damage_is_read_by_the_attribute_it_is_earned_by(self) -> None:
         bonus = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Armored, bonus=10.0)
@@ -405,6 +434,11 @@ class TestARecordedGamesTables:
         assert not set(AbilityId) - set(data.abilities)
         assert not set(UpgradeId) - set(data.upgrades)
         assert not set(EffectId) - set(data.effects)
+
+    def test_the_tables_give_no_weapon_to_the_types_a_weapon_was_measured_for(self, path: Path) -> None:
+        """Once the tables give one of these a weapon, its entry can go."""
+        rows = {row.unit_id: row for row in _answer(path).units}
+        assert [unit_type.name for unit_type in MEASURED_WEAPONS if rows[unit_type].weapons] == []
 
     def test_only_the_rows_a_bot_can_name_are_read(self, path: Path) -> None:
         """The game describes 2005 unit types and 4134 abilities; a bot has a name for a seventh of them."""

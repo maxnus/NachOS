@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
+from sc2nachos.gamedata._measured import ATTACK_SPEED_UPGRADES, MEASURED_WEAPON_UPGRADES, MEASURED_WEAPONS
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
+from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade
 from sc2nachos.gamedata._upgrade_data import UpgradeData
 from sc2nachos.ids import UnitTypeId
 
@@ -36,7 +38,7 @@ class GameData:
         unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
-        self._units = _with_build_steps_borrowed(unit_rows, TECH_TREE.abilities)
+        self._units = _with_measured_attacks(_with_build_steps_borrowed(unit_rows, TECH_TREE.abilities))
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
@@ -97,6 +99,23 @@ def _with_build_steps_borrowed(
         if (built_as := units.get(types_made.pop())) is not None:
             rows_with_build_steps[unit_type] = replace(row, build_steps=built_as.build_steps)
     return MappingProxyType(rows_with_build_steps)
+
+
+def _with_measured_attacks(units: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`units`, where a type the tables give no weapon takes the weapons measured for it, with what its upgrades add to
+    them, and a type an upgrade attacks faster takes that upgrade's attack speed."""
+    rows = dict(units)
+    for unit_type, weapons in MEASURED_WEAPONS.items():
+        if (row := rows.get(unit_type)) is not None and not row.weapons:
+            upgrades = {**row.upgrades, **MEASURED_WEAPON_UPGRADES.get(unit_type, {})}
+            rows[unit_type] = replace(row, weapons=weapons, upgrades=MappingProxyType(upgrades))
+    for unit_type, speeds in ATTACK_SPEED_UPGRADES.items():
+        if (row := rows.get(unit_type)) is not None:
+            upgrades = dict(row.upgrades)
+            for upgrade, speed in speeds.items():
+                upgrades[upgrade] = replace(upgrades.get(upgrade, UnitTypeUpgrade()), attack_speed=speed)
+            rows[unit_type] = replace(row, upgrades=MappingProxyType(upgrades))
+    return MappingProxyType(rows)
 
 
 def _read_table[MessageT, IdT, RowT](

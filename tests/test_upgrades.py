@@ -287,15 +287,43 @@ class TestWhatTheTablesSay:
             assert row.with_upgrades(shields) is row
 
     @pytest.mark.parametrize(
-        ("unit_type", "family"),
-        [(UnitTypeId.VOID_RAY, "PROTOSS_AIR_WEAPONS"), (UnitTypeId.SENTRY, "PROTOSS_GROUND_WEAPONS")],
+        ("unit_type", "family", "damages"),
+        [
+            (UnitTypeId.VOID_RAY, "PROTOSS_AIR_WEAPONS", [(6, 7, 8, 9)]),
+            (UnitTypeId.SENTRY, "PROTOSS_GROUND_WEAPONS", [(6, 7, 8, 9)]),
+            (UnitTypeId.BATTLECRUISER, "TERRAN_SHIP_WEAPONS", [(8, 9, 10, 11), (5, 6, 7, 8)]),
+        ],
     )
-    def test_attack_levels_affect_a_type_the_rows_give_no_weapon(
-        self, tables: GameData, unit_type: UnitTypeId, family: str
+    def test_each_attack_level_adds_one_to_a_measured_weapon(
+        self, tables: GameData, unit_type: UnitTypeId, family: str, damages: list[tuple[int, ...]]
+    ) -> None:
+        """The rows give these types no weapon, and the weapons measured gained 3 a hit with the third levels, a void
+        ray's bonus against armored nothing (tool `sweep_combat`, `no-weapon`)."""
+        row = tables.units[unit_type]
+        levels = _levels(family)
+        by_level = [[weapon.damage for weapon in row.with_upgrades(levels[:level]).weapons] for level in range(4)]
+        assert by_level == [list(level) for level in zip(*damages, strict=True)]
+        assert row.with_upgrades(levels).weapons[0].damage_bonuses == row.weapons[0].damage_bonuses
+
+    def test_no_attack_level_adds_to_an_oracles_beam(self, tables: GameData) -> None:
+        oracle = tables.units[UnitTypeId.ORACLE]
+        assert oracle.with_upgrades(_levels("PROTOSS_AIR_WEAPONS")) is oracle
+
+    @pytest.mark.parametrize(
+        ("unit_type", "upgrade", "sped_up"),
+        [
+            # What every cooldown started from, the delay aside (tool `sweep_combat`, `delay-sped-up`).
+            (UnitTypeId.ZERGLING, UpgradeId.ADRENAL_GLANDS, 32585 / 4096),
+            (UnitTypeId.ADEPT, UpgradeId.GLAIVES, 36 / 1.45),
+        ],
+    )
+    def test_an_upgrade_that_speeds_an_attack_divides_the_tables_cooldown_and_keeps_the_delay(
+        self, tables: GameData, unit_type: UnitTypeId, upgrade: UpgradeId, sped_up: float
     ) -> None:
         row = tables.units[unit_type]
-        assert not row.weapons
-        assert all(row.upgrades[upgrade] == UnitTypeUpgrade() for upgrade in _levels(family))
+        (weapon,) = row.with_upgrades({upgrade}).weapons
+        assert weapon.cooldown_steps == pytest.approx(sped_up + 0.4996, abs=1e-3)
+        assert weapon.damage == row.weapons[0].damage
 
     def test_an_upgrade_no_unit_reports_is_of_no_kind_and_no_level(self, tables: GameData) -> None:
         other = (UpgradeType.OTHER, 0)
@@ -338,6 +366,15 @@ class TestWhatAUnitReads:
         tracker = _tracker(tables)
         (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=(UpgradeId.ZERGLING_SPEED,))
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
+
+    def test_this_players_units_attack_as_fast_as_its_upgrades_have_them(self, tables: GameData) -> None:
+        tracker = _tracker(tables)
+        upgrades = (UpgradeId.ADRENAL_GLANDS,)
+        (zergling,) = _observe(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=upgrades)
+        expected = tables.units[UnitTypeId.ZERGLING].with_upgrades(upgrades).weapons[0].cooldown_steps
+        assert (
+            zergling.weapons[0].cooldown_steps == expected < tables.units[UnitTypeId.ZERGLING].weapons[0].cooldown_steps
+        )
 
     def test_this_players_units_show_it_nothing_it_has_not_researched(self, tables: GameData) -> None:
         """This player's units report only this player's upgrades, so nothing is inferred from them."""

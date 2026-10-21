@@ -66,7 +66,9 @@ from _sandbox import Cheat, OpenGround, Rivals, Sandbox, playing_rivals
 from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
-from sc2nachos.gamedata import GameData, TargetDomain
+from sc2nachos.gamedata import GameData, TargetDomain, Weapon
+from sc2nachos.gamedata._measured import MEASURED_WEAPONS
+from sc2nachos.gamedata._unit_type_data import _MEAN_ATTACK_DELAY_STEPS
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
@@ -205,11 +207,22 @@ class RangeFinding:
     """Whether the halving stopped at a displaced sample, so the two distances may not bracket the reach."""
 
 
+def _tables_weapons(game_data: GameData, unit_type: UnitTypeId) -> tuple[Weapon, ...]:
+    """The weapons the game's tables give `unit_type`: none for a type NachOS gives the weapons measured here."""
+    return () if unit_type in MEASURED_WEAPONS else game_data.units[unit_type].weapons
+
+
+def _tables_cooldown_steps(weapon: Weapon) -> float:
+    """The cooldown the game's tables give a weapon of theirs. NachOS adds to it the mean of the random delay this tool
+    works back, which is the delay added to the tables' own."""
+    return weapon.cooldown_steps - _MEAN_ATTACK_DELAY_STEPS
+
+
 def _weapon_range(game_data: GameData, attacker: UnitTypeId, *, flying: bool) -> float | None:
     """The range of the attacker's weapon the tables give it against a target that flies or does not, or None."""
-    row = game_data.units[attacker]
     wanted = TargetDomain.AIR if flying else TargetDomain.GROUND
-    ranges = [weapon.range for weapon in row.weapons if weapon.target_domain in (wanted, TargetDomain.ANY)]
+    weapons = _tables_weapons(game_data, attacker)
+    ranges = [weapon.range for weapon in weapons if weapon.target_domain in (wanted, TargetDomain.ANY)]
     return max(ranges) if ranges else None
 
 
@@ -399,7 +412,7 @@ class AttackFinding:
 
 def _is_melee(game_data: GameData, unit_type: UnitTypeId) -> bool:
     """Whether every weapon the tables give `unit_type` reaches less than 1, as a melee one does."""
-    weapons = game_data.units[unit_type].weapons
+    weapons = _tables_weapons(game_data, unit_type)
     return bool(weapons) and max(weapon.range for weapon in weapons) < 1
 
 
@@ -475,10 +488,10 @@ def _weapons_of(game_data: GameData, unit_type: UnitTypeId) -> list[dict[str, An
             "damage": weapon.damage,
             "attacks": weapon.attacks,
             "range": weapon.range,
-            "cooldown_steps": weapon.cooldown_steps,
+            "cooldown_steps": _tables_cooldown_steps(weapon),
             "damage_bonuses": {attribute.name: bonus for attribute, bonus in weapon.damage_bonuses.items()},
         }
-        for weapon in game_data.units[unit_type].weapons
+        for weapon in _tables_weapons(game_data, unit_type)
     ]
 
 
@@ -498,7 +511,7 @@ def _attack_finding(
     game_data = GameData(rivals.me.client.game_data())
     _, target, losses = _set_upon(rivals, attacker_type, target_type, at, shields=shields, before=before)
     row = base_tables.units[target_type]
-    weapons = game_data.units[attacker_type].weapons
+    weapons = _tables_weapons(game_data, attacker_type)
     finding = AttackFinding(
         attacker_type.name,
         target_type.name,
@@ -642,8 +655,8 @@ def _by_a_command_center(
     (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
     away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
     (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
-    weapons = game_data.units[attacker_type].weapons
-    return attacker, target, weapons[0].cooldown_steps if weapons else None
+    weapons = _tables_weapons(game_data, attacker_type)
+    return attacker, target, _tables_cooldown_steps(weapons[0]) if weapons else None
 
 
 class _AttackWatch:
