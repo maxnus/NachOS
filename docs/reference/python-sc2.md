@@ -429,7 +429,7 @@ it.
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
 | nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not ordered yet, with `margin` as `is_free` takes it |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
-| `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.map.pathing.path_distance_from(a)[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
+| `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.map.pathing.cheapest_paths_from(a).distances[b]`, over the start's grid, which rocks and this player's first townhall block: `a` must be on walkable ground, or every `b` reads `inf` |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location` |
 | `enemy_start_locations` | `api.map.opponent_start_locations` |
