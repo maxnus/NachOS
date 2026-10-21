@@ -46,8 +46,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `sweep_combat`, build 75689).
 - The tables' cooldowns leave out what speeds an attack up. Timed over six shots at a command center, Adrenal Glands
   brought a zergling's from 11.7 steps to 8.0, 1.4 times as fast, Resonating Glaives an adept's from 36.8 to 25.0, 1.45
-  times, and stim a marine's from 13.7 to 9.3 and a marauder's from 25.2 to 16.4, 1.5 times. A unit fires on whole
-  steps: a marine, of cooldown 13.77, fired 12 to 15 steps apart, 13.7 on average (tool `sweep_combat`, build 75689).
+  times, and stim a marine's from 13.7 to 9.3 and a marauder's from 25.2 to 16.4, 1.5 times; over six shots the delay
+  below leaves each to within a few percent (tool `sweep_combat`, build 75689).
+- A unit does not fire every cooldown. Over 200 shots at a command center, each of eight types waited from about one
+  step less than its cooldown to two more, and half a step more on average: a marine, of cooldown 13.77, 13 to 16 steps
+  and once 12, 14.33 on average; a zergling, of 11.14, 10 to 13, 11.67; a stalker, of 29.92, 28 to 32, 30.37; a siege
+  tank, of 16.64, 15 to 19, 17.17. The mean was the cooldown and 0.42 to 0.57 steps for every type, which fits a delay
+  of -1/16 to 1/8 of a game second on each shot, as the game's data editor gives weapons (stated). The cooldown a unit
+  reports just after it fires is not the wait to its next shot: a zergling's read 6.3 to 9.9 (tool `sweep_combat`, build
+  75689).
 
 ## Buffs
 

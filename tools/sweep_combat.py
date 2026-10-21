@@ -20,12 +20,16 @@ a light target, an armored one and one that flies, before and after this player'
 
 `attack-speed`, under `god`, times the first shots of one attacker at a time at a command center of the other
 player's, by the steps at which its cooldown rises, before this player's upgrades and after, a marine and a marauder
-then stimmed too::
+then stimmed too.
+
+`shot-timing` times `_TIMED_SHOTS` shots of each of a few attackers at a command center healed as it goes, with no
+upgrade and no cheat but `show_map`, and records the steps between shots and the cooldown each showed at its shot::
 
     uv run python tools/sweep_combat.py range --out combat-range.json
     uv run python tools/sweep_combat.py damage --out combat-damage.json
     uv run python tools/sweep_combat.py no-weapon --out combat-no-weapon.json
     uv run python tools/sweep_combat.py attack-speed --out combat-attack-speed.json
+    uv run python tools/sweep_combat.py shot-timing --out combat-shot-timing.json
 """
 
 import argparse
@@ -33,6 +37,7 @@ import itertools
 import json
 import math
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -340,6 +345,7 @@ _MELEE_TRIAL_DISTANCE = 0.5
 _UPGRADE_SENDS = 3
 _SHIELDS_VALUE = debug_pb2.DebugSetUnitValue.Shields
 _ENERGY_VALUE = debug_pb2.DebugSetUnitValue.Energy
+_LIFE_VALUE = debug_pb2.DebugSetUnitValue.Life
 
 
 @dataclass(slots=True)
@@ -675,6 +681,101 @@ def measure_attack_speed(installation: Installation) -> list[AttackIntervalFindi
     return findings
 
 
+_TIMED_SHOTS = 200
+# How many steps an attacker is given per shot timed, at the slowest cooldown timed, a roach's or a stalker's, and more.
+_STEPS_PER_TIMED_SHOT = 48
+# How often the command center fired at is healed back to its full life, so that no attacker kills it.
+_HEALING_EVERY_STEPS = 32
+_SHOT_TIMING_TRIALS = (
+    UnitTypeId.MARINE,
+    UnitTypeId.MARAUDER,
+    UnitTypeId.ZERGLING,
+    UnitTypeId.ZEALOT,
+    UnitTypeId.STALKER,
+    UnitTypeId.ROACH,
+    UnitTypeId.HYDRALISK,
+    UnitTypeId.SIEGE_TANK,
+)
+
+
+@dataclass(slots=True)
+class ShotTimingFinding:
+    """The steps between an attacker's shots over many, and the cooldown it showed at each, beside its tables'."""
+
+    attacker: str
+    table_cooldown_steps: float | None
+    shot_steps: list[int]
+    """The steps at which its cooldown rose: each shot."""
+    cooldowns_after_shots: list[float]
+    """The cooldown it showed at each of those steps."""
+    intervals: dict[int, int]
+    """How many times each number of steps came between two shots."""
+    mean_interval: float | None
+
+
+def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTimingFinding:
+    """Make a command center of the other player's at `at`, healed every `_HEALING_EVERY_STEPS`, and an attacker of
+    this player's beside it, and time `_TIMED_SHOTS` of its shots by the steps at which its cooldown rises."""
+    me = rivals.me
+    game_data = GameData(me.client.game_data())
+    weapons = game_data.units[attacker_type].weapons
+    melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
+    (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
+    away = _MELEE_FROM_COMMAND_CENTER if melee else _RANGED_FROM_COMMAND_CENTER
+    (attacker,) = _units_made(rivals, [(attacker_type, me.player, Point((target.pos.x - away, target.pos.y)))])
+    me.order(RawAbilityId.Attack, attacker.tag, target.tag)
+    shots: list[int] = []
+    cooldowns: list[float] = []
+    last = 0.0
+    for step in range(_TIMED_SHOTS * _STEPS_PER_TIMED_SHOT):
+        if step % _HEALING_EVERY_STEPS == 0:
+            me.set_value(_LIFE_VALUE, target.health_max, [target.tag])
+        rivals.step(1)
+        now = _unit_tagged(me, attacker.tag)
+        if now is None:
+            break
+        if now.weapon_cooldown > last:
+            shots.append(step)
+            cooldowns.append(now.weapon_cooldown)
+            if len(shots) > _TIMED_SHOTS:
+                break
+        last = now.weapon_cooldown
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
+    between = [later - earlier for earlier, later in itertools.pairwise(shots)]
+    finding = ShotTimingFinding(
+        attacker_type.name,
+        weapons[0].cooldown_steps if weapons else None,
+        shots,
+        cooldowns,
+        dict(sorted(Counter(between).items())),
+        sum(between) / len(between) if between else None,
+    )
+    logger.info(
+        "{}: {} shots, table {}, mean interval {}, intervals {}, cooldown after a shot {} to {}",
+        attacker_type.name,
+        len(shots),
+        finding.table_cooldown_steps,
+        finding.mean_interval,
+        finding.intervals,
+        min(cooldowns, default=None),
+        max(cooldowns, default=None),
+    )
+    return finding
+
+
+def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
+    """Every trial of `_SHOT_TIMING_TRIALS`, with neither side upgraded and no cheat but `show_map`."""
+    findings = []
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        me = rivals.me
+        me.cheat(Cheat.SHOW_MAP)
+        rivals.step(_SETTLING_STEPS)
+        at = _trial_ground(rivals)
+        for attacker_type in _SHOT_TIMING_TRIALS:
+            findings.append(_shot_timing(rivals, attacker_type, at))
+    return findings
+
+
 def main(argv: Sequence[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     measures = {
@@ -682,6 +783,7 @@ def main(argv: Sequence[str]) -> None:
         "damage": measure_damage,
         "no-weapon": measure_no_weapon,
         "attack-speed": measure_attack_speed,
+        "shot-timing": measure_shot_timing,
     }
     parser.add_argument("mode", choices=tuple(measures))
     parser.add_argument("--out", type=Path, help="where to write what it found, as JSON")

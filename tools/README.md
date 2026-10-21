@@ -14,7 +14,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, a game as each race, then `uv run python tools/generate_tech_tree.py` | yes |
 | Find what each upgrade adds to each unit type | `uv run python tools/sweep_upgrades.py`, then `uv run python tools/generate_tech_tree.py` | yes |
 | Measure every structure's footprint, and what lies under the map's rocks | `uv run python tools/sweep_placement.py footprints` or `ground-under-rocks`, then `uv run python tools/generate_footprints.py` | yes |
-| Find how far an attack reaches, what one hit takes off, what the units the tables give no weapon do, and what speeds an attack up | `uv run python tools/sweep_combat.py range`, `damage`, `no-weapon` or `attack-speed` | yes |
+| Find how far an attack reaches, what one hit takes off, what the units the tables give no weapon do, what speeds an attack up, and how far apart shots come | `uv run python tools/sweep_combat.py range`, `damage`, `no-weapon`, `attack-speed` or `shot-timing` | yes |
 | Find what the game's pathing grid shows as a game goes on, what each structure blocks for walking, and what the pathing query does from inside one | `uv run python tools/sweep_pathing.py timeline`, `footprints` or `inside` | yes |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py` | yes |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py` | yes |
