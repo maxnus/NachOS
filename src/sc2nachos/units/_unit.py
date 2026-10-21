@@ -9,7 +9,7 @@ from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Attribute, TargetDomain
-from sc2nachos.gamedata._measured import ATTACK_SPEED_BUFFS
+from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
@@ -41,10 +41,8 @@ _IDS_PER_ALLIANCE = 100_000
 # Air weapons hit these, though they stand on the ground: a viking, which has no ground weapon, fired at a colossus
 # (in game).
 _GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
-# The least a hit takes off health, whatever the armor (in game).
-_LEAST_DAMAGE_A_HIT = 0.5
 # How many times as often each buff has its wearer attack, by raw id, as a report lists its buffs.
-_ATTACK_SPEED_BY_RAW_BUFF = {int(buff): attack_speed for buff, attack_speed in ATTACK_SPEED_BUFFS.items()}
+_ATTACK_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in ATTACK_SPEED_BUFFS.items()}
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -688,21 +686,16 @@ class Unit[K: UnitType.AnyType]:
         return weapon is not None and self.distance_to(target) <= weapon.range + self.radius + target.radius + margin
 
     def damage_against(self, target: Unit[Any]) -> float:
-        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, or 0 if
+        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, as
+        `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor` and `shield`. 0 if
         this unit has no weapon against it or is a hallucination, which does no damage (stated). An enemy's reads as
-        one only once revealed, as `is_hallucination` has it.
-
-        Each hit takes off the weapon's damage and its bonus against the target's attributes: from the shields first,
-        less `shield_armor`, and what is more than the shields have left goes on to health less `armor`, at nothing at
-        least; from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the
-        whole hit. Each hit of an attack of several finds the shields the one before left. No buff on either unit
-        counts, and the damage may come to more than the target has left.
+        one only once revealed, as `is_hallucination` has it. No buff on either unit counts.
 
         Raises `NotReportedError` as `weapon_against` does, and for a unit of the two never shown visible, whose
         shields or hallucination the game never reported.
         """
         weapon = self.weapon_against(target)
-        return 0.0 if weapon is None or self.is_hallucination else _damage_of(weapon, target)
+        return 0.0 if weapon is None or self.is_hallucination else _damage_of_one_attack(weapon, target)
 
     def dps_against(self, target: Unit[Any]) -> float:
         """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`
@@ -714,32 +707,20 @@ class Unit[K: UnitType.AnyType]:
         weapon = self.weapon_against(target)
         if weapon is None or self.is_hallucination:
             return 0.0
-        damage = _damage_of(weapon, target)
+        damage = _damage_of_one_attack(weapon, target)
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
-        attack_speed = math.prod(_ATTACK_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in report.buff_ids)
-        cooldown_steps = weapon.cooldown_steps if attack_speed == 1.0 else weapon._sped_up_cooldown_steps(attack_speed)
+        # What speeds an attack divides the base cooldown, and leaves the random delay as it is (in game).
+        attack_speed_multiplier = math.prod(_ATTACK_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in report.buff_ids)
+        cooldown_steps = weapon.base_cooldown_steps / attack_speed_multiplier + weapon.mean_delay_steps
         return damage * STEPS_PER_SECOND / cooldown_steps
 
 
-def _damage_of(weapon: Weapon, target: Unit[Any]) -> float:
-    """What one attack of `weapon` takes off `target`'s shields and health as they stand, as `Unit.damage_against`
-    has it."""
-    attributes = target.type_data.attributes
-    hit = weapon.damage + sum(bonus for attribute, bonus in weapon.damage_bonuses.items() if attribute in attributes)
-    armor, shield_armor = (0.0, 0.0) if weapon.ignores_armor else (target.armor, target.shield_armor)
-    shields = target.shield
-    damage = 0.0
-    for _ in range(weapon.attacks):
-        if shields <= 0:
-            damage += max(hit - armor, _LEAST_DAMAGE_A_HIT)
-            continue
-        # Taken to be at least 0.5, as off health: no hit seen was small enough to tell.
-        on_shields = max(hit - shield_armor, _LEAST_DAMAGE_A_HIT)
-        if on_shields <= shields:
-            damage += on_shields
-            shields -= on_shields
-        else:
-            damage += shields + max(on_shields - shields - armor, 0.0)
-            shields = 0.0
-    return damage
+def _damage_of_one_attack(weapon: Weapon, target: Unit[Any]) -> float:
+    """What one attack of `weapon` takes off `target` as it stands, as `Weapon.damage_against` has it."""
+    return weapon.damage_against(
+        attributes=target.type_data.attributes,
+        armor=target.armor,
+        shield_armor=target.shield_armor,
+        shields=target.shield,
+    )

@@ -18,12 +18,7 @@ from sc2nachos.gamedata import (
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
-from sc2nachos.gamedata._measured import (
-    ATTACK_SPEED_BUFFS,
-    ATTACK_SPEED_UPGRADES,
-    MEASURED_WEAPON_UPGRADES,
-    MEASURED_WEAPONS,
-)
+from sc2nachos.gamedata._missing_attacks import MISSING_WEAPON_UPGRADES, MISSING_WEAPONS
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
@@ -32,7 +27,7 @@ from sc2nachos.gamedata._techtree import (
     UNNAMED_CREATION_ABILITIES,
 )
 from sc2nachos.geometry import Footprint
-from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
@@ -122,6 +117,7 @@ _DEAD_LURKER_MORPH = _DEAD_MAKERS[UnitTypeId.LURKER]
 _PHANTOM_VIKING = RawUnitTypeId.Viking
 
 # The game's row for a marine, cut down to the fields the tests read.
+_BONUS_AGAINST_ARMORED = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Armored, bonus=10.0)
 _MARINE = data_pb2.UnitTypeData(
     unit_id=UnitTypeId.MARINE,
     race=common_pb2.Race.Terran,
@@ -260,7 +256,8 @@ class TestReadingTheTables:
         assert weapon.target_domain is TargetDomain.ANY
         assert (weapon.damage, weapon.attacks, weapon.range) == (6.0, 1, 5.0)
         # The tables' 0.86 seconds at Normal speed, and the mean of the random delay the game adds to every attack.
-        assert weapon.cooldown_steps == pytest.approx(0.86 * 16 + 0.4996, abs=1e-4)
+        assert weapon.base_cooldown_steps == pytest.approx(0.86 * 16)
+        assert weapon.average_cooldown_steps == pytest.approx(0.86 * 16 + 0.4996, abs=1e-4)
         assert weapon.damage_bonuses == {}
         assert not weapon.ignores_armor
 
@@ -272,8 +269,17 @@ class TestReadingTheTables:
     def test_a_type_the_tables_give_no_weapon_takes_the_weapons_measured_with_their_upgrades(self) -> None:
         void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY)
         row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
-        assert row.weapons == MEASURED_WEAPONS[UnitTypeId.VOID_RAY]
-        assert row.upgrades.items() >= MEASURED_WEAPON_UPGRADES[UnitTypeId.VOID_RAY].items()
+        assert row.weapons == MISSING_WEAPONS[UnitTypeId.VOID_RAY]
+        assert row.upgrades.items() >= MISSING_WEAPON_UPGRADES[UnitTypeId.VOID_RAY].items()
+
+    def test_a_weapon_the_tables_leave_out_attacks_with_no_random_delay(self) -> None:
+        """A void ray's beam hit every 8 steps (tool `sweep_combat`, `no-weapon`)."""
+        assert all(
+            weapon.mean_delay_steps == 0.0 and weapon.average_cooldown_steps == weapon.base_cooldown_steps
+            for weapons in MISSING_WEAPONS.values()
+            for weapon in weapons
+        )
+        assert MISSING_WEAPONS[UnitTypeId.VOID_RAY][0].average_cooldown_steps == 8.0
 
     def test_a_weapon_the_tables_give_stands_over_the_one_measured(self) -> None:
         weapon = data_pb2.Weapon(type=data_pb2.Weapon.TargetType.Any, damage=9.0, attacks=1, range=5.0, speed=1.0)
@@ -282,19 +288,41 @@ class TestReadingTheTables:
         assert [weapon.damage for weapon in row.weapons] == [9.0]
         assert row.upgrades[UpgradeId.PROTOSS_GROUND_WEAPONS_1] == UnitTypeUpgrade()
 
-    def test_no_attack_speed_names_a_type_whose_weapons_were_measured(self) -> None:
-        """A speed-up takes the delay's mean off a cooldown first, which only a weapon from the tables holds."""
-        wearers = {BuffId.MARINE_STIMMED: UnitTypeId.MARINE, BuffId.MARAUDER_STIMMED: UnitTypeId.MARAUDER}
-        assert ATTACK_SPEED_BUFFS.keys() == wearers.keys()
-        assert ATTACK_SPEED_UPGRADES.keys().isdisjoint(MEASURED_WEAPONS)
-        assert set(wearers.values()).isdisjoint(MEASURED_WEAPONS)
-
     def test_an_oracles_beam_ignores_armor_and_hits_only_the_ground(self) -> None:
         """It took as much off a target with 3 more armor, and off a zealot's shields at shields level 3, and never
         fired at an overlord (tool `sweep_combat`, `no-weapon`)."""
         oracle = data_pb2.UnitTypeData(unit_id=UnitTypeId.ORACLE)
         (beam,) = GameData(sc2api_pb2.ResponseData(units=[oracle])).units[UnitTypeId.ORACLE].weapons
         assert (beam.target_domain, beam.ignores_armor) == (TargetDomain.GROUND, True)
+
+    @pytest.mark.parametrize(
+        ("weapon", "target", "damage"),
+        [
+            # A marauder's 10 and 10 against armored, on a roach's armor 1 and on a stalker's shields, at level 3 too.
+            (data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]), {"armor": 1.0}, 19.0),
+            (
+                data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]),
+                {"armor": 1.0, "shields": 80.0},
+                20.0,
+            ),
+            (
+                data_pb2.Weapon(damage=10.0, attacks=1, damage_bonus=[_BONUS_AGAINST_ARMORED]),
+                {"armor": 1.0, "shield_armor": 3.0, "shields": 80.0},
+                17.0,
+            ),
+            # A marine's 6 on an ultralisk's armor 7, at least 0.5.
+            (data_pb2.Weapon(damage=6.0, attacks=1), {"armor": 7.0}, 0.5),
+            # A zealot's two blades of 11 on 2 shields at level 3 and armor 4: 2 and 2 of the health, then 7.
+            (data_pb2.Weapon(damage=11.0, attacks=2), {"armor": 4.0, "shield_armor": 3.0, "shields": 2.0}, 11.0),
+        ],
+    )
+    def test_a_weapons_damage_against_a_target_takes_off_its_armor_shields_first(
+        self, weapon: data_pb2.Weapon, target: dict[str, float], damage: float
+    ) -> None:
+        """As `tools/sweep_combat.py`'s `damage` measured each, against an armored target."""
+        marauder = data_pb2.UnitTypeData(unit_id=UnitTypeId.MARAUDER, weapons=[weapon])
+        (read,) = GameData(sc2api_pb2.ResponseData(units=[marauder])).units[UnitTypeId.MARAUDER].weapons
+        assert read.damage_against(attributes={Attribute.ARMORED}, **target) == damage
 
     def test_a_weapons_bonus_damage_is_read_by_the_attribute_it_is_earned_by(self) -> None:
         bonus = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Armored, bonus=10.0)
@@ -450,7 +478,7 @@ class TestARecordedGamesTables:
     def test_the_tables_give_no_weapon_to_the_types_a_weapon_was_measured_for(self, path: Path) -> None:
         """Once the tables give one of these a weapon, its entry can go."""
         rows = {row.unit_id: row for row in _answer(path).units}
-        assert [unit_type.name for unit_type in MEASURED_WEAPONS if rows[unit_type].weapons] == []
+        assert [unit_type.name for unit_type in MISSING_WEAPONS if rows[unit_type].weapons] == []
 
     def test_only_the_rows_a_bot_can_name_are_read(self, path: Path) -> None:
         """The game describes 2005 unit types and 4134 abilities; a bot has a name for a seventh of them."""

@@ -347,14 +347,15 @@ it.
   `calculate_speed(upgrades)` for anyone else's, and its `ground_range`, `ground_dps` and `armor` include none. For
   another set of upgrades, read `unit.type_data.with_upgrades(set)`.
 - **A dps is per second of Faster speed, and counts what the game does.** `weapon.dps` and `unit.dps_against` divide by
-  `cooldown_steps`, which holds the random delay the game adds to every attack, half a step on average, and the speed of
-  Adrenal Glands and Resonating Glaives; `dps_against` counts stim too. python-sc2's `ground_dps` is per Normal second,
-  which leaves it 1.4 times too low, and leaves out the delay. NachOS also gives the battlecruiser, the oracle, the void
-  ray and the sentry the weapons it measured, an oracle's only while the beam is on, and takes nothing off that beam for
-  armor, as the game takes nothing. A hallucination does no damage. `weapon_against` picks a weapon as python-sc2 does,
-  the ground one for a colossus where there is one, and `has_in_range` keeps python-sc2's rule: exact for a unit that
-  can move firing at a unit, it reaches some 0.1 too far for an attacker that cannot move and up to some 0.26 for a
-  structure ([game behavior](game-behavior/damage-and-buffs.md)).
+  `average_cooldown_steps`: `base_cooldown_steps`, the tables' cooldown sped up by Adrenal Glands and Resonating
+  Glaives, and the random delay the game adds to every attack, half a step on average. `dps_against` counts stim too,
+  and `weapon.damage_against` works out one attack from a target's attributes, armor and shields alone. python-sc2's
+  `ground_dps` is per Normal second, which leaves it 1.4 times too low, and leaves out the delay. NachOS also gives the
+  battlecruiser, the oracle, the void ray and the sentry the weapons it measured, an oracle's only while the beam is on,
+  and takes nothing off that beam for armor, as the game takes nothing. A hallucination does no damage. `weapon_against`
+  picks a weapon as python-sc2 does, the ground one for a colossus where there is one, and `has_in_range` keeps
+  python-sc2's rule: exact for a unit that can move firing at a unit, it reaches some 0.1 too far for an attacker that
+  cannot move and up to some 0.26 for a structure ([game behavior](game-behavior/damage-and-buffs.md)).
 - **`weapon_cooldown_steps` reads 0 while an attack is under way**, for up to 8 steps before it by type, and a move
   ordered then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
   cooldown to rise ([game behavior](game-behavior/damage-and-buffs.md)).
@@ -523,7 +524,7 @@ it.
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
 | `upgrade_data.cost.time` | `upgrade_data.research_steps` |
-| `weapon.speed`, in Normal-speed seconds | `weapon.cooldown_steps`, the steps between attacks on average, the random delay the game adds to each counted |
+| `weapon.speed`, in Normal-speed seconds | `weapon.base_cooldown_steps`; `average_cooldown_steps` counts the random delay the game adds to each attack |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |

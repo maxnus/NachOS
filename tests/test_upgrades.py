@@ -321,8 +321,8 @@ class TestWhatTheTablesSay:
     ) -> None:
         row = first_corpus_tables.units[unit_type]
         (weapon,) = row.with_upgrades({upgrade}).weapons
-        assert weapon.cooldown_steps == pytest.approx(sped_up + 0.4996, abs=1e-3)
-        assert weapon.damage == row.weapons[0].damage
+        assert weapon.base_cooldown_steps == pytest.approx(sped_up, abs=1e-3)
+        assert (weapon.mean_delay_steps, weapon.damage) == (row.weapons[0].mean_delay_steps, row.weapons[0].damage)
 
     def test_an_upgrade_no_unit_reports_is_of_no_kind_and_no_level(self, first_corpus_tables: GameData) -> None:
         other = (UpgradeType.OTHER, 0)
@@ -377,12 +377,9 @@ class TestWhatAUnitReads:
         tracker = _tracker_against_the_computer(first_corpus_tables)
         upgrades = (UpgradeId.ADRENAL_GLANDS,)
         (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=upgrades)
-        expected = first_corpus_tables.units[UnitTypeId.ZERGLING].with_upgrades(upgrades).weapons[0].cooldown_steps
-        assert (
-            zergling.weapons[0].cooldown_steps
-            == expected
-            < first_corpus_tables.units[UnitTypeId.ZERGLING].weapons[0].cooldown_steps
-        )
+        row = first_corpus_tables.units[UnitTypeId.ZERGLING]
+        expected = row.with_upgrades(upgrades).weapons[0].average_cooldown_steps
+        assert zergling.weapons[0].average_cooldown_steps == expected < row.weapons[0].average_cooldown_steps
 
     def test_this_players_units_show_it_nothing_it_has_not_researched(self, first_corpus_tables: GameData) -> None:
         """This player's units report only this player's upgrades, so nothing is inferred from them."""

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #152. On branch `claude/combat-conveniences`, `uv run pytest` passes 2506 tests, and
+- nachOS `main` has every PR to #152. On branch `claude/combat-conveniences`, `uv run pytest` passes 2511 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -355,22 +355,26 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `tools/sweep_combat.py` measured, written into NachOS's generated data and marked as measured, over leaving them
     weaponless; the carrier stays weaponless, its interceptors carrying the weapon.
   - Attack speed counts upgrades and buffs (over upgrades alone and over neither): Adrenal Glands and Resonating
-    Glaives shorten `cooldown_steps` for the side that has them, and `dps_against` counts the buffs a unit has, stim
-    among them.
-  - `Weapon.cooldown_steps` and `Weapon.dps` count the random delay on every shot at its mean, the tables' cooldown
-    plus 0.4996 steps (the owner, 2026-10-21, on `tools/sweep_combat.py`'s finding that the delay is -1 + 3r/4096
-    steps, r even over 0 to 4095). A unit's reported cooldown already holds its shot's own delay and stays as reported.
+    Glaives shorten `base_cooldown_steps` for the side that has them, and `dps_against` counts the buffs a unit has,
+    stim among them.
+  - `Weapon.dps` counts the random delay on every shot at its mean, the tables' cooldown plus 0.4996 steps (the owner,
+    2026-10-21, on `tools/sweep_combat.py`'s finding that the delay is -1 + 3r/4096 steps, r even over 0 to 4095). In
+    the owner's review of #153 the cooldown split in two: `base_cooldown_steps` is the tables', sped up by upgrades, a
+    field `mean_delay_steps` holds the delay's mean (0 for the weapons the tables leave out), and the property
+    `average_cooldown_steps` adds them. A unit's reported cooldown already holds its shot's own delay and stays as
+    reported.
   - `has_in_range` is one rule, range and both radii and `margin`, for every pair (the owner, 2026-10-21, over taking
     off the largest shortfall measured and over a table by structure): exact for a unit that can move firing at a
     unit, and its docstring says an attacker that cannot move falls some 0.1 short and a structure up to some 0.26.
-  - The measured weapons and the attack speeds are hand-written in `gamedata/_measured.py` (the owner, 2026-10-21,
-    over a generator from the sweep's output), and `Weapon.ignores_armor` says the oracle's beam takes nothing off for
-    armor or shield armor (the owner, over leaving the oracle weaponless and over an ordinary weapon).
+  - The measured weapons and the attack speeds are hand-written in `gamedata/_missing_attacks.py` (the owner,
+    2026-10-21, over a generator from the sweep's output; named by the owner in the review of #153), and
+    `Weapon.ignores_armor` says the oracle's beam takes nothing off for armor or shield armor (the owner, over leaving
+    the oracle weaponless and over an ordinary weapon).
   - From the review of #153 (the owner, 2026-10-21): an oracle has its beam only while it wears
     `ORACLE_PULSAR_BEAM`, which it does exactly while the beam is on (measured); a hallucination does no damage
-    (stated by the owner, not measured); the speed-ups keep subtracting the delay's mean, with a test that none names a
-    type whose weapons were measured, over a `mean_delay_steps` field; and the corpus tables are one shared fixture,
-    `first_corpus_tables` in `tests/conftest.py`.
+    (stated by the owner, not measured); the damage rule is `Weapon.damage_against`, taking a target's attributes,
+    armor and shields; an upgrade's attack speed is `WeaponUpgrade.attack_speed_multiplier`; and the corpus tables are
+    one shared fixture, `first_corpus_tables` in `tests/conftest.py`.
 
 ## Next
 
@@ -380,7 +384,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   conveniences on a unit (in range, weapon ready, dps; this branch), a playback mode that answers a bot's own actions,
   and ramp wall-in sites with their sweep.
 - **The combat conveniences** (this branch): `weapon_against`, `has_in_range`, `damage_against` and `dps_against` on a
-  unit, `Weapon.dps`, the delay's mean in `cooldown_steps`, the measured weapons and the attack speeds.
+  unit, `Weapon.dps` and `Weapon.damage_against`, the cooldown split into base and average, the measured weapons and
+  the attack speeds.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Self, final
@@ -20,7 +19,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
     from sc2nachos.gamedata._techtree import TechTreeUnitTypes
@@ -33,6 +32,8 @@ _NO_CHANGE = UnitTypeUpgrade()
 
 # Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
 _MEAN_ATTACK_DELAY_STEPS = -1 + 3 * (4095 / 2) / 4096
+# The least a hit takes off health, whatever the armor (in game).
+_MINIMUM_DAMAGE = 0.5
 
 
 class Attribute(ReadableIntEnum):
@@ -72,22 +73,60 @@ class Weapon:
     """Hits per attack: two for a colossus."""
     range: float
     """Its range."""
-    cooldown_steps: float
-    """The steps from one attack to the next on average: the tables' cooldown, shortened by an upgrade that speeds the
-    attack, and the random delay the game adds to each attack, 0.4996 steps on average (in game). A thor's and an
-    ultralisk's attacks were not seen to keep to it. A unit's own `weapon_cooldown_steps` counts down the delay drawn
-    for its last attack."""
+    base_cooldown_steps: float
+    """The steps from one attack to the next before the random delay the game adds to each: the tables' cooldown,
+    shortened by an upgrade that speeds the attack."""
     damage_bonuses: Mapping[Attribute, float]
     """The extra damage per hit against a target with each attribute."""
     ignores_armor: bool = False
     """Whether a hit takes off its whole damage, whatever the target's armor and shield armor: an oracle's beam's (in
     game)."""
+    mean_delay_steps: float = _MEAN_ATTACK_DELAY_STEPS
+    """The mean of the random delay the game adds to each attack: 0.4996 steps for a weapon from the tables, whose delay
+    runs from -1 to 2, and nothing for the weapons measured for the types the tables give none (in game)."""
+
+    @property
+    def average_cooldown_steps(self) -> float:
+        """The steps from one attack to the next on average, the random delay counted. A thor's and an ultralisk's
+        attacks were not seen to keep to it. A unit's own `weapon_cooldown_steps` counts down the delay drawn for its
+        last attack."""
+        return self.base_cooldown_steps + self.mean_delay_steps
 
     @property
     def dps(self) -> float:
-        """Damage per second of real time at the game's Faster speed: every hit of an attack, each `cooldown_steps`,
-        against a target with no armor and no attribute it has a bonus against."""
-        return self.damage * self.attacks * STEPS_PER_SECOND / self.cooldown_steps
+        """Damage per second of real time at the game's Faster speed: every hit of an attack, each
+        `average_cooldown_steps`, against a target with no armor and no attribute it has a bonus against."""
+        return self.damage * self.attacks * STEPS_PER_SECOND / self.average_cooldown_steps
+
+    def damage_against(
+        self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shields: float = 0.0
+    ) -> float:
+        """What one attack takes off a target with these attributes, armor and shields, its shields and health
+        together.
+
+        Each hit takes off the damage and its bonus against the target's attributes: from the shields first, less
+        `shield_armor`, and what is more than the shields have left goes on to health less `armor`, at nothing at
+        least; from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the
+        whole hit. Each hit of an attack of several finds the shields the one before left. The damage may come to more
+        than the target has left.
+        """
+        hit = self.damage + sum(bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes)
+        if self.ignores_armor:
+            armor = shield_armor = 0.0
+        damage = 0.0
+        for _ in range(self.attacks):
+            if shields <= 0:
+                damage += max(hit - armor, _MINIMUM_DAMAGE)
+                continue
+            # Taken to be at least 0.5, as off health: no hit seen was small enough to tell.
+            on_shields = max(hit - shield_armor, _MINIMUM_DAMAGE)
+            if on_shields <= shields:
+                damage += on_shields
+                shields -= on_shields
+            else:
+                damage += shields + max(on_shields - shields - armor, 0.0)
+                shields = 0.0
+        return damage
 
     @classmethod
     def _from_proto(cls, weapon: data_pb2.Weapon) -> Self:
@@ -100,30 +139,28 @@ class Weapon:
             range=weapon.range,
             # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
             # seconds at Normal speed, 16 steps a second.
-            cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND + _MEAN_ATTACK_DELAY_STEPS,
+            base_cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
     def _with_weapon_upgrades(self, changes: Iterable[WeaponUpgrade]) -> Weapon:
-        """This weapon with each of `changes` added."""
-        damage, weapon_range = self.damage, self.range
+        """This weapon with each of `changes` added, and its base cooldown divided by their attack speed multipliers:
+        what speeds an attack leaves the random delay as it is (in game)."""
+        damage, weapon_range, attack_speed_multiplier = self.damage, self.range, 1.0
         bonuses = dict(self.damage_bonuses)
         for change in changes:
             damage += change.damage
             weapon_range += change.range
+            attack_speed_multiplier *= change.attack_speed_multiplier
             for attribute, bonus in change.damage_bonuses.items():
                 bonuses[attribute] = bonuses.get(attribute, 0.0) + bonus
-        return replace(self, damage=damage, range=weapon_range, damage_bonuses=MappingProxyType(bonuses))
-
-    def _with_attack_speed(self, speed: float) -> Weapon:
-        """This weapon attacking `speed` times as often as the tables have it, as `_sped_up_cooldown_steps` has it."""
-        return replace(self, cooldown_steps=self._sped_up_cooldown_steps(speed))
-
-    def _sped_up_cooldown_steps(self, speed: float) -> float:
-        """The cooldown of this weapon attacking `speed` times as often as the tables have it. What speeds an attack
-        divides the tables' cooldown, and the random delay is added to what is left, as it is (in game), so only a
-        weapon from the tables, whose cooldown holds the delay, is sped up right."""
-        return (self.cooldown_steps - _MEAN_ATTACK_DELAY_STEPS) / speed + _MEAN_ATTACK_DELAY_STEPS
+        return replace(
+            self,
+            damage=damage,
+            range=weapon_range,
+            base_cooldown_steps=self.base_cooldown_steps / attack_speed_multiplier,
+            damage_bonuses=MappingProxyType(bonuses),
+        )
 
 
 @final
@@ -205,8 +242,6 @@ class UnitTypeData:
             weapon._with_weapon_upgrades(change.weapons[index] for change in changes if change.weapons)
             for index, weapon in enumerate(self.weapons)
         )
-        if (attack_speed := math.prod(change.attack_speed for change in changes)) != 1.0:
-            weapons = tuple(weapon._with_attack_speed(attack_speed) for weapon in weapons)
         return replace(
             self,
             armor=self.armor + sum(change.armor for change in changes),

@@ -67,8 +67,7 @@ from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos.gamedata import GameData, TargetDomain, Weapon
-from sc2nachos.gamedata._measured import MEASURED_WEAPONS
-from sc2nachos.gamedata._unit_type_data import _MEAN_ATTACK_DELAY_STEPS
+from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
@@ -210,13 +209,7 @@ class RangeFinding:
 def _tables_weapons(game_data: GameData, unit_type: UnitTypeId) -> tuple[Weapon, ...]:
     """The weapons the game's tables give `unit_type`: none where NachOS gives it the weapons measured here instead."""
     weapons = game_data.units[unit_type].weapons
-    return () if weapons == MEASURED_WEAPONS.get(unit_type) else weapons
-
-
-def _tables_cooldown_steps(weapon: Weapon) -> float:
-    """The cooldown the game's tables give a weapon of theirs. NachOS adds to it the mean of the random delay this tool
-    works back, which is the delay added to the tables' own."""
-    return weapon.cooldown_steps - _MEAN_ATTACK_DELAY_STEPS
+    return () if weapons == MISSING_WEAPONS.get(unit_type) else weapons
 
 
 def _weapon_range(game_data: GameData, attacker: UnitTypeId, *, flying: bool) -> float | None:
@@ -503,7 +496,7 @@ def _weapons_of(game_data: GameData, unit_type: UnitTypeId) -> list[dict[str, An
             "damage": weapon.damage,
             "attacks": weapon.attacks,
             "range": weapon.range,
-            "cooldown_steps": _tables_cooldown_steps(weapon),
+            "cooldown_steps": weapon.base_cooldown_steps,
             "damage_bonuses": {attribute.name: bonus for attribute, bonus in weapon.damage_bonuses.items()},
         }
         for weapon in _tables_weapons(game_data, unit_type)
@@ -676,7 +669,7 @@ def _by_a_command_center(
     away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
     (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
     weapons = _tables_weapons(game_data, attacker_type)
-    return attacker, target, _tables_cooldown_steps(weapons[0]) if weapons else None
+    return attacker, target, weapons[0].base_cooldown_steps if weapons else None
 
 
 class _AttackWatch:

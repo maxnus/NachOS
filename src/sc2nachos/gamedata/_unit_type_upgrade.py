@@ -23,6 +23,8 @@ class WeaponUpgrade:
     """Added bonus damage against each attribute, including attributes the weapon had no bonus against."""
     range: float = 0.0
     """Added range."""
+    attack_speed_multiplier: float = 1.0
+    """How many times as often the weapon attacks: 1.4 for a zergling's with Adrenal Glands (in game)."""
 
 
 @final
@@ -37,5 +39,3 @@ class UnitTypeUpgrade:
     weapons: tuple[WeaponUpgrade, ...] = ()
     """The change to each weapon, in the type's weapon order, with a `WeaponUpgrade()` for a weapon left alone. Empty if
     no weapon changes."""
-    attack_speed: float = 1.0
-    """How many times as often its weapons attack: 1.4 for a zergling with Adrenal Glands (in game)."""
