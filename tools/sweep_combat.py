@@ -16,7 +16,8 @@ with neither side upgraded, with the target's side given the `upgrade` cheat thr
 weapon, armor and shield, and then with both sides so. Two trials set a zealot's shields to 2 first.
 
 `no-weapon` does the same for the battlecruiser, the oracle, its beam turned on, the void ray and the sentry, against
-a light target, an armored one and one that flies, before and after this player's upgrades.
+a light target, an armored one and one that flies, with neither side upgraded, with this player's side upgraded, and
+then with both, so that the target's armor is raised too.
 
 `attack-speed`, under `god`, times the first shots of one attacker at a time at a command center of the other
 player's, by the steps at which its cooldown rises, before this player's upgrades and after, a marine and a marauder
@@ -569,13 +570,16 @@ def measure_damage(installation: Installation) -> list[AttackFinding]:
 
 
 # The attackers the tables give no weapon, each against a light target and an armored one, on the ground or in the
-# air, and what each is ordered first: an oracle turns its beam on.
+# air, and what each is ordered first: an oracle turns its beam on. An oracle is set on a zealot too, for the shields,
+# and on an overlord, which it is not known to hit.
 _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = (
     (UnitTypeId.BATTLECRUISER, UnitTypeId.SCV, ()),
     (UnitTypeId.BATTLECRUISER, UnitTypeId.ROACH, ()),
     (UnitTypeId.BATTLECRUISER, UnitTypeId.OVERLORD, ()),
     (UnitTypeId.ORACLE, UnitTypeId.SCV, (RawAbilityId.Behavior_PulsarBeamOn,)),
     (UnitTypeId.ORACLE, UnitTypeId.ROACH, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.ZEALOT, (RawAbilityId.Behavior_PulsarBeamOn,)),
+    (UnitTypeId.ORACLE, UnitTypeId.OVERLORD, (RawAbilityId.Behavior_PulsarBeamOn,)),
     (UnitTypeId.VOID_RAY, UnitTypeId.SCV, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.ROACH, ()),
     (UnitTypeId.VOID_RAY, UnitTypeId.OVERLORD, ()),
@@ -586,7 +590,7 @@ _NO_WEAPON_TRIALS: tuple[tuple[UnitTypeId, UnitTypeId, tuple[int, ...]], ...] = 
 
 
 def measure_no_weapon(installation: Installation) -> list[AttackFinding]:
-    """Every trial of `_NO_WEAPON_TRIALS`, with neither side upgraded and then with the attacker's side upgraded."""
+    """Every trial of `_NO_WEAPON_TRIALS` with neither side upgraded, then the attacker's side, then both."""
     findings = []
     with playing_rivals(Race.TERRAN, installation) as rivals:
         me = rivals.me
@@ -594,9 +598,9 @@ def measure_no_weapon(installation: Installation) -> list[AttackFinding]:
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
         base_tables = GameData(me.client.game_data())
-        for upgrades in ("neither", "attacker"):
-            if upgrades == "attacker":
-                _send_upgrade_levels(me, rivals)
+        for upgrades, upgrading in (("neither", None), ("attacker", rivals.me), ("both", rivals.enemy)):
+            if upgrading is not None:
+                _send_upgrade_levels(upgrading, rivals)
             for attacker_type, target_type, abilities in _NO_WEAPON_TRIALS:
                 before = [(ability, None) for ability in abilities]
                 findings.append(
