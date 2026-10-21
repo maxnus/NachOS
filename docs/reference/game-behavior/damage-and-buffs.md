@@ -52,14 +52,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   evenly from 0 to 4095: from -1 step to 3/4096 short of 2, in 4096 even parts of -1/16 to 1/8 of a game second, the
   range the game's data editor gives weapons (stated). The cooldown then falls by 1 a step, never below 0, and the part
   of a step by which it passes 0 counts toward the next, so shots land on whole steps but come every cooldown and half
-  a step on average. Worked back from the cooldown shown at each shot at a command center, all 46,600 delays of 25
-  types, workers, melee and ranged units and fliers of the three races, lay on those values. A zergling's 40,000 drew
-  each of the 4096 about 10 times, as evenly as chance gives: -1 itself 8 times, and 2 never, which a value drawn as
-  often would miss once in 17,000 runs. Each other type's 200 to 400 spread alike, the types no different from one
-  another, and a delay's correlation with the last was 0.002 over the zergling's. The mean gap was the cooldown and
-  0.38 to 0.60 steps, in three runs of eight types: a marine's, of cooldown 13.77, 12 to 16 steps, 14.3 on average
-  (tool `sweep_combat`, build 75689). A thor's and an ultralisk's shots do not fit (see [not understood
-  yet](not-understood-yet.md)).
+  a step on average. Worked back from the cooldown shown at each shot at a command center, all 45,000 delays the
+  sweep recorded of 25 types, workers, melee and ranged units and fliers of the three races, lay on those values. A
+  zergling's 40,000 drew each of the 4096 about 10 times, as evenly as chance gives: -1 itself 8 times, and 2 never,
+  which a value drawn as often would miss once in 17,000 runs. Each type's 200 more spread alike, the types no
+  different from one another, and a delay's correlation with the last was 0.002 over the zergling's. The mean gap was
+  the cooldown and 0.36 to 0.66 steps, in four runs of eight types: a marine's, of cooldown 13.77, 12 to 16 steps,
+  14.2 to 14.3 on average (tool `sweep_combat`, build 75689). A thor's and an ultralisk's shots do not fit (see [not
+  understood yet](not-understood-yet.md)).
 - A cooldown can read 0 for a few steps before the unit fires. Traced over ten shots, a marauder's and a zealot's rose
   in the step it ran out, a marine's after 1 step at 0, and a zergling's, a stalker's, a roach's, a hydralisk's and a
   siege tank's after 3, at every shot; the gaps between shots give the same counts, and for more types a reaper's and
