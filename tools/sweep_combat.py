@@ -26,7 +26,8 @@ then stimmed too.
 upgrade and no cheat but `show_map`, and records the steps between shots and the cooldown each showed at its shot.
 
 `cooldown-trace` reads the same attackers' cooldowns and the command center's health at every step over
-`_TRACED_SHOTS` shots, and records how long the cooldown read 0 before each shot and when the target lost health::
+`_TRACED_SHOTS` shots after the first, and records how long the cooldown read 0 before each shot and when the target
+lost health::
 
     uv run python tools/sweep_combat.py range --out combat-range.json
     uv run python tools/sweep_combat.py damage --out combat-damage.json
@@ -616,14 +617,17 @@ class AttackIntervalFinding:
 
 
 def _by_a_command_center(
-    rivals: Rivals, game_data: GameData, attacker_type: UnitTypeId, at: Point
-) -> tuple[raw_pb2.Unit, raw_pb2.Unit]:
+    rivals: Rivals, attacker_type: UnitTypeId, at: Point
+) -> tuple[raw_pb2.Unit, raw_pb2.Unit, float | None]:
     """Make a command center of the other player's at `at` and an attacker of this player's to its left, by its edge
-    if the attacker is melee and well within reach if not, and return the attacker and the command center."""
+    if the attacker is melee and well within reach if not, and return the attacker, the command center and the
+    cooldown this player's tables give the attacker's first weapon, or None if they give it none."""
+    game_data = GameData(rivals.me.client.game_data())
     (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
     away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
     (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
-    return attacker, target
+    weapons = game_data.units[attacker_type].weapons
+    return attacker, target, weapons[0].cooldown_steps if weapons else None
 
 
 def _attack_interval(
@@ -632,9 +636,7 @@ def _attack_interval(
     """Make a command center of the other player's at `at` and an attacker of this player's beside it, stimmed if
     `stim` is its stim ability, and time its first `_SHOTS_TIMED` shots by the steps at which its cooldown rises."""
     me = rivals.me
-    game_data = GameData(me.client.game_data())
-    weapons = game_data.units[attacker_type].weapons
-    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
+    attacker, target, table_cooldown_steps = _by_a_command_center(rivals, attacker_type, at)
     if stim is not None:
         me.order(stim, attacker.tag)
         rivals.step(1)
@@ -661,7 +663,7 @@ def _attack_interval(
         upgraded,
         stim is not None,
         buffs,
-        weapons[0].cooldown_steps if weapons else None,
+        table_cooldown_steps,
         shots,
         sum(intervals) / len(intervals) if intervals else None,
     )
@@ -728,15 +730,20 @@ class ShotTimingFinding:
     intervals: dict[int, int]
     """How many times each number of steps came between two shots."""
     mean_interval: float | None
+    steps_at_zero_before_shots: list[int]
+    """For each shot after the first, the steps since the one before less the cooldown shown at that one, rounded up:
+    how many steps the cooldown read 0 before it."""
+    delays: list[float]
+    """For each shot after the first, what was added to the tables' cooldown, worked back: the cooldown shown at the
+    shot, the steps it read 0 before it and the part of a step by which the cooldown before it passed 0, less the
+    tables' cooldown. Empty if the tables give the attacker no weapon."""
 
 
 def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTimingFinding:
     """Make a command center of the other player's at `at`, healed every `_HEALING_EVERY_STEPS`, and an attacker of
     this player's beside it, and time `_TIMED_SHOTS` of its shots by the steps at which its cooldown rises."""
     me = rivals.me
-    game_data = GameData(me.client.game_data())
-    weapons = game_data.units[attacker_type].weapons
-    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
+    attacker, target, table_cooldown_steps = _by_a_command_center(rivals, attacker_type, at)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     shots: list[int] = []
     cooldowns: list[float] = []
@@ -756,23 +763,36 @@ def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTi
         last = now.weapon_cooldown
     _kill_and_wait(rivals, [attacker.tag, target.tag])
     between = [later - earlier for earlier, later in itertools.pairwise(shots)]
+    at_zero = [steps - math.ceil(shown) for steps, shown in zip(between, cooldowns[:-1], strict=True)]
+    delays = (
+        []
+        if table_cooldown_steps is None
+        else [
+            shown + steps + math.ceil(before) - before - table_cooldown_steps
+            for before, shown, steps in zip(cooldowns[:-1], cooldowns[1:], at_zero, strict=True)
+        ]
+    )
     finding = ShotTimingFinding(
         attacker_type.name,
-        weapons[0].cooldown_steps if weapons else None,
+        table_cooldown_steps,
         shots,
         cooldowns,
         dict(sorted(Counter(between).items())),
         sum(between) / len(between) if between else None,
+        at_zero,
+        delays,
     )
     logger.info(
-        "{}: {} shots, table {}, mean interval {}, intervals {}, cooldown after a shot {} to {}",
+        "{}: {} shots, table {}, mean interval {}, intervals {}, steps at 0 {}, delays {} to {}, mean {}",
         attacker_type.name,
         len(shots),
         finding.table_cooldown_steps,
         finding.mean_interval,
         finding.intervals,
-        min(cooldowns, default=None),
-        max(cooldowns, default=None),
+        dict(Counter(at_zero)),
+        min(delays, default=None),
+        max(delays, default=None),
+        sum(delays) / len(delays) if delays else None,
     )
     return finding
 
@@ -790,12 +810,13 @@ def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
     return findings
 
 
-# Few enough shots that no attacker kills the command center, which is never healed, so its losses read clean.
+# How many shots are traced, each from the shot before it: few enough that no attacker kills the command center, which
+# is never healed, so its losses read clean.
 _TRACED_SHOTS = 10
 
 
 @dataclass(slots=True)
-class CooldownReading:
+class TracedStep:
     """What one step showed: the attacker's weapon cooldown and its target's health."""
 
     step: int
@@ -810,11 +831,11 @@ class CooldownTraceFinding:
 
     attacker: str
     table_cooldown_steps: float | None
-    readings: list[CooldownReading]
+    readings: list[TracedStep]
     shot_steps: list[int]
-    """The steps at which its cooldown rose: each shot."""
+    """The steps at which its cooldown rose: the first shot and the `_TRACED_SHOTS` after it."""
     loss_steps: list[int]
-    """The steps at which the target lost health."""
+    """The steps at which the target lost health. A missile fired at the last shot lands after the trace ends."""
     steps_at_zero_before_shots: list[int]
     """For each shot after the first, how many steps in a row before it the cooldown read 0."""
     losses_after_nearest_shot: list[int]
@@ -823,23 +844,24 @@ class CooldownTraceFinding:
 
 def _cooldown_trace(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> CooldownTraceFinding:
     """Make a command center of the other player's at `at` and an attacker of this player's beside it, and read the
-    attacker's cooldown and the command center's health at every step until `_TRACED_SHOTS` shots and the rise of the
-    next."""
+    attacker's cooldown and the command center's health at every step, from the order to attack to the rise of the
+    `_TRACED_SHOTS`-th shot after the first."""
     me = rivals.me
-    game_data = GameData(me.client.game_data())
-    weapons = game_data.units[attacker_type].weapons
-    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
+    attacker, target, table_cooldown_steps = _by_a_command_center(rivals, attacker_type, at)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
-    readings: list[CooldownReading] = []
+    readings: list[TracedStep] = []
     shots: list[int] = []
+    last = 0.0
     for step in range(_TRACED_SHOTS * _STEPS_PER_TIMED_SHOT):
         rivals.step(1)
-        now, struck = _unit_tagged(me, attacker.tag), _unit_tagged(me, target.tag)
-        if now is None or struck is None:
+        units = {unit.tag: unit for unit in me.units()}
+        attacker_now, target_now = units.get(attacker.tag), units.get(target.tag)
+        if attacker_now is None or target_now is None:
             break
-        if readings and now.weapon_cooldown > readings[-1].weapon_cooldown:
+        if attacker_now.weapon_cooldown > last:
             shots.append(step)
-        readings.append(CooldownReading(step, now.weapon_cooldown, struck.health))
+        readings.append(TracedStep(step, attacker_now.weapon_cooldown, target_now.health))
+        last = attacker_now.weapon_cooldown
         if len(shots) > _TRACED_SHOTS:
             break
     _kill_and_wait(rivals, [attacker.tag, target.tag])
@@ -854,7 +876,7 @@ def _cooldown_trace(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> Coo
         at_zero.append(shot - first_at_zero)
     finding = CooldownTraceFinding(
         attacker_type.name,
-        weapons[0].cooldown_steps if weapons else None,
+        table_cooldown_steps,
         readings,
         shots,
         losses,

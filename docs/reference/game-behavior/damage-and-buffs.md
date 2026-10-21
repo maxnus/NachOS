@@ -52,9 +52,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   second as the game's data editor gives weapons (stated), to the tables' cooldown. The cooldown then falls by 1 a
   step, never below 0, and the part of a step by which it passes 0 counts toward the next, so shots land on whole steps
   but come every cooldown and half a step on average. Worked back from the cooldown shown at each of 200 shots of each
-  of eight types at a command center, the delays lay between -0.9993 and 1.9971, spread evenly, each unrelated to the
-  last; the mean gap was the cooldown and 0.40 to 0.60 steps, in two runs: a marine's, of cooldown 13.77, 13 to 16
-  steps and once 12, 14.33 on average; a zergling's, of 11.14, 10 to 13, 11.67 (tool `sweep_combat`, build 75689).
+  of eight types at a command center, in two runs, the delays lay between -0.9993 and 1.9993, spread evenly, and a
+  delay's correlation with the last was -0.11 to +0.15 by type, within chance. The mean gap was the cooldown and 0.38
+  to 0.60 steps, over three runs: a marine's, of cooldown 13.77, 12 to 16 steps, 14.3 on average; a zergling's, of
+  11.14, 10 to 14, 11.7 (tool `sweep_combat`, build 75689).
 - A cooldown can read 0 for a few steps before the unit fires. Traced over ten shots, a marauder's and a zealot's rose
   in the step it ran out, a marine's after 1 step at 0, and a zergling's, a stalker's, a roach's, a hydralisk's and a
   siege tank's after 3, at every shot. Those steps count toward the next cooldown: the cooldown shown when it rises is
