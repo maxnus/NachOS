@@ -28,7 +28,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
 from sc2nachos.protocol import Client, Status
-from sc2nachos.run import ApiBot, run_local
+from sc2nachos.run import run_local
 from sc2nachos.units import Alliance, Visibility
 from support import make_game_info, make_observation, make_response, make_unit
 
@@ -781,8 +781,9 @@ def test_in_a_real_game_debug_commands_create_set_and_kill_units_and_show_the_ma
 
     result = run_local(
         "PylonAIE_v4",
-        ApiBot(api, Race.TERRAN),
+        api,
         Computer(Race.ZERG, Difficulty.VERY_EASY),
+        race=Race.TERRAN,
         steps_per_turn=8,
         window=(640, 480),
     )

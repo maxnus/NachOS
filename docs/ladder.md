@@ -5,12 +5,12 @@ bot's script with the client's address on the command line. One script serves th
 
 ```python
 # run.py
-from sc2nachos import ApiBot, Race, run_from_command_line
+from sc2nachos import Race, run_from_command_line
 
 from my_bot import api
 
 if __name__ == "__main__":
-    run_from_command_line(ApiBot(api, Race.TERRAN, "MyBot"), steps_per_turn=2)
+    run_from_command_line(api, race=Race.TERRAN, name="MyBot", steps_per_turn=2)
 ```
 
 Given the ladder's `--GamePort`, `run_from_command_line` joins the ladder's game. Without it, it plays a local game
@@ -46,7 +46,7 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument("--build")
 own = parser.parse_known_args()[0]
-run_from_command_line(ApiBot(make_api(build=own.build), Race.TERRAN, "MyBot"))
+run_from_command_line(make_api(build=own.build), race=Race.TERRAN, name="MyBot")
 ```
 
 An argument of the other kind of game, such as `--Map` given to a ladder game, is logged as ignored.

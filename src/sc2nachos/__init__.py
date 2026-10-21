@@ -9,14 +9,13 @@ from sc2nachos.gamemap import Expansion
 from sc2nachos.geometry import Circle, Footprint, Point, Rectangle
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result
-from sc2nachos.run import ApiBot, run_from_command_line, run_ladder, run_local
+from sc2nachos.run import run_from_command_line, run_ladder, run_local
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 
 __all__ = [
     "AIBuild",
     "AbilityId",
     "Api",
-    "ApiBot",
     "BuffId",
     "Circle",
     "Computer",

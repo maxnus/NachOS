@@ -17,12 +17,12 @@ For a NachOS bot, the script builds the bot and hands it to `run_from_command_li
 
 ```python
 # scripts/run_game.py
-from sc2nachos import ApiBot, Race, run_from_command_line
+from sc2nachos import Race, run_from_command_line
 
 from my_bot.api import api
 
 if __name__ == "__main__":
-    run_from_command_line(ApiBot(api, Race.TERRAN, "MyBot"))
+    run_from_command_line(api, race=Race.TERRAN, name="MyBot")
 ```
 
 [`examples/run_game.py`](../examples/run_game.py) is the same, with a bot that does nothing. `run_from_command_line`

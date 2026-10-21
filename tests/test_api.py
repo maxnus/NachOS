@@ -9,7 +9,7 @@ import pytest
 from loguru import logger
 from s2clientprotocol import error_pb2, sc2api_pb2
 
-from sc2nachos import Api, ApiBot, NotPlayingError, run_ladder, run_local
+from sc2nachos import Api, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     Event,
@@ -669,7 +669,7 @@ class TestSavingAReplay:
         )
         _no_real_game(monkeypatch, transport)
         path = tmp_path / "game.SC2Replay"
-        run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2, save_replay_to=path)
+        run_local(_somewhere(), Api(), race=Race.TERRAN, steps_per_turn=2, save_replay_to=path)
         assert path.read_bytes() == _REPLAY
 
     def test_run_local_refuses_a_replay_with_no_file_to_go_in_before_the_game_starts(
@@ -678,7 +678,7 @@ class TestSavingAReplay:
         launched: list[bool] = []
         monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
         with pytest.raises(FileNotFoundError, match="to save the replay into"):
-            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), save_replay_to=tmp_path / "missing" / "game.SC2Replay")
+            run_local(_somewhere(), Api(), race=Race.TERRAN, save_replay_to=tmp_path / "missing" / "game.SC2Replay")
         assert not launched
 
     def test_run_ladder_saves_it(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -690,7 +690,7 @@ class TestSavingAReplay:
         )
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
         path = tmp_path / "game.SC2Replay"
-        run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2, save_replay_to=path)
+        run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, steps_per_turn=2, save_replay_to=path)
         assert path.read_bytes() == _REPLAY
 
 
@@ -702,7 +702,7 @@ class TestRunningLocally:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
 
-        run_local(_somewhere(), ApiBot(Api(), Race.TERRAN, "NachOS"), Computer(race=Race.ZERG), steps_per_turn=2)
+        run_local(_somewhere(), Api(), Computer(race=Race.ZERG), race=Race.TERRAN, name="NachOS", steps_per_turn=2)
 
         setups = transport.requests[0].create_game.player_setup
         assert [setup.type for setup in setups] == [sc2api_pb2.Participant, sc2api_pb2.Computer]
@@ -712,14 +712,14 @@ class TestRunningLocally:
     def test_a_bot_without_an_opponent_plays_the_map_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
-        run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2)
+        run_local(_somewhere(), Api(), race=Race.TERRAN, steps_per_turn=2)
         setups = transport.requests[0].create_game.player_setup
         assert [setup.type for setup in setups] == [sc2api_pb2.Participant]
 
     def test_the_join_carries_the_race_and_the_name_the_bot_plays_under(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         _no_real_game(monkeypatch, transport)
-        run_local(_somewhere(), ApiBot(Api(), Race.TERRAN, "NachOS"), Computer(), steps_per_turn=2)
+        run_local(_somewhere(), Api(), Computer(), race=Race.TERRAN, name="NachOS", steps_per_turn=2)
         joined = transport.requests[1].join_game
         assert joined.race == Race.TERRAN.value
         assert joined.player_name == "NachOS"
@@ -727,7 +727,7 @@ class TestRunningLocally:
     def test_the_client_this_library_started_is_stopped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _local_transport()
         game = _no_real_game(monkeypatch, transport)
-        result = run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), Computer(), steps_per_turn=2)
+        result = run_local(_somewhere(), Api(), Computer(), race=Race.TERRAN, steps_per_turn=2)
         assert result is Result.VICTORY
         assert any(request.HasField("quit") for request in transport.requests)
         assert transport.closed
@@ -745,7 +745,7 @@ class TestRunningLocally:
         )
         game = _no_real_game(monkeypatch, transport)
         with pytest.raises(ProtocolError, match="InvalidMapPath"):
-            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), Computer())
+            run_local(_somewhere(), Api(), Computer(), race=Race.TERRAN)
         assert any(request.HasField("quit") for request in transport.requests)
         assert transport.closed
         assert game.terminated
@@ -762,7 +762,7 @@ class TestRunningLocally:
         _no_real_game(monkeypatch, transport)
         path = tmp_path / "game.sc2rec"
         with pytest.raises(ProtocolError, match="Something no game has said yet"):
-            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), Computer(), steps_per_turn=2, record_to=path)
+            run_local(_somewhere(), Api(), Computer(), race=Race.TERRAN, steps_per_turn=2, record_to=path)
         assert transport.closed
         assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][-2:] == [
             "observation",
@@ -780,13 +780,13 @@ class TestRunningLocally:
         launched: list[bool] = []
         monkeypatch.setattr(GameProcess, "launch", classmethod(lambda cls, *args, **kwargs: launched.append(True)))
         with pytest.raises(error, match="to record into"):
-            run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), record_to=str(tmp_path / recording))
+            run_local(_somewhere(), Api(), race=Race.TERRAN, record_to=str(tmp_path / recording))
         assert not launched
 
     def test_a_recording_named_by_a_string_is_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         _no_real_game(monkeypatch, _local_transport())
         path = tmp_path / "game.sc2rec"
-        assert run_local(_somewhere(), ApiBot(Api(), Race.TERRAN), steps_per_turn=2, record_to=str(path)) is (
+        assert run_local(_somewhere(), Api(), race=Race.TERRAN, steps_per_turn=2, record_to=str(path)) is (
             Result.VICTORY
         )
         assert [exchange.request.WhichOneof("request") for exchange in Recording(path)][:2] == [
@@ -800,24 +800,32 @@ class TestRunningOnALadder:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
 
-        result = run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, start_port=1000, steps_per_turn=2)
+        result = run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, start_port=1000, steps_per_turn=2)
 
         assert result is Result.VICTORY
         joined = transport.requests[0].join_game
         assert (joined.server_ports.game_port, joined.server_ports.base_port) == (1002, 1003)
         assert [(pair.game_port, pair.base_port) for pair in joined.client_ports] == [(1004, 1005)]
 
+    def test_the_join_carries_the_race_and_the_name_the_bot_plays_under(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = _ladder_transport()
+        monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
+        run_ladder(Api(), race=Race.PROTOSS, name="NachOS", host="127.0.0.1", port=8000, steps_per_turn=2)
+        joined = transport.requests[0].join_game
+        assert joined.race == Race.PROTOSS.value
+        assert joined.player_name == "NachOS"
+
     def test_the_opponents_ladder_id_is_the_enemys(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
         api = Api()
-        run_ladder(ApiBot(api, Race.TERRAN), host="127.0.0.1", port=8000, enemy_ladder_id="5a1f", steps_per_turn=2)
+        run_ladder(api, race=Race.TERRAN, host="127.0.0.1", port=8000, enemy_ladder_id="5a1f", steps_per_turn=2)
         assert api.enemy.ladder_id == "5a1f"
 
     def test_no_game_is_created_because_the_ladder_already_made_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
-        run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2)
+        run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, steps_per_turn=2)
         assert not any(request.HasField("create_game") for request in transport.requests)
         assert not transport.requests[0].join_game.HasField("server_ports")
 
@@ -825,7 +833,7 @@ class TestRunningOnALadder:
         """The ladder owns the process it started and decides when it stops."""
         transport = _ladder_transport()
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
-        run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2)
+        run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, steps_per_turn=2)
         assert not any(request.HasField("quit") for request in transport.requests)
         assert any(request.HasField("leave_game") for request in transport.requests)
         assert transport.closed
@@ -841,7 +849,7 @@ class TestRunningOnALadder:
 
         monkeypatch.setattr("sc2nachos.run.RecordingTransport", refuse_to_open)
         with pytest.raises(PermissionError):
-            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, record_to=tmp_path / "game.sc2rec")
+            run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, record_to=tmp_path / "game.sc2rec")
         assert transport.closed
 
     @pytest.mark.parametrize("file_for", ["recording", "replay"])
@@ -855,7 +863,8 @@ class TestRunningOnALadder:
         missing = tmp_path / "missing" / "x"
         with pytest.raises(FileNotFoundError, match="there is no folder"):
             run_ladder(
-                ApiBot(Api(), Race.TERRAN),
+                Api(),
+                race=Race.TERRAN,
                 host="127.0.0.1",
                 port=8000,
                 record_to=missing if file_for == "recording" else None,
@@ -871,7 +880,7 @@ class TestRunningOnALadder:
         )
         monkeypatch.setattr(WebSocketTransport, "connect", classmethod(lambda cls, url, **kwargs: transport))
         with pytest.raises(ProtocolError, match="Something no game has said yet"):
-            run_ladder(ApiBot(Api(), Race.TERRAN), host="127.0.0.1", port=8000, steps_per_turn=2)
+            run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, steps_per_turn=2)
         assert transport.closed
 
 
@@ -890,8 +899,10 @@ class TestAgainstTheRealGame:
         api = Api()
         result = run_local(
             _LADDER_MAP,
-            ApiBot(api, Race.TERRAN, "NachOS"),
+            api,
             opponent,
+            race=Race.TERRAN,
+            name="NachOS",
             steps_per_turn=16,
             record_to=path,
             window=(640, 480),
@@ -922,7 +933,7 @@ class TestAgainstTheRealGame:
                     WebSocketTransport.connect(game.url)
 
             api = Api()
-            result = run_ladder(ApiBot(api, Race.TERRAN, "NachOS"), host="127.0.0.1", port=port, steps_per_turn=16)
+            result = run_ladder(api, race=Race.TERRAN, name="NachOS", host="127.0.0.1", port=port, steps_per_turn=16)
             assert result in (Result.VICTORY, Result.DEFEAT)
             assert api.time > 60
 
@@ -941,7 +952,7 @@ def test_in_a_real_game_called_a_tie_at_its_time_limit_the_replay_is_saved(tmp_p
     replay = tmp_path / "game.SC2Replay"
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
     result = run_local(
-        _LADDER_MAP, ApiBot(Api(), Race.TERRAN), opponent, steps_per_turn=16, time_limit=10, save_replay_to=replay
+        _LADDER_MAP, Api(), opponent, race=Race.TERRAN, steps_per_turn=16, time_limit=10, save_replay_to=replay
     )
     assert result is Result.TIE
     assert replay.read_bytes()[:4] == b"MPQ\x1b"
@@ -963,7 +974,7 @@ def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
             api.leave_game()
 
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
-    result = run_local(_LADDER_MAP, ApiBot(api, Race.TERRAN), opponent, steps_per_turn=8, window=(640, 480))
+    result = run_local(_LADDER_MAP, api, opponent, race=Race.TERRAN, steps_per_turn=8, window=(640, 480))
 
     assert result is Result.DEFEAT
     assert api.step == 16
@@ -981,13 +992,7 @@ def test_in_a_real_realtime_game_each_turn_comes_at_or_after_the_step_asked_for(
     api.on(TurnEvent)(lambda event: steps.append(event.step))
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
     result = run_local(
-        _LADDER_MAP,
-        ApiBot(api, Race.TERRAN),
-        opponent,
-        steps_per_turn=8,
-        realtime=True,
-        time_limit=10,
-        window=(640, 480),
+        _LADDER_MAP, api, opponent, race=Race.TERRAN, steps_per_turn=8, realtime=True, time_limit=10, window=(640, 480)
     )
 
     assert result is Result.TIE

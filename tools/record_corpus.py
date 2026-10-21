@@ -18,7 +18,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from sc2nachos import Api, ApiBot, run_local
+from sc2nachos import Api, run_local
 from sc2nachos.launch import MapFile
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 
@@ -66,11 +66,12 @@ def record(game: CorpusGame) -> None:
     if map_file.path.resolve() != (REPO_MAPS / f"{game.map}.SC2Map").resolve():
         raise SystemExit(f"{game.map} is found at {map_file.path}, which is not this repository's copy in {REPO_MAPS}")
     api = Api()
-    bot = ApiBot(api, game.race, "NachOS")
     result = run_local(
         map_file,
-        bot,
+        api,
         game.opponent,
+        race=game.race,
+        name="NachOS",
         steps_per_turn=STEPS_PER_TURN,
         random_seed=game.seed,
         record_to=game.path,
