@@ -642,6 +642,42 @@ def _by_a_command_center(
     return attacker, target, weapons[0].cooldown_steps if weapons else None
 
 
+class _AttackWatch:
+    """An attacker of this player's and its target, both read after every step."""
+
+    def __init__(self, rivals: Rivals, attacker: raw_pb2.Unit, target: raw_pb2.Unit) -> None:
+        self._rivals = rivals
+        self.attacker = attacker
+        self.target = target
+        self.step = 0
+        self.rose = False
+        """Whether the attacker's cooldown rose in the last step."""
+        self.lost_health = False
+        """Whether the target lost health in the last step."""
+
+    def advance(self) -> bool:
+        """Step once and read both units again; False if either is gone."""
+        self._rivals.step(1)
+        self.step += 1
+        units = {unit.tag: unit for unit in self._rivals.me.units()}
+        attacker, target = units.get(self.attacker.tag), units.get(self.target.tag)
+        if attacker is None or target is None:
+            return False
+        self.rose = attacker.weapon_cooldown > self.attacker.weapon_cooldown
+        self.lost_health = target.health < self.target.health
+        self.attacker, self.target = attacker, target
+        return True
+
+    def until_rise(self, most_steps: int) -> bool:
+        """Step until the attacker's cooldown rises, at most `most_steps` times; whether it rose."""
+        for _ in range(most_steps):
+            if not self.advance():
+                return False
+            if self.rose:
+                return True
+        return False
+
+
 def _attack_interval(
     rivals: Rivals, attacker_type: UnitTypeId, at: Point, *, upgraded: bool, stim: int | None
 ) -> AttackIntervalFinding:
@@ -650,25 +686,22 @@ def _attack_interval(
     me = rivals.me
     game_data = GameData(me.client.game_data())
     attacker, target, table_cooldown_steps = _by_a_command_center(rivals, game_data, attacker_type, at)
+    watch = _AttackWatch(rivals, attacker, target)
     if stim is not None:
         me.order(stim, attacker.tag)
         rivals.step(1)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     shots: list[int] = []
     buffs: list[int] = []
-    last = 0.0
     for step in range(_ATTACK_SPEED_STEPS):
-        rivals.step(1)
-        now = _unit_tagged(me, attacker.tag)
-        if now is None:
+        if not watch.advance():
             break
-        if now.weapon_cooldown > last:
+        if watch.rose:
             if not shots:
-                buffs = list(now.buff_ids)
+                buffs = list(watch.attacker.buff_ids)
             shots.append(step)
             if len(shots) > _SHOTS_TIMED:
                 break
-        last = now.weapon_cooldown
     _kill_and_wait(rivals, [attacker.tag, target.tag])
     intervals = [later - earlier for earlier, later in itertools.pairwise(shots)]
     finding = AttackIntervalFinding(
@@ -792,23 +825,20 @@ def _shot_timing(
     as come in `_LONGEST_TRIAL_STEPS`."""
     me = rivals.me
     attacker, target, table_cooldown_steps = _by_a_command_center(rivals, game_data, attacker_type, at)
+    watch = _AttackWatch(rivals, attacker, target)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     shots: list[int] = []
     cooldowns: list[float] = []
-    last = 0.0
     for step in range(_LONGEST_TRIAL_STEPS):
         if step % _HEALING_EVERY_STEPS == 0:
             me.set_value(_LIFE_VALUE, target.health_max, [target.tag])
-        rivals.step(1)
-        now = _unit_tagged(me, attacker.tag)
-        if now is None:
+        if not watch.advance():
             break
-        if now.weapon_cooldown > last:
+        if watch.rose:
             shots.append(step)
-            cooldowns.append(now.weapon_cooldown)
+            cooldowns.append(watch.attacker.weapon_cooldown)
             if len(shots) > shots_timed:
                 break
-        last = now.weapon_cooldown
     _kill_and_wait(rivals, [attacker.tag, target.tag])
     between = [later - earlier for earlier, later in itertools.pairwise(shots)]
     at_zero = [steps - math.ceil(shown) for steps, shown in zip(between, cooldowns[:-1], strict=True)]
@@ -947,20 +977,16 @@ def _cooldown_trace(rivals: Rivals, game_data: GameData, attacker_type: UnitType
     `_TRACED_SHOTS`-th shot after the first."""
     me = rivals.me
     attacker, target, table_cooldown_steps = _by_a_command_center(rivals, game_data, attacker_type, at)
+    watch = _AttackWatch(rivals, attacker, target)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     readings: list[TracedStep] = []
     shots: list[int] = []
-    last = 0.0
     for step in range(_LONGEST_TRIAL_STEPS):
-        rivals.step(1)
-        units = {unit.tag: unit for unit in me.units()}
-        attacker_now, target_now = units.get(attacker.tag), units.get(target.tag)
-        if attacker_now is None or target_now is None:
+        if not watch.advance():
             break
-        if attacker_now.weapon_cooldown > last:
+        if watch.rose:
             shots.append(step)
-        readings.append(TracedStep(step, attacker_now.weapon_cooldown, target_now.health))
-        last = attacker_now.weapon_cooldown
+        readings.append(TracedStep(step, watch.attacker.weapon_cooldown, watch.target.health))
         if len(shots) > _TRACED_SHOTS:
             break
     _kill_and_wait(rivals, [attacker.tag, target.tag])
@@ -1027,53 +1053,17 @@ class MoveBeforeShotFinding:
 
     attacker: str
     steps_at_zero: int
-    """How many steps its cooldown read 0 before a shot, found from its second and third."""
+    """How many steps its cooldown read 0 before a shot, found from its second, third and fourth."""
     steps_before_shot: int | None
     """How many steps before the shot due the move was ordered: 0 in the step its cooldown rose, once the rise was
     read. None for a shot let be, watched from the step before it."""
     shot_after: int | None
-    """How many steps after the order its cooldown rose, 0 for the step the order was given in, or None if it did not
-    within `_STEPS_WATCHED_AFTER_A_MOVE`."""
+    """How many steps after the order its cooldown rose, 0 for the step the order was given in and less for one before,
+    or None if it did not within `_STEPS_WATCHED_AFTER_A_MOVE`."""
     loss_after: int | None
     """How many steps after the order the target lost health, counted the same way, or None."""
     moved_after: int | None
     """How many steps after the order the attacker stood `_MOVED_AT_LEAST` from where it was, or None."""
-
-
-class _AttackWatch:
-    """An attacker of this player's and its target, both read after every step."""
-
-    def __init__(self, rivals: Rivals, attacker: raw_pb2.Unit, target: raw_pb2.Unit) -> None:
-        self._rivals = rivals
-        self.attacker = attacker
-        self.target = target
-        self.step = 0
-        self.rose = False
-        """Whether the attacker's cooldown rose in the last step."""
-        self.lost_health = False
-        """Whether the target lost health in the last step."""
-
-    def advance(self) -> bool:
-        """Step once and read both units again; False if either is gone."""
-        self._rivals.step(1)
-        self.step += 1
-        units = {unit.tag: unit for unit in self._rivals.me.units()}
-        attacker, target = units.get(self.attacker.tag), units.get(self.target.tag)
-        if attacker is None or target is None:
-            return False
-        self.rose = attacker.weapon_cooldown > self.attacker.weapon_cooldown
-        self.lost_health = target.health < self.target.health
-        self.attacker, self.target = attacker, target
-        return True
-
-    def until_rise(self, most_steps: int) -> bool:
-        """Step until the attacker's cooldown rises, at most `most_steps` times; whether it rose."""
-        for _ in range(most_steps):
-            if not self.advance():
-                return False
-            if self.rose:
-                return True
-        return False
 
 
 def _moves_before_shots(
@@ -1081,19 +1071,24 @@ def _moves_before_shots(
 ) -> list[MoveBeforeShotFinding]:
     """Make a command center of the other player's at `at` and an attacker of this player's beside it, find how many
     steps its cooldown reads 0 before a shot, and order it to move `_MOVES_EACH` times at each number of steps before
-    a shot due, from that many and one more down to 0, and let it fire as many times."""
+    a shot due, from that many and one more down to 0, and let it fire as many times. The command center is healed at
+    the start of each. An attacker whose steps at 0 differ between its second and third shots and its third and
+    fourth is left out."""
     me = rivals.me
     attacker, target, _ = _by_a_command_center(rivals, game_data, attacker_type, at)
     watch = _AttackWatch(rivals, attacker, target)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     rises: list[tuple[int, float]] = []
-    while len(rises) < 3 and watch.until_rise(_STEPS_TO_FIRE_AGAIN):
+    while len(rises) < 4 and watch.until_rise(_STEPS_TO_FIRE_AGAIN):
         rises.append((watch.step, watch.attacker.weapon_cooldown))
-    if len(rises) < 3:
+    each_at_zero = {
+        later - earlier - math.ceil(shown) for (earlier, shown), (later, _) in itertools.pairwise(rises[1:])
+    }
+    if len(rises) < 4 or len(each_at_zero) != 1:
+        logger.warning("{}: left out, its steps at 0 before its shots {}", attacker_type.name, each_at_zero)
         _kill_and_wait(rivals, [attacker.tag, target.tag])
         return []
-    (earlier, shown), (later, _) = rises[1], rises[2]
-    at_zero = later - earlier - math.ceil(shown)
+    (at_zero,) = each_at_zero
     findings = []
     moved = False
     for steps_before in [None, *range(at_zero + 1, -1, -1)]:
@@ -1107,9 +1102,10 @@ def _moves_before_shots(
                 break
             due = watch.step + math.ceil(watch.attacker.weapon_cooldown) + at_zero
             ordered_at = due - (1 if steps_before is None else steps_before)
+            shot = None
             while watch.step < ordered_at and watch.advance():
-                pass
-            shot = 0 if watch.rose and watch.step == ordered_at else None
+                if shot is None and watch.rose:
+                    shot = watch.step - ordered_at
             loss = 0 if watch.lost_health and watch.step == ordered_at else None
             moved_from = Point((watch.attacker.pos.x, watch.attacker.pos.y))
             moved = steps_before is not None
