@@ -23,13 +23,17 @@ player's, by the steps at which its cooldown rises, before this player's upgrade
 then stimmed too.
 
 `shot-timing` times `_TIMED_SHOTS` shots of each of a few attackers at a command center healed as it goes, with no
-upgrade and no cheat but `show_map`, and records the steps between shots and the cooldown each showed at its shot::
+upgrade and no cheat but `show_map`, and records the steps between shots and the cooldown each showed at its shot.
+
+`cooldown-trace` reads the same attackers' cooldowns and the command center's health at every step over
+`_TRACED_SHOTS` shots, and records how long the cooldown read 0 before each shot and when the target lost health::
 
     uv run python tools/sweep_combat.py range --out combat-range.json
     uv run python tools/sweep_combat.py damage --out combat-damage.json
     uv run python tools/sweep_combat.py no-weapon --out combat-no-weapon.json
     uv run python tools/sweep_combat.py attack-speed --out combat-attack-speed.json
     uv run python tools/sweep_combat.py shot-timing --out combat-shot-timing.json
+    uv run python tools/sweep_combat.py cooldown-trace --out combat-cooldown-trace.json
 """
 
 import argparse
@@ -786,6 +790,102 @@ def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
     return findings
 
 
+# Few enough shots that no attacker kills the command center, which is never healed, so its losses read clean.
+_TRACED_SHOTS = 10
+
+
+@dataclass(slots=True)
+class CooldownReading:
+    """What one step showed: the attacker's weapon cooldown and its target's health."""
+
+    step: int
+    weapon_cooldown: float
+    target_health: float
+
+
+@dataclass(slots=True)
+class CooldownTraceFinding:
+    """An attacker's weapon cooldown and its target's health at every step over a few shots, beside its tables'
+    cooldown."""
+
+    attacker: str
+    table_cooldown_steps: float | None
+    readings: list[CooldownReading]
+    shot_steps: list[int]
+    """The steps at which its cooldown rose: each shot."""
+    loss_steps: list[int]
+    """The steps at which the target lost health."""
+    steps_at_zero_before_shots: list[int]
+    """For each shot after the first, how many steps in a row before it the cooldown read 0."""
+    losses_after_nearest_shot: list[int]
+    """For each loss, how many steps after the shot nearest it it came: negative if before."""
+
+
+def _cooldown_trace(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> CooldownTraceFinding:
+    """Make a command center of the other player's at `at` and an attacker of this player's beside it, and read the
+    attacker's cooldown and the command center's health at every step until `_TRACED_SHOTS` shots and the rise of the
+    next."""
+    me = rivals.me
+    game_data = GameData(me.client.game_data())
+    weapons = game_data.units[attacker_type].weapons
+    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
+    me.order(RawAbilityId.Attack, attacker.tag, target.tag)
+    readings: list[CooldownReading] = []
+    shots: list[int] = []
+    for step in range(_TRACED_SHOTS * _STEPS_PER_TIMED_SHOT):
+        rivals.step(1)
+        now, struck = _unit_tagged(me, attacker.tag), _unit_tagged(me, target.tag)
+        if now is None or struck is None:
+            break
+        if readings and now.weapon_cooldown > readings[-1].weapon_cooldown:
+            shots.append(step)
+        readings.append(CooldownReading(step, now.weapon_cooldown, struck.health))
+        if len(shots) > _TRACED_SHOTS:
+            break
+    _kill_and_wait(rivals, [attacker.tag, target.tag])
+    losses = [
+        later.step for earlier, later in itertools.pairwise(readings) if later.target_health < earlier.target_health
+    ]
+    at_zero = []
+    for shot in shots[1:]:
+        first_at_zero = shot
+        while first_at_zero > 0 and readings[first_at_zero - 1].weapon_cooldown == 0:
+            first_at_zero -= 1
+        at_zero.append(shot - first_at_zero)
+    finding = CooldownTraceFinding(
+        attacker_type.name,
+        weapons[0].cooldown_steps if weapons else None,
+        readings,
+        shots,
+        losses,
+        at_zero,
+        [loss - min(shots, key=lambda shot: abs(loss - shot)) for loss in losses] if shots else [],
+    )
+    logger.info(
+        "{}: {} shots, table {}, steps at 0 before a shot {}, losses after the nearest shot {}",
+        attacker_type.name,
+        len(shots),
+        finding.table_cooldown_steps,
+        at_zero,
+        finding.losses_after_nearest_shot,
+    )
+    return finding
+
+
+def measure_cooldown_trace(installation: Installation) -> list[CooldownTraceFinding]:
+    """Every trial of `_SHOT_TIMING_TRIALS`, traced step by step, with neither side upgraded and no cheat but
+    `show_map`."""
+    findings = []
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        me = rivals.me
+        me.cheat(Cheat.SHOW_MAP)
+        rivals.step(_SETTLING_STEPS)
+        at = _trial_ground(rivals)
+        for attacker_type in _SHOT_TIMING_TRIALS:
+            findings.append(_cooldown_trace(rivals, attacker_type, at))
+    return findings
+
+
 def main(argv: Sequence[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     measures = {
@@ -794,6 +894,7 @@ def main(argv: Sequence[str]) -> None:
         "no-weapon": measure_no_weapon,
         "attack-speed": measure_attack_speed,
         "shot-timing": measure_shot_timing,
+        "cooldown-trace": measure_cooldown_trace,
     }
     parser.add_argument("mode", choices=tuple(measures))
     parser.add_argument("--out", type=Path, help="where to write what it found, as JSON")
