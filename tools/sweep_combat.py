@@ -378,6 +378,12 @@ class AttackFinding:
     """What the first attack took off in all, its hits within `_ONE_ATTACK_STEPS` of the first."""
 
 
+def _is_melee(game_data: GameData, unit_type: UnitTypeId) -> bool:
+    """Whether every weapon the tables give `unit_type` reaches less than 1, as a melee one does."""
+    weapons = game_data.units[unit_type].weapons
+    return bool(weapons) and max(weapon.range for weapon in weapons) < 1
+
+
 def _hold_position(game: Sandbox, tag: int) -> None:
     game.order(RawAbilityId.HoldPosition_Hold, tag)
 
@@ -396,8 +402,7 @@ def _set_upon(
     abilities `before` ordered on the attacker first, each with the energy it needs; and what the target lost at each
     step for `_ATTACK_STEPS` steps."""
     me, enemy = rivals.me, rivals.enemy
-    weapons = GameData(me.client.game_data()).units[attacker_type].weapons
-    melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
+    melee = _is_melee(GameData(me.client.game_data()), attacker_type)
     distance = _MELEE_TRIAL_DISTANCE if melee else _TRIAL_DISTANCE
     (attacker,) = _units_made(rivals, [(attacker_type, me.player, at)])
     _hold_position(me, attacker.tag)
@@ -606,6 +611,17 @@ class AttackIntervalFinding:
     """The mean of the steps between its shots, or None if it fired fewer than twice."""
 
 
+def _by_a_command_center(
+    rivals: Rivals, game_data: GameData, attacker_type: UnitTypeId, at: Point
+) -> tuple[raw_pb2.Unit, raw_pb2.Unit]:
+    """Make a command center of the other player's at `at` and an attacker of this player's to its left, by its edge
+    if the attacker is melee and well within reach if not, and return the attacker and the command center."""
+    (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
+    away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
+    (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
+    return attacker, target
+
+
 def _attack_interval(
     rivals: Rivals, attacker_type: UnitTypeId, at: Point, *, upgraded: bool, stim: int | None
 ) -> AttackIntervalFinding:
@@ -614,10 +630,7 @@ def _attack_interval(
     me = rivals.me
     game_data = GameData(me.client.game_data())
     weapons = game_data.units[attacker_type].weapons
-    melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
-    (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
-    away = _MELEE_FROM_COMMAND_CENTER if melee else _RANGED_FROM_COMMAND_CENTER
-    (attacker,) = _units_made(rivals, [(attacker_type, me.player, Point((target.pos.x - away, target.pos.y)))])
+    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
     if stim is not None:
         me.order(stim, attacker.tag)
         rivals.step(1)
@@ -719,10 +732,7 @@ def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTi
     me = rivals.me
     game_data = GameData(me.client.game_data())
     weapons = game_data.units[attacker_type].weapons
-    melee = bool(weapons) and max(weapon.range for weapon in weapons) < 1
-    (target,) = _units_made(rivals, [(UnitTypeId.COMMAND_CENTER, _enemy_of(rivals), at)])
-    away = _MELEE_FROM_COMMAND_CENTER if melee else _RANGED_FROM_COMMAND_CENTER
-    (attacker,) = _units_made(rivals, [(attacker_type, me.player, Point((target.pos.x - away, target.pos.y)))])
+    attacker, target = _by_a_command_center(rivals, game_data, attacker_type, at)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     shots: list[int] = []
     cooldowns: list[float] = []

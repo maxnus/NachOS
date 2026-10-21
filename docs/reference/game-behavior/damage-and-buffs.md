@@ -51,10 +51,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A unit does not fire every cooldown. Over 200 shots at a command center, each of eight types waited from about one
   step less than its cooldown to two more, and half a step more on average: a marine, of cooldown 13.77, 13 to 16 steps
   and once 12, 14.33 on average; a zergling, of 11.14, 10 to 13, 11.67; a stalker, of 29.92, 28 to 32, 30.37; a siege
-  tank, of 16.64, 15 to 19, 17.17. The mean was the cooldown and 0.42 to 0.57 steps for every type, which fits a delay
-  of -1/16 to 1/8 of a game second on each shot, as the game's data editor gives weapons (stated). The cooldown a unit
-  reports just after it fires is not the wait to its next shot: a zergling's read 6.3 to 9.9 (tool `sweep_combat`, build
-  75689).
+  tank, of 16.64, 15 to 19, 17.17. The mean was the cooldown and 0.40 to 0.60 steps for every type, in two runs that
+  agreed to within 0.1, which fits a delay of -1/16 to 1/8 of a game second on each shot, as the game's data editor
+  gives weapons (stated). The cooldown a unit reports just after it fires is not the wait to its next shot: a zergling's
+  read 6.3 to 9.9 (tool `sweep_combat`, build 75689).
 
 ## Buffs
 
