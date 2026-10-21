@@ -27,6 +27,25 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   structure once it was gone, and none the grid blocks did, but one under a collapsible tower beside a rock. Rocks on a
   ramp, as on LeyLinesAIE_v3 and PylonAIE_v4, stand on ground no structure takes (tool `sweep_placement`, build 75689;
   corpus).
+- `RequestGameInfo` asked again during a game answers the pathing grid as the game stood at the last observation asked
+  for, and nothing else in its answer changes. A barracks made 16 steps before, with no observation asked for since,
+  blocked none of its tiles; one observation later, all 9. On PylonAIE_v4 the request takes 0.55 ms, for an answer of
+  77 kB (tool `sweep_pathing`, build 75689).
+- That grid blocks a structure while this player sees it, its own or the enemy's, from the observation that first
+  reports it to the one that reports it gone, and a mineral field or a geyser as one. A structure out of sight blocks
+  nothing, its snapshot included: `show_map` turned on blocked 471 more tiles of PylonAIE_v4, and turned off opened them
+  again. A rock blocks in sight or not (#17), and opens when it dies. A unit that is no structure blocks nothing, but a
+  sieged tank its own tile (tool `sweep_pathing`, build 75689).
+- A structure lifted opens its ground in the observation that reports it flying, and one landing blocks its ground from
+  the observation after the order, 31 steps before it is reported landed. A depot lowered opens its ground 19 steps
+  after it is reported lowered, and one raised blocks it at once. A depot an SCV builds blocks nothing while it is a
+  placeholder, and blocks from the observation in which its construction starts (tool `sweep_pathing`, build 75689).
+- Of the 163 types that do not move, 117 block for walking the tiles they cover for placement. A townhall, each of the
+  seven, blocks its 5x5 less the corner tiles, and a nydus worm the five tiles of a plus in its 3x3. A lowered depot, a
+  burrowed creep tumor, a stasis ward, the unbuildable bricks, plates and rocks, and the units that push others from
+  under a falling tower block nothing. Rocks block more than they cover: a 4x4 rock or debris all its 16 tiles, a 6x6
+  one and the 3x3 Zerg infestation all of a 6x6 but a tile at each corner, and a huge diagonal one a band seven tiles
+  wide where it covers five (tool `sweep_pathing`, build 75689).
 - A structure covers a square twice its creation ability's `footprint_radius` across, laid around its center as the game
   snaps it: a sensor tower 1 tile, a depot or a pylon 2x2, a barracks 3x3, a townhall 5x5. A form a structure morphs
   into covers what it morphed from: a lowered depot 2x2, an orbital, a planetary fortress, a lair and a hive 5x5, a warp
@@ -88,7 +107,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   steps, and the next observation brought it at once, in two games each (tool `sweep_requests`, build 75689).
 - It answers 0 when there is no path, for an end inside a structure, the computer's townhall included, for an unknown
   tag, and from a point to itself; points 0.1 apart read 0.0999. It paths out of the townhall its start lies in, 7.0 to
-  a point 8 away, but never into a structure (tool `sweep_requests`, build 75689).
+  a point 8 away, but never into a structure (tool `sweep_requests`, build 75689). It paths out of each of ten
+  structures of the three races, from its center and from its corner tile alike (tool `sweep_pathing`, build 75689).
 - From a unit's tag it answers for that unit: from atop a cliff on PylonAIE_v4, 63.7 for a marine, by the ramp, 3.3
   for a reaper, which jumps the cliff, 58.0 for a colossus, and the straight line for a medivac. From the marine's
   position the answer was 61.7 (tool `sweep_requests`, build 75689).

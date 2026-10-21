@@ -92,7 +92,8 @@ reviewing code.
   `https://raw.githubusercontent.com/Blizzard/s2client-proto/master/s2clientprotocol/sc2api.proto`
 - **One connection can play game after game**, so anything held because it does not change during a game is held
   per game, never per connection.
-- **`ResponseGameInfo` never changes during a game.** Ask once, at the start.
+- **`ResponseGameInfo` changes during a game in its pathing grid alone**, which shows the structures in sight as of the
+  last observation asked for. Ask once, at the start, for the rest.
 - **`ResponseData` changes with the asking player's upgrades, and only with them**, though a unit type has one
   entry and no player. Asked at the start, before any upgrade, it holds the base values both sides share. Each
   unit reports its own upgrade levels, visible enemies' included.

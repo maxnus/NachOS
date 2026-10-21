@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #147. On branch `claude/grid-cheapest-paths`, `uv run pytest` passes 2445 tests
-  and `uv run pytest -m integration` passes 36 against a real game (run 2026-10-21).
+- nachOS `main` has every PR to #148. On branch `claude/sweep-pathing`, `uv run pytest` passes 2445 tests, and on
+  `claude/grid-cheapest-paths` `uv run pytest -m integration` passed 36 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -336,14 +336,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
-  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (this branch), combat
+  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148), combat
   conveniences on a unit (in range, weapon ready, dps), a playback mode that answers a bot's own actions, and ramp
   wall-in sites with their sweep.
-- **A pathing grid kept up to date each step**, from the units this player knows of, as `api.placement.dynamic` is: the
-  ground minus every structure, resource and rock still standing, to route on in place of `api.map.pathing`. A sweep
-  first measures how much ground each structure blocks for walking, which is not its placement footprint (a townhall
-  blocks 21 of its 25 tiles), and what a path starting inside a structure should do, since the game's own query paths
-  out of it. Until then AvocaDOS routes on its own `pathing | placement`.
+- **A pathing grid kept up to date each step**, to route on in place of `api.map.pathing`. `tools/sweep_pathing.py`
+  measured what it needs (docs/reference/game-behavior/map.md): `RequestGameInfo` asked again answers the pathing grid
+  as of the last observation, in 0.55 ms, blocking the structures in sight, each as it blocks for walking, and nothing
+  out of sight, snapshots included; and the pathing query paths out of any structure it starts in. How NachOS keeps the
+  grid, asking the game or laying known structures' walking footprints on the terrain, is for the owner to decide.
+  Until then AvocaDOS routes on its own `pathing | placement`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

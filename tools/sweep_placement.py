@@ -170,6 +170,10 @@ def _units_near(game: Sandbox, at: Point, reach: int) -> list[raw_pb2.Unit]:
     return [unit for unit in game.units() if abs(unit.pos.x - at.x) <= reach and abs(unit.pos.y - at.y) <= reach]
 
 
+class OutOfOpenGroundError(RuntimeError):
+    """No open ground of the size asked for is left in the game."""
+
+
 class _MeasuringGround:
     """The open ground units are made on to be measured, one patch for each reach asked about.
 
@@ -234,7 +238,7 @@ class _MeasuringGround:
             at = Point((float(x), float(y)))
             if not _covered_tiles(self._game, _tile_centers_around(at, reach)):
                 return at
-        raise RuntimeError(f"no open ground {size} tiles across takes a sensor tower everywhere")
+        raise OutOfOpenGroundError(f"no open ground {size} tiles across takes a sensor tower everywhere")
 
 
 def _measured_add_on(game: Sandbox, add_on: UnitTypeId, at: Point, reach: int) -> MeasuredFootprint | None:
