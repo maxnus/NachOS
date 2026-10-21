@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Attribute
+from sc2nachos.gamedata import Attribute, TargetDomain
+from sc2nachos.gamedata._measured import ATTACK_SPEED_BUFFS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
@@ -36,6 +38,11 @@ _CLOAKS = {int(member): member for member in CloakState}
 _LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
 # An id is the alliance's digit followed by a count of that alliance's units, below this.
 _IDS_PER_ALLIANCE = 100_000
+# Air weapons hit these, though they stand on the ground: a viking, which has no ground weapon, fired at a colossus
+# (in game).
+_GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
+# The least a hit takes off health, whatever the armor (in game).
+_LEAST_DAMAGE_A_HIT = 0.5
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -645,3 +652,76 @@ class Unit[K: UnitType.AnyType]:
                 self._radius_footprint = Footprint.square(side)
             return self._radius_footprint
         return row.footprint
+
+    # Combat.
+
+    def weapon_against(self, target: Unit[Any]) -> Weapon | None:
+        """The weapon of `weapons` this unit fires at `target`: one that hits the air for a target that flies, and one
+        that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as air weapons
+        do (in game). `None` if it has none that hits `target`."""
+        weapons = self.weapons
+        if target.is_flying:
+            return next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.GROUND), None)
+        on_the_ground = next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.AIR), None)
+        if on_the_ground is None and target.type_id in _GROUND_TYPES_HIT_FROM_THE_AIR:
+            return next((weapon for weapon in weapons if weapon.target_domain is TargetDomain.AIR), None)
+        return on_the_ground
+
+    def has_in_range(self, target: Unit[Any], *, margin: float = 0.0) -> bool:
+        """Whether `target` is within the reach of `weapon_against(target)`: their centers no farther apart than its
+        range, both radii and `margin`. False if this unit has no weapon against `target`.
+
+        That is where a unit that can move fires at another unit (in game). An attacker that cannot move, such as a
+        sieged tank or a spine crawler, fires from up to some 0.1 nearer, and any attacker fires at a structure from up
+        to some 0.26 nearer, so pass a negative `margin` to be sure the shot can land.
+        """
+        weapon = self.weapon_against(target)
+        return weapon is not None and self.distance_to(target) <= weapon.range + self.radius + target.radius + margin
+
+    def damage_against(self, target: Unit[Any]) -> float:
+        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, or 0 if
+        this unit has no weapon against it.
+
+        Each hit takes off the weapon's damage and its bonus against the target's attributes: from the shields first,
+        less `shield_armor`, and what is more than the shields have left goes on to health less `armor`, at nothing at
+        least; from health alone, less `armor`, but at least 0.5 (in game). A weapon that `ignores_armor` takes off the
+        whole hit. Each hit of an attack of several finds the shields the one before left. No buff on either unit
+        counts, and the damage may come to more than the target has left.
+        """
+        weapon = self.weapon_against(target)
+        return 0.0 if weapon is None else _damage_of(weapon, target)
+
+    def dps_against(self, target: Unit[Any]) -> float:
+        """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`
+        attacking as often as the buffs on this unit have it: stim makes a marine's and a marauder's 1.5 times as often
+        (in game). 0 if this unit has no weapon against `target`."""
+        weapon = self.weapon_against(target)
+        if weapon is None:
+            return 0.0
+        damage = _damage_of(weapon, target)
+        if (attack_speed := math.prod(ATTACK_SPEED_BUFFS.get(buff, 1.0) for buff in self.buffs)) != 1.0:
+            weapon = weapon._with_attack_speed(attack_speed)
+        return damage * STEPS_PER_SECOND / weapon.cooldown_steps
+
+
+def _damage_of(weapon: Weapon, target: Unit[Any]) -> float:
+    """What one attack of `weapon` takes off `target`'s shields and health as they stand, as `Unit.damage_against`
+    has it."""
+    attributes = target.type_data.attributes
+    hit = weapon.damage + sum(bonus for attribute, bonus in weapon.damage_bonuses.items() if attribute in attributes)
+    armor, shield_armor = (0.0, 0.0) if weapon.ignores_armor else (target.armor, target.shield_armor)
+    shields = target.shield
+    damage = 0.0
+    for _ in range(weapon.attacks):
+        if shields <= 0:
+            damage += max(hit - armor, _LEAST_DAMAGE_A_HIT)
+            continue
+        # Taken to be at least 0.5, as off health: no hit seen was small enough to tell.
+        on_shields = max(hit - shield_armor, _LEAST_DAMAGE_A_HIT)
+        if on_shields <= shields:
+            damage += on_shields
+            shields -= on_shields
+        else:
+            damage += shields + max(on_shields - shields - armor, 0.0)
+            shields = 0.0
+    return damage

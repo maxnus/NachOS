@@ -280,7 +280,13 @@ it.
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
-| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them |
+| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them, and `unit.weapon_against(target)` |
+| `unit.can_attack_ground`, `can_attack_air` | `unit.weapon_against(target) is not None` |
+| `unit.target_in_range(t, bonus_distance)` | `unit.has_in_range(t, margin=...)` |
+| `units.in_attack_range_of(u)` | `units.filter(lambda enemy: enemy.has_in_range(u))` |
+| `unit.calculate_damage_vs_target(t)[0]` | `unit.damage_against(t)`, one attack as the target stands |
+| `unit.calculate_dps_vs_target(t)` | `unit.dps_against(t)`, per second of Faster speed |
+| `unit.weapon_ready` | `unit.weapon_cooldown_steps == 0` |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
@@ -340,6 +346,18 @@ it.
   from `api.enemy.upgrades`. python-sc2's `real_speed` includes only your own upgrades and needs
   `calculate_speed(upgrades)` for anyone else's, and its `ground_range`, `ground_dps` and `armor` include none. For
   another set of upgrades, read `unit.type_data.with_upgrades(set)`.
+- **A dps is per second of Faster speed, and counts what the game does.** `weapon.dps` and `unit.dps_against` divide by
+  `cooldown_steps`, which holds the random delay the game adds to every attack, half a step on average, and the speed of
+  Adrenal Glands and Resonating Glaives; `dps_against` counts stim too. python-sc2's `ground_dps` is per Normal second,
+  which leaves it 1.4 times too low, and leaves out the delay. NachOS also gives the battlecruiser, the oracle, the void
+  ray and the sentry the weapons it measured, and takes nothing off an oracle's beam for armor, as the game takes
+  nothing. `weapon_against` picks a weapon as python-sc2 does, the ground one for a colossus where there is one, and
+  `has_in_range` keeps python-sc2's rule: exact for a unit that can move firing at a unit, it reaches some 0.1 too far
+  for an attacker that cannot move and up to some 0.26 for a structure ([game
+  behavior](game-behavior/damage-and-buffs.md)).
+- **`weapon_cooldown_steps` reads 0 while an attack is under way**, for up to 6 steps before it by type, and a move
+  ordered then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
+  cooldown to rise ([game behavior](game-behavior/damage-and-buffs.md)).
 - **The enemy's upgrades are read off its units, once, for the whole player.** The game reports nothing of the
   enemy's upgrades beyond the attack, armor and shield levels on each unit in sight, and those belong to the player
   and the unit's line: a marine at attack level 2 puts the first two Terran Infantry Weapons into
