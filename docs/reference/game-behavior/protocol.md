@@ -65,6 +65,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `DebugEndGame` ends a game at the next step as any ending does: the observation reads `ended` with the results, a
   defeat for a surrender and a victory for a declared victory, the computer taking the other (tool `sweep_requests`,
   build 75689).
+- A game of two can end in a tie for both players while nothing in it is made or killed. Two games of the combat sweep
+  did, both at some 29,600 steps by their step rates: one some 29,500 steps into its one trial, the other some 6,400
+  into a trial begun after trials of 3,600 to 4,900 steps, each of which made and killed its units by debug command.
+  Games whose trials did so every 6,500 steps or less ran on, to 33,000 steps and to 466,000. This fits the stalemate
+  rule, a tie once no player has mined, built or destroyed anything for some minutes (stated), with this player's
+  workers having mined out its main, which was not checked (tool `sweep_combat`, build 75689).
 - A replay can be saved while a game runs and after it has ended: on the client that created the game and on the one
   that joined it, and in a realtime game. For a game with nothing built it is 8 to 9 KB, an MPQ archive (`MPQ\x1b`),
   and takes 1.5 to 3 ms. The game reads each one back, with its map, build and players; saved after the end, with the

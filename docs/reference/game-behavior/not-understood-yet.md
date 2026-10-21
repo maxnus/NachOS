@@ -2,6 +2,19 @@
 
 Part of [how the game behaves](README.md), which says how each entry was seen.
 
+- **How a thor's and an ultralisk's shots are timed.** A thor firing at a command center showed its cooldown rise about
+  three times for each 48 steps of its ground weapon's cooldown, 7 to 23 steps apart, some rises to 0 from below it. An
+  ultralisk at one read 0 for 6 steps before most shots, as the rule for the other types has it, but 5, 7 or 8 before
+  some, and 17 of its 200 shots came up to 1.8 steps later than a delay of 2 allows (tool `sweep_combat`,
+  `delay-weapons`, build 75689; the rule in [damage and buffs](damage-and-buffs.md)).
+- **Why a zergling with Adrenal Glands reads 0 for 2 steps before some shots.** Without the upgrade it read 0 for 3
+  steps before every one of 40,500 shots. With it, 2 before 17% of 3,000 and 3 before the rest, and 2 the more often
+  the later in its step the cooldown ran out: before 2% of shots when it ran out in the step's first tenth, 31% in
+  its last. An adept with Resonating Glaives read 0 for 3 before every shot, as without (tool `sweep_combat`,
+  `delay-sped-up`, build 75689).
+- **Why a missile lands later when its attacker moves off.** A marauder's and a stalker's missiles fired just before
+  a move order landed some 4 steps later than when the attacker stood (tool `sweep_combat`, `move-before-shot`, build
+  75689; the entry in [damage and buffs](damage-and-buffs.md)).
 - **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it
   answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
   with the point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup,
