@@ -296,9 +296,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN)`. They stay functions, over methods of
     `Api`, which would have `api.py` import `run.py`, which imports it, or move launching and argparse into the class
     a bot's handlers talk to every turn.
-  - `docs/ladder.md` shows a bot's own argument handed to an object whose `__init__` subscribes its handlers, the api
-    staying at module level (the owner, review of #147), over a function that builds the api, which would keep it
-    from its modules, and over module settings of the bot's own.
+  - `docs/ladder.md` shows a bot's own arguments read into a settings dataclass of its own, at module level beside its
+    api, with `parse_known_args(namespace=settings)`, and its handlers plain functions that read it (the owner, review
+    of #147). Chosen over an object built from the settings that subscribes its handlers, which makes each a method,
+    over handlers defined in the main block, which does not scale to many settings, and over a function that builds
+    the api, which keeps it from the modules that register handlers. Subclassing `Api` stays out.
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
   "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
   to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside

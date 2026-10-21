@@ -38,39 +38,57 @@ while `api.enemy.name` reads `None` wherever the game gives no name, as in every
 ## Your own arguments
 
 `run_from_command_line` reads only the arguments above and the match workflow's, and leaves any other for you,
-listing it in the log. Read yours with a parser of your own before the game. The api stays where your modules import
-it, and a handler that needs an argument can be a method of an object built from it, which subscribes itself
-([subscribing](events.md#subscribing)):
+listing it in the log. Read yours before the game into settings of your own, which your handlers read when they run:
+
+```python
+# my_bot/settings.py
+from dataclasses import dataclass
+
+
+@dataclass
+class Settings:
+    """The bot's own settings, read from the command line before the game."""
+
+    build: str | None = None
+    debug: bool = False
+
+
+settings = Settings()
+```
+
+```python
+# my_bot/opening.py, one of the modules that load with my_bot
+from sc2nachos.events import TurnEvent
+
+from my_bot import api
+from my_bot.settings import settings
+
+
+@api.on(TurnEvent, once=True)
+def announce_the_build(event: TurnEvent) -> None:
+    api.chat(f"Playing {settings.build or 'the usual build'}")
+```
 
 ```python
 # run.py
 from argparse import ArgumentParser
 
-from sc2nachos import Api, Race, run_from_command_line
-from sc2nachos.events import TurnEvent
+from sc2nachos import Race, run_from_command_line
 
-api = Api()
-
-
-class Opening:
-    """The handlers that play `build`, or the bot's usual build if `None`."""
-
-    def __init__(self, build: str | None) -> None:
-        self.build = build
-        api.subscribe(self)
-
-    @api.on(TurnEvent, once=True)
-    def announce_the_build(self, event: TurnEvent) -> None:
-        api.chat(f"Playing {self.build or 'the usual build'}")
-
+from my_bot import api
+from my_bot.settings import settings
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--build")
-    own = parser.parse_known_args()[0]
-    Opening(own.build)
+    parser.add_argument("--debug", action="store_true")
+    parser.parse_known_args(namespace=settings)
     run_from_command_line(api, race=Race.TERRAN, name="MyBot")
 ```
+
+`parse_known_args(namespace=settings)` sets each argument given on `settings`, and leaves the dataclass's default for
+one that is not. A bot built of objects can hand them the settings instead, each subscribing its own handlers with
+`api.subscribe(self)` ([subscribing](events.md#subscribing)).
 
 An argument of the other kind of game, such as `--Map` given to a ladder game, is logged as ignored.
 
