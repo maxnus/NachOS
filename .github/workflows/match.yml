@@ -115,7 +115,7 @@ jobs:
     steps:
       - &nachos
         name: Check out the match workflow's own files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: maxnus/NachOS
           ref: ${{ inputs.nachos-ref }}
@@ -187,7 +187,7 @@ jobs:
       # Submodules recorded with SSH urls, as burnysc2 often is, are fetched over https: checkout rewrites
       # git@github.com: itself when it is given no ssh-key, for the fetch only.
       - name: Check out the bot
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.REPO }}
           ref: ${{ needs.prepare.outputs.sha }}
@@ -204,7 +204,7 @@ jobs:
       # A self-hosted runner keeps uv's cache in its user's own cache folder, which outlives the job; a GitHub-hosted
       # runner keeps it in the Actions cache.
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: ${{ runner.environment == 'github-hosted' }}
           cache-local-path: ${{ runner.environment == 'self-hosted' && '~/.cache/uv' || '' }}
@@ -244,7 +244,7 @@ jobs:
       # A game that crashed writes no result; the report counts it from the missing file.
       - name: Keep the result
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: result-${{ matrix.game.number }}
           path: ${{ env.RESULT_FILE }}
@@ -253,7 +253,7 @@ jobs:
 
       - name: Keep the replay
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: replay-${{ matrix.game.number }}
           path: ${{ env.REPLAY_FILE }}
@@ -275,7 +275,7 @@ jobs:
       - *nachos
 
       - name: Collect the results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: result-*
           path: results

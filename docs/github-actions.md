@@ -179,11 +179,11 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: maxnus/NachOS/.github/actions/setup-sc2@main
         with:
           maps: sc2maps/AIE        # optional, one folder per line
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync && uv run python tools/my_tool.py
 ```
 
