@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #150. On branch `claude/live-pathing-grid`, `uv run pytest` passes 2462 tests and
+- nachOS `main` has every PR to #150. On branch `claude/live-pathing-grid`, `uv run pytest` passes 2463 tests and
   `uv run pytest -m integration` passes 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -344,7 +344,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `api.placement.structure_at` and keeping it in `Pathing`): the structure on the ground whose footprint holds the
     point, one in sight before a snapshot over the same ground. Whether a unit stands on the ground is the public
     property `Unit.is_ground_structure`, the owner's name: a lifted structure does not, and a snapshot does, since the
-    game does not report whether it flies. `api.pathing`'s starts and ends take a tile too.
+    game does not report whether it flies. Every `api.pathing` method takes a tile where it takes a point.
 
 ## Next
 

@@ -58,6 +58,12 @@ class TestDistances:
         asked = [(pair.start_pos.x, pair.start_pos.y, pair.end_pos.x, pair.end_pos.y) for pair in request.query.pathing]
         assert asked == [(1, 2, 3, 4), (5, 6, 7.25, 8)]
 
+    def test_a_tile_is_asked_from_and_to_at_its_center(self) -> None:
+        pathing, transport = _answering(4.0)
+        assert pathing.query_distance(Tile(1, 2), Tile(5, 2)) == 4.0
+        (asked,) = transport.requests[0].query.pathing
+        assert (asked.start_pos.x, asked.start_pos.y, asked.end_pos.x, asked.end_pos.y) == (1.5, 2.5, 5.5, 2.5)
+
     def test_a_unit_is_asked_from_by_its_tag(self) -> None:
         pathing, transport = _answering(3.3)
         assert pathing.query_distance(_reaper(), (12, 10)) == pytest.approx(3.3)

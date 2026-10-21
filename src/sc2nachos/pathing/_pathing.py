@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import common_pb2, query_pb2
 
 from sc2nachos.gamemap._game_map import _create_pathing_grid
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Point, Tile
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.units import Unit, Units
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from sc2nachos.geometry import CheapestPaths, Grid, PointLike, Tile, TilePath
+    from sc2nachos.geometry import CheapestPaths, Grid, PointLike, TilePath
     from sc2nachos.protocol import Client
 
 
@@ -97,12 +97,13 @@ class Pathing:
         self._grid = None
         self._present_units = present_units
 
-    def query_distance(self, start: PointLike | Unit[Any], end: PointLike) -> float:
+    def query_distance(self, start: PointLike | Tile | Unit[Any], end: PointLike | Tile) -> float:
         """The pathing distance from `start` to `end`, as `query_distances` asks the game for it for one pair."""
         return self.query_distances([(start, end)])[0]
 
-    def query_distances(self, pairs: Iterable[tuple[PointLike | Unit[Any], PointLike]]) -> list[float]:
-        """The pathing distance from each start to its end, asked of the game in one request.
+    def query_distances(self, pairs: Iterable[tuple[PointLike | Tile | Unit[Any], PointLike | Tile]]) -> list[float]:
+        """The pathing distance from each start to its end, asked of the game in one request, a tile asked from or to
+        at its center.
 
         The game paths over the map as of the turn's observation: a structure in the way is walked around, and a
         lowered supply depot walked over from some 20 steps after the order. From a unit, the distance is that unit's
@@ -115,7 +116,7 @@ class Pathing:
         requests: list[query_pb2.RequestQueryPathing] = []
         coinciding: list[bool] = []
         for start, end in pairs:
-            end_point = Point._rounded_to_float32(end)
+            end_point = Point._rounded_to_float32(end.center if isinstance(end, Tile) else end)
             request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point.x, y=end_point.y))
             if isinstance(start, Unit):
                 if start.is_stale:
@@ -123,7 +124,7 @@ class Pathing:
                 request.unit_tag = start.tag
                 start_point = start.position
             else:
-                start_point = Point._rounded_to_float32(start)
+                start_point = Point._rounded_to_float32(start.center if isinstance(start, Tile) else start)
                 request.start_pos.x, request.start_pos.y = start_point.x, start_point.y
             requests.append(request)
             coinciding.append(start_point == end_point)
