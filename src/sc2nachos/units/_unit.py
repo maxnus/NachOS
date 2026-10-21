@@ -619,6 +619,12 @@ class Unit[K: UnitType.AnyType]:
         """Whether the game's tables give the unit's type the structure attribute."""
         return Attribute.STRUCTURE in self.type_data.attributes
 
+    @property
+    def is_ground_structure(self) -> bool:
+        """Whether the unit is a structure standing on the ground: one not lifted, and one remembered out of sight,
+        whose flying the game does not report."""
+        return self.is_structure and (self._latest_report.display_type == _IN_FOG or not self.is_flying)
+
     def distance_to(self, other: PointLike | Unit[Any]) -> float:
         """The distance from this unit's position to `other`, a point or another unit's position."""
         return self._position.distance_to(other._position if isinstance(other, Unit) else other)

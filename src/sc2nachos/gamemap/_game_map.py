@@ -52,9 +52,8 @@ class GameMap:
         origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
         self._name = info.map_name
         self._playable = playable
-        pathing = image_tiles(start.pathing_grid, playable) != 0
         placement = image_tiles(start.placement_grid, playable) != 0
-        self._pathing = Grid(pathing, origin=origin, outside=False, readonly=True)
+        self._pathing = _create_pathing_grid(start)
         self._placement = Grid(placement, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
@@ -152,6 +151,14 @@ class GameMap:
         Each is a townhall's position, which is a tile's center, so `Tile.containing` reads it exactly.
         """
         return self._opponent_start_locations
+
+
+def _create_pathing_grid(start: raw_pb2.StartRaw) -> Grid[bool]:
+    """Where `start`'s pathing grid lets a ground unit walk over the playable area, as a read-only grid that reads false
+    beyond it."""
+    playable = Rectangle._from_proto(start.playable_area)
+    origin = Tile(start.playable_area.p0.x, start.playable_area.p0.y)
+    return Grid(image_tiles(start.pathing_grid, playable) != 0, origin=origin, outside=False, readonly=True)
 
 
 def _corner_heights(image: common_pb2.ImageData, area: Rectangle) -> ndarray:

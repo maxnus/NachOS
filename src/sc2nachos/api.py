@@ -339,7 +339,8 @@ class Api:
 
     @property
     def pathing(self) -> Pathing:
-        """How units get around the map as it stands now, as the game answers."""
+        """How units get around the map as it stands now: the turn's grid of where ground units walk, paths over it, and
+        distances the game answers."""
         return self._current_game().pathing
 
     @property

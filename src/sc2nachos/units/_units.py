@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
-from sc2nachos.geometry import Area, Point
+from sc2nachos.geometry import Area, Point, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
@@ -17,12 +17,17 @@ if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
 
 
+# How far from a structure's position, along each axis, a point in its footprint can lie: half the widest footprint, a
+# huge rock's 12 tiles, and the tile it centers on.
+_FOOTPRINT_REACH = 7.0
+
+
 @final
 class Units[U: Unit[Any]](Sequence[U]):
     """An immutable, ordered collection of units. Filters keep the order.
 
-    Every filter returns a new collection. A query that picks one unit, such as `closest_to`, raises `ValueError` on
-    an empty collection.
+    Every filter returns a new collection. A query that picks the nearest unit, such as `closest_to`, raises
+    `ValueError` on an empty collection; `structure_at` answers `None` where no structure stands.
     """
 
     __slots__ = ("_by_id", "_units")
@@ -312,6 +317,27 @@ class Units[U: Unit[Any]](Sequence[U]):
             if distance < nearest:
                 nearest = distance
         return math.sqrt(nearest)
+
+    def structure_at(self, point: PointLike | Tile) -> U | None:
+        """The structure on the ground whose footprint holds `point`, a tile reading as its center, or `None` if none of
+        these does. Of one in sight and a snapshot over the same ground, the one in sight; a lifted structure covers no
+        ground."""
+        tile = Tile.containing(point)
+        x, y = _ground(tile.center if isinstance(point, Tile) else point)
+        remembered = None
+        for unit in self._units:
+            position = unit._position
+            if abs(position[0] - x) > _FOOTPRINT_REACH or abs(position[1] - y) > _FOOTPRINT_REACH:
+                continue
+            if not unit.is_ground_structure or (footprint := unit.footprint) is None:
+                continue
+            if tile not in footprint.tiles(at=position):
+                continue
+            if not unit.is_stale and unit.visibility.in_sight:
+                return unit
+            if remembered is None:
+                remembered = unit
+        return remembered
 
     @property
     def center(self) -> Point:

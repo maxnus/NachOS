@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #148. On branch `claude/sweep-pathing`, `uv run pytest` passes 2445 tests, and on
-  `claude/grid-cheapest-paths` `uv run pytest -m integration` passed 36 against a real game (run 2026-10-21).
+- nachOS `main` has every PR to #150. On branch `claude/live-pathing-grid`, `uv run pytest` passes 2463 tests and
+  `uv run pytest -m integration` passes 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -331,6 +331,20 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `api.map.pathing` is no grid to route on, and stays as the game sends it (the owner: it may block fields or a
     townhall that are gone), over opening this player's townhall in it. It misses every later structure and the
     enemy's fields, and reads differently at the two bases; it stays for the map's shape at the start.
+  - The grid to route on is the game's, asked lazily (after #150's sweep): `api.pathing.grid` asks for
+    `RequestGameInfo` the first time it is read in a turn and hands out that grid for the rest of the turn, so a turn
+    that never reads it costs nothing. It is exact for what is in sight and needs no tables, and forgets structures
+    out of sight, which the docs say; chosen over NachOS laying walking footprints on the terrain, and over both.
+  - `api.pathing.cheapest_path(start, end, *, leave_structure=True)` and `cheapest_paths_from(start, *,
+    leave_structure=True)` search the turn's grid, and a path from inside a structure leaves it, its footprint opened
+    on a copy, as the game's query does (the owner's idea of a boolean keyword, named by the owner over
+    `from_inside_structure` and `open_start_structure`). `Grid`'s methods stay plain: a grid knows no structures, and
+    opening the blocked tiles joined to the start can open a cliff.
+  - The structure under a point or a tile is the public `Units.structure_at(point)` (the owner, review of #151, over
+    `api.placement.structure_at` and keeping it in `Pathing`): the structure on the ground whose footprint holds the
+    point, one in sight before a snapshot over the same ground. Whether a unit stands on the ground is the public
+    property `Unit.is_ground_structure`, the owner's name: a lifted structure does not, and a snapshot does, since the
+    game does not report whether it flies. Every `api.pathing` method takes a tile where it takes a point.
 
 ## Next
 
@@ -339,12 +353,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148), combat
   conveniences on a unit (in range, weapon ready, dps), a playback mode that answers a bot's own actions, and ramp
   wall-in sites with their sweep.
-- **A pathing grid kept up to date each step**, to route on in place of `api.map.pathing`. `tools/sweep_pathing.py`
-  measured what it needs (docs/reference/game-behavior/map.md): `RequestGameInfo` asked again answers the pathing grid
-  as of the last observation, in 0.55 ms, blocking the structures in sight, each as it blocks for walking, and nothing
-  out of sight, snapshots included; and the pathing query paths out of any structure it starts in. How NachOS keeps the
-  grid, asking the game or laying known structures' walking footprints on the terrain, is for the owner to decide.
-  Until then AvocaDOS routes on its own `pathing | placement`.
+- **The turn's pathing grid** (this branch): `api.pathing.grid`, and paths over it that leave the structure they start
+  in, on what `tools/sweep_pathing.py` measured (#150). AvocaDOS routes on it at M5, in place of its own
+  `pathing | placement`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them
