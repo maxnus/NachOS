@@ -48,20 +48,27 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   brought a zergling's from 11.7 steps to 8.0, 1.4 times as fast, Resonating Glaives an adept's from 36.8 to 25.0, 1.45
   times, and stim a marine's from 13.7 to 9.3 and a marauder's from 25.2 to 16.4, 1.5 times; over six shots the delay
   below leaves each to within a few percent (tool `sweep_combat`, build 75689).
-- A unit does not fire every cooldown. Each shot adds a delay drawn evenly from -1 to 2 steps, -1/16 to 1/8 of a game
-  second as the game's data editor gives weapons (stated), to the tables' cooldown. The cooldown then falls by 1 a
-  step, never below 0, and the part of a step by which it passes 0 counts toward the next, so shots land on whole steps
-  but come every cooldown and half a step on average. Worked back from the cooldown shown at each of 200 shots of each
-  of eight types at a command center, in two runs, the delays lay between -0.9993 and 1.9993, spread evenly, and a
-  delay's correlation with the last was -0.11 to +0.15 by type, within chance. The mean gap was the cooldown and 0.38
-  to 0.60 steps, over three runs: a marine's, of cooldown 13.77, 12 to 16 steps, 14.3 on average; a zergling's, of
-  11.14, 10 to 14, 11.7 (tool `sweep_combat`, build 75689).
+- A unit does not fire every cooldown. Each shot adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn
+  evenly from 0 to 4095: from -1 step to 3/4096 short of 2, in 4096 even parts of -1/16 to 1/8 of a game second, the
+  range the game's data editor gives weapons (stated). The cooldown then falls by 1 a step, never below 0, and the part
+  of a step by which it passes 0 counts toward the next, so shots land on whole steps but come every cooldown and half
+  a step on average. Worked back from the cooldown shown at each shot at a command center, all 46,600 delays of 25
+  types, workers, melee and ranged units and fliers of the three races, lay on those values. A zergling's 40,000 drew
+  each of the 4096 about 10 times, as evenly as chance gives: -1 itself 8 times, and 2 never, which a value drawn as
+  often would miss once in 17,000 runs. Each other type's 200 to 400 spread alike, the types no different from one
+  another, and a delay's correlation with the last was 0.002 over the zergling's. The mean gap was the cooldown and
+  0.38 to 0.60 steps, in three runs of eight types: a marine's, of cooldown 13.77, 12 to 16 steps, 14.3 on average
+  (tool `sweep_combat`, build 75689). A thor's and an ultralisk's shots do not fit (see [not understood
+  yet](not-understood-yet.md)).
 - A cooldown can read 0 for a few steps before the unit fires. Traced over ten shots, a marauder's and a zealot's rose
   in the step it ran out, a marine's after 1 step at 0, and a zergling's, a stalker's, a roach's, a hydralisk's and a
-  siege tank's after 3, at every shot. Those steps count toward the next cooldown: the cooldown shown when it rises is
-  that much lower, and the unit fires no less often. An instant attack's damage lands in the step the cooldown rises,
-  a marine's, a zergling's, a zealot's first blade and a siege tank's, and a missile's later, from beside a command
-  center a hydralisk's 3 steps later, a marauder's 4 and a stalker's and a roach's 5 (tool `sweep_combat`, build 75689).
+  siege tank's after 3, at every shot; the gaps between shots give the same counts, and for more types a reaper's and
+  a mutalisk's 0, a ghost's and a colossus's 2, a worker's, a cyclone's, a banshee's, an adept's, an immortal's, an
+  archon's, a tempest's and a queen's 3, a hellion's and a ravager's 4 and a dark templar's 6, at every shot of 200.
+  Those steps count toward the next cooldown: the cooldown shown when it rises is that much lower, and the unit fires
+  no less often. An instant attack's damage lands in the step the cooldown rises, a marine's, a zergling's, a zealot's
+  first blade and a siege tank's, and a missile's later, from beside a command center a hydralisk's 3 steps later, a
+  marauder's 4 and a stalker's and a roach's 5 (tool `sweep_combat`, build 75689).
 
 ## Buffs
 

@@ -2,6 +2,11 @@
 
 Part of [how the game behaves](README.md), which says how each entry was seen.
 
+- **How a thor's and an ultralisk's shots are timed.** A thor firing at a command center showed its cooldown rise about
+  three times for each 48 steps of its ground weapon's cooldown, 7 to 23 steps apart, some rises to 0 from below it. An
+  ultralisk at one read 0 for 6 steps before most shots, as the rule for the other types has it, but 5, 7 or 8 before
+  some, and 17 of its 200 shots came up to 1.8 steps later than a delay of 2 allows (tool `sweep_combat`,
+  `delay-weapons`, build 75689; the rule in [damage and buffs](damage-and-buffs.md)).
 - **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it
   answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
   with the point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup,

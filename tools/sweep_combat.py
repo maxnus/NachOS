@@ -22,8 +22,11 @@ a light target, an armored one and one that flies, before and after this player'
 player's, by the steps at which its cooldown rises, before this player's upgrades and after, a marine and a marauder
 then stimmed too.
 
-`shot-timing` times `_TIMED_SHOTS` shots of each of a few attackers at a command center healed as it goes, with no
-upgrade and no cheat but `show_map`, and records the steps between shots and the cooldown each showed at its shot.
+`shot-timing` times `_TIMED_SHOTS` shots of each of a few attackers at a command center healed as it goes, over as
+many trials as it takes, with no upgrade and no cheat but `show_map`, and records the steps between shots, the
+cooldown each showed at its shot and the delay added to each shot's cooldown, worked back. `delay-bounds` does the
+same for `_SHOTS_FOR_DELAY_BOUNDS` shots of a zergling, and `delay-weapons` for `_TIMED_SHOTS` shots of each of more
+attackers.
 
 `cooldown-trace` reads the same attackers' cooldowns and the command center's health at every step over
 `_TRACED_SHOTS` shots after the first, and records how long the cooldown read 0 before each shot and when the target
@@ -34,6 +37,8 @@ lost health::
     uv run python tools/sweep_combat.py no-weapon --out combat-no-weapon.json
     uv run python tools/sweep_combat.py attack-speed --out combat-attack-speed.json
     uv run python tools/sweep_combat.py shot-timing --out combat-shot-timing.json
+    uv run python tools/sweep_combat.py delay-bounds --out combat-delay-bounds.json
+    uv run python tools/sweep_combat.py delay-weapons --out combat-delay-weapons.json
     uv run python tools/sweep_combat.py cooldown-trace --out combat-cooldown-trace.json
 """
 
@@ -701,8 +706,12 @@ def measure_attack_speed(installation: Installation) -> list[AttackIntervalFindi
 
 
 _TIMED_SHOTS = 200
-# How many steps an attacker is given per shot timed, at the slowest cooldown timed, a roach's or a stalker's, and more.
-_STEPS_PER_TIMED_SHOT = 48
+# How many shots of one attacker are timed for the ends of the delay's range: about ten for each of the 4096 values the
+# delay takes (in game).
+_SHOTS_FOR_DELAY_BOUNDS = 40_000
+# The most steps one trial runs before its units are made afresh: a game of two went to a tie after some 8000 steps
+# in which no unit was made or killed (in game), so an attacker's shots are timed over as many trials as it takes.
+_LONGEST_TRIAL_STEPS = 5000
 # How often the command center fired at is healed back to its full life, so that no attacker kills it.
 _HEALING_EVERY_STEPS = 32
 _SHOT_TIMING_TRIALS = (
@@ -714,6 +723,29 @@ _SHOT_TIMING_TRIALS = (
     UnitTypeId.ROACH,
     UnitTypeId.HYDRALISK,
     UnitTypeId.SIEGE_TANK,
+)
+# More weapons, of every race, of workers, melee and ranged units, fliers, and of several hits or a bounce, to check
+# the delay against the eight above.
+_DELAY_WEAPON_TRIALS = (
+    UnitTypeId.SCV,
+    UnitTypeId.PROBE,
+    UnitTypeId.DRONE,
+    UnitTypeId.REAPER,
+    UnitTypeId.GHOST,
+    UnitTypeId.HELLION,
+    UnitTypeId.CYCLONE,
+    UnitTypeId.THOR,
+    UnitTypeId.BANSHEE,
+    UnitTypeId.ADEPT,
+    UnitTypeId.IMMORTAL,
+    UnitTypeId.COLOSSUS,
+    UnitTypeId.ARCHON,
+    UnitTypeId.DARK_TEMPLAR,
+    UnitTypeId.TEMPEST,
+    UnitTypeId.QUEEN,
+    UnitTypeId.RAVAGER,
+    UnitTypeId.MUTALISK,
+    UnitTypeId.ULTRALISK,
 )
 
 
@@ -739,16 +771,17 @@ class ShotTimingFinding:
     tables' cooldown. Empty if the tables give the attacker no weapon."""
 
 
-def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTimingFinding:
+def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point, shots_timed: int) -> ShotTimingFinding:
     """Make a command center of the other player's at `at`, healed every `_HEALING_EVERY_STEPS`, and an attacker of
-    this player's beside it, and time `_TIMED_SHOTS` of its shots by the steps at which its cooldown rises."""
+    this player's beside it, and time `shots_timed` of its shots by the steps at which its cooldown rises, or as many
+    as come in `_LONGEST_TRIAL_STEPS`."""
     me = rivals.me
     attacker, target, table_cooldown_steps = _by_a_command_center(rivals, attacker_type, at)
     me.order(RawAbilityId.Attack, attacker.tag, target.tag)
     shots: list[int] = []
     cooldowns: list[float] = []
     last = 0.0
-    for step in range(_TIMED_SHOTS * _STEPS_PER_TIMED_SHOT):
+    for step in range(_LONGEST_TRIAL_STEPS):
         if step % _HEALING_EVERY_STEPS == 0:
             me.set_value(_LIFE_VALUE, target.health_max, [target.tag])
         rivals.step(1)
@@ -758,7 +791,7 @@ def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTi
         if now.weapon_cooldown > last:
             shots.append(step)
             cooldowns.append(now.weapon_cooldown)
-            if len(shots) > _TIMED_SHOTS:
+            if len(shots) > shots_timed:
                 break
         last = now.weapon_cooldown
     _kill_and_wait(rivals, [attacker.tag, target.tag])
@@ -797,17 +830,42 @@ def _shot_timing(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> ShotTi
     return finding
 
 
-def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
-    """Every trial of `_SHOT_TIMING_TRIALS`, with neither side upgraded and no cheat but `show_map`."""
+def _shots_timed(
+    installation: Installation, attacker_types: Sequence[UnitTypeId], shots: int
+) -> list[ShotTimingFinding]:
+    """`shots` shots of each of `attacker_types`, timed with neither side upgraded and no cheat but `show_map`, over
+    as many trials of `_LONGEST_TRIAL_STEPS` at most as it takes, each a finding. An attacker that fires fewer than
+    twice in a trial is not tried again."""
     findings = []
     with playing_rivals(Race.TERRAN, installation) as rivals:
         me = rivals.me
         me.cheat(Cheat.SHOW_MAP)
         rivals.step(_SETTLING_STEPS)
         at = _trial_ground(rivals)
-        for attacker_type in _SHOT_TIMING_TRIALS:
-            findings.append(_shot_timing(rivals, attacker_type, at))
+        for attacker_type in attacker_types:
+            timed = 0
+            while timed < shots:
+                finding = _shot_timing(rivals, attacker_type, at, shots - timed)
+                findings.append(finding)
+                if len(finding.shot_steps) < 2:
+                    break
+                timed += len(finding.shot_steps) - 1
     return findings
+
+
+def measure_shot_timing(installation: Installation) -> list[ShotTimingFinding]:
+    """`_TIMED_SHOTS` shots of each attacker of `_SHOT_TIMING_TRIALS`."""
+    return _shots_timed(installation, _SHOT_TIMING_TRIALS, _TIMED_SHOTS)
+
+
+def measure_delay_bounds(installation: Installation) -> list[ShotTimingFinding]:
+    """`_SHOTS_FOR_DELAY_BOUNDS` shots of a zergling, the quickest of `_SHOT_TIMING_TRIALS`."""
+    return _shots_timed(installation, (UnitTypeId.ZERGLING,), _SHOTS_FOR_DELAY_BOUNDS)
+
+
+def measure_delay_weapons(installation: Installation) -> list[ShotTimingFinding]:
+    """`_TIMED_SHOTS` shots of each attacker of `_DELAY_WEAPON_TRIALS`."""
+    return _shots_timed(installation, _DELAY_WEAPON_TRIALS, _TIMED_SHOTS)
 
 
 # How many shots are traced, each from the shot before it: few enough that no attacker kills the command center, which
@@ -852,7 +910,7 @@ def _cooldown_trace(rivals: Rivals, attacker_type: UnitTypeId, at: Point) -> Coo
     readings: list[TracedStep] = []
     shots: list[int] = []
     last = 0.0
-    for step in range(_TRACED_SHOTS * _STEPS_PER_TIMED_SHOT):
+    for step in range(_LONGEST_TRIAL_STEPS):
         rivals.step(1)
         units = {unit.tag: unit for unit in me.units()}
         attacker_now, target_now = units.get(attacker.tag), units.get(target.tag)
@@ -916,6 +974,8 @@ def main(argv: Sequence[str]) -> None:
         "no-weapon": measure_no_weapon,
         "attack-speed": measure_attack_speed,
         "shot-timing": measure_shot_timing,
+        "delay-bounds": measure_delay_bounds,
+        "delay-weapons": measure_delay_weapons,
         "cooldown-trace": measure_cooldown_trace,
     }
     parser.add_argument("mode", choices=tuple(measures))
