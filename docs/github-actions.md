@@ -159,9 +159,10 @@ To post the report on the pull request, add a job after the match:
 
 On a self-hosted runner, `setup-sc2` uses the client already installed there and never downloads one. Install the
 [Linux 4.10 client](https://github.com/Blizzard/s2client-proto#downloads) on the machine, and set `SC2PATH` to it
-unless it is at `~/StarCraftII`. Your maps are still
-copied in for each game. uv keeps the packages it downloads in the runner user's `~/.cache/uv`, where later games
-find them; `uv cache prune` clears out the ones no longer used.
+unless it is at `~/StarCraftII`. The runner must be version 2.327.1 or later, which the actions these jobs use need
+and a runner that updates itself already is. Your maps are still copied in for each game. uv keeps the packages it
+downloads in the runner user's `~/.cache/uv`, where later games find them; `uv cache prune` clears out the ones no
+longer used.
 
 Keep self-hosted runners off public repositories: a pull request from a fork could run its code on your machine.
 
@@ -179,11 +180,11 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: maxnus/NachOS/.github/actions/setup-sc2@main
         with:
           maps: sc2maps/AIE        # optional, one folder per line
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync && uv run python tools/my_tool.py
 ```
 

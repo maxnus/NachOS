@@ -59,7 +59,7 @@ runs:
     - name: Restore the client from the cache
       id: restore
       if: steps.locate.outputs.installed != 'true' && inputs.cache == 'true'
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: ${{ steps.locate.outputs.path }}
         key: sc2-linux-4.10-${{ runner.os }}-${{ runner.arch }}
@@ -82,7 +82,7 @@ runs:
 
     - name: Keep the client in the cache
       if: steps.locate.outputs.installed != 'true' && steps.restore.outputs.cache-hit != 'true' && inputs.cache == 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: ${{ steps.locate.outputs.path }}
         key: sc2-linux-4.10-${{ runner.os }}-${{ runner.arch }}
