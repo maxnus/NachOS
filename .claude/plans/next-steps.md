@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #150. On branch `claude/live-pathing-grid`, `uv run pytest` passes 2463 tests and
-  `uv run pytest -m integration` passes 37 against a real game (run 2026-10-21).
+- nachOS `main` has every PR to #151. On branch `claude/sweep-combat`, `uv run pytest` passes 2463 tests, and on
+  `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -345,17 +345,31 @@ Keep this file current: when a step is done, say so here in the same pull reques
     point, one in sight before a snapshot over the same ground. Whether a unit stands on the ground is the public
     property `Unit.is_ground_structure`, the owner's name: a lifted structure does not, and a snapshot does, since the
     game does not report whether it flies. Every `api.pathing` method takes a tile where it takes a point.
+- **Combat conveniences on a unit** (the owner, 2026-10-21, one question at a time, M5's gap 4):
+  - `unit.weapon_against(target) -> Weapon | None`, the weapon that can hit `target` by whether it flies, air weapons
+    hitting a colossus too; `unit.has_in_range(target, *, margin=0.0)`; `unit.damage_against(target)`, one attack's
+    damage after the bonus, armor and shields, hits on shields first; `unit.dps_against(target)`; and `Weapon.dps`,
+    damage x attacks per real second. Weapon ready stays `weapon_cooldown_steps == 0`. Chosen over python-sc2's
+    per-domain set and over leaving damage out; named over `reaches`/`_on` and over asking the target.
+  - The attackers the tables give no weapon, the battlecruiser, oracle, void ray and sentry, get the weapons
+    `tools/sweep_combat.py` measured, written into NachOS's generated data and marked as measured, over leaving them
+    weaponless; the carrier stays weaponless, its interceptors carrying the weapon.
+  - Attack speed counts upgrades and buffs (over upgrades alone and over neither): Adrenal Glands and Resonating
+    Glaives shorten `cooldown_steps` for the side that has them, and `dps_against` counts the buffs a unit has, stim
+    among them.
 
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
-  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148), combat
+  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
   conveniences on a unit (in range, weapon ready, dps), a playback mode that answers a bot's own actions, and ramp
   wall-in sites with their sweep.
-- **The turn's pathing grid** (this branch): `api.pathing.grid`, and paths over it that leave the structure they start
-  in, on what `tools/sweep_pathing.py` measured (#150). AvocaDOS routes on it at M5, in place of its own
-  `pathing | placement`.
+- **The combat conveniences**: `tools/sweep_combat.py` measured what they rest on (this branch,
+  docs/reference/game-behavior/damage-and-buffs.md). A unit reaches another at its range and both radii exactly, but
+  an attacker that cannot move reaches some 0.1 less and a structure is reached as though its radius were smaller,
+  by 0.05 to 0.26 and by direction; how `has_in_range` treats a structure is for the owner to decide before the
+  conveniences are built.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

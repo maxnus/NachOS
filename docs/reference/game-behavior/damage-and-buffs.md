@@ -6,7 +6,6 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 
 - Shield armor is the shields level: a marine's 6 damage took 5, 4 and 3 off a zealot's shields at levels 1, 2 and
   3. No table holds shield armor (#31).
-- A colossus lands 2 hits per attack (stated). Range is measured horizontally (stated).
 - Every unit below its maximum energy regenerates some every step (#37).
 - A feedback cost the high templar 50 energy and drained all 100 of a raven's, dealing 50 damage, and left no buff
   and no effect. An EMP cost the ghost 75 and drained 100 of a raven's 150 (#37; tested).
@@ -16,6 +15,38 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   has its own pending effect id (#5).
 - Since 4.12.0 Microbial Shroud needs no research: an infestor with no upgrades is offered it and casts it (#23).
 - A unit under attack that cannot fight back drifts away unless it holds position (tool `sweep_alerts`).
+
+## Reach, damage and attack speed
+
+- A unit fires at another while their centers are no farther apart than its weapon's range and both radii, across or
+  diagonally alike, to within 0.01: a marine at an SCV out to 5.75, its 5 and two radii of 0.375, at an overlord and at
+  a colossus 6.375, a viking at an overlord 10.75 and an unsieged tank at an SCV 8.25. Range is measured horizontally
+  (stated) (tool `sweep_combat`, build 75689).
+- Air weapons hit a colossus, which does not read flying: a viking, with no ground weapon, fired at one out to 10.75, as
+  at an overlord (tool `sweep_combat`, build 75689).
+- An attacker that cannot move reaches some 0.1 less: a missile turret fired at an overlord out to 9.00 to 9.06 of its
+  9.125, a planetary fortress at an SCV to 9.01 of 9.125, a spine crawler to 8.41 of 8.5 and a sieged tank to 14.12 of
+  14.25. A structure is reached as though its radius were smaller, and more so across than diagonally: a supply depot's
+  1.25 as 0.99 across and 1.05 diagonally, a barracks's 1.8125 as 1.57 and 1.76, a command center's 2.75 as 2.66 across.
+  Runs agreed to within 0.04, though the game moves a unit made beside a structure where something stands in the way,
+  which left some trials without an answer (tool `sweep_combat`, build 75689).
+- The tables give the battlecruiser, the oracle, the void ray and the sentry no weapon, though they attack: a
+  battlecruiser 8 to the ground and 5 to the air every 3 to 4 steps, 3.6 on average, at range 6; a void ray 6, and 4
+  more against armored, every 8 steps at 6, to both; a sentry 6 every 16 steps at 5, to both; and an oracle with its
+  beam on, against the ground, 22 to an SCV and 15 to a roach every 14 steps at 4. Each attack level adds 1 to the first
+  three and nothing to the oracle's, and armor comes off as for any weapon (tool `sweep_combat`, build 75689).
+- A hit takes off its weapon's damage and the bonus against the target's attributes, the attacker's upgrades in both.
+  From health it takes that less the armor, but at least 0.5; from shields, first, that less the shields level, and what
+  is more than the shields goes on to health less the armor, at nothing at least. A marine's 6 took 5 off a roach, with
+  armor 1, and 0.5 off an ultralisk with 7; 6 off a zealot's shields and 3 at shields level 3; and of a zealot's last
+  2.62 shields, those and 2.38 of its health. A marauder's 10 and 10 against armored took 19 off a roach and 20 off a
+  stalker's shields, 17 at level 3 (tool `sweep_combat`, build 75689).
+- A zealot's attack is 2 hits of 8, 4 steps apart, and a colossus's 2 beams land together, 15 each on a zergling (tool
+  `sweep_combat`, build 75689).
+- The tables' cooldowns leave out what speeds an attack up. Timed over six shots at a command center, Adrenal Glands
+  brought a zergling's from 11.7 steps to 8.0, 1.4 times as fast, Resonating Glaives an adept's from 36.8 to 25.0, 1.45
+  times, and stim a marine's from 13.7 to 9.3 and a marauder's from 25.2 to 16.4, 1.5 times. A unit fires on whole
+  steps, so a cooldown of 13.77 steps fires 13 or 14 apart (tool `sweep_combat`, build 75689).
 
 ## Buffs
 
