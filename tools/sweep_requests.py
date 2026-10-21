@@ -31,7 +31,7 @@ Needs StarCraft II installed. Each sweep plays its own games on the sandbox's ma
   - from an unknown tag;
   - into and out of a ring of supply depots, raised and lowered, every 2 steps, observing each time or not at all.
 
-  It times one pair and 100, and compares 100 random pairs with `Grid.path_distance_from`.
+  It times one pair and 100, and compares 100 random pairs with `Grid.cheapest_paths_from`.
 - `tables` asks for the tables in a game against the computer, and in a game of two of each player, and records each
   row that differs from the first corpus game's, with the fields that differ, and how many rows differ only in which
   empty fields they set.
@@ -470,7 +470,7 @@ def _cliff(game_map: GameMap, near: Point) -> tuple[Point, Point]:
     pathing, height = game_map.pathing, game_map.height
     start = game_map.start_location
     main_height = game_map.height_at(start)
-    distances = pathing.path_distance_from(near)
+    distances = pathing.cheapest_paths_from(near).distances
     best: tuple[float, Point, Point] | None = None
     centers = _tile_centers(pathing.values, (pathing.origin.x, pathing.origin.y))
     high = [p for p in centers if abs(height[p] - main_height) < 0.5 and math.dist(p, start) < 30]
@@ -514,7 +514,7 @@ def _timed(call: Callable[[], object]) -> float:
 
 def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
     """What the pathing query answers in the cases the module docstring lists, how long it takes, and how it compares
-    with `Grid.path_distance_from`."""
+    with `Grid.cheapest_paths_from`."""
     findings: dict[str, Any] = {}
     with playing(Race.TERRAN, installation) as sandbox:
         client = sandbox.client
@@ -526,7 +526,7 @@ def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
         near = min((p for p in centers if 7 <= math.dist(p, start) <= 9), key=lambda p: math.dist(p, start))
         findings["near"] = near
         # The start's grid blocks the townhall the start location lies in, so distances are taken from `near`.
-        from_near = grid.path_distance_from(near)
+        from_near = grid.cheapest_paths_from(near).distances
 
         offsets = (0.0, 0.1, 0.5, 1.0, 2.0)
         answers = _pathing_query(sandbox, [(near, Point((near.x + offset, near.y))) for offset in offsets])
@@ -556,7 +556,7 @@ def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
         }
         answers = _pathing_query(sandbox, list(townhall_pairs.values()))
         findings["townhall"] = dict(zip(townhall_pairs, answers, strict=True))
-        findings["townhall_by_the_grid"] = {"near_from_start": grid.path_distance_from(start)[near]}
+        findings["townhall_by_the_grid"] = {"near_from_start": grid.cheapest_paths_from(start).distances[near]}
 
         try:
             findings["unknown_tag"] = _pathing_query(sandbox, [(123456789, near)])
@@ -572,7 +572,7 @@ def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
         }
         cliff: dict[str, Any] = {"top": top, "bottom": bottom, "straight": math.dist(top, bottom)}
         cliff["from_the_point"] = _pathing_query(sandbox, [(top, bottom)])[0]
-        cliff["grid"] = grid.path_distance_from(top)[bottom]
+        cliff["grid"] = grid.cheapest_paths_from(top).distances[bottom]
         for unit_type in movers:
             if (unit := by_type.get(unit_type)) is not None:
                 from_tag, from_position = _pathing_query(sandbox, [(unit.tag, bottom), (_at(unit), bottom)])
@@ -619,7 +619,9 @@ def sweep_pathing_queries(installation: Installation) -> dict[str, Any]:
         reachable = [p for p in centers if math.isfinite(from_near[p])]
         pairs = [(rng.choice(reachable), rng.choice(reachable)) for _ in range(100)]
         answers = _pathing_query(sandbox, pairs)
-        compared = [(answer, grid.path_distance_from(a)[b]) for (a, b), answer in zip(pairs, answers, strict=True)]
+        compared = [
+            (answer, grid.cheapest_paths_from(a).distances[b]) for (a, b), answer in zip(pairs, answers, strict=True)
+        ]
         ratios = [
             answer / by_grid for answer, by_grid in compared if answer > 0 and by_grid > 0 and math.isfinite(by_grid)
         ]

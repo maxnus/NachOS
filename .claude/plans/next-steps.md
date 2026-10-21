@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #146. On branch `claude/runners-take-the-api`, `uv run pytest` passes 2439 tests
+- nachOS `main` has every PR to #147. On branch `claude/grid-cheapest-paths`, `uv run pytest` passes 2445 tests
   and `uv run pytest -m integration` passes 36 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -206,8 +206,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     distances, and is built as a zone around each resource that no townhall's footprint may cover.
   - A group of 6 to 10 mineral fields is an expansion: fewer are a blocker, more a wall. A geyser more than 11 from its
     group's townhall gets an expansion of its own, sharing the fields, as on Torches' gold bases.
-  - They come nearest this player's start first by pathing distance, from the public `Grid.path_distance_from`, which
-    gives distances, never a path ("pathing distance", never "walking distance"). Each says `is_start_location` and
+  - They come nearest this player's start first by pathing distance, from the distances of the public
+    `Grid.cheapest_paths_from` ("pathing distance", never "walking distance"). Each says `is_start_location` and
     `pathing_distance_from_start`; ranking by the opponent's distance too is the bot's judgment.
   - They are found by the private classmethod `Expansion._find_all(game_map, neutral_units)`, so that `GameMap`
     knows nothing of units and `api.expansions` stays the one public spelling.
@@ -318,14 +318,32 @@ Keep this file current: when a step is done, say so here in the same pull reques
   of the debris alone), without `ROCKS_2X2_NON_CONJOINED`; `InhibitorZone`, `AccelerationZone`, `AnyTerranTownhall`
   and `AnyZergTownhall`. Each group is in every group that holds all its types, so `AnyDrone` is a `Worker` and
   `CollapsibleTower` a `Structure`.
+- **Paths on a grid** (the owner, 2026-10-21, one question at a time), on semita
+  ([github.com/maxnus/semita](https://github.com/maxnus/semita)), the C package AvocaDOS's `external/pathfinding`
+  became, a package of its own so that NachOS ships no compiled code (the owner):
+  - `Grid.cheapest_path(start, end) -> TilePath | None` and `Grid.cheapest_paths_from(start) -> CheapestPaths`, with
+    read-only `costs` and `distances` grids and `path_to(end)`, over a one-path method alone and over keeping
+    `path_distance_from` beside them. A grid's values are its tiles' costs, a grid of bools as before.
+  - Named as in semita, whose `find_path` became `cheapest_path` in 0.2.0 for the pair (the owner's idea), over
+    `path_between` and `paths_from`, and over AvocaDOS's plan's `Grid.path_to(start, end)`.
+  - `TilePath` stays, with no cost, over a `cost: float | None` and over retiring it for `semita.Path`, whose rows are
+    the searched grid's indices, with no `Tile`s; a path's cost is `cheapest_paths_from(a).costs[b]`.
+  - `api.map.pathing` is no grid to route on, and stays as the game sends it (the owner: it may block fields or a
+    townhall that are gone), over opening this player's townhall in it. It misses every later structure and the
+    enemy's fields, and reads differently at the two bases; it stays for the map's shape at the start.
 
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
-  replay saving, and the runners taking the api with `race` and `name`, this branch), `Grid.path_to`, combat
+  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (this branch), combat
   conveniences on a unit (in range, weapon ready, dps), a playback mode that answers a bot's own actions, and ramp
   wall-in sites with their sweep.
+- **A pathing grid kept up to date each step**, from the units this player knows of, as `api.placement.dynamic` is: the
+  ground minus every structure, resource and rock still standing, to route on in place of `api.map.pathing`. A sweep
+  first measures how much ground each structure blocks for walking, which is not its placement footprint (a townhall
+  blocks 21 of its 25 tiles), and what a path starting inside a structure should do, since the game's own query paths
+  out of it. Until then AvocaDOS routes on its own `pathing | placement`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

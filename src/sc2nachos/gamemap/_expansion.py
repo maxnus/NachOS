@@ -171,4 +171,4 @@ def _pathing_distance_from_start(pathing: Grid[bool], start: Point) -> Grid[floa
     footprint_xs = slice(max(x - townhall_half_width, 0), x + townhall_half_width + 1)
     footprint_ys = slice(max(y - townhall_half_width, 0), y + townhall_half_width + 1)
     walkable[footprint_xs, footprint_ys] = True
-    return Grid(walkable, origin=pathing.origin).path_distance_from(start)
+    return Grid(walkable, origin=pathing.origin).cheapest_paths_from(start).distances

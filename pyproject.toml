@@ -22,6 +22,7 @@ dependencies = [
     "websocket-client>=1.9",
     "numpy>=2.1",
     "scipy>=1.14",
+    "semita>=0.2",
     "loguru>=0.7",
 ]
 

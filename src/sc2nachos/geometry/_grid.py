@@ -1,21 +1,23 @@
-"""A grid of per-tile values laid over a rectangular patch of the map."""
+"""A grid of per-tile values laid over a rectangular patch of the map, and the cheapest paths across one."""
 
 from __future__ import annotations
 
+import contextlib
 import math
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy
 import scipy.ndimage
-from scipy.sparse import coo_array
-from scipy.sparse.csgraph import dijkstra
+import semita
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.geometry._shapes import Rectangle, Tile
+from sc2nachos.geometry._tile_path import TilePath
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from numpy import ndarray
 
@@ -38,8 +40,8 @@ class Grid[T: float]:
     `origin` is the tile at the grid's lower left corner, so a grid can cover the playable area alone. An area
     reaching past the edge is clipped to the tiles the grid holds; a point outside it raises `IndexError`.
 
-    A grid the library shares, such as the map's, is `readonly` and refuses every write. `copy()` gives a writable
-    one, as does every other grid derived from it.
+    A grid the library shares, such as the map's, and the grids of `CheapestPaths` are `readonly` and refuse every
+    write. `copy()` gives a writable one, as does every other grid derived from one.
     """
 
     __slots__ = ("_data", "_origin", "_outside", "_readonly")
@@ -381,40 +383,50 @@ class Grid[T: float]:
             distances = numpy.asarray(scipy.ndimage.distance_transform_edt(self._data, return_indices=False))
         return Grid(distances, origin=self._origin, outside=outside)
 
-    def path_distance_from(self: Grid[bool], point: PointLike, *, outside: float | None = None) -> Grid[float]:
-        """The length of the shortest path from the tile holding `point` to each tile's center, over true tiles: `inf`
-        where no path reaches. A nonzero value counts as true.
+    def cheapest_path(self, start: PointLike | Tile, end: PointLike | Tile) -> TilePath | None:
+        """The cheapest path from the tile holding `start` to the tile holding `end`, or `None` if there is none. Of
+        several equally cheap paths it is one, but which is not part of the contract.
 
-        A path steps to a tile sharing a side or a corner, and across a corner only where both tiles sharing a side
-        with the two are true. The tile holding `point` reads 0 even when false, but no path leaves a false tile, so
-        every other tile then reads `inf`. Raises `IndexError` for a point the grid does not cover.
+        Each tile's value is the cost of moving one unit of distance across it, and 0 and `inf` block it, so on a grid
+        of bools, where true costs 1 and false blocks, the cheapest path is a shortest one. A negative or NaN value
+        raises `ValueError`. A step goes to a tile sharing a side or a corner, 1 or sqrt(2) long, and costs its length
+        times the mean of the two tiles' values; a diagonal step needs both tiles sharing a side with the two passable,
+        so no path cuts a corner. The start is a path to itself even on a blocked tile, but no path leaves one. Raises
+        `IndexError` for a point the grid does not cover.
         """
-        # Each step a path can take to a neighboring tile, across, up or diagonally, with its length. The steps back the
-        # other way are the same edges of an undirected graph.
-        neighbor_steps = ((1, 0, 1.0), (0, 1, 1.0), (1, 1, math.sqrt(2)), (1, -1, math.sqrt(2)))
-        start = self.index_of(point)
-        passable = self._data.astype(bool, copy=False)
-        width, height = passable.shape
-        tiles = numpy.arange(width * height).reshape(width, height)
-        sources, targets, lengths = [], [], []
-        for dx, dy, length in neighbor_steps:
-            # The tiles a step leaves from and lands on, as slices of the grid lined up with each other.
-            from_xs, to_xs = slice(0, width - dx), slice(dx, width)
-            from_ys, to_ys = (
-                (slice(0, height - dy), slice(dy, height)) if dy >= 0 else (slice(-dy, height), slice(0, height + dy))
-            )
-            open_step = passable[from_xs, from_ys] & passable[to_xs, to_ys]
-            if dx and dy:
-                open_step &= passable[to_xs, from_ys] & passable[from_xs, to_ys]
-            sources.append(tiles[from_xs, from_ys][open_step])
-            targets.append(tiles[to_xs, to_ys][open_step])
-            lengths.append(numpy.full(int(open_step.sum()), length))
-        steps = coo_array(
-            (numpy.concatenate(lengths), (numpy.concatenate(sources), numpy.concatenate(targets))),
-            shape=(width * height, width * height),
-        )
-        distances = dijkstra(steps.tocsr(), directed=False, indices=int(tiles[start]))
-        return Grid(numpy.asarray(distances).reshape(width, height), origin=self._origin, outside=outside)
+        start_index = self.index_of(start)
+        end_index = self.index_of(end)
+        with self._bad_cost_named_by_its_tile():
+            found = semita.cheapest_path(self._data, start_index, end_index)
+        return None if found is None else _semita_path_to_tile_path(found, self._origin)
+
+    def cheapest_paths_from(self, start: PointLike | Tile, *, outside: float | None = None) -> CheapestPaths:
+        """The cheapest path from the tile holding `start` to every tile, over the steps `cheapest_path` takes, found in
+        one search: their costs, their lengths and each one's tiles. `outside` is what the costs and the lengths read
+        beyond the grid. Raises as `cheapest_path` does.
+        """
+        start_index = self.index_of(start)
+        with self._bad_cost_named_by_its_tile():
+            found = semita.cheapest_paths_from(self._data, start_index)
+        costs = Grid(found.costs, origin=self._origin, outside=outside, readonly=True)
+        distances = Grid(found.distances, origin=self._origin, outside=outside, readonly=True)
+        return CheapestPaths(costs, distances, found)
+
+    @contextlib.contextmanager
+    def _bad_cost_named_by_its_tile(self) -> Iterator[None]:
+        """Within it, the `ValueError` a search raises for a negative or NaN cost names the cost's tile rather than its
+        index into `values`."""
+        try:
+            yield
+        except ValueError as error:
+            bad_costs = numpy.argwhere(~(self._data >= 0))
+            if not len(bad_costs):
+                raise
+            index = (int(bad_costs[0][0]), int(bad_costs[0][1]))
+            tile = self.tile_at(index)
+            cost = self._data.item(index)
+            message = f"the cost at {tile!r} is {cost!r}; a tile's cost is positive, or 0 or inf to block it"
+            raise ValueError(message) from error
 
     def smoothed(self, sigma: float, *, within: Grid[bool] | None = None, outside: float | None = None) -> Grid[float]:
         """A Gaussian blur of the values, `sigma` measured in tiles.
@@ -584,3 +596,31 @@ class Grid[T: float]:
 
     def __repr__(self) -> str:
         return f"Grid({self.width}x{self.height} of {self._data.dtype} at {self._origin!r})"
+
+
+@final
+@dataclass(frozen=True, slots=True, eq=False)
+class CheapestPaths:
+    """The cheapest path from one tile to every tile of a grid, which on a grid of bools is a shortest one; of several
+    equally cheap paths to a tile, one of them."""
+
+    costs: Grid[float]
+    """Each tile's cheapest path's cost, `inf` where no path reaches; read-only."""
+    distances: Grid[float]
+    """Each tile's cheapest path's length, `inf` where no path reaches; read-only. On a grid of bools, the costs."""
+    _found: semita.CheapestPaths = field(repr=False)
+    """What the search found, by the grid's indices."""
+
+    def path_to(self, end: PointLike | Tile) -> TilePath | None:
+        """The cheapest path to the tile holding `end`, whose cost and length are `costs` and `distances` there, or
+        `None` if no path reaches it. Raises `IndexError` for a point the grid does not cover, even where `costs` reads
+        a value beyond it.
+        """
+        found = self._found.path_to(self.costs.index_of(end))
+        return None if found is None else _semita_path_to_tile_path(found, self.costs.origin)
+
+
+def _semita_path_to_tile_path(found: semita.Path, origin: Tile) -> TilePath:
+    """`found`, a path by a grid's indices, as the tiles it crosses on a grid whose lower left tile is `origin`."""
+    origin_x, origin_y = origin.x, origin.y
+    return TilePath([Tile(origin_x + x, origin_y + y) for x, y in found.tiles.tolist()], found.distance)

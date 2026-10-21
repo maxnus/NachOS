@@ -1,12 +1,14 @@
 """Grids of per-tile values."""
 
 import contextlib
+import itertools
 import math
+import re
 
 import numpy
 import pytest
 
-from sc2nachos.geometry import Area, Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TilePath, TileSet
 from test_geometry_footprint import DIAGONAL, SHAPES
 
 
@@ -197,8 +199,12 @@ class TestOutsidePropagation:
         assert left.smoothed(1.0, outside=0.0).outside == 0.0
         assert left.distance_from(Point((1.5, 1.5))).outside is None
         assert left.distance_from(Point((1.5, 1.5)), outside=0.0).outside == 0.0
-        assert pathable.path_distance_from(Point((1.5, 1.5))).outside is None
-        assert pathable.path_distance_from(Point((1.5, 1.5)), outside=0.0).outside == 0.0
+        cheapest_paths = pathable.cheapest_paths_from(Point((1.5, 1.5)))
+        assert cheapest_paths.costs.outside is None
+        assert cheapest_paths.distances.outside is None
+        cheapest_paths = pathable.cheapest_paths_from(Point((1.5, 1.5)), outside=math.inf)
+        assert cheapest_paths.costs.outside == math.inf
+        assert cheapest_paths.distances.outside == math.inf
 
     def test_copy_keeps_it(self) -> None:
         left, _ = self.grids()
@@ -483,37 +489,6 @@ class TestDerivedGrids:
         pathable = Grid(numpy.ones((1, 7), dtype=bool), outside=outside)
         assert pathable.distance_transform().values.tolist() == [[math.inf] * 7]
 
-    def test_a_path_distance_goes_around_what_is_false(self) -> None:
-        """A wall at x = 12 from y = 20 to 23 leaves one way round, over the top row: up 3 and a diagonal to (11, 24),
-        2 across, and a diagonal and 3 down to (14, 20)."""
-        passable = Grid(numpy.ones((5, 5), dtype=bool), origin=Tile(10, 20))
-        passable[Rectangle(12, 20, 1, 4)] = False
-        distances = passable.path_distance_from(Point((10.5, 20.5)))
-        assert distances[Tile(10, 20)] == 0.0
-        assert distances[Tile(11, 21)] == pytest.approx(math.sqrt(2))
-        assert distances[Tile(14, 20)] == pytest.approx(8 + 2 * math.sqrt(2))
-        assert distances.origin == passable.origin
-
-    def test_a_path_never_cuts_across_a_corner_between_two_false_tiles(self) -> None:
-        passable = Grid(numpy.ones((2, 2), dtype=bool))
-        passable[Tile(1, 0)] = False
-        passable[Tile(0, 1)] = False
-        assert passable.path_distance_from(Point((0.5, 0.5)))[Tile(1, 1)] == math.inf
-
-    def test_a_path_distance_counts_a_nonzero_value_as_true(self) -> None:
-        """Round a false middle tile along two sides, since every diagonal beside it would cut its corner."""
-        passable = Grid(numpy.ones((3, 3), dtype=numpy.uint8))
-        passable[Tile(1, 1)] = 0
-        distances = passable.path_distance_from(Point((0.5, 0.5)))
-        assert distances[Tile(2, 2)] == pytest.approx(4.0)
-        assert distances[Tile(1, 1)] == math.inf
-
-    def test_a_path_distance_reads_zero_where_it_starts_even_on_a_false_tile(self) -> None:
-        passable = Grid(numpy.zeros((2, 2), dtype=bool))
-        distances = passable.path_distance_from(Point((0.5, 0.5)))
-        assert distances[Tile(0, 0)] == 0.0
-        assert distances[Tile(1, 0)] == math.inf
-
     def test_smoothed_spreads_a_spike_without_moving_it(self) -> None:
         grid = Grid.zeros(9, 9)
         grid[Tile(4, 4)] = 100.0
@@ -537,6 +512,109 @@ class TestDerivedGrids:
     def test_smoothed_refuses_a_region_over_other_tiles(self) -> None:
         with pytest.raises(ValueError, match="same tiles"):
             Grid.zeros(4, 4).smoothed(1.0, within=Grid.zeros(4, 4, origin=Tile(9, 9), dtype=bool))
+
+
+def _is_a_walk_over(path: TilePath, grid: Grid[bool] | Grid[float]) -> bool:
+    """Whether each tile of `path` is passable on `grid` and each step goes to a tile sharing a side or a corner."""
+    passable = all(0 < grid[tile] < math.inf for tile in path)
+    return passable and all(
+        max(abs(one.x - following.x), abs(one.y - following.y)) == 1 for one, following in itertools.pairwise(path)
+    )
+
+
+class TestCheapestPaths:
+    def grid_with_a_wall(self) -> Grid[bool]:
+        """A wall at x = 12 from y = 20 to 23, which leaves one way round, over the top row: up 3 and a diagonal to
+        (11, 24), 2 across, and a diagonal and 3 down to (14, 20)."""
+        passable = Grid(numpy.ones((5, 5), dtype=bool), origin=Tile(10, 20))
+        passable[Rectangle(12, 20, 1, 4)] = False
+        return passable
+
+    def test_a_path_goes_around_what_is_false(self) -> None:
+        cheapest_paths = self.grid_with_a_wall().cheapest_paths_from(Point((10.5, 20.5)))
+        assert cheapest_paths.costs.equals(cheapest_paths.distances)
+        distances = cheapest_paths.distances
+        assert distances[Tile(10, 20)] == 0.0
+        assert distances[Tile(11, 21)] == pytest.approx(math.sqrt(2))
+        assert distances[Tile(14, 20)] == pytest.approx(8 + 2 * math.sqrt(2))
+        assert distances.origin == Tile(10, 20)
+
+    def test_a_path_is_the_map_tiles_it_crosses(self) -> None:
+        passable = self.grid_with_a_wall()
+        searched_path = passable.cheapest_path(Point((10.5, 20.5)), Tile(14, 20))
+        flooded_path = passable.cheapest_paths_from(Tile(10, 20)).path_to(Point((14.5, 20.5)))
+        for path in (searched_path, flooded_path):
+            assert path is not None
+            assert (path.start, path.end) == (Tile(10, 20), Tile(14, 20))
+            assert path.distance == pytest.approx(8 + 2 * math.sqrt(2))
+            assert Tile(12, 24) in path
+            assert _is_a_walk_over(path, passable)
+
+    def test_a_path_keeps_to_a_cheap_lane(self) -> None:
+        """Ground costing 1, with a lane costing 0.25 along x = 7, two tiles off the straight line."""
+        costs = Grid(numpy.ones((3, 21)), origin=Tile(5, 5))
+        costs[Rectangle(7, 5, 1, 21)] = 0.25
+        cheapest_paths = costs.cheapest_paths_from(Tile(5, 5))
+        path = costs.cheapest_path(Tile(5, 5), Tile(5, 25))
+        assert path is not None
+        assert sum(tile.x == 7 for tile in path) >= 10
+        assert cheapest_paths.costs[Tile(5, 25)] < 20 < cheapest_paths.distances[Tile(5, 25)]
+        assert cheapest_paths.distances[Tile(5, 25)] == pytest.approx(path.distance)
+        assert _is_a_walk_over(path, costs)
+
+    def test_a_grid_of_numbers_costs_its_values(self) -> None:
+        """Round a blocked middle tile along two sides, since every diagonal beside it would cut its corner."""
+        costs = Grid(numpy.full((3, 3), 2, dtype=numpy.uint8))
+        costs[Tile(1, 1)] = 0
+        cheapest_paths = costs.cheapest_paths_from(Point((0.5, 0.5)))
+        assert cheapest_paths.distances[Tile(2, 2)] == pytest.approx(4.0)
+        assert cheapest_paths.costs[Tile(2, 2)] == pytest.approx(8.0)
+        assert cheapest_paths.distances[Tile(1, 1)] == math.inf
+
+    def test_a_path_never_cuts_across_a_corner_between_two_false_tiles(self) -> None:
+        passable = Grid(numpy.ones((2, 2), dtype=bool))
+        passable[Tile(1, 0)] = False
+        passable[Tile(0, 1)] = False
+        assert passable.cheapest_paths_from(Point((0.5, 0.5))).distances[Tile(1, 1)] == math.inf
+        assert passable.cheapest_path(Tile(0, 0), Tile(1, 1)) is None
+
+    def test_the_start_is_a_path_to_itself_even_on_a_false_tile_but_no_path_leaves_it(self) -> None:
+        passable = Grid(numpy.zeros((2, 2), dtype=bool))
+        cheapest_paths = passable.cheapest_paths_from(Point((0.5, 0.5)))
+        assert cheapest_paths.distances[Tile(0, 0)] == 0.0
+        assert cheapest_paths.distances[Tile(1, 0)] == math.inf
+        assert cheapest_paths.path_to(Tile(0, 0)) == TilePath([Tile(0, 0)])
+        assert cheapest_paths.path_to(Tile(1, 0)) is None
+        assert passable.cheapest_path(Tile(0, 0), Tile(0, 0)) == TilePath([Tile(0, 0)])
+        assert passable.cheapest_path(Tile(0, 0), Tile(1, 0)) is None
+
+    def test_the_costs_and_distances_refuse_writes(self) -> None:
+        cheapest_paths = Grid(numpy.ones((3, 3), dtype=bool)).cheapest_paths_from(Tile(0, 0))
+        for grid in (cheapest_paths.costs, cheapest_paths.distances):
+            assert grid.readonly
+            with pytest.raises(TypeError, match="read-only"):
+                grid[Tile(1, 1)] = 0.0
+
+    @pytest.mark.parametrize("cost", [-1.0, math.nan])
+    def test_a_negative_or_nan_cost_raises_naming_its_tile(self, cost: float) -> None:
+        costs = Grid(numpy.ones((3, 3)), origin=Tile(10, 20))
+        costs[Tile(11, 22)] = cost
+        message = re.escape(f"the cost at Tile(11, 22) is {cost!r}; a tile's cost is positive, or 0 or inf to block it")
+        with pytest.raises(ValueError, match=message):
+            costs.cheapest_path(Tile(10, 20), Tile(10, 21))
+        with pytest.raises(ValueError, match=message):
+            costs.cheapest_paths_from(Tile(10, 20))
+
+    def test_a_point_the_grid_does_not_cover_raises_whatever_it_reads_outside(self) -> None:
+        passable = Grid(numpy.ones((3, 3), dtype=bool), origin=Tile(10, 20), outside=False)
+        with pytest.raises(IndexError, match="outside"):
+            passable.cheapest_path(Tile(10, 20), Tile(13, 20))
+        with pytest.raises(IndexError, match="outside"):
+            passable.cheapest_paths_from(Tile(9, 20))
+        cheapest_paths = passable.cheapest_paths_from(Tile(10, 20), outside=math.inf)
+        assert cheapest_paths.distances[Tile(13, 20)] == math.inf
+        with pytest.raises(IndexError, match="outside"):
+            cheapest_paths.path_to(Tile(13, 20))
 
 
 class TestSummaries:

@@ -92,7 +92,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - From a unit's tag it answers for that unit: from atop a cliff on PylonAIE_v4, 63.7 for a marine, by the ramp, 3.3
   for a reaper, which jumps the cliff, 58.0 for a colossus, and the straight line for a medivac. From the marine's
   position the answer was 61.7 (tool `sweep_requests`, build 75689).
-- Over 100 random pairs of tiles on PylonAIE_v4, its distance was 0.89 to 1.12 times `Grid.path_distance_from`'s,
+- Over 100 random pairs of tiles on PylonAIE_v4, its distance was 0.89 to 1.12 times that of `Grid.cheapest_paths_from`,
   0.95 at the median. The two pairs it answered 0 for, where the grid has a path, ended inside the computer's
   structures, which the start's grid leaves open (tool `sweep_requests`, build 75689).
 - PylonAIE_v4 has two rich geysers, each the one geyser of a base, and neither in sight from a start (corpus).

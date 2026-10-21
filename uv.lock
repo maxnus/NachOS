@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [[package]]
@@ -231,6 +231,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pys2clientprotocol" },
     { name = "scipy" },
+    { name = "semita" },
     { name = "websocket-client" },
 ]
 
@@ -250,6 +251,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "scipy", specifier = ">=1.14" },
+    { name = "semita", specifier = ">=0.2" },
     { name = "websocket-client", specifier = ">=1.9" },
 ]
 provides-extras = ["dev"]
@@ -323,6 +325,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/d9/135be205d9de8783193aff9cc3bf483a03a38e4b29432c954e8cb66ac14e/scipy-1.18.1-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:179ce34a8d0fe273d8883ba59e17e052247d08973dfcb743ca52bb1cce2d60b0", size = 37521946, upload-time = "2026-08-21T23:28:35.245Z" },
     { url = "https://files.pythonhosted.org/packages/5c/a2/5b7d5270621ab7cfa3f7766067bf95dc360b5efb6394694e8143b4156e2b/scipy-1.18.1-cp315-cp315t-win_amd64.whl", hash = "sha256:5632e3ae3d09197c446310cd5187de63e28448ce22f0f67b2b93d97503c0c230", size = 37408295, upload-time = "2026-08-21T23:28:40.724Z" },
     { url = "https://files.pythonhosted.org/packages/63/ad/741c19fcb66755ff953daf9243af8480e4bf3d7fbe57583c178c7d2b6b51/scipy-1.18.1-cp315-cp315t-win_arm64.whl", hash = "sha256:eda632a7981f69730d6281f451db9c1c370993a2c0d7ddb43e2a809a2862b83a", size = 25319710, upload-time = "2026-08-21T23:28:45.713Z" },
+]
+
+[[package]]
+name = "semita"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e7/6d/7d12af3e23f9931c0b1ba9e3c816b5497402e71c917e47163840dc631443/semita-0.2.0.tar.gz", hash = "sha256:0b017a9a2be3076ba17a126e8e4e819da47e90e83376eb81eaf3459148ec1cba", size = 42957, upload-time = "2026-10-21T11:24:13.237Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ce/ca/8bee323e460ee26c46ce4006425001818b670cea6e904dd20139df3d59c0/semita-0.2.0-cp312-abi3-macosx_10_13_x86_64.whl", hash = "sha256:56496745c540dc926bacf4e1df56b61a897cf2e144980e474ecce3942f1682e4", size = 19780, upload-time = "2026-10-21T11:24:07.361Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/98/a0a0d97801dfd4317d53270fbb20ef49ed114e6669bbb751e335dcb5bd7b/semita-0.2.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:cc99091c4ba6165c9aef713fb7256ac2bfa70ab3c8fc2a08be8c49908cb07ea2", size = 19459, upload-time = "2026-10-21T11:24:08.575Z" },
+    { url = "https://files.pythonhosted.org/packages/59/cf/008bed7e4eb70eaf6462c1d4c4b361c1d01d10f6b651c5df60643edd4692/semita-0.2.0-cp312-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:31943f026e167a215969c7bf9e901a9e1a59022ce5de30d134bcb9b163df8305", size = 57662, upload-time = "2026-10-21T11:24:09.845Z" },
+    { url = "https://files.pythonhosted.org/packages/da/01/d982479381cda28e05a66139d69da7a96b25d75e01e5996e1c49a47909e1/semita-0.2.0-cp312-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:a3a399bc5a4aad0992ec5fe0509ee7bc590f94757a74da94fa686731855773bc", size = 59330, upload-time = "2026-10-21T11:24:11.102Z" },
+    { url = "https://files.pythonhosted.org/packages/81/47/db54b14bd71d5cfe0798776311ec5655c65691d8224ac066aef7b4a14b39/semita-0.2.0-cp312-abi3-win_amd64.whl", hash = "sha256:670960e24a920782773c1b67d85c1f6f638c327b43984f298e24331ca00a44e3", size = 19865, upload-time = "2026-10-21T11:24:12.206Z" },
 ]
 
 [[package]]
