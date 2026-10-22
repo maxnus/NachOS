@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2560 tests, and
-  on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
+- nachOS `main` has every PR to #154. On branch `claude/record-file`, `uv run pytest` passes 2561 tests, and
+  `uv run pytest -m integration` passed 37 against a real game (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -406,15 +406,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
     recorded, over one scan for a create and real time). An observation asked once only leaving, quitting or nothing is
     left is the last again with the status `ended`, so a recording that stops before its game's end, as one made with a
     time limit does, ends `UNDECIDED` (over a `TIE` at its end and over raising, documented).
+- **`--RecordFile PATH`** (the owner, 2026-10-22), so that a bot started through `run_from_command_line` records its
+  ladder games for `run_recording` to reproduce a crash: read in both kinds of game and passed as `record_to`, over
+  ladder games only, and named like `--ReplayFile`, over `--RecordingFile`. The ladder passes only its own arguments,
+  so a script adds it to the `argv` it hands over (`docs/ladder.md`). `RecordingTransport` compresses at xz preset 3,
+  over 1 and over xz's default of 6, which took several times as long an exchange for a file barely smaller (the
+  measurements in this branch's PR).
 
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
-  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (this branch), and ramp wall-in
-  sites with their sweep.
-- **The playback mode** (this branch): `PermissivePlaybackTransport` and `run_recording`.
+  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154), and ramp wall-in sites
+  with their sweep, which is next, to be planned with the owner.
+- **`--RecordFile`** (this branch).
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

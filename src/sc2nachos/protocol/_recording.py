@@ -15,9 +15,12 @@ from sc2nachos.protocol._errors import ConnectionClosedError, ProtocolError
 from sc2nachos.protocol._transport import Transport
 
 # The format: this header, then every message length-prefixed, all of it xz-compressed. Protobuf messages are
-# not self-delimiting, and consecutive observations are near-identical, which xz compresses some 200x.
+# not self-delimiting, and consecutive observations are near-identical, which xz compresses well.
 _HEADER = b"NACHOS RECORDING 1\n"
 _LENGTH = 4
+# A recording is written during the bot's turns, so at a lighter preset than xz's default of 6, which takes several
+# times as long for a file barely smaller. A file written at any preset reads the same.
+_COMPRESSION_PRESET = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +102,7 @@ class RecordingTransport:
         self._recording = Recording(path)
         self._exchanges = 0
         # The file stays open for the whole game and is closed with the transport.
-        self._stream = lzma.open(path, "wb")  # noqa: SIM115
+        self._stream = lzma.open(path, "wb", preset=_COMPRESSION_PRESET)  # noqa: SIM115
         self._stream.write(_HEADER)
 
     @property

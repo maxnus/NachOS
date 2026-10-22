@@ -15,9 +15,11 @@ Both runners take `record_to`, a file to write the whole conversation with the g
 run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN, record_to="tests/games/pylon.sc2rec")
 ```
 
-The file is complete once the runner returns; a run killed before then leaves only part of it. NachOS's own repository
-holds seven such games in `tests/corpus`, a bot that does nothing losing to the computer on each map of the ladder
-pool, three of them as Terran; `tools/record_corpus.py` says what each one is.
+`run_from_command_line` takes the file as `--RecordFile`, in a ladder game too
+([playing on the ladder](ladder.md#replays-recordings-and-results)). The file is complete once the runner returns; a
+run killed before then leaves only part of it. NachOS's own repository holds seven such games in `tests/corpus`, a bot
+that does nothing losing to the computer on each map of the ladder pool, three of them as Terran;
+`tools/record_corpus.py` says what each one is.
 
 ## Replaying a bot's own game exactly
 
@@ -29,10 +31,11 @@ from my_bot import api
 run_recording("games/ladder.sc2rec", api, enemy_ladder_id="5a1f")
 ```
 
-The bot must ask what it asked when the game was recorded, in the same order, and gets the game's own answers: to its
-orders, its queries and everything else. That reproduces a crash as it happened, its handler's exception raising out
-of `run_recording` as out of the game. A request of another kind than the recording holds next raises `ProtocolError`;
-only the kind of each request is checked, not its contents. The game is created and played in real time as recorded.
+The bot must ask what it asked when the game was recorded, in the same order, so it must read what it read then, its
+own files included, and it gets the game's own answers: to its orders, its queries and everything else. That
+reproduces a crash as it happened, its handler's exception raising out of `run_recording` as out of the game. A
+request of another kind than the recording holds next raises `ProtocolError`; only the kind of each request is
+checked, not its contents. The game is created and played in real time as recorded.
 
 `run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None, save_replay_to=None)`
 returns how the recorded game ended for the player recorded, or `TIE` at `time_limit`. The three keywords must be what
@@ -41,6 +44,9 @@ the game was played with:
 - `enemy_ladder_id`, without which a bot that reads `api.enemy.ladder_id` reads `None`;
 - `save_replay_to`, without which a game the bot left after saving its replay raises at the leave. Given, it holds the
   replay recorded.
+
+A game cut short by its connection closing, as a ladder closes it when either bot crashes, replays up to the close and
+then raises `ProtocolError`: the recording holds no answer to the request the close cut off.
 
 Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 
