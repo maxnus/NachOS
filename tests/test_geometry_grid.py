@@ -228,7 +228,7 @@ class TestArrayIndices:
     def test_tile_at_inverts_index_of(self) -> None:
         grid = playable_grid()
         for point in (Point((4.0, 6.0)), Point((5.7, 7.3)), Point((13.9, 13.9))):
-            assert grid.tile_at(grid.index_of(point)) == Tile.containing(point)
+            assert grid.tile_at(grid.index_of(point)) == Tile.at(point)
 
     def test_a_point_off_the_grid_raises_rather_than_going_negative(self) -> None:
         """An index the caller passes on is not bounds-checked again: pathfinding returns inf for every tile."""

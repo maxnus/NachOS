@@ -465,7 +465,7 @@ class TestRectangle:
         """Both must cover the same tiles, or a mask over one cannot index the other."""
         rect = Rectangle(0.4, 0.6, 5.3, 5.1)
         centers = rect.tile_centers().reshape(-1, 2)
-        assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+        assert {Tile.at(tuple(point)) for point in centers} == set(rect.tiles())
 
     def test_tile_centers_offset_shifts_without_changing_coverage(self) -> None:
         """An even-sized footprint sits on a tile corner, so the caller shifts by half a tile."""
@@ -478,12 +478,12 @@ class TestRectangle:
 class TestTile:
     def test_containing_floors(self) -> None:
         """Flooring, not rounding: the reference implementation conflated the two."""
-        assert Tile.containing((3.9, 4.1)) == Tile(3, 4)
-        assert Tile.containing(Point((1.9, 2.9))) == Tile(1, 2), "rounding would give Tile(2, 3)"
-        assert Tile.containing((-0.5, -0.5)) == Tile(-1, -1), "floors rather than truncating"
+        assert Tile.at((3.9, 4.1)) == Tile(3, 4)
+        assert Tile.at(Point((1.9, 2.9))) == Tile(1, 2), "rounding would give Tile(2, 3)"
+        assert Tile.at((-0.5, -0.5)) == Tile(-1, -1), "floors rather than truncating"
 
     def test_containing_drops_height(self) -> None:
-        assert Tile.containing(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2)
+        assert Tile.at(Point3D((1.4, 2.6, 9.9))) == Tile(1, 2)
 
     @pytest.mark.parametrize(
         "operation",
@@ -515,7 +515,7 @@ class TestTile:
 
     def test_containing_a_tile_gives_that_tile(self) -> None:
         """A tile reads as its center, not as its address, so it lands back on itself."""
-        assert Tile.containing(Tile(3, 4)) == Tile(3, 4)
+        assert Tile.at(Tile(3, 4)) == Tile(3, 4)
 
     def test_center_is_where_a_unit_stands(self) -> None:
         assert Tile(3, 4).center == Point((3.5, 4.5))
@@ -688,7 +688,7 @@ class TestAreaAgreement:
     def test_tile_centers_and_tiles_describe_the_same_region(self, rect: Rectangle) -> None:
         """Their docstring promises a mask over one indexes the other, so they cannot round differently."""
         centers = rect.tile_centers().reshape(-1, 2)
-        assert {Tile.containing(tuple(point)) for point in centers} == set(rect.tiles())
+        assert {Tile.at(tuple(point)) for point in centers} == set(rect.tiles())
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_no_point_of_any_shape_is_nearer_than_its_closest_point(self, area: Area) -> None:
@@ -770,7 +770,7 @@ class TestAreaAgreement:
 
 class TestTileSet:
     def test_points_in_one_tile_collapse(self) -> None:
-        tiles = TileSet([Tile.containing((0.1, 0.9)), Tile.containing((0.4, 0.2))])
+        tiles = TileSet([Tile.at((0.1, 0.9)), Tile.at((0.4, 0.2))])
         assert len(tiles) == 1, "both points fall in the same tile"
         assert (0.7, 0.7) in tiles
 

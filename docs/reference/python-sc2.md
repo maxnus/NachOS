@@ -238,8 +238,8 @@ it.
 | `p.to2`, `p.to3` | `p.ground`, `p.with_height(z)` |
 | `p.offset(q)` | `p + q` |
 | `p.rotate(angle)` | `p.rotated(angle)`, optionally `around=` another point |
-| `p.rounded`, which floors | `Tile.containing(p)`, the tile the point is on |
-| `p.snap()` | `Tile.containing(p).center` |
+| `p.rounded`, which floors | `Tile.at(p)`, the tile the point is on |
+| `p.snap()` | `Tile.at(p).center` |
 
 - **Equality is exact.** python-sc2 treats points as equal if every coordinate is within 1e-8, and counts a
   missing coordinate as zero, so `Point3((1, 2, 0)) == Point2((1, 2))`. NachOS points compare as the tuples they

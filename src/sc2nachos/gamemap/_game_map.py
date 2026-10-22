@@ -155,7 +155,7 @@ class GameMap:
         The level ground is every tile a unit can walk on, and the ground a townhall at `start` would stand on: off the
         ramps, within half a level of the height at `start`'s tile, and joined to it across sides.
         """
-        start_tile = Tile.containing(start)
+        start_tile = Tile.at(start)
         if start_tile not in self._main_ramps_by_start_tile:
             self._main_ramps_by_start_tile[start_tile] = find_main_ramp(
                 start, self._ramps, self._pathing, self._placement, self._height
@@ -171,7 +171,7 @@ class GameMap:
     def opponent_start_locations(self) -> tuple[Point, ...]:
         """Every start location on the map but this player's own.
 
-        Each is a townhall's position, which is a tile's center, so `Tile.containing` reads it exactly.
+        Each is a townhall's position, which is a tile's center, so `Tile.at` reads it exactly.
         """
         return self._opponent_start_locations
 

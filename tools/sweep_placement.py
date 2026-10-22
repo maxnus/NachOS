@@ -142,7 +142,7 @@ def _covered_tiles(game: Sandbox, centers: Sequence[Point]) -> set[Tile]:
     off_creep = game.placeable(_OFF_CREEP_PROBE, centers)
     on_creep = game.placeable(_ON_CREEP_PROBE, centers)
     return {
-        Tile.containing(center)
+        Tile.at(center)
         for center, sensor_tower_taken, creep_tumor_taken in zip(centers, off_creep, on_creep, strict=True)
         if not sensor_tower_taken and not creep_tumor_taken
     }
@@ -553,7 +553,7 @@ def _check_ground_on(
                 continue
             position = Point((blocker.pos.x, blocker.pos.y))
             under = _footprint_tiles(footprints[name], position)
-            around = sorted(Tile.containing(center) for center in _tile_centers_around(position, _WIDE_PROBE_REACH))
+            around = sorted(Tile.at(center) for center in _tile_centers_around(position, _WIDE_PROBE_REACH))
             before = _taken(game, around)
             tags_before = {unit.tag for unit in game.units()}
             measured = GroundUnderAUnit(name, (position.x, position.y))

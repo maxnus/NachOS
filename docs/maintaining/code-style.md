@@ -18,7 +18,8 @@ codebases read alike. A new rule of style goes here, with an example from the co
   constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
 - **A classmethod that turns a value of another kind into an instance of its class is named `from_` that value**:
   `Footprint.from_rows`, `GamePorts.from_start_port`, `Player._from_game`. One that builds a shape or a state names
-  what it builds: `Footprint.square`, `Grid.zeros`. `of` names what selects part of a whole, `Units.of_type` and
+  what it builds: `Footprint.square`, `Grid.zeros`. One that finds the instance at a position is named `at`:
+  `Tile.at(point)`, the tile a point falls in. `of` names what selects part of a whole, `Units.of_type` and
   `AnyAreaEvent.of(area)`, or what reads something of a value, `_key_of`.
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 

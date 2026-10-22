@@ -934,7 +934,7 @@ class _DepotBot:
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))
         self.turns.append((stands, placement.reserved[self.site], placement.dynamic[self.site]))
         if stands and not self.game_answers:
-            site = Tile.containing(self.site)
+            site = Tile.at(self.site)
             tiles = [Tile(site.x + dx, site.y + dy) for dx in range(-3, 4) for dy in range(-3, 4)]
             self.game_answers = dict(zip(tiles, _game_takes_a_sensor_tower(self.transport, tiles), strict=True))
             self.grid_answers = {tile: placement.dynamic[tile] for tile in tiles}
