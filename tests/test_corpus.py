@@ -1,16 +1,19 @@
 """The recorded games everything above the protocol is tested against, and what must hold in them."""
 
 import contextlib
+import math
 from collections.abc import Hashable
 from functools import cached_property
 from pathlib import Path
 from typing import Any
 
+import numpy
 import pytest
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos import Api
+from sc2nachos import Api, run_recording
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.debug import DebugText
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     EnemyUnitDamagedEvent,
@@ -30,18 +33,19 @@ from sc2nachos.events import (
     OwnUnitLeftAreaEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
+    TurnEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Circle, Point
+from sc2nachos.geometry import Circle, Grid, Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, PlaybackTransport, Recording
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
 from sc2nachos.units._tracking import _Tracker
-from support import HAPPENINGS, make_enemy
+from support import HAPPENINGS, make_enemy, recorded_observations
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -49,9 +53,12 @@ CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 _CURATED: tuple[type[ReadableIntEnum], ...] = (UnitTypeId, AbilityId, UpgradeId, BuffId, EffectId)
 
 
-def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
-    """Every observation in `recording`, in order."""
-    return [exchange.response.observation for exchange in recording if exchange.response.HasField("observation")]
+def _recorded_result(recording: Recording, last: sc2api_pb2.ResponseObservation) -> Result:
+    """How the game in `recording`, whose last observation is `last`, ended for the player recorded."""
+    player = next(
+        exchange.response.join_game.player_id for exchange in recording if exchange.request.HasField("join_game")
+    )
+    return {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
 
 
 def test_there_is_a_corpus() -> None:
@@ -62,20 +69,45 @@ def test_there_is_a_corpus() -> None:
 def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> None:
     """A change to what the library asks a game, or in what order, shows up here as an unanswered request."""
     recording = Recording(path)
-    last = _observations(recording)[-1]
-    client = Client(PlaybackTransport(recording))
-    # A recording answers each kind of request in turn without reading it, so the setup can be repeated without its
-    # details.
-    client.create_game("recorded", [Participant(), Computer()])
-    player = client.join_game(Race.RANDOM)
-
+    last = recorded_observations(recording)[-1]
     api = Api()
-    result = api.play(client)
+
+    result = run_recording(recording, api)
 
     assert api.step == last.observation.game_loop
-    assert result is {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
-    client.leave_game()
-    client.quit()
+    assert result is _recorded_result(recording, last)
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_a_bot_that_acts_plays_a_recorded_game_to_its_end(path: Path) -> None:
+    """`run_recording` answers what a bot asks of its own accord, which the bare api recorded never asked."""
+    recording = Recording(path)
+    last = recorded_observations(recording)[-1]
+    api = Api()
+    distances: list[float] = []
+    grids: list[Grid[bool]] = []
+
+    @api.on(TurnEvent)
+    def act(_: TurnEvent) -> None:
+        assert not api.action_failures
+        workers = api.units.own.workers
+        if not workers:
+            return
+        worker = next(iter(workers))
+        api.orders.issue(workers, AbilityId.MOVE, target=api.map.start_location)
+        api.debug.draw(worker, DebugText("worker"))
+        api.camera.move_to(worker.position)
+        api.chat("moving")
+        distances.append(api.pathing.query_distance(worker, api.map.start_location))
+        grids.append(api.pathing.grid)
+
+    result = run_recording(path, api, permissive=True)
+
+    assert api.step == last.observation.game_loop
+    assert result is _recorded_result(recording, last)
+    assert distances
+    assert all(math.isfinite(distance) for distance in distances)
+    assert numpy.array_equal(grids[0].values, grids[-1].values)
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
@@ -83,7 +115,7 @@ def test_every_id_a_game_reported_is_curated(path: Path) -> None:
     """A curated enum raises on an id it reads as no member, so an id a real game reports must read as one: its own,
     or for a unit type's own id of an action several types perform, that action's."""
     reported: dict[type[ReadableIntEnum], set[int]] = {enum: set() for enum in _CURATED}
-    for observation in _observations(Recording(path)):
+    for observation in recorded_observations(Recording(path)):
         raw = observation.observation.raw_data
         for unit in raw.units:
             reported[UnitTypeId].add(unit.unit_type)
@@ -116,7 +148,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
     recording = Recording(path)
     tracker = _Tracker(_tables(recording), make_enemy())
     objects: dict[int, Unit[Any]] = {}
-    for index, observation in enumerate(_observations(recording)):
+    for index, observation in enumerate(recorded_observations(recording)):
         step = observation.observation.game_loop
         tracker.update(observation.observation.raw_data, step)
         units = tracker.unit_tracker.present
@@ -191,7 +223,7 @@ _LEFT = (OwnUnitLeftAreaEvent, EnemyUnitLeftAreaEvent)
 def _map(recording: Recording) -> GameMap:
     """The map of a recorded game, read as a game reads it from its answers."""
     info = next(exchange.response.game_info for exchange in recording if exchange.response.HasField("game_info"))
-    return GameMap._from_game(info, next(iter(_observations(recording))))
+    return GameMap._from_game(info, next(iter(recorded_observations(recording))))
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
@@ -230,7 +262,9 @@ def test_what_is_watched_holds_together_over_a_whole_game(path: Path) -> None:
             api.on(event_type.of(vital_type, value))(vital)
     # The starting units stand around this player's main base, and its workers cross a circle around them as they
     # mine.
-    starting = [unit.pos for unit in _observations(recording)[0].observation.raw_data.units if unit.alliance == 1]
+    starting = [
+        unit.pos for unit in recorded_observations(recording)[0].observation.raw_data.units if unit.alliance == 1
+    ]
     home = Point((sum(pos.x for pos in starting) / len(starting), sum(pos.y for pos in starting) / len(starting)))
     for watched in (
         Circle(home, 4),
@@ -261,7 +295,7 @@ def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> No
     recording = Recording(path)
     tracker = _Tracker(_tables(recording), make_enemy())
     game_map = _map(recording)
-    for observation in _observations(recording):
+    for observation in recorded_observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)
         for name in _STATE_READS:

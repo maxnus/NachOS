@@ -2,6 +2,7 @@
 
 import lzma
 from collections.abc import Generator
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -53,6 +54,35 @@ class Recording:
                 ) from cut
             except lzma.LZMAError as error:
                 raise ProtocolError(f"{self.path} is not a recording, or is a damaged one: {error}") from error
+
+    @property
+    def created_its_game(self) -> bool:
+        """Whether the client recorded created its game, as a local game's does, rather than only joining it, as a
+        ladder game's does: whether it asked to create one before it joined. It reads the start of the file."""
+        with closing(iter(self)) as exchanges:
+            for exchange in exchanges:
+                asked_kind = exchange.request.WhichOneof("request")
+                if asked_kind in ("create_game", "join_game"):
+                    return asked_kind == "create_game"
+        return False
+
+    @property
+    def played_in_real_time(self) -> bool:
+        """Whether the game recorded was played in real time: as its create asked, and for a game only joined, if it
+        asked for no step before its second observation. It reads the start of the file."""
+        observations_seen = 0
+        with closing(iter(self)) as exchanges:
+            for exchange in exchanges:
+                asked_kind = exchange.request.WhichOneof("request")
+                if asked_kind == "create_game":
+                    return exchange.request.create_game.realtime
+                if asked_kind == "step":
+                    return False
+                if asked_kind == "observation":
+                    observations_seen += 1
+                    if observations_seen == 2:
+                        return True
+        return False
 
 
 class RecordingTransport:

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #152. On branch `claude/combat-conveniences`, `uv run pytest` passes 2512 tests, and
+- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2560 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -375,17 +375,46 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (stated by the owner, not measured); the damage rule is `Weapon.damage_against`, taking a target's attributes,
     armor and shields; an upgrade's attack speed is `WeaponUpgrade.attack_speed_multiplier`; and the corpus tables are
     one shared fixture, `first_corpus_tables` in `tests/conftest.py`.
+- **A playback mode** (the owner, 2026-10-22, one question at a time), so that AvocaDOS can replay the corpus's Terran
+  games in CI as a smoke test:
+  - `PermissivePlaybackTransport(recording)`, a class of its own beside `PlaybackTransport`, which stays strict for
+    `test_corpus.py` and as main had it (the owner, 2026-10-22, reversing a keyword `answer_unrecorded` on
+    `PlaybackTransport`, which had made it much more complicated; a sibling over a subclass, which would break the
+    strict class's promise to raise), and `run_recording` in `sc2nachos.run`, over the keyword alone.
+  - `run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None, save_replay_to=None)` is
+    strict by default (the owner, 2026-10-22, over always permissive), through a `PlaybackTransport`, so that a bot
+    replaying its own game gets the game's own answers; `permissive`, over `strict=True` and over the transport's
+    class. Strict, it reads the setup from the recording (over keywords), as two properties of it (the owner, review
+    of #154, over a classmethod on `PlaybackTransport` and over a function and a dataclass in `run.py`):
+    `Recording.created_its_game`, whether it asked to create the game before joining, and `played_in_real_time`, as the
+    create asked, or for a game only joined, if no step comes before the second observation. It leaves no game, so a
+    handler's exception raises out as it is. `save_replay_to` came from my review of 36abcc2 (the owner, over
+    documenting it only): without it, a game the bot left after saving its replay raised at the leave. The permissive
+    mode's lasting use after M5 is a crash check over fixed recordings that any version of a bot plays through, in the
+    plain test run; a real game in CI catches more.
+  - What a bot asks of its own accord is made up, under the last recorded status: every action `Success`, so the order
+    book records each order as sent, over every action refused; a debug request an empty answer; saving the replay
+    refused, which `play` logs; leaving before the recording does answered, `launched`.
+  - A pathing query is the straight line between each pair's ends, from a unit's tag at its position in the last
+    recorded observation, a tag not in it reading no path; over a path on the start's grid, no path everywhere and
+    refusing queries. A query for abilities or placements raises `ProtocolError`.
+  - The recording's own answers to a bot's requests, actions, debug, queries and replay saves, are passed over, so that
+    a recording of a bot that acted plays back too, over a recorded answer of the same kind first. A game info asked
+    for when none is next is the last one recorded, the start's for the corpus.
+  - From my review of #154 (the owner): every step is made up too, the recorded ones passed over, and so is a create
+    the recording does not hold, so a permissive playback reads nothing of the file to guess (reversing steps played as
+    recorded, over one scan for a create and real time). An observation asked once only leaving, quitting or nothing is
+    left is the last again with the status `ended`, so a recording that stops before its game's end, as one made with a
+    time limit does, ends `UNDECIDED` (over a `TIE` at its end and over raising, documented).
 
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
-  conveniences on a unit (in range, weapon ready, dps; this branch), a playback mode that answers a bot's own actions,
-  and ramp wall-in sites with their sweep.
-- **The combat conveniences** (this branch): `weapon_against`, `has_in_range`, `damage_against` and `dps_against` on a
-  unit, `Weapon.dps` and `Weapon.damage_against`, the cooldown split into base and average, the measured weapons and
-  the attack speeds.
+  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (this branch), and ramp wall-in
+  sites with their sweep.
+- **The playback mode** (this branch): `PermissivePlaybackTransport` and `run_recording`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

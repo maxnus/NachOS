@@ -392,8 +392,8 @@ class Api:
         """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
         for this player.
 
-        `run_local` and `run_ladder` call this. Call it directly to play a game connected some other way, such as a
-        recording. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
+        `run_local`, `run_ladder` and `run_recording` call this. Call it directly to play a game connected some other
+        way. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
         was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
         `enemy_ladder_id` is the ladder's id for the opponent, which `enemy.ladder_id` reads.
 
