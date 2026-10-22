@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 # Every site is an offset from the middle of the ramp's top, the corner its two tiles share, for a ramp climbing toward
 # +x and +y; a ramp climbing another way mirrors them. They are burnysc2's sites, which close every main ramp of the
-# pool on NachOS's grids (corpus).
+# pool (in game).
 _CORNER_DEPOTS = ((2.0, -1.0), (-1.0, 2.0))
 _MIDDLE_DEPOT = (1.0, 1.0)
 _BARRACKS = (1.5, 1.5)

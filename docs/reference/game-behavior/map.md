@@ -101,6 +101,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   (93, 150) to (90.5, 147.5), and a pylon ordered onto unbuildable ground was never made (#25, #32).
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
+- Every main of the pool, both starts of the 7 maps, leaves by one ramp of the same shape: 16 tiles, two across its top
+  and its bottom, climbing diagonally (corpus). At each of the 14, the game accepts every site of `api.placement`'s two
+  walls on empty ground, and a zergling made below the ramp and ordered to the start stays out while two depots at the
+  top's corners stand raised with a barracks between them, or a third depot, and walks in once they are lowered (tool
+  `sweep_walls`, build 75689).
+- On the 6 mains left of their ramp, which climbs toward -x, the barracks moved 2 left so that its add-on fits beside
+  the depot lets the zergling in until its reactor stands, and on the 8 others it closes the wall alone; the reactor
+  builds at all 14 (tool `sweep_walls`, build 75689). On NachOS's grid, no barracks between those depots closes the
+  wall alone with room for its add-on on a main left of its ramp (corpus).
+- A gateway at the Protoss wall's sites is refused, `CantBuildTooFarFromBuildPowerSource`, until the pylon stands 4
+  tiles up from the middle of the ramp's top along both axes, and then taken. With a zealot holding the gap the zergling
+  stays out, and with the gap open it walks in, at all 14 mains (tool `sweep_walls`, build 75689).
 - The pathing query (`RequestQueryPathing`) answers the distance a ground unit walks over the map as it stood at the
   last observation asked for: a change of structures shows only once an observation has been asked for since. A ring of
   eight supply depots made by debug command shut the ground inside off by the first observation after, and lowered
