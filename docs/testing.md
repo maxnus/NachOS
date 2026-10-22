@@ -27,10 +27,10 @@ def test_the_bot_plays_a_whole_recorded_game() -> None:
     run_recording("tests/games/pylon.sc2rec", api)
 ```
 
-`run_recording(recording, api, *, time_limit=None)` returns how the recorded game ended for the player recorded, or
-`DEFEAT` if the bot leaves first, or `TIE` at `time_limit`. A handler that raises raises out of it, as out of any game.
-The game is played stepped or in real time as it was recorded, a turn at each recorded observation: the corpus's are
-16 steps apart.
+`run_recording(recording, api, *, time_limit=None)` returns how the recorded game ended for the player recorded:
+`UNDECIDED` if the recording stops before the game's end, as one made with a time limit does, `DEFEAT` if the bot
+leaves first, and `TIE` at `time_limit`. A handler that raises raises out of it, as out of any game. The bot has a turn
+at each recorded observation, whether the game was played stepped or in real time: the corpus's are 16 steps apart.
 
 ## What the bot sees
 

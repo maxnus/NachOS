@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2534 tests, and
+- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2541 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -378,9 +378,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **A playback mode** (the owner, 2026-10-22, one question at a time), so that AvocaDOS can replay the corpus's Terran
   games in CI as a smoke test:
   - `PlaybackTransport(recording, answer_unrecorded=True)`, off by default so that `test_corpus.py` stays strict, and
-    `run_recording(recording, api, *, time_limit=None)` in `sc2nachos.run`, which repeats the recorded create, if the
-    recording has one, and join, and plays as the recording was played, stepped or in real time. Chosen over the
-    keyword alone and over a transport class of its own.
+    `run_recording(recording, api, *, time_limit=None)` in `sc2nachos.run`, which creates, joins and plays stepped.
+    Chosen over the keyword alone and over a transport class of its own.
   - What a bot asks of its own accord is made up, under the last recorded status: every action `Success`, so the order
     book records each order as sent, over every action refused; a debug request an empty answer; saving the replay
     refused, which `play` logs; leaving before the recording does answered, `launched`.
@@ -390,6 +389,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - The recording's own answers to a bot's requests, actions, debug, queries and replay saves, are passed over, so that
     a recording of a bot that acted plays back too, over a recorded answer of the same kind first. A game info asked
     for when none is next is the last one recorded, the start's for the corpus.
+  - From my review of #154 (the owner): every step is made up too, the recorded ones passed over, and so is a create
+    the recording does not hold, so the runner reads nothing of the file to guess (reversing steps played as recorded,
+    over one scan for a create and real time). An observation asked once only leaving, quitting or nothing is left is
+    the last again with the status `ended`, so a recording that stops before its game's end, as one made with a time
+    limit does, ends `UNDECIDED` (over a `TIE` at its end and over raising, documented).
 
 ## Next
 

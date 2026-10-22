@@ -778,31 +778,82 @@ class TestAnsweringUnrecorded:
             (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="At the start"))),
             (_OBSERVE, _observed(16)),
             (_STEP, _STEPPED),
-            (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Later"))),
             (_OBSERVE, _observed(32)),
+            (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="In the turn at 32"))),
+            (_STEP, _STEPPED),
+            (_OBSERVE, _observed(48)),
         )
         assert client.game_info().map_name == "At the start"
         client.observation()
         assert client.game_info().map_name == "At the start"
         client.step(16)
-        assert client.observation().observation.game_loop == 32
-        assert client.game_info().map_name == "Later"
+        client.observation()
+        client.step(16)
+        assert client.observation().observation.game_loop == 48
+        assert client.game_info().map_name == "In the turn at 32"
+
+    def test_a_game_info_once_the_recording_has_run_out_is_the_last_it_answered(self, tmp_path: Path) -> None:
+        client = self._client(
+            tmp_path, (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="At the start")))
+        )
+        client.game_info()
+        assert client.game_info().map_name == "At the start"
 
     def test_the_recorded_bots_own_requests_are_passed_over(self, tmp_path: Path) -> None:
         refused = make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Error]))
         debug = sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug())
+        query = sc2api_pb2.Request(query=_pathing_query(((1, 2), (4, 6))))
+        no_path = make_response(query=query_pb2.ResponseQuery(pathing=[query_pb2.ResponseQueryPathing(distance=0)]))
+        save_replay = sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay())
+        replay = make_response(save_replay=sc2api_pb2.ResponseSaveReplay(data=b"replay"))
         client = self._client(
             tmp_path,
             (_OBSERVE, _observed(16)),
             (sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=[sc2api_pb2.Action()])), refused),
             (debug, make_response(debug=sc2api_pb2.ResponseDebug())),
+            (query, no_path),
+            (save_replay, replay),
             (_STEP, _STEPPED),
             (_OBSERVE, _observed(32)),
         )
         client.observation()
         assert list(client.act([sc2api_pb2.Action()]).result) == [error_pb2.Success]
+        assert [answer.distance for answer in client.query(query.query).pathing] == [5.0]
         client.step(16)
         assert client.observation().observation.game_loop == 32
+
+    def test_a_step_is_answered_where_the_recording_has_none(self, tmp_path: Path) -> None:
+        """As in a game recorded in real time, whose observations follow one another with no step between."""
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)), (_OBSERVE, _observed(32)))
+        client.observation()
+        client.step(16)
+        assert client.observation().observation.game_loop == 32
+
+    def test_a_game_the_recording_only_joined_is_created(self, tmp_path: Path) -> None:
+        joined = make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=2))
+        client = self._client(tmp_path, (sc2api_pb2.Request(join_game=sc2api_pb2.RequestJoinGame()), joined))
+        client.create_game("map", [Participant(), Computer()])
+        assert client.status is Status.INIT_GAME
+        assert client.join_game(Race.TERRAN) == 2
+
+    @pytest.mark.parametrize("leaves", [True, False], ids=["then leaves", "then stops"])
+    def test_an_observation_after_the_last_is_the_last_again_with_the_game_ended(
+        self, tmp_path: Path, leaves: bool
+    ) -> None:
+        """As in a game recorded with a time limit, which stops with no result."""
+        leave = sc2api_pb2.Request(leave_game=sc2api_pb2.RequestLeaveGame())
+        left = make_response(Status.LAUNCHED, leave_game=sc2api_pb2.ResponseLeaveGame())
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)), *([(leave, left)] if leaves else []))
+        client.observation()
+        client.step(16)
+        assert client.observation().observation.game_loop == 16
+        assert client.status is Status.ENDED
+        assert client.result is None
+
+    def test_another_request_the_recording_does_not_answer_next_still_raises(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)))
+        with pytest.raises(ProtocolError, match="answers observation next, and was asked for ping"):
+            client.ping()
 
     def test_leaving_before_the_recording_does_is_answered(self, tmp_path: Path) -> None:
         client = self._client(tmp_path, (_OBSERVE, _observed(16)), (_STEP, _STEPPED), (_OBSERVE, _observed(32)))
