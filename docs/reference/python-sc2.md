@@ -457,11 +457,19 @@ it.
 | `game_info.vision_blockers` | nothing; see below |
 | `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
 | `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
+| `main_base_ramp` | `api.map.main_ramp`, and `api.map.main_ramp_of(start)` for another main |
+| `ramp.corner_depots`, `ramp.depot_in_middle`, `ramp.depot_locations` | `api.placement.terran_wall(ramp)`'s `depots` and `middle_depot` |
+| `ramp.barracks_correct_placement`, `ramp.barracks_in_middle` | its `barracks` and `barracks_without_add_on` |
+| `ramp.barracks_can_fit_addon` | `wall.barracks == wall.barracks_without_add_on` |
+| `ramp.protoss_wall_pylon`, `protoss_wall_buildings`, `protoss_wall_warpin` | `api.placement.protoss_wall(ramp)`'s `pylon`, `buildings` and `gap` |
 | `expansion_locations_list` | `[expansion.center for expansion in api.expansions]` |
 | `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
 | `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
 | `owned_expansions` | `[expansion for expansion in api.expansions if isinstance(expansion.townhall, OwnUnit)]` |
 
+- **A wall is `None` where python-sc2 raises or answers `None`**: on a ramp whose top is not two tiles touching at a
+  corner. On every main of the pool its sites are python-sc2's, and on one left of its ramp both libraries' `barracks`
+  closes the wall only once its add-on stands ([game behavior](game-behavior/map.md)).
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
 - **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so a write into it lasted one

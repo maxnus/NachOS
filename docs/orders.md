@@ -193,6 +193,33 @@ warp-in has none, since a warp gate keeps no queue. A cancel takes back only the
 neither a slot nor a mineral within the same step
 ([game behavior](reference/game-behavior/abilities-and-orders.md#cancels-and-refunds)).
 
+## Walling a ramp
+
+`api.map.main_ramp` is the ramp out of this player's main, and `api.map.main_ramp_of(start)` the ramp out of any
+other, such as the one at `api.map.opponent_start_locations[0]`. `api.placement.terran_wall(ramp)` and
+`protoss_wall(ramp)` say where structures close a ramp at its top:
+
+```python
+ramp = api.map.main_ramp
+wall = None if ramp is None else api.placement.terran_wall(ramp)
+if wall is not None:
+    free = [depot for depot in wall.depots if api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=depot)]
+    if free:
+        api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=free[0])
+```
+
+- **The Terran wall** is a supply depot at each corner of the top, `depots`, and between them `barracks`,
+  `barracks_without_add_on` or `middle_depot`. Raised, the depots keep out even a zergling; lowered, they let the
+  bot's own units through. `barracks` leaves room for its add-on, but on a main left of its ramp it closes the wall
+  only once the add-on stands, and `barracks_without_add_on` closes it alone with no room for one
+  ([game behavior](reference/game-behavior/map.md)).
+- **The Protoss wall** is a `pylon` that powers two 3x3 `buildings`, gateways or a forge or a cybernetics core, and a
+  `gap` at the corner nearer the start, which one unit holding position closes.
+
+Each is `None` for a ramp not of the shape every main ramp of the pool is: two tiles across its top, touching at a
+corner, and climbing diagonally away from them. Its sites are where the map lets the structures stand; whether one is
+free now is for `api.placement.is_free` to say.
+
 ## What the game did
 
 An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
