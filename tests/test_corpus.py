@@ -58,6 +58,14 @@ def _observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
     return [exchange.response.observation for exchange in recording if exchange.response.HasField("observation")]
 
 
+def _recorded_result(recording: Recording, last: sc2api_pb2.ResponseObservation) -> Result:
+    """How the game in `recording`, whose last observation is `last`, ended for the player recorded."""
+    player = next(
+        exchange.response.join_game.player_id for exchange in recording if exchange.request.HasField("join_game")
+    )
+    return {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
+
+
 def test_there_is_a_corpus() -> None:
     assert CORPUS, "tests/corpus holds no recordings, so nothing below ran"
 
@@ -67,19 +75,12 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
     """A change to what the library asks a game, or in what order, shows up here as an unanswered request."""
     recording = Recording(path)
     last = _observations(recording)[-1]
-    client = Client(PlaybackTransport(recording))
-    # A recording answers each kind of request in turn without reading it, so the setup can be repeated without its
-    # details.
-    client.create_game("recorded", [Participant(), Computer()])
-    player = client.join_game(Race.RANDOM)
-
     api = Api()
-    result = api.play(client)
+
+    result = run_recording(recording, api)
 
     assert api.step == last.observation.game_loop
-    assert result is {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
-    client.leave_game()
-    client.quit()
+    assert result is _recorded_result(recording, last)
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
@@ -87,9 +88,6 @@ def test_a_bot_that_acts_plays_a_recorded_game_to_its_end(path: Path) -> None:
     """`run_recording` answers what a bot asks of its own accord, which the bare api recorded never asked."""
     recording = Recording(path)
     last = _observations(recording)[-1]
-    player = next(
-        exchange.response.join_game.player_id for exchange in recording if exchange.request.HasField("join_game")
-    )
     api = Api()
     distances: list[float] = []
     grids: list[Grid[bool]] = []
@@ -108,10 +106,10 @@ def test_a_bot_that_acts_plays_a_recorded_game_to_its_end(path: Path) -> None:
         distances.append(api.pathing.query_distance(worker, api.map.start_location))
         grids.append(api.pathing.grid)
 
-    result = run_recording(path, api)
+    result = run_recording(path, api, permissive=True)
 
     assert api.step == last.observation.game_loop
-    assert result is {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
+    assert result is _recorded_result(recording, last)
     assert distances
     assert all(math.isfinite(distance) for distance in distances)
     assert numpy.array_equal(grids[0].values, grids[-1].values)

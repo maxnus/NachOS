@@ -12,6 +12,7 @@ from s2clientprotocol import sc2api_pb2
 import sc2nachos.run
 from sc2nachos import AIBuild, Api, Computer, Difficulty, Race, Result, run_from_command_line, run_local, run_recording
 from sc2nachos._command_line_arguments import _CommandLineArguments
+from sc2nachos.constants import steps_to_seconds
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
@@ -20,6 +21,7 @@ from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
     Exchange,
+    ProtocolError,
     Recording,
     RecordingTransport,
     WebSocketTransport,
@@ -266,9 +268,27 @@ def _rerecorded(path: Path, exchanges: Iterable[Exchange]) -> Path:
     return path
 
 
-def _pylon_game_without(kind: str) -> Iterator[Exchange]:
-    """The exchanges of the corpus game on Pylon but those whose requests are of `kind`."""
-    return (exchange for exchange in Recording(_PYLON_GAME) if exchange.request.WhichOneof("request") != kind)
+def _pylon_game_rewritten(*, created: bool, stepped: bool) -> Iterator[Exchange]:
+    """The exchanges of the corpus game on Pylon as a recording of it holds them if it was `created` or only joined,
+    and `stepped` or played in real time."""
+    for exchange in Recording(_PYLON_GAME):
+        asked_kind = exchange.request.WhichOneof("request")
+        if (asked_kind == "create_game" and not created) or (asked_kind == "step" and not stepped):
+            continue
+        if asked_kind == "create_game":
+            exchange.request.create_game.realtime = not stepped
+        yield exchange
+
+
+def _pylon_game_stopped_after(observations: int) -> Iterator[Exchange]:
+    """The exchanges of the corpus game on Pylon as a recording of it holds them if it stopped after `observations`,
+    as one made with a time limit does: its last observation, then leaving the game and quitting."""
+    observations_kept = 0
+    for exchange in Recording(_PYLON_GAME):
+        asked_kind = exchange.request.WhichOneof("request")
+        if observations_kept < observations or asked_kind in ("leave_game", "quit"):
+            observations_kept += asked_kind == "observation"
+            yield exchange
 
 
 def _last_recorded_step(path: Path) -> int:
@@ -280,7 +300,39 @@ def _last_recorded_step(path: Path) -> int:
 
 
 class TestPlayingARecording:
-    def test_a_bot_that_leaves_is_defeated_where_it_left(self) -> None:
+    def test_by_default_a_bot_that_asks_what_the_recording_was_not_asked_raises(self) -> None:
+        api = Api()
+
+        @api.on(TurnEvent)
+        def greet(_: TurnEvent) -> None:
+            api.chat("hello")
+
+        with pytest.raises(ProtocolError, match="was asked for action"):
+            run_recording(_PYLON_GAME, api)
+
+    def test_by_default_a_handlers_exception_raises_out_as_it_is(self) -> None:
+        api = Api()
+
+        @api.on(TurnEvent)
+        def crash(_: TurnEvent) -> None:
+            if api.step >= 160:
+                raise RuntimeError("the crash being reproduced")
+
+        with pytest.raises(RuntimeError, match="the crash being reproduced"):
+            run_recording(_PYLON_GAME, api)
+
+    def test_by_default_the_enemys_ladder_id_is_the_one_given(self) -> None:
+        api = Api()
+        ladder_ids: set[str | None] = set()
+
+        @api.on(TurnEvent)
+        def read(_: TurnEvent) -> None:
+            ladder_ids.add(api.enemy.ladder_id)
+
+        run_recording(_PYLON_GAME, api, enemy_ladder_id="5a1f")
+        assert ladder_ids == {"5a1f"}
+
+    def test_a_permissive_bot_that_leaves_is_defeated_where_it_left(self) -> None:
         api = Api()
         left_at: list[int] = []
 
@@ -290,39 +342,43 @@ class TestPlayingARecording:
                 left_at.append(api.step)
                 api.leave_game()
 
-        assert run_recording(str(_PYLON_GAME), api) is Result.DEFEAT
+        assert run_recording(str(_PYLON_GAME), api, permissive=True) is Result.DEFEAT
         assert [api.step] == left_at
 
-    def test_at_the_time_limit_it_is_a_tie(self) -> None:
+    @pytest.mark.parametrize("permissive", [False, True], ids=["strict", "permissive"])
+    def test_at_the_time_limit_it_is_a_tie(self, permissive: bool) -> None:
         api = Api()
-        assert run_recording(_PYLON_GAME, api, time_limit=60) is Result.TIE
+        assert run_recording(_PYLON_GAME, api, permissive=permissive, time_limit=60) is Result.TIE
         assert 60 <= api.time < 61
 
-    def test_a_recording_that_stops_before_the_games_end_ends_undecided(self, tmp_path: Path) -> None:
-        """As one made with a time limit does: its last observation, then leaving the game and quitting."""
-        observations_kept = 0
-        exchanges: list[Exchange] = []
-        for exchange in Recording(_PYLON_GAME):
-            asked_kind = exchange.request.WhichOneof("request")
-            if observations_kept < 100 or asked_kind in ("leave_game", "quit"):
-                exchanges.append(exchange)
-                observations_kept += asked_kind == "observation"
-        stopped = _rerecorded(tmp_path / "stopped.sc2rec", exchanges)
+    def test_by_default_a_recording_that_stops_before_the_games_end_needs_its_time_limit(self, tmp_path: Path) -> None:
+        stopped = _rerecorded(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
+        last_step = _last_recorded_step(stopped)
+        with pytest.raises(ProtocolError, match="answers leave_game next, and was asked for step"):
+            run_recording(stopped, Api())
         api = Api()
-        assert run_recording(stopped, api) is Result.UNDECIDED
+        assert run_recording(stopped, api, time_limit=steps_to_seconds(last_step)) is Result.TIE
+        assert api.step == last_step
+
+    def test_a_permissive_one_of_a_recording_that_stops_before_the_games_end_ends_undecided(
+        self, tmp_path: Path
+    ) -> None:
+        stopped = _rerecorded(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
+        api = Api()
+        assert run_recording(stopped, api, permissive=True) is Result.UNDECIDED
         assert api.step == _last_recorded_step(stopped)
 
-    def test_a_recording_of_a_joined_game_is_joined_without_creating_one(self, tmp_path: Path) -> None:
-        joined = _rerecorded(tmp_path / "joined.sc2rec", _pylon_game_without("create_game"))
+    @pytest.mark.parametrize("permissive", [False, True], ids=["strict", "permissive"])
+    @pytest.mark.parametrize(
+        ("created", "stepped"), [(False, True), (True, False), (False, False)], ids=["joined", "real time", "both"]
+    )
+    def test_a_recording_plays_to_its_end_however_the_game_was_set_up(
+        self, tmp_path: Path, permissive: bool, created: bool, stepped: bool
+    ) -> None:
+        rewritten = _rerecorded(tmp_path / "rewritten.sc2rec", _pylon_game_rewritten(created=created, stepped=stepped))
         api = Api()
-        assert run_recording(joined, api) is Result.DEFEAT
-        assert api.step == _last_recorded_step(joined)
-
-    def test_a_recording_of_a_game_in_real_time_plays_to_its_end(self, tmp_path: Path) -> None:
-        realtime = _rerecorded(tmp_path / "realtime.sc2rec", _pylon_game_without("step"))
-        api = Api()
-        assert run_recording(realtime, api) is Result.DEFEAT
-        assert api.step == _last_recorded_step(realtime)
+        assert run_recording(rewritten, api, permissive=permissive) is Result.DEFEAT
+        assert api.step == _last_recorded_step(rewritten)
 
 
 class _ClientStarted(Exception):

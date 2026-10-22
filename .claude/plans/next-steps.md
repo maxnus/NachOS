@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2543 tests, and
+- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2552 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -380,11 +380,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `PermissivePlaybackTransport(recording)`, a class of its own beside `PlaybackTransport`, which stays strict for
     `test_corpus.py` and as main had it (the owner, 2026-10-22, reversing a keyword `answer_unrecorded` on
     `PlaybackTransport`, which had made it much more complicated; a sibling over a subclass, which would break the
-    strict class's promise to raise), and `run_recording(recording, api, *, time_limit=None)` in `sc2nachos.run`,
-    which creates, joins and plays stepped through it, over the keyword alone.
-  - A bot replaying its own game for the game's own answers plays a `PlaybackTransport` through `api.play` itself, as
-    `docs/testing.md` shows; `run_recording` stays permissive. Its lasting use after M5 is a crash check over fixed
-    recordings that any version of a bot plays through, in the plain test run; a real game in CI catches more.
+    strict class's promise to raise), and `run_recording` in `sc2nachos.run`, over the keyword alone.
+  - `run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None)` is strict by default
+    (the owner, 2026-10-22, over always permissive), through a `PlaybackTransport`, so that a bot replaying its own
+    game gets the game's own answers; `permissive`, over `strict=True` and over the transport's class. Strict, it reads
+    the setup from the recording: a create if the first exchange is one, in real time as that create asked, and for a
+    game only joined, in real time if no step comes before the second observation (over keywords). It leaves no game,
+    so a handler's exception raises out as it is. The permissive mode's lasting use after M5 is a crash check over
+    fixed recordings that any version of a bot plays through, in the plain test run; a real game in CI catches more.
   - What a bot asks of its own accord is made up, under the last recorded status: every action `Success`, so the order
     book records each order as sent, over every action refused; a debug request an empty answer; saving the replay
     refused, which `play` logs; leaving before the recording does answered, `launched`.
@@ -395,10 +398,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     a recording of a bot that acted plays back too, over a recorded answer of the same kind first. A game info asked
     for when none is next is the last one recorded, the start's for the corpus.
   - From my review of #154 (the owner): every step is made up too, the recorded ones passed over, and so is a create
-    the recording does not hold, so the runner reads nothing of the file to guess (reversing steps played as recorded,
-    over one scan for a create and real time). An observation asked once only leaving, quitting or nothing is left is
-    the last again with the status `ended`, so a recording that stops before its game's end, as one made with a time
-    limit does, ends `UNDECIDED` (over a `TIE` at its end and over raising, documented).
+    the recording does not hold, so a permissive playback reads nothing of the file to guess (reversing steps played as
+    recorded, over one scan for a create and real time). An observation asked once only leaving, quitting or nothing is
+    left is the last again with the status `ended`, so a recording that stops before its game's end, as one made with a
+    time limit does, ends `UNDECIDED` (over a `TIE` at its end and over raising, documented).
 
 ## Next
 

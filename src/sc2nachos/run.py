@@ -4,6 +4,7 @@ import json
 import random
 from collections.abc import Sequence
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -19,6 +20,7 @@ from sc2nachos.protocol import (
     ConnectionClosedError,
     GamePorts,
     PermissivePlaybackTransport,
+    PlaybackTransport,
     Recording,
     RecordingTransport,
     Transport,
@@ -118,26 +120,76 @@ def run_ladder(
             client.leave_game()
 
 
-def run_recording(recording: Recording | Path | str, api: Api, *, time_limit: float | None = None) -> Result:
-    """Play `api` through the game recorded in `recording`, with no game client, and return how it ended for the player
-    recorded: `UNDECIDED` if the recording stops before the game's end, as one made with a time limit does, `DEFEAT` if
-    the bot leaves first, and `TIE` at `time_limit`, in game seconds.
+def run_recording(
+    recording: Recording | Path | str,
+    api: Api,
+    *,
+    permissive: bool = False,
+    time_limit: float | None = None,
+    enemy_ladder_id: str | None = None,
+) -> Result:
+    """Play `api` through the game recorded in `recording`, with no game client, a turn at each recorded observation,
+    and return how it ended for the player recorded, or `TIE` at `time_limit`, in game seconds. `enemy_ladder_id` is
+    as for `Api.play`.
 
-    The bot is the player recorded, and sees the game as recorded whatever it does, a turn at each recorded
-    observation, whether the game was played stepped or in real time. What it asks of its own accord is answered as
-    `PermissivePlaybackTransport` makes it up. A request the recording cannot answer raises `ProtocolError`.
+    By default the bot must ask what was asked when the game was recorded, and gets the game's own answers, as a
+    `PlaybackTransport` gives them: a request of another kind raises `ProtocolError`. The game is created if the
+    recording created it, and played in real time as the create asked; a game only joined is played in real time if
+    it asks for no step before its second observation. `time_limit` and `enemy_ladder_id` must be what the game was
+    played with: a game its time limit ended raises at its end without it.
+
+    With `permissive`, any bot plays the recording through, though nothing it does changes what comes next: what it
+    asks of its own accord is answered as `PermissivePlaybackTransport` makes it up. It returns `UNDECIDED` if the
+    recording stops before the game's end, as one made with a time limit does, and `DEFEAT` if the bot leaves first. A
+    request the recording cannot answer raises `ProtocolError`.
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    with closing(Client(PermissivePlaybackTransport(recording))) as client:
-        try:
-            # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
-            # details.
+    if permissive:
+        transport: Transport = PermissivePlaybackTransport(recording)
+        setup = _PERMISSIVE_SETUP
+    else:
+        transport = PlaybackTransport(recording)
+        setup = _recorded_setup(recording)
+    with closing(Client(transport)) as client:
+        # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
+        # details.
+        if setup.creates_the_game:
             client.create_game("recorded", [Participant(), Computer()])
-            client.join_game(Race.RANDOM)
-            return api.play(client, time_limit=time_limit)
-        finally:
-            client.leave_game()
+        client.join_game(Race.RANDOM)
+        return api.play(client, realtime=setup.realtime, time_limit=time_limit, enemy_ladder_id=enemy_ladder_id)
+
+
+@dataclass(frozen=True, slots=True)
+class _GameSetup:
+    """How a recorded game is set up to be played back: whether it is created before it is joined, and whether it is
+    played in real time."""
+
+    creates_the_game: bool
+    realtime: bool
+
+
+# A permissive playback makes up a create and every step.
+_PERMISSIVE_SETUP = _GameSetup(creates_the_game=True, realtime=False)
+
+
+def _recorded_setup(recording: Recording) -> _GameSetup:
+    """How `recording`'s game was set up: created if its first request creates it, and then in real time as the create
+    asked; a game only joined was played in real time if it asked for no step before its second observation."""
+    observations_seen = 0
+    with closing(iter(recording)) as exchanges:
+        first_exchange = next(exchanges, None)
+        if first_exchange is not None and first_exchange.request.HasField("create_game"):
+            return _GameSetup(creates_the_game=True, realtime=first_exchange.request.create_game.realtime)
+        for exchange in exchanges:
+            asked_kind = exchange.request.WhichOneof("request")
+            if asked_kind == "step":
+                return _GameSetup(creates_the_game=False, realtime=False)
+            if asked_kind == "observation":
+                observations_seen += 1
+                if observations_seen == 2:
+                    return _GameSetup(creates_the_game=False, realtime=True)
+    return _GameSetup(creates_the_game=False, realtime=False)
 
 
 def run_from_command_line(
