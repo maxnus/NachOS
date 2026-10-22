@@ -238,8 +238,8 @@ class TestReadingAMap:
             start_location=Point((10.5, 2.5)),
         )
         left_ramp, right_ramp = game_map.ramps
-        start = game_map.start_location
-        assert left_ramp.tiles.center.distance_to(start) < right_ramp.tiles.center.distance_to(start)
+        main_start = game_map.start_location
+        assert left_ramp.tiles.center.distance_to(main_start) < right_ramp.tiles.center.distance_to(main_start)
         assert game_map.main_ramp is right_ramp
 
     def test_the_main_does_not_reach_across_rocks_whose_ground_is_buildable(self) -> None:
@@ -272,7 +272,7 @@ class TestReadingAMap:
 
     def test_a_point_that_is_no_start_location_has_no_main_ramp_to_ask_for(self) -> None:
         game_map = GameMap(make_game_info(start_locations=((5.5, 5.5),)), start_location=Point((0.5, 0.5)))
-        assert game_map.main_ramp_of(Point((5.5, 5.5))) is None
+        assert game_map.main_ramp_of(Point((5.5, 5.5))) is game_map.main_ramp_of(Point((5.2, 5.8))) is None
         with pytest.raises(ValueError, match="no start location"):
             game_map.main_ramp_of(Point((3.5, 3.5)))
 
@@ -382,6 +382,7 @@ class TestARecordedMap:
             assert ramp is not None
             assert (len(ramp.tiles), len(ramp.top), len(ramp.bottom)) == (16, 2, 2)
             assert ramp.orientation in diagonals
+            assert ramp.width == 2
             top_tile_offset = ramp._point_at_offset_from_the_top((0.5, -0.5))
             assert Tile.at(top_tile_offset) in ramp.top
             assert ramp is min(game_map.ramps, key=lambda each: each.top.center.distance_to(start))

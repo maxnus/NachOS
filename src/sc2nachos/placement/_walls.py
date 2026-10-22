@@ -44,7 +44,7 @@ class TerranWall:
     @classmethod
     def _from_ramp(cls, ramp: Ramp, *, start: PointLike) -> TerranWall | None:
         """The Terran wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: 2 wide, and climbing along a diagonal."""
+        shape every main ramp of the pool is: two top tiles, 2 wide, and climbing along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, far_corner = _corners_nearer_first(ramp, start)
@@ -84,7 +84,7 @@ class ProtossWall:
     @classmethod
     def _from_ramp(cls, ramp: Ramp, *, start: PointLike) -> ProtossWall | None:
         """The Protoss wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: 2 wide, and climbing along a diagonal."""
+        shape every main ramp of the pool is: two top tiles, 2 wide, and climbing along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, _ = _corners_nearer_first(ramp, start)
@@ -104,10 +104,10 @@ class ProtossWall:
 
 
 def _is_shaped_like_the_pools_main_ramps(ramp: Ramp) -> bool:
-    """Whether `ramp` is 2 wide and climbs along a diagonal, as every main ramp of the pool does: the walls' offsets are
-    measured from the corner its two top tiles share."""
+    """Whether `ramp` has two top tiles, is 2 wide and climbs along a diagonal, as every main ramp of the pool does: the
+    walls' offsets are measured from the corner those two tiles share, which a top of more tiles has none of."""
     step_x, step_y = ramp.orientation.value
-    return ramp.width == 2 and step_x != 0 and step_y != 0
+    return len(ramp.top) == ramp.width == 2 and step_x != 0 and step_y != 0
 
 
 def _corners_nearer_first(ramp: Ramp, start: PointLike) -> tuple[Point, Point]:

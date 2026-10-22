@@ -244,15 +244,15 @@ class PlacementGrids:
     def terran_wall(self, start: PointLike) -> TerranWall | None:
         """Where a Terran wall closes the ramp out of the main at the start location `start` at its top, as `TerranWall`
         says: `None` if the main has no ramp, as `GameMap.main_ramp_of` finds it, or one not of the shape every main
-        ramp of the pool is, 2 wide and climbing along a diagonal. Whether a structure may stand at a site now is for
-        `is_free` to say. Raises `ValueError` for a point that is no start location."""
+        ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether a structure may stand at a site now
+        is for `is_free` to say. Raises `ValueError` for a point on no start location's tile."""
         main_ramp = self._game_map.main_ramp_of(start)
         return None if main_ramp is None else TerranWall._from_ramp(main_ramp, start=start)
 
     def protoss_wall(self, start: PointLike) -> ProtossWall | None:
         """Where a Protoss wall closes the ramp out of the main at the start location `start` at its top, as
         `ProtossWall` says, `None` where `terran_wall` is. Whether a structure may stand at a site now is for `is_free`
-        to say. Raises `ValueError` for a point that is no start location."""
+        to say. Raises `ValueError` for a point on no start location's tile."""
         main_ramp = self._game_map.main_ramp_of(start)
         return None if main_ramp is None else ProtossWall._from_ramp(main_ramp, start=start)
 

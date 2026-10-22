@@ -214,8 +214,8 @@ if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at
   `gap` beside the `near_building`, at the corner nearer the start, which one unit holding position closes. The
   `far_building` stands at the other corner.
 
-Each is `None` for a main with no ramp, or one not of the shape every main ramp of the pool is: 2 `width` at its top,
-and an `orientation` along a diagonal. Whether a structure may stand at a site now is for `api.placement.is_free` to
+Each is `None` for a main with no ramp, or one not of the shape every main ramp of the pool is: two tiles across its
+top, a `width` of 2, and an `orientation` along a diagonal. Whether a structure may stand at a site now is for `api.placement.is_free` to
 say.
 
 ## What the game did

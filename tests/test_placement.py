@@ -929,6 +929,9 @@ class TestAWallOnADrawnRamp:
             pytest.param([Tile(20, 20), Tile(21, 19), Tile(22, 18)], [Tile(17, 17), Tile(18, 16)], id="a top of three"),
             pytest.param([Tile(20, 20), Tile(20, 21)], [Tile(16, 20), Tile(16, 21)], id="climbing east"),
             pytest.param([Tile(20, 20), Tile(22, 18)], [Tile(17, 17), Tile(19, 15)], id="a top apart"),
+            pytest.param(
+                [Tile(20, 21), Tile(21, 20), Tile(21, 21)], [Tile(17, 18), Tile(18, 17)], id="a top of three 2 wide"
+            ),
         ],
     )
     def test_a_ramp_of_another_shape_has_none(self, top: list[Tile], bottom: list[Tile]) -> None:

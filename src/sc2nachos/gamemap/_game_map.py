@@ -39,7 +39,7 @@ class GameMap:
         "_all_start_locations",
         "_corners",
         "_height",
-        "_main_ramps_by_start",
+        "_main_ramps_by_start_tile",
         "_name",
         "_pathing",
         "_placement",
@@ -62,7 +62,9 @@ class GameMap:
         opponent_start_locations = (Point._from_proto(location) for location in start.start_locations)
         self._all_start_locations = (start_location, *opponent_start_locations)
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
-        self._main_ramps_by_start = {start: self._find_main_ramp(start) for start in self._all_start_locations}
+        self._main_ramps_by_start_tile = {
+            Tile.at(start): self._find_main_ramp(start) for start in self._all_start_locations
+        }
 
     @classmethod
     def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
@@ -145,19 +147,19 @@ class GameMap:
     @property
     def main_ramp(self) -> Ramp | None:
         """The ramp out of this player's main, as `main_ramp_of(start_location)` says."""
-        return self._main_ramps_by_start[self.start_location]
+        return self._main_ramps_by_start_tile[Tile.at(self.start_location)]
 
     def main_ramp_of(self, start: PointLike) -> Ramp | None:
         """The ramp out of the main at the start location `start`, such as an opponent's: of the ramps whose top is at
         `start`'s level, within half a level of the height at its tile, the one whose center is the shortest walk from
         `start`, and of two as short, the first in tile order. The walk is over the pathing grid with the ground a
         townhall at `start` covers opened, since the start's own townhall closes it. `None` if no such ramp can be
-        walked to. Raises `ValueError` for a point that is no start location.
+        walked to. Raises `ValueError` for a point on no start location's tile.
         """
-        start_location = Point((start[0], start[1]))
-        if start_location not in self._main_ramps_by_start:
-            raise ValueError(f"{start_location} is no start location of the map's: {self._all_start_locations}")
-        return self._main_ramps_by_start[start_location]
+        start_tile = Tile.at(start)
+        if start_tile not in self._main_ramps_by_start_tile:
+            raise ValueError(f"{start} is on no start location's tile: {self._all_start_locations}")
+        return self._main_ramps_by_start_tile[start_tile]
 
     def _find_main_ramp(self, start: Point) -> Ramp | None:
         """The ramp out of the main at the start location `start`, as `main_ramp_of` says; `None` for a start beyond the
@@ -170,8 +172,10 @@ class GameMap:
         walking_distances = walkable_ground.cheapest_paths_from(start).distances
         start_level = self._height[start]
         at_its_level = [ramp for ramp in self._ramps if abs(self._height[min(ramp.top)] - start_level) < _HALF_A_LEVEL]
-        nearest = min(at_its_level, key=lambda ramp: walking_distances[ramp.tiles.center], default=None)
-        return nearest if nearest is not None and walking_distances[nearest.tiles.center] < math.inf else None
+        nearest_ramp = min(at_its_level, key=lambda ramp: walking_distances[ramp.tiles.center], default=None)
+        if nearest_ramp is None or walking_distances[nearest_ramp.tiles.center] == math.inf:
+            return None
+        return nearest_ramp
 
     @property
     def start_location(self) -> Point:
