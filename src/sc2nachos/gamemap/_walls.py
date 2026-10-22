@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
 
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.geometry import Point
-from sc2nachos.placement._build_sites import _ADD_ON_OFFSET
 
 if TYPE_CHECKING:
     from sc2nachos.gamemap._ramp import Ramp
@@ -55,7 +55,7 @@ class TerranWall:
     @classmethod
     def from_ramp(cls, ramp: Ramp, *, start: PointLike) -> TerranWall | None:
         """The Terran wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: two top tiles, and a climb along a diagonal."""
+        shape every main ramp of the pool is: two top tiles touching at a corner, and a climb along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, far_corner = _corners_nearer_first(ramp, start)
@@ -67,7 +67,7 @@ class TerranWall:
             near_depot=near_corner,
             far_depot=far_corner,
             barracks_with_add_on=barracks_with_add_on,
-            add_on=Point((barracks_with_add_on.x + _ADD_ON_OFFSET[0], barracks_with_add_on.y + _ADD_ON_OFFSET[1])),
+            add_on=Point((barracks_with_add_on.x + ADD_ON_OFFSET[0], barracks_with_add_on.y + ADD_ON_OFFSET[1])),
             barracks_in_wall=barracks_in_wall,
             middle_depot=ramp._point_from_top(_MIDDLE_DEPOT_OFFSET),
         )
@@ -93,7 +93,7 @@ class ProtossWall:
     @classmethod
     def from_ramp(cls, ramp: Ramp, *, start: PointLike) -> ProtossWall | None:
         """The Protoss wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: two top tiles, and a climb along a diagonal."""
+        shape every main ramp of the pool is: two top tiles touching at a corner, and a climb along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, _ = _corners_nearer_first(ramp, start)
@@ -111,10 +111,14 @@ class ProtossWall:
 
 
 def _is_shaped_like_the_pools_main_ramps(ramp: Ramp) -> bool:
-    """Whether `ramp` has the two top tiles and the diagonal climb every main ramp of the pool has, which the walls'
-    offsets are for."""
+    """Whether `ramp` has the two top tiles touching at a corner and the diagonal climb every main ramp of the pool
+    has, which the walls' offsets are for: they are measured from that corner."""
+    if len(ramp.top) != 2:
+        return False
+    first_top_tile, second_top_tile = sorted(ramp.top)
+    touching_at_a_corner = second_top_tile.x - first_top_tile.x == abs(second_top_tile.y - first_top_tile.y) == 1
     step_x, step_y = ramp.orientation.value
-    return len(ramp.top) == 2 and step_x != 0 and step_y != 0
+    return touching_at_a_corner and step_x != 0 and step_y != 0
 
 
 def _corners_nearer_first(ramp: Ramp, start: PointLike) -> tuple[Point, Point]:

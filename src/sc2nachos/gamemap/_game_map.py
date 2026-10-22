@@ -151,9 +151,10 @@ class GameMap:
     def main_ramp_of(self, start: PointLike) -> Ramp | None:
         """The ramp out of the main `start` stands in, such as an opponent's start location: of the ramps whose top is
         at `start`'s level, within half a level of the height at its tile, the one whose top is the shortest walk from
-        `start`. The walk is over the pathing grid with the ground a townhall at `start` would cover opened, since the
-        start's own townhall closes it. `None` if no such ramp's top can be walked to. Raises `IndexError` outside the
-        playable area.
+        `start`, and of two as short, the first in tile order. The walk is over the pathing grid with the ground a
+        townhall at `start` would cover opened, since the start's own townhall closes it. `None` if no such ramp's top
+        can be walked to. A start on a ramp, near its top, reads that ramp. Raises `IndexError` outside the playable
+        area.
         """
         start_tile = Tile.at(start)
         if start_tile not in self._main_ramps_by_start_tile:

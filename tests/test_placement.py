@@ -13,7 +13,7 @@ from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamedata._footprints import FOOTPRINTS
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
 from sc2nachos.gamemap import GameMap, ProtossWall, Ramp, TerranWall
 from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
@@ -21,7 +21,6 @@ from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids
-from sc2nachos.placement._build_sites import _ADD_ON_OFFSET
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
@@ -808,8 +807,8 @@ class TestTheWallsOfARecordedMain:
                 assert free_ground.fits_footprint(FOOTPRINTS[UnitTypeId.BARRACKS], at=barracks_site)
             assert terran_wall.add_on == Point(
                 (
-                    terran_wall.barracks_with_add_on.x + _ADD_ON_OFFSET[0],
-                    terran_wall.barracks_with_add_on.y + _ADD_ON_OFFSET[1],
+                    terran_wall.barracks_with_add_on.x + ADD_ON_OFFSET[0],
+                    terran_wall.barracks_with_add_on.y + ADD_ON_OFFSET[1],
                 )
             )
             assert free_ground.fits_footprint(add_on_footprint, at=terran_wall.add_on)
@@ -918,7 +917,7 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
 
 
 class TestAWallOnADrawnRamp:
-    """A ramp of the pool's main ramps' shape, climbing north-east from (17.5, 17.5) to (21, 21), and others."""
+    """A ramp of the pool's main ramps' shape, climbing north-east from (18, 18) to (21, 21), and others."""
 
     _STANDARD_RAMP = Ramp(
         tiles=TileSet([Tile(20, 21), Tile(21, 20), Tile(17, 18), Tile(18, 17)]),
@@ -931,6 +930,7 @@ class TestAWallOnADrawnRamp:
         [
             pytest.param([Tile(20, 20), Tile(21, 19), Tile(22, 18)], [Tile(17, 17), Tile(18, 16)], id="a top of three"),
             pytest.param([Tile(20, 20), Tile(20, 21)], [Tile(16, 20), Tile(16, 21)], id="climbing east"),
+            pytest.param([Tile(20, 20), Tile(22, 18)], [Tile(17, 17), Tile(19, 15)], id="a top apart"),
         ],
     )
     def test_a_ramp_of_another_shape_has_none(self, top: list[Tile], bottom: list[Tile]) -> None:

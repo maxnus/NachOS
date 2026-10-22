@@ -21,11 +21,11 @@ class Direction(Enum):
 
     @classmethod
     def _nearest_to(cls, step_x: float, step_y: float) -> Direction:
-        """The direction whose line lies nearest by angle to the line toward `(step_x, step_y)`; of two as near, the
-        one counterclockwise of it. Raises `ValueError` for a step of no length, which points nowhere."""
+        """The direction whose line lies nearest by angle to the line toward `(step_x, step_y)`. Raises `ValueError`
+        for a step of no length, which points nowhere."""
         if step_x == 0 and step_y == 0:
             raise ValueError("a step of no length has no direction")
-        # A tie rounds up, counterclockwise, as every tie in NachOS does.
+        # Rounded half up, as NachOS rounds, though no step of floats lands exactly halfway between two directions.
         eighths_counterclockwise_of_east = math.floor(math.atan2(step_y, step_x) / (math.pi / 4) + 0.5) % 8
         return _COUNTERCLOCKWISE_FROM_EAST[eighths_counterclockwise_of_east]
 

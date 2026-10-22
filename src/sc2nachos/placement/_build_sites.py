@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.geometry import Grid, Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import NotReportedError, Unit, UnitType
@@ -16,9 +17,6 @@ if TYPE_CHECKING:
     from sc2nachos.orders import Order, OrderBook
     from sc2nachos.placement._placement_reservation import PlacementReservation
     from sc2nachos.units import OwnUnit, UnitOrder, Units
-
-# An add-on stands 2.5 right of its host's center and 0.5 below (#37).
-_ADD_ON_OFFSET = (2.5, -0.5)
 
 
 @final
@@ -109,7 +107,7 @@ class _BuildSites:
         if host_footprint is None:
             return
         host_center = host_footprint.snapped_center(at=landing_site if landing_site is not None else host.position)
-        add_on_center = Point((host_center.x + _ADD_ON_OFFSET[0], host_center.y + _ADD_ON_OFFSET[1]))
+        add_on_center = Point((host_center.x + ADD_ON_OFFSET[0], host_center.y + ADD_ON_OFFSET[1]))
         if _placement_key(add_on_center) in standing:
             return
         reserved.fill_footprint(footprint, at=add_on_center, value=True)
