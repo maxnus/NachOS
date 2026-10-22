@@ -11,9 +11,9 @@ from sc2nachos.protocol._recording import Exchange, Recording
 # recording's own are passed over.
 _BOT_REQUESTS = frozenset({"action", "debug", "query", "save_replay", "step"})
 
-# What a recorded bot may have asked between its turn's other requests, which another bot need not ask. Each is passed
-# over while something else is asked, the last game info kept.
-_ANSWERED_ONLY_WHEN_ASKED = frozenset({"game_info", "ping"})
+# What a recorded bot may have asked between its turn's other requests, which another bot need not ask. The last game
+# info is kept.
+_PASSED_OVER_UNLESS_ASKED = frozenset({"game_info", "ping"})
 
 # What a recording holds after the last observation of its game.
 _AFTER_THE_GAME = frozenset({"leave_game", "quit", "nothing"})
@@ -89,7 +89,7 @@ class PermissivePlaybackTransport:
                 return None
             recorded_kind = exchange.request.WhichOneof("request")
             if recorded_kind not in _BOT_REQUESTS and (
-                recorded_kind not in _ANSWERED_ONLY_WHEN_ASKED or recorded_kind == asked_kind
+                recorded_kind not in _PASSED_OVER_UNLESS_ASKED or recorded_kind == asked_kind
             ):
                 return exchange
             self._next_exchange = None

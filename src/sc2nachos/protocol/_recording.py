@@ -58,10 +58,13 @@ class Recording:
     @property
     def created_its_game(self) -> bool:
         """Whether the client recorded created its game, as a local game's does, rather than only joining it, as a
-        ladder game's does: whether its first request creates one. It reads the start of the file."""
+        ladder game's does: whether it asked to create one before it joined. It reads the start of the file."""
         with closing(iter(self)) as exchanges:
-            first_exchange = next(exchanges, None)
-        return first_exchange is not None and first_exchange.request.HasField("create_game")
+            for exchange in exchanges:
+                asked_kind = exchange.request.WhichOneof("request")
+                if asked_kind in ("create_game", "join_game"):
+                    return asked_kind == "create_game"
+        return False
 
     @property
     def played_in_real_time(self) -> bool:

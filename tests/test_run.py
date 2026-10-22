@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,10 +23,9 @@ from sc2nachos.protocol import (
     Exchange,
     ProtocolError,
     Recording,
-    RecordingTransport,
     WebSocketTransport,
 )
-from support import FakeTransport, make_response, recorded_observations
+from support import make_response, recorded_observations, write_recording
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -259,15 +258,6 @@ def test_an_installation_without_maps_is_reported(tmp_path: Path, monkeypatch: p
 _PYLON_GAME = Path(__file__).parent / "corpus" / "PylonAIE_v4-TvZ.sc2rec"
 
 
-def _rerecorded(path: Path, exchanges: Iterable[Exchange]) -> Path:
-    """`exchanges` recorded at `path`."""
-    exchanges = list(exchanges)
-    with closing(RecordingTransport(FakeTransport(*(exchange.response for exchange in exchanges)), path)) as recorder:
-        for exchange in exchanges:
-            recorder.request(exchange.request)
-    return path
-
-
 def _pylon_game_rewritten(*, created: bool, stepped: bool) -> Iterator[Exchange]:
     """The exchanges of the corpus game on Pylon as a recording of it holds them if it was `created` or only joined,
     and `stepped` or played in real time."""
@@ -304,9 +294,9 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
-def _last_recorded_step(path: Path) -> int:
-    """The step of the last observation recorded at `path`."""
-    return recorded_observations(Recording(path))[-1].observation.game_loop
+def _last_recorded_step(recording: Recording) -> int:
+    """The step of the last observation in `recording`."""
+    return recorded_observations(recording)[-1].observation.game_loop
 
 
 class TestPlayingARecording:
@@ -362,7 +352,7 @@ class TestPlayingARecording:
         assert 60 <= api.time < 61
 
     def test_by_default_a_recording_that_stops_before_the_games_end_needs_its_time_limit(self, tmp_path: Path) -> None:
-        stopped = _rerecorded(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
+        stopped = write_recording(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
         last_step = _last_recorded_step(stopped)
         with pytest.raises(ProtocolError, match="answers leave_game next, and was asked for step"):
             run_recording(stopped, Api())
@@ -371,7 +361,7 @@ class TestPlayingARecording:
         assert api.step == last_step
 
     def test_by_default_a_bot_that_left_after_saving_its_replay_needs_where_to_save_it(self, tmp_path: Path) -> None:
-        left = _rerecorded(tmp_path / "left.sc2rec", _pylon_game_left_after(100))
+        left = write_recording(tmp_path / "left.sc2rec", _pylon_game_left_after(100))
         last_step = _last_recorded_step(left)
 
         def leaving_api() -> Api:
@@ -399,7 +389,7 @@ class TestPlayingARecording:
     def test_a_permissive_one_of_a_recording_that_stops_before_the_games_end_ends_undecided(
         self, tmp_path: Path
     ) -> None:
-        stopped = _rerecorded(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
+        stopped = write_recording(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
         api = Api()
         assert run_recording(stopped, api, permissive=True) is Result.UNDECIDED
         assert api.step == _last_recorded_step(stopped)
@@ -411,7 +401,9 @@ class TestPlayingARecording:
     def test_a_recording_plays_to_its_end_however_the_game_was_set_up(
         self, tmp_path: Path, permissive: bool, created: bool, stepped: bool
     ) -> None:
-        rewritten = _rerecorded(tmp_path / "rewritten.sc2rec", _pylon_game_rewritten(created=created, stepped=stepped))
+        rewritten = write_recording(
+            tmp_path / "rewritten.sc2rec", _pylon_game_rewritten(created=created, stepped=stepped)
+        )
         api = Api()
         assert run_recording(rewritten, api, permissive=permissive) is Result.DEFEAT
         assert api.step == _last_recorded_step(rewritten)

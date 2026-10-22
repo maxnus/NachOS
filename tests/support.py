@@ -62,7 +62,7 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.player import Player
-from sc2nachos.protocol import Client, Recording, Status
+from sc2nachos.protocol import Client, Exchange, Recording, RecordingTransport, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -387,6 +387,16 @@ def played(
     events._set_step(step)
     events._hand_out(game.report(events))
     return game
+
+
+def write_recording(path: Path, exchanges: Iterable[Exchange]) -> Recording:
+    """A recording at `path` of `exchanges`."""
+    exchanges = list(exchanges)
+    recorder = RecordingTransport(FakeTransport(*(exchange.response for exchange in exchanges)), path)
+    for exchange in exchanges:
+        recorder.request(exchange.request)
+    recorder.close()
+    return recorder.recording
 
 
 def recorded_observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:

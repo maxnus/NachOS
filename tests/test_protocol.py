@@ -35,6 +35,7 @@ from support import (
     make_client,
     make_observation,
     make_response,
+    write_recording,
 )
 
 
@@ -698,11 +699,7 @@ class TestReplay:
 
 def _recording_of(path: Path, *exchanges: tuple[sc2api_pb2.Request, sc2api_pb2.Response]) -> Recording:
     """A recording at `path` of `exchanges`, each a request and its answer."""
-    recorder = _recorder(path, *(response for _, response in exchanges))
-    for request, _ in exchanges:
-        recorder.request(request)
-    recorder.close()
-    return recorder.recording
+    return write_recording(path, (Exchange(request, response) for request, response in exchanges))
 
 
 _OBSERVE = sc2api_pb2.Request(observation=sc2api_pb2.RequestObservation())
@@ -766,6 +763,15 @@ class TestRecordedSetup:
         )
         assert not recording.created_its_game
         assert recording.played_in_real_time
+
+    def test_a_game_created_after_a_ping_was_created(self, tmp_path: Path) -> None:
+        recording = _recording_of(
+            tmp_path / "game.sc2rec",
+            (sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()), _VERSION),
+            _create(realtime=False),
+            (_JOIN, _JOINED),
+        )
+        assert recording.created_its_game
 
     def test_an_empty_recording_created_nothing_and_was_stepped(self, tmp_path: Path) -> None:
         recording = _recording_of(tmp_path / "game.sc2rec")
