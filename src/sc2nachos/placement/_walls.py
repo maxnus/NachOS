@@ -9,24 +9,13 @@ from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.geometry import Point
 
 if TYPE_CHECKING:
-    from sc2nachos.gamemap._ramp import Ramp
+    from sc2nachos.gamemap import Ramp
     from sc2nachos.geometry import PointLike
 
 # Every site is an offset from the middle of the ramp's top, as for a ramp climbing north-east, which `Ramp` mirrors
 # to the way it climbs. They are burnysc2's sites (corpus), and with the depots raised each wall closes every main ramp
-# of the pool, `barracks_with_add_on` there once its add-on stands (in game).
+# of the pool, `barracks_with_add_on` there once its add-on stands (in game). The corners, where the depots stand:
 _CORNER_DEPOT_OFFSETS = ((2.0, -1.0), (-1.0, 2.0))
-_MIDDLE_DEPOT_OFFSET = (1.0, 1.0)
-_BARRACKS_IN_WALL_OFFSET = (1.5, 1.5)
-# A barracks's add-on stands on its right, so where the ramp climbs toward -x the barracks moves this far left to leave
-# the add-on room beside the depot.
-_BARRACKS_SHIFT_FOR_ITS_ADD_ON = -2.0
-_PYLON_OFFSET = (4.0, 4.0)
-# The Protoss wall with its gap at the second of the corners; where the first is the nearer the start, each offset's
-# coordinates swap, mirroring the wall across the line the ramp climbs along.
-_NEAR_BUILDING_OFFSET = (0.5, 2.5)
-_FAR_BUILDING_OFFSET = (2.5, -0.5)
-_GAP_OFFSET = (-1.5, 1.5)
 
 
 @final
@@ -53,23 +42,25 @@ class TerranWall:
     """A third depot, in the barracks's place."""
 
     @classmethod
-    def from_ramp(cls, ramp: Ramp, *, start: PointLike) -> TerranWall | None:
+    def _from_ramp(cls, ramp: Ramp, *, start: PointLike) -> TerranWall | None:
         """The Terran wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: two top tiles touching at a corner, and a climb along a diagonal."""
+        shape every main ramp of the pool is: 2 wide, and climbing along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, far_corner = _corners_nearer_first(ramp, start)
-        barracks_in_wall = ramp._point_from_top(_BARRACKS_IN_WALL_OFFSET)
+        barracks_in_wall = ramp._point_at_offset_from_the_top((1.5, 1.5))
         barracks_with_add_on = barracks_in_wall
         if ramp.orientation.value[0] < 0:
-            barracks_with_add_on = Point((barracks_in_wall.x + _BARRACKS_SHIFT_FOR_ITS_ADD_ON, barracks_in_wall.y))
+            # Its add-on stands on its right, so where the ramp climbs toward -x it moves 2 left to leave the add-on
+            # room beside the depot.
+            barracks_with_add_on = Point((barracks_in_wall.x - 2, barracks_in_wall.y))
         return cls(
             near_depot=near_corner,
             far_depot=far_corner,
             barracks_with_add_on=barracks_with_add_on,
             add_on=Point((barracks_with_add_on.x + ADD_ON_OFFSET[0], barracks_with_add_on.y + ADD_ON_OFFSET[1])),
             barracks_in_wall=barracks_in_wall,
-            middle_depot=ramp._point_from_top(_MIDDLE_DEPOT_OFFSET),
+            middle_depot=ramp._point_at_offset_from_the_top((1.0, 1.0)),
         )
 
 
@@ -91,41 +82,39 @@ class ProtossWall:
     """Where a unit stands to close the wall, at the corner nearer the main's start."""
 
     @classmethod
-    def from_ramp(cls, ramp: Ramp, *, start: PointLike) -> ProtossWall | None:
+    def _from_ramp(cls, ramp: Ramp, *, start: PointLike) -> ProtossWall | None:
         """The Protoss wall at the top of `ramp` out of the main `start` stands in, or `None` if the ramp is not of the
-        shape every main ramp of the pool is: two top tiles touching at a corner, and a climb along a diagonal."""
+        shape every main ramp of the pool is: 2 wide, and climbing along a diagonal."""
         if not _is_shaped_like_the_pools_main_ramps(ramp):
             return None
         near_corner, _ = _corners_nearer_first(ramp, start)
-        gap_at_the_second_corner = near_corner == ramp._point_from_top(_CORNER_DEPOT_OFFSETS[1])
+        gap_at_the_second_corner = near_corner == ramp._point_at_offset_from_the_top(_CORNER_DEPOT_OFFSETS[1])
 
         def site_by_the_near_corner(offset: tuple[float, float]) -> Point:
-            return ramp._point_from_top(offset if gap_at_the_second_corner else (offset[1], offset[0]))
+            """The site `offset` gives for a wall with its gap at the second corner, mirrored across the line the ramp
+            climbs along where the gap is at the first."""
+            return ramp._point_at_offset_from_the_top(offset if gap_at_the_second_corner else (offset[1], offset[0]))
 
         return cls(
-            pylon=ramp._point_from_top(_PYLON_OFFSET),
-            near_building=site_by_the_near_corner(_NEAR_BUILDING_OFFSET),
-            far_building=site_by_the_near_corner(_FAR_BUILDING_OFFSET),
-            gap=site_by_the_near_corner(_GAP_OFFSET),
+            pylon=ramp._point_at_offset_from_the_top((4.0, 4.0)),
+            near_building=site_by_the_near_corner((0.5, 2.5)),
+            far_building=site_by_the_near_corner((2.5, -0.5)),
+            gap=site_by_the_near_corner((-1.5, 1.5)),
         )
 
 
 def _is_shaped_like_the_pools_main_ramps(ramp: Ramp) -> bool:
-    """Whether `ramp` has the two top tiles touching at a corner and the diagonal climb every main ramp of the pool
-    has, which the walls' offsets are for: they are measured from that corner."""
-    if len(ramp.top) != 2:
-        return False
-    first_top_tile, second_top_tile = sorted(ramp.top)
-    touching_at_a_corner = second_top_tile.x - first_top_tile.x == abs(second_top_tile.y - first_top_tile.y) == 1
+    """Whether `ramp` is 2 wide and climbs along a diagonal, as every main ramp of the pool does: the walls' offsets are
+    measured from the corner its two top tiles share."""
     step_x, step_y = ramp.orientation.value
-    return touching_at_a_corner and step_x != 0 and step_y != 0
+    return ramp.width == 2 and step_x != 0 and step_y != 0
 
 
 def _corners_nearer_first(ramp: Ramp, start: PointLike) -> tuple[Point, Point]:
     """The two corners of `ramp`'s top where a wall's depots stand, the one nearer `start` first; of two as near, the
     one with the lower x."""
     first_corner, second_corner = sorted(
-        (ramp._point_from_top(offset) for offset in _CORNER_DEPOT_OFFSETS),
+        (ramp._point_at_offset_from_the_top(offset) for offset in _CORNER_DEPOT_OFFSETS),
         key=lambda corner: (corner.distance_to(start), corner.x),
     )
     return first_corner, second_corner

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2633 tests, and
+- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2636 tests, and
   `uv run pytest -m integration` passed 37 against a real game (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -412,20 +412,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
   so a script adds it to the `argv` it hands over (`docs/ladder.md`). `RecordingTransport` compresses at xz preset 3,
   over 1 and over xz's default of 6, which took several times as long an exchange for a file barely smaller (the
   measurements in #155).
-- **Ramp wall-in sites** (the owner, 2026-10-22, one question at a time, and in review of #156):
+- **Ramp wall-in sites** (the owner, 2026-10-22, one question at a time, and in two reviews of #156):
   - both walls, Terran and Protoss, over Terran only and over a search for any ramp;
-  - `TerranWall.from_ramp(ramp, *, start)` and `ProtossWall.from_ramp(ramp, *, start)` in `sc2nachos.gamemap`, each
-    `None` only for a ramp of another shape (review of #156, reversing `api.placement.terran_wall` and `protoss_wall`,
-    which first won over `api.map` and over properties on `Ramp`). No check of the sites against the placement grid:
-    whether a structure may stand at one is `is_free`'s to say;
+  - `api.placement.terran_wall(start)` and `protoss_wall(start)`, asked of a start location (second review of #156,
+    over walls on the map by start and over a `Main` record; the first review had made them classmethods taking a ramp
+    and a start, which the owner found redundant). Each is `None` for a main with no ramp or one not 2 wide and climbing
+    along a diagonal, and checks no site against the grids: whether a structure may stand at one is `is_free`'s to say;
   - built for the main's start, which picks the Protoss gap's corner and names near and far: `near_depot`, `far_depot`,
     `barracks_with_add_on`, `add_on`, `barracks_in_wall` and `middle_depot`; `pylon`, `near_building`, `far_building`
-    and `gap`. A tie in the corners goes to the lower x;
-  - `api.map.main_ramp` and `main_ramp_of(start)`: of the ramps whose top is at the start's level, the shortest walk
-    from it, over the pathing grid with a townhall's ground at the start opened (review of #156, over a flood fill of the
-    level ground and over the nearest in a line), and `api.map.all_start_locations`, over `start_locations`;
-  - `Ramp.orientation`, the nearest of eight compass `Direction`s to the climb, never `None`, and the private
-    `Ramp._point_from_top(offset)` the walls' fixed offsets go through (review of #156);
+    and `gap`, all Points (over Rectangles, a `Square` and Tiles). A tie in the corners goes to the lower x;
+  - `api.map.main_ramp` and `main_ramp_of(start)` for start locations only, found when the map is made (over finding
+    other points on asking): of the ramps whose top is at the start's level, the one whose center is the shortest walk,
+    over the pathing grid with a townhall's footprint at the start opened;
+  - `api.map.all_start_locations`, one tuple with this player's first, over `start_locations`;
+  - `Ramp.orientation`, the `Direction.closest` of eight compass directions to the climb, never `None`; `Ramp.width`,
+    how many tiles the top spans across the climb; and the private `Ramp._point_at_offset_from_the_top(offset)`;
   - `tools/sweep_walls.py`, placement and a zergling on every main of the pool, over placement alone and one map first.
   - Found building it: on a main left of its ramp no barracks closes the wall alone with room for its add-on, so
     `barracks_with_add_on` closes it once the add-on stands, documented (the owner, over `None` there and over a field).
@@ -442,6 +443,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## 1. Waiting until something needs them
 
+- A type for start locations, perhaps a subclass of `Expansion` holding its main ramp (the owner, second review of
+  #156), to plan once M5 shows how AvocaDOS reads its mains; `main_ramp_of` and the walls take a start location Point
+  until then.
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.

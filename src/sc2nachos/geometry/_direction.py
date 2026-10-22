@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import math
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sc2nachos.geometry._point import PointLike
 
 
 class Direction(Enum):
@@ -20,14 +24,12 @@ class Direction(Enum):
     SOUTH_EAST = (1, -1)
 
     @classmethod
-    def _nearest_to(cls, step_x: float, step_y: float) -> Direction:
-        """The direction whose line lies nearest by angle to the line toward `(step_x, step_y)`. Raises `ValueError`
-        for a step of no length, which points nowhere."""
-        if step_x == 0 and step_y == 0:
-            raise ValueError("a step of no length has no direction")
-        # Rounded half up, as NachOS rounds, though no step of floats lands exactly halfway between two directions.
-        eighths_counterclockwise_of_east = math.floor(math.atan2(step_y, step_x) / (math.pi / 4) + 0.5) % 8
-        return _COUNTERCLOCKWISE_FROM_EAST[eighths_counterclockwise_of_east]
-
-
-_COUNTERCLOCKWISE_FROM_EAST = tuple(Direction)
+    def closest(cls, vector: PointLike) -> Direction:
+        """The direction whose line lies nearest by angle to the line along `vector`. Raises `ValueError` for a vector
+        of no length, which points nowhere."""
+        vector_x, vector_y = vector[0], vector[1]
+        if vector_x == 0 and vector_y == 0:
+            raise ValueError("a vector of no length has no direction")
+        # The members run counterclockwise from east, an eighth of a turn apart; a half rounds up, as NachOS rounds.
+        eighths_counterclockwise_of_east = math.floor(math.atan2(vector_y, vector_x) / (math.pi / 4) + 0.5) % 8
+        return tuple(cls)[eighths_counterclockwise_of_east]

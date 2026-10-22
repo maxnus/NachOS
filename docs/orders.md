@@ -195,14 +195,12 @@ neither a slot nor a mineral within the same step
 
 ## Walling a ramp
 
-`api.map.main_ramp` is the ramp out of this player's main, and `api.map.main_ramp_of(start)` the ramp out of any
-other, such as the one at `api.map.opponent_start_locations[0]`. `TerranWall.from_ramp(ramp, start=start)` and
-`ProtossWall.from_ramp(ramp, start=start)`, from `sc2nachos.gamemap`, say where structures close a main's ramp at its
-top, `start` being that main's start location:
+`api.map.main_ramp` is the ramp out of this player's main, and `api.map.main_ramp_of(start)` the ramp out of the main
+at any start location, such as `api.map.opponent_start_locations[0]`. `api.placement.terran_wall(start)` and
+`protoss_wall(start)` say where structures close that main's ramp at its top:
 
 ```python
-main_ramp = api.map.main_ramp
-terran_wall = None if main_ramp is None else TerranWall.from_ramp(main_ramp, start=api.map.start_location)
+terran_wall = api.placement.terran_wall(api.map.start_location)
 if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=terran_wall.near_depot):
     api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=terran_wall.near_depot)
 ```
@@ -216,9 +214,9 @@ if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at
   `gap` beside the `near_building`, at the corner nearer the start, which one unit holding position closes. The
   `far_building` stands at the other corner.
 
-Each is `None` for a ramp not of the shape every main ramp of the pool is, two tiles across its top and climbing along
-a diagonal; `ramp.orientation` says which way a ramp climbs. Whether a structure may stand at a site now is for
-`api.placement.is_free` to say.
+Each is `None` for a main with no ramp, or one not of the shape every main ramp of the pool is: 2 `width` at its top,
+and an `orientation` along a diagonal. Whether a structure may stand at a site now is for `api.placement.is_free` to
+say.
 
 ## What the game did
 

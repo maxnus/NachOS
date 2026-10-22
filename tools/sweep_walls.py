@@ -1,4 +1,4 @@
-"""Check in game that the walls `TerranWall.from_ramp` and `ProtossWall.from_ramp` give close each main's ramp.
+"""Check in game that the walls `api.placement.terran_wall` and `protoss_wall` give close each main's ramp.
 
 Needs StarCraft II installed. On each map of the pool, it plays one game as Terran and one as Protoss, each against the
 easiest computer of the same race, left one engineering bay in the middle of the map, so that it can neither fight nor
@@ -26,16 +26,21 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing
+from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing, without_uncurated_units
 from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import error_pb2, raw_pb2
 
-from sc2nachos.gamemap import GameMap, ProtossWall, Ramp, TerranWall
+from sc2nachos.gamedata import GameData
+from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.orders import OrderBook
+from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
+from sc2nachos.state._state import _State
+from sc2nachos.units._tracking import _Tracker
 
 # How far below the ramp's bottom the zergling is made, along the way the ramp climbs.
 _BELOW_THE_RAMP = 4.0
@@ -90,7 +95,7 @@ def _answer_name(answer: error_pb2.ActionResult.ValueType) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Main:
-    """One main of the map being played: its start, its ramp, and the walls NachOS gives it."""
+    """One main of the map being played: its start, its ramp, and the walls `api.placement` gives it."""
 
     start: Point
     ramp: Ramp
@@ -105,15 +110,28 @@ class _Main:
 
 
 def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
-    """Both mains of the map `game` plays, with their walls as NachOS gives them."""
-    game_map = GameMap._from_game(game.client.game_info(), game.client.observation())
+    """Both mains of the map `game` plays, with their walls as NachOS's placement grids give them."""
+    observation = game.client.observation()
+    game_map = GameMap._from_game(game.client.game_info(), observation)
+    game_data = GameData(game.client.game_data())
+    tracker = _Tracker(game_data, None)
+    curated_raw_data, _ = without_uncurated_units(observation.observation.raw_data)
+    tracker.update(curated_raw_data, observation.observation.game_loop)
+    placement_grids = PlacementGrids._build_at_start(
+        game_map,
+        present_units=tracker.unit_tracker.present,
+        state=_State(observation, tracker, game_map),
+        step=observation.observation.game_loop,
+        game_data=game_data,
+        order_book=OrderBook(game_data),
+    )
     mains = []
     for start_location in game_map.all_start_locations:
         main_ramp = game_map.main_ramp_of(start_location)
         if main_ramp is None:
             raise RuntimeError(f"the main at {start_location} has no ramp")
-        terran_wall = TerranWall.from_ramp(main_ramp, start=start_location)
-        protoss_wall = ProtossWall.from_ramp(main_ramp, start=start_location)
+        terran_wall = placement_grids.terran_wall(start_location)
+        protoss_wall = placement_grids.protoss_wall(start_location)
         if terran_wall is None or protoss_wall is None:
             raise RuntimeError(f"the ramp of the main at {start_location} has no wall")
         mains.append(_Main(start_location, main_ramp, terran_wall, protoss_wall))

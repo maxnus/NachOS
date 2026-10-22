@@ -157,7 +157,7 @@ class _Game:
             observation=observation,
             state=state,
             placement=PlacementGrids._build_at_start(
-                game_map.placement,
+                game_map,
                 present_units=present_units,
                 state=state,
                 step=step,

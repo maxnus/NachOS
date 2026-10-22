@@ -458,22 +458,22 @@ it.
 | `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
 | `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
 | `main_base_ramp` | `api.map.main_ramp`, and `api.map.main_ramp_of(start)` for another main |
-| `ramp.corner_depots`, `ramp.depot_in_middle`, `ramp.depot_locations` | `TerranWall.from_ramp(ramp, start=start)`'s `near_depot`, `far_depot` and `middle_depot` |
+| `ramp.corner_depots`, `ramp.depot_in_middle`, `ramp.depot_locations` | `api.placement.terran_wall(start)`'s `near_depot`, `far_depot` and `middle_depot` |
 | `ramp.barracks_correct_placement`, `ramp.barracks_in_middle` | its `barracks_with_add_on`, with its `add_on`, and `barracks_in_wall` |
 | `ramp.barracks_can_fit_addon` | `wall.barracks_with_add_on == wall.barracks_in_wall` |
-| `ramp.protoss_wall_pylon`, `protoss_wall_buildings`, `protoss_wall_warpin` | `ProtossWall.from_ramp(ramp, start=start)`'s `pylon`, `near_building` and `far_building`, and `gap` |
-| nothing | `ramp.orientation`, the `Direction` it climbs; `api.map.all_start_locations` |
+| `ramp.protoss_wall_pylon`, `protoss_wall_buildings`, `protoss_wall_warpin` | `api.placement.protoss_wall(start)`'s `pylon`, `near_building` and `far_building`, and `gap` |
+| nothing | `ramp.orientation`, the `Direction` it climbs, and `ramp.width`; `api.map.all_start_locations` |
 | `expansion_locations_list` | `[expansion.center for expansion in api.expansions]` |
 | `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
 | `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
 | `owned_expansions` | `[expansion for expansion in api.expansions if isinstance(expansion.townhall, OwnUnit)]` |
 
-- **A wall is `None` rather than an exception**, on a ramp whose top, as NachOS reads it, is not two tiles, or which
-  does not climb along a diagonal. python-sc2 works from its own `upper`, which can differ: on three mains of the pool
+- **A wall is `None` rather than an exception**, on a ramp whose top, as NachOS reads it, is not 2 wide, or which does
+  not climb along a diagonal. python-sc2 works from its own `upper`, which can differ: on three mains of the pool
   it reads five tiles where NachOS reads two. On every main of the pool the sites are python-sc2's, and on one left of
   its ramp both libraries' barracks with room for its add-on closes the wall only once the add-on stands
-  ([game behavior](game-behavior/map.md)). A wall takes the main's start, which names its near and far corners, where
-  python-sc2 reads the bot's own start for its Protoss wall alone.
+  ([game behavior](game-behavior/map.md)). A wall is asked of a start location, which names its near and far corners,
+  where python-sc2 reads the bot's own start for its Protoss wall alone, whichever ramp it is asked of.
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
 - **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so a write into it lasted one

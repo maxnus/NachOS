@@ -986,9 +986,12 @@ class TestDirection:
             ((-5, 0.1), Direction.WEST),
         ],
     )
-    def test_the_nearest_to_a_step_is_the_nearest_by_angle(self, step: tuple[float, float], nearest: Direction) -> None:
-        assert Direction._nearest_to(*step) is nearest
+    def test_the_closest_to_a_vector_is_the_nearest_by_angle(
+        self, step: tuple[float, float], nearest: Direction
+    ) -> None:
+        assert Direction.closest(step) is nearest
+        assert Direction.closest(Point(step)) is nearest
 
-    def test_a_step_of_no_length_has_none(self) -> None:
+    def test_a_vector_of_no_length_has_none(self) -> None:
         with pytest.raises(ValueError, match="no direction"):
-            Direction._nearest_to(0, 0)
+            Direction.closest((0, 0))

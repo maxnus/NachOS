@@ -45,10 +45,19 @@ class Ramp:
     def orientation(self) -> Direction:
         """The way the ramp climbs: of the eight directions, the one nearest the line from its bottom's center to its
         top's. Every main ramp of the pool climbs along a diagonal (corpus)."""
-        top_middle, bottom_middle = self.top.center, self.bottom.center
-        return Direction._nearest_to(top_middle.x - bottom_middle.x, top_middle.y - bottom_middle.y)
+        return Direction.closest(self.top.center - self.bottom.center)
 
-    def _point_from_top(self, offset: tuple[float, float]) -> Point:
+    @property
+    def width(self) -> int:
+        """How many tiles wide the ramp is at its top, across the way it climbs: from one end of the top to the other,
+        any gap between them included. Every main ramp of the pool is 2 wide (corpus)."""
+        step_x, step_y = self.orientation.value
+        # Across the climb, a tile's place is its coordinates turned a quarter: the next tile across along a diagonal
+        # is 2 further, along an axis 1.
+        places_across = [step_x * tile.y - step_y * tile.x for tile in self.top]
+        return (max(places_across) - min(places_across)) // (abs(step_x) + abs(step_y)) + 1
+
+    def _point_at_offset_from_the_top(self, offset: tuple[float, float]) -> Point:
         """The point `offset` from the middle of the top, `offset` as for a ramp climbing north-east, mirrored to this
         one's diagonal. Raises `ValueError` for a ramp climbing along an axis, which has no diagonal to mirror to."""
         step_x, step_y = self.orientation.value

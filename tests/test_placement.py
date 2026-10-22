@@ -14,13 +14,13 @@ from sc2nachos import Api
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
-from sc2nachos.gamemap import GameMap, ProtossWall, Ramp, TerranWall
+from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
-from sc2nachos.placement import PlacementGrids
+from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
@@ -111,7 +111,7 @@ class _Game:
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
-                self.map.placement,
+                self.map,
                 present_units=present,
                 state=state,
                 step=step,
@@ -673,7 +673,7 @@ def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
     order_book = OrderBook(data)
     present_units = tracker.unit_tracker.present
     grids = PlacementGrids._build_at_start(
-        game_map.placement,
+        game_map,
         present_units=present_units,
         state=state,
         step=observation.observation.game_loop,
@@ -769,13 +769,13 @@ class _RecordedMain:
 
     @property
     def terran_wall(self) -> TerranWall:
-        terran_wall = TerranWall.from_ramp(self.ramp, start=self.start)
+        terran_wall = self.placement_grids.terran_wall(self.start)
         assert terran_wall is not None
         return terran_wall
 
     @property
     def protoss_wall(self) -> ProtossWall:
-        protoss_wall = ProtossWall.from_ramp(self.ramp, start=self.start)
+        protoss_wall = self.placement_grids.protoss_wall(self.start)
         assert protoss_wall is not None
         return protoss_wall
 
@@ -882,11 +882,9 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
     """burnysc2's `corner_depots`, `depot_in_middle`, `barracks_in_middle`, `barracks_correct_placement` and its
     Protoss wall, read on the map in AvocaDOS's environment, for the main at (175.5, 76.5), whose ramp climbs
     north-east, and the one at (72.5, 171.5), whose ramp climbs south-west."""
-    game_map, _, _ = _grids_at_the_start(next(path for path in CORPUS if path.stem.startswith("PylonAIE")))
+    _, _, placement_grids = _grids_at_the_start(next(path for path in CORPUS if path.stem.startswith("PylonAIE")))
     east_start, west_start = Point((175.5, 76.5)), Point((72.5, 171.5))
-    east_ramp, west_ramp = game_map.main_ramp_of(east_start), game_map.main_ramp_of(west_start)
-    assert east_ramp is not None and west_ramp is not None
-    assert TerranWall.from_ramp(east_ramp, start=east_start) == TerranWall(
+    assert placement_grids.terran_wall(east_start) == TerranWall(
         near_depot=Point((163, 82)),
         far_depot=Point((160, 85)),
         barracks_with_add_on=Point((162.5, 84.5)),
@@ -894,7 +892,7 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
         barracks_in_wall=Point((162.5, 84.5)),
         middle_depot=Point((162, 84)),
     )
-    assert TerranWall.from_ramp(west_ramp, start=west_start) == TerranWall(
+    assert placement_grids.terran_wall(west_start) == TerranWall(
         near_depot=Point((85, 166)),
         far_depot=Point((88, 163)),
         barracks_with_add_on=Point((83.5, 163.5)),
@@ -902,13 +900,13 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
         barracks_in_wall=Point((85.5, 163.5)),
         middle_depot=Point((86, 164)),
     )
-    assert ProtossWall.from_ramp(east_ramp, start=east_start) == ProtossWall(
+    assert placement_grids.protoss_wall(east_start) == ProtossWall(
         pylon=Point((165, 87)),
         near_building=Point((163.5, 83.5)),
         far_building=Point((160.5, 85.5)),
         gap=Point((162.5, 81.5)),
     )
-    assert ProtossWall.from_ramp(west_ramp, start=west_start) == ProtossWall(
+    assert placement_grids.protoss_wall(west_start) == ProtossWall(
         pylon=Point((83, 161)),
         near_building=Point((84.5, 164.5)),
         far_building=Point((87.5, 162.5)),
@@ -935,13 +933,13 @@ class TestAWallOnADrawnRamp:
     )
     def test_a_ramp_of_another_shape_has_none(self, top: list[Tile], bottom: list[Tile]) -> None:
         ramp = Ramp(tiles=TileSet([*top, *bottom]), top=TileSet(top), bottom=TileSet(bottom))
-        assert TerranWall.from_ramp(ramp, start=Point((30.5, 30.5))) is None
-        assert ProtossWall.from_ramp(ramp, start=Point((30.5, 30.5))) is None
+        assert TerranWall._from_ramp(ramp, start=Point((30.5, 30.5))) is None
+        assert ProtossWall._from_ramp(ramp, start=Point((30.5, 30.5))) is None
 
     def test_a_start_on_the_line_it_climbs_along_ties_its_corners_to_the_lower_x(self) -> None:
         start_up_the_ramp = Point((31, 31))
-        terran_wall = TerranWall.from_ramp(self._STANDARD_RAMP, start=start_up_the_ramp)
-        protoss_wall = ProtossWall.from_ramp(self._STANDARD_RAMP, start=start_up_the_ramp)
+        terran_wall = TerranWall._from_ramp(self._STANDARD_RAMP, start=start_up_the_ramp)
+        protoss_wall = ProtossWall._from_ramp(self._STANDARD_RAMP, start=start_up_the_ramp)
         assert terran_wall is not None and protoss_wall is not None
         assert terran_wall.near_depot.distance_to(start_up_the_ramp) == terran_wall.far_depot.distance_to(
             start_up_the_ramp

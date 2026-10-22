@@ -12,10 +12,12 @@ from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.placement._build_sites import _BuildSites, _placement_key, _standing_centers
 from sc2nachos.placement._placement_reservation import PlacementReservation
 from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
+from sc2nachos.placement._walls import ProtossWall, TerranWall
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
+    from sc2nachos.gamemap import GameMap
     from sc2nachos.geometry import Footprint, Margin, PointLike
     from sc2nachos.ids import UnitTypeId
     from sc2nachos.orders import OrderBook
@@ -31,13 +33,15 @@ class PlacementGrids:
 
     `free` combines them, and `free_for` adds what a structure type needs: the creep, and for a townhall, the ground
     resources leave it. `is_free` says whether one may stand at a point, and `nearest_free` finds the nearest site where
-    one may. None of them knows of power or of units in the way.
+    one may. None of them knows of power or of units in the way. `terran_wall` and `protoss_wall` say where structures
+    close a main's ramp at its top.
     """
 
     __slots__ = (
         "_build_sites",
         "_dynamic",
         "_game_data",
+        "_game_map",
         "_ground_by_needs",
         "_present_units",
         "_reservations",
@@ -51,6 +55,7 @@ class PlacementGrids:
         self,
         static_placement_grid: Grid[bool],
         *,
+        game_map: GameMap,
         build_sites: _BuildSites,
         present_units: Units[Unit[Any]],
         state: _State,
@@ -58,8 +63,9 @@ class PlacementGrids:
         game_data: GameData,
     ) -> None:
         """The grids of the observation `state` reads, made at `step`, in which this player knows of `present_units`,
-        in sight or remembered, from the game's `static_placement_grid` and its `build_sites`."""
+        in sight or remembered, from the game's `static_placement_grid` and its `build_sites`, on `game_map`."""
         self._static = static_placement_grid
+        self._game_map = game_map
         self._build_sites = build_sites
         self._present_units = present_units
         self._state = state
@@ -74,7 +80,7 @@ class PlacementGrids:
     @classmethod
     def _build_at_start(
         cls,
-        placement_grid: Grid[bool],
+        game_map: GameMap,
         *,
         present_units: Units[Unit[Any]],
         state: _State,
@@ -82,17 +88,18 @@ class PlacementGrids:
         game_data: GameData,
         order_book: OrderBook,
     ) -> Self:
-        """The grids of a game's first observation, which `state` reads, made at `step`, and in which this player knows
-        of `present_units`, from the game's `placement_grid` at the start, and with this player's builds as
+        """The grids of a game's first observation on `game_map`, which `state` reads, made at `step`, and in which this
+        player knows of `present_units`, from the map's placement grid at the start, and with this player's builds as
         `order_book` holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral
         fields in sight included; it is the pathing grid that blocks those."""
-        static = placement_grid.copy()
+        static = game_map.placement.copy()
         for unit in present_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             if (footprint := unit.footprint) is not None:
                 static.fill_footprint(footprint, at=unit.position, value=False)
         build_sites = _BuildSites(game_data, order_book)
         return cls(
             static.as_readonly(),
+            game_map=game_map,
             build_sites=build_sites,
             present_units=present_units,
             state=state,
@@ -233,6 +240,21 @@ class PlacementGrids:
         if not fitting.any() or candidates.min() == math.inf:
             return None
         return footprint.center_in_tile(candidates.argmin())
+
+    def terran_wall(self, start: PointLike) -> TerranWall | None:
+        """Where a Terran wall closes the ramp out of the main at the start location `start` at its top, as `TerranWall`
+        says: `None` if the main has no ramp, as `GameMap.main_ramp_of` finds it, or one not of the shape every main
+        ramp of the pool is, 2 wide and climbing along a diagonal. Whether a structure may stand at a site now is for
+        `is_free` to say. Raises `ValueError` for a point that is no start location."""
+        main_ramp = self._game_map.main_ramp_of(start)
+        return None if main_ramp is None else TerranWall._from_ramp(main_ramp, start=start)
+
+    def protoss_wall(self, start: PointLike) -> ProtossWall | None:
+        """Where a Protoss wall closes the ramp out of the main at the start location `start` at its top, as
+        `ProtossWall` says, `None` where `terran_wall` is. Whether a structure may stand at a site now is for `is_free`
+        to say. Raises `ValueError` for a point that is no start location."""
+        main_ramp = self._game_map.main_ramp_of(start)
+        return None if main_ramp is None else ProtossWall._from_ramp(main_ramp, start=start)
 
     def _ground_for(self, unit_type: UnitTypeId) -> Grid[bool]:
         """`free_for(unit_type)` before `reserved` is taken off, which no order changes: one grid for the types that
