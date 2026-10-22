@@ -8,6 +8,7 @@ from sc2nachos.protocol._errors import (
     GameNotStartedError,
     ProtocolError,
 )
+from sc2nachos.protocol._permissive_playback_transport import PermissivePlaybackTransport
 from sc2nachos.protocol._ports import GamePorts, PortPair
 from sc2nachos.protocol._recording import Exchange, PlaybackTransport, Recording, RecordingTransport
 from sc2nachos.protocol._status import Status
@@ -22,6 +23,7 @@ __all__ = [
     "GameEndedError",
     "GameNotStartedError",
     "GamePorts",
+    "PermissivePlaybackTransport",
     "PortPair",
     "ProtocolError",
     "Recording",

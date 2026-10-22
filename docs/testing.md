@@ -47,7 +47,24 @@ of its own accord is answered as if the game had answered:
 A query for abilities or placements through `api.client.query` raises `ProtocolError`, as does anything else the
 recording holds no answer to.
 
-Underneath, `run_recording` plays the file through `PlaybackTransport(recording, answer_unrecorded=True)`. Without
-`answer_unrecorded`, a `PlaybackTransport` answers only what the recording was asked, in order, and raises
-`ProtocolError` at the first request of another kind: a strict check that the code asks the game exactly what it asked
-when the recording was made.
+Underneath, `run_recording` plays the file through a `PermissivePlaybackTransport`.
+
+## Replaying a bot's own game exactly
+
+A `PlaybackTransport` answers only what the recording was asked, in order, and raises `ProtocolError` at the first
+request of another kind; it checks the kind of each request, not its contents. A bot played through its own recording
+this way gets the game's own answers, to its orders and its queries too, for as long as it asks what it asked then,
+which reproduces a crash as it happened:
+
+```python
+from sc2nachos.match import Computer, Participant, Race
+from sc2nachos.protocol import Client, PlaybackTransport, Recording
+
+client = Client(PlaybackTransport(Recording("tests/games/pylon.sc2rec")))
+# Answered in turn without being read: the create, for a game the recording created, then the join.
+client.create_game("recorded", [Participant(), Computer()])
+client.join_game(Race.RANDOM)
+api.play(client)
+```
+
+A game recorded in real time is played with `api.play(client, realtime=True)`.

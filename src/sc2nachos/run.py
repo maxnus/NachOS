@@ -18,7 +18,7 @@ from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
     GamePorts,
-    PlaybackTransport,
+    PermissivePlaybackTransport,
     Recording,
     RecordingTransport,
     Transport,
@@ -125,12 +125,11 @@ def run_recording(recording: Recording | Path | str, api: Api, *, time_limit: fl
 
     The bot is the player recorded, and sees the game as recorded whatever it does, a turn at each recorded
     observation, whether the game was played stepped or in real time. What it asks of its own accord is answered as
-    `PlaybackTransport` with `answer_unrecorded` makes it up. A request the recording cannot answer raises
-    `ProtocolError`.
+    `PermissivePlaybackTransport` makes it up. A request the recording cannot answer raises `ProtocolError`.
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    with closing(Client(PlaybackTransport(recording, answer_unrecorded=True))) as client:
+    with closing(Client(PermissivePlaybackTransport(recording))) as client:
         try:
             # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
             # details.

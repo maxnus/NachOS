@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2542 tests, and
+- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2543 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -377,9 +377,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
     one shared fixture, `first_corpus_tables` in `tests/conftest.py`.
 - **A playback mode** (the owner, 2026-10-22, one question at a time), so that AvocaDOS can replay the corpus's Terran
   games in CI as a smoke test:
-  - `PlaybackTransport(recording, answer_unrecorded=True)`, off by default so that `test_corpus.py` stays strict, and
-    `run_recording(recording, api, *, time_limit=None)` in `sc2nachos.run`, which creates, joins and plays stepped.
-    Chosen over the keyword alone and over a transport class of its own.
+  - `PermissivePlaybackTransport(recording)`, a class of its own beside `PlaybackTransport`, which stays strict for
+    `test_corpus.py` and as main had it (the owner, 2026-10-22, reversing a keyword `answer_unrecorded` on
+    `PlaybackTransport`, which had made it much more complicated; a sibling over a subclass, which would break the
+    strict class's promise to raise), and `run_recording(recording, api, *, time_limit=None)` in `sc2nachos.run`,
+    which creates, joins and plays stepped through it, over the keyword alone.
+  - A bot replaying its own game for the game's own answers plays a `PlaybackTransport` through `api.play` itself, as
+    `docs/testing.md` shows; `run_recording` stays permissive. Its lasting use after M5 is a crash check over fixed
+    recordings that any version of a bot plays through, in the plain test run; a real game in CI catches more.
   - What a bot asks of its own accord is made up, under the last recorded status: every action `Success`, so the order
     book records each order as sent, over every action refused; a debug request an empty answer; saving the replay
     refused, which `play` logs; leaving before the recording does answered, `launched`.
@@ -402,7 +407,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
   conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (this branch), and ramp wall-in
   sites with their sweep.
-- **The playback mode** (this branch): `PlaybackTransport(recording, answer_unrecorded=True)` and `run_recording`.
+- **The playback mode** (this branch): `PermissivePlaybackTransport` and `run_recording`.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them

@@ -20,6 +20,7 @@ from sc2nachos.protocol import (
     GameEndedError,
     GameNotStartedError,
     GamePorts,
+    PermissivePlaybackTransport,
     PlaybackTransport,
     PortPair,
     ProtocolError,
@@ -689,6 +690,11 @@ class TestReplay:
         with pytest.raises(ConnectionClosedError):
             transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
 
+    def test_a_bots_own_request_the_recording_was_not_asked_raises(self, tmp_path: Path) -> None:
+        client = Client(PlaybackTransport(_recording_of(tmp_path / "game.sc2rec", (_OBSERVE, _observed(16)))))
+        with pytest.raises(ProtocolError, match="answers observation next, and was asked for action"):
+            client.act([sc2api_pb2.Action()])
+
 
 def _recording_of(path: Path, *exchanges: tuple[sc2api_pb2.Request, sc2api_pb2.Response]) -> Recording:
     """A recording at `path` of `exchanges`, each a request and its answer."""
@@ -722,12 +728,12 @@ def _pathing_query(*pairs: tuple[tuple[float, float] | int, tuple[float, float]]
     return query
 
 
-class TestAnsweringUnrecorded:
-    """A recording played back with `answer_unrecorded`, for a bot other than the one recorded."""
+class TestPermissivePlayback:
+    """A recording played back for a bot other than the one recorded."""
 
     def _client(self, tmp_path: Path, *exchanges: tuple[sc2api_pb2.Request, sc2api_pb2.Response]) -> Client:
         recording = _recording_of(tmp_path / "game.sc2rec", *exchanges)
-        return Client(PlaybackTransport(recording, answer_unrecorded=True))
+        return Client(PermissivePlaybackTransport(recording))
 
     def test_every_action_succeeds_and_the_recording_goes_on(self, tmp_path: Path) -> None:
         client = self._client(tmp_path, (_OBSERVE, _observed(16)), (_STEP, _STEPPED), (_OBSERVE, _observed(32)))
@@ -875,12 +881,13 @@ class TestAnsweringUnrecorded:
         recording = _recording_of(
             tmp_path / "game.sc2rec", (_OBSERVE, make_response(Status.ENDED, observation=make_observation(16)))
         )
-        transport = PlaybackTransport(recording, answer_unrecorded=True)
+        transport = PermissivePlaybackTransport(recording)
         transport.request(_OBSERVE)
         answer = transport.request(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=[sc2api_pb2.Action()])))
         assert answer.status == Status.ENDED.value
 
-    def test_without_it_a_bots_own_request_raises(self, tmp_path: Path) -> None:
-        client = Client(PlaybackTransport(_recording_of(tmp_path / "game.sc2rec", (_OBSERVE, _observed(16)))))
-        with pytest.raises(ProtocolError, match="answers observation next, and was asked for action"):
-            client.act([sc2api_pb2.Action()])
+    def test_a_request_after_closing_raises(self, tmp_path: Path) -> None:
+        transport = PermissivePlaybackTransport(_recording_of(tmp_path / "game.sc2rec"))
+        transport.close()
+        with pytest.raises(ConnectionClosedError):
+            transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
