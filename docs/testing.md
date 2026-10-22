@@ -34,10 +34,13 @@ orders, its queries and everything else. That reproduces a crash as it happened,
 of `run_recording` as out of the game. A request of another kind than the recording holds next raises `ProtocolError`;
 only the kind of each request is checked, not its contents. The game is created and played in real time as recorded.
 
-`run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None)` returns how the recorded
-game ended for the player recorded, or `TIE` at `time_limit`. Both keywords must be what the game was played with: a
-game its time limit ended raises `ProtocolError` at its end without it, and a bot that reads `api.enemy.ladder_id`
-reads `None` without the ladder's.
+`run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None, save_replay_to=None)`
+returns how the recorded game ended for the player recorded, or `TIE` at `time_limit`. The three keywords must be what
+the game was played with:
+- `time_limit`, without which a game its time limit ended raises `ProtocolError` at its end;
+- `enemy_ladder_id`, without which a bot that reads `api.enemy.ladder_id` reads `None`;
+- `save_replay_to`, without which a game the bot left after saving its replay raises at the leave. Given, it holds the
+  replay recorded.
 
 Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 

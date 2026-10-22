@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2552 tests, and
+- nachOS `main` has every PR to #153. On branch `claude/playback-mode`, `uv run pytest` passes 2554 tests, and
   on `claude/live-pathing-grid` `uv run pytest -m integration` passed 37 against a real game (run 2026-10-21).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -381,13 +381,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `test_corpus.py` and as main had it (the owner, 2026-10-22, reversing a keyword `answer_unrecorded` on
     `PlaybackTransport`, which had made it much more complicated; a sibling over a subclass, which would break the
     strict class's promise to raise), and `run_recording` in `sc2nachos.run`, over the keyword alone.
-  - `run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None)` is strict by default
-    (the owner, 2026-10-22, over always permissive), through a `PlaybackTransport`, so that a bot replaying its own
-    game gets the game's own answers; `permissive`, over `strict=True` and over the transport's class. Strict, it reads
-    the setup from the recording: a create if the first exchange is one, in real time as that create asked, and for a
-    game only joined, in real time if no step comes before the second observation (over keywords). It leaves no game,
-    so a handler's exception raises out as it is. The permissive mode's lasting use after M5 is a crash check over
-    fixed recordings that any version of a bot plays through, in the plain test run; a real game in CI catches more.
+  - `run_recording(recording, api, *, permissive=False, time_limit=None, enemy_ladder_id=None, save_replay_to=None)` is
+    strict by default (the owner, 2026-10-22, over always permissive), through a `PlaybackTransport`, so that a bot
+    replaying its own game gets the game's own answers; `permissive`, over `strict=True` and over the transport's
+    class. Strict, it reads the setup from the recording: a create if the first exchange is one, in real time as that
+    create asked, and for a game only joined, in real time if no step comes before the second observation (over
+    keywords). It leaves no game, so a handler's exception raises out as it is. `save_replay_to` came from my review of
+    36abcc2 (the owner, over documenting it only): without it, a game the bot left after saving its replay raised at
+    the leave. The permissive mode's lasting use after M5 is a crash check over fixed recordings that any version of a
+    bot plays through, in the plain test run; a real game in CI catches more.
   - What a bot asks of its own accord is made up, under the last recorded status: every action `Success`, so the order
     book records each order as sent, over every action refused; a debug request an empty answer; saving the replay
     refused, which `play` logs; leaving before the recording does answered, `launched`.

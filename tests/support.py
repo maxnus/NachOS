@@ -62,7 +62,7 @@ from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.player import Player
-from sc2nachos.protocol import Client, Status
+from sc2nachos.protocol import Client, Recording, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -387,6 +387,11 @@ def played(
     events._set_step(step)
     events._hand_out(game.report(events))
     return game
+
+
+def recorded_observations(recording: Recording) -> list[sc2api_pb2.ResponseObservation]:
+    """Every observation in `recording`, in order."""
+    return [exchange.response.observation for exchange in recording if exchange.response.HasField("observation")]
 
 
 def make_client(*responses: sc2api_pb2.Response) -> tuple[Client, FakeTransport]:

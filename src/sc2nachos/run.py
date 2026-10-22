@@ -127,21 +127,24 @@ def run_recording(
     permissive: bool = False,
     time_limit: float | None = None,
     enemy_ladder_id: str | None = None,
+    save_replay_to: Path | str | None = None,
 ) -> Result:
     """Play `api` through the game recorded in `recording`, with no game client, a turn at each recorded observation,
-    and return how it ended for the player recorded, or `TIE` at `time_limit`, in game seconds. `enemy_ladder_id` is
-    as for `Api.play`.
+    and return how it ended for the player recorded, or `TIE` at `time_limit`, in game seconds. `enemy_ladder_id` and
+    `save_replay_to` are as for `Api.play`.
 
     By default the bot must ask what was asked when the game was recorded, and gets the game's own answers, as a
     `PlaybackTransport` gives them: a request of another kind raises `ProtocolError`. The game is created if the
     recording created it, and played in real time as the create asked; a game only joined is played in real time if
-    it asks for no step before its second observation. `time_limit` and `enemy_ladder_id` must be what the game was
-    played with: a game its time limit ended raises at its end without it.
+    it asks for no step before its second observation. `time_limit`, `enemy_ladder_id` and `save_replay_to` must be
+    what the game was played with: a game its time limit ended raises at its end without it, and so does one the bot
+    left after saving its replay without `save_replay_to`, which then holds the replay recorded.
 
     With `permissive`, any bot plays the recording through, though nothing it does changes what comes next: what it
     asks of its own accord is answered as `PermissivePlaybackTransport` makes it up. It returns `UNDECIDED` if the
-    recording stops before the game's end, as one made with a time limit does, and `DEFEAT` if the bot leaves first. A
-    request the recording cannot answer raises `ProtocolError`.
+    recording stops before the game's end, as one made with a time limit does, and `DEFEAT` if the bot leaves first,
+    and saves no replay, logging a save asked for as failed. A request the recording cannot answer raises
+    `ProtocolError`.
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
@@ -157,7 +160,13 @@ def run_recording(
         if setup.creates_the_game:
             client.create_game("recorded", [Participant(), Computer()])
         client.join_game(Race.RANDOM)
-        return api.play(client, realtime=setup.realtime, time_limit=time_limit, enemy_ladder_id=enemy_ladder_id)
+        return api.play(
+            client,
+            realtime=setup.realtime,
+            time_limit=time_limit,
+            enemy_ladder_id=enemy_ladder_id,
+            save_replay_to=save_replay_to,
+        )
 
 
 @dataclass(frozen=True, slots=True)

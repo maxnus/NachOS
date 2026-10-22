@@ -26,7 +26,7 @@ from sc2nachos.protocol import (
     RecordingTransport,
     WebSocketTransport,
 )
-from support import FakeTransport
+from support import FakeTransport, make_response, recorded_observations
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -291,12 +291,22 @@ def _pylon_game_stopped_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
+def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
+    """The exchanges of the corpus game on Pylon as a recording of it holds them if the bot left after `observations`,
+    saving the replay first."""
+    for exchange in _pylon_game_stopped_after(observations):
+        if exchange.request.HasField("leave_game"):
+            replay = sc2api_pb2.ResponseSaveReplay(data=b"the replay recorded")
+            yield Exchange(
+                sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay()), make_response(save_replay=replay)
+            )
+        if not exchange.request.HasField("quit"):
+            yield exchange
+
+
 def _last_recorded_step(path: Path) -> int:
     """The step of the last observation recorded at `path`."""
-    observations = [
-        exchange.response.observation for exchange in Recording(path) if exchange.response.HasField("observation")
-    ]
-    return observations[-1].observation.game_loop
+    return recorded_observations(Recording(path))[-1].observation.game_loop
 
 
 class TestPlayingARecording:
@@ -359,6 +369,32 @@ class TestPlayingARecording:
         api = Api()
         assert run_recording(stopped, api, time_limit=steps_to_seconds(last_step)) is Result.TIE
         assert api.step == last_step
+
+    def test_by_default_a_bot_that_left_after_saving_its_replay_needs_where_to_save_it(self, tmp_path: Path) -> None:
+        left = _rerecorded(tmp_path / "left.sc2rec", _pylon_game_left_after(100))
+        last_step = _last_recorded_step(left)
+
+        def leaving_api() -> Api:
+            api = Api()
+
+            @api.on(TurnEvent)
+            def leave(_: TurnEvent) -> None:
+                if api.step >= last_step:
+                    api.leave_game()
+
+            return api
+
+        with pytest.raises(ProtocolError, match="answers save_replay next, and was asked for leave_game"):
+            run_recording(left, leaving_api())
+        replay = tmp_path / "game.SC2Replay"
+        assert run_recording(left, leaving_api(), save_replay_to=replay) is Result.DEFEAT
+        assert replay.read_bytes() == b"the replay recorded"
+
+    def test_a_permissive_one_saves_no_replay_and_says_so(self, tmp_path: Path, logged: list[str]) -> None:
+        replay = tmp_path / "game.SC2Replay"
+        run_recording(_PYLON_GAME, Api(), permissive=True, save_replay_to=replay)
+        assert not replay.exists()
+        assert any(message.startswith(f"No replay was saved to {replay}") for message in logged)
 
     def test_a_permissive_one_of_a_recording_that_stops_before_the_games_end_ends_undecided(
         self, tmp_path: Path
