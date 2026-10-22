@@ -322,7 +322,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         """The structure on the ground whose footprint holds `point`, a tile reading as its center, or `None` if none of
         these does. Of one in sight and a snapshot over the same ground, the one in sight; a lifted structure covers no
         ground."""
-        tile = Tile.containing(point)
+        tile = Tile.at(point)
         x, y = _ground(tile.center if isinstance(point, Tile) else point)
         remembered = None
         for unit in self._units:

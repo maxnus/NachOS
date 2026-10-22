@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, Self, final
 import numpy
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.gamedata._footprints import FOOTPRINTS
 from sc2nachos.gamemap._image_data import image_array, image_tiles
-from sc2nachos.gamemap._ramp import Ramp, find_ramps
+from sc2nachos.gamemap._ramp import _HALF_A_LEVEL, Ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
+from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
@@ -34,15 +36,15 @@ class GameMap:
     """
 
     __slots__ = (
+        "_all_start_locations",
         "_corners",
         "_height",
+        "_main_ramps_by_start_tile",
         "_name",
-        "_opponent_start_locations",
         "_pathing",
         "_placement",
         "_playable",
         "_ramps",
-        "_start_location",
     )
 
     def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: Point) -> None:
@@ -57,9 +59,12 @@ class GameMap:
         self._placement = Grid(placement, origin=origin, outside=False, readonly=True)
         self._corners = _tile_corners(_corner_heights(start.terrain_height, playable))
         self._height = Grid(self._corners.mean(axis=-1), origin=origin, readonly=True)
-        self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
-        self._start_location = start_location
+        opponent_start_locations = (Point._from_proto(location) for location in start.start_locations)
+        self._all_start_locations = (start_location, *opponent_start_locations)
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
+        self._main_ramps_by_start_tile = {
+            Tile.at(start): self._find_main_ramp(start) for start in self._all_start_locations
+        }
 
     @classmethod
     def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
@@ -140,17 +145,53 @@ class GameMap:
         return self._ramps
 
     @property
+    def main_ramp(self) -> Ramp | None:
+        """The ramp out of this player's main, as `main_ramp_of(start_location)` says."""
+        return self._main_ramps_by_start_tile[Tile.at(self.start_location)]
+
+    def main_ramp_of(self, start: PointLike) -> Ramp | None:
+        """The ramp out of the main at the start location `start`, such as an opponent's: of the ramps whose top is at
+        `start`'s level, within half a level of the height at its tile, the one whose center is the shortest walk from
+        `start`, and of two as short, the first in tile order. The walk is over the pathing grid with the ground a
+        townhall at `start` covers opened, since the start's own townhall closes it. `None` if no such ramp can be
+        walked to. Raises `ValueError` for a point on no start location's tile.
+        """
+        start_tile = Tile.at(start)
+        if start_tile not in self._main_ramps_by_start_tile:
+            raise ValueError(f"{start} is on no start location's tile: {self._all_start_locations}")
+        return self._main_ramps_by_start_tile[start_tile]
+
+    def _find_main_ramp(self, start: Point) -> Ramp | None:
+        """The ramp out of the main at the start location `start`, as `main_ramp_of` says; `None` for a start beyond the
+        playable area, which only a map drawn for a test has."""
+        if start not in self._playable:
+            return None
+        walkable_ground = self._pathing.copy()
+        # Every townhall's footprint is the command center's.
+        walkable_ground.fill_footprint(FOOTPRINTS[UnitTypeId.COMMAND_CENTER], at=start, value=True)
+        walking_distances = walkable_ground.cheapest_paths_from(start).distances
+        start_level = self._height[start]
+        at_its_level = [ramp for ramp in self._ramps if abs(self._height[min(ramp.top)] - start_level) < _HALF_A_LEVEL]
+        nearest_ramp = min(at_its_level, key=lambda ramp: walking_distances[ramp.tiles.center], default=None)
+        if nearest_ramp is None or walking_distances[nearest_ramp.tiles.center] == math.inf:
+            return None
+        return nearest_ramp
+
+    @property
     def start_location(self) -> Point:
         """Where this player's first townhall stood when the game began, a tile's center. It stays the same all game."""
-        return self._start_location
+        return self._all_start_locations[0]
+
+    @property
+    def all_start_locations(self) -> tuple[Point, ...]:
+        """Every start location on the map: this player's first, then the opponents' in the order the game names
+        them."""
+        return self._all_start_locations
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:
-        """Every start location on the map but this player's own.
-
-        Each is a townhall's position, which is a tile's center, so `Tile.containing` reads it exactly.
-        """
-        return self._opponent_start_locations
+        """Every start location on the map but this player's own."""
+        return self._all_start_locations[1:]
 
 
 def _create_pathing_grid(start: raw_pb2.StartRaw) -> Grid[bool]:

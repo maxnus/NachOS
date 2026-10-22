@@ -6,9 +6,9 @@ import numpy
 import pytest
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
-from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.gamemap._ramp import _NEIGHBORS8
-from sc2nachos.geometry import Point, Rectangle, Tile
+from sc2nachos.geometry import Direction, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import ProtocolError, Recording
 from sc2nachos.units import Alliance
@@ -20,6 +20,21 @@ _TOWNHALLS = {UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.NEXUS}
 # Six tiles wide, climbing a level over the middle four. The corner bytes give tile heights 8.0, 8.125, 8.625,
 # 9.375, 9.875 and 10.0, and no tile has two corners a cliff apart.
 _SLOPE = make_bytes(*[[191, 191, 193, 199, 205, 207, 207]] * 8)
+
+# Twelve tiles wide: low ground, a ramp up, two columns of high ground at height 10, a ramp down and low ground again.
+# The tile heights in bytes are 191, 191, 193, 198, 204, 207, 207, 204, 198, 193, 191 and 191.
+_HIGH_GROUND_BETWEEN_TWO_RAMPS = "##~~~##~~~##"
+_TWO_RAMPS = make_bytes(*[[191, 191, 191, 195, 201, 207, 207, 207, 201, 195, 191, 191]] * 5)
+
+# Nineteen tiles wide: low ground, a ramp up, nine columns of high ground, rocks, a column of high ground beyond them, a
+# ramp down and low ground. The tile heights in bytes are 191, 193, 198, 204, 207 eleven times, 204, 198, 193 and 191.
+_HIGH_GROUND_BEYOND_ROCKS = "#~~~#########=#~~~#"
+# Nineteen tiles wide and nine high: low ground, a ramp up, nine columns of high ground, a ramp down along the top row
+# alone, and low ground beside it. A cliff runs up the high ground but for the top row, so from the start the left
+# ramp is the nearer in a line and the right the nearer to walk.
+_NEARER_IN_A_LINE_FARTHER_TO_WALK = ["##~~~#########~~~##", *["##~~~##.######....."] * 8]
+_RAMPS_EITHER_SIDE_OF_A_WIDE_MAIN = make_bytes(*[[191, 191, 191, 195, 201, *[207] * 10, 201, 195, 191, 191]] * 9)
+_RAMPS_EITHER_SIDE_OF_ROCKS = make_bytes(*[[191, 191, 195, 201, *[207] * 12, 201, 195, 191]] * 3)
 
 
 class TestReadingAMap:
@@ -130,6 +145,32 @@ class TestReadingAMap:
         game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=Point((0.5, 0.5)))
         assert game_map.opponent_start_locations == (Point((5.5, 2.5)),)
 
+    def test_all_start_locations_are_this_players_then_the_opponents(self) -> None:
+        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5), (6.5, 6.5))), start_location=Point((0.5, 0.5)))
+        assert game_map.all_start_locations == (Point((0.5, 0.5)), Point((5.5, 2.5)), Point((6.5, 6.5)))
+
+    def test_a_ramp_climbing_along_x_is_oriented_east_three_wide_and_mirrors_no_offset(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((5.5, 1.5)))
+        (ramp,) = game_map.ramps
+        assert ramp.orientation is Direction.EAST
+        assert ramp.width == 3
+        with pytest.raises(ValueError, match="no diagonal"):
+            ramp._point_at_offset_from_the_top((1.5, 1.5))
+
+    @pytest.mark.parametrize(
+        ("top", "width"),
+        [
+            pytest.param([Tile(20, 21), Tile(21, 20)], 2, id="two touching at a corner"),
+            pytest.param([Tile(20, 22), Tile(22, 20)], 3, id="two with a tile between"),
+            pytest.param([Tile(19, 22), Tile(20, 21), Tile(21, 20)], 3, id="three across"),
+        ],
+    )
+    def test_a_ramps_width_is_how_many_tiles_its_top_spans_across_its_climb(self, top: list[Tile], width: int) -> None:
+        bottom = [Tile(17, 18), Tile(18, 17)]
+        ramp = Ramp(tiles=TileSet([*top, *bottom]), top=TileSet(top), bottom=TileSet(bottom))
+        assert ramp.orientation is Direction.NORTH_EAST
+        assert ramp.width == width
+
     def test_a_slope_a_unit_walks_but_cannot_build_on_is_a_ramp(self) -> None:
         game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5)))
         (ramp,) = game_map.ramps
@@ -176,6 +217,64 @@ class TestReadingAMap:
             make_game_info(*["#~~~~#"] * 3, "......", *["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5))
         )
         assert [min(ramp.tiles) for ramp in game_map.ramps] == [Tile(1, 0), Tile(1, 4)]
+
+    def test_the_main_ramp_is_the_ramp_out_of_the_starts_main(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((5.5, 1.5)))
+        (ramp,) = game_map.ramps
+        assert game_map.main_ramp is game_map.main_ramp_of(Point((5.5, 1.5))) is ramp
+
+    def test_of_several_ramps_out_of_a_main_the_main_ramp_is_the_nearest_by_ground(self) -> None:
+        game_map = GameMap(
+            make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS, start_locations=((6.5, 1.5),)),
+            start_location=Point((5.5, 1.5)),
+        )
+        left_ramp, right_ramp = game_map.ramps
+        assert game_map.main_ramp is left_ramp
+        assert game_map.main_ramp_of(Point((6.5, 1.5))) is right_ramp
+
+    def test_of_several_ramps_the_main_ramp_is_the_nearer_walk_not_the_nearer_in_a_line(self) -> None:
+        game_map = GameMap(
+            make_game_info(*_NEARER_IN_A_LINE_FARTHER_TO_WALK, heights=_RAMPS_EITHER_SIDE_OF_A_WIDE_MAIN),
+            start_location=Point((10.5, 2.5)),
+        )
+        left_ramp, right_ramp = game_map.ramps
+        main_start = game_map.start_location
+        assert left_ramp.tiles.center.distance_to(main_start) < right_ramp.tiles.center.distance_to(main_start)
+        assert game_map.main_ramp is right_ramp
+
+    def test_the_main_does_not_reach_across_rocks_whose_ground_is_buildable(self) -> None:
+        rocks = GameMap(
+            make_game_info(*[_HIGH_GROUND_BEYOND_ROCKS] * 3, heights=_RAMPS_EITHER_SIDE_OF_ROCKS),
+            start_location=Point((10.5, 1.5)),
+        )
+        left_ramp, right_ramp = rocks.ramps
+        assert rocks.main_ramp is left_ramp
+        open_ground = GameMap(
+            make_game_info(*[_HIGH_GROUND_BEYOND_ROCKS.replace("=", "#")] * 3, heights=_RAMPS_EITHER_SIDE_OF_ROCKS),
+            start_location=Point((10.5, 1.5)),
+        )
+        assert open_ground.main_ramp == right_ramp
+
+    def test_a_ramp_up_from_the_start_is_not_its_main_ramp(self) -> None:
+        game_map = GameMap(
+            make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS), start_location=Point((0.5, 1.5))
+        )
+        assert len(game_map.ramps) == 2
+        assert game_map.main_ramp is None
+
+    def test_a_start_on_a_ramp_or_on_closed_ground_or_with_no_ramp_or_off_the_map_has_no_main_ramp(self) -> None:
+        on_a_ramp = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((2.5, 1.5)))
+        assert on_a_ramp.main_ramp is None
+        on_closed_ground = GameMap(make_game_info("....", "....", "...."), start_location=Point((1.5, 1.5)))
+        assert on_closed_ground.main_ramp is None
+        assert GameMap(make_game_info(), start_location=Point((0.5, 0.5))).main_ramp is None
+        assert GameMap(make_game_info(), start_location=Point((20.5, 0.5))).main_ramp is None
+
+    def test_a_point_that_is_no_start_location_has_no_main_ramp_to_ask_for(self) -> None:
+        game_map = GameMap(make_game_info(start_locations=((5.5, 5.5),)), start_location=Point((0.5, 0.5)))
+        assert game_map.main_ramp_of(Point((5.5, 5.5))) is game_map.main_ramp_of(Point((5.2, 5.8))) is None
+        with pytest.raises(ValueError, match="no start location"):
+            game_map.main_ramp_of(Point((3.5, 3.5)))
 
     def test_an_image_too_short_for_its_size_is_refused(self) -> None:
         info = make_game_info()
@@ -271,6 +370,23 @@ class TestARecordedMap:
         for ramp in game_map.ramps:
             assert ramp.top and ramp.bottom
             assert not set(ramp.top) & set(ramp.bottom)
+
+    def test_each_main_ramp_is_the_pools_one_shape_and_the_nearest_to_its_start(self, path: Path) -> None:
+        """Every main of the pool is left by one 16-tile ramp, two tiles across its top and its bottom, climbing along a
+        diagonal."""
+        info, observation = _start(path)
+        game_map = GameMap._from_game(info, observation)
+        diagonals = {Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_WEST, Direction.SOUTH_EAST}
+        for start in game_map.all_start_locations:
+            ramp = game_map.main_ramp_of(start)
+            assert ramp is not None
+            assert (len(ramp.tiles), len(ramp.top), len(ramp.bottom)) == (16, 2, 2)
+            assert ramp.orientation in diagonals
+            assert ramp.width == 2
+            top_tile_offset = ramp._point_at_offset_from_the_top((0.5, -0.5))
+            assert Tile.at(top_tile_offset) in ramp.top
+            assert ramp is min(game_map.ramps, key=lambda each: each.top.center.distance_to(start))
+        assert game_map.main_ramp is game_map.main_ramp_of(game_map.start_location)
 
     def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
         info, observation = _start(path)

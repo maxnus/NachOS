@@ -62,7 +62,7 @@ def _box(game_map: GameMap, tile: Tile, color: tuple[int, int, int]) -> debug_pb
 def _label(game_map: GameMap, index: int, ramp: Ramp) -> debug_pb2.DebugText:
     """The label for one ramp, floating over its center."""
     # A ramp is a solid patch, so the tile at its center belongs to it.
-    tile = Tile.containing(ramp.tiles.center)
+    tile = Tile.at(ramp.tiles.center)
     return debug_pb2.DebugText(
         color=debug_pb2.Color(r=_CENTER[0], g=_CENTER[1], b=_CENTER[2]),
         text=f"ramp {index}: {len(ramp.tiles)} tiles",
@@ -79,7 +79,7 @@ def drawing(game_map: GameMap) -> list[debug_pb2.DebugCommand]:
         # Later boxes draw over earlier ones, so the ends and the center go after the whole ramp.
         for tiles, color in ((ramp.tiles, _WHOLE), (ramp.top, _TOP), (ramp.bottom, _BOTTOM)):
             boxes.extend(_box(game_map, tile, color) for tile in tiles)
-        boxes.append(_box(game_map, Tile.containing(ramp.tiles.center), _CENTER))
+        boxes.append(_box(game_map, Tile.at(ramp.tiles.center), _CENTER))
         texts.append(_label(game_map, index, ramp))
     return [debug_pb2.DebugCommand(draw=debug_pb2.DebugDraw(boxes=boxes, text=texts))]
 

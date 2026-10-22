@@ -52,6 +52,9 @@ _SQUARE_5 = Footprint.square(5)
 _SQUARE_6_CUT_2 = Footprint.square(6, cut_corners=2)
 _SQUARE_7_CUT_2 = Footprint.square(7, cut_corners=2)
 
+# An add-on stands 2.5 right of its host's center and 0.5 below (#37).
+ADD_ON_OFFSET: Final = (2.5, -0.5)
+
 FOOTPRINTS: Final = MappingProxyType(
     {
         UnitTypeId.ARMORY: _SQUARE_3,

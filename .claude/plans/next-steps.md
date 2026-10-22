@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #154. On branch `claude/record-file`, `uv run pytest` passes 2561 tests, and
+- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2639 tests, and
   `uv run pytest -m integration` passed 37 against a real game (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -411,20 +411,43 @@ Keep this file current: when a step is done, say so here in the same pull reques
   ladder games only, and named like `--ReplayFile`, over `--RecordingFile`. The ladder passes only its own arguments,
   so a script adds it to the `argv` it hands over (`docs/ladder.md`). `RecordingTransport` compresses at xz preset 3,
   over 1 and over xz's default of 6, which took several times as long an exchange for a file barely smaller (the
-  measurements in this branch's PR).
+  measurements in #155).
+- **Ramp wall-in sites** (the owner, 2026-10-22, one question at a time, and in two reviews of #156):
+  - both walls, Terran and Protoss, over Terran only and over a search for any ramp;
+  - `api.placement.terran_wall(ramp)` and `protoss_wall(ramp)`, asked of a main's ramp, its start found as the start
+    location whose main ramp it is; a ramp out of no main raises (third review of #156: the wall is the ramp's, over any
+    ramp facing the nearest start. The first review had made them classmethods taking a ramp and a start, which was one
+    too many, and the second had them take the start). Each is `None` for a ramp not 2 wide with two top tiles and
+    climbing along a diagonal (`Direction.is_diagonal`), and checks no site against the grids: whether a structure may
+    stand at one is `is_free`'s to say;
+  - built for the main's start, which picks the Protoss gap's corner and names near and far: `near_depot`, `far_depot`,
+    `barracks_with_add_on`, `add_on`, `barracks_in_wall` and `middle_depot`; `pylon`, `near_building`, `far_building`
+    and `gap`, all Points (over Rectangles, a `Square` and Tiles). A tie in the corners goes to the lower x;
+  - `api.map.main_ramp` and `main_ramp_of(start)` for start locations only, found when the map is made (over finding
+    other points on asking): of the ramps whose top is at the start's level, the one whose center is the shortest walk,
+    over the pathing grid with a townhall's footprint at the start opened;
+  - `api.map.all_start_locations`, one tuple with this player's first, over `start_locations`;
+  - `Ramp.orientation`, the `Direction.closest` of eight compass directions to the climb, never `None`; `Ramp.width`,
+    how many tiles the top spans across the climb; and the private `Ramp._point_at_offset_from_the_top(offset)`;
+  - `tools/sweep_walls.py`, placement and a zergling on every main of the pool, over placement alone and one map first.
+  - Found building it: on a main left of its ramp no barracks closes the wall alone with room for its add-on, so
+    `barracks_with_add_on` closes it once the add-on stands, documented (the owner, over `None` there and over a field).
+  - `Tile.containing` is `Tile.at` (review of #156).
 
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
-  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154), and ramp wall-in sites
-  with their sweep, which is next, to be planned with the owner.
-- **`--RecordFile`** (this branch).
+  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154, with `--RecordFile` in
+  #155), and ramp wall-in sites with their sweep (this branch), the last of them.
 - M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
 
 ## 1. Waiting until something needs them
 
+- A type for start locations, perhaps a subclass of `Expansion` holding its main ramp (the owner, second review of
+  #156), to plan once M5 shows how AvocaDOS reads its mains; `main_ramp_of` and the walls take a start location Point
+  until then.
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.

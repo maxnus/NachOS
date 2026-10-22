@@ -113,7 +113,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 - **A dps is per second of Faster speed too**, where python-sc2's `ground_dps` is per Normal second, 1.4 times lower
   ([in detail](reference/python-sc2.md#units)).
 - **2D and 3D points do not mix**, so convert with `.ground` or `.with_height(z)`; and python-sc2's `rounded` floors,
-  which is `Tile.containing(p)` here ([in detail](reference/python-sc2.md#points-areas-and-grids)).
+  which is `Tile.at(p)` here ([in detail](reference/python-sc2.md#points-areas-and-grids)).
 - **Grids are indexed `[x, y]`** and cover the playable area alone ([in detail](reference/python-sc2.md#the-map)).
 - **The names changed, not the numbers**: `UnitTypeId(old.value)` translates an id
   ([in detail](reference/python-sc2.md#ids)).

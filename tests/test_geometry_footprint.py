@@ -142,7 +142,7 @@ class TestCentering:
     @pytest.mark.parametrize("footprint", SHAPES, ids=repr)
     def test_center_in_tile_is_where_the_footprint_centers(self, footprint: Footprint) -> None:
         center = footprint.center_in_tile(Tile(10, 20))
-        assert Tile.containing(center) == Tile(10, 20)
+        assert Tile.at(center) == Tile(10, 20)
         assert footprint.snapped_center(at=center) == center
 
 

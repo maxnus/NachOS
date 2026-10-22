@@ -85,12 +85,12 @@ class TilePath(Sequence[Tile]):
     def index(self, value: PointLike | Tile, start: int = 0, stop: int = sys.maxsize) -> int:
         """The position of the first tile from `start`, and before `stop`, that holds the point `value`, a tile
         reading as itself. Raises `ValueError` if none does, and `TypeError` on anything but a point or a tile."""
-        return self._tiles.index(Tile.containing(value), start, stop)
+        return self._tiles.index(Tile.at(value), start, stop)
 
     def count(self, value: PointLike | Tile) -> int:
         """How many of the path's tiles hold the point `value`, a tile reading as itself. Raises `TypeError` on
         anything but a point or a tile."""
-        return self._tiles.count(Tile.containing(value))
+        return self._tiles.count(Tile.at(value))
 
     def __contains__(self, point: object) -> bool:
         """Whether the path covers the tile holding `point`, a tile reading as itself. Raises `TypeError` on anything
@@ -98,7 +98,7 @@ class TilePath(Sequence[Tile]):
 
         This scans the path; build a `TileSet` from it to test many points.
         """
-        return Tile.containing(cast("PointLike | Tile", point)) in self._tiles
+        return Tile.at(cast("PointLike | Tile", point)) in self._tiles
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TilePath):

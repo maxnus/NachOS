@@ -157,8 +157,9 @@ def make_game_info(
     """A map drawn in `rows`, top row first, or eight by eight of open ground, in a game of `players`, or of
     `PLAYER_ID` playing Terran against a Zerg computer, `ENEMY_ID`.
 
-    `#` is open ground, `~` is pathable but not buildable, and `.` is neither. The whole map is playable unless
-    `playable` gives a smaller area as `(x0, y0, x1, y1)`, and flat unless `heights` is given.
+    `#` is open ground, `~` is pathable but not buildable, `=` is buildable but not pathable, as the ground under rocks
+    is, and `.` is neither. The whole map is playable unless `playable` gives a smaller area as `(x0, y0, x1, y1)`,
+    and flat unless `heights` is given.
     """
     rows = rows or ("#" * 8,) * 8
     width, height = len(rows[0]), len(rows)
@@ -168,7 +169,7 @@ def make_game_info(
         start_raw=raw_pb2.StartRaw(
             map_size=common_pb2.Size2DI(x=width, y=height),
             pathing_grid=make_bits(*rows, drawn="#~"),
-            placement_grid=make_bits(*rows),
+            placement_grid=make_bits(*rows, drawn="#="),
             terrain_height=heights or make_bytes(*([128] * width for _ in range(height))),
             playable_area=common_pb2.RectangleI(p0=common_pb2.PointI(x=x0, y=y0), p1=common_pb2.PointI(x=x1, y=y1)),
             start_locations=[common_pb2.Point2D(x=x, y=y) for x, y in start_locations],
@@ -368,7 +369,7 @@ def played(
             observation=observation,
             state=state,
             placement=PlacementGrids._build_at_start(
-                game_map.placement,
+                game_map,
                 present_units=present_units,
                 state=state,
                 step=step,

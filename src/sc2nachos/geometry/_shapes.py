@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True, order=True, init=False)
 class Tile(Area):
     """One square of the map, addressed by the integer coordinates of its lower left corner. An area's `in`, a grid's
-    index and `Tile.containing` take a tile where they take a point; anything else that wants a point takes its
+    index and `Tile.at` take a tile where they take a point; anything else that wants a point takes its
     `center`. Tiles sort by `x`, then `y`."""
 
     x: int
@@ -43,13 +43,13 @@ class Tile(Area):
         object.__setattr__(self, "y", operator.index(y))
 
     @classmethod
-    def containing(cls, point: PointLike | Tile) -> Self:
+    def at(cls, point: PointLike | Tile) -> Self:
         """The tile a point falls in, or the tile itself."""
-        x, y = Tile._address_containing(point)
+        x, y = Tile._address_at(point)
         return cls(x, y)
 
     @staticmethod
-    def _address_containing(point: PointLike | Tile) -> tuple[int, int]:
+    def _address_at(point: PointLike | Tile) -> tuple[int, int]:
         """The x and y of the tile `point` falls in, or of the tile itself. Raises `TypeError` on anything but a point
         or a tile."""
         # Points first: this runs for every lookup of a tile set and a grid.
@@ -95,7 +95,7 @@ class Tile(Area):
     def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether a point falls on this tile, on the lower edges but not the upper ones, a tile reading as itself.
         Raises `TypeError` on anything but a point or a tile."""
-        return Tile._address_containing(point) == (self.x, self.y)
+        return Tile._address_at(point) == (self.x, self.y)
 
     def shifted(self, dx: int, dy: int) -> Tile:
         """The tile `dx` across and `dy` up from this one. Raises `TypeError` for a shift that is not a whole number."""
@@ -105,7 +105,7 @@ class Tile(Area):
         """The tile reached by shifting this one's center by `offset`. Raises `ValueError` for an offset with a
         height."""
         ground_offset = checked_ground_offset(offset)
-        return Tile.containing((self.x + 0.5 + ground_offset[0], self.y + 0.5 + ground_offset[1]))
+        return Tile.at((self.x + 0.5 + ground_offset[0], self.y + 0.5 + ground_offset[1]))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the tile nearest to `point`, and the distance to it."""
@@ -347,7 +347,7 @@ def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
 class TileSet(Area):
     """An area of any shape, held as the set of map tiles it covers.
 
-    Build one from positions with `Tile.containing`. An empty tile set is falsy.
+    Build one from positions with `Tile.at`. An empty tile set is falsy.
     """
 
     _addresses: frozenset[tuple[int, int]]
@@ -357,7 +357,7 @@ class TileSet(Area):
         try:
             self._addresses = frozenset((tile.x, tile.y) for tile in tiles)
         except AttributeError as error:
-            raise TypeError("a tile set is built of tiles; Tile.containing gives the one a point falls in") from error
+            raise TypeError("a tile set is built of tiles; Tile.at gives the one a point falls in") from error
 
     @classmethod
     def _from_addresses(cls, addresses: Iterable[tuple[int, int]]) -> TileSet:
@@ -410,7 +410,7 @@ class TileSet(Area):
 
     def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether the tile containing `point` is covered."""
-        return Tile._address_containing(point) in self._addresses
+        return Tile._address_at(point) in self._addresses
 
     @cached_property
     def _spatial_index(self) -> tuple[KDTree, list[Tile]]:
@@ -423,7 +423,7 @@ class TileSet(Area):
         if not self._addresses:
             raise ValueError("an empty tile set has no closest point")
         position = Point(point[:2])
-        if Tile._address_containing(position) in self._addresses:
+        if Tile._address_at(position) in self._addresses:
             return position, 0.0
         tree, tiles = self._spatial_index
         nearest_center_distance, _ = tree.query(position)
