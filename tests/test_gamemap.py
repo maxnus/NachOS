@@ -8,7 +8,7 @@ from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._ramp import _NEIGHBORS8
-from sc2nachos.geometry import Point, Rectangle, Tile
+from sc2nachos.geometry import Direction, Point, Rectangle, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import ProtocolError, Recording
 from sc2nachos.units import Alliance
@@ -139,6 +139,17 @@ class TestReadingAMap:
     def test_the_opponent_start_locations_are_the_ones_the_game_names(self) -> None:
         game_map = GameMap(make_game_info(start_locations=((5.5, 2.5),)), start_location=Point((0.5, 0.5)))
         assert game_map.opponent_start_locations == (Point((5.5, 2.5)),)
+
+    def test_all_start_locations_are_this_players_then_the_opponents(self) -> None:
+        game_map = GameMap(make_game_info(start_locations=((5.5, 2.5), (6.5, 6.5))), start_location=Point((0.5, 0.5)))
+        assert game_map.all_start_locations == (Point((0.5, 0.5)), Point((5.5, 2.5)), Point((6.5, 6.5)))
+
+    def test_a_ramp_climbing_along_x_is_oriented_east_and_mirrors_no_offset(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((5.5, 1.5)))
+        (ramp,) = game_map.ramps
+        assert ramp.orientation is Direction.EAST
+        with pytest.raises(ValueError, match="no diagonal"):
+            ramp._point_from_top((1.5, 1.5))
 
     def test_a_slope_a_unit_walks_but_cannot_build_on_is_a_ramp(self) -> None:
         game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((0.5, 0.5)))
@@ -336,13 +347,18 @@ class TestARecordedMap:
             assert not set(ramp.top) & set(ramp.bottom)
 
     def test_each_main_ramp_is_the_pools_one_shape_and_the_nearest_to_its_start(self, path: Path) -> None:
-        """Every main of the pool is left by one 16-tile ramp, two tiles across its top and its bottom."""
+        """Every main of the pool is left by one 16-tile ramp, two tiles across its top and its bottom, climbing along a
+        diagonal."""
         info, observation = _start(path)
         game_map = GameMap._from_game(info, observation)
-        for start in (game_map.start_location, *game_map.opponent_start_locations):
+        diagonals = {Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_WEST, Direction.SOUTH_EAST}
+        for start in game_map.all_start_locations:
             ramp = game_map.main_ramp_of(start)
             assert ramp is not None
             assert (len(ramp.tiles), len(ramp.top), len(ramp.bottom)) == (16, 2, 2)
+            assert ramp.orientation in diagonals
+            top_tile_offset = ramp._point_from_top((0.5, -0.5))
+            assert Tile.at(top_tile_offset) in ramp.top
             assert ramp is min(game_map.ramps, key=lambda each: each.top.center.distance_to(start))
         assert game_map.main_ramp is game_map.main_ramp_of(game_map.start_location)
 

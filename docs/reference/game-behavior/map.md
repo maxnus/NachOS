@@ -102,10 +102,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
 - Every main of the pool, both starts of the 7 maps, leaves by one ramp of the same shape: 16 tiles, two across its top
-  and its bottom, climbing diagonally (corpus). At each of the 14, the game accepts every site of `api.placement`'s two
-  walls on empty ground, and a zergling made below the ramp and ordered to the start stays out while two depots at the
-  top's corners stand raised with a barracks between them, or a third depot, and walks in once they are lowered (tool
-  `sweep_walls`, build 75689).
+  and its bottom, climbing diagonally (corpus). At each of the 14, the game accepts every site of `TerranWall` and
+  `ProtossWall` on empty ground, and a zergling made below the ramp and ordered to the start stays out while two depots
+  at the top's corners stand raised with a barracks between them, or a third depot, and walks in once they are lowered
+  (tool `sweep_walls`, build 75689).
 - On the 6 mains left of their ramp, which climbs toward -x, the barracks moved 2 left so that its add-on fits beside
   the depot lets the zergling in until its reactor stands, and on the 8 others it closes the wall alone; the reactor
   builds at all 14 (tool `sweep_walls`, build 75689). On NachOS's grid, no barracks between those depots closes the

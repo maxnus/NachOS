@@ -1,4 +1,4 @@
-"""Check in game that the walls `api.placement` gives close each main's ramp.
+"""Check in game that the walls `TerranWall.from_ramp` and `ProtossWall.from_ramp` give close each main's ramp.
 
 Needs StarCraft II installed. On each map of the pool, it plays one game as Terran and one as Protoss, each against the
 easiest computer of the same race, left one engineering bay in the middle of the map, so that it can neither fight nor
@@ -7,9 +7,10 @@ debug commands. A zergling, the smallest ground unit, made below the ramp and or
 of closed. What it records for each main:
 
 - the game's answer to placing every site of both walls, with the ground empty;
-- as Terran, for each wall: the two corner depots with `barracks_without_add_on`, with `middle_depot`, with `barracks`
-  alone, and with `barracks` and the reactor it builds: whether the zergling got in with the depots raised, and again
-  once they are lowered, and whether the barracks at `barracks` took the order to build its reactor and built it;
+- as Terran, for each wall: the two corner depots with `barracks_in_wall`, with `middle_depot`, with
+  `barracks_with_add_on` alone, and with `barracks_with_add_on` and the reactor it builds: whether the zergling got in
+  with the depots raised, and again once they are lowered, and whether that barracks took the order to build its
+  reactor and built it;
 - as Protoss: the answer to placing each building before the pylon stands and after, and whether the zergling got in
   with a zealot holding the gap, and again once the zealot is gone::
 
@@ -25,22 +26,16 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing, without_uncurated_units
+from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import error_pb2, raw_pb2
 
-from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import GameMap, Ramp
+from sc2nachos.gamemap import GameMap, ProtossWall, Ramp, TerranWall
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import Installation
 from sc2nachos.match import Race
-from sc2nachos.orders import OrderBook
-from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
-from sc2nachos.placement._walls import _climbing_signs
-from sc2nachos.state._state import _State
-from sc2nachos.units._tracking import _Tracker
 
 # How far below the ramp's bottom the zergling is made, along the way the ramp climbs.
 _BELOW_THE_RAMP = 4.0
@@ -83,8 +78,8 @@ class MainCheck:
 
     map: str
     start: tuple[float, float]
-    climbing_signs: tuple[int, int]
-    """The signs of x and y along which the ramp climbs."""
+    orientation: str
+    """The way the ramp climbs, as `Ramp.orientation` names it."""
     terran: TerranWallCheck | None = None
     protoss: ProtossWallCheck | None = None
 
@@ -95,7 +90,7 @@ def _answer_name(answer: error_pb2.ActionResult.ValueType) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Main:
-    """One main of the map being played: its start, its ramp, and the walls `api.placement` gives it."""
+    """One main of the map being played: its start, its ramp, and the walls NachOS gives it."""
 
     start: Point
     ramp: Ramp
@@ -103,43 +98,22 @@ class _Main:
     protoss_wall: ProtossWall
 
     @property
-    def climbing_signs(self) -> tuple[int, int]:
-        """The signs of x and y along which the ramp climbs."""
-        climbing_signs = _climbing_signs(self.ramp)
-        if climbing_signs is None:
-            raise RuntimeError(f"the ramp of the main at {self.start} is of no shape a wall is given for")
-        return climbing_signs
-
-    @property
     def below_the_ramp(self) -> Point:
         ramp_bottom = self.ramp.bottom.center
-        sign_x, sign_y = self.climbing_signs
-        return Point((ramp_bottom.x - _BELOW_THE_RAMP * sign_x, ramp_bottom.y - _BELOW_THE_RAMP * sign_y))
+        step_x, step_y = self.ramp.orientation.value
+        return Point((ramp_bottom.x - _BELOW_THE_RAMP * step_x, ramp_bottom.y - _BELOW_THE_RAMP * step_y))
 
 
 def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
-    """Both mains of the map `game` plays, with their walls as NachOS's grids give them."""
-    observation = game.client.observation()
-    game_map = GameMap._from_game(game.client.game_info(), observation)
-    game_data = GameData(game.client.game_data())
-    tracker = _Tracker(game_data, None)
-    curated_raw_data, _ = without_uncurated_units(observation.observation.raw_data)
-    tracker.update(curated_raw_data, observation.observation.game_loop)
-    placement_grids = PlacementGrids._build_at_start(
-        game_map,
-        present_units=tracker.unit_tracker.present,
-        state=_State(observation, tracker, game_map),
-        step=observation.observation.game_loop,
-        game_data=game_data,
-        order_book=OrderBook(game_data),
-    )
+    """Both mains of the map `game` plays, with their walls as NachOS gives them."""
+    game_map = GameMap._from_game(game.client.game_info(), game.client.observation())
     mains = []
-    for start_location in (game_map.start_location, *game_map.opponent_start_locations):
+    for start_location in game_map.all_start_locations:
         main_ramp = game_map.main_ramp_of(start_location)
         if main_ramp is None:
             raise RuntimeError(f"the main at {start_location} has no ramp")
-        terran_wall = placement_grids.terran_wall(main_ramp)
-        protoss_wall = placement_grids.protoss_wall(main_ramp)
+        terran_wall = TerranWall.from_ramp(main_ramp, start=start_location)
+        protoss_wall = ProtossWall.from_ramp(main_ramp, start=start_location)
         if terran_wall is None or protoss_wall is None:
             raise RuntimeError(f"the ramp of the main at {start_location} has no wall")
         mains.append(_Main(start_location, main_ramp, terran_wall, protoss_wall))
@@ -203,11 +177,11 @@ def _zergling_raised_and_lowered(
 def _check_terran_wall(game: Sandbox, main: _Main) -> TerranWallCheck:
     terran_wall = main.terran_wall
     sites_by_name = {
-        "first depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.depots[0]),
-        "second depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.depots[1]),
+        "near depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.near_depot),
+        "far depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.far_depot),
         "middle depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.middle_depot),
-        "barracks": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks),
-        "barracks without add-on": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks_without_add_on),
+        "barracks with add-on": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks_with_add_on),
+        "barracks in wall": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks_in_wall),
     }
     terran_check = TerranWallCheck(
         placement={
@@ -216,15 +190,19 @@ def _check_terran_wall(game: Sandbox, main: _Main) -> TerranWallCheck:
         }
     )
     between_the_depots = {
-        "barracks without add-on": (UnitTypeId.BARRACKS, terran_wall.barracks_without_add_on),
+        "barracks in wall": (UnitTypeId.BARRACKS, terran_wall.barracks_in_wall),
         "middle depot": (UnitTypeId.SUPPLY_DEPOT, terran_wall.middle_depot),
-        "barracks": (UnitTypeId.BARRACKS, terran_wall.barracks),
+        "barracks with add-on": (UnitTypeId.BARRACKS, terran_wall.barracks_with_add_on),
     }
-    corner_depots = [(UnitTypeId.SUPPLY_DEPOT, depot_site) for depot_site in terran_wall.depots]
+    corner_depots = [
+        (UnitTypeId.SUPPLY_DEPOT, terran_wall.near_depot),
+        (UnitTypeId.SUPPLY_DEPOT, terran_wall.far_depot),
+    ]
     for name, structure_between in between_the_depots.items():
         with _structures_standing(game, [*corner_depots, structure_between]) as structures_made:
             terran_check.zergling_got_in[name] = _zergling_raised_and_lowered(game, main, structures_made)
-    with _structures_standing(game, [*corner_depots, (UnitTypeId.BARRACKS, terran_wall.barracks)]) as structures_made:
+    with_room_for_the_add_on = (UnitTypeId.BARRACKS, terran_wall.barracks_with_add_on)
+    with _structures_standing(game, [*corner_depots, with_room_for_the_add_on]) as structures_made:
         barracks_made = next(unit for unit in structures_made if unit.unit_type == UnitTypeId.BARRACKS)
         terran_check.reactor_order = _answer_name(game.order(AbilityId.BUILD_REACTOR, barracks_made.tag))
         game.client.step(_BUILDING_STEPS)
@@ -243,8 +221,8 @@ def _check_protoss_wall(game: Sandbox, main: _Main) -> ProtossWallCheck:
     protoss_wall = main.protoss_wall
     sites_by_name = {
         "pylon": (AbilityId.PROBE_BUILD_PYLON, protoss_wall.pylon),
-        "building at the corner": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.buildings[0]),
-        "building beside the gap": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.buildings[1]),
+        "near building": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.near_building),
+        "far building": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.far_building),
     }
     protoss_check = ProtossWallCheck(
         placement={
@@ -253,9 +231,10 @@ def _check_protoss_wall(game: Sandbox, main: _Main) -> ProtossWallCheck:
         }
     )
     with _structures_standing(game, [(UnitTypeId.PYLON, protoss_wall.pylon)]):
-        answers_with_the_pylon = game.placement_answers(AbilityId.PROBE_BUILD_GATEWAY, list(protoss_wall.buildings))
+        building_sites = [protoss_wall.near_building, protoss_wall.far_building]
+        answers_with_the_pylon = game.placement_answers(AbilityId.PROBE_BUILD_GATEWAY, building_sites)
         protoss_check.buildings_with_the_pylon = [_answer_name(answer) for answer in answers_with_the_pylon]
-        protoss_buildings = [(UnitTypeId.GATEWAY, building_site) for building_site in protoss_wall.buildings]
+        protoss_buildings = [(UnitTypeId.GATEWAY, building_site) for building_site in building_sites]
         with (
             _structures_standing(game, protoss_buildings),
             _structures_standing(game, [(UnitTypeId.ZEALOT, protoss_wall.gap)]) as (zealot,),
@@ -280,7 +259,7 @@ def check_walls(installation: Installation, map_names: Sequence[str]) -> list[Ma
                 for main in _mains_with_their_walls(game):
                     main_check = checks_by_main.setdefault(
                         (map_name, main.start),
-                        MainCheck(map_name, (main.start.x, main.start.y), main.climbing_signs),
+                        MainCheck(map_name, (main.start.x, main.start.y), main.ramp.orientation.name),
                     )
                     if race is Race.TERRAN:
                         main_check.terran = _check_terran_wall(game, main)
@@ -312,8 +291,8 @@ def _summary_of_each_main(main_checks: Sequence[MainCheck]) -> str:
         if main_check.protoss is not None:
             protoss_check = main_check.protoss
             answers_with_no_pylon = [
-                protoss_check.placement["building at the corner"],
-                protoss_check.placement["building beside the gap"],
+                protoss_check.placement["near building"],
+                protoss_check.placement["far building"],
             ]
             summary_parts.append(
                 f"pylon {protoss_check.placement['pylon']}, buildings with no pylon {answers_with_no_pylon}, with it "
@@ -322,7 +301,7 @@ def _summary_of_each_main(main_checks: Sequence[MainCheck]) -> str:
                 f"gap open: {_in_or_out(protoss_check.zergling_got_in_with_the_gap_open)}"
             )
         summary_lines.append(
-            f"{main_check.map} {main_check.start} climbing {main_check.climbing_signs}: " + "; ".join(summary_parts)
+            f"{main_check.map} {main_check.start} climbing {main_check.orientation}: " + "; ".join(summary_parts)
         )
     return "\n".join(summary_lines)
 

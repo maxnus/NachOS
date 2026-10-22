@@ -10,7 +10,7 @@ import numpy
 import pytest
 
 from sc2nachos.constants import POINT_PRECISION
-from sc2nachos.geometry import Area, Circle, Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Direction, Point, Point3D, Rectangle, Tile, TileSet
 
 
 class TestPoint2:
@@ -967,3 +967,28 @@ class TestCircle:
 
     def test_repr_round_trips(self) -> None:
         assert repr(Circle((1, 2), 3.5)) == "Circle(Point((1, 2)), 3.5)"
+
+
+class TestDirection:
+    def test_each_is_a_step_to_a_neighbor_counterclockwise_from_east(self) -> None:
+        steps = [direction.value for direction in Direction]
+        assert steps == [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+
+    @pytest.mark.parametrize(
+        ("step", "nearest"),
+        [
+            ((4, 4), Direction.NORTH_EAST),
+            ((4, 1), Direction.EAST),
+            ((1, 4), Direction.NORTH),
+            ((-3, -4), Direction.SOUTH_WEST),
+            ((0, -2), Direction.SOUTH),
+            ((5, -0.1), Direction.EAST),
+            ((-5, 0.1), Direction.WEST),
+        ],
+    )
+    def test_the_nearest_to_a_step_is_the_nearest_by_angle(self, step: tuple[float, float], nearest: Direction) -> None:
+        assert Direction._nearest_to(*step) is nearest
+
+    def test_a_step_of_no_length_has_none(self) -> None:
+        with pytest.raises(ValueError, match="no direction"):
+            Direction._nearest_to(0, 0)

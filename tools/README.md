@@ -18,7 +18,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Find what the game's pathing grid shows as a game goes on, what each structure blocks for walking, and what the pathing query does from inside one | `uv run python tools/sweep_pathing.py timeline`, `footprints` or `inside` | yes |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py` | yes |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py` | yes |
-| Check that the walls `api.placement` gives close each main's ramp of the pool | `uv run python tools/sweep_walls.py`, or with the maps to check | yes |
+| Check that the walls `TerranWall` and `ProtossWall` give close each main's ramp of the pool | `uv run python tools/sweep_walls.py`, or with the maps to check | yes |
 | Record the corpus again | `uv run python tools/record_corpus.py` | yes |
 | Regenerate the raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as [curating ids](../docs/maintaining/curating-ids.md) says | no |
 | Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` | no |

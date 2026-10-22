@@ -369,7 +369,7 @@ def played(
             observation=observation,
             state=state,
             placement=PlacementGrids._build_at_start(
-                game_map,
+                game_map.placement,
                 present_units=present_units,
                 state=state,
                 step=step,
