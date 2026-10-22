@@ -6,19 +6,22 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
+import numpy
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Grid, Point, Tile
+from sc2nachos.gamedata._footprints import FOOTPRINTS
+from sc2nachos.gamemap import GameMap, Ramp
+from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
-from sc2nachos.placement import PlacementGrids
+from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
+from sc2nachos.placement._walls import find_protoss_wall, find_terran_wall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
@@ -109,7 +112,7 @@ class _Game:
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
-                self.map.placement,
+                self.map,
                 present_units=present,
                 state=state,
                 step=step,
@@ -664,36 +667,38 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
     raise AssertionError(f"{path.name} holds no observation")
 
 
+def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
+    """The map of a recorded game, a tracker that has taken in its first observation, and the grids made from it."""
+    game_map, tracker, data, observation = _first_observation(path)
+    state = _State(observation, tracker, game_map)
+    order_book = OrderBook(data)
+    present_units = tracker.unit_tracker.present
+    grids = PlacementGrids._build_at_start(
+        game_map,
+        present_units=present_units,
+        state=state,
+        step=observation.observation.game_loop,
+        game_data=data,
+        order_book=order_book,
+    )
+    return game_map, tracker, grids
+
+
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedGamesStart:
-    def _grids(self, path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
-        game_map, tracker, data, observation = _first_observation(path)
-        state = _State(observation, tracker, game_map)
-        order_book = OrderBook(data)
-        present_units = tracker.unit_tracker.present
-        grids = PlacementGrids._build_at_start(
-            game_map.placement,
-            present_units=present_units,
-            state=state,
-            step=observation.observation.game_loop,
-            game_data=data,
-            order_book=order_book,
-        )
-        return game_map, tracker, grids
-
     def test_every_one_of_the_maps_units_but_an_acceleration_zone_has_a_measured_footprint(self, path: Path) -> None:
-        _, tracker, _ = self._grids(path)
+        _, tracker, _ = _grids_at_the_start(path)
         unmeasured = {unit.type_id for unit in tracker.unit_tracker.present.neutral if unit.type_data.footprint is None}
         assert unmeasured <= {UnitTypeId.ACCELERATION_ZONE_SMALL, UnitTypeId.ACCELERATION_ZONE_LARGE}
 
     def test_the_geysers_and_collapsible_towers_are_closed_from_the_start(self, path: Path) -> None:
-        _, tracker, grids = self._grids(path)
+        _, tracker, grids = _grids_at_the_start(path)
         neutral_units = tracker.unit_tracker.present.neutral
         for unit in neutral_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             assert not grids.static[unit.position]
 
     def test_this_players_townhall_and_mineral_fields_close_the_ground_under_them(self, path: Path) -> None:
-        game_map, tracker, grids = self._grids(path)
+        game_map, tracker, grids = _grids_at_the_start(path)
         assert grids.static[game_map.start_location]
         assert not grids.dynamic[game_map.start_location]
         for field in tracker.unit_tracker.present.neutral.of_type(UnitType.AnyMineralField):
@@ -701,7 +706,7 @@ class TestARecordedGamesStart:
             assert not grids.dynamic[field.position + (0.5, 0.0)]
 
     def test_nothing_is_reserved_before_an_order(self, path: Path) -> None:
-        _, _, grids = self._grids(path)
+        _, _, grids = _grids_at_the_start(path)
         assert not grids.reserved.any()
 
 
@@ -723,6 +728,168 @@ def _game_takes_a_sensor_tower(transport: WebSocketTransport, tiles: Sequence[Ti
     ]
     response = transport.request(sc2api_pb2.Request(query=query_pb2.RequestQuery(placements=placements)))
     return [answer.result == error_pb2.Success for answer in response.query.placements]
+
+
+# The ground one unit standing in a Protoss wall's gap takes.
+_ONE_UNIT = Footprint.square(1)
+
+
+def _closes(game_map: GameMap, ramp: Ramp, structures: Sequence[tuple[UnitTypeId | Footprint, Point]]) -> bool:
+    """Whether `structures`, each a structure type or a footprint at its center, leave no walking path from `ramp`'s
+    bottom onto the buildable ground of the main above it, within 12 of its start: a diagonal step needs both tiles
+    beside it open."""
+    walkable = game_map.pathing.copy()
+    for taking, center in structures:
+        footprint = taking if isinstance(taking, Footprint) else FOOTPRINTS[taking]
+        walkable.fill_footprint(footprint, at=center, value=False)
+    distances = walkable.cheapest_paths_from(min(ramp.bottom)).distances
+    start = min((game_map.start_location, *game_map.opponent_start_locations), key=ramp.top.center.distance_to)
+    level = game_map.height[start]
+    main = [
+        tile
+        for tile in Circle(start, 12).tiles()
+        if game_map.placement[tile] and game_map.pathing[tile] and abs(game_map.height[tile] - level) < 0.5
+    ]
+    assert main
+    return all(distances[tile] == math.inf for tile in main)
+
+
+def _add_on_of(barracks: Point) -> Point:
+    """Where a barracks's add-on stands."""
+    return Point((barracks.x + 2.5, barracks.y - 0.5))
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+class TestTheWallsOfARecordedMain:
+    """On both mains of each map of the pool, the ramp's walls stand where structures may at the start and close it."""
+
+    def _mains(self, path: Path) -> list[tuple[GameMap, PlacementGrids, Ramp]]:
+        game_map, _, grids = _grids_at_the_start(path)
+        starts = (game_map.start_location, *game_map.opponent_start_locations)
+        ramps = [game_map.main_ramp_of(start) for start in starts]
+        assert all(ramp is not None for ramp in ramps)
+        return [(game_map, grids, ramp) for ramp in ramps if ramp is not None]
+
+    def test_every_terran_site_is_free_at_the_start_with_room_for_the_add_on(self, path: Path) -> None:
+        """Free as `free` reads it: a Zerg player's creep reaches the top of its own ramp, on LeyLines and Ultralove."""
+        for _, grids, ramp in self._mains(path):
+            wall = grids.terran_wall(ramp)
+            assert wall is not None
+            for depot in (*wall.depots, wall.middle_depot):
+                assert grids.free.fits_footprint(FOOTPRINTS[UnitTypeId.SUPPLY_DEPOT], at=depot)
+            for barracks in (wall.barracks, wall.barracks_without_add_on):
+                assert grids.free.fits_footprint(FOOTPRINTS[UnitTypeId.BARRACKS], at=barracks)
+            assert grids.free.fits_footprint(FOOTPRINTS[UnitTypeId.REACTOR_BARRACKS], at=_add_on_of(wall.barracks))
+            assert not set(FOOTPRINTS[UnitTypeId.REACTOR_BARRACKS].tiles(at=_add_on_of(wall.barracks))) & {
+                tile for depot in wall.depots for tile in FOOTPRINTS[UnitTypeId.SUPPLY_DEPOT].tiles(at=depot)
+            }
+
+    def test_the_depots_close_the_ramp_with_a_barracks_or_a_third_depot(self, path: Path) -> None:
+        for game_map, grids, ramp in self._mains(path):
+            wall = grids.terran_wall(ramp)
+            assert wall is not None
+            depots = [(UnitTypeId.SUPPLY_DEPOT, depot) for depot in wall.depots]
+            assert not _closes(game_map, ramp, depots)
+            assert _closes(game_map, ramp, [*depots, (UnitTypeId.BARRACKS, wall.barracks_without_add_on)])
+            assert _closes(game_map, ramp, [*depots, (UnitTypeId.SUPPLY_DEPOT, wall.middle_depot)])
+            with_its_add_on = [(UnitTypeId.BARRACKS, wall.barracks), (UnitTypeId.REACTOR, _add_on_of(wall.barracks))]
+            assert _closes(game_map, ramp, [*depots, *with_its_add_on])
+
+    def test_the_barracks_with_room_for_its_add_on_closes_the_ramp_alone_unless_the_main_is_left_of_it(
+        self, path: Path
+    ) -> None:
+        for game_map, grids, ramp in self._mains(path):
+            wall = grids.terran_wall(ramp)
+            assert wall is not None
+            depots = [(UnitTypeId.SUPPLY_DEPOT, depot) for depot in wall.depots]
+            climbs_left = ramp.top.center.x < ramp.bottom.center.x
+            assert _closes(game_map, ramp, [*depots, (UnitTypeId.BARRACKS, wall.barracks)]) is not climbs_left
+            assert (wall.barracks == wall.barracks_without_add_on) is not climbs_left
+
+    def test_the_protoss_wall_is_free_at_the_start_and_closed_by_a_unit_in_its_gap(self, path: Path) -> None:
+        for game_map, grids, ramp in self._mains(path):
+            wall = grids.protoss_wall(ramp)
+            assert wall is not None
+            assert grids.free.fits_footprint(FOOTPRINTS[UnitTypeId.PYLON], at=wall.pylon)
+            for building in wall.buildings:
+                assert grids.free.fits_footprint(FOOTPRINTS[UnitTypeId.GATEWAY], at=building)
+            buildings = [(UnitTypeId.GATEWAY, building) for building in wall.buildings]
+            assert not _closes(game_map, ramp, buildings)
+            assert _closes(game_map, ramp, [*buildings, (_ONE_UNIT, wall.gap)])
+
+    def test_the_protoss_gap_is_at_the_corner_nearer_the_start(self, path: Path) -> None:
+        for game_map, grids, ramp in self._mains(path):
+            wall = grids.protoss_wall(ramp)
+            assert wall is not None
+            start = min((game_map.start_location, *game_map.opponent_start_locations), key=ramp.top.center.distance_to)
+            assert wall.gap.distance_to(start) < wall.buildings[0].distance_to(start)
+
+
+def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
+    """burnysc2's `corner_depots`, `depot_in_middle`, `barracks_in_middle`, `barracks_correct_placement` and its
+    Protoss wall, read on the map in AvocaDOS's environment, for the main at (175.5, 76.5), whose ramp climbs toward +x
+    and +y, and the one at (72.5, 171.5), whose ramp climbs toward -x and -y."""
+    game_map, _, grids = _grids_at_the_start(next(path for path in CORPUS if path.stem.startswith("PylonAIE")))
+    east = game_map.main_ramp_of(Point((175.5, 76.5)))
+    west = game_map.main_ramp_of(Point((72.5, 171.5)))
+    assert east is not None and west is not None
+    assert grids.terran_wall(east) == TerranWall(
+        depots=(Point((160, 85)), Point((163, 82))),
+        barracks=Point((162.5, 84.5)),
+        barracks_without_add_on=Point((162.5, 84.5)),
+        middle_depot=Point((162, 84)),
+    )
+    assert grids.terran_wall(west) == TerranWall(
+        depots=(Point((85, 166)), Point((88, 163))),
+        barracks=Point((83.5, 163.5)),
+        barracks_without_add_on=Point((85.5, 163.5)),
+        middle_depot=Point((86, 164)),
+    )
+    assert grids.protoss_wall(east) == ProtossWall(
+        pylon=Point((165, 87)), buildings=(Point((160.5, 85.5)), Point((163.5, 83.5))), gap=Point((162.5, 81.5))
+    )
+
+
+class TestAWallOnARampOfAnotherShape:
+    """A ramp whose top is not two tiles touching at a corner, or which climbs along an axis, has no wall."""
+
+    _OPEN = Grid(numpy.ones((40, 40), dtype=bool), outside=False)
+
+    @staticmethod
+    def _footprint_of(unit_type: UnitTypeId) -> Footprint:
+        return FOOTPRINTS[unit_type]
+
+    @pytest.mark.parametrize(
+        ("top", "bottom"),
+        [
+            pytest.param([Tile(20, 20), Tile(21, 19), Tile(22, 18)], [Tile(17, 17), Tile(18, 16)], id="a top of three"),
+            pytest.param([Tile(20, 20), Tile(20, 21)], [Tile(16, 20), Tile(16, 21)], id="climbing along x"),
+            pytest.param([Tile(20, 20), Tile(22, 18)], [Tile(17, 17), Tile(19, 15)], id="a top apart"),
+        ],
+    )
+    def test_answers_none(self, top: list[Tile], bottom: list[Tile]) -> None:
+        ramp = Ramp(tiles=TileSet([*top, *bottom]), top=TileSet(top), bottom=TileSet(bottom))
+        assert find_terran_wall(ramp, self._OPEN, self._footprint_of) is None
+        assert find_protoss_wall(ramp, self._OPEN, self._footprint_of, [Point((30.5, 30.5))]) is None
+
+    def test_a_standard_ramp_on_ground_no_structure_takes_has_none(self) -> None:
+        ramp = Ramp(
+            tiles=TileSet([Tile(20, 21), Tile(21, 20), Tile(17, 18), Tile(18, 17)]),
+            top=TileSet([Tile(20, 21), Tile(21, 20)]),
+            bottom=TileSet([Tile(17, 18), Tile(18, 17)]),
+        )
+        closed = Grid(numpy.zeros((40, 40), dtype=bool), outside=False)
+        assert find_terran_wall(ramp, self._OPEN, self._footprint_of) is not None
+        assert find_terran_wall(ramp, closed, self._footprint_of) is None
+        assert find_protoss_wall(ramp, closed, self._footprint_of, [Point((30.5, 30.5))]) is None
+
+    def test_a_protoss_wall_needs_a_start_to_put_its_gap_by(self) -> None:
+        ramp = Ramp(
+            tiles=TileSet([Tile(20, 21), Tile(21, 20), Tile(17, 18), Tile(18, 17)]),
+            top=TileSet([Tile(20, 21), Tile(21, 20)]),
+            bottom=TileSet([Tile(17, 18), Tile(18, 17)]),
+        )
+        assert find_protoss_wall(ramp, self._OPEN, self._footprint_of, []) is None
 
 
 class _DepotBot:
