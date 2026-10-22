@@ -104,6 +104,10 @@ class TestALadderGame:
         assert (ladder_played["enemy_ladder_id"], ladder_played["realtime"]) == (None, False)
         assert not [message for message in logged if "ignores" in message or "left to the bot" in message]
 
+    def test_by_default_it_saves_no_replay_and_records_nothing(self, ladder_played: dict[str, Any]) -> None:
+        run_from_command_line(Api(), ["--GamePort", "5000"], race=Race.TERRAN)
+        assert (ladder_played["save_replay_to"], ladder_played["record_to"]) == (None, None)
+
     def test_a_local_games_argument_is_logged_as_ignored(
         self, ladder_played: dict[str, Any], logged: list[str]
     ) -> None:

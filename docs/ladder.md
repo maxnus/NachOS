@@ -106,11 +106,26 @@ records its ladder games adds this one to those it hands over, naming a file in 
 AI Arena's `data`:
 
 ```python
-run_from_command_line(api, [*sys.argv[1:], "--RecordFile", "data/last_game.sc2rec"], race=Race.TERRAN, name="MyBot")
+# run.py
+import sys
+
+from sc2nachos import Race, run_from_command_line
+
+from my_bot import api
+
+if __name__ == "__main__":
+    run_from_command_line(api, [*sys.argv[1:], "--RecordFile", "data/last_game.sc2rec"], race=Race.TERRAN)
 ```
 
-The file is overwritten by the next game, and complete once `run_from_command_line` returns or raises; a run killed
-before then leaves only part of it.
+The folder must exist: if it does not, the run raises `FileNotFoundError` before it joins the game, so the bot never
+plays it. The file is overwritten by the next game, and complete once `run_from_command_line` returns or raises; a run
+killed before then leaves only part of it.
+
+To replay a ladder game, give `run_recording` the ladder's `--OpponentId` as `enemy_ladder_id`, since the recording
+does not hold it, and `save_replay_to` if the game was given `--ReplayFile`. The bot must also read what it read then,
+such as its own files in `data`, or it asks something else and the replay raises `ProtocolError`. A game the ladder
+closed replays up to the close, then raises `ProtocolError` where the run returned `Result.UNDECIDED`: the recording
+holds no answer to the request the close cut off.
 
 A ladder game has no time limit. A bot ends one early only by leaving it, with `api.leave_game()`, which concedes it.
 A ladder may end one early by closing the connection, as AvocaDOS has seen when a bot crashes or fails to start: the
