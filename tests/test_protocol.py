@@ -836,6 +836,16 @@ class TestAnsweringUnrecorded:
         assert client.status is Status.INIT_GAME
         assert client.join_game(Race.TERRAN) == 2
 
+    def test_a_recorded_ping_is_passed_over_while_something_else_is_asked(self, tmp_path: Path) -> None:
+        joined = make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=2))
+        client = self._client(
+            tmp_path,
+            (sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()), _VERSION),
+            (sc2api_pb2.Request(join_game=sc2api_pb2.RequestJoinGame()), joined),
+        )
+        client.create_game("map", [Participant(), Computer()])
+        assert client.join_game(Race.TERRAN) == 2
+
     @pytest.mark.parametrize("leaves", [True, False], ids=["then leaves", "then stops"])
     def test_an_observation_after_the_last_is_the_last_again_with_the_game_ended(
         self, tmp_path: Path, leaves: bool

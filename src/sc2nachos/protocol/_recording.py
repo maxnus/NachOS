@@ -23,6 +23,10 @@ _LENGTH = 4
 # transport makes it up, and the recording's own are passed over.
 _BOT_REQUESTS = frozenset({"action", "debug", "query", "save_replay", "step"})
 
+# What a recorded bot may have asked between its turn's other requests, which another bot need not ask. Played back for
+# it, each is passed over while something else is asked, the last game info kept.
+_ANSWERED_ONLY_WHEN_ASKED = frozenset({"game_info", "ping"})
+
 # What a recording holds after the last observation of its game.
 _AFTER_THE_GAME = frozenset({"leave_game", "quit", "nothing"})
 
@@ -122,7 +126,8 @@ class PlaybackTransport:
       last recorded observation, or 0, which the game answers for no path, for a tag that observation does not hold;
     - a request to save the replay, refused.
 
-    The rest plays as recorded, and is made up where the recording does not answer it next:
+    The rest plays as recorded, a recorded game info or ping passed over while something else is asked, and is made
+    up where the recording does not answer it next:
     - creating a game it did not create, with the status `init_game`;
     - a game info, as the last one it answered;
     - an observation once only leaving the game, quitting or nothing is left, as its last observation again with the
@@ -169,7 +174,8 @@ class PlaybackTransport:
 
     def _peek_past_unrecorded(self, asked_kind: str) -> Exchange | None:
         """The next exchange, unread, or `None` once there is none. With `answer_unrecorded`, the answers to a bot's own
-        requests are passed over first, and so is a game info while something else is asked, the last one kept."""
+        requests are passed over first, and so is a game info or a ping while something else is asked, the last game
+        info kept."""
         while True:
             if self._next_exchange is None:
                 self._next_exchange = next(self._exchanges, None)
@@ -177,7 +183,9 @@ class PlaybackTransport:
             if exchange is None or not self._answer_unrecorded:
                 return exchange
             recorded_kind = exchange.request.WhichOneof("request")
-            if recorded_kind not in _BOT_REQUESTS and (recorded_kind != "game_info" or asked_kind == "game_info"):
+            if recorded_kind not in _BOT_REQUESTS and (
+                recorded_kind not in _ANSWERED_ONLY_WHEN_ASKED or recorded_kind == asked_kind
+            ):
                 return exchange
             self._next_exchange = None
             self._remember(exchange.response)
