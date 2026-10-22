@@ -92,12 +92,25 @@ one that is not. A bot built of objects can hand them the settings instead, each
 
 An argument of the other kind of game, such as `--Map` given to a ladder game, is logged as ignored.
 
-## Replays and results
+## Replays, recordings and results
 
 `--ReplayFile` saves the game's replay there, however the game ends: at its end, before leaving it when the bot calls
 `api.leave_game()`, and after a handler raises. The ladder keeps its own replays, so this is for your own runs.
 `--ResultFile` writes the result as JSON, as for [the match workflow](github-actions.md#1-a-game-script), with the
 map's display name in a ladder game, where no map file is known.
+
+`--RecordFile` records the whole conversation with the game there, as `record_to` does, so that `run_recording` can
+replay the bot through the game exactly, with no game client, and reproduce a handler's exception as it was raised
+([testing](testing.md#replaying-a-bots-own-game-exactly)). The ladder passes only its own arguments, so a script that
+records its ladder games adds this one to those it hands over, naming a file in a folder the ladder keeps, such as
+AI Arena's `data`:
+
+```python
+run_from_command_line(api, [*sys.argv[1:], "--RecordFile", "data/last_game.sc2rec"], race=Race.TERRAN, name="MyBot")
+```
+
+The file is overwritten by the next game, and complete once `run_from_command_line` returns or raises; a run killed
+before then leaves only part of it.
 
 A ladder game has no time limit. A bot ends one early only by leaving it, with `api.leave_game()`, which concedes it.
 A ladder may end one early by closing the connection, as AvocaDOS has seen when a bot crashes or fails to start: the

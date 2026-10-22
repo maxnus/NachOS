@@ -85,6 +85,11 @@ class _CommandLineArguments:
         """Where to save the game's replay."""
         return self._arguments.ReplayFile
 
+    @property
+    def record_file(self) -> Path | None:
+        """Where to record the whole conversation with the game."""
+        return self._arguments.RecordFile
+
     def create_computer_opponent(self) -> Computer:
         """The computer a local game is played against, from `--ComputerRace`, `--ComputerDifficulty` and
         `--ComputerBuild` as member names. A name that is no member stops the run, as an argument argparse refuses
@@ -157,4 +162,5 @@ class _CommandLineArguments:
         parser.add_argument("--RealTime", action="store_true", help="play the game in real time")
         parser.add_argument("--ResultFile", type=Path, help="where to write the result, as JSON")
         parser.add_argument("--ReplayFile", type=Path, help="where to save the game's replay")
+        parser.add_argument("--RecordFile", type=Path, help="where to record the whole conversation with the game")
         return parser

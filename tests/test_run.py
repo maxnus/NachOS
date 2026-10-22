@@ -77,8 +77,8 @@ class TestALadderGame:
     def test_it_joins_with_the_ladders_arguments(self, ladder_played: dict[str, Any], tmp_path: Path) -> None:
         api = Api()
         argv = ["--LadderServer", "10.0.0.7", "--GamePort", "5000", "--StartPort", "5100", "--OpponentId", "5a1f"]
-        replay = tmp_path / "game.SC2Replay"
-        argv += ["--RealTime", "--ReplayFile", str(replay)]
+        replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
+        argv += ["--RealTime", "--ReplayFile", str(replay), "--RecordFile", str(record)]
         result = run_from_command_line(api, argv, race=Race.ZERG, name="MyBot", steps_per_turn=2)
         assert result is Result.DEFEAT
         assert ladder_played == {
@@ -91,6 +91,7 @@ class TestALadderGame:
             "enemy_ladder_id": "5a1f",
             "steps_per_turn": 2,
             "realtime": True,
+            "record_to": record,
             "save_replay_to": replay,
         }
 
@@ -191,17 +192,20 @@ def test_a_bots_argument_that_begins_like_one_of_nachoss_is_left_for_the_bot(
     assert (played["save_replay_to"], played["realtime"], played["opponent"]) == (None, False, Computer())
 
 
-def test_a_local_game_takes_the_turn_length_realtime_and_the_replay_file(
+def test_a_local_game_takes_the_turn_length_realtime_and_the_replay_and_record_files(
     played: dict[str, Any], tmp_path: Path
 ) -> None:
-    replay = tmp_path / "game.SC2Replay"
-    run_from_command_line(Api(), ["--RealTime", "--ReplayFile", str(replay)], race=Race.TERRAN, steps_per_turn=4)
-    assert (played["steps_per_turn"], played["realtime"], played["save_replay_to"]) == (4, True, replay)
+    replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
+    argv = ["--RealTime", "--ReplayFile", str(replay), "--RecordFile", str(record)]
+    run_from_command_line(Api(), argv, race=Race.TERRAN, steps_per_turn=4)
+    assert (played["steps_per_turn"], played["realtime"]) == (4, True)
+    assert (played["save_replay_to"], played["record_to"]) == (replay, record)
 
 
-def test_by_default_a_local_game_is_stepped_and_saves_no_replay(played: dict[str, Any]) -> None:
+def test_by_default_a_local_game_is_stepped_saves_no_replay_and_records_nothing(played: dict[str, Any]) -> None:
     run_from_command_line(Api(), [], race=Race.TERRAN)
-    assert (played["steps_per_turn"], played["realtime"], played["save_replay_to"]) == (1, False, None)
+    assert (played["steps_per_turn"], played["realtime"]) == (1, False)
+    assert (played["save_replay_to"], played["record_to"]) == (None, None)
 
 
 def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> None:
@@ -442,8 +446,11 @@ def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
 
 
 @pytest.mark.integration
-def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_replay_are_read(tmp_path: Path) -> None:
-    """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins."""
+def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay_and_recording_are_read(
+    tmp_path: Path,
+) -> None:
+    """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins, then
+    replays it exactly from its recording."""
     try:
         game_map = MapFile.find(_LADDER_MAP)
     except MapNotFoundError as missing:
@@ -456,15 +463,16 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_re
             api.leave_game()
 
     port = free_port()
-    replay = tmp_path / "game.SC2Replay"
+    replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
     result_file = tmp_path / "result.json"
     with GameProcess.launch(port=port, window=(640, 480)) as game:
         # The ladder creates the match and disconnects; the client serves one connection at a time.
         with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
             ladder.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
         argv = ["--GamePort", str(port), "--OpponentId", "5a1f", "--ReplayFile", str(replay)]
-        argv += ["--ResultFile", str(result_file)]
+        argv += ["--ResultFile", str(result_file), "--RecordFile", str(record)]
         result = run_from_command_line(api, argv, race=Race.TERRAN, steps_per_turn=8)
+        left_at_step = api.step
 
         with closing(WebSocketTransport.connect(game.url)) as transport:
             request = sc2api_pb2.Request(replay_info=sc2api_pb2.RequestReplayInfo(replay_data=replay.read_bytes()))
@@ -477,3 +485,8 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_and_re
     assert not read_back.HasField("error")
     assert read_back.game_duration_loops >= 8
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]
+
+    replayed = tmp_path / "replayed.SC2Replay"
+    assert run_recording(record, api, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
+    assert (api.step, api.enemy.ladder_id) == (left_at_step, "5a1f")
+    assert replayed.read_bytes() == replay.read_bytes()

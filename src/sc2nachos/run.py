@@ -185,7 +185,8 @@ def run_from_command_line(
     `RANDOM`), `--Map`, by default one at random from the installation's, and `--TimeLimit` in game seconds. A value
     that names no member stops the run, as an argument argparse refuses does.
 
-    In either, `--RealTime` plays the game in real time, `--ReplayFile` is a file to save its replay to, and
+    In either, `--RealTime` plays the game in real time, `--ReplayFile` is a file to save its replay to, `--RecordFile`
+    one to record the whole conversation with the game into, as `record_to` does, for `run_recording` to play back, and
     `--ResultFile` one to write the JSON the match workflow reads: the result, the map, as its file's name in a local
     game and as its display name in a ladder game, and the game time, each of those two `null` if the ladder closed the
     connection before the game began. An argument of the other kind of game is logged as ignored, and one NachOS does
@@ -227,6 +228,7 @@ def _play_ladder_game(
             enemy_ladder_id=command_line_arguments.opponent_id,
             steps_per_turn=steps_per_turn,
             realtime=command_line_arguments.realtime,
+            record_to=command_line_arguments.record_file,
             save_replay_to=command_line_arguments.replay_file,
         )
     except ConnectionClosedError as closed:
@@ -271,6 +273,7 @@ def _play_local_game(
         steps_per_turn=steps_per_turn,
         realtime=command_line_arguments.realtime,
         time_limit=command_line_arguments.time_limit,
+        record_to=command_line_arguments.record_file,
         save_replay_to=command_line_arguments.replay_file,
         installation=installation,
     )

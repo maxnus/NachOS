@@ -15,9 +15,11 @@ Both runners take `record_to`, a file to write the whole conversation with the g
 run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN, record_to="tests/games/pylon.sc2rec")
 ```
 
-The file is complete once the runner returns; a run killed before then leaves only part of it. NachOS's own repository
-holds seven such games in `tests/corpus`, a bot that does nothing losing to the computer on each map of the ladder
-pool, three of them as Terran; `tools/record_corpus.py` says what each one is.
+`run_from_command_line` takes the file as `--RecordFile`, in a ladder game too
+([playing on the ladder](ladder.md#replays-recordings-and-results)). The file is complete once the runner returns; a
+run killed before then leaves only part of it. NachOS's own repository holds seven such games in `tests/corpus`, a bot
+that does nothing losing to the computer on each map of the ladder pool, three of them as Terran;
+`tools/record_corpus.py` says what each one is.
 
 ## Replaying a bot's own game exactly
 
