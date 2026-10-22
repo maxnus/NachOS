@@ -728,6 +728,51 @@ def _pathing_query(*pairs: tuple[tuple[float, float] | int, tuple[float, float]]
     return query
 
 
+_JOIN = sc2api_pb2.Request(join_game=sc2api_pb2.RequestJoinGame())
+_JOINED = make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1))
+
+
+def _create(*, realtime: bool) -> tuple[sc2api_pb2.Request, sc2api_pb2.Response]:
+    """Creating a game, played in real time if `realtime`, and the game's answer."""
+    request = sc2api_pb2.Request(create_game=sc2api_pb2.RequestCreateGame(realtime=realtime))
+    return request, make_response(Status.INIT_GAME, create_game=sc2api_pb2.ResponseCreateGame())
+
+
+class TestRecordedSetup:
+    @pytest.mark.parametrize("realtime", [False, True], ids=["stepped", "real time"])
+    def test_a_game_created_was_played_in_real_time_as_its_create_asked(self, tmp_path: Path, realtime: bool) -> None:
+        recording = _recording_of(
+            tmp_path / "game.sc2rec", _create(realtime=realtime), (_JOIN, _JOINED), (_OBSERVE, _observed(16))
+        )
+        assert recording.created_its_game
+        assert recording.played_in_real_time is realtime
+
+    def test_a_game_only_joined_that_steps_was_stepped(self, tmp_path: Path) -> None:
+        recording = _recording_of(
+            tmp_path / "game.sc2rec",
+            (_JOIN, _JOINED),
+            (_OBSERVE, _observed(16)),
+            (_STEP, _STEPPED),
+            (_OBSERVE, _observed(32)),
+        )
+        assert not recording.created_its_game
+        assert not recording.played_in_real_time
+
+    def test_a_game_only_joined_that_observes_twice_without_a_step_was_played_in_real_time(
+        self, tmp_path: Path
+    ) -> None:
+        recording = _recording_of(
+            tmp_path / "game.sc2rec", (_JOIN, _JOINED), (_OBSERVE, _observed(16)), (_OBSERVE, _observed(32))
+        )
+        assert not recording.created_its_game
+        assert recording.played_in_real_time
+
+    def test_an_empty_recording_created_nothing_and_was_stepped(self, tmp_path: Path) -> None:
+        recording = _recording_of(tmp_path / "game.sc2rec")
+        assert not recording.created_its_game
+        assert not recording.played_in_real_time
+
+
 class TestPermissivePlayback:
     """A recording played back for a bot other than the one recorded."""
 

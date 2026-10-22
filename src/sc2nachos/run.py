@@ -4,7 +4,6 @@ import json
 import random
 from collections.abc import Sequence
 from contextlib import closing
-from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -135,10 +134,10 @@ def run_recording(
 
     By default the bot must ask what was asked when the game was recorded, and gets the game's own answers, as a
     `PlaybackTransport` gives them: a request of another kind raises `ProtocolError`. The game is created if the
-    recording created it, and played in real time as the create asked; a game only joined is played in real time if
-    it asks for no step before its second observation. `time_limit`, `enemy_ladder_id` and `save_replay_to` must be
-    what the game was played with: a game its time limit ended raises at its end without it, and so does one the bot
-    left after saving its replay without `save_replay_to`, which then holds the replay recorded.
+    recording created it, and played in real time if it was, as `Recording.created_its_game` and `played_in_real_time`
+    say. `time_limit`, `enemy_ladder_id` and `save_replay_to` must be what the game was played with: a game its time
+    limit ended raises at its end without it, and so does one the bot left after saving its replay without
+    `save_replay_to`, which then holds the replay recorded.
 
     With `permissive`, any bot plays the recording through, though nothing it does changes what comes next: what it
     asks of its own accord is answered as `PermissivePlaybackTransport` makes it up. It returns `UNDECIDED` if the
@@ -148,57 +147,20 @@ def run_recording(
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    if permissive:
-        transport: Transport = PermissivePlaybackTransport(recording)
-        setup = _PERMISSIVE_SETUP
-    else:
-        transport = PlaybackTransport(recording)
-        setup = _recorded_setup(recording)
+    transport: Transport = PermissivePlaybackTransport(recording) if permissive else PlaybackTransport(recording)
     with closing(Client(transport)) as client:
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
-        # details.
-        if setup.creates_the_game:
+        # details. A permissive one makes up a create and every step.
+        if permissive or recording.created_its_game:
             client.create_game("recorded", [Participant(), Computer()])
         client.join_game(Race.RANDOM)
         return api.play(
             client,
-            realtime=setup.realtime,
+            realtime=not permissive and recording.played_in_real_time,
             time_limit=time_limit,
             enemy_ladder_id=enemy_ladder_id,
             save_replay_to=save_replay_to,
         )
-
-
-@dataclass(frozen=True, slots=True)
-class _GameSetup:
-    """How a recorded game is set up to be played back: whether it is created before it is joined, and whether it is
-    played in real time."""
-
-    creates_the_game: bool
-    realtime: bool
-
-
-# A permissive playback makes up a create and every step.
-_PERMISSIVE_SETUP = _GameSetup(creates_the_game=True, realtime=False)
-
-
-def _recorded_setup(recording: Recording) -> _GameSetup:
-    """How `recording`'s game was set up: created if its first request creates it, and then in real time as the create
-    asked; a game only joined was played in real time if it asked for no step before its second observation."""
-    observations_seen = 0
-    with closing(iter(recording)) as exchanges:
-        first_exchange = next(exchanges, None)
-        if first_exchange is not None and first_exchange.request.HasField("create_game"):
-            return _GameSetup(creates_the_game=True, realtime=first_exchange.request.create_game.realtime)
-        for exchange in exchanges:
-            asked_kind = exchange.request.WhichOneof("request")
-            if asked_kind == "step":
-                return _GameSetup(creates_the_game=False, realtime=False)
-            if asked_kind == "observation":
-                observations_seen += 1
-                if observations_seen == 2:
-                    return _GameSetup(creates_the_game=False, realtime=True)
-    return _GameSetup(creates_the_game=False, realtime=False)
 
 
 def run_from_command_line(
