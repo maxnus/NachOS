@@ -57,14 +57,19 @@ this way gets the game's own answers, to its orders and its queries too, for as 
 which reproduces a crash as it happened:
 
 ```python
+from contextlib import closing
+
 from sc2nachos.match import Computer, Participant, Race
 from sc2nachos.protocol import Client, PlaybackTransport, Recording
 
-client = Client(PlaybackTransport(Recording("tests/games/pylon.sc2rec")))
-# Answered in turn without being read: the create, for a game the recording created, then the join.
-client.create_game("recorded", [Participant(), Computer()])
-client.join_game(Race.RANDOM)
-api.play(client)
+with closing(Client(PlaybackTransport(Recording("tests/games/pylon.sc2rec")))) as client:
+    # Answered in turn without being read: the create, for a game the recording created, then the join.
+    client.create_game("recorded", [Participant(), Computer()])
+    client.join_game(Race.RANDOM)
+    api.play(client)
 ```
 
-A game recorded in real time is played with `api.play(client, realtime=True)`.
+`api.play` takes what the game was played with:
+- `realtime=True` for a game played in real time;
+- its `time_limit`, without which a game the limit ended raises `ProtocolError` at its end;
+- on the ladder, the opponent's `enemy_ladder_id`, if the bot reads it.
