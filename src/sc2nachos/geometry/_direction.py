@@ -23,6 +23,12 @@ class Direction(Enum):
     SOUTH = (0, -1)
     SOUTH_EAST = (1, -1)
 
+    @property
+    def is_diagonal(self) -> bool:
+        """Whether the direction lies between two axes, such as north-east."""
+        step_x, step_y = self.value
+        return step_x != 0 and step_y != 0
+
     @classmethod
     def closest(cls, vector: PointLike) -> Direction:
         """The direction whose line lies nearest by angle to the line along `vector`. Raises `ValueError` for a vector

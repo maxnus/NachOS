@@ -190,10 +190,7 @@ class GameMap:
 
     @property
     def opponent_start_locations(self) -> tuple[Point, ...]:
-        """Every start location on the map but this player's own.
-
-        Each is a townhall's position, which is a tile's center, so `Tile.at` reads it exactly.
-        """
+        """Every start location on the map but this player's own."""
         return self._all_start_locations[1:]
 
 

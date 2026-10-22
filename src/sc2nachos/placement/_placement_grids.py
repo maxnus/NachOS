@@ -17,7 +17,7 @@ from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
-    from sc2nachos.gamemap import GameMap
+    from sc2nachos.gamemap import GameMap, Ramp
     from sc2nachos.geometry import Footprint, Margin, PointLike
     from sc2nachos.ids import UnitTypeId
     from sc2nachos.orders import OrderBook
@@ -241,20 +241,26 @@ class PlacementGrids:
             return None
         return footprint.center_in_tile(candidates.argmin())
 
-    def terran_wall(self, start: PointLike) -> TerranWall | None:
-        """Where a Terran wall closes the ramp out of the main at the start location `start` at its top, as `TerranWall`
-        says: `None` if the main has no ramp, as `GameMap.main_ramp_of` finds it, or one not of the shape every main
-        ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether a structure may stand at a site now
-        is for `is_free` to say. Raises `ValueError` for a point on no start location's tile."""
-        main_ramp = self._game_map.main_ramp_of(start)
-        return None if main_ramp is None else TerranWall._from_ramp(main_ramp, start=start)
+    def terran_wall(self, main_ramp: Ramp) -> TerranWall | None:
+        """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main as `GameMap.main_ramp_of`
+        finds it, at its top, as `TerranWall` says, near and far going by that start: `None` if the ramp is not of the
+        shape every main ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether a structure may
+        stand at a site now is for `is_free` to say. Raises `ValueError` for a ramp out of no start location's main."""
+        return TerranWall._from_ramp(main_ramp, start=self._start_whose_main_ramp_is(main_ramp))
 
-    def protoss_wall(self, start: PointLike) -> ProtossWall | None:
-        """Where a Protoss wall closes the ramp out of the main at the start location `start` at its top, as
-        `ProtossWall` says, `None` where `terran_wall` is. Whether a structure may stand at a site now is for `is_free`
-        to say. Raises `ValueError` for a point on no start location's tile."""
-        main_ramp = self._game_map.main_ramp_of(start)
-        return None if main_ramp is None else ProtossWall._from_ramp(main_ramp, start=start)
+    def protoss_wall(self, main_ramp: Ramp) -> ProtossWall | None:
+        """Where a Protoss wall closes `main_ramp` at its top, as `ProtossWall` says, its gap at the corner nearer the
+        start whose main the ramp leaves: `None` where `terran_wall` is. Whether a structure may stand at a site now is
+        for `is_free` to say. Raises `ValueError` for a ramp out of no start location's main."""
+        return ProtossWall._from_ramp(main_ramp, start=self._start_whose_main_ramp_is(main_ramp))
+
+    def _start_whose_main_ramp_is(self, main_ramp: Ramp) -> Point:
+        """The start location whose main `main_ramp` leaves; raises `ValueError` for a ramp out of no start location's
+        main."""
+        for start_location in self._game_map.all_start_locations:
+            if self._game_map.main_ramp_of(start_location) == main_ramp:
+                return start_location
+        raise ValueError(f"the ramp at {main_ramp.top.center} leads out of no start location's main")
 
     def _ground_for(self, unit_type: UnitTypeId) -> Grid[bool]:
         """`free_for(unit_type)` before `reserved` is taken off, which no order changes: one grid for the types that

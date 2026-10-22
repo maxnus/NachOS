@@ -60,9 +60,9 @@ class Ramp:
     def _point_at_offset_from_the_top(self, offset: tuple[float, float]) -> Point:
         """The point `offset` from the middle of the top, `offset` as for a ramp climbing north-east, mirrored to this
         one's diagonal. Raises `ValueError` for a ramp climbing along an axis, which has no diagonal to mirror to."""
-        step_x, step_y = self.orientation.value
-        if step_x == 0 or step_y == 0:
+        if not self.orientation.is_diagonal:
             raise ValueError(f"a ramp climbing {self.orientation.name} has no diagonal to mirror an offset to")
+        step_x, step_y = self.orientation.value
         top_middle = self.top.center
         return Point((top_middle.x + step_x * offset[0], top_middle.y + step_y * offset[1]))
 

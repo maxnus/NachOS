@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2637 tests, and
+- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2639 tests, and
   `uv run pytest -m integration` passed 37 against a real game (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -414,10 +414,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measurements in #155).
 - **Ramp wall-in sites** (the owner, 2026-10-22, one question at a time, and in two reviews of #156):
   - both walls, Terran and Protoss, over Terran only and over a search for any ramp;
-  - `api.placement.terran_wall(start)` and `protoss_wall(start)`, asked of a start location (second review of #156,
-    over walls on the map by start and over a `Main` record; the first review had made them classmethods taking a ramp
-    and a start, which the owner found redundant). Each is `None` for a main with no ramp or one not 2 wide and climbing
-    along a diagonal, and checks no site against the grids: whether a structure may stand at one is `is_free`'s to say;
+  - `api.placement.terran_wall(ramp)` and `protoss_wall(ramp)`, asked of a main's ramp, its start found as the start
+    location whose main ramp it is; a ramp out of no main raises (third review of #156: the wall is the ramp's, over any
+    ramp facing the nearest start. The first review had made them classmethods taking a ramp and a start, which was one
+    too many, and the second had them take the start). Each is `None` for a ramp not 2 wide with two top tiles and
+    climbing along a diagonal (`Direction.is_diagonal`), and checks no site against the grids: whether a structure may
+    stand at one is `is_free`'s to say;
   - built for the main's start, which picks the Protoss gap's corner and names near and far: `near_depot`, `far_depot`,
     `barracks_with_add_on`, `add_on`, `barracks_in_wall` and `middle_depot`; `pylon`, `near_building`, `far_building`
     and `gap`, all Points (over Rectangles, a `Square` and Tiles). A tie in the corners goes to the lower x;

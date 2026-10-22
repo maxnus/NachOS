@@ -196,11 +196,12 @@ neither a slot nor a mineral within the same step
 ## Walling a ramp
 
 `api.map.main_ramp` is the ramp out of this player's main, and `api.map.main_ramp_of(start)` the ramp out of the main
-at any start location, such as `api.map.opponent_start_locations[0]`. `api.placement.terran_wall(start)` and
-`protoss_wall(start)` say where structures close that main's ramp at its top:
+at any start location, such as `api.map.opponent_start_locations[0]`. `api.placement.terran_wall(ramp)` and
+`protoss_wall(ramp)` say where structures close such a ramp at its top, near and far going by its main's start:
 
 ```python
-terran_wall = api.placement.terran_wall(api.map.start_location)
+main_ramp = api.map.main_ramp
+terran_wall = None if main_ramp is None else api.placement.terran_wall(main_ramp)
 if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=terran_wall.near_depot):
     api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=terran_wall.near_depot)
 ```
@@ -214,9 +215,9 @@ if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at
   `gap` beside the `near_building`, at the corner nearer the start, which one unit holding position closes. The
   `far_building` stands at the other corner.
 
-Each is `None` for a main with no ramp, or one not of the shape every main ramp of the pool is: two tiles across its
-top, a `width` of 2, and an `orientation` along a diagonal. Whether a structure may stand at a site now is for `api.placement.is_free` to
-say.
+Each is `None` for a ramp not of the shape every main ramp of the pool is: two tiles across its top, a `width` of 2,
+and an `orientation` along a diagonal. A ramp out of no start location's main raises `ValueError`. Whether a structure
+may stand at a site now is for `api.placement.is_free` to say.
 
 ## What the game did
 

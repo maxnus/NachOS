@@ -769,13 +769,13 @@ class _RecordedMain:
 
     @property
     def terran_wall(self) -> TerranWall:
-        terran_wall = self.placement_grids.terran_wall(self.start)
+        terran_wall = self.placement_grids.terran_wall(self.ramp)
         assert terran_wall is not None
         return terran_wall
 
     @property
     def protoss_wall(self) -> ProtossWall:
-        protoss_wall = self.placement_grids.protoss_wall(self.start)
+        protoss_wall = self.placement_grids.protoss_wall(self.ramp)
         assert protoss_wall is not None
         return protoss_wall
 
@@ -882,9 +882,13 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
     """burnysc2's `corner_depots`, `depot_in_middle`, `barracks_in_middle`, `barracks_correct_placement` and its
     Protoss wall, read on the map in AvocaDOS's environment, for the main at (175.5, 76.5), whose ramp climbs
     north-east, and the one at (72.5, 171.5), whose ramp climbs south-west."""
-    _, _, placement_grids = _grids_at_the_start(next(path for path in CORPUS if path.stem.startswith("PylonAIE")))
-    east_start, west_start = Point((175.5, 76.5)), Point((72.5, 171.5))
-    assert placement_grids.terran_wall(east_start) == TerranWall(
+    game_map, _, placement_grids = _grids_at_the_start(
+        next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
+    )
+    east_ramp = game_map.main_ramp_of(Point((175.5, 76.5)))
+    west_ramp = game_map.main_ramp_of(Point((72.5, 171.5)))
+    assert east_ramp is not None and west_ramp is not None
+    assert placement_grids.terran_wall(east_ramp) == TerranWall(
         near_depot=Point((163, 82)),
         far_depot=Point((160, 85)),
         barracks_with_add_on=Point((162.5, 84.5)),
@@ -892,7 +896,7 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
         barracks_in_wall=Point((162.5, 84.5)),
         middle_depot=Point((162, 84)),
     )
-    assert placement_grids.terran_wall(west_start) == TerranWall(
+    assert placement_grids.terran_wall(west_ramp) == TerranWall(
         near_depot=Point((85, 166)),
         far_depot=Point((88, 163)),
         barracks_with_add_on=Point((83.5, 163.5)),
@@ -900,18 +904,30 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
         barracks_in_wall=Point((85.5, 163.5)),
         middle_depot=Point((86, 164)),
     )
-    assert placement_grids.protoss_wall(east_start) == ProtossWall(
+    assert placement_grids.protoss_wall(east_ramp) == ProtossWall(
         pylon=Point((165, 87)),
         near_building=Point((163.5, 83.5)),
         far_building=Point((160.5, 85.5)),
         gap=Point((162.5, 81.5)),
     )
-    assert placement_grids.protoss_wall(west_start) == ProtossWall(
+    assert placement_grids.protoss_wall(west_ramp) == ProtossWall(
         pylon=Point((83, 161)),
         near_building=Point((84.5, 164.5)),
         far_building=Point((87.5, 162.5)),
         gap=Point((85.5, 166.5)),
     )
+
+
+def test_a_ramp_out_of_no_main_has_no_wall_to_ask_for() -> None:
+    game_map, _, placement_grids = _grids_at_the_start(
+        next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
+    )
+    main_ramps = {game_map.main_ramp_of(start_location) for start_location in game_map.all_start_locations}
+    other_ramp = next(ramp for ramp in game_map.ramps if ramp not in main_ramps)
+    with pytest.raises(ValueError, match="no start location's main"):
+        placement_grids.terran_wall(other_ramp)
+    with pytest.raises(ValueError, match="no start location's main"):
+        placement_grids.protoss_wall(other_ramp)
 
 
 class TestAWallOnADrawnRamp:

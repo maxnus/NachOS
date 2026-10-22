@@ -992,6 +992,10 @@ class TestDirection:
         assert Direction.closest(step) is nearest
         assert Direction.closest(Point(step)) is nearest
 
+    def test_the_four_between_two_axes_are_diagonal(self) -> None:
+        diagonals = {Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_WEST, Direction.SOUTH_EAST}
+        assert {direction for direction in Direction if direction.is_diagonal} == diagonals
+
     def test_a_vector_of_no_length_has_none(self) -> None:
         with pytest.raises(ValueError, match="no direction"):
             Direction.closest((0, 0))

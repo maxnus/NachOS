@@ -130,8 +130,8 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
         main_ramp = game_map.main_ramp_of(start_location)
         if main_ramp is None:
             raise RuntimeError(f"the main at {start_location} has no ramp")
-        terran_wall = placement_grids.terran_wall(start_location)
-        protoss_wall = placement_grids.protoss_wall(start_location)
+        terran_wall = placement_grids.terran_wall(main_ramp)
+        protoss_wall = placement_grids.protoss_wall(main_ramp)
         if terran_wall is None or protoss_wall is None:
             raise RuntimeError(f"the ramp of the main at {start_location} has no wall")
         mains.append(_Main(start_location, main_ramp, terran_wall, protoss_wall))

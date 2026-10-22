@@ -106,8 +106,7 @@ class ProtossWall:
 def _is_shaped_like_the_pools_main_ramps(ramp: Ramp) -> bool:
     """Whether `ramp` has two top tiles, is 2 wide and climbs along a diagonal, as every main ramp of the pool does: the
     walls' offsets are measured from the corner those two tiles share, which a top of more tiles has none of."""
-    step_x, step_y = ramp.orientation.value
-    return len(ramp.top) == ramp.width == 2 and step_x != 0 and step_y != 0
+    return len(ramp.top) == ramp.width == 2 and ramp.orientation.is_diagonal
 
 
 def _corners_nearer_first(ramp: Ramp, start: PointLike) -> tuple[Point, Point]:
