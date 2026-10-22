@@ -18,6 +18,8 @@ from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
     GamePorts,
+    PlaybackTransport,
+    Recording,
     RecordingTransport,
     Transport,
     WebSocketTransport,
@@ -114,6 +116,53 @@ def run_ladder(
         finally:
             # The client is the ladder's, so it is left running.
             client.leave_game()
+
+
+def run_recording(recording: Recording | Path | str, api: Api, *, time_limit: float | None = None) -> Result:
+    """Play `api` through the game recorded in `recording`, with no game client, and return how it ended for the player
+    recorded, `DEFEAT` if the bot leaves first, or `TIE` at `time_limit`, in game seconds.
+
+    The bot is the player recorded, and sees the game as recorded whatever it does. What it asks of its own accord is
+    answered as `PlaybackTransport` with `answer_unrecorded` makes it up. The game is played stepped or in real time as
+    it was recorded, a turn at each recorded observation. A request the recording cannot answer raises `ProtocolError`.
+    """
+    if not isinstance(recording, Recording):
+        recording = Recording(Path(recording))
+    creates_its_game = _creates_its_game(recording)
+    realtime = _plays_in_real_time(recording)
+    with closing(Client(PlaybackTransport(recording, answer_unrecorded=True))) as client:
+        try:
+            if creates_its_game:
+                # A recording answers each kind of request in turn without reading it, so the setup is repeated without
+                # its details.
+                client.create_game("recorded", [Participant(), Computer()])
+            client.join_game(Race.RANDOM)
+            return api.play(client, realtime=realtime, time_limit=time_limit)
+        finally:
+            client.leave_game()
+
+
+def _creates_its_game(recording: Recording) -> bool:
+    """Whether `recording` begins by creating its game, as a local game does, rather than by joining one."""
+    with closing(iter(recording)) as exchanges:
+        first = next(exchanges, None)
+    return first is not None and first.request.HasField("create_game")
+
+
+def _plays_in_real_time(recording: Recording) -> bool:
+    """Whether `recording`'s game is played in real time, as a game that asks for no step before its second
+    observation is."""
+    observations = 0
+    with closing(iter(recording)) as exchanges:
+        for exchange in exchanges:
+            asked = exchange.request.WhichOneof("request")
+            if asked == "step":
+                return False
+            if asked == "observation":
+                observations += 1
+                if observations == 2:
+                    return True
+    return False
 
 
 def run_from_command_line(

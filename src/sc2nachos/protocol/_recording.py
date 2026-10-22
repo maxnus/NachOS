@@ -1,6 +1,7 @@
 """A game's requests and answers, recorded so they can be played back without the game."""
 
 import lzma
+import math
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import IO
 
 from google.protobuf.message import DecodeError, Message
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
+from s2clientprotocol import error_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.protocol._errors import ConnectionClosedError, ProtocolError
 from sc2nachos.protocol._transport import Transport
@@ -17,6 +18,10 @@ from sc2nachos.protocol._transport import Transport
 # not self-delimiting, and consecutive observations are near-identical, which xz compresses some 200x.
 _HEADER = b"NACHOS RECORDING 1\n"
 _LENGTH = 4
+
+# What a bot asks of its own accord during a game. Played back for another bot, each is answered as the transport makes
+# it up, and the recording's own are passed over.
+_BOT_REQUESTS = frozenset({"action", "debug", "query", "save_replay"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,30 +108,112 @@ class PlaybackTransport:
 
     Answers come back in the order they were recorded. Only the kind of request is checked, not its contents, so a
     caller may ask about a different game loop than the recording did, but not for a different thing.
+
+    With `answer_unrecorded`, a bot other than the one recorded can play the recording through, though nothing it does
+    changes what comes next. What it asks of its own accord is answered as made up here, under the status of the last
+    recorded answer, and the recording's own answers to such requests are passed over:
+    - an action, every one of its actions `Success`;
+    - a debug request, an empty answer;
+    - a query, each pathing distance as the straight line between its ends, from a unit's tag at its position in the
+      last recorded observation, or 0, which the game answers for no path, for a tag that observation does not hold;
+    - a request to save the replay, refused.
+
+    The rest plays as recorded. A game info asked for when the recording does not answer one next is the last one it
+    answered, and leaving the game before the recording does is answered, with the status `launched`. A query for
+    abilities or placements raises `ProtocolError`.
     """
 
-    def __init__(self, recording: Recording) -> None:
-        """Answer from `recording`, starting at its first exchange."""
+    def __init__(self, recording: Recording, *, answer_unrecorded: bool = False) -> None:
+        """Answer from `recording`, starting at its first exchange, and make up answers if `answer_unrecorded`."""
         self._exchanges = iter(recording)
+        self._answer_unrecorded = answer_unrecorded
+        self._next_exchange: Exchange | None = None
+        self._last_status: sc2api_pb2.Status.ValueType | None = None
+        self._last_game_info: sc2api_pb2.Response | None = None
+        self._last_observation = sc2api_pb2.ResponseObservation()
         self._closed = False
 
     def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        """The next recorded answer, if the recording was asked the same kind of question."""
+        """The next recorded answer, if the recording was asked the same kind of question, or one made up as the class
+        says."""
         if self._closed:
             raise ConnectionClosedError("the recording is closed")
         asked = request.WhichOneof("request") or "nothing"
-        exchange = next(self._exchanges, None)
+        if self._answer_unrecorded and asked in _BOT_REQUESTS:
+            return self._made_up_answer(request, asked)
+        exchange = self._peek_past_unrecorded(asked)
+        recorded = "nothing" if exchange is None else exchange.request.WhichOneof("request") or "nothing"
+        if exchange is not None and recorded == asked:
+            self._next_exchange = None
+            return self._remember(exchange.response)
+        if self._answer_unrecorded and asked == "game_info" and self._last_game_info is not None:
+            return self._last_game_info
+        if self._answer_unrecorded and asked == "leave_game":
+            return sc2api_pb2.Response(leave_game=sc2api_pb2.ResponseLeaveGame(), status=sc2api_pb2.launched)
         if exchange is None:
             raise ProtocolError(f"the recording has no answer left, and was asked for {asked}")
-        recorded = exchange.request.WhichOneof("request") or "nothing"
-        if asked != recorded:
-            raise ProtocolError(f"the recording answers {recorded} next, and was asked for {asked}")
-        return exchange.response
+        raise ProtocolError(f"the recording answers {recorded} next, and was asked for {asked}")
 
     def close(self) -> None:
         """Stop answering and release the file. A request after this raises, as it would on a closed socket."""
         self._closed = True
         self._exchanges.close()
+
+    def _peek_past_unrecorded(self, asked: str) -> Exchange | None:
+        """The next exchange, unread, or `None` once there is none. With `answer_unrecorded`, the answers to a bot's own
+        requests are passed over first, and so is a game info while something else is asked, the last one kept."""
+        while True:
+            if self._next_exchange is None:
+                self._next_exchange = next(self._exchanges, None)
+            exchange = self._next_exchange
+            if exchange is None or not self._answer_unrecorded:
+                return exchange
+            recorded = exchange.request.WhichOneof("request")
+            if recorded not in _BOT_REQUESTS and (recorded != "game_info" or asked == "game_info"):
+                return exchange
+            self._next_exchange = None
+            self._remember(exchange.response)
+
+    def _remember(self, response: sc2api_pb2.Response) -> sc2api_pb2.Response:
+        """Keep what a made-up answer reads from `response`, a recorded answer, and return it."""
+        if response.HasField("status"):
+            self._last_status = response.status
+        if response.HasField("game_info"):
+            self._last_game_info = response
+        elif response.HasField("observation"):
+            self._last_observation = response.observation
+        return response
+
+    def _made_up_answer(self, request: sc2api_pb2.Request, asked: str) -> sc2api_pb2.Response:
+        """An answer to `request`, a bot's own `asked`, as the class says."""
+        response = sc2api_pb2.Response()
+        if self._last_status is not None:
+            response.status = self._last_status
+        if asked == "action":
+            response.action.result.extend([error_pb2.Success] * len(request.action.actions))
+        elif asked == "debug":
+            response.debug.SetInParent()
+        elif asked == "query":
+            response.query.CopyFrom(self._straight_line_distances(request.query))
+        else:
+            response.error.append("a recording holds no replay to save")
+        return response
+
+    def _straight_line_distances(self, query: query_pb2.RequestQuery) -> query_pb2.ResponseQuery:
+        """The answer to `query`, each pathing distance the straight line between its ends."""
+        if query.abilities or query.placements:
+            raise ProtocolError("a recording answers a query only for pathing distances, not abilities or placements")
+        positions_by_tag = {unit.tag: unit.pos for unit in self._last_observation.observation.raw_data.units}
+        answer = query_pb2.ResponseQuery()
+        for pathing in query.pathing:
+            start = (
+                pathing.start_pos
+                if pathing.WhichOneof("start") == "start_pos"
+                else positions_by_tag.get(pathing.unit_tag)
+            )
+            distance = 0.0 if start is None else math.hypot(pathing.end_pos.x - start.x, pathing.end_pos.y - start.y)
+            answer.pathing.add(distance=distance)
+        return answer
 
 
 def _read[MessageT: Message](stream: IO[bytes], kind: type[MessageT]) -> MessageT | None:

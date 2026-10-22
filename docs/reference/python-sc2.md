@@ -32,8 +32,8 @@ difference that rests on what the game does links there for its evidence.
 - **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
   belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
-  `path`. A `Client` over `PlaybackTransport(Recording(path))` then plays it back with no game running. A run
-  killed before it finishes leaves only part of the file.
+  `path`. `run_recording(path, api)` then plays a bot through it with no game running, answering what the bot asks of
+  its own accord ([testing](../testing.md)). A run killed before it finishes leaves only part of the file.
 
 ## Events
 

@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 from loguru import logger
-from s2clientprotocol import debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import common_pb2, debug_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 from websocket import WebSocket, WebSocketConnectionClosedException, WebSocketException, WebSocketTimeoutException
 
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race, Result
@@ -688,3 +688,138 @@ class TestReplay:
         transport.close()
         with pytest.raises(ConnectionClosedError):
             transport.request(sc2api_pb2.Request(ping=sc2api_pb2.RequestPing()))
+
+
+def _recording_of(path: Path, *exchanges: tuple[sc2api_pb2.Request, sc2api_pb2.Response]) -> Recording:
+    """A recording at `path` of `exchanges`, each a request and its answer."""
+    recorder = _recorder(path, *(response for _, response in exchanges))
+    for request, _ in exchanges:
+        recorder.request(request)
+    recorder.close()
+    return recorder.recording
+
+
+_OBSERVE = sc2api_pb2.Request(observation=sc2api_pb2.RequestObservation())
+_STEP = sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=16))
+_GAME_INFO = sc2api_pb2.Request(game_info=sc2api_pb2.RequestGameInfo())
+_STEPPED = make_response(step=sc2api_pb2.ResponseStep())
+
+
+def _observed(game_loop: int, *units: raw_pb2.Unit) -> sc2api_pb2.Response:
+    """The answer to an observation at `game_loop` of `units`."""
+    return make_response(observation=make_observation(game_loop, units=units))
+
+
+def _pathing_query(*pairs: tuple[tuple[float, float] | int, tuple[float, float]]) -> query_pb2.RequestQuery:
+    """A query for the pathing distance of each pair, from a point or a unit's tag to a point."""
+    query = query_pb2.RequestQuery()
+    for start, (end_x, end_y) in pairs:
+        pathing = query.pathing.add(end_pos=common_pb2.Point2D(x=end_x, y=end_y))
+        if isinstance(start, int):
+            pathing.unit_tag = start
+        else:
+            pathing.start_pos.x, pathing.start_pos.y = start
+    return query
+
+
+class TestAnsweringUnrecorded:
+    """A recording played back with `answer_unrecorded`, for a bot other than the one recorded."""
+
+    def _client(self, tmp_path: Path, *exchanges: tuple[sc2api_pb2.Request, sc2api_pb2.Response]) -> Client:
+        recording = _recording_of(tmp_path / "game.sc2rec", *exchanges)
+        return Client(PlaybackTransport(recording, answer_unrecorded=True))
+
+    def test_every_action_succeeds_and_the_recording_goes_on(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)), (_STEP, _STEPPED), (_OBSERVE, _observed(32)))
+        client.observation()
+        assert list(client.act([sc2api_pb2.Action(), sc2api_pb2.Action()]).result) == [error_pb2.Success] * 2
+        client.step(16)
+        assert client.observation().observation.game_loop == 32
+
+    def test_a_debug_request_is_answered(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)))
+        client.debug([debug_pb2.DebugCommand(draw=debug_pb2.DebugDraw())])
+        assert client.observation().observation.game_loop == 16
+
+    def test_a_pathing_distance_is_the_straight_line_between_its_ends(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        answers = client.query(_pathing_query(((1, 2), (4, 6)), ((3, 3), (3, 3)))).pathing
+        assert [answer.distance for answer in answers] == [5.0, 0.0]
+
+    def test_a_distance_from_a_unit_is_from_where_the_last_observation_had_it(self, tmp_path: Path) -> None:
+        client = self._client(
+            tmp_path,
+            (_OBSERVE, _observed(16, raw_pb2.Unit(tag=7, pos=common_pb2.Point(x=10, y=10)))),
+            (_STEP, _STEPPED),
+            (_OBSERVE, _observed(32, raw_pb2.Unit(tag=7, pos=common_pb2.Point(x=13, y=14)))),
+        )
+        client.observation()
+        client.step(16)
+        client.observation()
+        answers = client.query(_pathing_query((7, (13, 10)), (8, (13, 10)))).pathing
+        assert [answer.distance for answer in answers] == [4.0, 0.0]
+
+    def test_a_query_for_placements_or_abilities_raises(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        placements = query_pb2.RequestQuery(placements=[query_pb2.RequestQueryBuildingPlacement(ability_id=318)])
+        abilities = query_pb2.RequestQuery(abilities=[query_pb2.RequestQueryAvailableAbilities(unit_tag=7)])
+        for query in (placements, abilities):
+            with pytest.raises(ProtocolError, match="only for pathing distances"):
+                client.query(query)
+
+    def test_saving_the_replay_is_refused(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)))
+        with pytest.raises(ProtocolError, match="no replay to save"):
+            client.save_replay()
+
+    def test_a_game_info_the_recording_does_not_answer_next_is_the_last_it_answered(self, tmp_path: Path) -> None:
+        client = self._client(
+            tmp_path,
+            (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="At the start"))),
+            (_OBSERVE, _observed(16)),
+            (_STEP, _STEPPED),
+            (_GAME_INFO, make_response(game_info=sc2api_pb2.ResponseGameInfo(map_name="Later"))),
+            (_OBSERVE, _observed(32)),
+        )
+        assert client.game_info().map_name == "At the start"
+        client.observation()
+        assert client.game_info().map_name == "At the start"
+        client.step(16)
+        assert client.observation().observation.game_loop == 32
+        assert client.game_info().map_name == "Later"
+
+    def test_the_recorded_bots_own_requests_are_passed_over(self, tmp_path: Path) -> None:
+        refused = make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Error]))
+        debug = sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug())
+        client = self._client(
+            tmp_path,
+            (_OBSERVE, _observed(16)),
+            (sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=[sc2api_pb2.Action()])), refused),
+            (debug, make_response(debug=sc2api_pb2.ResponseDebug())),
+            (_STEP, _STEPPED),
+            (_OBSERVE, _observed(32)),
+        )
+        client.observation()
+        assert list(client.act([sc2api_pb2.Action()]).result) == [error_pb2.Success]
+        client.step(16)
+        assert client.observation().observation.game_loop == 32
+
+    def test_leaving_before_the_recording_does_is_answered(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, (_OBSERVE, _observed(16)), (_STEP, _STEPPED), (_OBSERVE, _observed(32)))
+        client.observation()
+        client.leave_game()
+        assert client.status is Status.LAUNCHED
+
+    def test_a_made_up_answer_has_the_last_recorded_status(self, tmp_path: Path) -> None:
+        recording = _recording_of(
+            tmp_path / "game.sc2rec", (_OBSERVE, make_response(Status.ENDED, observation=make_observation(16)))
+        )
+        transport = PlaybackTransport(recording, answer_unrecorded=True)
+        transport.request(_OBSERVE)
+        answer = transport.request(sc2api_pb2.Request(action=sc2api_pb2.RequestAction(actions=[sc2api_pb2.Action()])))
+        assert answer.status == Status.ENDED.value
+
+    def test_without_it_a_bots_own_request_raises(self, tmp_path: Path) -> None:
+        client = Client(PlaybackTransport(_recording_of(tmp_path / "game.sc2rec", (_OBSERVE, _observed(16)))))
+        with pytest.raises(ProtocolError, match="answers observation next, and was asked for action"):
+            client.act([sc2api_pb2.Action()])

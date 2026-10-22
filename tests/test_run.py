@@ -10,13 +10,14 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 import sc2nachos.run
-from sc2nachos import AIBuild, Api, Computer, Difficulty, Race, Result, run_from_command_line, run_local
+from sc2nachos import AIBuild, Api, Computer, Difficulty, Race, Result, run_from_command_line, run_local, run_recording
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
-from sc2nachos.protocol import Client, ConnectionClosedError, WebSocketTransport
+from sc2nachos.protocol import Client, ConnectionClosedError, Recording, RecordingTransport, WebSocketTransport
+from support import FakeTransport
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -244,6 +245,60 @@ def test_an_installation_without_maps_is_reported(tmp_path: Path, monkeypatch: p
     assert Installation.find().maps == tmp_path / "Maps"
     with pytest.raises(MapNotFoundError, match="no maps"):
         run_from_command_line(Api(), [], race=Race.TERRAN)
+
+
+_PYLON_GAME = Path(__file__).parent / "corpus" / "PylonAIE_v4-TvZ.sc2rec"
+
+
+def _rerecorded(path: Path, *, leaving_out: str) -> Path:
+    """The corpus game on Pylon recorded again at `path`, without the exchanges whose requests are `leaving_out`."""
+    exchanges = [
+        exchange for exchange in Recording(_PYLON_GAME) if exchange.request.WhichOneof("request") != leaving_out
+    ]
+    with closing(RecordingTransport(FakeTransport(*(exchange.response for exchange in exchanges)), path)) as recorder:
+        for exchange in exchanges:
+            recorder.request(exchange.request)
+    return path
+
+
+def _last_recorded_step(path: Path) -> int:
+    """The step of the last observation recorded at `path`."""
+    observations = [
+        exchange.response.observation for exchange in Recording(path) if exchange.response.HasField("observation")
+    ]
+    return observations[-1].observation.game_loop
+
+
+class TestPlayingARecording:
+    def test_a_bot_that_leaves_is_defeated_where_it_left(self) -> None:
+        api = Api()
+        left_at: list[int] = []
+
+        @api.on(TurnEvent)
+        def leave(_: TurnEvent) -> None:
+            if api.step >= 160 and not left_at:
+                left_at.append(api.step)
+                api.leave_game()
+
+        assert run_recording(str(_PYLON_GAME), api) is Result.DEFEAT
+        assert [api.step] == left_at
+
+    def test_at_the_time_limit_it_is_a_tie(self) -> None:
+        api = Api()
+        assert run_recording(_PYLON_GAME, api, time_limit=60) is Result.TIE
+        assert 60 <= api.time < 61
+
+    def test_a_recording_of_a_joined_game_is_joined_without_creating_one(self, tmp_path: Path) -> None:
+        joined = _rerecorded(tmp_path / "joined.sc2rec", leaving_out="create_game")
+        api = Api()
+        assert run_recording(joined, api) is Result.DEFEAT
+        assert api.step == _last_recorded_step(joined)
+
+    def test_a_recording_of_a_game_in_real_time_is_played_in_real_time(self, tmp_path: Path) -> None:
+        realtime = _rerecorded(tmp_path / "realtime.sc2rec", leaving_out="step")
+        api = Api()
+        assert run_recording(realtime, api) is Result.DEFEAT
+        assert api.step == _last_recorded_step(realtime)
 
 
 class _ClientStarted(Exception):

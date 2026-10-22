@@ -1,16 +1,19 @@
 """The recorded games everything above the protocol is tested against, and what must hold in them."""
 
 import contextlib
+import math
 from collections.abc import Hashable
 from functools import cached_property
 from pathlib import Path
 from typing import Any
 
+import numpy
 import pytest
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos import Api
+from sc2nachos import Api, run_recording
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.debug import DebugText
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     EnemyUnitDamagedEvent,
@@ -30,11 +33,12 @@ from sc2nachos.events import (
     OwnUnitLeftAreaEvent,
     OwnUnitVitalDroppedEvent,
     OwnUnitVitalReachedEvent,
+    TurnEvent,
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Circle, Point
+from sc2nachos.geometry import Circle, Grid, Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, PlaybackTransport, Recording
@@ -76,6 +80,41 @@ def test_a_recorded_game_replays_to_its_end_asking_what_it_asked(path: Path) -> 
     assert result is {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
     client.leave_game()
     client.quit()
+
+
+@pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
+def test_a_bot_that_acts_plays_a_recorded_game_to_its_end(path: Path) -> None:
+    """`run_recording` answers what a bot asks of its own accord, which the bare api recorded never asked."""
+    recording = Recording(path)
+    last = _observations(recording)[-1]
+    player = next(
+        exchange.response.join_game.player_id for exchange in recording if exchange.request.HasField("join_game")
+    )
+    api = Api()
+    distances: list[float] = []
+    grids: list[Grid[bool]] = []
+
+    @api.on(TurnEvent)
+    def act(_: TurnEvent) -> None:
+        assert not api.action_failures
+        workers = api.units.own.workers
+        if not workers:
+            return
+        worker = next(iter(workers))
+        api.orders.issue(workers, AbilityId.MOVE, target=api.map.start_location)
+        api.debug.draw(worker, DebugText("worker"))
+        api.camera.move_to(worker.position)
+        api.chat("moving")
+        distances.append(api.pathing.query_distance(worker, api.map.start_location))
+        grids.append(api.pathing.grid)
+
+    result = run_recording(path, api)
+
+    assert api.step == last.observation.game_loop
+    assert result is {entry.player_id: Result(entry.result) for entry in last.player_result}[player]
+    assert distances
+    assert all(math.isfinite(distance) for distance in distances)
+    assert numpy.array_equal(grids[0].values, grids[-1].values)
 
 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
