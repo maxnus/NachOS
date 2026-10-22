@@ -9,7 +9,7 @@ import numpy
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamemap._image_data import image_array, image_tiles
-from sc2nachos.gamemap._ramp import Ramp, find_ramps
+from sc2nachos.gamemap._ramp import Ramp, find_main_ramp, find_ramps
 from sc2nachos.geometry import Grid, Point, Rectangle, Tile
 from sc2nachos.units._unit_type import UnitType
 
@@ -36,6 +36,7 @@ class GameMap:
     __slots__ = (
         "_corners",
         "_height",
+        "_main_ramps_by_start_tile",
         "_name",
         "_opponent_start_locations",
         "_pathing",
@@ -60,6 +61,7 @@ class GameMap:
         self._opponent_start_locations = tuple(Point._from_proto(location) for location in start.start_locations)
         self._start_location = start_location
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
+        self._main_ramps_by_start_tile: dict[Tile, Ramp | None] = {}
 
     @classmethod
     def _from_game(cls, info: sc2api_pb2.ResponseGameInfo, observation: sc2api_pb2.ResponseObservation) -> Self:
@@ -138,6 +140,27 @@ class GameMap:
     def ramps(self) -> tuple[Ramp, ...]:
         """Every ramp on the map, ordered by lower left tile."""
         return self._ramps
+
+    @property
+    def main_ramp(self) -> Ramp | None:
+        """The ramp out of this player's main, as `main_ramp_of(start_location)` finds it."""
+        return self.main_ramp_of(self._start_location)
+
+    def main_ramp_of(self, start: PointLike) -> Ramp | None:
+        """The ramp out of the main `start` stands in, such as an opponent's start location: the ramp whose top
+        touches the level ground `start` stands on, the nearest by ground path from `start` if several do. `None` if
+        none does, or if `start` stands on a ramp or on ground a unit can neither walk nor build on. Raises
+        `IndexError` outside the playable area.
+
+        The level ground is every tile a unit can walk or build on, off the ramps, within half a level of the height
+        at `start`'s tile, and joined to it across sides or corners.
+        """
+        start_tile = Tile.containing(start)
+        if start_tile not in self._main_ramps_by_start_tile:
+            self._main_ramps_by_start_tile[start_tile] = find_main_ramp(
+                start, self._ramps, self._pathing, self._placement, self._height
+            )
+        return self._main_ramps_by_start_tile[start_tile]
 
     @property
     def start_location(self) -> Point:

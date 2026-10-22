@@ -21,6 +21,11 @@ _TOWNHALLS = {UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.NEXUS}
 # 9.375, 9.875 and 10.0, and no tile has two corners a cliff apart.
 _SLOPE = make_bytes(*[[191, 191, 193, 199, 205, 207, 207]] * 8)
 
+# Twelve tiles wide: low ground, a ramp up, two columns of high ground at height 10, a ramp down and low ground again.
+# The tile heights in bytes are 191, 191, 193, 198, 204, 207, 207, 204, 198, 193, 191 and 191.
+_HIGH_GROUND_BETWEEN_TWO_RAMPS = "##~~~##~~~##"
+_TWO_RAMPS = make_bytes(*[[191, 191, 191, 195, 201, 207, 207, 207, 201, 195, 191, 191]] * 3)
+
 
 class TestReadingAMap:
     def test_the_grids_read_the_map_the_way_up_it_is_drawn(self) -> None:
@@ -177,6 +182,37 @@ class TestReadingAMap:
         )
         assert [min(ramp.tiles) for ramp in game_map.ramps] == [Tile(1, 0), Tile(1, 4)]
 
+    def test_the_main_ramp_is_the_one_whose_top_touches_the_starts_level_ground(self) -> None:
+        game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((5.5, 1.5)))
+        (ramp,) = game_map.ramps
+        assert game_map.main_ramp is game_map.main_ramp_of(Point((5.5, 0.5))) is ramp
+
+    def test_of_several_ramps_out_of_a_main_the_main_ramp_is_the_nearest_by_ground(self) -> None:
+        game_map = GameMap(
+            make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS), start_location=Point((5.5, 1.5))
+        )
+        left, right = game_map.ramps
+        assert game_map.main_ramp is left
+        assert game_map.main_ramp_of(Point((6.5, 1.5))) is right
+
+    def test_a_ramp_up_from_the_start_is_not_its_main_ramp(self) -> None:
+        game_map = GameMap(
+            make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS), start_location=Point((0.5, 1.5))
+        )
+        assert len(game_map.ramps) == 2
+        assert game_map.main_ramp is None
+
+    def test_a_start_on_a_ramp_or_on_closed_ground_or_with_no_ramp_has_no_main_ramp(self) -> None:
+        sloped = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((2.5, 1.5)))
+        assert sloped.main_ramp is None
+        closed = GameMap(make_game_info("....", "....", "...."), start_location=Point((1.5, 1.5)))
+        assert closed.main_ramp is None
+        assert GameMap(make_game_info(), start_location=Point((0.5, 0.5))).main_ramp is None
+
+    def test_a_main_ramp_off_the_map_is_an_index_error(self) -> None:
+        with pytest.raises(IndexError, match="lies outside"):
+            GameMap(make_game_info(), start_location=Point((0.5, 0.5))).main_ramp_of(Point((20.5, 0.5)))
+
     def test_an_image_too_short_for_its_size_is_refused(self) -> None:
         info = make_game_info()
         info.start_raw.pathing_grid.data = info.start_raw.pathing_grid.data[:-1]
@@ -271,6 +307,17 @@ class TestARecordedMap:
         for ramp in game_map.ramps:
             assert ramp.top and ramp.bottom
             assert not set(ramp.top) & set(ramp.bottom)
+
+    def test_each_main_ramp_is_the_pools_one_shape_and_the_nearest_to_its_start(self, path: Path) -> None:
+        """Every main of the pool is left by one 16-tile ramp, two tiles across its top and its bottom."""
+        info, observation = _start(path)
+        game_map = GameMap._from_game(info, observation)
+        for start in (game_map.start_location, *game_map.opponent_start_locations):
+            ramp = game_map.main_ramp_of(start)
+            assert ramp is not None
+            assert (len(ramp.tiles), len(ramp.top), len(ramp.bottom)) == (16, 2, 2)
+            assert ramp is min(game_map.ramps, key=lambda each: each.top.center.distance_to(start))
+        assert game_map.main_ramp is game_map.main_ramp_of(game_map.start_location)
 
     def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
         info, observation = _start(path)

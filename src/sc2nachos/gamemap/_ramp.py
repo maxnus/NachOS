@@ -8,12 +8,14 @@ from typing import TYPE_CHECKING, cast, final
 import numpy
 import scipy.ndimage
 
-from sc2nachos.geometry import TileSet
+from sc2nachos.geometry import Grid, TileSet
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from numpy import ndarray
 
-    from sc2nachos.geometry import Grid
+    from sc2nachos.geometry import PointLike
 
 # The neighbors `scipy.ndimage.label` joins into one patch, a tile's `neighbors8`: ground touching at a corner is one
 # patch, so a ramp that runs diagonally is one ramp. Read-only, since every api in the process shares it.
@@ -71,3 +73,39 @@ def find_ramps(pathing: Grid[bool], placement: Grid[bool], height: Grid[float]) 
                 )
             )
     return tuple(sorted(ramps, key=lambda ramp: min(ramp.tiles)))
+
+
+def find_main_ramp(
+    start: PointLike, ramps: Sequence[Ramp], pathing: Grid[bool], placement: Grid[bool], height: Grid[float]
+) -> Ramp | None:
+    """The ramp out of the main `start` stands in: the one of `ramps` whose top touches the level ground `start` stands
+    on, the nearest by ground path from `start` if several do. `None` if none does, or if `start` stands on a ramp or on
+    ground a unit can neither walk nor build on. Raises `IndexError` outside the grids.
+
+    The level ground is every tile a unit can walk or build on, off the ramps, within half a level of `start`'s height,
+    and joined to it across sides or corners. Buildable ground counts, since the start's own townhall blocks pathing.
+    """
+    start_index = height.index_of(start)
+    on_a_ramp = Grid.like(height, dtype=bool, outside=False)
+    for ramp in ramps:
+        on_a_ramp[ramp.tiles] = True
+    heights = height.values
+    level_ground = (
+        (pathing.values | placement.values)
+        & ~on_a_ramp.values
+        & (numpy.abs(heights - heights[start_index]) < _HALF_A_LEVEL)
+    )
+    patches, _ = cast("tuple[ndarray, int]", scipy.ndimage.label(level_ground, structure=_NEIGHBORS8))
+    start_patch = patches[start_index]
+    if start_patch == 0:
+        return None
+    main = patches == start_patch
+    beside_the_main = Grid(
+        scipy.ndimage.binary_dilation(main, structure=_NEIGHBORS8), origin=height.origin, outside=False
+    )
+    leading_out = [ramp for ramp in ramps if any(beside_the_main[tile] for tile in ramp.top)]
+    if len(leading_out) <= 1:
+        return leading_out[0] if leading_out else None
+    walkable = Grid(main | on_a_ramp.values, origin=height.origin, outside=False)
+    distances = walkable.cheapest_paths_from(start).distances
+    return min(leading_out, key=lambda ramp: min(distances[tile] for tile in ramp.top))
