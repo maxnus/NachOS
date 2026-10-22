@@ -200,12 +200,12 @@ other, such as the one at `api.map.opponent_start_locations[0]`. `api.placement.
 `protoss_wall(ramp)` say where structures close a ramp at its top:
 
 ```python
-ramp = api.map.main_ramp
-wall = None if ramp is None else api.placement.terran_wall(ramp)
-if wall is not None:
-    free = [depot for depot in wall.depots if api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=depot)]
-    if free:
-        api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=free[0])
+main_ramp = api.map.main_ramp
+terran_wall = None if main_ramp is None else api.placement.terran_wall(main_ramp)
+if terran_wall is not None:
+    free_depot_sites = [site for site in terran_wall.depots if api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=site)]
+    if free_depot_sites:
+        api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=free_depot_sites[0])
 ```
 
 - **The Terran wall** is a supply depot at each corner of the top, `depots`, and between them `barracks`,

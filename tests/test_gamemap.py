@@ -24,7 +24,12 @@ _SLOPE = make_bytes(*[[191, 191, 193, 199, 205, 207, 207]] * 8)
 # Twelve tiles wide: low ground, a ramp up, two columns of high ground at height 10, a ramp down and low ground again.
 # The tile heights in bytes are 191, 191, 193, 198, 204, 207, 207, 204, 198, 193, 191 and 191.
 _HIGH_GROUND_BETWEEN_TWO_RAMPS = "##~~~##~~~##"
-_TWO_RAMPS = make_bytes(*[[191, 191, 191, 195, 201, 207, 207, 207, 201, 195, 191, 191]] * 3)
+_TWO_RAMPS = make_bytes(*[[191, 191, 191, 195, 201, 207, 207, 207, 201, 195, 191, 191]] * 5)
+
+# Nineteen tiles wide: low ground, a ramp up, nine columns of high ground, rocks, a column of high ground beyond them, a
+# ramp down and low ground. The tile heights in bytes are 191, 193, 198, 204, 207 eleven times, 204, 198, 193 and 191.
+_HIGH_GROUND_BEYOND_ROCKS = "#~~~#########=#~~~#"
+_RAMPS_EITHER_SIDE_OF_ROCKS = make_bytes(*[[191, 191, 195, 201, *[207] * 12, 201, 195, 191]] * 3)
 
 
 class TestReadingAMap:
@@ -191,9 +196,31 @@ class TestReadingAMap:
         game_map = GameMap(
             make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS), start_location=Point((5.5, 1.5))
         )
-        left, right = game_map.ramps
-        assert game_map.main_ramp is left
-        assert game_map.main_ramp_of(Point((6.5, 1.5))) is right
+        left_ramp, right_ramp = game_map.ramps
+        assert game_map.main_ramp is left_ramp
+        assert game_map.main_ramp_of(Point((6.5, 1.5))) is right_ramp
+
+    def test_of_several_ramps_the_main_ramp_is_the_nearer_walk_not_the_nearer_in_a_line(self) -> None:
+        # The left ramp's top touches the main only in the top row, so from the bottom right its nearest top tile is 2
+        # away in a line but 6 by ground, and the right ramp's lone top tile 4.1 away in a line and 5 by ground.
+        rows = ["##~~~##~~~##", "##~~~.#.....", "##~~~.#.....", "##~~~.#.....", "##~~~.#....."]
+        game_map = GameMap(make_game_info(*rows, heights=_TWO_RAMPS), start_location=Point((6.5, 0.5)))
+        left_ramp, right_ramp = game_map.ramps
+        assert set(right_ramp.top) == {Tile(7, 4)}
+        assert game_map.main_ramp is right_ramp
+
+    def test_the_main_does_not_reach_across_rocks_whose_ground_is_buildable(self) -> None:
+        rocks = GameMap(
+            make_game_info(*[_HIGH_GROUND_BEYOND_ROCKS] * 3, heights=_RAMPS_EITHER_SIDE_OF_ROCKS),
+            start_location=Point((10.5, 1.5)),
+        )
+        left_ramp, right_ramp = rocks.ramps
+        assert rocks.main_ramp is left_ramp
+        open_ground = GameMap(
+            make_game_info(*[_HIGH_GROUND_BEYOND_ROCKS.replace("=", "#")] * 3, heights=_RAMPS_EITHER_SIDE_OF_ROCKS),
+            start_location=Point((10.5, 1.5)),
+        )
+        assert open_ground.main_ramp == right_ramp
 
     def test_a_ramp_up_from_the_start_is_not_its_main_ramp(self) -> None:
         game_map = GameMap(
@@ -203,10 +230,10 @@ class TestReadingAMap:
         assert game_map.main_ramp is None
 
     def test_a_start_on_a_ramp_or_on_closed_ground_or_with_no_ramp_has_no_main_ramp(self) -> None:
-        sloped = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((2.5, 1.5)))
-        assert sloped.main_ramp is None
-        closed = GameMap(make_game_info("....", "....", "...."), start_location=Point((1.5, 1.5)))
-        assert closed.main_ramp is None
+        on_a_ramp = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((2.5, 1.5)))
+        assert on_a_ramp.main_ramp is None
+        on_closed_ground = GameMap(make_game_info("....", "....", "...."), start_location=Point((1.5, 1.5)))
+        assert on_closed_ground.main_ramp is None
         assert GameMap(make_game_info(), start_location=Point((0.5, 0.5))).main_ramp is None
 
     def test_a_main_ramp_off_the_map_is_an_index_error(self) -> None:

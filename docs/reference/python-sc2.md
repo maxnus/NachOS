@@ -467,9 +467,10 @@ it.
 | `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
 | `owned_expansions` | `[expansion for expansion in api.expansions if isinstance(expansion.townhall, OwnUnit)]` |
 
-- **A wall is `None` where python-sc2 raises or answers `None`**: on a ramp whose top is not two tiles touching at a
-  corner. On every main of the pool its sites are python-sc2's, and on one left of its ramp both libraries' `barracks`
-  closes the wall only once its add-on stands ([game behavior](game-behavior/map.md)).
+- **A wall is `None` rather than an exception**, on a ramp whose top, as NachOS reads it, is not two tiles touching at a
+  corner. python-sc2 works from its own `upper`, which can differ: on three mains of the pool it reads five tiles where
+  NachOS reads two. On every main of the pool the sites are python-sc2's, and on one left of its ramp both libraries'
+  barracks with room for its add-on closes the wall only once the add-on stands ([game behavior](game-behavior/map.md)).
 - **The grids cover the playable area and no more.** A grid's `values[0, 0]` is the playable area's lower left
   corner, not the map's. Past the playable area, pathing and placement read `False` and height raises.
 - **The grids refuse writes.** python-sc2 rebuilds the pathing grid every step, so a write into it lasted one

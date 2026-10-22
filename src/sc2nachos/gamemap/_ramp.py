@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 # patch, so a ramp that runs diagonally is one ramp. Read-only, since every api in the process shares it.
 _NEIGHBORS8 = numpy.ones((3, 3), dtype=bool)
 _NEIGHBORS8.flags.writeable = False
+# The neighbors across a side alone, a tile's `neighbors4`: a unit walks from one tile to the next across a side, and
+# across a corner only where both tiles beside it are open, which joins nothing a side does not.
+_NEIGHBORS4 = numpy.array([[False, True, False], [True, True, True], [False, True, False]])
+_NEIGHBORS4.flags.writeable = False
 
 # Levels are two apart in height, so ground spanning this much climbs from one to the next.
 _HALF_A_LEVEL = 1.0
@@ -29,6 +33,9 @@ _HALF_A_LEVEL = 1.0
 # A row straight across a ramp is not quite level, its tiles differing by up to half a byte, while the next row up is
 # 0.1875 away, so a byte cannot reach it (in game).
 _A_BYTE = 0.125
+
+# How many tiles a townhall reaches from the tile at its center to its edge, being 5 across.
+_TOWNHALL_REACH_FROM_ITS_CENTER = 2
 
 
 @final
@@ -79,33 +86,42 @@ def find_main_ramp(
     start: PointLike, ramps: Sequence[Ramp], pathing: Grid[bool], placement: Grid[bool], height: Grid[float]
 ) -> Ramp | None:
     """The ramp out of the main `start` stands in: the one of `ramps` whose top touches the level ground `start` stands
-    on, the nearest by ground path from `start` if several do. `None` if none does, or if `start` stands on a ramp or on
-    ground a unit can neither walk nor build on. Raises `IndexError` outside the grids.
+    on across a side, the nearest by ground path from `start` if several do. `None` if none does, or if `start` stands
+    on a ramp or on ground a unit can neither walk nor build on. Raises `IndexError` outside the grids.
 
-    The level ground is every tile a unit can walk or build on, off the ramps, within half a level of `start`'s height,
-    and joined to it across sides or corners. Buildable ground counts, since the start's own townhall blocks pathing.
+    The level ground is every tile a unit can walk on, and the buildable ground a townhall at `start` covers, which the
+    start's own townhall keeps out of the pathing grid: off the ramps, within half a level of `start`'s height, and
+    joined to it across sides. Buildable ground elsewhere does not count, since the ground under rocks is buildable.
     """
     start_index = height.index_of(start)
     on_a_ramp = Grid.like(height, dtype=bool, outside=False)
     for ramp in ramps:
         on_a_ramp[ramp.tiles] = True
-    heights = height.values
-    level_ground = (
-        (pathing.values | placement.values)
-        & ~on_a_ramp.values
-        & (numpy.abs(heights - heights[start_index]) < _HALF_A_LEVEL)
+    walkable_or_under_the_townhall = pathing.values.copy()
+    townhall_columns = slice(
+        max(start_index[0] - _TOWNHALL_REACH_FROM_ITS_CENTER, 0), start_index[0] + _TOWNHALL_REACH_FROM_ITS_CENTER + 1
     )
-    patches, _ = cast("tuple[ndarray, int]", scipy.ndimage.label(level_ground, structure=_NEIGHBORS8))
-    start_patch = patches[start_index]
+    townhall_rows = slice(
+        max(start_index[1] - _TOWNHALL_REACH_FROM_ITS_CENTER, 0), start_index[1] + _TOWNHALL_REACH_FROM_ITS_CENTER + 1
+    )
+    walkable_or_under_the_townhall[townhall_columns, townhall_rows] |= placement.values[townhall_columns, townhall_rows]
+    tile_heights = height.values
+    level_ground = (
+        walkable_or_under_the_townhall
+        & ~on_a_ramp.values
+        & (numpy.abs(tile_heights - tile_heights[start_index]) < _HALF_A_LEVEL)
+    )
+    level_patches, _ = cast("tuple[ndarray, int]", scipy.ndimage.label(level_ground, structure=_NEIGHBORS4))
+    start_patch = level_patches[start_index]
     if start_patch == 0:
         return None
-    main = patches == start_patch
+    main_ground = level_patches == start_patch
     beside_the_main = Grid(
-        scipy.ndimage.binary_dilation(main, structure=_NEIGHBORS8), origin=height.origin, outside=False
+        scipy.ndimage.binary_dilation(main_ground, structure=_NEIGHBORS4), origin=height.origin, outside=False
     )
-    leading_out = [ramp for ramp in ramps if any(beside_the_main[tile] for tile in ramp.top)]
-    if len(leading_out) <= 1:
-        return leading_out[0] if leading_out else None
-    walkable = Grid(main | on_a_ramp.values, origin=height.origin, outside=False)
-    distances = walkable.cheapest_paths_from(start).distances
-    return min(leading_out, key=lambda ramp: min(distances[tile] for tile in ramp.top))
+    ramps_leading_out = [ramp for ramp in ramps if any(beside_the_main[tile] for tile in ramp.top)]
+    if len(ramps_leading_out) <= 1:
+        return ramps_leading_out[0] if ramps_leading_out else None
+    walkable_ground = Grid(main_ground | on_a_ramp.values, origin=height.origin, outside=False)
+    walking_distances = walkable_ground.cheapest_paths_from(start).distances
+    return min(ramps_leading_out, key=lambda ramp: min(walking_distances[tile] for tile in ramp.top))

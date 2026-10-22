@@ -148,12 +148,12 @@ class GameMap:
 
     def main_ramp_of(self, start: PointLike) -> Ramp | None:
         """The ramp out of the main `start` stands in, such as an opponent's start location: the ramp whose top
-        touches the level ground `start` stands on, the nearest by ground path from `start` if several do. `None` if
-        none does, or if `start` stands on a ramp or on ground a unit can neither walk nor build on. Raises
-        `IndexError` outside the playable area.
+        touches the level ground `start` stands on across a side, the nearest by ground path from `start` if several
+        do. `None` if none does, or if `start` stands on a ramp or on ground a unit can neither walk nor build on.
+        Raises `IndexError` outside the playable area.
 
-        The level ground is every tile a unit can walk or build on, off the ramps, within half a level of the height
-        at `start`'s tile, and joined to it across sides or corners.
+        The level ground is every tile a unit can walk on, and the ground a townhall at `start` would stand on: off the
+        ramps, within half a level of the height at `start`'s tile, and joined to it across sides.
         """
         start_tile = Tile.containing(start)
         if start_tile not in self._main_ramps_by_start_tile:

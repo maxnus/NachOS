@@ -38,6 +38,7 @@ from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
+from sc2nachos.placement._walls import _climbing_signs
 from sc2nachos.state._state import _State
 from sc2nachos.units._tracking import _Tracker
 
@@ -82,7 +83,7 @@ class MainCheck:
 
     map: str
     start: tuple[float, float]
-    climb: tuple[int, int]
+    climbing_signs: tuple[int, int]
     """The signs of x and y along which the ramp climbs."""
     terran: TerranWallCheck | None = None
     protoss: ProtossWallCheck | None = None
@@ -102,52 +103,57 @@ class _Main:
     protoss_wall: ProtossWall
 
     @property
-    def climb(self) -> tuple[int, int]:
-        top, bottom = self.ramp.top.center, self.ramp.bottom.center
-        return (1 if top.x > bottom.x else -1, 1 if top.y > bottom.y else -1)
+    def climbing_signs(self) -> tuple[int, int]:
+        """The signs of x and y along which the ramp climbs."""
+        climbing_signs = _climbing_signs(self.ramp)
+        if climbing_signs is None:
+            raise RuntimeError(f"the ramp of the main at {self.start} is of no shape a wall is given for")
+        return climbing_signs
 
     @property
     def below_the_ramp(self) -> Point:
-        bottom = self.ramp.bottom.center
-        return Point((bottom.x - _BELOW_THE_RAMP * self.climb[0], bottom.y - _BELOW_THE_RAMP * self.climb[1]))
+        ramp_bottom = self.ramp.bottom.center
+        sign_x, sign_y = self.climbing_signs
+        return Point((ramp_bottom.x - _BELOW_THE_RAMP * sign_x, ramp_bottom.y - _BELOW_THE_RAMP * sign_y))
 
 
-def _mains(game: Sandbox) -> list[_Main]:
+def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
     """Both mains of the map `game` plays, with their walls as NachOS's grids give them."""
     observation = game.client.observation()
     game_map = GameMap._from_game(game.client.game_info(), observation)
-    data = GameData(game.client.game_data())
-    tracker = _Tracker(data, None)
-    raw, _ = without_uncurated_units(observation.observation.raw_data)
-    tracker.update(raw, observation.observation.game_loop)
-    grids = PlacementGrids._build_at_start(
+    game_data = GameData(game.client.game_data())
+    tracker = _Tracker(game_data, None)
+    curated_raw_data, _ = without_uncurated_units(observation.observation.raw_data)
+    tracker.update(curated_raw_data, observation.observation.game_loop)
+    placement_grids = PlacementGrids._build_at_start(
         game_map,
         present_units=tracker.unit_tracker.present,
         state=_State(observation, tracker, game_map),
         step=observation.observation.game_loop,
-        game_data=data,
-        order_book=OrderBook(data),
+        game_data=game_data,
+        order_book=OrderBook(game_data),
     )
     mains = []
-    for start in (game_map.start_location, *game_map.opponent_start_locations):
-        ramp = game_map.main_ramp_of(start)
-        if ramp is None:
-            raise RuntimeError(f"the main at {start} has no ramp")
-        terran_wall, protoss_wall = grids.terran_wall(ramp), grids.protoss_wall(ramp)
+    for start_location in (game_map.start_location, *game_map.opponent_start_locations):
+        main_ramp = game_map.main_ramp_of(start_location)
+        if main_ramp is None:
+            raise RuntimeError(f"the main at {start_location} has no ramp")
+        terran_wall = placement_grids.terran_wall(main_ramp)
+        protoss_wall = placement_grids.protoss_wall(main_ramp)
         if terran_wall is None or protoss_wall is None:
-            raise RuntimeError(f"the ramp of the main at {start} has no wall")
-        mains.append(_Main(start, ramp, terran_wall, protoss_wall))
+            raise RuntimeError(f"the ramp of the main at {start_location} has no wall")
+        mains.append(_Main(start_location, main_ramp, terran_wall, protoss_wall))
     return mains
 
 
 @contextmanager
-def _standing(game: Sandbox, structures: Sequence[tuple[UnitTypeId, Point]]) -> Iterator[list[raw_pb2.Unit]]:
+def _structures_standing(game: Sandbox, structures: Sequence[tuple[UnitTypeId, Point]]) -> Iterator[list[raw_pb2.Unit]]:
     """`structures` made for this player, each a type at its center, and removed again afterwards."""
-    made = game.spawn([(unit_type, game.player, at) for unit_type, at in structures])
+    structures_made = game.spawn([(unit_type, game.player, at) for unit_type, at in structures])
     try:
-        yield made
+        yield structures_made
     finally:
-        game.remove(unit.tag for unit in made)
+        game.remove(unit.tag for unit in structures_made)
 
 
 def _leave_the_computer_one_structure(game: Sandbox) -> None:
@@ -155,11 +161,11 @@ def _leave_the_computer_one_structure(game: Sandbox) -> None:
     neither fight nor train, and both mains stand empty. Not a supply depot, which the computer lowers at once."""
     observation = game.client.observation()
     game_map = GameMap._from_game(game.client.game_info(), observation)
-    units = list(observation.observation.raw_data.units)
-    computer = 2 if game.player == 1 else 1
-    middle = OpenGround(game_map, units).claim(game_map.playable_area.center, half=1)
-    (kept,) = game.spawn([(UnitTypeId.ENGINEERING_BAY, computer, middle)])
-    game.remove(unit.tag for unit in game.units() if unit.owner == computer and unit.tag != kept.tag)
+    units_at_the_start = list(observation.observation.raw_data.units)
+    computer_id = 2 if game.player == 1 else 1
+    map_middle = OpenGround(game_map, units_at_the_start).claim(game_map.playable_area.center, half=1)
+    (kept_bay,) = game.spawn([(UnitTypeId.ENGINEERING_BAY, computer_id, map_middle)])
+    game.remove(unit.tag for unit in game.units() if unit.owner == computer_id and unit.tag != kept_bay.tag)
 
 
 def _zergling_gets_in(game: Sandbox, main: _Main) -> bool:
@@ -168,155 +174,170 @@ def _zergling_gets_in(game: Sandbox, main: _Main) -> bool:
     try:
         game.order(AbilityId.MOVE, zergling.tag, main.start)
         game.client.step(_WALKING_STEPS)
-        positions = [unit.pos for unit in game.units() if unit.tag == zergling.tag]
-        if not positions:
+        zergling_positions = [unit.pos for unit in game.units() if unit.tag == zergling.tag]
+        if not zergling_positions:
             raise RuntimeError(f"the zergling sent into the main at {main.start} is gone")
-        (position,) = positions
-        return Point((position.x, position.y)).distance_to(main.start) < (
+        (zergling_position,) = zergling_positions
+        return Point((zergling_position.x, zergling_position.y)).distance_to(main.start) < (
             main.ramp.top.center.distance_to(main.start) - _PAST_THE_WALL
         )
     finally:
         game.remove([zergling.tag])
 
 
-def _lower(game: Sandbox, depots: Sequence[raw_pb2.Unit]) -> None:
+def _lower_the_depots(game: Sandbox, depots: Sequence[raw_pb2.Unit]) -> None:
     for depot in depots:
         game.order(AbilityId.SUPPLY_DEPOT_LOWER, depot.tag)
     game.client.step(_SETTLING_STEPS)
 
 
+def _zergling_raised_and_lowered(
+    game: Sandbox, main: _Main, structures_made: Sequence[raw_pb2.Unit]
+) -> dict[str, bool]:
+    """Whether the zergling gets into `main` with the depots among `structures_made` raised, and then lowered."""
+    got_in_raised = _zergling_gets_in(game, main)
+    _lower_the_depots(game, [unit for unit in structures_made if unit.unit_type == UnitTypeId.SUPPLY_DEPOT])
+    return {"raised": got_in_raised, "lowered": _zergling_gets_in(game, main)}
+
+
 def _check_terran_wall(game: Sandbox, main: _Main) -> TerranWallCheck:
-    wall = main.terran_wall
-    sites = {
-        "first depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, wall.depots[0]),
-        "second depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, wall.depots[1]),
-        "middle depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, wall.middle_depot),
-        "barracks": (AbilityId.SCV_BUILD_BARRACKS, wall.barracks),
-        "barracks without add-on": (AbilityId.SCV_BUILD_BARRACKS, wall.barracks_without_add_on),
+    terran_wall = main.terran_wall
+    sites_by_name = {
+        "first depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.depots[0]),
+        "second depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.depots[1]),
+        "middle depot": (AbilityId.SCV_BUILD_SUPPLY_DEPOT, terran_wall.middle_depot),
+        "barracks": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks),
+        "barracks without add-on": (AbilityId.SCV_BUILD_BARRACKS, terran_wall.barracks_without_add_on),
     }
-    check = TerranWallCheck(
+    terran_check = TerranWallCheck(
         placement={
-            name: _answer_name(game.placement_answers(ability, [at])[0]) for name, (ability, at) in sites.items()
+            name: _answer_name(game.placement_answers(ability, [site])[0])
+            for name, (ability, site) in sites_by_name.items()
         }
     )
-    closings = {
-        "barracks without add-on": (UnitTypeId.BARRACKS, wall.barracks_without_add_on),
-        "middle depot": (UnitTypeId.SUPPLY_DEPOT, wall.middle_depot),
-        "barracks": (UnitTypeId.BARRACKS, wall.barracks),
+    between_the_depots = {
+        "barracks without add-on": (UnitTypeId.BARRACKS, terran_wall.barracks_without_add_on),
+        "middle depot": (UnitTypeId.SUPPLY_DEPOT, terran_wall.middle_depot),
+        "barracks": (UnitTypeId.BARRACKS, terran_wall.barracks),
     }
-    corner_depots = [(UnitTypeId.SUPPLY_DEPOT, depot) for depot in wall.depots]
-    for name, closing in closings.items():
-        with _standing(game, [*corner_depots, closing]) as made:
-            depots = [unit for unit in made if unit.unit_type == UnitTypeId.SUPPLY_DEPOT]
-            raised = _zergling_gets_in(game, main)
-            _lower(game, depots)
-            check.zergling_got_in[name] = {"raised": raised, "lowered": _zergling_gets_in(game, main)}
-    with _standing(game, [*corner_depots, (UnitTypeId.BARRACKS, wall.barracks)]) as made:
-        barracks = next(unit for unit in made if unit.unit_type == UnitTypeId.BARRACKS)
-        check.reactor_order = _answer_name(game.order(AbilityId.BUILD_REACTOR, barracks.tag))
+    corner_depots = [(UnitTypeId.SUPPLY_DEPOT, depot_site) for depot_site in terran_wall.depots]
+    for name, structure_between in between_the_depots.items():
+        with _structures_standing(game, [*corner_depots, structure_between]) as structures_made:
+            terran_check.zergling_got_in[name] = _zergling_raised_and_lowered(game, main, structures_made)
+    with _structures_standing(game, [*corner_depots, (UnitTypeId.BARRACKS, terran_wall.barracks)]) as structures_made:
+        barracks_made = next(unit for unit in structures_made if unit.unit_type == UnitTypeId.BARRACKS)
+        terran_check.reactor_order = _answer_name(game.order(AbilityId.BUILD_REACTOR, barracks_made.tag))
         game.client.step(_BUILDING_STEPS)
-        reactors = [unit for unit in game.units() if unit.unit_type == UnitTypeId.REACTOR_BARRACKS]
-        check.reactor_built = any(reactor.build_progress == 1 for reactor in reactors)
+        reactors_made = [unit for unit in game.units() if unit.unit_type == UnitTypeId.REACTOR_BARRACKS]
+        terran_check.reactor_built = any(reactor.build_progress == 1 for reactor in reactors_made)
         try:
-            depots = [unit for unit in made if unit.unit_type == UnitTypeId.SUPPLY_DEPOT]
-            raised = _zergling_gets_in(game, main)
-            _lower(game, depots)
-            check.zergling_got_in["barracks and its reactor"] = {
-                "raised": raised,
-                "lowered": _zergling_gets_in(game, main),
-            }
+            terran_check.zergling_got_in["barracks and its reactor"] = _zergling_raised_and_lowered(
+                game, main, structures_made
+            )
         finally:
-            game.remove(reactor.tag for reactor in reactors)
-    return check
+            game.remove(reactor.tag for reactor in reactors_made)
+    return terran_check
 
 
 def _check_protoss_wall(game: Sandbox, main: _Main) -> ProtossWallCheck:
-    wall = main.protoss_wall
-    sites = {
-        "pylon": (AbilityId.PROBE_BUILD_PYLON, wall.pylon),
-        "building at the corner": (AbilityId.PROBE_BUILD_GATEWAY, wall.buildings[0]),
-        "building beside the gap": (AbilityId.PROBE_BUILD_GATEWAY, wall.buildings[1]),
+    protoss_wall = main.protoss_wall
+    sites_by_name = {
+        "pylon": (AbilityId.PROBE_BUILD_PYLON, protoss_wall.pylon),
+        "building at the corner": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.buildings[0]),
+        "building beside the gap": (AbilityId.PROBE_BUILD_GATEWAY, protoss_wall.buildings[1]),
     }
-    check = ProtossWallCheck(
+    protoss_check = ProtossWallCheck(
         placement={
-            name: _answer_name(game.placement_answers(ability, [at])[0]) for name, (ability, at) in sites.items()
+            name: _answer_name(game.placement_answers(ability, [site])[0])
+            for name, (ability, site) in sites_by_name.items()
         }
     )
-    with _standing(game, [(UnitTypeId.PYLON, wall.pylon)]):
-        answers = game.placement_answers(AbilityId.PROBE_BUILD_GATEWAY, list(wall.buildings))
-        check.buildings_with_the_pylon = [_answer_name(answer) for answer in answers]
-        buildings = [(UnitTypeId.GATEWAY, building) for building in wall.buildings]
-        with _standing(game, buildings), _standing(game, [(UnitTypeId.ZEALOT, wall.gap)]) as (zealot,):
+    with _structures_standing(game, [(UnitTypeId.PYLON, protoss_wall.pylon)]):
+        answers_with_the_pylon = game.placement_answers(AbilityId.PROBE_BUILD_GATEWAY, list(protoss_wall.buildings))
+        protoss_check.buildings_with_the_pylon = [_answer_name(answer) for answer in answers_with_the_pylon]
+        protoss_buildings = [(UnitTypeId.GATEWAY, building_site) for building_site in protoss_wall.buildings]
+        with (
+            _structures_standing(game, protoss_buildings),
+            _structures_standing(game, [(UnitTypeId.ZEALOT, protoss_wall.gap)]) as (zealot,),
+        ):
             game.order(AbilityId.HOLD_POSITION, zealot.tag)
             game.client.step(_SETTLING_STEPS)
-            check.zergling_got_in_with_the_gap_held = _zergling_gets_in(game, main)
+            protoss_check.zergling_got_in_with_the_gap_held = _zergling_gets_in(game, main)
             game.remove([zealot.tag])
-            check.zergling_got_in_with_the_gap_open = _zergling_gets_in(game, main)
-    return check
+            protoss_check.zergling_got_in_with_the_gap_open = _zergling_gets_in(game, main)
+    return protoss_check
 
 
 def check_walls(installation: Installation, map_names: Sequence[str]) -> list[MainCheck]:
     """Check both walls at both mains of each of `map_names`."""
-    checks: dict[tuple[str, Point], MainCheck] = {}
+    checks_by_main: dict[tuple[str, Point], MainCheck] = {}
     for map_name in map_names:
         for race in (Race.TERRAN, Race.PROTOSS):
             with playing(race, installation, map_name=map_name) as game:
                 game.cheat(Cheat.SHOW_MAP, Cheat.FREE, Cheat.FAST_BUILD)
                 game.client.step(4)
                 _leave_the_computer_one_structure(game)
-                for main in _mains(game):
-                    check = checks.setdefault(
-                        (map_name, main.start), MainCheck(map_name, (main.start.x, main.start.y), main.climb)
+                for main in _mains_with_their_walls(game):
+                    main_check = checks_by_main.setdefault(
+                        (map_name, main.start),
+                        MainCheck(map_name, (main.start.x, main.start.y), main.climbing_signs),
                     )
                     if race is Race.TERRAN:
-                        check.terran = _check_terran_wall(game, main)
+                        main_check.terran = _check_terran_wall(game, main)
                     else:
-                        check.protoss = _check_protoss_wall(game, main)
-                    logger.info("{} at {}: {}", map_name, main.start, check)
-    return list(checks.values())
+                        main_check.protoss = _check_protoss_wall(game, main)
+                    logger.info("{} at {}: {}", map_name, main.start, main_check)
+    return list(checks_by_main.values())
 
 
-def _summary(checks: Sequence[MainCheck]) -> str:
+def _in_or_out(got_in: bool) -> str:
+    return "in" if got_in else "out"
+
+
+def _summary_of_each_main(main_checks: Sequence[MainCheck]) -> str:
     """One line for each main: the sites the game refused, the Protoss buildings' answers with no pylon, and how the
     zergling fared."""
-    lines = []
-    for check in checks:
-        parts = []
-        if check.terran is not None:
-            refused = [name for name, answer in check.terran.placement.items() if answer != _answer_name(SUCCESS)]
-            parts.append(f"Terran sites refused: {refused or 'none'}")
-            for name, got_in in check.terran.zergling_got_in.items():
-                raised, lowered = ("in" if got_in[state] else "out" for state in ("raised", "lowered"))
-                parts.append(f"{name}: {raised} raised, {lowered} lowered")
-            parts.append(f"reactor {check.terran.reactor_order}, built {check.terran.reactor_built}")
-        if check.protoss is not None:
-            placement = check.protoss.placement
-            unpowered = [placement["building at the corner"], placement["building beside the gap"]]
-            held, opened = (
-                "in" if got_in else "out"
-                for got_in in (
-                    check.protoss.zergling_got_in_with_the_gap_held,
-                    check.protoss.zergling_got_in_with_the_gap_open,
+    summary_lines = []
+    for main_check in main_checks:
+        summary_parts = []
+        if main_check.terran is not None:
+            terran_check = main_check.terran
+            refused_sites = [name for name, answer in terran_check.placement.items() if answer != _answer_name(SUCCESS)]
+            summary_parts.append(f"Terran sites refused: {refused_sites or 'none'}")
+            for name, got_in in terran_check.zergling_got_in.items():
+                summary_parts.append(
+                    f"{name}: {_in_or_out(got_in['raised'])} raised, {_in_or_out(got_in['lowered'])} lowered"
                 )
+            summary_parts.append(f"reactor {terran_check.reactor_order}, built {terran_check.reactor_built}")
+        if main_check.protoss is not None:
+            protoss_check = main_check.protoss
+            answers_with_no_pylon = [
+                protoss_check.placement["building at the corner"],
+                protoss_check.placement["building beside the gap"],
+            ]
+            summary_parts.append(
+                f"pylon {protoss_check.placement['pylon']}, buildings with no pylon {answers_with_no_pylon}, with it "
+                f"{protoss_check.buildings_with_the_pylon}, "
+                f"gap held: {_in_or_out(protoss_check.zergling_got_in_with_the_gap_held)}, "
+                f"gap open: {_in_or_out(protoss_check.zergling_got_in_with_the_gap_open)}"
             )
-            parts.append(
-                f"pylon {placement['pylon']}, buildings with no pylon {unpowered}, with it "
-                f"{check.protoss.buildings_with_the_pylon}, gap held: {held}, gap open: {opened}"
-            )
-        lines.append(f"{check.map} {check.start} climbing {check.climb}: " + "; ".join(parts))
-    return "\n".join(lines)
+        summary_lines.append(
+            f"{main_check.map} {main_check.start} climbing {main_check.climbing_signs}: " + "; ".join(summary_parts)
+        )
+    return "\n".join(summary_lines)
 
 
 def main(argv: Sequence[str]) -> None:
-    pool = sorted({game.map for game in GAMES})
+    pool_maps = sorted({game.map for game in GAMES})
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("maps", nargs="*", default=pool, help="the maps to check (default: the pool's)")
+    parser.add_argument("maps", nargs="*", default=pool_maps, help="the maps to check (default: the pool's)")
     parser.add_argument("--out", type=Path, help="write every check here as JSON")
     arguments = parser.parse_args(argv)
-    checks = check_walls(Installation.find(), arguments.maps)
-    print(_summary(checks))
+    main_checks = check_walls(Installation.find(), arguments.maps)
+    print(_summary_of_each_main(main_checks))
     if arguments.out is not None:
-        arguments.out.write_text(json.dumps([asdict(check) for check in checks], indent=2), encoding="utf-8")
+        checks_as_json = json.dumps([asdict(main_check) for main_check in main_checks], indent=2)
+        arguments.out.write_text(checks_as_json, encoding="utf-8")
 
 
 if __name__ == "__main__":
