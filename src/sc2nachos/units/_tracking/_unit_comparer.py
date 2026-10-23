@@ -83,7 +83,7 @@ class _UnitComparer:
                 self._record_buffs(side, unit, was, now, only_buffs)
             if report.unit_type != then.unit_type:
                 continue
-            if damage and (lost := max(0.0, then.health - report.health) + max(0.0, then.shield - report.shield)):
+            if damage and (lost := unit.damage_taken):
                 side.damaged.append((unit, lost))
             if energy and (drained := then.energy - report.energy) > 0.0:
                 side.energy_lost.append((unit, drained))

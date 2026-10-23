@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #156. On this branch, `uv run pytest` passes 2645 tests; `uv run pytest -m
+- nachOS `main` has every PR to #157. On this branch, `uv run pytest` passes 2651 tests; `uv run pytest -m
   integration` passed 37 against a real game on #156's branch (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -442,8 +442,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     race's every townhall, and over `base_townhall_type` (review of #157);
   - no `army`: NachOS gives a property only for a category the game draws, and type groups for `of_type` and
     `excluding_type`; what counts as army is a bot's call;
-  - `Unit.damage_taken`, the health and shields lost since the observation before, 0 for a unit not seen in both,
-    with the health a stim costs counted as the game reports it (over leaving it out, after a sweep);
+  - `Unit.damage_taken`, the health and shields lost since the observation before, `None` unless the unit was
+    visible in both and kept its type (review of #158, over 0), with the health a stim costs counted as the game
+    reports it (over leaving it out, after a sweep); its report kept in a slot of its own beside `velocity`'s position
+    and step, which keep other rules (review of #158, over one record for the three, which made intake some 8%
+    slower and would have changed `velocity`);
   - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
     and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
@@ -456,9 +459,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154, with `--RecordFile` in
   #155), and ramp wall-in sites with their sweep (#156), the last of them.
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
-  next piece: `Units.non_structures` and the race's unit types (this branch); `Unit.damage_taken`; repair, measured
-  by a sweep, then `Unit.repair_cost` and `Unit.repair_steps`; and turning, measured by a sweep of each type's turn
-  rate, then `Unit.time_to_face(target)`.
+  next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (this branch); repair,
+  measured by a sweep, then `Unit.repair_cost` and `Unit.repair_steps`; and turning, measured by a sweep of each
+  type's turn rate, then `Unit.time_to_face(target)`.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them

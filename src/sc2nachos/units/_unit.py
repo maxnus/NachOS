@@ -73,6 +73,7 @@ class Unit[K: UnitType.AnyType]:
     # key its own data by unit in a `weakref.WeakKeyDictionary`, which slots would otherwise rule out.
     __slots__ = (
         "__weakref__",
+        "_damage_taken",
         "_dead",
         "_hallucination_confirmed",
         "_id",
@@ -84,6 +85,7 @@ class Unit[K: UnitType.AnyType]:
         "_own",
         "_position",
         "_previous_position",
+        "_previous_report",
         "_previous_step",
         "_raw_alliance",
         "_raw_type",
@@ -108,8 +110,15 @@ class Unit[K: UnitType.AnyType]:
     _position: Point
     _own: bool
     _step: int
+    # Where the unit was at the last step before its latest, and that step, for `velocity`. Kept while the unit is out
+    # of the observation, and across a second observation at one step; let go as it comes back.
     _previous_position: Point | None
     _previous_step: int
+    # The report of the observation just before, for `damage_taken`, at every update. Let go as the unit leaves the
+    # observation, so it keeps that one observation alive and no other.
+    _previous_report: raw_pb2.Unit | None
+    # `damage_taken` as last worked out, with the tracker update it was worked out at.
+    _damage_taken: _Snapshot[float | None]
     _stale: bool
     _dead: bool
     # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
@@ -138,7 +147,9 @@ class Unit[K: UnitType.AnyType]:
         self._own = self._raw_alliance == _OWN
         self._step = step
         self._previous_position = None
+        self._previous_report = None
         self._previous_step = step
+        self._damage_taken = _Snapshot(None)
         self._stale = False
         self._dead = False
         self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
@@ -159,9 +170,12 @@ class Unit[K: UnitType.AnyType]:
             # Back in the observation. How it moved while away is not known.
             self._stale = False
             self._previous_position = None
-        elif step != last_step:
-            self._previous_position = position
-            self._previous_step = last_step
+        else:
+            # A unit is updated once an observation, so this is the report of the observation before.
+            self._previous_report = self._latest_report
+            if step != last_step:
+                self._previous_position = position
+                self._previous_step = last_step
         self._step = step
         reported = report.pos
         x, y = reported.x, reported.y
@@ -211,6 +225,7 @@ class Unit[K: UnitType.AnyType]:
         """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
         alive."""
         self._stale = True
+        self._previous_report = None
         report = self._latest_report
         copy = _copy(report)
         if self._latest_visible_report is report:
@@ -351,6 +366,34 @@ class Unit[K: UnitType.AnyType]:
         position = self._position
         scale = STEPS_PER_SECOND / (self._step - self._previous_step)
         return Point(((position[0] - previous[0]) * scale, (position[1] - previous[1]) * scale))
+
+    @property
+    def damage_taken(self) -> float | None:
+        """The health and shields the unit lost since the observation before, as `OwnUnitDamagedEvent` and
+        `EnemyUnitDamagedEvent` report it, and a neutral unit's alike, which no event reports; `None` unless it was
+        visible in both and kept its type. Health regained offsets only health lost, and shields regained only shields
+        lost. The health a stim costs is lost like any other."""
+        update = self._tracker.last_changes.update
+        if (cached := self._damage_taken).update == update:
+            return cached.value
+        damage = self._damage_since_previous_report()
+        self._damage_taken = _Snapshot(damage, update)
+        return damage
+
+    def _damage_since_previous_report(self) -> float | None:
+        """The health and shields lost between the report of the observation before and the latest, as
+        `damage_taken` defines it."""
+        previous = self._previous_report
+        if previous is None:
+            return None
+        report = self._latest_report
+        if (
+            report.display_type != _VISIBLE
+            or previous.display_type != _VISIBLE
+            or report.unit_type != previous.unit_type
+        ):
+            return None
+        return max(0.0, previous.health - report.health) + max(0.0, previous.shield - report.shield)
 
     # How it is seen.
 

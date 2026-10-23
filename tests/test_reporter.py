@@ -433,6 +433,62 @@ class TestDamage:
         assert [(event.step, event.damage) for event in seen] == [(48, 5.0)]
 
 
+class TestDamageTaken:
+    def test_a_unit_reads_what_it_lost_since_the_observation_before_with_no_handler(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(100.0, shield=50.0))
+        marine = game.observe(16, _marine(90.0, shield=30.0))[1]
+        assert marine.damage_taken == 30.0
+        game.observe(32, _marine(95.0, shield=30.0))
+        assert marine.damage_taken == 0.0
+
+    def test_it_is_what_the_damage_events_report(self) -> None:
+        game = _Game()
+        own, enemy = record(game.events, OwnUnitDamagedEvent), record(game.events, EnemyUnitDamagedEvent)
+        game.observe(0, _marine(45.0), make_unit(2, health=45.0, shield=10.0))
+        units = game.observe(16, _marine(40.0), make_unit(2, health=30.0, shield=12.0))
+        assert (
+            [(event.unit, event.damage) for event in own] == [(units[2], units[2].damage_taken)] == [(units[2], 15.0)]
+        )
+        assert (
+            [(event.unit, event.damage) for event in enemy] == [(units[1], units[1].damage_taken)] == [(units[1], 5.0)]
+        )
+
+    def test_two_observations_at_one_step_compare_with_the_one_just_before(self) -> None:
+        """Each observation is compared with the one before it, whatever its step, so a loss is reported once."""
+        game = _Game()
+        seen = record(game.events, EnemyUnitDamagedEvent)
+        game.observe(0, _marine(45.0))
+        game.observe(16, _marine(40.0))
+        marine = game.observe(16, _marine(40.0))[1]
+        assert marine.damage_taken == 0.0
+        assert [(event.step, event.damage) for event in seen] == [(16, 5.0)]
+
+    def test_a_neutral_unit_reads_it_too_though_no_event_reports_it(self) -> None:
+        game = _Game()
+        rock = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ROCK
+        game.observe(0, make_unit(3, rock, alliance=Alliance.NEUTRAL, health=2000.0))
+        assert game.observe(16, make_unit(3, rock, alliance=Alliance.NEUTRAL, health=1500.0))[3].damage_taken == 500.0
+
+    def test_what_a_unit_that_changed_type_or_was_out_of_vision_lost_is_not_known(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(175.0, unit_type=UnitTypeId.SIEGE_TANK))
+        assert game.observe(16, _marine(160.0, unit_type=UnitTypeId.SIEGE_TANK_SIEGED))[1].damage_taken is None
+        game.observe(32, _marine(45.0))
+        assert game.observe(48, _marine(40.0, visibility=Visibility.INVISIBLE))[1].damage_taken is None
+        assert game.observe(64, _marine(30.0))[1].damage_taken is None
+
+    def test_what_a_unit_lost_out_of_the_observation_or_back_in_it_is_not_known(self) -> None:
+        """The observation before is let go as the unit leaves, so it keeps no observation alive."""
+        game = _Game()
+        assert game.observe(0, _marine(45.0))[1].damage_taken is None
+        marine = game.observe(16, _marine(40.0))[1]
+        game.observe(32)
+        assert marine.damage_taken is None
+        assert marine._previous_report is None
+        assert game.observe(48, _marine(30.0))[1].damage_taken is None
+
+
 class TestCloak:
     def _changes(self, *units: raw_pb2.Unit | None) -> list[tuple[type[Event], CloakState]]:
         """The cloak changes reported as `units` are observed one after another; `None` is an observation without it."""
