@@ -84,6 +84,7 @@ class Unit[K: UnitType.AnyType]:
         "_own",
         "_position",
         "_previous_position",
+        "_previous_report",
         "_previous_step",
         "_raw_alliance",
         "_raw_type",
@@ -109,6 +110,8 @@ class Unit[K: UnitType.AnyType]:
     _own: bool
     _step: int
     _previous_position: Point | None
+    # The report of the observation before, while the unit was in it; it keeps that one observation alive.
+    _previous_report: raw_pb2.Unit | None
     _previous_step: int
     _stale: bool
     _dead: bool
@@ -138,6 +141,7 @@ class Unit[K: UnitType.AnyType]:
         self._own = self._raw_alliance == _OWN
         self._step = step
         self._previous_position = None
+        self._previous_report = None
         self._previous_step = step
         self._stale = False
         self._dead = False
@@ -161,6 +165,7 @@ class Unit[K: UnitType.AnyType]:
             self._previous_position = None
         elif step != last_step:
             self._previous_position = position
+            self._previous_report = self._latest_report
             self._previous_step = last_step
         self._step = step
         reported = report.pos
@@ -211,6 +216,7 @@ class Unit[K: UnitType.AnyType]:
         """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
         alive."""
         self._stale = True
+        self._previous_report = None
         report = self._latest_report
         copy = _copy(report)
         if self._latest_visible_report is report:
@@ -351,6 +357,24 @@ class Unit[K: UnitType.AnyType]:
         position = self._position
         scale = STEPS_PER_SECOND / (self._step - self._previous_step)
         return Point(((position[0] - previous[0]) * scale, (position[1] - previous[1]) * scale))
+
+    @property
+    def damage_taken(self) -> float:
+        """The health and shields the unit lost since the observation before, as `OwnUnitDamagedEvent` and
+        `EnemyUnitDamagedEvent` report it, and a neutral unit's alike, which no event reports: 0 unless it was visible
+        in both and kept its type. Health regained offsets only health lost, and shields regained only shields lost.
+        The health a stim costs is lost like any other."""
+        previous = self._previous_report
+        if previous is None:
+            return 0.0
+        report = self._latest_report
+        if (
+            report.display_type != _VISIBLE
+            or previous.display_type != _VISIBLE
+            or report.unit_type != previous.unit_type
+        ):
+            return 0.0
+        return max(0.0, previous.health - report.health) + max(0.0, previous.shield - report.shield)
 
     # How it is seen.
 
