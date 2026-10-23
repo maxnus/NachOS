@@ -110,12 +110,15 @@ class Unit[K: UnitType.AnyType]:
     _position: Point
     _own: bool
     _step: int
+    # Where the unit was at the last step before its latest, and that step, for `velocity`. Kept while the unit is out
+    # of the observation, and across a second observation at one step; let go as it comes back.
     _previous_position: Point | None
-    # The report of the observation before, while the unit was in it; it keeps that one observation alive.
-    _previous_report: raw_pb2.Unit | None
     _previous_step: int
+    # The report of the observation just before, for `damage_taken`, at every update. Let go as the unit leaves the
+    # observation, so it keeps that one observation alive and no other.
+    _previous_report: raw_pb2.Unit | None
     # `damage_taken` as last worked out, with the tracker update it was worked out at.
-    _damage_taken: _Snapshot[float]
+    _damage_taken: _Snapshot[float | None]
     _stale: bool
     _dead: bool
     # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
@@ -146,7 +149,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_position = None
         self._previous_report = None
         self._previous_step = step
-        self._damage_taken = _Snapshot(0.0)
+        self._damage_taken = _Snapshot(None)
         self._stale = False
         self._dead = False
         self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
@@ -365,11 +368,11 @@ class Unit[K: UnitType.AnyType]:
         return Point(((position[0] - previous[0]) * scale, (position[1] - previous[1]) * scale))
 
     @property
-    def damage_taken(self) -> float:
+    def damage_taken(self) -> float | None:
         """The health and shields the unit lost since the observation before, as `OwnUnitDamagedEvent` and
-        `EnemyUnitDamagedEvent` report it, and a neutral unit's alike, which no event reports: 0 unless it was visible
-        in both and kept its type. Health regained offsets only health lost, and shields regained only shields lost.
-        The health a stim costs is lost like any other."""
+        `EnemyUnitDamagedEvent` report it, and a neutral unit's alike, which no event reports; `None` unless it was
+        visible in both and kept its type. Health regained offsets only health lost, and shields regained only shields
+        lost. The health a stim costs is lost like any other."""
         update = self._tracker.last_changes.update
         if (cached := self._damage_taken).update == update:
             return cached.value
@@ -377,19 +380,19 @@ class Unit[K: UnitType.AnyType]:
         self._damage_taken = _Snapshot(damage, update)
         return damage
 
-    def _damage_since_previous_report(self) -> float:
+    def _damage_since_previous_report(self) -> float | None:
         """The health and shields lost between the report of the observation before and the latest, as
         `damage_taken` defines it."""
         previous = self._previous_report
         if previous is None:
-            return 0.0
+            return None
         report = self._latest_report
         if (
             report.display_type != _VISIBLE
             or previous.display_type != _VISIBLE
             or report.unit_type != previous.unit_type
         ):
-            return 0.0
+            return None
         return max(0.0, previous.health - report.health) + max(0.0, previous.shield - report.shield)
 
     # How it is seen.

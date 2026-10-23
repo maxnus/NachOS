@@ -470,23 +470,23 @@ class TestDamageTaken:
         game.observe(0, make_unit(3, rock, alliance=Alliance.NEUTRAL, health=2000.0))
         assert game.observe(16, make_unit(3, rock, alliance=Alliance.NEUTRAL, health=1500.0))[3].damage_taken == 500.0
 
-    def test_a_unit_that_changed_type_or_was_out_of_vision_took_none(self) -> None:
+    def test_what_a_unit_that_changed_type_or_was_out_of_vision_lost_is_not_known(self) -> None:
         game = _Game()
         game.observe(0, _marine(175.0, unit_type=UnitTypeId.SIEGE_TANK))
-        assert game.observe(16, _marine(160.0, unit_type=UnitTypeId.SIEGE_TANK_SIEGED))[1].damage_taken == 0.0
+        assert game.observe(16, _marine(160.0, unit_type=UnitTypeId.SIEGE_TANK_SIEGED))[1].damage_taken is None
         game.observe(32, _marine(45.0))
-        assert game.observe(48, _marine(40.0, visibility=Visibility.INVISIBLE))[1].damage_taken == 0.0
-        assert game.observe(64, _marine(30.0))[1].damage_taken == 0.0
+        assert game.observe(48, _marine(40.0, visibility=Visibility.INVISIBLE))[1].damage_taken is None
+        assert game.observe(64, _marine(30.0))[1].damage_taken is None
 
-    def test_a_unit_back_in_the_observation_took_none_and_one_out_of_it_keeps_no_report_of_it(self) -> None:
-        """The report before is let go as the unit leaves, so it keeps no observation alive."""
+    def test_what_a_unit_lost_out_of_the_observation_or_back_in_it_is_not_known(self) -> None:
+        """The observation before is let go as the unit leaves, so it keeps no observation alive."""
         game = _Game()
-        game.observe(0, _marine(45.0))
+        assert game.observe(0, _marine(45.0))[1].damage_taken is None
         marine = game.observe(16, _marine(40.0))[1]
         game.observe(32)
-        assert marine.damage_taken == 0.0
+        assert marine.damage_taken is None
         assert marine._previous_report is None
-        assert game.observe(48, _marine(30.0))[1].damage_taken == 0.0
+        assert game.observe(48, _marine(30.0))[1].damage_taken is None
 
 
 class TestCloak:

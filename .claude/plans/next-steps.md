@@ -442,8 +442,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     race's every townhall, and over `base_townhall_type` (review of #157);
   - no `army`: NachOS gives a property only for a category the game draws, and type groups for `of_type` and
     `excluding_type`; what counts as army is a bot's call;
-  - `Unit.damage_taken`, the health and shields lost since the observation before, 0 for a unit not seen in both,
-    with the health a stim costs counted as the game reports it (over leaving it out, after a sweep);
+  - `Unit.damage_taken`, the health and shields lost since the observation before, `None` unless the unit was
+    visible in both and kept its type (review of #158, over 0), with the health a stim costs counted as the game
+    reports it (over leaving it out, after a sweep); its report kept in a slot of its own beside `velocity`'s position
+    and step, which keep other rules (review of #158, over one record for the three, which made intake some 8%
+    slower and would have changed `velocity`);
   - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
     and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
