@@ -73,6 +73,7 @@ class Unit[K: UnitType.AnyType]:
     # key its own data by unit in a `weakref.WeakKeyDictionary`, which slots would otherwise rule out.
     __slots__ = (
         "__weakref__",
+        "_damage_taken",
         "_dead",
         "_hallucination_confirmed",
         "_id",
@@ -113,6 +114,8 @@ class Unit[K: UnitType.AnyType]:
     # The report of the observation before, while the unit was in it; it keeps that one observation alive.
     _previous_report: raw_pb2.Unit | None
     _previous_step: int
+    # `damage_taken` as last worked out, with the tracker update it was worked out at.
+    _damage_taken: _Snapshot[float]
     _stale: bool
     _dead: bool
     # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
@@ -143,6 +146,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_position = None
         self._previous_report = None
         self._previous_step = step
+        self._damage_taken = _Snapshot(0.0)
         self._stale = False
         self._dead = False
         self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
@@ -163,10 +167,12 @@ class Unit[K: UnitType.AnyType]:
             # Back in the observation. How it moved while away is not known.
             self._stale = False
             self._previous_position = None
-        elif step != last_step:
-            self._previous_position = position
+        else:
+            # A unit is updated once an observation, so this is the report of the observation before.
             self._previous_report = self._latest_report
-            self._previous_step = last_step
+            if step != last_step:
+                self._previous_position = position
+                self._previous_step = last_step
         self._step = step
         reported = report.pos
         x, y = reported.x, reported.y
@@ -364,6 +370,16 @@ class Unit[K: UnitType.AnyType]:
         `EnemyUnitDamagedEvent` report it, and a neutral unit's alike, which no event reports: 0 unless it was visible
         in both and kept its type. Health regained offsets only health lost, and shields regained only shields lost.
         The health a stim costs is lost like any other."""
+        update = self._tracker.last_changes.update
+        if (cached := self._damage_taken).update == update:
+            return cached.value
+        damage = self._damage_since_previous_report()
+        self._damage_taken = _Snapshot(damage, update)
+        return damage
+
+    def _damage_since_previous_report(self) -> float:
+        """The health and shields lost between the report of the observation before and the latest, as
+        `damage_taken` defines it."""
         previous = self._previous_report
         if previous is None:
             return 0.0

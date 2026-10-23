@@ -454,6 +454,16 @@ class TestDamageTaken:
             [(event.unit, event.damage) for event in enemy] == [(units[1], units[1].damage_taken)] == [(units[1], 5.0)]
         )
 
+    def test_two_observations_at_one_step_compare_with_the_one_just_before(self) -> None:
+        """Each observation is compared with the one before it, whatever its step, so a loss is reported once."""
+        game = _Game()
+        seen = record(game.events, EnemyUnitDamagedEvent)
+        game.observe(0, _marine(45.0))
+        game.observe(16, _marine(40.0))
+        marine = game.observe(16, _marine(40.0))[1]
+        assert marine.damage_taken == 0.0
+        assert [(event.step, event.damage) for event in seen] == [(16, 5.0)]
+
     def test_a_neutral_unit_reads_it_too_though_no_event_reports_it(self) -> None:
         game = _Game()
         rock = UnitTypeId.DESTRUCTIBLE_2X4_HORIZONTAL_ROCK
