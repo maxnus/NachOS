@@ -79,13 +79,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a queued one
   clears it, and a queued move after an unqueued one goes behind it. A stim and a move to one marine are both
   carried out in either order: it moves, stimmed (tool `sweep_orders`).
-- Each action is judged against the game as the last observation asked for saw it, not as the steps since or earlier
-  actions in the same step changed it. A missile turret whose life a debug command halved 8 steps before, with no
-  observation asked for since, was refused a repair `TooMuchLife`, and taken after one observation (tool `sweep_repair`,
-  build 75689). When the game steps, it carries the actions out in order and drops what no longer fits, with no error
-  and no entry among the reported actions. Ten marines sent to a barracks in ten requests within one step are all
-  answered `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in one request
-  to a command center, five are queued (tool `sweep_orders`).
+- Each action is judged against the game state as the last step left it, not as earlier actions in the same step change
+  it, and a unit's life as the last observation asked for saw it: a missile turret whose life a debug command halved 8
+  steps before, with no observation asked for since, was refused a repair `TooMuchLife`, and taken after one observation
+  (tool `sweep_repair`, build 75689). When the game steps, it carries the actions out in order and drops what no longer
+  fits, with no error and no entry among the reported actions. Ten marines sent to a barracks in ten requests within one
+  step are all answered `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in
+  one request to a command center, five are queued (tool `sweep_orders`).
 - An order to a dead unit's tag, or to a tag never used, is answered `Error`; to an enemy unit,
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).

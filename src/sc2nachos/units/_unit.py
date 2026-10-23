@@ -702,11 +702,9 @@ class Unit[K: UnitType.AnyType]:
         """The steps one SCV takes to repair the unit from its health now to whole: what a whole repair of its type
         was measured to take, for the share of its health missing; 0 for a unit whole. `None` for a structure under
         construction, which an SCV is refused, and for any type but the Terran mechanical ones measured (in game).
-
-        For most types a whole repair takes the build steps of each stage that cost something, give or take one in a
-        hundred; `docs/reference/game-behavior/damage-and-buffs.md` has the measures and the exceptions.
+        `docs/reference/game-behavior/damage-and-buffs.md` has what was measured.
         """
-        if (whole_repair_steps := REPAIR_STEPS.get(self.type_id)) is None or not self.is_complete:
+        if (whole_repair_steps := self._whole_repair_steps) is None:
             return None
         return whole_repair_steps * (self.health_max - self.health) / self.health_max
 
@@ -715,7 +713,7 @@ class Unit[K: UnitType.AnyType]:
         """What a repair of the unit from its health now to whole costs: a quarter of what its type costs, its
         forms before included, for the share of its health missing, each resource rounded up (in game); nothing for a
         unit whole. `None` wherever `repair_steps` is."""
-        if self.repair_steps is None:
+        if self._whole_repair_steps is None:
             return None
         cost, health_max = self.type_data.cost, self.health_max
         missing = health_max - self.health
@@ -724,6 +722,14 @@ class Unit[K: UnitType.AnyType]:
             math.ceil(missing * cost.minerals * REPAIR_COST_SHARE / health_max),
             math.ceil(missing * cost.vespene * REPAIR_COST_SHARE / health_max),
         )
+
+    @property
+    def _whole_repair_steps(self) -> int | None:
+        """The steps one SCV takes to repair a unit of this type from no health to whole; `None` for a type not
+        measured, and for a structure under construction."""
+        if (whole_repair_steps := REPAIR_STEPS.get(self.type_id)) is None or not self.is_complete:
+            return None
+        return whole_repair_steps
 
     # Combat.
 

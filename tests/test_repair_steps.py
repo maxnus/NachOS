@@ -60,8 +60,8 @@ class TestReading:
 
     @pytest.mark.parametrize(("minerals", "vespene"), [(38, 32), (18, 16), (19, 15)])
     def test_a_repair_that_did_not_cost_a_quarter_rounded_up_is_refused(self, minerals: int, vespene: int) -> None:
-        """Half of a quarter of 150 minerals and 125 vespene is 18.75 and 15.625: neither the whole cost's half, nor
-        rounded down."""
+        """Half of a quarter of 150 minerals and 125 vespene is 18.75 and 15.625, which round up to 19 and 16: not the
+        38 and 32 of a whole repair, and not rounded down."""
         repair = _siege_tank_repair(minerals_spent=minerals, vespene_spent=vespene)
         with pytest.raises(ValueError, match="not a quarter of its cost, \\(19, 16\\)"):
             _generator().read(_findings(SIEGE_TANK=repair))
