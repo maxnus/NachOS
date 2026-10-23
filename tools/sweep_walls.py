@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing, without_uncurated_units
+from _sandbox import SUCCESS, Cheat, Sandbox, playing, without_uncurated_units
 from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import error_pb2, raw_pb2
@@ -148,18 +148,6 @@ def _structures_standing(game: Sandbox, structures: Sequence[tuple[UnitTypeId, P
         game.remove(unit.tag for unit in structures_made)
 
 
-def _leave_the_computer_one_structure(game: Sandbox) -> None:
-    """Give the computer one engineering bay in the middle of the map and remove all else it has, so that it can
-    neither fight nor train, and both mains stand empty. Not a supply depot, which the computer lowers at once."""
-    observation = game.client.observation()
-    game_map = GameMap._from_game(game.client.game_info(), observation)
-    units_at_the_start = list(observation.observation.raw_data.units)
-    computer_id = 2 if game.player == 1 else 1
-    map_middle = OpenGround(game_map, units_at_the_start).claim(game_map.playable_area.center, half=1)
-    (kept_bay,) = game.spawn([(UnitTypeId.ENGINEERING_BAY, computer_id, map_middle)])
-    game.remove(unit.tag for unit in game.units() if unit.owner == computer_id and unit.tag != kept_bay.tag)
-
-
 def _zergling_gets_in(game: Sandbox, main: _Main) -> bool:
     """Whether a zergling made below `main`'s ramp and ordered to its start gets past the wall in the time given."""
     (zergling,) = game.spawn([(UnitTypeId.ZERGLING, game.player, main.below_the_ramp)])
@@ -273,7 +261,7 @@ def check_walls(installation: Installation, map_names: Sequence[str]) -> list[Ma
             with playing(race, installation, map_name=map_name) as game:
                 game.cheat(Cheat.SHOW_MAP, Cheat.FREE, Cheat.FAST_BUILD)
                 game.client.step(4)
-                _leave_the_computer_one_structure(game)
+                game.leave_the_computer_one_structure()
                 for main in _mains_with_their_walls(game):
                     main_check = checks_by_main.setdefault(
                         (map_name, main.start),
