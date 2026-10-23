@@ -44,7 +44,7 @@ def test_they_print_as_names_not_numbers() -> None:
         (Race.ZERG, (UnitTypeId.DRONE, UnitTypeId.HATCHERY, UnitTypeId.OVERLORD)),
         (Race.PROTOSS, (UnitTypeId.PROBE, UnitTypeId.NEXUS, UnitTypeId.PYLON)),
     ],
-    ids=lambda value: value.name if isinstance(value, Race) else "",
+    ids=["terran", "zerg", "protoss"],
 )
 def test_a_race_names_its_worker_starting_townhall_and_supply(race: Race, unit_types: tuple[UnitTypeId, ...]) -> None:
     assert (race.worker_type, race.townhall_type, race.supply_type) == unit_types
