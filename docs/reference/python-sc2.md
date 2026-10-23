@@ -410,7 +410,7 @@ it.
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
-| `race_worker[race]`, `race_townhalls[race]` | `race.worker_type`; `race.townhall_type`, the one it starts with, where `api.units.own.townhalls` are all of this player's; and `race.supply_type` |
+| `race_worker[race]`, `race_townhalls[race]` | `race.worker_type`; `race.starting_townhall_type`, where `api.units.own.townhalls` are all of this player's; and `race.supply_type` |
 | `bot.enemy_race` | `api.enemy.race`, `None` until known; `api.enemy.requested_race` reads `RANDOM` |
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |

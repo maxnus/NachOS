@@ -1,7 +1,6 @@
 """The players of a match, how the computer opponent plays, and how the match ended."""
 
 from dataclasses import dataclass
-from typing import NamedTuple
 
 from s2clientprotocol import common_pb2, sc2api_pb2
 
@@ -24,10 +23,10 @@ class Race(ReadableIntEnum):
         return _unit_types_of(self).worker
 
     @property
-    def townhall_type(self) -> UnitTypeId:
+    def starting_townhall_type(self) -> UnitTypeId:
         """The townhall the race starts with: a command center, a hatchery or a nexus. Raises `ValueError` for `NONE`
         and `RANDOM`."""
-        return _unit_types_of(self).townhall
+        return _unit_types_of(self).starting_townhall
 
     @property
     def supply_type(self) -> UnitTypeId:
@@ -36,11 +35,12 @@ class Race(ReadableIntEnum):
         return _unit_types_of(self).supply
 
 
-class _RaceUnitTypes(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class _RaceUnitTypes:
     """A race's worker, starting townhall and supply provider."""
 
     worker: UnitTypeId
-    townhall: UnitTypeId
+    starting_townhall: UnitTypeId
     supply: UnitTypeId
 
 

@@ -437,8 +437,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **What the owner's review of AvocaDOS #49 settled for NachOS** (2026-10-23, one question at a time):
   - `Units.non_structures`, the units that are not structures as `UnitType.Structure` has them, over `mobile`, which
     a larva or a sieged tank is not and a lifted barracks is, and over python-sc2's `units`;
-  - `Race.worker_type`, `townhall_type`, the one a race starts with, and `supply_type`, each raising `ValueError` for
-    `NONE` and `RANDOM`, over the same on `Player` and `Enemy`;
+  - `Race.worker_type`, `starting_townhall_type` and `supply_type`, each raising `ValueError` for `NONE` and
+    `RANDOM`, over the same on `Player` and `Enemy`; `starting_townhall_type` over `townhall_type`, which claims the
+    race's every townhall, and over `base_townhall_type` (review of #157);
   - no `army`: NachOS gives a property only for a category the game draws, and type groups for `of_type` and
     `excluding_type`; what counts as army is a bot's call;
   - `Unit.damage_taken`, the health and shields lost since the observation before, 0 for a unit not seen in both,
