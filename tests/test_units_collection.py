@@ -208,6 +208,21 @@ class TestFilters:
         assert _tags(units.complete) == [unit.tag for unit in units if unit.build_progress == 1.0]
         assert _tags(units.idle) == [unit.tag for unit in units if not unit.orders]
 
+    def test_structures_and_non_structures_split_the_units(self) -> None:
+        """A lifted barracks is a structure, and a larva, an egg and a sieged tank are not."""
+        units = _units(
+            make_unit(1, UnitTypeId.SCV),
+            make_unit(2, UnitTypeId.BARRACKS_FLYING),
+            make_unit(3, UnitTypeId.LARVA),
+            make_unit(4, UnitTypeId.EGG),
+            make_unit(5, UnitTypeId.SIEGE_TANK_SIEGED),
+            make_unit(6, UnitTypeId.SUPPLY_DEPOT_LOWERED, alliance=Alliance.ENEMY),
+            make_unit(7, UnitTypeId.MARINE, alliance=Alliance.ENEMY),
+        )
+        assert _tags(units.non_structures) == [1, 3, 4, 5, 7]
+        assert _tags(units.structures) == [2, 6]
+        assert _tags(units.enemy.non_structures) == [7]
+
     def test_the_groups_a_bot_reads_most(self) -> None:
         neutral = Alliance.NEUTRAL
         units = _units(
