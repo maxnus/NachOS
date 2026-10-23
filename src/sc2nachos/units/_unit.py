@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Attribute, TargetDomain
+from sc2nachos.gamedata import Attribute, Resources, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
+from sc2nachos.gamedata._repair_steps import REPAIR_COST_SHARE, REPAIR_STEPS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
@@ -695,6 +696,34 @@ class Unit[K: UnitType.AnyType]:
                 self._radius_footprint = Footprint.square(side)
             return self._radius_footprint
         return row.footprint
+
+    @property
+    def repair_steps(self) -> float | None:
+        """The steps one SCV takes to repair the unit from its health now to whole: what a whole repair of its type
+        was measured to take, for the share of its health missing; 0 for a unit whole. `None` for a structure under
+        construction, which an SCV is refused, and for any type but the Terran mechanical ones measured (in game).
+
+        For most types a whole repair takes the build steps of each stage that cost something, give or take one in a
+        hundred; `docs/reference/game-behavior/damage-and-buffs.md` has the measures and the exceptions.
+        """
+        if (whole_repair_steps := REPAIR_STEPS.get(self.type_id)) is None or not self.is_complete:
+            return None
+        return whole_repair_steps * (self.health_max - self.health) / self.health_max
+
+    @property
+    def repair_cost(self) -> Resources | None:
+        """What a repair of the unit from its health now to whole costs: a quarter of what its type costs, its
+        forms before included, for the share of its health missing, each resource rounded up (in game); nothing for a
+        unit whole. `None` wherever `repair_steps` is."""
+        if self.repair_steps is None:
+            return None
+        cost, health_max = self.type_data.cost, self.health_max
+        missing = health_max - self.health
+        # Multiplied out before the one division, so that a whole number of resources comes out whole.
+        return Resources(
+            math.ceil(missing * cost.minerals * REPAIR_COST_SHARE / health_max),
+            math.ceil(missing * cost.vespene * REPAIR_COST_SHARE / health_max),
+        )
 
     # Combat.
 
