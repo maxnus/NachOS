@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #155. On branch `claude/ramp-walls`, `uv run pytest` passes 2639 tests, and
-  `uv run pytest -m integration` passed 37 against a real game (run 2026-10-22).
+- nachOS `main` has every PR to #156. On this branch, `uv run pytest` passes 2645 tests; `uv run pytest -m
+  integration` passed 37 against a real game on #156's branch (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -292,7 +292,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A ladder game whose connection the ladder closes ends `Result.UNDECIDED` with a warning in `run_from_command_line`,
     as AvocaDOS's ladder `run.py` had it; `run_ladder` and a local game still raise `ConnectionClosedError`. A save
     after an interrupted request reads that request's answer and is logged as failed, which stays (my review of #146).
-  - The runners take the api with `race` and `name` keywords, and `ApiBot` is gone (review of #146, this branch):
+  - The runners take the api with `race` and `name` keywords, and `ApiBot` is gone (review of #146, #147):
     `run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN)`. They stay functions, over methods of
     `Api`, which would have `api.py` import `run.py`, which imports it, or move launching and argparse into the class
     a bot's handlers talk to every turn.
@@ -434,16 +434,39 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `barracks_with_add_on` closes it once the add-on stands, documented (the owner, over `None` there and over a field).
   - `Tile.containing` is `Tile.at` (review of #156).
 
+- **What the owner's review of AvocaDOS #49 settled for NachOS** (2026-10-23, one question at a time):
+  - `Units.non_structures`, the units that are not structures as `UnitType.Structure` has them, over `mobile`, which
+    a larva or a sieged tank is not and a lifted barracks is, and over python-sc2's `units`;
+  - `Race.worker_type`, `starting_townhall_type` and `supply_type`, each raising `ValueError` for `NONE` and
+    `RANDOM`, over the same on `Player` and `Enemy`; `starting_townhall_type` over `townhall_type`, which claims the
+    race's every townhall, and over `base_townhall_type` (review of #157);
+  - no `army`: NachOS gives a property only for a category the game draws, and type groups for `of_type` and
+    `excluding_type`; what counts as army is a bot's call;
+  - `Unit.damage_taken`, the health and shields lost since the observation before, 0 for a unit not seen in both,
+    with the health a stim costs counted as the game reports it (over leaving it out, after a sweep);
+  - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
+    and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables);
+  - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
+
 ## Next
 
 - **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
   players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
   replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
   conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154, with `--RecordFile` in
-  #155), and ramp wall-in sites with their sweep (this branch), the last of them.
-- M5, in AvocaDOS (section 3), whose preparation on python-sc2 can run beside these.
+  #155), and ramp wall-in sites with their sweep (#156), the last of them.
+- **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
+  next piece: `Units.non_structures` and the race's unit types (this branch); `Unit.damage_taken`; repair, measured
+  by a sweep, then `Unit.repair_cost` and `Unit.repair_steps`; and turning, measured by a sweep of each type's turn
+  rate, then `Unit.time_to_face(target)`.
+- M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
+
+- Keeping the selections a turn's units hand out, rather than building them at every read, about 15 ns a unit: the
+  owner chose to decide it once the swap runs and AvocaDOS's exit gate measures what its reads cost (review of
+  AvocaDOS #49). The owner's two ideas: one key for a set of selections in any order, so `own.structures` and
+  `structures.own` are built once, and lazy views, so a chain filters once. A view must still be a `Sequence`.
 
 - A type for start locations, perhaps a subclass of `Expansion` holding its main ramp (the owner, second review of
   #156), to plan once M5 shows how AvocaDOS reads its mains; `main_ramp_of` and the walls take a start location Point
@@ -468,20 +491,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## 2. After each nachOS pull request merges
 
-Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under "M4 status" saying what it
+Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under M5's "Status" saying what it
 settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS checkout; its tests (`uv run pytest`,
 `tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push only when the owner
 says so.
 
-## 3. Next, M5 (AvocaDOS runs on NachOS)
+## 3. M5 (AvocaDOS runs on NachOS)
 
-In AvocaDOS's plan, section "M5 — The swap". Already known:
+In AvocaDOS's plan, section "M5 — The swap". Its preparation on python-sc2 is done (AvocaDOS #45 to #48: the bot's
+state off the api, the event layer in NachOS's shape, the last order wins, and the whole turn timed), and the swap is
+stacked pull requests into AvocaDOS's `nachos-swap` branch, merged into its `main` once the whole passes, the first
+of them AvocaDOS #49.
 
-- AvocaDOS's own `api.event.on` becomes NachOS's `api.on`, and `api.event.listener`, which subscribes each instance
-  of a class as it is made, an `api.subscribe(self)` in the class's `__init__`. Its `api.order` becomes `api.orders`;
-  its `OrderManager` keeps the *highest*-priority order where NachOS keeps the *last*, and `has_order(unit)` is
-  `api.orders.issued_to(unit)`. `OrderManager._order`, which splits a `Units` into one order per unit, gives a group
-  one `issue`, but for a research or a build at a target, which go to one unit.
-- `phase=` becomes `priority=`, with the handlers that forget the dead at `HIGHEST`.
 - The bot's `MEDIVACINCREASESPEEDBOOST`, `DUTCHMARAUDERSLOW` and `IMMORTALOVERLOAD` take their curated names;
   AvocaDOS's `tests/test_nachos_id_parity.py` fails on those three until then, as expected.

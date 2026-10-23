@@ -4,6 +4,7 @@ import pytest
 from google.protobuf.descriptor import EnumDescriptor
 from s2clientprotocol import common_pb2, sc2api_pb2
 
+from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import AIBuild, Difficulty, Race, Result
 
 
@@ -34,3 +35,23 @@ def test_they_print_as_names_not_numbers() -> None:
     assert str(Race.TERRAN) == "Race.TERRAN"
     assert f"{Result.VICTORY}" == "Result.VICTORY"
     assert f"{Race.TERRAN:d}" == "1"
+
+
+@pytest.mark.parametrize(
+    ("race", "unit_types"),
+    [
+        (Race.TERRAN, (UnitTypeId.SCV, UnitTypeId.COMMAND_CENTER, UnitTypeId.SUPPLY_DEPOT)),
+        (Race.ZERG, (UnitTypeId.DRONE, UnitTypeId.HATCHERY, UnitTypeId.OVERLORD)),
+        (Race.PROTOSS, (UnitTypeId.PROBE, UnitTypeId.NEXUS, UnitTypeId.PYLON)),
+    ],
+    ids=["terran", "zerg", "protoss"],
+)
+def test_a_race_names_its_worker_starting_townhall_and_supply(race: Race, unit_types: tuple[UnitTypeId, ...]) -> None:
+    assert (race.worker_type, race.starting_townhall_type, race.supply_type) == unit_types
+
+
+@pytest.mark.parametrize("race", [Race.NONE, Race.RANDOM], ids=lambda race: race.name)
+def test_a_race_no_player_is_given_has_no_unit_types(race: Race) -> None:
+    for unit_type_of in (lambda: race.worker_type, lambda: race.starting_townhall_type, lambda: race.supply_type):
+        with pytest.raises(ValueError, match="no race a player is given"):
+            unit_type_of()

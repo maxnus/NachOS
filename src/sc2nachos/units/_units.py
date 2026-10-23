@@ -198,6 +198,12 @@ class Units[U: Unit[Any]](Sequence[U]):
         return self._in_group(UnitType.Structure)
 
     @property
+    def non_structures(self) -> Units[U]:
+        """The units that are not structures, as `UnitType.Structure` has them: larvae, eggs and a sieged tank among
+        them, and not a lifted barracks."""
+        return self.excluding_type(UnitType.Structure)
+
+    @property
     def workers(self) -> Units[U]:
         """The workers: SCVs, probes and drones, burrowed or not, as `UnitType.Worker` has them. A MULE is none."""
         return self._in_group(UnitType.Worker)
