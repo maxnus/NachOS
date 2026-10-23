@@ -40,7 +40,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **An air unit hovering over the middle of a command center was never repaired.** A viking and a battlecruiser halved
   by a debug command, and a medivac and a viking shot by this player's marines, were each answered `Success`, but the
   SCV held the order 32 to 48 steps and dropped it, and their health never rose. Hovering beside the SCV, a viking, a
-  medivac and a battlecruiser were repaired (#NNN).
+  medivac and a battlecruiser were repaired (#159).
 - A repair is refused `MustTargetMechanicalUnits` for a unit that is not mechanical, a marine, and
   `CantTargetUnderConstructionUnits` for a supply depot a quarter built (tool `sweep_repair`, build 75689).
 

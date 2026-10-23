@@ -450,8 +450,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
     and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables); every Terran mechanical
     type swept into a generated table (over the rule and a hand-written table of its exceptions), once the sweep's
-    air units that were never repaired were found to be the sweep's own doing (over answering `None` for them) (this
-    branch);
+    air units that were never repaired were found to be the sweep's own doing (over answering `None` for them)
+    (#159);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
 
 ## Next
@@ -463,7 +463,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   #155), and ramp wall-in sites with their sweep (#156), the last of them.
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
   next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
-  sweep, then `Unit.repair_cost` and `Unit.repair_steps` (this branch); and turning, measured by a sweep of each type's
+  sweep, then `Unit.repair_cost` and `Unit.repair_steps` (#159); and turning, measured by a sweep of each type's
   turn rate, then `Unit.time_to_face(target)`.
 - M5, in AvocaDOS (section 3).
 
