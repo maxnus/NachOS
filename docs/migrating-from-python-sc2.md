@@ -104,6 +104,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   ([in detail](reference/python-sc2.md#orders)).
 - **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself
   ([in detail](reference/python-sc2.md#units)).
+- **`api.units` is every unit**, of every side; python-sc2's `bot.units` is this player's non-structures, which is
+  `api.units.own.non_structures` ([in detail](reference/python-sc2.md#units)).
 - **Out of sight is stale, not gone.** `api.units` is what the observation lists, and `api.known_units` adds what is
   remembered ([in detail](reference/python-sc2.md#units)).
 - **Only your own units have orders**, cargo, rallies and weapon cooldown; the game reports them for nobody else's

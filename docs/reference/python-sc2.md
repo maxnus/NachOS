@@ -266,9 +266,10 @@ it.
 | python-sc2 | NachOS |
 |---|---|
 | `bot.all_units` | `api.units`, and `api.known_units` with the units out of sight |
+| `bot.units`, `structures`, this player's | `api.units.own.non_structures`, `api.units.own.structures`; `api.units` is every unit |
 | `bot.workers`, `townhalls`, `gas_buildings` | `api.units.own.workers`, `townhalls`, `gas_buildings` |
 | `bot.mineral_field`, `vespene_geyser` | `api.units.mineral_fields`, `geysers` |
-| `bot.enemy_units`, `enemy_structures` | `api.units.enemy.excluding_type(UnitType.Structure)`, `api.units.enemy.structures` |
+| `bot.enemy_units`, `enemy_structures` | `api.units.enemy.non_structures`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
@@ -341,7 +342,9 @@ it.
 - **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, `UnitType.Worker`,
   `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, which `Units` also reads as `workers`,
   `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`. A MULE is not a worker, and a lifted command center
-  is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are the plain kinds alone.
+  is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are the plain kinds alone. `UnitType.Structure`
+  divides any collection into its `structures` and `non_structures`: a lifted barracks is a structure, and a larva,
+  an egg and a sieged tank are not.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **A unit's weapons, speed and armor include its owner's upgrades.** Yours come from the observation, the enemy's
   from `api.enemy.upgrades`. python-sc2's `real_speed` includes only your own upgrades and needs
@@ -407,6 +410,7 @@ it.
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
+| `race_worker[race]`, `race_townhalls[race]` | `race.worker_type`; `race.townhall_type`, the one it starts with, where `UnitType.Townhall` holds them all; and `race.supply_type` |
 | `bot.enemy_race` | `api.enemy.race`, `None` until known; `api.enemy.requested_race` reads `RANDOM` |
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
