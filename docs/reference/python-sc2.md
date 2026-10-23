@@ -64,7 +64,7 @@ difference that rests on what the game does links there for its evidence.
   | `on_unit_destroyed(tag)` | `AnyUnitDiedEvent`, with the unit, or one side's `OwnUnitDiedEvent`, `EnemyUnitDiedEvent` or `NeutralUnitDiedEvent`; and `UnitFoundDeadEvent` for a structure found gone from its spot |
   | `on_unit_type_changed` | `AnyUnitTypeChangedEvent`, for this player's units and the enemy's, or one side's `OwnUnitTypeChangedEvent` or `EnemyUnitTypeChangedEvent` |
   | `on_upgrade_complete` | `OwnUpgradeFinishedEvent` |
-  | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's visible units |
+  | `on_unit_took_damage` | `OwnUnitDamagedEvent`, and `EnemyUnitDamagedEvent` for the enemy's visible units; or `unit.damage_taken`, read off any unit |
   | `on_enemy_unit_entered_vision`, `_left_vision(tag)` | `EnemyUnitEnteredSightEvent`, `EnemyUnitLeftSightEvent(unit)` |
   | nothing | `EnemyUnitFirstSeenEvent`, `UnitAllianceChangedEvent`, `OwnWarpInStartedEvent`, `OwnWarpInFinishedEvent` |
   | nothing | `OwnUnitBecameIdleEvent`, `OwnUpgradeStartedEvent`, `OwnUpgradeStoppedEvent` |
