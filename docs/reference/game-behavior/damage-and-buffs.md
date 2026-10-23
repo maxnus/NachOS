@@ -16,6 +16,34 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Since 4.12.0 Microbial Shroud needs no research: an infestor with no upgrades is offered it and casts it (#23).
 - A unit under attack that cannot fight back drifts away unless it holds position (tool `sweep_alerts`).
 
+## Repair
+
+- **An SCV repairs a unit to its whole health in the build steps of each of its stages that cost something**, give or
+  take 10 steps, for 44 of the 50 types the tables call Terran and mechanical: a supply depot 481, a barracks 1045, a
+  siege tank 726, a viking 668, a battlecruiser 1442, a thor 964, an orbital command 2168 (a command center's 1600 and
+  its own 560), a planetary fortress 2410, and the banshee farthest off, 970 of 960. A form switched into for nothing is
+  repaired as the form it switched from: a lowered depot, a sieged tank or liberator, a landed viking, a lifted
+  barracks, factory, starport, command center or orbital, and a thor in high-impact mode. The tables give each switch
+  build steps of its own, 21 to 69, which do not count (tool `sweep_repair`, build 75689).
+- **Six types break that rule** (tool `sweep_repair`, build 75689):
+  - a MULE takes 270 steps, as an SCV does, though the tables give a MULE none;
+  - an auto-turret 800, against its 16;
+  - a widow mine 320, burrowed or not, against its 480;
+  - a reactor and a tech lab standing on their own, as a structure lifting off leaves them, 800 and 400, against the
+    2 the tables give them. On a barracks, a factory or a starport, the tables give them 800 and 400, and a repair
+    takes that.
+- **A whole repair costs a quarter of what the type costs, whatever it morphed from included**, minerals and vespene
+  alike, for all 50 types, the six above among them: from half health, 13 minerals for a supply depot, 19 and 16
+  vespene for a siege tank, 50 and 38 for a battlecruiser, and 69 for an orbital command, of the 550 that it and its
+  command center cost. The resources are taken one at a time as the health comes back, the first as the repair
+  starts, so a part repair costs its share rounded up (tool `sweep_repair`, build 75689).
+- **An air unit hovering over the middle of a command center was never repaired.** A viking and a battlecruiser halved
+  by a debug command, and a medivac and a viking shot by this player's marines, were each answered `Success`, but the
+  SCV held the order 32 to 48 steps and dropped it, and their health never rose. Hovering beside the SCV, a viking, a
+  medivac and a battlecruiser were repaired (#NNN).
+- A repair is refused `MustTargetMechanicalUnits` for a unit that is not mechanical, a marine, and
+  `CantTargetUnderConstructionUnits` for a supply depot a quarter built (tool `sweep_repair`, build 75689).
+
 ## Reach, damage and attack speed
 
 - A unit fires at another while their centers are no farther apart than its weapon's range and both radii, across or
