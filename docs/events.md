@@ -240,8 +240,9 @@ and dead within one observation gets both its creation and its death, in that or
 A structure in the fog that was seen and lost again between two turns comes back under a new tag at its spot, and
 stays the one unit, with no event. So does one killed out of sight and built again on its spot and seen so, since the
 game shows the two alike ([game behavior](reference/game-behavior/units.md#what-an-observation-lists)): it is taken
-for the old one until its spot is in sight at a turn, when the old one comes as a `UnitFoundDeadEvent` and the new
-one as an `EnemyUnitFirstSeenEvent`.
+for the old one, and one of another type for the old one changing type, with an `EnemyUnitTypeChangedEvent`, until
+its spot is in sight at a turn, when the old one comes as a `UnitFoundDeadEvent` and the new one as an
+`EnemyUnitFirstSeenEvent`.
 
 ### Actions, chat and alerts
 

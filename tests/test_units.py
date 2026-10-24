@@ -348,6 +348,7 @@ class TestTheFog:
         assert game.tracker.last_changes.enemy_units_entered_sight == [depot]
 
     def test_a_mineral_field_never_seen_remembered_afresh_is_the_same_unit(self) -> None:
+        """A copy of the map's is remembered afresh alike: a geyser's was, in the scouting games of #163."""
         field = {"at": (60.0, 20.5), "alliance": Alliance.NEUTRAL}
         game = _Game()
         (remembered,) = game.observe(0, make_unit(700, UnitTypeId.MINERAL_FIELD, visibility=_IN_FOG, **field))
@@ -367,6 +368,18 @@ class TestTheFog:
         changes = game.tracker.last_changes
         assert new is not old
         assert (changes.units_found_dead, changes.enemy_units_first_seen) == ([old], [new])
+
+    def test_another_type_built_on_the_spot_and_glimpsed_between_observations_reads_as_a_change_of_type(self) -> None:
+        """The type is not compared, since a structure can change form in the fog, as a depot lowering does."""
+        game = _Game()
+        (old,) = game.observe(0, _depot(1))
+        game.observe(16, _depot(900, visibility=_IN_FOG))
+        turret = make_unit(901, UnitTypeId.MISSILE_TURRET, at=(30.5, 40.5), alliance=_ENEMY, visibility=_IN_FOG)
+        (taken_for_the_old,) = game.observe(32, turret)
+        changes = game.tracker.last_changes
+        assert taken_for_the_old is old
+        assert changes.units_type_changed == [(old, UnitTypeId.SUPPLY_DEPOT)]
+        assert not (changes.units_found_dead or changes.enemy_units_first_seen)
 
     @pytest.mark.parametrize("reported", [1, 900], ids=["its visible tag", "its fog tag"])
     def test_a_copy_at_the_spot_of_a_structure_reported_dead_is_another_unit(self, reported: int) -> None:
@@ -1441,6 +1454,8 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
 
 # The most steps waited for a dead marine's sight to lapse: it lingers 65 (tool `sweep_fog`).
 _MOST_STEPS_SIGHT_LINGERS = 224
+# The most steps waited for a marine made by a debug command to be listed: it takes 2 (tool `sweep_fog`).
+_MOST_STEPS_TO_MAKE_THE_WATCHER = 16
 
 
 @pytest.mark.integration
@@ -1476,15 +1491,18 @@ def test_in_a_real_game_a_structure_seen_and_lost_again_between_two_observations
 
         # Between two observations of the tracker's: a marine shows the bay and is killed as soon as it is listed.
         game.debug(game.create(UnitTypeId.MARINE, watching_point))
-        watchers: list[int] = []
-        while not watchers:
+        watcher_tags: list[int] = []
+        for _ in range(_MOST_STEPS_TO_MAKE_THE_WATCHER):
             client.step(1)
-            watchers = [
+            watcher_tags = [
                 unit.tag
                 for unit in client.observation().observation.raw_data.units
                 if unit.owner == game.player and unit.unit_type == UnitTypeId.MARINE
             ]
-        game.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=watchers)))
+            if watcher_tags:
+                break
+        assert watcher_tags, f"no marine was listed {_MOST_STEPS_TO_MAKE_THE_WATCHER} steps after it was made"
+        game.debug(debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=watcher_tags)))
         game.turn(_MOST_STEPS_SIGHT_LINGERS)
 
         changes = game.tracker.last_changes

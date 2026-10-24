@@ -367,9 +367,9 @@ def _new_tag_is_same_unit(unit: Unit[Any], display: int) -> bool:
     """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
     visible into the fog; a fog copy remembered afresh, as when the structure was seen and lost again between two
     observations; or a fog copy of a unit never seen visible shown visible."""
-    before = unit._latest_report.display_type
-    if before == _VISIBLE_DISPLAY:
+    previous_display = unit._latest_report.display_type
+    if previous_display == _VISIBLE_DISPLAY:
         return display == _IN_FOG_DISPLAY
-    if before != _IN_FOG_DISPLAY:
+    if previous_display != _IN_FOG_DISPLAY:
         return False
     return display == _IN_FOG_DISPLAY or (display == _VISIBLE_DISPLAY and unit._latest_visible_report is None)

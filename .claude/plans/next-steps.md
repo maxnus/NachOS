@@ -556,7 +556,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - An up-to-date pathing grid.
 - The next trial of `tools/sweep_fog.py` (begun with `retag` and `rebuilt`, 2026-10-24) checks that a structure lifted
   off or uprooted, and a viking in either form, is never left as a remembered copy, which the tracker assumes (the
-  owner, review of #71).
+  owner, review of #71). It also measures whether a remembered copy reports its structure's build progress. If it
+  does, a copy under a new tag whose build progress went down is another unit: a structure built again on its spot
+  starts unfinished (the owner, review of #164).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
   the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
   back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that

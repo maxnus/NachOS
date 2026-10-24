@@ -3,9 +3,9 @@ observations, and what NachOS's tracker makes of the two observations.
 
 Needs StarCraft II installed. Each trial plays its own game against the computer on the sandbox's map. An enemy
 engineering bay stands near the middle of the map, made by a debug command; a marine made beside it shows it to this
-player and is killed, and the bay is in the fog once the dead marine's sight lapses, which each trial measures. Then,
-between two observations as far apart as that lapse and 8 steps, a marine made beside the bay shows it again and is
-killed as soon as it is listed:
+player and is killed, and the bay is in the fog once the dead marine's sight lapses, which each trial measures.
+Then, between two observations, a marine made beside the bay shows it again and is killed as soon as it is listed, and
+the second observation comes as long after its death as that lapse and 8 steps:
 
 - `retag` records each of the two observations' copies of the bay, by its tag, type and exact position, and what an
   observation between them lists of it; and what NachOS's tracker reports found dead and first seen when it is updated
@@ -61,14 +61,14 @@ class _BayInTheFog:
     def __init__(self, sandbox: Sandbox) -> None:
         self.sandbox = sandbox
         client = sandbox.client
-        info = client.game_info()
+        game_info = client.game_info()
         observation = client.observation()
-        game_map = GameMap._from_game(info, observation)
-        self.tracker = _Tracker(GameData(client.game_data()), Enemy._from_game(info, sandbox.player))
+        game_map = GameMap._from_game(game_info, observation)
+        self.tracker = _Tracker(GameData(client.game_data()), Enemy._from_game(game_info, sandbox.player))
         self.enemy_player = 2 if sandbox.player == 1 else 1
         open_ground = OpenGround(game_map, observation.observation.raw_data.units)
-        self.site = open_ground.claim(game_map.playable_area.center, half=2)
-        self.watching_point = Point((self.site.x + _WATCHER_DISTANCE, self.site.y))
+        self.bay_site = open_ground.claim(game_map.playable_area.center, half=2)
+        self.watching_point = Point((self.bay_site.x + _WATCHER_DISTANCE, self.bay_site.y))
         self.make_bay()
         bay, self.steps_its_sight_lingers = self._watch_and_kill_the_watcher(steps_in_sight=_SETTLE_STEPS)
         self.bay_tag = bay.tag
@@ -81,7 +81,7 @@ class _BayInTheFog:
 
     def make_bay(self) -> None:
         """Make an enemy engineering bay at the site."""
-        self.sandbox.debug(self.sandbox.create(UnitTypeId.ENGINEERING_BAY, self.enemy_player, self.site))
+        self.sandbox.debug(self.sandbox.create(UnitTypeId.ENGINEERING_BAY, self.enemy_player, self.bay_site))
         self.sandbox.client.step(_SETTLE_STEPS)
 
     def _watch_and_kill_the_watcher(self, *, steps_in_sight: int) -> tuple[raw_pb2.Unit, int]:
@@ -91,7 +91,10 @@ class _BayInTheFog:
         client = self.sandbox.client
         (watcher,) = self.sandbox.spawn([(UnitTypeId.MARINE, self.sandbox.player, self.watching_point)])
         client.step(steps_in_sight)
-        bay = next(unit for unit in self.observe().observation.raw_data.units if _is_the_bay(unit, _VISIBLE_DISPLAY))
+        units = self.observe().observation.raw_data.units
+        bay = next((unit for unit in units if _is_the_bay(unit, _VISIBLE_DISPLAY)), None)
+        if bay is None:
+            raise RuntimeError(f"the bay was not in sight {steps_in_sight} steps after its watcher was made")
         self.sandbox.kill([watcher.tag])
         for steps_since_the_kill in range(1, _MOST_STEPS_SIGHT_LINGERS + 1):
             client.step(1)
@@ -105,34 +108,40 @@ class _BayInTheFog:
         listed of it in between, and what the tracker, updated with the two alone, found."""
         sandbox = self.sandbox
         client = sandbox.client
-        before = self.observe()
+        observation_before = self.observe()
         sandbox.debug(sandbox.create(UnitTypeId.MARINE, sandbox.player, self.watching_point))
         # Taken from the client, not the tracker: the bot takes no turn between the two.
         for _ in range(_MOST_STEPS_TO_MAKE_THE_WATCHER):
             client.step(1)
-            between = client.observation()
-            watchers = [
+            observation_between = client.observation()
+            watcher_tags = [
                 unit.tag
-                for unit in between.observation.raw_data.units
+                for unit in observation_between.observation.raw_data.units
                 if unit.owner == sandbox.player and unit.unit_type == UnitTypeId.MARINE
             ]
-            if watchers:
+            if watcher_tags:
                 break
         else:
             raise RuntimeError(f"no marine was made within {_MOST_STEPS_TO_MAKE_THE_WATCHER} steps")
-        sandbox.kill(watchers)
+        sandbox.kill(watcher_tags)
         client.step(self.steps_its_sight_lingers + _SETTLE_STEPS)
-        after = self.observe()
-        changes = self.tracker.last_changes
+        observation_after = self.observe()
+        tracker_changes = self.tracker.last_changes
+        steps = [
+            observation.observation.game_loop
+            for observation in (observation_before, observation_between, observation_after)
+        ]
         return {
             "steps a dead watcher's sight lingers": self.steps_its_sight_lingers,
-            "steps": [before.observation.game_loop, between.observation.game_loop, after.observation.game_loop],
-            "copy before": _bays_listed(before),
-            "listed between": _bays_listed(between),
-            "copy after": _bays_listed(after),
-            "the copies stand bit for bit at one position": _positions_of_copies(before) == _positions_of_copies(after),
-            "found dead by the tracker": [unit.type_id.name for unit in changes.units_found_dead],
-            "first seen by the tracker": [unit.type_id.name for unit in changes.enemy_units_first_seen],
+            "steps": steps,
+            "copy before": _bays_listed(observation_before),
+            "listed between": _bays_listed(observation_between),
+            "copy after": _bays_listed(observation_after),
+            "the copies stand bit for bit at one position": (
+                _positions_of_copies(observation_before) == _positions_of_copies(observation_after)
+            ),
+            "found dead by the tracker": [unit.type_id.name for unit in tracker_changes.units_found_dead],
+            "first seen by the tracker": [unit.type_id.name for unit in tracker_changes.enemy_units_first_seen],
         }
 
 
@@ -176,11 +185,11 @@ def sweep_retag(installation: Installation) -> dict[str, Any]:
 def sweep_rebuilt(installation: Installation) -> dict[str, Any]:
     """A bay killed out of sight and another made at its point, shown between two observations."""
     with playing(Race.TERRAN, installation, map_name=MAP) as sandbox:
-        game = _BayInTheFog(sandbox)
-        sandbox.kill([game.bay_tag])
+        bay_in_the_fog = _BayInTheFog(sandbox)
+        sandbox.kill([bay_in_the_fog.bay_tag])
         sandbox.client.step(_SETTLE_STEPS)
-        game.make_bay()
-        return game.show_between_observations()
+        bay_in_the_fog.make_bay()
+        return bay_in_the_fog.show_between_observations()
 
 
 _SWEEPS_BY_NAME: dict[str, Callable[[Installation], object]] = {
