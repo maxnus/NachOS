@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2736 tests; `uv run pytest -m
+- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2738 tests; `uv run pytest -m
   integration` passed 39 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -507,8 +507,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - A unit undetected in the player's sight reads as last reported in full in `api.all_units`, as AGENTS.md's "never
     answer the zero" has it.
   - Found building it: the player's view rebuilds the fog-on observation, the structures and map's units in the fog as
-    copies under tags of their own, remembered as they went until their spot is in sight, so that the tracker reads it
-    unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner, not the tile under
+    copies under tags of their own, remembered as they went until their spot is in sight without them, so that the
+    tracker reads it unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner, not the tile under
     it, and an integration test plays one replay with the fog on and off a step at a turn and finds the player's views
     the same at every step. With more steps a turn the fog on can remember a structure afresh between two turns, which
     NachOS reads as one found dead and another first seen, in a game too (`not-understood-yet.md`).

@@ -19,13 +19,13 @@ replay saved at its time limit.
   plays that back as each player, to its end: the result and status there, the results the replay's info gives, and
   what a step after the end is answered. It does the same for the shared game, saved at its time limit.
 - `unseen` plays a game of its own between two players from here, in which the first sees the enemy's main and loses
-  sight of it, has an undetected enemy observer in its main, and is far from an enemy marine, all made by debug
-  commands, and then the enemy's townhall and that marine die out of its sight; and saves its replay. Played back as
-  the first player with the fog on and with it off, at a step while it sees the enemy's main, one after, and one after
-  the two died, it compares every enemy unit of the fog-off view with the fog-on view: its display, whether its tile is
-  in the player's sight, whether the fog-on view lists it, under its tag or as a copy where it stands, and its health
-  and orders; the enemy units the fog-on view lists alone; the deaths each view reports; and whether the two views'
-  tiles in sight are the same.
+  sight of it, has an undetected enemy observer, burrowed zergling and burrowed widow mine in its main, and is far
+  from an enemy marine, all made by debug commands, and then the enemy's townhall and that marine die out of its
+  sight; and saves its replay. Played back as the first player with the fog on and with it off, at a step while it sees
+  the enemy's main, one after, and one after the two died, it compares every enemy unit of the fog-off view with the
+  fog-on view: its display, whether its tile is in the player's sight, whether the fog-on view lists it, under its tag
+  or as a copy where it stands, its health and orders, and its owner, maximum health, cloak and burrow; the enemy units
+  the fog-on view lists alone; the deaths each view reports; and whether the two views' tiles in sight are the same.
 - `scouting` plays four games of 100 seconds against the computer, seeded 1 to 4, in which an SCV scouts the enemy's
   main and comes back, as the integration test of a playback with the fog off does, and plays each one's replay back
   with the fog on and off, 8 steps a turn. It sorts the enemy's hidden units of the fog-off view by whether the tile
@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy
-from _sandbox import MAP, OpenGround, playing, playing_rivals
+from _sandbox import MAP, Cheat, OpenGround, playing, playing_rivals
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
 
@@ -90,6 +90,9 @@ _UNIT_FIELDS = ("type", "owner", "display", "x", "y", "health", "shield", "energ
 _UNSEEN_UNITS_STEP = 4480
 # The steps `unseen` lets pass after each thing it makes happen, and how near a copy of a unit stands to it.
 _UNSEEN_SETTLE_STEPS = 64
+# The raw ability that burrows a zergling, and the steps `unseen` lets it take.
+_BURROW_ZERGLING = 1390
+_BURROW_STEPS = 16
 # How far from the enemy's start, toward the middle, `unseen` keeps it a structure, out of the first player's sight.
 _ENEMY_BAY_DISTANCE = 30.0
 _SAME_PLACE = 0.5
@@ -97,7 +100,7 @@ _SAME_PLACE = 0.5
 _SCOUTING_SECONDS = 100
 _SCOUTING_SEEDS = (1, 2, 3, 4)
 _SCOUT_BACK_AT_STEP = 1500
-_SNAPSHOT = raw_pb2.DisplayType.Snapshot
+_SNAPSHOT_DISPLAY = raw_pb2.DisplayType.Snapshot
 # A tile the player sees, in the game's visibility image.
 _TILE_IN_SIGHT = 2
 # The kinds of unit `unseen` always gives an example of: a display that its tile's sight does not match.
@@ -559,10 +562,18 @@ def _replay_of_units_unseen(installation: Installation) -> tuple[bytes, int, dic
         kept_structure_site = open_ground.claim(enemy_start.towards(middle, _ENEMY_BAY_DISTANCE), half=2)
         enemy.debug(
             enemy.create(UnitTypeId.OBSERVER, enemy.player, own_start.towards(middle, 4.0)),
+            enemy.create(UnitTypeId.ZERGLING, enemy.player, own_start.towards(middle, 5.0)),
+            enemy.create(UnitTypeId.WIDOW_MINE_BURROWED, enemy.player, own_start.towards(middle, 6.0)),
             enemy.create(UnitTypeId.MARINE, enemy.player, open_ground.claim(middle, half=1)),
             enemy.create(UnitTypeId.ENGINEERING_BAY, enemy.player, kept_structure_site),
         )
+        # A zergling made burrowed is not made, so this one burrows, under the cheat that gives every upgrade.
+        enemy.cheat(Cheat.UPGRADE)
         rivals.step(_UNSEEN_SETTLE_STEPS)
+        zerglings = [u.tag for u in enemy.units() if u.owner == enemy.player and u.unit_type == UnitTypeId.ZERGLING]
+        for tag in zerglings:
+            enemy.order(_BURROW_ZERGLING, tag)
+        rivals.step(_BURROW_STEPS)
         steps = {"seeing the enemy's main": me.client.observation().observation.game_loop}
         me.kill(unit.tag for unit in me.units() if unit.owner == me.player and unit.unit_type == UnitTypeId.MARINE)
         rivals.step(_UNSEEN_SETTLE_STEPS)
@@ -640,6 +651,7 @@ def _enemy_units_unseen(
                     "health, fog off": unit.health,
                     "health, fog on": None if seen_as is None else seen_as.health,
                     "owner and maximum health, fog off": [unit.owner, unit.health_max],
+                    "cloak and burrowed, fog off": [raw_pb2.CloakState.Name(unit.cloak), unit.is_burrowed],
                     "orders, fog off": len(unit.orders),
                     "orders, fog on": None if seen_as is None else len(seen_as.orders),
                 }
@@ -771,9 +783,9 @@ def _copies_retagged_in_the_fog(fog_on_views: Sequence[sc2api_pb2.ResponseObserv
     observation."""
     retagged = []
     for before, after in itertools.pairwise(fog_on_views):
-        later_copies = [unit for unit in after.observation.raw_data.units if unit.display_type == _SNAPSHOT]
+        later_copies = [unit for unit in after.observation.raw_data.units if unit.display_type == _SNAPSHOT_DISPLAY]
         for unit in before.observation.raw_data.units:
-            if unit.display_type != _SNAPSHOT:
+            if unit.display_type != _SNAPSHOT_DISPLAY:
                 continue
             for other in later_copies:
                 same_place = abs(other.pos.x - unit.pos.x) < _SAME_PLACE and abs(other.pos.y - unit.pos.y) < _SAME_PLACE
@@ -835,7 +847,7 @@ def _sort_the_units_out_of_sight(
                 owner = "an owner" if unit.owner else "no owner"
                 health = "a maximum health" if unit.health_max else "no maximum health"
                 hidden[f"on a tile {sight}, reporting {owner} and {health}, {listed}"] += 1
-            elif unit.alliance == raw_pb2.Alliance.Neutral and unit.display_type == _SNAPSHOT:
+            elif unit.alliance == raw_pb2.Alliance.Neutral and unit.display_type == _SNAPSHOT_DISPLAY:
                 contents = "contents" if unit.mineral_contents or unit.vespene_contents else "no contents"
                 in_the_fog[f"on a tile {sight}, reporting {contents}, {listed} under its tag"] += 1
         on, off = fog_on.observation, fog_off.observation

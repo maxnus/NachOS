@@ -20,10 +20,10 @@ if TYPE_CHECKING:
 
     from sc2nachos.units._tracking._tracker import _Tracker
 
-_VISIBLE = raw_pb2.DisplayType.Visible
-_IN_FOG = raw_pb2.DisplayType.Snapshot
-_OWN = raw_pb2.Alliance.Self
-_ENEMY = raw_pb2.Alliance.Enemy
+_VISIBLE_DISPLAY = raw_pb2.DisplayType.Visible
+_IN_FOG_DISPLAY = raw_pb2.DisplayType.Snapshot
+_OWN_ALLIANCE = raw_pb2.Alliance.Self
+_ENEMY_ALLIANCE = raw_pb2.Alliance.Enemy
 # The structures that can leave the spot they are remembered at: those offered a lift or an uproot, in their grounded
 # forms alone, since one lifted off or uprooted, like a viking in either form, is never remembered in the fog (stated).
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
@@ -212,7 +212,7 @@ class _UnitTracker:
 
     def _record_entered_sight(self, unit: Unit[Any], report: raw_pb2.Unit) -> None:
         """Record an enemy unit back in sight after being out of the observation or in the fog."""
-        if report.alliance == _ENEMY and report.display_type != _IN_FOG:
+        if report.alliance == _ENEMY_ALLIANCE and report.display_type != _IN_FOG_DISPLAY:
             self._tracker.last_changes.enemy_units_entered_sight.append(unit)
 
     def _ignore_structure_fog_copy(self, tag: int, previous: _UnitsByTag, present: _UnitsByTag) -> None:
@@ -254,9 +254,9 @@ class _UnitTracker:
             display = report.display_type
             unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
             if unit is not None and _new_tag_is_same_unit(unit, display):
-                if report.alliance == _ENEMY:
+                if report.alliance == _ENEMY_ALLIANCE:
                     changes = self._tracker.last_changes
-                    entered = display == _VISIBLE
+                    entered = display == _VISIBLE_DISPLAY
                     sight = changes.enemy_units_entered_sight if entered else changes.enemy_units_left_sight
                     sight.append(unit)
                 unit._tag = report.tag
@@ -269,7 +269,7 @@ class _UnitTracker:
             tag = report.tag
             self._by_tag[tag] = unit
             self._ids[tag] = unit._id
-            if display == _IN_FOG:
+            if display == _IN_FOG_DISPLAY:
                 self._in_fog_tags.add(tag)
             present[tag] = unit
 
@@ -300,7 +300,7 @@ class _UnitTracker:
                     continue
             if unit._step != step and not unit._stale:
                 report = unit._latest_report
-                if report.alliance == _ENEMY and report.display_type != _IN_FOG:
+                if report.alliance == _ENEMY_ALLIANCE and report.display_type != _IN_FOG_DISPLAY:
                     self._tracker.last_changes.enemy_units_left_sight.append(unit)
                 unit._mark_stale()
                 self._stale_units[unit._id] = unit
@@ -319,7 +319,7 @@ class _UnitTracker:
             self._units_seen_per_alliance[alliance] = count
             unit_id = alliance * _IDS_PER_ALLIANCE + count
         changes = self._tracker.last_changes
-        if alliance == _OWN:
+        if alliance == _OWN_ALLIANCE:
             own: OwnUnit[Any] = OwnUnit(report, self._tracker, unit_id, step)
             changes.own_units_created.append(own)
             if report.build_progress < 1.0:
@@ -327,9 +327,9 @@ class _UnitTracker:
             unit: Unit[Any] = own
         else:
             unit = Unit(report, self._tracker, unit_id, step)
-            if alliance == _ENEMY:
+            if alliance == _ENEMY_ALLIANCE:
                 changes.enemy_units_first_seen.append(unit)
-                if report.display_type != _IN_FOG:
+                if report.display_type != _IN_FOG_DISPLAY:
                     changes.enemy_units_entered_sight.append(unit)
         self._units_by_id[unit_id] = unit
         return unit
@@ -370,6 +370,6 @@ def _new_tag_is_same_unit(unit: Unit[Any], display: int) -> bool:
     """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
     visible into the fog, or a fog copy of a unit never seen visible shown visible."""
     before = unit._latest_report.display_type
-    if before == _VISIBLE:
-        return display == _IN_FOG
-    return before == _IN_FOG and display == _VISIBLE and unit._latest_visible_report is None
+    if before == _VISIBLE_DISPLAY:
+        return display == _IN_FOG_DISPLAY
+    return before == _IN_FOG_DISPLAY and display == _VISIBLE_DISPLAY and unit._latest_visible_report is None

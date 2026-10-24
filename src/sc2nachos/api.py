@@ -239,9 +239,9 @@ class Api:
 
         Raises `FogOnError` in a game, and in a replay played back with the fog on.
         """
-        if (whole_game_tracker := self._current_game().whole_game_tracker) is None:
+        if (fog_off_playback := self._current_game().fog_off_playback) is None:
             raise FogOnError("the fog is on, so the game reports only what this player sees")
-        return whole_game_tracker.unit_tracker.present
+        return fog_off_playback.whole_game_tracker.unit_tracker.present
 
     @property
     def known_units(self) -> Units[Unit[Any]]:

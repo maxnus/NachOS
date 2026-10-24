@@ -50,7 +50,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import UnitCommand
-from sc2nachos.units import Alliance, NotReportedError, Unit, Units, Visibility
+from sc2nachos.units import NotReportedError, Unit, Units, Visibility
 from support import FakeTransport, make_response, recorded_observations, write_recording
 
 # A map from the current AIE ladder pool, for the test games.
@@ -964,11 +964,12 @@ def test_in_a_real_game_its_replay_with_the_fog_off_shows_the_player_what_the_fo
     assert fog_off.sight_events == fog_on.sight_events
     seen = {name for name, _, _ in fog_on.sight_events}
     assert {"EnemyUnitFirstSeenEvent", "EnemyUnitLeftSightEvent"} <= seen
-    last_step = max(fog_off.readings)
-    remembered = [r for r in fog_off.readings[last_step] if r[0] is Alliance.ENEMY and r[4] is Visibility.IN_FOG]
-    assert remembered, "the scout saw no enemy structure to remember"
     assert max(unseen_by_turn.values()) > 0
-    remembered_now = [
-        unit for unit in fog_off.api.all_units.enemy if unit.id in fog_off.api.units.ids and not unit.is_stale
-    ]
-    assert all(unit.visibility is Visibility.VISIBLE and unit.health > 0 for unit in remembered_now)
+    remembered = fog_off.api.units.enemy.filter(lambda unit: unit.visibility is Visibility.IN_FOG)
+    assert remembered, "the scout saw no enemy structure to remember"
+    for unit in remembered:
+        as_it_is = fog_off.api.all_units.get(unit.id)
+        assert as_it_is is not None
+        assert as_it_is.type_id == unit.type_id
+        assert as_it_is.visibility is Visibility.VISIBLE
+        assert as_it_is.health > 0
