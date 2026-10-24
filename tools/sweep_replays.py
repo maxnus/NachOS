@@ -18,6 +18,12 @@ replay saved at its time limit.
 - `ending` plays a game the computer is defeated in through `DebugEndGame`, saves its replay once it has ended, and
   plays that back as each player, to its end: the result and status there, the results the replay's info gives, and
   what a step after the end is answered. It does the same for the shared game, saved at its time limit.
+- `unseen` plays a game of its own against the computer in which player 1 sees the enemy's main and loses sight of
+  it, has an undetected enemy observer in its main, and is far from an enemy marine, all made by debug commands, and
+  saves its replay. Played back as player 1 with the fog on and with it off, at a step while it sees the enemy's main
+  and one after, it compares every enemy unit of the fog-off view with the fog-on view: its display, whether its tile
+  is in player 1's sight, whether the fog-on view lists it, under its tag or as a copy where it stands, and its health
+  and orders; and whether the two views' tiles in sight are the same.
 - `speed` times starting the replay, and playing it back, observing each turn, at 8 steps a turn and at every step,
   with the fog on and off, with the size of an observation. It then plays it back through `run_replay` at every step,
   recording it, and gives the recording's size and how long `run_recording` takes to play it back.
@@ -42,11 +48,16 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-from _sandbox import MAP, playing
+import numpy
+from _sandbox import MAP, OpenGround, playing
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, Computer, Difficulty, Race, run_local, run_recording, run_replay
+from sc2nachos.gamemap import GameMap
+from sc2nachos.gamemap._image_data import image_array
+from sc2nachos.geometry import Rectangle
+from sc2nachos.ids import UnitTypeId
 from sc2nachos.launch import GameProcess, Installation
 from sc2nachos.protocol import ConnectionClosedError, Recording, WebSocketTransport
 from sc2nachos.protocol._client import _raw_interface
@@ -66,6 +77,13 @@ _UNIT_FIELDS = ("type", "owner", "display", "x", "y", "health", "shield", "energ
 # The step at which `views` compares the enemy units player 1 did not see with their owner's view of them, and the
 # fields it compares.
 _UNSEEN_UNITS_STEP = 4480
+# The steps `unseen` lets pass after each thing it makes happen, and how near a copy of a unit stands to it.
+_UNSEEN_SETTLE_STEPS = 64
+_SAME_PLACE = 0.5
+# A tile the player sees, in the game's visibility image.
+_TILE_IN_SIGHT = 2
+# The kinds of unit `unseen` always gives an example of: a display that its tile's sight does not match.
+_KINDS_AT_THE_EDGE_OF_SIGHT = frozenset({"Visible, on a tile out of sight", "Hidden, on a tile in sight"})
 _REPORTED_FIELDS = (
     "unit_type",
     "health",
@@ -504,6 +522,152 @@ def sweep_ending(installation: Installation, replay: Path, recording: Path) -> d
     return findings
 
 
+def _replay_of_units_unseen(installation: Installation) -> tuple[bytes, dict[str, int]]:
+    """Play a game against the computer in which player 1 sees the enemy's main and then loses sight of it, has an
+    undetected enemy observer in its main, and is far from an enemy marine, all made by debug commands, and return its
+    replay and the steps at which player 1 sees the enemy's main and after it lost sight of it."""
+    with playing(Race.TERRAN, installation) as sandbox:
+        client = sandbox.client
+        observation = client.observation()
+        game_map = GameMap._from_game(client.game_info(), observation)
+        own_start, enemy_start = game_map.all_start_locations
+        middle = game_map.playable_area.center
+        open_ground = OpenGround(game_map, observation.observation.raw_data.units)
+        made = sandbox.spawn(
+            [
+                (UnitTypeId.MARINE, 1, enemy_start.towards(middle, 7.0)),
+                (UnitTypeId.OBSERVER, 2, own_start.towards(middle, 4.0)),
+                (UnitTypeId.MARINE, 2, open_ground.claim(middle, half=1)),
+            ]
+        )
+        scout = next(unit for unit in made if unit.owner == 1)
+        client.step(_UNSEEN_SETTLE_STEPS)
+        steps = {"seeing the enemy's main": client.observation().observation.game_loop}
+        sandbox.kill([scout.tag])
+        client.step(_UNSEEN_SETTLE_STEPS)
+        steps["after losing sight of it"] = client.observation().observation.game_loop
+        client.step(_UNSEEN_SETTLE_STEPS)
+        replay = sandbox.transport.request(sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay()))
+        return replay.save_replay.data, steps
+
+
+def _observation_at(
+    transport: WebSocketTransport, replay_data: bytes, *, disable_fog: bool, step: int
+) -> sc2api_pb2.ResponseObservation:
+    """The observation player 1 is shown at `step` of the replay, with the fog off or on."""
+    _start_replay(transport, player=1, disable_fog=disable_fog, replay_data=replay_data)
+    _answer_to(transport, step=sc2api_pb2.RequestStep(count=step))
+    return _observe_the_replay(transport).observation
+
+
+def _tiles_in_sight(observation: sc2api_pb2.ResponseObservation) -> numpy.ndarray:
+    """Whether player 1 sees each tile, indexed `[x, y]`."""
+    visibility = observation.observation.raw_data.map_state.visibility
+    whole_map = Rectangle(0, 0, visibility.size.x, visibility.size.y)
+    return image_array(visibility, whole_map) == _TILE_IN_SIGHT
+
+
+def _enemy_units_unseen(
+    fog_on: sc2api_pb2.ResponseObservation, fog_off: sc2api_pb2.ResponseObservation
+) -> dict[str, Any]:
+    """Every enemy unit of `fog_off`, sorted by its display and whether its tile is in player 1's sight, against
+    `fog_on`: whether that lists it under its tag or as a copy of its type where it stands, and its health and orders
+    in both."""
+    in_sight = _tiles_in_sight(fog_off)
+    listed_with_the_fog_on = list(fog_on.observation.raw_data.units)
+    by_tag = {unit.tag: unit for unit in listed_with_the_fog_on}
+    kinds: dict[str, Counter[str]] = {}
+    examples: list[dict[str, Any]] = []
+    for unit in fog_off.observation.raw_data.units:
+        if unit.alliance != raw_pb2.Alliance.Enemy:
+            continue
+        sight = "in sight" if in_sight[int(unit.pos.x), int(unit.pos.y)] else "out of sight"
+        kind = f"{raw_pb2.DisplayType.Name(unit.display_type)}, on a tile {sight}"
+        fog_on_twin = by_tag.get(unit.tag)
+        copies = [
+            other
+            for other in listed_with_the_fog_on
+            if other.tag != unit.tag
+            and other.unit_type == unit.unit_type
+            and abs(other.pos.x - unit.pos.x) < _SAME_PLACE
+            and abs(other.pos.y - unit.pos.y) < _SAME_PLACE
+        ]
+        if fog_on_twin is not None:
+            listed = f"listed with the fog on under its tag, {raw_pb2.DisplayType.Name(fog_on_twin.display_type)}"
+        elif copies:
+            listed = f"listed with the fog on as a copy, {raw_pb2.DisplayType.Name(copies[0].display_type)}"
+        else:
+            listed = "not listed with the fog on"
+        kinds.setdefault(kind, Counter())[listed] += 1
+        if len(examples) < 12 or kind in _KINDS_AT_THE_EDGE_OF_SIGHT:
+            seen_as = fog_on_twin or (copies[0] if copies else None)
+            examples.append(
+                {
+                    "type": unit.unit_type,
+                    "kind": kind,
+                    "listed": listed,
+                    "distance to the nearest tile in sight": _distance_to_sight(in_sight, unit),
+                    "radius": unit.radius,
+                    "health, fog off": unit.health,
+                    "health, fog on": None if seen_as is None else seen_as.health,
+                    "orders, fog off": len(unit.orders),
+                    "orders, fog on": None if seen_as is None else len(seen_as.orders),
+                }
+            )
+    return {
+        "enemy units by kind": {kind: dict(listed) for kind, listed in kinds.items()},
+        "enemy units with orders, fog off": sum(
+            1 for unit in fog_off.observation.raw_data.units if unit.alliance == raw_pb2.Alliance.Enemy and unit.orders
+        ),
+        "the same tiles in sight": bool((_tiles_in_sight(fog_on) == in_sight).all()),
+        "examples": examples,
+    }
+
+
+def _distance_to_sight(in_sight: numpy.ndarray, unit: raw_pb2.Unit) -> float | None:
+    """How far `unit` stands from the center of the nearest tile in sight, or `None` if no tile is."""
+    xs, ys = numpy.nonzero(in_sight)
+    if not len(xs):
+        return None
+    return round(float(numpy.hypot(xs + 0.5 - unit.pos.x, ys + 0.5 - unit.pos.y).min()), 2)
+
+
+def _enemy_tags_kept(earlier: sc2api_pb2.ResponseObservation, later: sc2api_pb2.ResponseObservation) -> dict[str, int]:
+    """Of the enemy units `later` lists that `earlier` listed by type where they stand, how many kept their tag, by
+    their display in `later`."""
+    earlier_tags = {
+        (unit.unit_type, round(unit.pos.x), round(unit.pos.y)): unit.tag
+        for unit in earlier.observation.raw_data.units
+        if unit.alliance == raw_pb2.Alliance.Enemy
+    }
+    kept: Counter[str] = Counter()
+    for unit in later.observation.raw_data.units:
+        earlier_tag = earlier_tags.get((unit.unit_type, round(unit.pos.x), round(unit.pos.y)))
+        if unit.alliance == raw_pb2.Alliance.Enemy and earlier_tag is not None:
+            same = "kept its tag" if earlier_tag == unit.tag else "under another tag"
+            kept[f"{raw_pb2.DisplayType.Name(unit.display_type)}, {same}"] += 1
+    return dict(kept)
+
+
+def sweep_unseen(installation: Installation, replay: Path, recording: Path) -> dict[str, Any]:
+    """What the fog off shows player 1 of the enemy units it does not see, against what the fog on shows it."""
+    replay_data, steps = _replay_of_units_unseen(installation)
+    findings: dict[str, Any] = {"steps": steps}
+    fog_off_views = []
+    with _replay_client(installation) as transport:
+        for name, step in steps.items():
+            fog_on = _observation_at(transport, replay_data, disable_fog=False, step=step)
+            fog_off = _observation_at(transport, replay_data, disable_fog=True, step=step)
+            fog_off_views.append(fog_off)
+            findings[name] = {"step played back to": fog_off.observation.game_loop} | _enemy_units_unseen(
+                fog_on, fog_off
+            )
+    findings["enemy units standing still, from the first step to the second, fog off"] = _enemy_tags_kept(
+        *fog_off_views
+    )
+    return findings
+
+
 def _timed_playback(
     transport: WebSocketTransport, replay_data: bytes, *, steps_per_turn: int, disable_fog: bool
 ) -> dict[str, Any]:
@@ -559,6 +723,7 @@ _SWEEPS_BY_NAME: dict[str, Callable[[Installation, Path, Path], object]] = {
     "views": sweep_views,
     "requests": sweep_requests_answered,
     "ending": sweep_ending,
+    "unseen": sweep_unseen,
     "speed": sweep_speed,
 }
 

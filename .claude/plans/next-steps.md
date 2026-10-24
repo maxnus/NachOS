@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161 but #160. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
+- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
   integration` passed 38 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -513,8 +513,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
   cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
-- Beside M5: replay playback (this branch), then reading a playback with the fog off, its design planned with the
-  owner first (2026-10-24, above).
+- Beside M5: reading a playback with the fog off (this branch), its design planned with the owner first, after
+  replay playback (#160; 2026-10-24, above). `tools/sweep_replays.py`, `unseen`, measured what it rests on.
 
 ## 1. Waiting until something needs them
 

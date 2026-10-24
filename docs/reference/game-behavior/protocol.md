@@ -100,6 +100,14 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
   game reports those as their owner saw them, in type, health, shields, energy, build progress, flight, burrowing,
   weapon cooldown and facing, but not their orders. A structure a player has ordered and not yet placed, a
   `Placeholder`, is in its own view alone (`views`).
+- With the fog off, in a game of player 1's against the computer whose units were made by debug commands (`unseen`):
+  - an enemy unit player 1 does not see is listed `Hidden` when it stands out of player 1's sight, and the fog-on view
+    lists none of them; one in its sight but undetected, an observer, is `Hidden` in both views under one tag;
+  - a unit undetected in sight reports its health as 0 in both views, as one undetected does with the fog on, and the
+    same observer out of sight reports its full 40;
+  - a structure player 1 saw and lost sight of keeps its tag and its health, 1485 for a command center, displayed
+    `Snapshot`, where the fog-on view remembers a copy under another tag with health 0;
+  - no enemy unit reports an order, in either view, and the tiles in sight are the same in both.
 - In a replay the game refuses every action, an empty one, chat and a camera move included, with "Can't issue actions
   in a replay"; every debug command, with "Not allowed during replays"; and a save, with "Can't save a replay of a
   replay". It answers an observer's camera move, the queries for abilities and pathing, the tables and the game
