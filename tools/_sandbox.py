@@ -62,7 +62,9 @@ class OpenGround:
         self._taken: dict[tuple[float, float], tuple[int, int, int]] = {}
         for unit in units:
             reach = int(unit.radius) + 2
-            self._take(int(unit.pos.x), int(unit.pos.y), reach, free=False)
+            # The grid starts at the playable area's corner, not at the map's.
+            x, y = int(unit.pos.x) - self._origin.x, int(unit.pos.y) - self._origin.y
+            self._take(x, y, reach, free=False)
 
     def claim(self, near: Point, half: int) -> Point:
         """Take the free square `2 * half + 1` tiles across nearest to `near`, and return its center. `release` gives
@@ -88,7 +90,8 @@ class OpenGround:
             self._take(*square, free=True)
 
     def _take(self, x: int, y: int, half: int, *, free: bool) -> None:
-        """Mark the square `2 * half + 1` tiles across centered on tile `(x, y)` as taken or free."""
+        """Mark the square `2 * half + 1` tiles across centered on tile `(x, y)` of the grid, counted from its
+        origin, as taken or free."""
         self._free[max(x - half, 0) : x + half + 1, max(y - half, 0) : y + half + 1] = free
 
 
@@ -146,6 +149,18 @@ class Sandbox:
             if not tags & {unit.tag for unit in self.units()}:
                 return
         raise RuntimeError(f"{len(tags)} units were not removed")
+
+    def leave_the_computer_one_structure(self) -> None:
+        """Give the computer one engineering bay in the middle of the map and remove all else it has, so that it can
+        neither fight nor train, and both mains stand empty. Not a supply depot, which the computer lowers at once.
+        Needs the map shown, to see the bay it makes."""
+        observation = self.client.observation()
+        game_map = GameMap._from_game(self.client.game_info(), observation)
+        units_at_the_start = list(observation.observation.raw_data.units)
+        computer_id = 2 if self.player == 1 else 1
+        map_middle = OpenGround(game_map, units_at_the_start).claim(game_map.playable_area.center, half=1)
+        (kept_bay,) = self.spawn([(UnitTypeId.ENGINEERING_BAY, computer_id, map_middle)])
+        self.remove(unit.tag for unit in self.units() if unit.owner == computer_id and unit.tag != kept_bay.tag)
 
     def set_value(
         self, kind: debug_pb2.DebugSetUnitValue.UnitValue.ValueType, value: float, tags: Iterable[int]

@@ -199,7 +199,8 @@ class OrderBook:
     def pending_cost(self) -> Cost:
         """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
         `cost` in the game's tables for each unit it goes out to. A unit given orders that replace one another pays for
-        the last, and one already carrying an order out pays nothing for it again."""
+        the last, and one already carrying an order out pays nothing for it again. Its steps are every order's added up,
+        though the units may carry them out side by side."""
         total = Cost(0, 0)
         for order, units in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)

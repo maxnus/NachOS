@@ -79,11 +79,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   them out in that order: of two unqueued moves to one unit the second stands, an unqueued move after a queued one
   clears it, and a queued move after an unqueued one goes behind it. A stim and a move to one marine are both
   carried out in either order: it moves, stimmed (tool `sweep_orders`).
-- Each action is judged against the game state as the last step left it, not as earlier actions in the same step
-  change it. When the game steps, it carries them out in order and drops what no longer fits, with no error and no
-  entry among the reported actions. Ten marines sent to a barracks in ten requests within one step are all answered
-  `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in one request to a
-  command center, five are queued (tool `sweep_orders`).
+- Each action is judged against the game state as the last step left it, not as earlier actions in the same step change
+  it, and a unit's life as the last observation asked for saw it: a missile turret whose life a debug command halved 8
+  steps before, with no observation asked for since, was refused a repair `TooMuchLife`, and taken after one observation
+  (tool `sweep_repair`, build 75689). When the game steps, it carries the actions out in order and drops what no longer
+  fits, with no error and no entry among the reported actions. Ten marines sent to a barracks in ten requests within one
+  step are all answered `Success`: five are queued, or eight with a reactor, and the rest are dropped. Of seven SCVs in
+  one request to a command center, five are queued (tool `sweep_orders`).
 - An order to a dead unit's tag, or to a tag never used, is answered `Error`; to an enemy unit,
   `YouCantControlThatUnit`. A target of the wrong kind is answered `Error`: a point for a stop or a stim, none for a
   move, a unit for a supply depot (tool `sweep_orders`).
@@ -332,6 +334,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   becomes an egg carrying only the last of them, and the hatchery's own orders stay empty. Every larva of a hatchery
   given a drone becomes a drone egg, and a second order to a larva already spoken for changes nothing (tool
   `sweep_orders`).
+- Once Warp Gate is researched, the game gives every idle gateway a `Morph_WarpGate` order itself, which shows in the
+  observation after the research, and the gateway is then offered only its rally and smart. Before the research a
+  gateway is not offered the morph, and an order of it is refused `NotSupported`. A warp gate ordered back is a gateway
+  160 steps later under the same tag, its type changing a step before its order ends; that gateway is offered the morph
+  and does not turn again by itself (watched 640 steps), and ordered it, is a warp gate 160 steps later in the same way.
+  While it trains a zealot it is not offered the morph (probe in #159, under `free`, local game, Linux build 75689).
 - A warp gate keeps no queue either: given two zealot warp-ins in one request, both answered `Success`, it shows no
   orders at all, then or 16 steps later (tool `sweep_orders`).
 - A warp gate waits after each warp-in: 448 steps after a zealot or an adept, 512 after a stalker or a sentry, and 720

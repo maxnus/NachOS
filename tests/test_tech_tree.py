@@ -452,8 +452,8 @@ class TestWhatTheTablesSay:
         assert AbilityId.STIM in first_corpus_tables.units[UnitTypeId.MARINE].abilities
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, first_corpus_tables: GameData) -> None:
-        """A gateway becomes a warp gate by itself once the research is done. Every research ability has a
-        performer."""
+        """The game orders every gateway to become a warp gate once the research is done, so the sweep saw none
+        offered it. Every research ability has a performer."""
         makers = [row.creation_ability for row in first_corpus_tables.units.values()]
         makers += [row.research_ability for row in first_corpus_tables.upgrades.values()]
         unperformed = {

@@ -275,6 +275,7 @@ it.
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
+| `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
@@ -531,8 +532,8 @@ it.
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene and supply, without the time |
-| `unit_data.cost.time` | `unit_data.build_steps` |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps |
+| `unit_data.cost.time` | `unit_data.build_steps`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.steps` counts what it morphed from too |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
@@ -540,7 +541,7 @@ it.
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
-| `upgrade_data.cost.time` | `upgrade_data.research_steps` |
+| `upgrade_data.cost.time` | `upgrade_data.cost.steps` |
 | `weapon.speed`, in Normal-speed seconds | `weapon.base_cooldown_steps`; `average_cooldown_steps` counts the random delay the game adds to each attack |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
@@ -593,13 +594,16 @@ it.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
   no path for yet ([game behavior](game-behavior/abilities-and-orders.md#loading-and-unloading)), so `UNLOAD`,
   and `UNLOAD_AT` put everyone down at once.
-- **A cost is minerals, vespene and supply; times are steps beside it.** python-sc2's `Cost` carries a `time` in
-  steps, which its `__add__` adds and its `__eq__` ignores; build times overlap, so adding them is wrong nearly
-  everywhere. NachOS's `Cost` adds, subtracts and scales, supply included, and `build_steps` and `research_steps`
-  are their own fields. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts,
-  scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are fractional,
-  since half a cost and an average cost are ordinary things to want; what the game gave stays whole until something
-  divides it.
+- **A cost is minerals, vespene, supply and steps, and a type's steps are everything spent to reach it.** python-sc2's
+  `Cost` carries a `time` in steps too, which its `__add__` adds and its `__eq__` ignores, and for a morph it is the
+  morph's alone, an orbital command's 560. NachOS's `unit_data.cost.steps` adds the steps of each stage that costs
+  something, as the minerals do: an orbital command's 2160, the command center's 1600 included, and a sieged tank's the
+  tank's 720, since a switch that costs nothing adds none. `build_steps` is the last stage alone. NachOS's `Cost` adds,
+  subtracts, scales and compares every field; costs added up add their steps, which is production time one after
+  another, not how long they take side by side. What a player holds is `Resources`, minerals and vespene alone, which
+  adds, subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
+  fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole until
+  something divides it.
 - **A unit type's cost is everything spent to reach it; an ability's is what the game charges.** `unit_data.cost` hands
   the game's number back as it is, an orbital command's 550 with the command center's 400 in it, and `morphed_from` says
   what to subtract; `ability_data.cost` has it subtracted already: `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` charges 150,

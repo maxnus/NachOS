@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #157. On this branch, `uv run pytest` passes 2651 tests; `uv run pytest -m
+- nachOS `main` has every PR to #158. On this branch, `uv run pytest` passes 2666 tests; `uv run pytest -m
   integration` passed 37 against a real game on #156's branch (run 2026-10-22).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -447,8 +447,24 @@ Keep this file current: when a step is done, say so here in the same pull reques
     reports it (over leaving it out, after a sweep); its report kept in a slot of its own beside `velocity`'s position
     and step, which keep other rules (review of #158, over one record for the three, which made intake some 8%
     slower and would have changed `velocity`);
-  - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
-    and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables);
+  - repair measured by a sweep first, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, from the health
+    now and from none, each a `Cost` whose steps are one SCV's (review of #159, over `repair_cost` and `repair_steps`,
+    over a class of their own for the two, and over the same per type in the tables); every Terran mechanical type
+    swept, with the generated table keeping only the six not repaired in the steps their type costs (review of #159,
+    over every type measured, and over a hand-written table of the exceptions), once the sweep's air units that were
+    never repaired were found to be the sweep's own doing (over answering `None` for them) (#159);
+  - `Cost.steps`, 0 where nothing is made; in a unit type's row the build steps of each stage that costs something,
+    so that a switch that costs nothing adds none and every form of a unit reads alike (review of #159, over no time
+    on `Cost`, and over counting a switch's own steps); `build_steps` stays the last stage alone, and
+    `research_steps` goes for `cost.steps` (review of #159, over keeping both until the duration type);
+  - every step count read from the tables whole: a build time rounded up, as a train was seen to take it, and a
+    repair's share rounded up, with `Cost.steps` still a float, since a cost scales (review of #159, over int-typed
+    steps, and over the tables' fractions);
+  - a duration type for every duration, with steps and seconds, as its own pull request, planned first (review of
+    #159, over seconds for repair alone, and over one type for repair first);
+  - the warp gate's source, the gateway, from `SELF_MORPHS` in this pull request, so that it costs the gateway's steps
+    (review of #159, over a task of its own, and over the tech tree's sweep turning a warp gate back first, which the
+    next sweep of the tech tree does);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
 
 ## Next
@@ -459,9 +475,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154, with `--RecordFile` in
   #155), and ramp wall-in sites with their sweep (#156), the last of them.
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
-  next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (this branch); repair,
-  measured by a sweep, then `Unit.repair_cost` and `Unit.repair_steps`; and turning, measured by a sweep of each
-  type's turn rate, then `Unit.time_to_face(target)`.
+  next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
+  sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
+  measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`.
+- **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
+  the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
+  stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`
+  today), and whether the inputs (`steps_per_turn`, `every_steps=`, `debug.refresh_steps`) take it too. Then one pull
+  request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
+  cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
@@ -484,7 +506,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
   as a remembered copy, which the tracker assumes (the owner, review of #71).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
-  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
+  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
+  back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that
+  the tech tree records a gateway offered `GATEWAY_MORPH_WARP_GATE` and `SELF_MORPHS` can go (#159). Recorded as it
+  stands, the turn back would make the warp gate the gateway's source too, a loop that would break the gateway's cost:
+  plan with the owner which way a switch both ways gives the source.
 - When the corpus is next recorded, `run_ladder` pings the client for its build and warns of one the tech tree was not
   swept on, as `run_local` warns from the installation without asking the game (the owner, #75).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though

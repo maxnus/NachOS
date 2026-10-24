@@ -125,7 +125,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
             ability_requirements=MappingProxyType(ability_requirements),
             creation_abilities=MappingProxyType(creation_abilities),
             producers=MappingProxyType(_producers_by_unit_type(ability_products, creation_abilities)),
-            morph_sources=MappingProxyType(_morph_sources(trials)),
+            morph_sources=MappingProxyType(_morph_sources(trials, creation_abilities)),
             power_consumers=power_consumers,
             upgrades=MappingProxyType(
                 {unit_type: MappingProxyType(upgrades) for unit_type, upgrades in found.unit_types.items()}
@@ -394,8 +394,11 @@ def _producers_by_unit_type(
     return {unit_type: frozenset(type_producers) for unit_type, type_producers in producers_by_type.items()}
 
 
-def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
-    """The type each unit type is made from, from the trials that used up the unit ordered.
+def _morph_sources(
+    trials: Iterable[Trial], creation_abilities: Mapping[UnitTypeId, AbilityId]
+) -> dict[UnitTypeId, UnitTypeId]:
+    """The type each unit type is made from, from the trials that used up the unit ordered, and for a type made by an
+    ability in `SELF_MORPHS`, which no trial saw, the type that turns itself into it there: a gateway, for a warp gate.
 
     Where several types can be used up making one, the source is the one the others are themselves made from: an
     overseer is made from an overlord, and from the overlord transport an overlord becomes.
@@ -409,6 +412,9 @@ def _morph_sources(trials: Iterable[Trial]) -> dict[UnitTypeId, UnitTypeId]:
         roots = [performer for performer in performers if not used_up.get(performer, set()) & performers]
         if len(roots) == 1:
             sources[product] = roots[0]
+    for unit_type, creation_ability in creation_abilities.items():
+        if (self_morphing_type := SELF_MORPHS.get(creation_ability)) is not None:
+            sources.setdefault(unit_type, self_morphing_type)
     return sources
 
 
