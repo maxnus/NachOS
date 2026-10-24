@@ -10,6 +10,7 @@ from typing import Any, Final, Self, cast
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
+from sc2nachos._fog_off_playback import _FogOffPlayback
 from sc2nachos.camera import Camera
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.debug import DebugCommands
@@ -110,6 +111,9 @@ class _Game:
     pathing: Final[Pathing]
     camera: Final[Camera]
     debug: Final[DebugCommands]
+    # In a replay played back with the fog off, what the player was shown of each observation, and every unit. `None`
+    # in a game, and with the fog on.
+    _fog_off_playback: Final[_FogOffPlayback | None] = None
     # The event each player's chat comes as, by player id: this player's own, and `None` for an observer's. Any other
     # player's is the opponent's.
     _chat_event_types: Final[Mapping[int, type[AnyChatEvent] | None]]
@@ -138,7 +142,13 @@ class _Game:
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
         enemy = Enemy._from_game(info, player_id, ladder_id=enemy_ladder_id)
-        tracker = _Tracker(game_data, enemy)
+        fog_off_playback = None
+        if client.fog_disabled:
+            fog_off_playback = _FogOffPlayback(game_data, enemy)
+            tracker = _Tracker(game_data, enemy, id_provider=fog_off_playback.id_of_unit)
+            observation = fog_off_playback.read(observation, step)
+        else:
+            tracker = _Tracker(game_data, enemy)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
@@ -170,14 +180,29 @@ class _Game:
             _chat_event_types=_chat_event_types_by_player(info, player_id),
             _enemy_race_to_report=enemy is not None and enemy.race is not None,
             step=step,
+            _fog_off_playback=fog_off_playback,
         )
         game._read(observation, step)
         return game
 
+    @property
+    def whole_game_tracker(self) -> _Tracker | None:
+        """Every unit of a replay played back with the fog off, each read in full, or `None` where the fog is on."""
+        return None if self._fog_off_playback is None else self._fog_off_playback.whole_game_tracker
+
     def observe(self, step: int | None = None) -> None:
         """Observe the game now, or once it reaches `step`."""
         observation = self.client.observation(game_loop=step)
-        self._take_in(observation, _step(observation))
+        step_observed = _step(observation)
+        if self._fog_off_playback is not None:
+            observation = self._fog_off_playback.read(observation, step_observed)
+        self._take_in(observation, step_observed)
+
+    def end(self) -> None:
+        """Mark every unit stale, in every tracker: the game is over, and another is starting."""
+        self.tracker.end()
+        if self._fog_off_playback is not None:
+            self._fog_off_playback.end()
 
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
         """Read `observation`: its units, the enemy upgrades they show if inference is on, and the rest it reports."""

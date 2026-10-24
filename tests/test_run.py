@@ -7,7 +7,7 @@ from typing import Any, Self
 
 import pytest
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
+from s2clientprotocol import raw_pb2, sc2api_pb2
 
 import sc2nachos.run
 from sc2nachos import (
@@ -16,6 +16,7 @@ from sc2nachos import (
     Api,
     Computer,
     Difficulty,
+    FogOnError,
     Race,
     Result,
     UnitTypeId,
@@ -26,7 +27,16 @@ from sc2nachos import (
 )
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.events import OwnActionEvent, TurnEvent
+from sc2nachos.events import (
+    AnyUnitEvent,
+    EnemyUnitDiedEvent,
+    EnemyUnitEnteredSightEvent,
+    EnemyUnitFirstSeenEvent,
+    EnemyUnitLeftSightEvent,
+    OwnActionEvent,
+    TurnEvent,
+    UnitFoundDeadEvent,
+)
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
@@ -40,6 +50,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import UnitCommand
+from sc2nachos.units import NotReportedError, Unit, Units, Visibility
 from support import FakeTransport, make_response, recorded_observations, write_recording
 
 # A map from the current AIE ladder pool, for the test games.
@@ -317,22 +328,51 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
-def _played_back(exchanges: Iterable[Exchange]) -> Iterator[Exchange]:
-    """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as
-    holds them: the replay started where the game was joined, never created, and played back rather than played."""
+def _played_back(exchanges: Iterable[Exchange], *, disable_fog: bool = False) -> Iterator[Exchange]:
+    """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as,
+    with the fog off if `disable_fog`, holds them: the replay started where the game was joined, never created, and
+    played back rather than played."""
     for exchange in exchanges:
         asked_kind = exchange.request.WhichOneof("request")
         if asked_kind == "create_game":
             continue
         if asked_kind == "join_game":
             start = sc2api_pb2.RequestStartReplay(
-                replay_data=b"the replay", observed_player_id=exchange.response.join_game.player_id
+                replay_data=b"the replay",
+                observed_player_id=exchange.response.join_game.player_id,
+                disable_fog=disable_fog,
             )
             started = make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay())
             yield Exchange(sc2api_pb2.Request(start_replay=start), started)
             continue
         if exchange.response.status == sc2api_pb2.Status.in_game:
             exchange.response.status = sc2api_pb2.Status.in_replay
+        yield exchange
+
+
+# The tag of the enemy marine `_with_an_enemy_marine_unseen` adds, which no corpus unit has.
+_UNSEEN_MARINE = 0x7FFF0001
+
+
+def _with_an_enemy_marine_unseen(exchanges: Iterable[Exchange]) -> Iterator[Exchange]:
+    """`exchanges` with an enemy marine in every observation, standing out of sight at the enemy's start, as a game
+    played back with the fog off lists one the player does not see."""
+    enemy_start = None
+    for exchange in exchanges:
+        response = exchange.response
+        if response.HasField("game_info"):
+            enemy_start = response.game_info.start_raw.start_locations[0]
+        elif response.HasField("observation") and enemy_start is not None:
+            marine = response.observation.observation.raw_data.units.add(
+                tag=_UNSEEN_MARINE,
+                unit_type=UnitTypeId.MARINE,
+                alliance=raw_pb2.Alliance.Enemy,
+                display_type=raw_pb2.DisplayType.Hidden,
+                owner=2,
+                health=45,
+                health_max=45,
+            )
+            marine.pos.x, marine.pos.y = enemy_start.x, enemy_start.y
         yield exchange
 
 
@@ -486,6 +526,57 @@ class TestPlayingARecordedReplay:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
         with pytest.raises(ValueError, match="is a replay played back, which plays back only as it was recorded"):
             run_recording(recording, Api(), permissive=True)
+
+
+class TestAReplayPlayedBackWithTheFogOff:
+    def _recording(self, tmp_path: Path) -> Recording:
+        """The corpus game on Pylon, for 100 observations, as a replay played back with the fog off, an enemy marine
+        out of sight in every observation."""
+        exchanges = _with_an_enemy_marine_unseen(_pylon_game_stopped_after(100))
+        return write_recording(tmp_path / "replay.sc2rec", _played_back(exchanges, disable_fog=True))
+
+    def _turns(self, recording: Recording) -> list[tuple[Units[Unit[Any]], Units[Unit[Any]]]]:
+        """Each turn's units and all units, played back from `recording` to its last observation."""
+        api = Api()
+        turns: list[tuple[Units[Unit[Any]], Units[Unit[Any]]]] = []
+
+        @api.on(TurnEvent)
+        def note(_: TurnEvent) -> None:
+            turns.append((api.units, api.all_units))
+
+        run_recording(recording, api, time_limit=steps_to_seconds(_last_recorded_step(recording)))
+        return turns
+
+    def test_all_units_holds_the_unit_the_player_did_not_see_in_full(self, tmp_path: Path) -> None:
+        turns = self._turns(self._recording(tmp_path))
+        assert turns
+        for units, all_units in turns:
+            assert not [unit for unit in units if unit.tag == _UNSEEN_MARINE]
+            (marine,) = [unit for unit in all_units if unit.tag == _UNSEEN_MARINE]
+            assert (marine.visibility, marine.health) == (Visibility.VISIBLE, 45)
+
+    def test_every_unit_the_player_knew_is_among_all_units_under_its_id(self, tmp_path: Path) -> None:
+        for units, all_units in self._turns(self._recording(tmp_path)):
+            assert len(all_units) > len(units)
+            assert all(
+                (whole := all_units.get(unit.id)) is not None and whole.type_id == unit.type_id for unit in units
+            )
+
+    @pytest.mark.parametrize("disable_fog", [False, None], ids=["replay with the fog on", "game"])
+    def test_all_units_raises_where_the_fog_is_on(self, tmp_path: Path, disable_fog: bool | None) -> None:
+        recording = (
+            _PYLON_GAME
+            if disable_fog is None
+            else write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
+        )
+        api = Api()
+
+        @api.on(TurnEvent, once=True)
+        def read(_: TurnEvent) -> None:
+            api.all_units  # noqa: B018
+
+        with pytest.raises(FogOnError, match="the fog is on, so the game reports only what this player sees"):
+            run_recording(recording, api)
 
 
 class TestTheReplaysPlayer:
@@ -773,3 +864,112 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
     assert from_the_recording.own_units == as_the_bot.own_units
     assert from_the_recording.units_shown == as_the_bot.units_shown
     assert from_the_recording.orders_given == played.orders_given
+
+
+# The events that follow what the player sees, which a playback with the fog off must hand out as one with it on.
+_SIGHT_EVENT_TYPES: tuple[type[AnyUnitEvent], ...] = (
+    EnemyUnitFirstSeenEvent,
+    EnemyUnitEnteredSightEvent,
+    EnemyUnitLeftSightEvent,
+    EnemyUnitDiedEvent,
+    UnitFoundDeadEvent,
+)
+
+
+class _ViewWatcher:
+    """An api that notes, every turn, how it reads each unit it knows of, and every event of what the player sees."""
+
+    def __init__(self) -> None:
+        self.api = Api()
+        self.readings: dict[int, list[tuple[Any, ...]]] = {}
+        self.sight_events: list[tuple[str, int, UnitTypeId]] = []
+        self.api.on(TurnEvent)(self._note_the_units)
+        for event_type in _SIGHT_EVENT_TYPES:
+            self.api.on(event_type)(self._note_the_event)
+
+    def _note_the_units(self, event: TurnEvent) -> None:
+        self.readings[event.step] = sorted(map(_reading, self.api.units), key=repr)
+
+    def _note_the_event(self, event: AnyUnitEvent) -> None:
+        self.sight_events.append((type(event).__name__, event.step, event.unit.type_id))
+
+
+def _reading(unit: Unit[Any]) -> tuple[Any, ...]:
+    """How `unit` reads: its side, type, position, visibility and health, or `None` where the game never reported it."""
+    try:
+        health: float | None = unit.health
+    except NotReportedError:
+        health = None
+    return (unit.alliance, unit.type_id, round(unit.position.x, 2), round(unit.position.y, 2), unit.visibility, health)
+
+
+def _scout_the_enemys_main_and_come_back(api: Api, *, back_at_step: int) -> None:
+    """Have `api` send one of its workers to the enemy's start on its first turn, and back home at `back_at_step`."""
+    scout_ids: list[int] = []
+
+    @api.on(TurnEvent, once=True)
+    def send(_: TurnEvent) -> None:
+        scout = api.units.own.workers[0]
+        scout_ids.append(scout.id)
+        api.orders.issue(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
+
+    @api.on(TurnEvent, at_step=back_at_step)
+    def come_back(_: TurnEvent) -> None:
+        if (scout := api.units.own.get(scout_ids[0])) is not None:
+            api.orders.issue(scout, AbilityId.MOVE, target=api.map.start_location)
+
+
+@pytest.mark.integration
+def test_in_a_real_game_its_replay_with_the_fog_off_shows_the_player_what_the_fog_on_does_and_every_unit_besides(
+    tmp_path: Path,
+) -> None:
+    """Run with `pytest -m integration`. Plays 100 seconds of a game in which the bot scouts the enemy's main and comes
+    back, then plays its replay back as the bot's player with the fog on and with it off."""
+    try:
+        game_map = MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    replay = tmp_path / "game.SC2Replay"
+    api = Api()
+    _scout_the_enemys_main_and_come_back(api, back_at_step=1500)
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    run_local(game_map, api, opponent, race=Race.TERRAN, steps_per_turn=8, time_limit=100, save_replay_to=replay)
+
+    # Observed every step: one sighting between two observations would have the fog on remember a structure under a
+    # new tag, which NachOS cannot tell from another structure, while the fog off keeps its tag.
+    fog_on = _ViewWatcher()
+    run_replay(replay, fog_on.api, player_id=1)
+    fog_off = _ViewWatcher()
+    unseen_by_turn: dict[int, int] = {}
+
+    @fog_off.api.on(TurnEvent)
+    def note_every_unit(event: TurnEvent) -> None:
+        known_ids = fog_off.api.units.ids
+        all_units = fog_off.api.all_units
+        assert known_ids <= all_units.ids
+        unseen_by_turn[event.step] = len(all_units.enemy.without_ids(known_ids))
+
+    run_replay(replay, fog_off.api, player_id=1, disable_fog=True)
+
+    assert fog_off.readings.keys() == fog_on.readings.keys()
+    differences = {
+        step: (
+            sorted(set(fog_on.readings[step]) - set(fog_off.readings[step]), key=repr),
+            sorted(set(fog_off.readings[step]) - set(fog_on.readings[step]), key=repr),
+        )
+        for step in fog_on.readings
+        if fog_on.readings[step] != fog_off.readings[step]
+    }
+    assert not differences, f"with the fog on alone, and off alone: {differences}"
+    assert fog_off.sight_events == fog_on.sight_events
+    seen = {name for name, _, _ in fog_on.sight_events}
+    assert {"EnemyUnitFirstSeenEvent", "EnemyUnitLeftSightEvent"} <= seen
+    assert max(unseen_by_turn.values()) > 0
+    remembered = fog_off.api.units.enemy.filter(lambda unit: unit.visibility is Visibility.IN_FOG)
+    assert remembered, "the scout saw no enemy structure to remember"
+    for unit in remembered:
+        as_it_is = fog_off.api.all_units.get(unit.id)
+        assert as_it_is is not None
+        assert as_it_is.type_id == unit.type_id
+        assert as_it_is.visibility is Visibility.VISIBLE
+        assert as_it_is.health > 0

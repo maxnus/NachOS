@@ -100,6 +100,27 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
   game reports those as their owner saw them, in type, health, shields, energy, build progress, flight, burrowing,
   weapon cooldown and facing, but not their orders. A structure a player has ordered and not yet placed, a
   `Placeholder`, is in its own view alone (`views`).
+- With the fog off, in a game of player 1's against the computer whose units were made by debug commands (`unseen`):
+  - an enemy unit player 1 does not see is listed `Hidden` when it stands out of player 1's sight, and the fog-on view
+    lists none of them; one in its sight but undetected, an observer, is `Hidden` in both views under one tag;
+  - a unit undetected in sight reports its health as 0 in both views, as one undetected does with the fog on, and the
+    same observer out of sight reports its full 40;
+  - a structure player 1 saw and lost sight of keeps its tag and its health, 1485 for a command center, displayed
+    `Snapshot`, where the fog-on view remembers a copy under another tag with health 0;
+  - no enemy unit reports an order, in either view, and the tiles in sight are the same in both;
+  - the undetected observer and burrowed widow mine report no owner and no maximum health, and every enemy unit the
+    player does not see reports both; a zergling burrowed undetected in sight is listed in neither view, and while it
+    burrows, `Visible` in both;
+  - the enemy's townhall and a marine killed out of the player's sight are reported dead in neither view, and the
+    fog-on view goes on listing the townhall's copy, where the fog-off view lists the townhall no more.
+- With the fog off, in four games of 100 seconds against the computer in which player 1's SCV scouted the enemy's main
+  and came back, 1124 observations 8 steps apart (`scouting`):
+  - every enemy unit listed `Hidden` reported its owner and maximum health, 3 of them on tiles the visibility image
+    gave as in sight, and the fog-on view listed none of them;
+  - the map's units in the fog are listed under their own tags, with their contents but for mined-out fields, 4 of
+    them on tiles given as in sight, where the fog-on view lists copies under other tags;
+  - the creep, the visibility, the score, the player's numbers, the alerts, the actions, the effects and the deaths
+    were the same in both views at every observation.
 - In a replay the game refuses every action, an empty one, chat and a camera move included, with "Can't issue actions
   in a replay"; every debug command, with "Not allowed during replays"; and a save, with "Can't save a replay of a
   replay". It answers an observer's camera move, the queries for abilities and pathing, the tables and the game

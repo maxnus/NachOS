@@ -16,7 +16,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from sc2nachos.units._tracking._tracker import _Tracker
 
@@ -41,6 +41,7 @@ class _UnitTracker:
 
     __slots__ = (
         "_by_tag",
+        "_id_provider",
         "_ids",
         "_ignored_tags",
         "_in_fog_tags",
@@ -55,8 +56,12 @@ class _UnitTracker:
         "_units_seen_per_alliance",
     )
 
-    def __init__(self, tracker: _Tracker) -> None:
+    def __init__(self, tracker: _Tracker, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None) -> None:
+        """Track the units of `tracker`'s game, each new one under its alliance's next id, or under the id
+        `id_provider` gives the report it is first seen in."""
         self._tracker = tracker
+        # The id each new unit gets, from the report it is first seen in.
+        self._id_provider = self._next_id_in_alliance if id_provider is None else id_provider
         # Every tag of a living unit: a tag in sight for good, a tag in the fog until it leaves.
         self._by_tag: _UnitsByTag = {}
         # The tags among those of structures in the fog. Such a tag never comes back once it leaves.
@@ -306,15 +311,9 @@ class _UnitTracker:
                 self._stale_units[unit._id] = unit
 
     def _create_unit(self, report: raw_pb2.Unit, step: int) -> Unit[Any]:
-        """Create the unit first seen in `report`, under its alliance's next id."""
+        """Create the unit first seen in `report`, under the id the id provider gives it."""
         alliance = report.alliance
-        count = self._units_seen_per_alliance[alliance] + 1
-        if count >= _IDS_PER_ALLIANCE:
-            raise UnitIdsExhaustedError(
-                f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
-            )
-        self._units_seen_per_alliance[alliance] = count
-        unit_id = alliance * _IDS_PER_ALLIANCE + count
+        unit_id = self._id_provider(report)
         changes = self._tracker.last_changes
         if alliance == _OWN_ALLIANCE:
             own: OwnUnit[Any] = OwnUnit(report, self._tracker, unit_id, step)
@@ -330,6 +329,17 @@ class _UnitTracker:
                     changes.enemy_units_entered_sight.append(unit)
         self._units_by_id[unit_id] = unit
         return unit
+
+    def _next_id_in_alliance(self, report: raw_pb2.Unit) -> int:
+        """The next id of the alliance of the unit first seen in `report`."""
+        alliance = report.alliance
+        count = self._units_seen_per_alliance[alliance] + 1
+        if count >= _IDS_PER_ALLIANCE:
+            raise UnitIdsExhaustedError(
+                f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
+            )
+        self._units_seen_per_alliance[alliance] = count
+        return alliance * _IDS_PER_ALLIANCE + count
 
     def _mark_unit_dead(self, unit: Unit[Any], present: _UnitsByTag, *, reported: bool) -> None:
         """Mark `unit` dead and drop it. `reported` says whether the game reported the death or the unit was found

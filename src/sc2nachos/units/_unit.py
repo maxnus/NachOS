@@ -276,7 +276,8 @@ class Unit[K: UnitType.AnyType]:
         """NachOS's id for this unit, the same for the whole game.
 
         The first digit is the unit's alliance when first seen, `Alliance.OWN` being 1 and `Alliance.ENEMY` 4. The
-        rest counts that alliance's units in the order they were first seen.
+        rest counts that alliance's units in the order they were first seen; in a replay played back with the fog off,
+        in the order the game first listed them, so that the unit is under the same id in `Api.all_units`.
         """
         return self._id
 
