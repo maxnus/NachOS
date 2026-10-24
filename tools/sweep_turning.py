@@ -14,7 +14,11 @@ moved.
 each of `_SHOT_ANGLES_DEGREES` off its facing, within its reach, that does not fight back: an SCV for a weapon that hits
 the ground and an overlord for one that hits the air. It orders the attack and records the attacker's facing at every
 step until its first shot, which its cooldown rising or its target's loss shows: the steps to the shot, how far it
-turned first and how far off its target it faced as it fired::
+turned first and how far off its target it faced as it fired.
+
+`in-place` sets each of the types that turn some 90 degrees a step or more upon a target at each of
+`_IN_PLACE_ANGLES_DEGREES` off its facing, as `firing` does, and records how far it turned in each step to face it where
+it stands, so that the angle where one step stops being enough pins its rate::
 
     uv run python tools/sweep_turning.py
     uv run python tools/sweep_turning.py turning --out turning.json
@@ -48,7 +52,7 @@ from sc2nachos.units._unit_type import UnitType
 
 REPO = Path(__file__).parents[1]
 OUTPUT = REPO / "data" / "turning.json"
-MODES = ("turning", "firing")
+MODES = ("turning", "firing", "in-place")
 
 # The widest free square near the start, once this player's units are marked on the open ground: 15 tiles across on
 # PylonAIE_v4, its center 42 from the start (in game).
@@ -107,6 +111,13 @@ _NEVER_ATTACKING = frozenset(
 _GROUND_TARGET = UnitTypeId.SCV
 _AIR_TARGET = UnitTypeId.OVERLORD
 _TARGET_RADII = {_GROUND_TARGET: 0.375, _AIR_TARGET: 1.0}
+# The types that turn some 90 degrees a step or more, so that no turn of theirs while moving takes a step at their full
+# rate, and the angles off their facing they are set upon a target at, every quarter of a degree from 90 to 100, which
+# an attacker turns to face where it stands, to its target's bearing exactly (tool `sweep_turning`, `turning`,
+# `firing`). Not a phoenix, which fires at any angle and so does not turn (tool `sweep_turning`, `in-place`).
+_IN_PLACE_TURNERS = (UnitTypeId.BANSHEE, UnitTypeId.LIBERATOR, UnitTypeId.MUTALISK)
+_IN_PLACE_ANGLES_DEGREES = tuple(90.0 + 0.25 * quarter for quarter in range(41))
+_IN_PLACE_WATCH_STEPS = 12
 # What an attacker is ordered before it can attack, with the energy that takes: an oracle turns its beam on.
 _ORDERED_FIRST = {UnitTypeId.ORACLE: RawAbilityId.Behavior_PulsarBeamOn}
 _ENERGY_VALUE = debug_pb2.DebugSetUnitValue.Energy
@@ -133,6 +144,20 @@ class TurnFinding:
     """The most it turned in one of those steps."""
     steps_until_moving: int | None = None
     """The first step after the order in which it stood away from where it was, or None if it never did."""
+
+
+@dataclass(slots=True)
+class InPlaceTurnFinding:
+    """One attacker set upon a target made off its facing: how it turned to face it where it stood."""
+
+    target: str
+    asked_off_facing_degrees: float
+    start_off_facing_degrees: float
+    """How far off the attacker's facing the target stood as the attack was ordered."""
+    turned_degrees: list[float] = field(default_factory=list)
+    """How far it turned in each step after the order, up to the last of its first steps of turning."""
+    turning_steps: int | None = None
+    """How many steps it turned in, one after another, or None if it never turned."""
 
 
 @dataclass(slots=True)
@@ -266,27 +291,7 @@ class TurningSweep:
         off its facing, within its reach, order the attack and watch until the first shot."""
         made_tags: list[int] = []
         try:
-            if attacker_type in _POWERED_BY_A_PYLON:
-                pylon_at = Point((self._ground_center.x + _PYLON_OFFSET[0], self._ground_center.y + _PYLON_OFFSET[1]))
-                made_tags.append(self._make(UnitTypeId.PYLON, self._me.player, pylon_at).tag)
-            attacker = self._make(attacker_type, self._me.player, self._ground_center)
-            made_tags.append(attacker.tag)
-            self._me.order(RawAbilityId.HoldPosition_Hold, attacker.tag)
-            if (first_order := _ORDERED_FIRST.get(attacker_type)) is not None:
-                self._me.set_value(_ENERGY_VALUE, _FULL_ENERGY, [attacker.tag])
-                self._rivals.step(1)
-                self._me.order(first_order, attacker.tag)
-            self._rivals.step(_SETTLING_STEPS)
-            attacker = self._listed(attacker.tag)
-            target_at = _point_toward(
-                _position_of(attacker),
-                attacker.facing + math.radians(off_facing_degrees),
-                self._target_distance(attacker_type, attacker, target_type),
-            )
-            target = self._make(target_type, self._enemy_player, target_at)
-            made_tags.append(target.tag)
-            self._rivals.enemy.order(RawAbilityId.HoldPosition_Hold, target.tag)
-            attacker, target = self._listed(attacker.tag), self._listed(target.tag)
+            attacker, target = self._attacker_and_target(attacker_type, target_type, off_facing_degrees, made_tags)
             start_facing = attacker.facing
             start_bearing = _bearing_between(_position_of(attacker), _position_of(target))
             shot_finding = ShotFinding(
@@ -322,6 +327,60 @@ class TurningSweep:
             return shot_finding
         finally:
             self._remove(made_tags)
+
+    def turn_in_place(
+        self, attacker_type: UnitTypeId, target_type: UnitTypeId, off_facing_degrees: float
+    ) -> InPlaceTurnFinding:
+        """Make a `attacker_type` holding its position and a `target_type` of the other player's `off_facing_degrees`
+        off its facing, order the attack, and watch it turn to face the target where it stands."""
+        made_tags: list[int] = []
+        try:
+            attacker, target = self._attacker_and_target(attacker_type, target_type, off_facing_degrees, made_tags)
+            start_bearing = _bearing_between(_position_of(attacker), _position_of(target))
+            in_place_finding = InPlaceTurnFinding(
+                target_type.name, off_facing_degrees, round(_degrees_between(attacker.facing, start_bearing), 3)
+            )
+            self._me.order(RawAbilityId.Attack, attacker.tag, target.tag)
+            turned_each_step: list[float] = []
+            watched_attacker = attacker
+            for _ in range(_IN_PLACE_WATCH_STEPS):
+                self._rivals.step(1)
+                previous_facing, watched_attacker = watched_attacker.facing, self._listed(attacker.tag)
+                turned_each_step.append(round(_degrees_between(previous_facing, watched_attacker.facing), 3))
+            if turning_indexes := _first_turning_indexes(turned_each_step):
+                in_place_finding.turned_degrees = turned_each_step[: turning_indexes[-1] + 1]
+                in_place_finding.turning_steps = len(turning_indexes)
+            return in_place_finding
+        finally:
+            self._remove(made_tags)
+
+    def _attacker_and_target(
+        self, attacker_type: UnitTypeId, target_type: UnitTypeId, off_facing_degrees: float, made_tags: list[int]
+    ) -> tuple[raw_pb2.Unit, raw_pb2.Unit]:
+        """Make a `attacker_type` holding its position, its beam on or its pylon beside it where it needs one, and a
+        `target_type` of the other player's `off_facing_degrees` off its facing, within its reach, holding too, adding
+        each tag made to `made_tags`; both as the game then lists them."""
+        if attacker_type in _POWERED_BY_A_PYLON:
+            pylon_at = Point((self._ground_center.x + _PYLON_OFFSET[0], self._ground_center.y + _PYLON_OFFSET[1]))
+            made_tags.append(self._make(UnitTypeId.PYLON, self._me.player, pylon_at).tag)
+        attacker = self._make(attacker_type, self._me.player, self._ground_center)
+        made_tags.append(attacker.tag)
+        self._me.order(RawAbilityId.HoldPosition_Hold, attacker.tag)
+        if (first_order := _ORDERED_FIRST.get(attacker_type)) is not None:
+            self._me.set_value(_ENERGY_VALUE, _FULL_ENERGY, [attacker.tag])
+            self._rivals.step(1)
+            self._me.order(first_order, attacker.tag)
+        self._rivals.step(_SETTLING_STEPS)
+        attacker = self._listed(attacker.tag)
+        target_at = _point_toward(
+            _position_of(attacker),
+            attacker.facing + math.radians(off_facing_degrees),
+            self._target_distance(attacker_type, attacker, target_type),
+        )
+        target = self._make(target_type, self._enemy_player, target_at)
+        made_tags.append(target.tag)
+        self._rivals.enemy.order(RawAbilityId.HoldPosition_Hold, target.tag)
+        return self._listed(attacker.tag), self._listed(target.tag)
 
     def _target_distance(self, attacker_type: UnitTypeId, attacker: raw_pb2.Unit, target_type: UnitTypeId) -> float:
         """How far from the attacker its target is made: within the reach of its longest weapon that hits the target,
@@ -406,6 +465,26 @@ def sweep_firing(turning_sweep: TurningSweep, unit_types: Sequence[UnitTypeId]) 
     return shots
 
 
+def sweep_in_place(turning_sweep: TurningSweep, unit_types: Sequence[UnitTypeId]) -> dict[str, object]:
+    """Each fast turner's turns where it stands, to face a target at each of `_IN_PLACE_ANGLES_DEGREES`, by type
+    name."""
+    in_place_turns: dict[str, object] = {}
+    for attacker_type in unit_types or _IN_PLACE_TURNERS:
+        target_type = turning_sweep.targets_for(attacker_type)[0]
+        try:
+            type_turns = [
+                turning_sweep.turn_in_place(attacker_type, target_type, angle) for angle in _IN_PLACE_ANGLES_DEGREES
+            ]
+        except RuntimeError as error:
+            logger.warning("{}: {}", attacker_type.name, error)
+            in_place_turns[attacker_type.name] = {"error": str(error)}
+            continue
+        in_place_turns[attacker_type.name] = [asdict(turn) for turn in type_turns]
+        one_step_angles = [turn.asked_off_facing_degrees for turn in type_turns if turn.turning_steps == 1]
+        logger.info("{} turned in one step up to {} degrees", attacker_type.name, max(one_step_angles, default=None))
+    return in_place_turns
+
+
 def main(argv: Sequence[str]) -> None:
     """Sweep the modes and types named, or every mode and type, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -433,6 +512,8 @@ def main(argv: Sequence[str]) -> None:
             findings["turning"] = sweep_turning(turning_sweep, unit_types)
         if "firing" in modes:
             findings["firing"] = sweep_firing(turning_sweep, unit_types)
+        if "in-place" in modes:
+            findings["in_place"] = sweep_in_place(turning_sweep, unit_types)
     out_path = arguments.out or OUTPUT
     out_path.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote the findings to {}", out_path)

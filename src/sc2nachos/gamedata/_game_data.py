@@ -11,13 +11,8 @@ from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
-from sc2nachos.gamedata._turning import (
-    SET_OFF_ONLY_FACING,
-    TURN_RATE_DEGREES,
-    TURNS_TO_FIRE_AT_AIR,
-    TURNS_TO_FIRE_AT_GROUND,
-)
-from sc2nachos.gamedata._unit_type_data import Attribute, TargetDomain, UnitTypeData
+from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
+from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
 from sc2nachos.ids import UnitTypeId
 
@@ -109,37 +104,30 @@ def _with_build_steps_borrowed(
     return MappingProxyType(rows_with_build_steps)
 
 
+# The game turns a unit in 1/4096 of a full turn, `TURN_RATE_UNITS`'s unit.
+_RADIANS_A_TURN_UNIT = math.tau / 4096
+_TURN_RATE_UNITS_BY_TYPE = MappingProxyType(
+    {unit_type: rate_units for rate_units, unit_types in TURN_RATE_UNITS.items() for unit_type in unit_types}
+)
+
+
 def _with_turning(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given how its type turns and whether each of its weapons turns to fire, as
-    `tools/sweep_turning.py` measured them."""
+    """`unit_rows`, each given how its type turns and whether its weapons turn to fire, as `tools/sweep_turning.py`
+    measured them."""
     return MappingProxyType({unit_type: _row_with_turning(type_row) for unit_type, type_row in unit_rows.items()})
 
 
 def _row_with_turning(type_row: UnitTypeData) -> UnitTypeData:
-    """`type_row` given how its type turns and whether each of its weapons turns to fire, where measured."""
-    weapons_with_turning = tuple(
-        replace(weapon, turns_to_fire=_turns_to_fire(type_row.id, weapon.target_domain)) for weapon in type_row.weapons
-    )
-    if (turn_rate_degrees := TURN_RATE_DEGREES.get(type_row.id)) is None:
-        return replace(type_row, weapons=weapons_with_turning)
+    """`type_row` given how its type turns, where it turns, and whether its weapons turn to fire."""
+    if type_row.id in FIRE_WITHOUT_TURNING_UNITS:
+        type_row = replace(type_row, weapons=tuple(replace(weapon, turns_to_fire=False) for weapon in type_row.weapons))
+    if (rate_units := _TURN_RATE_UNITS_BY_TYPE.get(type_row.id)) is None:
+        return type_row
     return replace(
         type_row,
-        weapons=weapons_with_turning,
-        turn_rate=math.radians(turn_rate_degrees),
-        sets_off_while_turning=type_row.id not in SET_OFF_ONLY_FACING,
+        turn_rate=rate_units * _RADIANS_A_TURN_UNIT,
+        moves_while_turning=type_row.id not in TURN_BEFORE_MOVE_UNITS,
     )
-
-
-def _turns_to_fire(unit_type: UnitTypeId, target_domain: TargetDomain) -> bool | None:
-    """Whether `unit_type` turned to face a target its weapon of `target_domain` hits before it fired at it; for one
-    that hits both, what it did at both, or `None` where that differed or neither was measured."""
-    at_ground, at_air = TURNS_TO_FIRE_AT_GROUND.get(unit_type), TURNS_TO_FIRE_AT_AIR.get(unit_type)
-    if target_domain is TargetDomain.GROUND:
-        return at_ground
-    if target_domain is TargetDomain.AIR:
-        return at_air
-    measured_answers = {turns_to_fire for turns_to_fire in (at_ground, at_air) if turns_to_fire is not None}
-    return measured_answers.pop() if len(measured_answers) == 1 else None
 
 
 def _with_steps_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:

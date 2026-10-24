@@ -1,17 +1,27 @@
 """Generate `sc2nachos/gamedata/_turning.py` from `data/turning.json`, written by `tools/sweep_turning.py`.
 
-For each type the sweep turned, the most it turned in one step, to the nearest `_RATE_STEP_DEGREES`, and whether it set
-off before its turn ended in any turn of two steps or more; a type whose facing never changed is left out, as it turns
-not at all. For each type the sweep set upon a target on the ground or in the air, whether it turned to face the target
-before its first shot, from the shots at `_WIDE_ANGLE_DEGREES` or more off its facing; a type that fired at no target
-there is left out. Refuses findings with a trial the sweep could not set up, a type that turned in some trials and not
-others or never set off when ordered to move, or one that turned before some shots and not others. Runs without
-StarCraft II::
+A rate is in the game's unit, 1/4096 of a full turn a step. A full step is each step of a turn while moving but the
+last two, which share what is left, in a turn of three steps or more, and each step but the last of a turn in place of
+two steps or more. Types whose most common full step is within one unit of each other turn alike, and their rate is the
+mean of their full steps within `_STEPS_NEAR_THE_RATE` of their most common one, rounded down to a whole unit, as the
+steps come out up to a unit or so above it: 711 or 712 for most, 711.7 in the mean, so 711. A type with no full step,
+such as a phoenix, which neither turns in place nor needs three steps to turn, takes the slowest of those rates that is
+no less than the most it turned in one step. A type whose facing never changed is left out, as it turns not at all.
+
+The types that turned to face where they went before they moved, from the turns of two steps or more. The types that
+fired without turning at a target `_WIDE_ANGLE_DEGREES` or more off their facing, at the ground or in the air alike; a
+type that fired at no target there is taken to turn.
+
+Refuses findings with a trial the sweep could not set up, a type that turned in some trials and not others or never
+moved when ordered to, one that turned before some shots and not others or at one target and not the other, and one
+with no full step and no rate to take. Runs without StarCraft II::
 
     uv run python tools/generate_turning.py
 """
 
 import json
+import math
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,17 +32,20 @@ from sc2nachos.ids import UnitTypeId
 REPO = Path(__file__).parents[1]
 INPUT = REPO / "data" / "turning.json"
 OUTPUT = REPO / "src" / "sc2nachos" / "gamedata" / "_turning.py"
-# A rate is kept to the nearest of these: a facing comes back in single precision, and every full step of a type that
-# turns 22.5, 45 or 62.5 degrees a step came out within 0.11 of it (in game).
-_RATE_STEP_DEGREES = 0.5
+# The game's unit of a turn: the facing comes back in whole 1/4096 radians, but every full step of a turn came to a
+# whole number of 1/4096 of a full turn or a unit or so more (in game).
+UNITS_A_FULL_TURN = 4096
+# The full steps that make a group's rate: those this many units or fewer from its most common one, which leaves out
+# the steps of a turn the game cut short, a worker's for one.
+_STEPS_NEAR_THE_RATE = 2
+# The steps at the end of a turn that share what is left of it, while moving and in place (in game).
+_STEPS_SHARING_THE_REST_MOVING = 2
+_STEPS_SHARING_THE_REST_IN_PLACE = 1
 # The shots that tell whether an attacker turns to fire: those at a target this far off its facing or more, which no
 # attacker that turns could have fired at without turning most of the way.
 _WIDE_ANGLE_DEGREES = 90.0
 # An attacker that turned less than this before a shot did not turn to fire it.
 _LARGEST_TURN_OF_ONE_THAT_DOES_NOT = 1.0
-# Which of the two targets stands for which of the weapons' targets.
-_GROUND_TARGET = "SCV"
-_AIR_TARGET = "OVERLORD"
 
 HEADER = '''"""How each unit type turns and whether it turns to fire, as `tools/sweep_turning.py` measured them on build
 {base_build}.
@@ -51,101 +64,170 @@ from sc2nachos.ids import UnitTypeId
 class Turning:
     """What the findings say of how the types turn and fire."""
 
-    turn_rate_degrees: Mapping[UnitTypeId, float]
-    """The most each type that turns turned in one step, in degrees."""
-    set_off_only_facing: frozenset[UnitTypeId]
-    """The types that set off only once they faced where they went."""
-    turns_to_fire_at_ground: Mapping[UnitTypeId, bool]
-    """Whether each type turned to face a target on the ground before it fired at it."""
-    turns_to_fire_at_air: Mapping[UnitTypeId, bool]
-    """Whether each type turned to face a target in the air before it fired at it."""
+    turn_rate_units: Mapping[UnitTypeId, int]
+    """Each type that turns, by how much it turns in a step, in 1/4096 of a full turn."""
+    turn_before_move: frozenset[UnitTypeId]
+    """The types that turned to face where they went before they moved."""
+    fire_without_turning: frozenset[UnitTypeId]
+    """The types that fired at a target off their facing without turning."""
 
 
 def read(findings: Mapping[str, Any]) -> Turning:
     """What `findings` say of each type's turning and firing, by its curated id."""
-    turn_rate_degrees: dict[UnitTypeId, float] = {}
-    set_off_only_facing: set[UnitTypeId] = set()
+    turning_types: list[UnitTypeId] = []
+    full_steps_by_type: dict[UnitTypeId, list[float]] = {}
+    one_step_units_by_type: dict[UnitTypeId, float] = {}
+    turn_before_move: set[UnitTypeId] = set()
+    in_place = findings.get("in_place", {})
     for name, turns in findings["turning"].items():
         if "error" in turns:
             raise ValueError(f"the sweep could not turn a {name}: {turns['error']}")
-        unit_type = UnitTypeId[name]
-        turned_at_all = [turn["steps_until_turned"] is not None for turn in turns]
+        turned_at_all = [turn["turning_steps"] is not None for turn in turns]
         if not any(turned_at_all):
             continue
         if not all(turned_at_all):
             raise ValueError(f"a {name} turned in some trials and not in others")
-        largest_turn_degrees = max(turn["largest_turn_degrees"] for turn in turns)
-        turn_rate_degrees[unit_type] = round(largest_turn_degrees / _RATE_STEP_DEGREES) * _RATE_STEP_DEGREES
-        if not _sets_off_while_turning(name, turns):
-            set_off_only_facing.add(unit_type)
-    turns_to_fire = {target: _turns_to_fire_at(findings["firing"], target) for target in (_GROUND_TARGET, _AIR_TARGET)}
+        unit_type = UnitTypeId[name]
+        turning_types.append(unit_type)
+        if not _moves_while_turning(name, turns):
+            turn_before_move.add(unit_type)
+        in_place_turns = in_place.get(name, [])
+        if "error" in in_place_turns:
+            raise ValueError(f"the sweep could not turn a {name} in place: {in_place_turns['error']}")
+        full_steps_by_type[unit_type] = [
+            *_full_steps(turns, _STEPS_SHARING_THE_REST_MOVING),
+            *_full_steps(in_place_turns, _STEPS_SHARING_THE_REST_IN_PLACE),
+        ]
+        one_step_units_by_type[unit_type] = max(
+            _units(turned) for turn in [*turns, *in_place_turns] for turned in turn["turned_degrees"]
+        )
     return Turning(
-        turn_rate_degrees,
-        frozenset(set_off_only_facing),
-        turns_to_fire[_GROUND_TARGET],
-        turns_to_fire[_AIR_TARGET],
+        _turn_rate_units(turning_types, full_steps_by_type, one_step_units_by_type),
+        frozenset(turn_before_move),
+        _fire_without_turning(findings["firing"]),
     )
 
 
-def _sets_off_while_turning(name: str, turns: Sequence[Mapping[str, Any]]) -> bool:
-    """Whether a type set off before its turn ended in any of `turns` that took two steps or more."""
+def _units(turned_degrees: float) -> float:
+    """`turned_degrees` in the game's unit, however far it turned."""
+    return abs(turned_degrees) / 360 * UNITS_A_FULL_TURN
+
+
+def _full_steps(turns: Sequence[Mapping[str, Any]], steps_sharing_the_rest: int) -> list[float]:
+    """The steps of `turns` taken at the full rate, in the game's unit: each but the last `steps_sharing_the_rest` of
+    a turn longer than them."""
+    full_steps = []
+    for turn in turns:
+        turning_steps = turn["turning_steps"] or 0
+        if turning_steps > steps_sharing_the_rest:
+            turned_in_turn = turn["turned_degrees"][-turning_steps:]
+            full_steps += [_units(turned) for turned in turned_in_turn[:-steps_sharing_the_rest]]
+    return full_steps
+
+
+def _turn_rate_units(
+    turning_types: Sequence[UnitTypeId],
+    full_steps_by_type: Mapping[UnitTypeId, Sequence[float]],
+    one_step_units_by_type: Mapping[UnitTypeId, float],
+) -> dict[UnitTypeId, int]:
+    """Each of `turning_types` by its rate: that of the types whose most common full step is within one of its own, or
+    for one with no full step, the slowest rate no less than the most it turned in one step."""
+    most_common_step = {
+        unit_type: Counter(round(step) for step in full_steps).most_common(1)[0][0]
+        for unit_type, full_steps in full_steps_by_type.items()
+        if full_steps
+    }
+    groups: list[list[UnitTypeId]] = []
+    for unit_type in sorted(most_common_step, key=lambda unit_type: most_common_step[unit_type]):
+        if groups and most_common_step[unit_type] - most_common_step[groups[-1][-1]] <= 1:
+            groups[-1].append(unit_type)
+        else:
+            groups.append([unit_type])
+    rate_units: dict[UnitTypeId, int] = {}
+    for group in groups:
+        pooled_steps = [step for unit_type in group for step in full_steps_by_type[unit_type]]
+        group_mode = Counter(round(step) for step in pooled_steps).most_common(1)[0][0]
+        near_the_rate = [step for step in pooled_steps if abs(step - group_mode) <= _STEPS_NEAR_THE_RATE]
+        rate_units |= dict.fromkeys(group, math.floor(sum(near_the_rate) / len(near_the_rate)))
+    group_rates = sorted(set(rate_units.values()))
+    for unit_type in turning_types:
+        if unit_type in rate_units:
+            continue
+        one_step_units = one_step_units_by_type[unit_type]
+        if (rate := next((rate for rate in group_rates if rate >= one_step_units), None)) is None:
+            raise ValueError(f"a {unit_type.name} has no full step and turned faster in one step than any rate seen")
+        rate_units[unit_type] = rate
+    return rate_units
+
+
+def _moves_while_turning(name: str, turns: Sequence[Mapping[str, Any]]) -> bool:
+    """Whether a type moved before its turn ended in any of `turns` that took two steps or more."""
     if never_moving := next((turn for turn in turns if turn["steps_until_moving"] is None), None):
         angle = never_moving["ordered_off_facing_degrees"]
         raise ValueError(f"a {name} never set off when ordered to move {angle} degrees off its facing")
     long_turns = [turn for turn in turns if turn["turning_steps"] >= 2]
     if not long_turns:
-        raise ValueError(f"no turn of a {name} took two steps, which shows whether it sets off while turning")
+        raise ValueError(f"no turn of a {name} took two steps, which shows whether it moves while turning")
     return any(turn["steps_until_moving"] <= turn["steps_until_turned"] for turn in long_turns)
 
 
-def _turns_to_fire_at(firing: Mapping[str, Sequence[Mapping[str, Any]]], target: str) -> dict[UnitTypeId, bool]:
-    """Whether each type turned to face `target` before its shots at it from `_WIDE_ANGLE_DEGREES` or more off its
-    facing, for each type that fired at one there."""
-    turns_to_fire: dict[UnitTypeId, bool] = {}
+def _fire_without_turning(firing: Mapping[str, Sequence[Mapping[str, Any]]]) -> frozenset[UnitTypeId]:
+    """The types that fired without turning at a target `_WIDE_ANGLE_DEGREES` or more off their facing, at every
+    target they fired at there."""
+    fire_without_turning = set()
     for name, shots in firing.items():
-        at_target = [shot for shot in shots if shot["target"] == target]
-        if failed := next((shot for shot in at_target if "error" in shot), None):
-            raise ValueError(f"the sweep could not set a {name} upon a {target}: {failed['error']}")
+        if failed := next((shot for shot in shots if "error" in shot), None):
+            raise ValueError(f"the sweep could not set a {name} upon a {failed['target']}: {failed['error']}")
         wide_shots = [
             shot
-            for shot in at_target
+            for shot in shots
             if shot["asked_off_facing_degrees"] >= _WIDE_ANGLE_DEGREES and shot["steps_until_shot"] is not None
         ]
-        if not wide_shots:
-            continue
-        turned_to_fire = [
-            abs(shot["turned_degrees_before_shot"]) >= _LARGEST_TURN_OF_ONE_THAT_DOES_NOT for shot in wide_shots
-        ]
-        if any(turned_to_fire) != all(turned_to_fire):
-            raise ValueError(f"a {name} turned before some shots at a {target} and not before others")
-        turns_to_fire[UnitTypeId[name]] = all(turned_to_fire)
-    return turns_to_fire
+        turned_to_fire_by_target = {
+            target: {
+                abs(shot["turned_degrees_before_shot"]) >= _LARGEST_TURN_OF_ONE_THAT_DOES_NOT
+                for shot in wide_shots
+                if shot["target"] == target
+            }
+            for target in {shot["target"] for shot in wide_shots}
+        }
+        for target, answers in turned_to_fire_by_target.items():
+            if len(answers) > 1:
+                raise ValueError(f"a {name} turned before some shots at a {target} and not before others")
+        answers_at_every_target = set().union(*turned_to_fire_by_target.values())
+        if len(answers_at_every_target) > 1:
+            raise ValueError(f"a {name} turned to fire at one target and not at another")
+        if answers_at_every_target == {False}:
+            fire_without_turning.add(UnitTypeId[name])
+    return frozenset(fire_without_turning)
 
 
 def render(turning: Turning, base_build: int) -> str:
-    """The module source for `turning`, one entry a type, sorted by name."""
-    only_facing = "".join(
-        f"        UnitTypeId.{unit_type.name},\n" for unit_type in _sorted_by_name(turning.set_off_only_facing)
+    """The module source for `turning`, each set sorted by name, the rates from the slowest."""
+    types_by_rate: dict[int, list[UnitTypeId]] = {}
+    for unit_type, rate_units in turning.turn_rate_units.items():
+        types_by_rate.setdefault(rate_units, []).append(unit_type)
+    rate_entries = "".join(
+        f"        {rate_units}: frozenset(\n            {{\n"
+        + "".join(f"                UnitTypeId.{unit_type.name},\n" for unit_type in _sorted_by_name(unit_types))
+        + "            }\n        ),\n"
+        for rate_units, unit_types in sorted(types_by_rate.items())
     )
     return (
         HEADER.format(base_build=base_build)
-        + _rendered_mapping(
-            "TURN_RATE_DEGREES",
-            "The most each type that turns turned in one step, in degrees.",
-            turning.turn_rate_degrees,
+        + "\n# The types that turn each of these in a step, in 1/4096 of a full turn.\n"
+        + f"TURN_RATE_UNITS: Final = MappingProxyType(\n    {{\n{rate_entries}    }}\n)\n"
+        + _rendered_set(
+            "TURN_BEFORE_MOVE_UNITS",
+            "The types that turn to face where they go before they move; every other type that turns moves while it"
+            "\n# turns.",
+            turning.turn_before_move,
         )
-        + "\n# The types that set off only once they faced where they went; every other type that turns sets off while"
-        + "\n# it turns.\n"
-        + f"SET_OFF_ONLY_FACING: Final = frozenset(\n    {{\n{only_facing}    }}\n)\n"
-        + _rendered_mapping(
-            "TURNS_TO_FIRE_AT_GROUND",
-            "Whether each type turned to face a target on the ground before it fired at it.",
-            turning.turns_to_fire_at_ground,
-        )
-        + _rendered_mapping(
-            "TURNS_TO_FIRE_AT_AIR",
-            "Whether each type turned to face a target in the air before it fired at it.",
-            turning.turns_to_fire_at_air,
+        + _rendered_set(
+            "FIRE_WITHOUT_TURNING_UNITS",
+            "The types that fire at a target at any angle off their facing, without turning; every other type turns"
+            "\n# to face its target first.",
+            turning.fire_without_turning,
         )
     )
 
@@ -155,20 +237,19 @@ def _sorted_by_name(unit_types: Iterable[UnitTypeId]) -> list[UnitTypeId]:
     return sorted(unit_types, key=lambda unit_type: unit_type.name)
 
 
-def _rendered_mapping(name: str, comment: str, values_by_type: Mapping[UnitTypeId, object]) -> str:
-    """The source of a module constant `name`, a mapping of `values_by_type` sorted by name, under `comment`."""
-    entries = "".join(
-        f"        UnitTypeId.{unit_type.name}: {values_by_type[unit_type]},\n"
-        for unit_type in _sorted_by_name(values_by_type)
-    )
-    return f"\n# {comment}\n{name}: Final = MappingProxyType(\n    {{\n{entries}    }}\n)\n"
+def _rendered_set(name: str, comment: str, unit_types: Iterable[UnitTypeId]) -> str:
+    """The source of a module constant `name`, a frozenset of `unit_types` sorted by name, under `comment`."""
+    entries = "".join(f"        UnitTypeId.{unit_type.name},\n" for unit_type in _sorted_by_name(unit_types))
+    return f"\n# {comment}\n{name}: Final = frozenset(\n    {{\n{entries}    }}\n)\n"
 
 
 if __name__ == "__main__":
     findings = json.loads(INPUT.read_text(encoding="utf-8"))
     turning = read(findings)
     OUTPUT.write_text(render(turning, findings["base_build"]), encoding="utf-8")
+    rates = sorted(set(turning.turn_rate_units.values()))
     print(
-        f"{OUTPUT.name}: {len(turning.turn_rate_degrees)} types that turn, {len(turning.turns_to_fire_at_ground)} "
-        f"that fire at the ground and {len(turning.turns_to_fire_at_air)} at the air"
+        f"{OUTPUT.name}: {len(turning.turn_rate_units)} types that turn, at {rates} of {UNITS_A_FULL_TURN} a step, "
+        f"{len(turning.turn_before_move)} that turn before they move and {len(turning.fire_without_turning)} that fire "
+        "without turning"
     )

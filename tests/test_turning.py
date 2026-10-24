@@ -19,7 +19,7 @@ def _generator() -> ModuleType:
 
 
 def _turn(off_facing_degrees: float, turned_degrees: list[float], steps_until_moving: int | None) -> dict[str, object]:
-    """One turn as the sweep writes it, from the steps after the order up to the last it turned in."""
+    """One turn while moving as the sweep writes it, from the steps after the order up to the last it turned in."""
     turning_indexes = [index for index, turned_that_step in enumerate(turned_degrees) if turned_that_step]
     return {
         "ordered_off_facing_degrees": off_facing_degrees,
@@ -32,10 +32,32 @@ def _turn(off_facing_degrees: float, turned_degrees: list[float], steps_until_mo
     }
 
 
-# A marine's turns, setting off while it turns, and a thor's, setting off once it faces where it goes (in game).
-_MARINE_TURNS = [_turn(45.0, [0.0, 42.2], 3), _turn(170.0, [0.0, 62.582, 52.3, 52.3], 3)]
-_THOR_TURNS = [_turn(45.0, [0.0, 45.0], 3), _turn(170.0, [0.0, 45.04, 45.0, 40.0, 40.0], 6)]
+def _turn_in_place(off_facing_degrees: float, turned_degrees: list[float]) -> dict[str, object]:
+    """One turn in place as the sweep writes it."""
+    return {
+        "target": "SCV",
+        "asked_off_facing_degrees": off_facing_degrees,
+        "start_off_facing_degrees": off_facing_degrees,
+        "turned_degrees": turned_degrees,
+        "turning_steps": len([turned for turned in turned_degrees if turned]) or None,
+    }
+
+
+# Turns while moving, in the steps the game gave them (in game). A marine sets off while it turns, its full steps
+# 711 and 712 of 4096 a turn; a thor only once it faces where it goes, its 512; a colossus never turns.
+_MARINE_TURNS = [
+    _turn(45.0, [0.0, 42.2], 3),
+    _turn(160.0, [0.0, 62.582, 48.7, 48.7], 3),
+    _turn(170.0, [0.0, 62.49, 53.8, 53.8], 3),
+]
+_THOR_TURNS = [_turn(45.0, [0.0, 45.0], 3), _turn(170.0, [0.0, 45.0, 45.0, 40.0, 40.0], 6)]
 _COLOSSUS_TURNS = [_turn(45.0, [], 3), _turn(170.0, [], 3)]
+# A banshee never takes three steps to turn while moving, and turns in place 93.75 degrees in one step and 94 in two,
+# the first of them 93.832, 1067.6 units (in game).
+_BANSHEE_TURNS = [_turn(45.0, [0.0, 42.2], 3), _turn(170.0, [0.0, 83.3, 83.2], 3)]
+_BANSHEE_TURNS_IN_PLACE = [_turn_in_place(93.75, [93.748]), _turn_in_place(94.0, [93.832, 0.14])]
+# A phoenix neither turns in place nor takes three steps to turn: the most it turned in one step was 93 (in game).
+_PHOENIX_TURNS = [_turn(96.0, [0.0, 93.0], 3), _turn(170.0, [0.0, 83.4, 83.3], 3)]
 
 
 def _shot(target: str, off_facing_degrees: float, turned_degrees: float, *, fired: bool = True) -> dict[str, object]:
@@ -51,27 +73,44 @@ def _shot(target: str, off_facing_degrees: float, turned_degrees: float, *, fire
     }
 
 
-def _findings(turning: dict[str, Any] | None = None, firing: dict[str, Any] | None = None) -> dict[str, object]:
-    """Findings as the sweep writes them, of `turning` and `firing` alone."""
-    return {"base_build": 1, "turning": turning or {}, "firing": firing or {}}
+def _findings(
+    turning: dict[str, Any] | None = None,
+    firing: dict[str, Any] | None = None,
+    in_place: dict[str, Any] | None = None,
+) -> dict[str, object]:
+    """Findings as the sweep writes them, of `turning`, `firing` and `in_place` alone."""
+    return {"base_build": 1, "turning": turning or {}, "firing": firing or {}, "in_place": in_place or {}}
 
 
 class TestReadingTheTurns:
-    def test_a_types_rate_is_the_most_it_turned_in_a_step_to_the_nearest_half_degree(self) -> None:
-        """A full step comes back up to 0.11 degrees either side of the rate, in single precision (in game)."""
-        viper_turns = [_turn(45.0, [0.0, 43.1], 3), _turn(170.0, [0.0, 62.471, 53.1, 52.8], 3)]
-        findings = _findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS, "VIPER": viper_turns})
-        turning = _generator().read(findings)
-        assert turning.turn_rate_degrees == {UnitTypeId.MARINE: 62.5, UnitTypeId.THOR: 45.0, UnitTypeId.VIPER: 62.5}
-
-    def test_a_type_that_set_off_only_once_it_faced_where_it_went_is_set_apart(self) -> None:
-        """A turn of one step shows nothing of it: every type sets off after that."""
+    def test_a_rate_is_the_mean_of_its_full_steps_rounded_down_to_a_whole_unit(self) -> None:
+        """A full step comes out at the rate or a unit or so above it, in 1/4096 of a full turn: a marine's 711.0 and
+        712.1 make 711."""
         turning = _generator().read(_findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS}))
-        assert turning.set_off_only_facing == {UnitTypeId.THOR}
+        assert turning.turn_rate_units == {UnitTypeId.MARINE: 711, UnitTypeId.THOR: 512}
+
+    def test_a_turn_in_place_gives_the_full_steps_of_a_type_that_never_takes_three_while_moving(self) -> None:
+        findings = _findings({"BANSHEE": _BANSHEE_TURNS}, in_place={"BANSHEE": _BANSHEE_TURNS_IN_PLACE})
+        assert _generator().read(findings).turn_rate_units == {UnitTypeId.BANSHEE: 1067}
+
+    def test_a_type_with_no_full_step_takes_the_slowest_rate_no_less_than_its_largest_step(self) -> None:
+        """A phoenix's 93 degrees in a step is 1058 units, of which a banshee's 1067 is the slowest rate above."""
+        turning_findings = {"MARINE": _MARINE_TURNS, "BANSHEE": _BANSHEE_TURNS, "PHOENIX": _PHOENIX_TURNS}
+        turning = _generator().read(_findings(turning_findings, in_place={"BANSHEE": _BANSHEE_TURNS_IN_PLACE}))
+        assert turning.turn_rate_units[UnitTypeId.PHOENIX] == 1067
+
+    def test_a_type_with_no_full_step_faster_than_every_rate_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="PHOENIX has no full step and turned faster"):
+            _generator().read(_findings({"MARINE": _MARINE_TURNS, "PHOENIX": _PHOENIX_TURNS}))
+
+    def test_a_type_that_turned_before_it_moved_is_set_apart(self) -> None:
+        """A turn of one step shows nothing of it: every type moves after that."""
+        turning = _generator().read(_findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS}))
+        assert turning.turn_before_move == {UnitTypeId.THOR}
 
     def test_a_type_whose_facing_never_changed_is_left_out(self) -> None:
         turning = _generator().read(_findings({"COLOSSUS": _COLOSSUS_TURNS}))
-        assert (turning.turn_rate_degrees, turning.set_off_only_facing) == ({}, frozenset())
+        assert (turning.turn_rate_units, turning.turn_before_move) == ({}, frozenset())
 
     def test_a_type_that_turned_in_some_trials_and_not_others_is_refused(self) -> None:
         with pytest.raises(ValueError, match="turned in some trials"):
@@ -92,28 +131,34 @@ class TestReadingTheTurns:
 
 
 class TestReadingTheShots:
-    def test_a_type_that_turned_before_its_wide_shots_turns_to_fire_and_one_that_did_not_does_not(self) -> None:
+    def test_a_type_that_fired_without_turning_at_wide_targets_is_set_apart(self) -> None:
+        """At the ground and in the air alike; one that turned is not."""
         firing = {
-            "MARINE": [_shot("SCV", 30.0, 30.0), _shot("SCV", 135.0, 134.9), _shot("SCV", 180.0, 179.9)],
+            "MARINE": [_shot("SCV", 135.0, 134.9), _shot("OVERLORD", 180.0, 179.9)],
             "PLANETARY_FORTRESS": [_shot("SCV", 135.0, 0.0), _shot("SCV", 180.0, 0.0)],
+            "MISSILE_TURRET": [_shot("OVERLORD", 135.0, 0.0)],
         }
-        turning = _generator().read(_findings(firing=firing))
-        assert turning.turns_to_fire_at_ground == {UnitTypeId.MARINE: True, UnitTypeId.PLANETARY_FORTRESS: False}
-        assert turning.turns_to_fire_at_air == {}
+        fire_without_turning = _generator().read(_findings(firing=firing)).fire_without_turning
+        assert fire_without_turning == {UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.MISSILE_TURRET}
 
     def test_a_shot_some_steps_short_of_facing_still_turned_to_fire(self) -> None:
         """A zealot fired some 10 degrees off a target 135 off (in game)."""
-        turning = _generator().read(_findings(firing={"ZEALOT": [_shot("SCV", 135.0, 125.1)]}))
-        assert turning.turns_to_fire_at_ground == {UnitTypeId.ZEALOT: True}
+        firing = {"ZEALOT": [_shot("SCV", 135.0, 125.1)]}
+        assert _generator().read(_findings(firing=firing)).fire_without_turning == frozenset()
 
-    def test_a_type_that_fired_at_no_wide_target_is_left_out(self) -> None:
+    def test_a_type_that_fired_at_no_wide_target_is_taken_to_turn(self) -> None:
         """As a sieged liberator, which fired at no target made around it (in game)."""
-        firing = {"LIBERATOR_SIEGED": [_shot("SCV", 135.0, 0.0, fired=False)], "MARINE": [_shot("SCV", 30.0, 30.0)]}
-        assert _generator().read(_findings(firing=firing)).turns_to_fire_at_ground == {}
+        firing = {"LIBERATOR_SIEGED": [_shot("SCV", 135.0, 0.0, fired=False)]}
+        assert _generator().read(_findings(firing=firing)).fire_without_turning == frozenset()
 
     def test_a_type_that_turned_before_some_wide_shots_and_not_others_is_refused(self) -> None:
         firing = {"MARINE": [_shot("OVERLORD", 135.0, 134.9), _shot("OVERLORD", 180.0, 0.0)]}
         with pytest.raises(ValueError, match="turned before some shots at a OVERLORD"):
+            _generator().read(_findings(firing=firing))
+
+    def test_a_type_that_turned_to_fire_at_one_target_and_not_the_other_is_refused(self) -> None:
+        firing = {"VOID_RAY": [_shot("SCV", 135.0, 134.9), _shot("OVERLORD", 135.0, 0.0)]}
+        with pytest.raises(ValueError, match="turned to fire at one target and not at another"):
             _generator().read(_findings(firing=firing))
 
     def test_a_shot_the_sweep_could_not_set_up_is_refused(self) -> None:
@@ -127,20 +172,15 @@ class TestTheModule:
         generator = _generator()
         firing = {"MARINE": [_shot("SCV", 135.0, 134.9)], "PHOENIX": [_shot("OVERLORD", 180.0, 0.0)]}
         turning = generator.read(_findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS}, firing))
-        namespace: dict[str, object] = {}
+        namespace: dict[str, Any] = {}
         exec(generator.render(turning, base_build=1), namespace)  # noqa: S102
-        rendered = (
-            namespace["TURN_RATE_DEGREES"],
-            namespace["SET_OFF_ONLY_FACING"],
-            namespace["TURNS_TO_FIRE_AT_GROUND"],
-            namespace["TURNS_TO_FIRE_AT_AIR"],
-        )
-        assert rendered == (
-            turning.turn_rate_degrees,
-            turning.set_off_only_facing,
-            turning.turns_to_fire_at_ground,
-            turning.turns_to_fire_at_air,
-        )
+        rendered_rates = {
+            unit_type: rate_units
+            for rate_units, unit_types in namespace["TURN_RATE_UNITS"].items()
+            for unit_type in unit_types
+        }
+        rendered = (rendered_rates, namespace["TURN_BEFORE_MOVE_UNITS"], namespace["FIRE_WITHOUT_TURNING_UNITS"])
+        assert rendered == (turning.turn_rate_units, turning.turn_before_move, turning.fire_without_turning)
 
     def test_it_is_as_generated_from_the_findings(self) -> None:
         generator = _generator()

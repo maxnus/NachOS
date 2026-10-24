@@ -17,7 +17,6 @@ from sc2nachos.gamedata import (
     TargetDomain,
     TargetType,
     UnitTypeUpgrade,
-    _game_data,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
 from sc2nachos.gamedata._game_data import _build_steps_of_stages_that_cost
@@ -260,15 +259,6 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[refinery, rich]))
         assert data.units[UnitTypeId.REFINERY_RICH].build_steps == 480.0
         assert data.units[UnitTypeId.REFINERY_RICH].cost.steps == 480.0
-
-    def test_a_weapon_that_hits_both_says_nothing_where_its_unit_turned_for_one_and_not_the_other(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """No type was seen to, but a weapon that hits both would then have no one answer."""
-        monkeypatch.setattr(_game_data, "TURNS_TO_FIRE_AT_GROUND", {UnitTypeId.VOID_RAY: True})
-        monkeypatch.setattr(_game_data, "TURNS_TO_FIRE_AT_AIR", {UnitTypeId.VOID_RAY: False})
-        assert _game_data._turns_to_fire(UnitTypeId.VOID_RAY, TargetDomain.ANY) is None
-        assert _game_data._turns_to_fire(UnitTypeId.VOID_RAY, TargetDomain.AIR) is False
 
     def test_a_morph_whose_source_has_no_row_costs_its_own_steps_alone(self) -> None:
         orbital = data_pb2.UnitTypeData(unit_id=UnitTypeId.ORBITAL_COMMAND, mineral_cost=550, build_time=560.0)
@@ -783,27 +773,28 @@ class TestARecordedGamesTables:
         # The build time is the morph alone, shorter than building what it morphed from.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
-    def test_a_type_that_turns_has_its_rate_and_whether_it_sets_off_while_turning(self, path: Path) -> None:
-        """As `tools/sweep_turning.py` measured them; none for one whose facing never changes, or that cannot move."""
+    def test_a_type_that_turns_has_its_rate_and_whether_it_moves_while_turning(self, path: Path) -> None:
+        """As `tools/sweep_turning.py` measured them, a rate in 1/4096 of a full turn; none for one whose facing never
+        changes, or that cannot move."""
         unit_rows = _tables(path).units
         marine, thor = unit_rows[UnitTypeId.MARINE], unit_rows[UnitTypeId.THOR]
-        assert (math.degrees(marine.turn_rate or 0), marine.sets_off_while_turning) == (pytest.approx(62.5), True)
-        assert (math.degrees(thor.turn_rate or 0), thor.sets_off_while_turning) == (pytest.approx(45.0), False)
+        assert (marine.turn_rate, marine.moves_while_turning) == (pytest.approx(711 * math.tau / 4096), True)
+        assert (thor.turn_rate, thor.moves_while_turning) == (pytest.approx(512 * math.tau / 4096), False)
         for unit_type in (UnitTypeId.COLOSSUS, UnitTypeId.BARRACKS, UnitTypeId.SIEGE_TANK_SIEGED):
-            assert (unit_rows[unit_type].turn_rate, unit_rows[unit_type].sets_off_while_turning) == (None, None)
+            assert (unit_rows[unit_type].turn_rate, unit_rows[unit_type].moves_while_turning) == (None, None)
 
     def test_a_weapon_says_whether_its_unit_turns_to_fire_it(self, path: Path) -> None:
         """A marine's does, a planetary fortress's and a battlecruiser's, whose the tables leave out, do not, and a
-        void ray's, which hits both, does at both; a sieged liberator's was never seen to fire."""
+        void ray's, which hits both, does; a sieged liberator's, never seen to fire, is taken to."""
         unit_rows = _tables(path).units
 
-        def turns_to_fire(unit_type: UnitTypeId) -> set[bool | None]:
+        def turns_to_fire(unit_type: UnitTypeId) -> set[bool]:
             """Whether each of `unit_type`'s weapons turns to fire."""
             return {weapon.turns_to_fire for weapon in unit_rows[unit_type].weapons}
 
         assert turns_to_fire(UnitTypeId.MARINE) == turns_to_fire(UnitTypeId.VOID_RAY) == {True}
         assert turns_to_fire(UnitTypeId.PLANETARY_FORTRESS) == turns_to_fire(UnitTypeId.BATTLECRUISER) == {False}
-        assert turns_to_fire(UnitTypeId.LIBERATOR_SIEGED) == {None}
+        assert turns_to_fire(UnitTypeId.LIBERATOR_SIEGED) == {True}
 
     def test_a_types_steps_are_those_of_each_of_its_stages_that_costs_something(self, path: Path) -> None:
         """A morph adds its source's steps, and a switch that costs nothing adds none, so every form of a unit costs

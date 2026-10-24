@@ -1,5 +1,6 @@
 """A game's units, from observations written here: ids, the fog, staleness, death, and every property."""
 
+import math
 import weakref
 from contextlib import closing
 from typing import Any
@@ -622,27 +623,34 @@ class TestRepair:
 
 
 class TestTurning:
-    """The steps from an order until a unit faces where it is sent: the order's own, then its turn at its type's rate,
-    62.5 degrees a step for a marine and 45.0 for a thor, as `tools/sweep_turning.py` measured them."""
+    """The steps a unit turns in to face where it is sent, at its type's rate: 711/4096 of a full turn a step, 62.49
+    degrees, for a marine and 512/4096, 45, for a thor, as `tools/sweep_turning.py` measured them."""
 
     @staticmethod
     def _facing_east(unit_type: UnitTypeId, tag: int = 1, at: tuple[float, float] = (10.0, 10.0)) -> Unit[Any]:
         """A `unit_type` of this player's at `at`, facing along the positive x-axis."""
         return _one(make_unit(tag, unit_type, at=at, facing=0.0))
 
-    def test_a_turn_takes_the_orders_step_and_its_angle_over_the_rate_rounded_up(self) -> None:
-        """90 degrees is two steps of 45 for a thor, and 180 three of 62.5 for a marine."""
+    def test_a_turn_takes_its_angle_over_the_rate_rounded_up(self) -> None:
+        """90 degrees is two steps of 45 for a thor, and 180 three of 62.49 for a marine."""
         thor, marine = self._facing_east(UnitTypeId.THOR), self._facing_east(UnitTypeId.MARINE)
-        assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (3, 4)
+        assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (2, 3)
 
     def test_it_turns_to_face_another_unit_as_it_would_its_position(self) -> None:
         marine = self._facing_east(UnitTypeId.MARINE)
         (behind,) = _Game().observe(0, make_unit(2, UnitTypeId.MARINE, at=(0.0, 10.0), alliance=_ENEMY))
-        assert marine.time_to_face(behind) == 4
+        assert marine.time_to_face(behind) == 3
 
     def test_a_unit_that_faces_its_target_to_within_a_degree_takes_no_steps(self) -> None:
         marine = self._facing_east(UnitTypeId.MARINE)
         assert [marine.time_to_face(target) for target in ((20.0, 10.1), (10.0, 10.0))] == [0, 0]
+
+    def test_how_near_facing_counts_as_facing_can_be_given(self) -> None:
+        """A target 5 degrees off is a step's turn by default, and none within 10."""
+        marine = self._facing_east(UnitTypeId.MARINE)
+        target = (10.0 + 10 * math.cos(math.radians(5)), 10.0 + 10 * math.sin(math.radians(5)))
+        within_ten_degrees = marine.time_to_face(target, facing_tolerance=math.radians(10))
+        assert (marine.time_to_face(target), within_ten_degrees) == (1, 0)
 
     def test_a_type_whose_facing_never_changes_has_no_time_to_face(self) -> None:
         """A colossus moves with its facing as it was (in game)."""

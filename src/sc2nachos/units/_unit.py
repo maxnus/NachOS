@@ -28,11 +28,10 @@ if TYPE_CHECKING:
     from sc2nachos.units._values import UnitOrder
 
 _VISIBLE = raw_pb2.DisplayType.Visible
-# A unit this close to facing a target counts as facing it: most attackers fire facing their target to within a
-# degree (in game), though a zealot, a reaper and a marauder were seen to fire some 10 degrees off.
-_FACING_TOLERANCE = math.radians(1.0)
-# A unit ordered to move begins its turn in the step after the order (in game).
-_STEPS_FOR_AN_ORDER_TO_LAND = 1
+# A unit this close to facing a target counts as facing it, unless `time_to_face` is told otherwise: most attackers fire
+# facing their target to within a degree (in game), though a zealot, a reaper and a marauder were seen to fire some 10
+# degrees off.
+_DEFAULT_FACING_TOLERANCE = math.radians(1.0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
@@ -718,11 +717,15 @@ class Unit[K: UnitType.AnyType]:
         what was measured."""
         return self._repair_cost_of(self.health_max)
 
-    def time_to_face(self, target: PointLike | Unit[Any]) -> int | None:
-        """The steps from an order given now until the unit faces `target`, a point or another unit: the step the order
-        takes to land, then the angle to turn over its type's `turn_rate`, rounded up (in game); 0 if it faces it
-        already, to within a degree. `None` wherever `turn_rate` is: for a type whose facing the game never changes and
-        for one that does not move. `docs/reference/game-behavior/units.md` has what was measured."""
+    def time_to_face(
+        self, target: PointLike | Unit[Any], *, facing_tolerance: float = _DEFAULT_FACING_TOLERANCE
+    ) -> int | None:
+        """The steps the unit takes to turn to face `target`, a point or another unit: the angle to turn over its type's
+        `turn_rate`, rounded up (in game); 0 if it faces it already, to within `facing_tolerance` radians, a degree
+        unless given. Counted from the step its turn begins, which an order sets off a step after it in a game stepped
+        by the bot, and may set off later in a realtime one, as on the ladder. `None` wherever `turn_rate` is: for a
+        type whose facing the game never changes and for one that does not move.
+        `docs/reference/game-behavior/units.md` has what was measured."""
         if (turn_rate := self.type_data.turn_rate) is None:
             return None
         target_position = target._position if isinstance(target, Unit) else target
@@ -730,9 +733,9 @@ class Unit[K: UnitType.AnyType]:
             return 0
         bearing = self._position.angle_to(target_position)
         angle_to_turn = abs((bearing - self.facing + math.pi) % math.tau - math.pi)
-        if angle_to_turn <= _FACING_TOLERANCE:
+        if angle_to_turn <= facing_tolerance:
             return 0
-        return _STEPS_FOR_AN_ORDER_TO_LAND + math.ceil(angle_to_turn / turn_rate)
+        return math.ceil(angle_to_turn / turn_rate)
 
     def _repair_cost_of(self, missing_health: float) -> Cost | None:
         """What one SCV's repair of `missing_health` of the unit takes; `None` wherever `total_repair_cost` is."""
