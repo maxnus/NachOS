@@ -12,6 +12,8 @@ from sc2nachos.units._tracking._unit_watcher import _UnitWatcher
 from sc2nachos.units._tracking._upgrade_tracker import _UpgradeTracker
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.enemy import Enemy
@@ -35,12 +37,16 @@ class _Tracker:
         "_upgrade_tracker",
     )
 
-    def __init__(self, game_data: GameData, enemy: Enemy | None) -> None:
+    def __init__(
+        self, game_data: GameData, enemy: Enemy | None, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None
+    ) -> None:
+        """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
+        alliance's next id, or under the one `id_provider` gives the report it is first seen in."""
         self._game_data = game_data
         self._enemy = enemy
         # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
-        self._unit_tracker = _UnitTracker(self)
+        self._unit_tracker = _UnitTracker(self, id_provider=id_provider)
         self._builder_tracker = _BuilderTracker(self)
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)

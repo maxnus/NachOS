@@ -52,6 +52,10 @@ class NoEnemyError(NachOSError, RuntimeError):
     """The game has no other player, as a mini-game has not, so there is no enemy to answer about."""
 
 
+class FogOnError(NachOSError, RuntimeError):
+    """The fog is on, as in every game, so the game reports only what this player sees."""
+
+
 class Api:
     """Everything a bot talks to. It is built before there is a game.
 
@@ -223,8 +227,21 @@ class Api:
 
     @property
     def units(self) -> Units[Unit[Any]]:
-        """Every unit in the last observation, including remembered structures out of sight and hidden units."""
+        """Every unit in the last observation, including remembered structures out of sight and hidden units. In a
+        replay played back with the fog off, those the observation would have listed with the fog on."""
         return self._current_game().tracker.unit_tracker.present
+
+    @property
+    def all_units(self) -> Units[Unit[Any]]:
+        """Every unit of a replay played back with the fog off, as the game lists it then: those of `units`, under the
+        same ids, and those this player did not see. Each reads as visible, in full, but one undetected in this
+        player's sight, whose health and the like the game reports as 0 (in game): it reads as last reported in full.
+
+        Raises `FogOnError` in a game, and in a replay played back with the fog on.
+        """
+        if (whole_game_tracker := self._current_game().whole_game_tracker) is None:
+            raise FogOnError("the fog is on, so the game reports only what this player sees")
+        return whole_game_tracker.unit_tracker.present
 
     @property
     def known_units(self) -> Units[Unit[Any]]:
@@ -410,7 +427,7 @@ class Api:
         if replay_path is not None:
             check_file_to_write(replay_path, "save the replay into")
         if self._game is not None:
-            self._game.tracker.end()
+            self._game.end()
         game = _Game.start(
             client, enemy_upgrade_inference=self._enemy_upgrade_inference, enemy_ladder_id=enemy_ladder_id
         )
