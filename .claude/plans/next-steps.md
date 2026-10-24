@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2738 tests; `uv run pytest -m
+- nachOS `main` has every PR to #162. On this branch, `uv run pytest` passes 2777 tests; `uv run pytest -m
   integration` passed 39 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -465,7 +465,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - the warp gate's source, the gateway, from `SELF_MORPHS` in this pull request, so that it costs the gateway's steps
     (review of #159, over a task of its own, and over the tech tree's sweep turning a warp gate back first, which the
     next sweep of the tech tree does);
-  - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
+  - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap;
+    the sweep measuring whether a unit moves before it faces and whether it turns to fire too (over the turn rate
+    alone); the values on the rows, `UnitTypeData.turn_rate` and `moves_while_turning` (over internal, as repair, over
+    the rate alone, and over the name `sets_off_while_turning`), and `Weapon.turns_to_fire`, a bool, true unless the
+    type was seen to fire without turning, a weapon never seen to fire taken to turn (over the planned
+    `Weapon.firing_arc`, and over a value at the ground and one at the air, which agreed for every type); the rates
+    generated in the game's unit, 1/4096 of a full turn a step, the fast flyers pinned by a turn in place (over degrees
+    to the nearest half), each type mapped to its rate, a constant named for the degrees a Normal second it makes (over
+    grouping the types by rate, and over plain whole numbers); `Unit.time_to_face(target, *, facing_tolerance)` in steps, the turn
+    alone, since how long an order takes to land is the connection's (over `steps_to_face`, and over counting the
+    order's step); settled at a stop point after the sweep and in the owner's review (#162);
 - **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
   of either player saw the game, in a branch of its own beside M5:
   - `run_replay(replay, api, *, player_id, steps_per_turn=1, time_limit=None, record_to=None, installation=None,
@@ -526,7 +536,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
   next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
-  measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`.
+  measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
+  `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
   the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
   stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`
