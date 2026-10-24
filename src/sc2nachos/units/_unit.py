@@ -732,11 +732,11 @@ class Unit[K: UnitType.AnyType]:
             return None
         target_position = target._position if isinstance(target, Unit) else target
         if self._position.distance_to(target_position) == 0:
-            return GameTime.zero
+            return GameTime.ZERO
         bearing = self._position.angle_to(target_position)
         angle_to_turn = abs((bearing - self.facing + math.pi) % math.tau - math.pi)
         if angle_to_turn <= facing_tolerance:
-            return GameTime.zero
+            return GameTime.ZERO
         return GameTime(steps=math.ceil(angle_to_turn / turn_rate))
 
     def _repair_cost_of(self, missing_health: float) -> Cost | None:

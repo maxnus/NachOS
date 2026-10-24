@@ -36,9 +36,9 @@ class TestConversions:
         assert GameTime(steps=0).seconds == 0
 
     def test_the_zero_constant_is_no_time(self):
-        assert GameTime.zero == GameTime(steps=0)
-        assert not GameTime.zero
-        assert isinstance(GameTime.zero, GameTime)
+        assert GameTime(steps=0) == GameTime.ZERO
+        assert not GameTime.ZERO
+        assert isinstance(GameTime.ZERO, GameTime)
 
     def test_a_normal_second_is_16_steps(self):
         assert GameTime.from_normal_seconds(1) == GameTime(steps=16)

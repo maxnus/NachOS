@@ -24,14 +24,14 @@ class GameTime:
     A moment is a whole number of steps; a length may be fractional, as a weapon's cooldown is. Two add, subtract and
     take `%` to a `GameTime`, and divide, `/` or `//`, to a plain number; one multiplies by a plain number and divides
     by one to a `GameTime`. It orders against another `GameTime` alone: compared with a plain number it raises
-    `TypeError`, and it equals none. Zero is false, and is `GameTime.zero`.
+    `TypeError`, and it equals none. Zero is false, and is `GameTime.ZERO`.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * time`, hand over to `__rmul__` instead of reading the time
     # as an array.
     __array_ufunc__ = None
 
-    zero: ClassVar[GameTime]
+    ZERO: ClassVar[GameTime]
     """No time: the game's start, or a length of none."""
 
     steps: float
@@ -159,7 +159,7 @@ class GameTime:
         return GameTime(steps=abs(self.steps))
 
 
-GameTime.zero = GameTime(steps=0)
+GameTime.ZERO = GameTime(steps=0)
 
 # The plain numbers a game time multiplies and divides by, as a constant: an inline `a | b` union is rebuilt on every
 # call. `numbers.Real` catches numpy scalars, which subclass neither `int` nor `float`; it comes last, being the

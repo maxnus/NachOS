@@ -28,7 +28,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=GameTime.zero,
+                mean_delay=GameTime.ZERO,
             ),
             Weapon(
                 TargetDomain.AIR,
@@ -37,7 +37,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=GameTime.zero,
+                mean_delay=GameTime.ZERO,
             ),
         ),
         # Its beam, which fires only while it is on, and at nothing in the air (in game).
@@ -50,7 +50,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 base_cooldown=GameTime(steps=14.0),
                 damage_bonuses=MappingProxyType({Attribute.LIGHT: 7.0}),
                 ignores_armor=True,
-                mean_delay=GameTime.zero,
+                mean_delay=GameTime.ZERO,
             ),
         ),
         UnitTypeId.VOID_RAY: (
@@ -61,7 +61,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=8.0),
                 damage_bonuses=MappingProxyType({Attribute.ARMORED: 4.0}),
-                mean_delay=GameTime.zero,
+                mean_delay=GameTime.ZERO,
             ),
         ),
         UnitTypeId.SENTRY: (
@@ -72,7 +72,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=5.0,
                 base_cooldown=GameTime(steps=16.0),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=GameTime.zero,
+                mean_delay=GameTime.ZERO,
             ),
         ),
     }

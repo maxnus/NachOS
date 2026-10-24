@@ -489,9 +489,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     - a frozen, slotted dataclass of one keyword-only field, `steps: float`, with `seconds` worked out and
       `from_seconds` (over a `float` subclass, and over holding seconds, and in the owner's review over `GameSteps`
       with its field positional), made once an observation for its events; `is_integer()` says whether it is a whole
-      number of steps (the owner's review, over a private helper), `GameTime.zero` is the one zero (the owner's
-      review, over a module constant each), and `from_normal_seconds` and `normal_seconds` read the times the game
-      gives at the Normal speed, 16 steps a second: a weapon's cooldown, the score's idle times (the owner's review);
+      number of steps (the owner's review, over a private helper), `GameTime.ZERO` is the one zero (the owner's
+      review, over a module constant each, and over a lowercase `zero`, every other constant being upper case), and
+      `from_normal_seconds` and `normal_seconds` read the times the game gives at the Normal speed, 16 steps a
+      second: a weapon's cooldown, the score's idle times (the owner's review);
     - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
       to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
       false (over the least needed, and over a plain number read as steps);

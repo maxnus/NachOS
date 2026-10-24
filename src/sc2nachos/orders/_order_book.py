@@ -87,7 +87,7 @@ class OrderBook:
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
-        self._time = GameTime.zero
+        self._time = GameTime.ZERO
 
     @overload
     def issue(
