@@ -154,6 +154,18 @@ class TestReplays:
         assert client.player_id == 2
         assert client.in_replay and client.in_game
 
+    def test_a_replay_played_back_with_the_fog_off_says_so_until_the_next_game(self) -> None:
+        client, transport = make_client(
+            make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()),
+            make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),
+        )
+        assert not client.fog_disabled
+        client.start_replay(b"replay", player_id=1, disable_fog=True)
+        assert transport.requests[0].start_replay.disable_fog
+        assert client.fog_disabled
+        client.join_game(Race.TERRAN)
+        assert not client.fog_disabled
+
     def test_a_game_is_not_a_replay(self) -> None:
         client, _ = make_client(make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1)))
         client.join_game(Race.TERRAN)

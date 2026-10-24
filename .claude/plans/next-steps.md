@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #162. On this branch, `uv run pytest` passes 2809 tests; `uv run pytest -m
-  integration` passed 38 against a real game on this branch (run 2026-10-24).
+- nachOS `main` has every PR to #164. On this branch, `uv run pytest` passes 2858 tests; `uv run pytest -m
+  integration` passed 40 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -514,8 +514,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - No fog-off view yet (found building it, the owner over keeping `disable_fog` documented and over fixing the reading
     in the same PR): the game reports the units a player never saw in full but for their orders, displayed `Hidden` or
     as remembered, and NachOS reads them as units out of sight, a `Hidden` one `INVISIBLE` with `in_sight` True and its
-    health raising `NotReportedError`. A PR of its own teaches NachOS to read a fog-off report, keeping what the player
-    saw apart from the rest.
+    health raising `NotReportedError`. #163 then taught NachOS to read a fog-off report, keeping what the player saw
+    apart from the rest.
   - Orders, chat, drawings and camera moves get no special code: the game refuses the turn's request, and `play`
     raises `ProtocolError` with its words (over raising at the call and over dropping them with a log). The observer's
     camera move, which the game takes, is left out.
@@ -530,6 +530,39 @@ Keep this file current: when a step is done, say so here in the same pull reques
     replay played back as it, as documented, a niche case; a recording that asks something before starting its replay
     is not played back, as a recorded game with a request before its setup is not; and `run_recording` reads the start
     of a recording up to three times, a few kilobytes each.
+- **Reading a playback with the fog off** (the owner, 2026-10-24, one question at a time):
+  - Two collections, over one list marking the unseen with a new `Visibility.UNSEEN` and over the truth alone. The
+    owner: "We don't really want to make things more complicated for writing a bot, just for the purpose of supporting
+    the replay functionality." `api.units`, `Visibility` and every event stay what the player knew, as with the fog on.
+  - The second holds every unit, the whole game, as objects of its own read in full from a second tracker, over only
+    the rest: a unit the player lost sight of is stale in `api.known_units`, read as last seen, and in the whole game
+    as it is.
+  - `api.all_units`, over `api.units_with_fog_off` (my recommendation) and `api.whole_game.units`; where the fog is on,
+    reading it raises a new `FogOnError`, as `api.enemy` raises `NoEnemyError`.
+  - The same id in both, over a lookup by tag: the player's view takes each unit's id from the whole game's.
+  - A unit undetected in the player's sight reads as last reported in full in `api.all_units`, as AGENTS.md's "never
+    answer the zero" has it.
+  - Found building it: the player's view rebuilds the fog-on observation, the structures and map's units in the fog as
+    copies under tags of their own, remembered as they went until their spot is in sight without them, so that the
+    tracker reads it unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner,
+    not the tile under it, and an integration test plays one replay with the fog on and off a step at a turn and finds
+    the player's views the same at every step. With more steps a turn the fog on can remember a structure afresh
+    between two turns, which NachOS read as one found dead and another first seen, in a game too, until #164 took it
+    for the one unit (below).
+  - From my review of #163 (the owner, over changing them): no guard against `id_provider` giving an id a unit already
+    holds, since no path to it was found; and each fog-off observation stays copied whole, some 0.3 ms of a 4.0 ms
+    turn.
+  - From the owner's review of #163: the tracker takes each new unit's id from one callable, `id_provider`, given the
+    report the unit is first seen in, its alliance's next id unless another is given, over a branch on an optional
+    `id_of_tag` (11 ns more a new unit). An enemy unit of `api.all_units` stays a `Unit`, with no sweep of the fields
+    only `OwnUnit` reads: the fog off reports no enemy orders, and the rest was not compared.
+- **A structure remembered afresh between two turns** (the owner, 2026-10-24, over leaving it found dead and first
+  seen, documented): a fog copy that comes under a new tag at the bit-identical spot of the same alliance is the same
+  unit, with no event. `tools/sweep_fog.py` measured it (`retag`): a structure seen and lost again between two
+  observations comes so, and NachOS read it as one found dead and another first seen. The game shows one killed out
+  of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
+  in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
+  display changes, and a unit reported dead under either of its tags is matched to no copy.
 
 ## Next
 
@@ -544,8 +577,6 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - M5, in AvocaDOS (section 3).
-- Beside M5: reading a playback with the fog off, after replay playback (#160), its design planned with the owner
-  first (2026-10-24, above).
 
 ## 1. Waiting until something needs them
 
@@ -567,8 +598,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
-- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
-  as a remembered copy, which the tracker assumes (the owner, review of #71).
+- The next trial of `tools/sweep_fog.py` (begun with `retag` and `rebuilt`, 2026-10-24) checks that a structure lifted
+  off or uprooted, and a viking in either form, is never left as a remembered copy, which the tracker assumes (the
+  owner, review of #71). It also measures whether a remembered copy reports its structure's build progress. If it
+  does, a copy under a new tag whose build progress went down is another unit: a structure built again on its spot
+  starts unfinished (the owner, review of #164).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
   the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
   back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that

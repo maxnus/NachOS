@@ -2,7 +2,7 @@
 
 from sc2nachos.__about__ import __version__
 from sc2nachos._errors import NachOSError
-from sc2nachos.api import Api, NoEnemyError, NotPlayingError
+from sc2nachos.api import Api, FogOnError, NoEnemyError, NotPlayingError
 from sc2nachos.enemy import UpgradeInference
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Cost, Resources
@@ -23,6 +23,7 @@ __all__ = [
     "Cost",
     "Difficulty",
     "Expansion",
+    "FogOnError",
     "Footprint",
     "GameTime",
     "NachOSError",

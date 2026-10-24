@@ -24,6 +24,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   6720. In a game of two and in a realtime game, where nothing had been observed, each read back the step it was saved
   at (tool `sweep_requests`, `replay`, build 75689). One saved at a 300 second time limit, just after the observation
   at step 6720, read back 6720 and played back to 6720 (tool `sweep_replays`, `ending`, build 75689).
+- **Why an enemy SCV far from any tile in sight is `Visible`.** Played back as player 1 two seconds after its marine
+  was killed in the enemy's main, both the fog-on and the fog-off view list an enemy SCV the marine had damaged as
+  `Visible`, 128 from the nearest tile player 1 sees (tool `sweep_replays`, `unseen`, build 75689).
 - **Why a replay of a game won through `DebugEndGame` stops early when played back.** Its info gives it 16 steps, and
   played back 8 steps a turn its last observation, which says it ended, with the victory and the defeat, reads step 8
   (tool `sweep_replays`, `ending`, build 75689).

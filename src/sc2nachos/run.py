@@ -127,6 +127,7 @@ def run_replay(
     api: Api,
     *,
     player_id: int,
+    disable_fog: bool = False,
     steps_per_turn: int = 1,
     time_limit: GameTime | None = None,
     record_to: Path | str | None = None,
@@ -137,9 +138,10 @@ def run_replay(
     turn every `steps_per_turn` steps, and return how it ended for that player.
 
     The api sees what that player saw when the game was played (in game): `api.player` is that player, `api.units.own`
-    its units, and each action it took comes as an `OwnActionEvent`. The game takes no actions or debug commands in a
-    replay, so a turn that orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run
-    (in game). Leaving the replay, or reaching `time_limit`, stops it `Result.UNDECIDED`.
+    its units, and each action it took comes as an `OwnActionEvent`. With `disable_fog`, it sees that too, and
+    `api.all_units` holds every unit besides. The game takes no actions or debug commands in a replay, so a turn that
+    orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run (in game). Leaving the
+    replay, or reaching `time_limit`, stops it `Result.UNDECIDED`.
 
     Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
     on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
@@ -164,7 +166,7 @@ def run_replay(
         _check_tech_tree_build(info.base_build)
         with closing(_connect(game.url, record_to)) as client:
             try:
-                client.start_replay(replay_data, player_id=player_id)
+                client.start_replay(replay_data, player_id=player_id, disable_fog=disable_fog)
                 return api.play(client, steps_per_turn=steps_per_turn, time_limit=time_limit)
             finally:
                 client.leave_game()
@@ -209,8 +211,8 @@ def run_recording(
     and saves no replay, logging a save asked for as failed. A request the recording cannot answer raises
     `ProtocolError`.
 
-    A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for,
-    by default only: `permissive` raises `ValueError` for one.
+    A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for and
+    with the fog as it was, by default only: `permissive` raises `ValueError` for one.
     """
     _check_time_limit(time_limit)
     if not isinstance(recording, Recording):
@@ -223,7 +225,11 @@ def run_recording(
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
         # details. A permissive one makes up a create and every step.
         if start_replay_request is not None:
-            client.start_replay(start_replay_request.replay_data, player_id=start_replay_request.observed_player_id)
+            client.start_replay(
+                start_replay_request.replay_data,
+                player_id=start_replay_request.observed_player_id,
+                disable_fog=start_replay_request.disable_fog,
+            )
         else:
             if permissive or recording.created_its_game:
                 client.create_game("recorded", [Participant(), Computer()])
