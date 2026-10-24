@@ -638,4 +638,3 @@ In AvocaDOS's plan, section "M5 — The swap". Its preparation on python-sc2 is 
 state off the api, the event layer in NachOS's shape, the last order wins, and the whole turn timed), and the swap is
 a pull request a piece into AvocaDOS's `main`, the first of them AvocaDOS #49 (the owner, 2026-10-24, over an
 integration branch, `nachos-swap`, to be merged into `main` once the whole passed).
-
