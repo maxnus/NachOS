@@ -910,7 +910,7 @@ class TestAgainstTheRealGame:
         assert result in (Result.VICTORY, Result.DEFEAT)
         assert api.time > 60
 
-        # A recording holds the setup too, so replaying it replays the setup.
+        # A recording holds the setup too, so playing it back repeats the setup.
         replayed = Api()
         client = Client(PlaybackTransport(Recording(path)))
         client.create_game(_LADDER_MAP, [Participant(), opponent])

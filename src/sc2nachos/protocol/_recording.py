@@ -70,6 +70,19 @@ class Recording:
         return False
 
     @property
+    def start_replay_request(self) -> sc2api_pb2.RequestStartReplay | None:
+        """The request that started the replay the client recorded played back, as `run_replay` records one, or `None`
+        if it played a game, creating or joining it first. It reads the start of the file."""
+        with closing(iter(self)) as exchanges:
+            for exchange in exchanges:
+                asked_kind = exchange.request.WhichOneof("request")
+                if asked_kind == "start_replay":
+                    return exchange.request.start_replay
+                if asked_kind in ("create_game", "join_game"):
+                    return None
+        return None
+
+    @property
     def played_in_real_time(self) -> bool:
         """Whether the game recorded was played in real time: as its create asked, and for a game only joined, if it
         asked for no step before its second observation. It reads the start of the file."""

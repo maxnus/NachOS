@@ -118,9 +118,9 @@ marked `@pytest.mark.integration`, which a plain `pytest` run deselects. Everyth
 protobuf fixtures via the fixture transport.
 
 **The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer, one on each map of the
-current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is and holds. Replaying a game asks
-the same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until the
-corpus is recorded again.
+current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is and holds. Playing a game back
+asks the same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until
+the corpus is recorded again.
 
 | Task | Command |
 |---|---|

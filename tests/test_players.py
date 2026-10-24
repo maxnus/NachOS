@@ -82,6 +82,15 @@ class TestThisPlayer:
         _play(api, [_participant(_ME, Race.RANDOM, actual=Race.PROTOSS), _computer(_OTHER, Race.ZERG)], *_short_game())
         assert api.player == Player(id=_ME, race=Race.PROTOSS, requested_race=Race.RANDOM, name=None)
 
+    @pytest.mark.parametrize("requested", [Race.ZERG, Race.RANDOM])
+    def test_as_a_computer_whose_race_the_game_never_gives_it_plays_the_race_it_asked_for(
+        self, requested: Race
+    ) -> None:
+        """As a replay played back as the computer it is."""
+        api = Api()
+        _play(api, [_computer(_ME, requested), _participant(_OTHER, Race.TERRAN, actual=Race.TERRAN)], *_short_game())
+        assert (api.player.race, api.player.requested_race) == (requested, requested)
+
     def test_a_game_that_lists_no_entry_for_it_is_refused(self) -> None:
         with pytest.raises(ValueError, match="the game lists no player 1"):
             _play(Api(), [_computer(_OTHER, Race.ZERG)], *_short_game())

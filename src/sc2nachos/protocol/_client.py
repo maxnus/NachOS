@@ -23,8 +23,32 @@ _NOT_STARTED_ERRORS = frozenset({"A game has not been started yet"})
 # The answers this client reads. A `Literal` rather than `str`, so pyright checks each name against the response
 # fields the stubs declare.
 type _Answer = Literal[
-    "action", "create_game", "data", "game_info", "join_game", "observation", "ping", "query", "save_replay", "step"
+    "action",
+    "create_game",
+    "data",
+    "game_info",
+    "join_game",
+    "observation",
+    "ping",
+    "query",
+    "replay_info",
+    "save_replay",
+    "start_replay",
+    "step",
 ]
+
+
+def _raw_interface(*, raw_affects_selection: bool) -> sc2api_pb2.InterfaceOptions:
+    """The interface NachOS plays on, the raw one; the rendered interfaces are never requested."""
+    return sc2api_pb2.InterfaceOptions(
+        raw=True,
+        score=True,
+        show_cloaked=True,
+        show_burrowed_shadows=True,
+        show_placeholders=True,
+        raw_affects_selection=raw_affects_selection,
+        raw_crop_to_playable_area=False,
+    )
 
 
 def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
@@ -68,8 +92,14 @@ class Client:
 
     @property
     def in_game(self) -> bool:
-        """Whether a game is running, rather than loading, ended or not yet started."""
+        """Whether a game is running, rather than loading, ended or not yet started. A replay being played back is
+        one."""
         return self._status in (Status.IN_GAME, Status.IN_REPLAY)
+
+    @property
+    def in_replay(self) -> bool:
+        """Whether a replay is being played back, rather than a game played, or nothing running."""
+        return self._status is Status.IN_REPLAY
 
     @property
     def player_id(self) -> int | None:
@@ -140,16 +170,7 @@ class Client:
         """
         self._forget_game()
         request = sc2api_pb2.RequestJoinGame(
-            race=race.value,
-            options=sc2api_pb2.InterfaceOptions(
-                raw=True,
-                score=True,
-                show_cloaked=True,
-                show_burrowed_shadows=True,
-                show_placeholders=True,
-                raw_affects_selection=raw_affects_selection,
-                raw_crop_to_playable_area=False,
-            ),
+            race=race.value, options=_raw_interface(raw_affects_selection=raw_affects_selection)
         )
         if name is not None:
             request.player_name = name
@@ -169,6 +190,42 @@ class Client:
         self._player_id = joined.player_id
         logger.info("Joined the game as player {} playing {}", joined.player_id, race)
         return joined.player_id
+
+    def replay_info(self, replay: bytes) -> sc2api_pb2.ResponseReplayInfo:
+        """What the game reads from `replay`, the bytes of a `.SC2Replay` file: its map, its length, the build it was
+        played on and its players. Raises `ProtocolError` if the game cannot read it."""
+        request = sc2api_pb2.RequestReplayInfo(replay_data=replay)
+        info = self._send(sc2api_pb2.Request(replay_info=request), "replay_info").replay_info
+        # An unset error field reads as the first error the proto declares, so check that it is set first.
+        if info.HasField("error"):
+            reason = sc2api_pb2.ResponseReplayInfo.Error.Name(info.error)
+            detail = info.error_details or "no detail given"
+            raise ProtocolError(f"the game could not read the replay, as {reason}: {detail}")
+        return info
+
+    def start_replay(self, replay: bytes, *, player_id: int) -> None:
+        """Play back `replay`, the bytes of a `.SC2Replay` file, as the player `player_id` saw it, which then stands
+        for the player id a join assigns.
+
+        The game then answers observations, steps, queries and the rest as in a game, and as that player saw the game
+        when it was played, but refuses every action and debug command (in game). It is played stepped, never in real
+        time.
+        """
+        self._forget_game()
+        request = sc2api_pb2.RequestStartReplay(
+            replay_data=replay,
+            observed_player_id=player_id,
+            options=_raw_interface(raw_affects_selection=False),
+            realtime=False,
+        )
+        started = self._send(sc2api_pb2.Request(start_replay=request), "start_replay").start_replay
+        # An unset error field reads as the first error the proto declares, so check that it is set first.
+        if started.HasField("error"):
+            reason = sc2api_pb2.ResponseStartReplay.Error.Name(started.error)
+            detail = started.error_details or "no detail given"
+            raise ProtocolError(f"the game refused to play the replay back, as {reason}: {detail}")
+        self._player_id = player_id
+        logger.info("Playing a replay back as player {}", player_id)
 
     def game_info(self) -> sc2api_pb2.ResponseGameInfo:
         """The map: its size, terrain, start locations and players."""

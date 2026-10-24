@@ -3,7 +3,7 @@
 A bot runs from start to end with no game client by playing a recorded game. The bot is the player recorded, and its
 handlers run on every recorded observation, a turn at each, whether the game was played stepped or in real time: the
 corpus's are 16 steps apart. `run_recording` plays a recording in one of two ways:
-- **exactly**, by default, for a bot replaying its own game, as it asked then, with the game's own answers;
+- **exactly**, by default, for a bot playing its own game back, as it asked then, with the game's own answers;
 - **permissively**, for any bot, or one whose code has changed since, which makes the recording a smoke test that runs
   anywhere, CI included.
 
@@ -21,7 +21,7 @@ run killed before then leaves only part of it. NachOS's own repository holds sev
 that does nothing losing to the computer on each map of the ladder pool, three of them as Terran;
 `tools/record_corpus.py` says what each one is.
 
-## Replaying a bot's own game exactly
+## Playing a bot's own game back exactly
 
 ```python
 from sc2nachos import run_recording
@@ -45,8 +45,10 @@ the game was played with:
 - `save_replay_to`, without which a game the bot left after saving its replay raises at the leave. Given, it holds the
   replay recorded.
 
-A game cut short by its connection closing, as a ladder closes it when either bot crashes, replays up to the close and
-then raises `ProtocolError`: the recording holds no answer to the request the close cut off.
+A game cut short by its connection closing, as a ladder closes it when either bot crashes, plays back up to the close
+and then raises `ProtocolError`: the recording holds no answer to the request the close cut off. A replay played back
+by `run_replay` and recorded plays back exactly too, as the player it was played for
+([playing back a replay](replays.md#playing-it-back-again-with-no-game)).
 
 Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 

@@ -22,8 +22,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **Why a replay saved during a game can read back shorter than the game.** Against the computer, each one saved
   read back the step of the observation before it, not the step it was saved at: 0 at step 16, 16 at 2240 and 2240 at
   6720. In a game of two and in a realtime game, where nothing had been observed, each read back the step it was saved
-  at. Whether the replay itself stops short was not looked at: none was played back (tool `sweep_requests`, `replay`,
-  build 75689).
+  at (tool `sweep_requests`, `replay`, build 75689). One saved at a 300 second time limit, just after the observation
+  at step 6720, read back 6720 and played back to 6720 (tool `sweep_replays`, `ending`, build 75689).
+- **Why a replay of a game won through `DebugEndGame` stops early when played back.** Its info gives it 16 steps, and
+  played back 8 steps a turn its last observation, which says it ended, with the victory and the defeat, reads step 8
+  (tool `sweep_replays`, `ending`, build 75689).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
   reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
