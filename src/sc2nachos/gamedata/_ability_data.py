@@ -156,9 +156,10 @@ def ability_costs(
 ) -> Mapping[AbilityId, Cost]:
     """The cost of ordering each ability, supply included.
 
-    A unit type's row holds everything spent to reach it, so a morph costs the difference from its source type. An
-    action several types perform costs what each makes costs, which is one price for every action there is: a lift
-    nothing, a tech lab 50/25. `COST_OVERRIDES` corrects the few the tables get wrong.
+    A unit type's row holds everything spent to reach it, so a morph costs the difference from its source type, steps
+    included: an orbital command 150 and 560 steps, a siege nothing. An action several types perform costs what each
+    makes costs, which is one price for every action there is: a lift nothing, a tech lab 50/25 and 400 steps.
+    `COST_OVERRIDES` corrects the few the tables get wrong.
     """
     costs: dict[AbilityId, Cost] = {}
     for ability, products_by_maker in tech_tree_abilities.products.items():
@@ -252,7 +253,9 @@ class AbilityData:
     cost: Cost
     """What ordering it charges. For a morph that is the difference from the source type: 150 for an orbital command,
     not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less what the
-    unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. An action several types perform
+    unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. Its steps are the build steps
+    the tables give what it makes, the source's taken off: 560 for an orbital command, none for a siege, and a
+    warp-in's those of its unit's train at a gateway, not how long the warp-in takes. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
     """Whether every unit one command names carries it out, so that `api.orders.issue` gives it to several in one

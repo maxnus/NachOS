@@ -209,30 +209,33 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
     {
         # Nothing makes an interceptor in the tech tree: the table names no ability for it, and the sweep never saw a
         # carrier offered Build Interceptors (tool `sweep_tech_tree`). Each costs 15, charged when the carrier is
-        # ordered to build it.
+        # ordered to build it. Its row gives it no build steps.
         AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
         # The nova's row carries the disruptor's 3 supply; a nova takes none.
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),
         # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
         # should read 350. It reads 325, and taking off the drone leaves 275 where the game charges 300.
-        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1),
-        # A gateway turns itself into a warp gate once the research is done, for nothing. Its row holds the
-        # gateway's 150 and names no source type.
+        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1, steps=1600),
+        # A gateway turns itself into a warp gate once the research is done, for nothing, and so for no steps, as
+        # every switch that costs nothing. Its row holds the gateway's 150 and names no source type.
         AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
-        # A nuke is not a unit, so nothing is derived for it.
+        # A nuke is not a unit, so nothing is derived for it, nor its steps.
         AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
         # One order makes two zerglings; the row prices one, with its half supply.
-        AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1),
-        # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing.
-        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25),
-        # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges.
-        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0),
+        AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, steps=384),
+        # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, steps
+        # too. The morph takes the 336 steps its row gives.
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, steps=336.015625),
+        # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges, and the
+        # turret's build steps.
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0, steps=16),
     }
 )
 """The cost of ordering an ability, where the tables get it wrong. Every other cost is derived as the product's cost
 less its source type's, which is right for every other morph: an orbital command 150 of its row's 550, with its cancel
 giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke has no row to derive from, and an
-interceptor no ability that makes it. These are the prices the game has always charged (stated).
+interceptor no ability that makes it. These are the prices the game has always charged (stated), with the steps the
+tables give what each makes: a hatchery's 1600 and a zergling's 384.
 `tests/test_gamedata.py` checks that every entry differs from what the tables derive, so an entry goes as soon as a
 patch makes it unnecessary."""
 

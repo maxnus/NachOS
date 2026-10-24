@@ -170,7 +170,10 @@ class UnitTypeData:
     """The race it belongs to."""
     cost: Cost
     """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
-    400 included."""
+    400 included. Its steps are the build steps of each stage that costs something: an orbital command's 2160 are the
+    command center's 1600 and its own 560, and a sieged tank's are the tank's 720, since its siege costs nothing. A type
+    whose source the tech tree does not know has its own alone, a warp gate 160, though its resources are its
+    gateway's."""
     build_steps: float
     """Steps to make one; for a morph, only the last stage. A type the table gives none takes the build time of the one
     other type its creation ability makes: a rich gas building its plain one's."""

@@ -37,7 +37,9 @@ class GameData:
         unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
-        self._units = with_missing_attacks(_with_build_steps_borrowed(unit_rows, TECH_TREE.abilities))
+        self._units = _with_steps_in_costs(
+            with_missing_attacks(_with_build_steps_borrowed(unit_rows, TECH_TREE.abilities))
+        )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
@@ -98,6 +100,33 @@ def _with_build_steps_borrowed(
         if (built_as := units.get(types_made.pop())) is not None:
             rows_with_build_steps[unit_type] = replace(row, build_steps=built_as.build_steps)
     return MappingProxyType(rows_with_build_steps)
+
+
+def _with_steps_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`unit_rows`, each cost given the build steps of each stage of its type that costs something. A switch that costs
+    nothing, such as a tank's siege or a depot's lowering, adds none, so every form of a unit costs the same steps."""
+    return MappingProxyType(
+        {
+            unit_type: replace(
+                type_row, cost=replace(type_row.cost, steps=_build_steps_of_stages_that_cost(type_row, unit_rows))
+            )
+            for unit_type, type_row in unit_rows.items()
+        }
+    )
+
+
+def _build_steps_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> float:
+    """The build steps of each stage of `type_row`'s type, back along `morphed_from`, whose resources differ from the
+    stage before it, as a morph's do and a switch's do not, and of the first stage, whatever it costs."""
+    counted_steps, stage_row, stages_passed = 0.0, type_row, {type_row.id}
+    while (source_type := stage_row.morphed_from) is not None and source_type not in stages_passed:
+        if (row_before := unit_rows.get(source_type)) is None:
+            break
+        if stage_row.cost.resources != row_before.cost.resources:
+            counted_steps += stage_row.build_steps
+        stage_row = row_before
+        stages_passed.add(source_type)
+    return counted_steps + stage_row.build_steps
 
 
 def _read_table[MessageT, IdT, RowT](

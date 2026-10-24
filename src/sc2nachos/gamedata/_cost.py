@@ -11,11 +11,11 @@ from sc2nachos.gamedata._resources import Resources
 @final
 @dataclass(frozen=True, slots=True)
 class Cost:
-    """The cost of making something: minerals, vespene and supply.
+    """The cost of making something: minerals, vespene, supply and the steps it takes.
 
     Not a `Resources`, which is an amount a player holds, earns or spends. Supply is room under the cap, so compare
-    `cost.resources` against `api.resources` and `cost.supply` against `api.supply.left`. A cost has no time; that is
-    `build_steps` or `research_steps` on the row.
+    `cost.resources` against `api.resources` and `cost.supply` against `api.supply.left`. Costs added up add their
+    steps too, which makes the production time they take one after another, not how long they take side by side.
     """
 
     minerals: float
@@ -24,6 +24,9 @@ class Cost:
     """Vespene."""
     supply: float = 0.0
     """Supply taken, or given back when negative: -1 for a spawning pool, which uses up a drone."""
+    steps: float = 0.0
+    """The steps of production it takes, at the normal rate: 0 for an order that makes nothing, for a switch that costs
+    nothing, such as a siege, and where the tables give none, as for an interceptor."""
 
     @property
     def resources(self) -> Resources:
@@ -32,15 +35,25 @@ class Cost:
 
     def __add__(self, other: Cost) -> Cost:
         """The sum of the two costs."""
-        return Cost(self.minerals + other.minerals, self.vespene + other.vespene, self.supply + other.supply)
+        return Cost(
+            self.minerals + other.minerals,
+            self.vespene + other.vespene,
+            self.supply + other.supply,
+            self.steps + other.steps,
+        )
 
     def __sub__(self, other: Cost) -> Cost:
         """This cost less `other`."""
-        return Cost(self.minerals - other.minerals, self.vespene - other.vespene, self.supply - other.supply)
+        return Cost(
+            self.minerals - other.minerals,
+            self.vespene - other.vespene,
+            self.supply - other.supply,
+            self.steps - other.steps,
+        )
 
     def __mul__(self, count: float) -> Cost:
         """This cost `count` times over."""
-        return Cost(self.minerals * count, self.vespene * count, self.supply * count)
+        return Cost(self.minerals * count, self.vespene * count, self.supply * count, self.steps * count)
 
     def __rmul__(self, count: float) -> Cost:
         """This cost `count` times over."""
@@ -48,8 +61,8 @@ class Cost:
 
     def __truediv__(self, divisor: float) -> Cost:
         """This cost divided by `divisor`."""
-        return Cost(self.minerals / divisor, self.vespene / divisor, self.supply / divisor)
+        return Cost(self.minerals / divisor, self.vespene / divisor, self.supply / divisor, self.steps / divisor)
 
     def __neg__(self) -> Cost:
         """This cost negated: given back rather than paid."""
-        return Cost(-self.minerals, -self.vespene, -self.supply)
+        return Cost(-self.minerals, -self.vespene, -self.supply, -self.steps)
