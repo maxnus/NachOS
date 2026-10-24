@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #164. On this branch, `uv run pytest` passes 2882 tests; `uv run pytest -m
-  integration` passed 40 against a real game on this branch (run 2026-10-24).
+- nachOS `main` has every PR to #165. `uv run pytest` passes 2882 tests; `uv run pytest -m integration` passed 40
+  against a real game (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -473,9 +473,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `Weapon.firing_arc`, and over a value at the ground and one at the air, which agreed for every type); the rates
     generated in the game's unit, 1/4096 of a full turn a step, the fast flyers pinned by a turn in place (over degrees
     to the nearest half), each type mapped to its rate, a constant named for the degrees a Normal second it makes (over
-    grouping the types by rate, and over plain whole numbers); `Unit.time_to_face(target, *, facing_tolerance)` in steps, the turn
-    alone, since how long an order takes to land is the connection's (over `steps_to_face`, and over counting the
-    order's step); settled at a stop point after the sweep and in the owner's review (#162);
+    grouping the types by rate, and over plain whole numbers); `Unit.time_to_face(target, *, facing_tolerance)`, a
+    `GameTime` since #165, the turn alone, since how long an order takes to land is the connection's (over
+    `steps_to_face`, and over counting the order's step); settled at a stop point after the sweep and in the owner's
+    review (#162);
   - one type for every moment and length of game time, `sc2nachos.GameTime` (the owner, 2026-10-24, one question at a
     time, over `Duration`, a length alone, and over `Time`), so `api.time` returns one too:
     - every moment one, under a `time` name: `event.time`, `action.time`, `order.issued_time`, `reservation.time`,
@@ -635,8 +636,6 @@ says so.
 
 In AvocaDOS's plan, section "M5 — The swap". Its preparation on python-sc2 is done (AvocaDOS #45 to #48: the bot's
 state off the api, the event layer in NachOS's shape, the last order wins, and the whole turn timed), and the swap is
-stacked pull requests into AvocaDOS's `nachos-swap` branch, merged into its `main` once the whole passes, the first
-of them AvocaDOS #49.
+a pull request a piece into AvocaDOS's `main`, the first of them AvocaDOS #49 (the owner, 2026-10-24, over an
+integration branch, `nachos-swap`, to be merged into `main` once the whole passed).
 
-- The bot's `MEDIVACINCREASESPEEDBOOST`, `DUTCHMARAUDERSLOW` and `IMMORTALOVERLOAD` take their curated names;
-  AvocaDOS's `tests/test_nachos_id_parity.py` fails on those three until then, as expected.
