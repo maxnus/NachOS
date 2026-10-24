@@ -11,6 +11,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   new tag at a bit-identical position; seen again, it is back under its first tag, and each return to the fog makes
   another tag. Mineral fields start the game as such copies (#25; tested).
 - A copy can have a different type from the structure it copies: a depot that lowered as it left sight (#25).
+- Seen again between two observations and back in the fog by the second, a structure's copy comes in the second under
+  a new tag, at the first copy's bit-identical position. So does the copy of a structure killed out of sight and made
+  again at its point, seen so: the two observations alone list nothing that tells the two apart. A marine's sight
+  lingers 65 steps after it is killed, so the game was 73 steps between the observations, in a game against the
+  computer with an enemy engineering bay made by a debug command (tool `sweep_fog`, `retag` and `rebuilt`, build
+  75689).
 - A barracks that lifts off, a spine crawler that uproots and a command center that becomes an orbital command out
   of sight keep their tags. Seen elsewhere, the structure is listed there while its copy stays listed at the old
   spot, until that spot is seen (#25; tested).
