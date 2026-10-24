@@ -471,8 +471,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     the rate alone, and over the name `sets_off_while_turning`), and `Weapon.turns_to_fire`, a bool, true unless the
     type was seen to fire without turning, a weapon never seen to fire taken to turn (over the planned
     `Weapon.firing_arc`, and over a value at the ground and one at the air, which agreed for every type); the rates
-    generated in the game's unit, 1/4096 of a full turn a step, grouped by rate, the fast flyers pinned by a turn in
-    place (over degrees to the nearest half); `Unit.time_to_face(target, *, facing_tolerance)` in steps, the turn
+    generated in the game's unit, 1/4096 of a full turn a step, the fast flyers pinned by a turn in place (over degrees
+    to the nearest half), each type mapped to its rate, a constant named for the degrees a Normal second it makes (over
+    grouping the types by rate, and over plain whole numbers); `Unit.time_to_face(target, *, facing_tolerance)` in steps, the turn
     alone, since how long an order takes to land is the connection's (over `steps_to_face`, and over counting the
     order's step); settled at a stop point after the sweep and in the owner's review (#162);
 - **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
