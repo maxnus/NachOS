@@ -17,6 +17,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Find how far an attack reaches, what one hit takes off, what the units the tables give no weapon do, what speeds an attack up, how far apart shots come and what random delay each draws, what the cooldown reads between them, what an attack speed-up does to the delay, and whether a move cancels a shot | `uv run python tools/sweep_combat.py range`, `damage`, `no-weapon`, `attack-speed`, `shot-timing`, `delay-bounds`, `delay-weapons`, `delay-sped-up`, `cooldown-trace` or `move-before-shot` | yes |
 | Find what the game's pathing grid shows as a game goes on, what each structure blocks for walking, and what the pathing query does from inside one | `uv run python tools/sweep_pathing.py timeline`, `footprints` or `inside` | yes |
 | Measure how long one SCV takes to repair each Terran mechanical type, and what it costs | `uv run python tools/sweep_repair.py`, then `uv run python tools/generate_repair_steps.py` | yes |
+| Measure how each unit type turns, and how far off its facing it fires | `uv run python tools/sweep_turning.py`, or `turning` or `firing` alone | yes |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py` | yes |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py` | yes |
 | Check that the walls `api.placement` gives close each main's ramp of the pool | `uv run python tools/sweep_walls.py`, or with the maps to check | yes |
