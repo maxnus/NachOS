@@ -9,9 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #159. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
-  integration` passed 37 of 38 against a real game on this branch (run 2026-10-24). The one that fails,
-  `test_three_barracks_given_one_train_each_train_a_marine`, expects a `Cost` without the steps #159 gave it.
+- nachOS `main` has every PR to #161 but #160. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
+  integration` passed 38 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
