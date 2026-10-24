@@ -117,6 +117,23 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   the damage landed. Each began to move 3 steps after the order. A missile already fired still landed, but some 4 steps
   later than when its attacker stood: a marauder's 8 steps after the rise in 18 tries of 20 and 4 or 6 in the others,
   against 4, and a stalker's 9, against 5 (tool `sweep_combat`, `move-before-shot`, build 75689).
+- **Most attackers turn to face a target before they fire at it, and fire facing it, to within a degree.** The turn's
+  first step costs nothing, since it falls within the steps from the order to the shot: a marine fired 3 steps after the
+  order at a target 0° to 60° off its facing, and 4 or 5 steps after at one 90° to 180° off. A zealot, a reaper and a
+  marauder, which fire 1 to 3 steps after the order, fired some 10° off where their turn had that much left: a zealot at
+  a target 10° off in the first step, and each at one 135° off after two steps of 62.5°. So a firing arc shows only
+  where the shot comes before the turn ends (tool `sweep_turning`, build 75689).
+- **Some attackers fire at any angle off their facing, which does not change.** A battlecruiser, a mothership, a
+  burrowed lurker and an unsieged siege tank fired as soon at a target behind as at one in front. The rest fired a
+  little later the farther round the target stood, as though a turret the game does not report turned first: a planetary
+  fortress 5 to 7 steps after the order at a target up to 60° off, 12 at 90°, 18 to 20 at 135° and 26 to 28 at 180°; a
+  spine crawler 8 to 16 steps, a spore crawler 5 to 13, a colossus 2 to 7, a phoenix 4 to 11, an immortal 3 to 9, a
+  cyclone 1 to 9, a hellion 6 to 9, a photon cannon 5 to 9, an auto-turret 5 to 9 and a missile turret 5 to 8. A sieged
+  tank is the other way round: 9 to 13 steps at a target in front, 7 at 135° and 5 behind. A sieged liberator fired at
+  no target made around it within 6 (tool `sweep_turning`, build 75689).
+- **A first shot comes a step or two sooner or later from one trial to the next, and now and then some 15 steps late**:
+  a sentry's at 19 or 20 steps, an oracle's at 18, a void ray's at 10 or 11 and an ultralisk's at 20 or 21, against
+  their usual 4 to 8, at a target at any angle, and at another in the second run (tool `sweep_turning`, build 75689).
 
 ## Buffs
 
