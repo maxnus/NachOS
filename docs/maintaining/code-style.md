@@ -61,6 +61,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
   `color`, `center`. Two exceptions: generated identifiers, where `ids/raw/` mirrors Blizzard's own names verbatim
   (`BuildinProgressNonCancellable`); those are data, never to be "corrected". And **"cancelled"**, which the code,
   the tests and the docs spell with two l's throughout.
+- **A replay is the game's `.SC2Replay` file, and a recording NachOS's `.sc2rec`**, the whole conversation with the
+  game. `run_replay` plays a replay back and `run_recording` a recording, and neither is named for the other: a test
+  that plays a recording is `TestPlayback`, never `TestReplay`.
 - **One game loop is a step.** Above the protocol layer, time is counted in steps -- `Api.step`,
   `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
   layer keeps Blizzard's `game_loop`, since the messages it hands back carry that field, and `Api.play` is the one

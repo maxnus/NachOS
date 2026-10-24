@@ -19,7 +19,8 @@ class Player:
     id: int
     """Its id in the game, which its units read as their `owner_id`."""
     race: Race
-    """The race it plays, which the game gives from the start, where it asked for Random too."""
+    """The race it plays, which the game gives from the start, where it asked for Random too. A computer's, which the
+    game never gives, as when a replay is played back as one, is the race it asked for, `RANDOM` included (in game)."""
     requested_race: Race
     """The race it asked for, `RANDOM` included."""
     name: str | None
@@ -32,9 +33,11 @@ class Player:
         entry = next((entry for entry in info.player_info if entry.player_id == player_id), None)
         if entry is None:
             raise ValueError(f"the game lists no player {player_id}, the one this client joined as")
+        requested_race = Race(entry.race_requested)
+        actual_race = Race(entry.race_actual)
         return cls(
             id=player_id,
-            race=Race(entry.race_actual),
-            requested_race=Race(entry.race_requested),
+            race=requested_race if actual_race is Race.NONE else actual_race,
+            requested_race=requested_race,
             name=entry.player_name or None,
         )

@@ -32,9 +32,16 @@ difference that rests on what the game does links there for its evidence.
 - **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
   belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
-  `path`, and `--RecordFile` on the command line. `run_recording(path, api)` then replays the bot through it exactly
-  with no game running, and with `permissive=True` plays any bot through it, answering what the bot asks of its own
-  accord ([testing](../testing.md)). A run killed before it finishes leaves only part of the file.
+  `path`, and `--RecordFile` on the command line. `run_recording(path, api)` then plays the bot through it again
+  exactly with no game running, and with `permissive=True` plays any bot through it, answering what the bot asks of
+  its own accord ([testing](../testing.md)). A run killed before it finishes leaves only part of the file.
+- **A replay plays back through an ordinary api, as a player you name.** python-sc2's `run_replay(ai, replay_path,
+  realtime=False, observed_id=0)` plays an `ObserverAI` through it, as player 0 unless told otherwise. NachOS's
+  `run_replay(path, api, player_id=1)` takes any `Api`, and `player_id` has no default and refuses 0, which shows
+  every unit as nobody's ([game behavior](game-behavior/protocol.md#playing-a-replay-back)). python-sc2 reads the
+  replay's build with `mpyq` and on Linux needs the replay in `~/Documents/StarCraft II/Replays`; NachOS asks the
+  game, and the replay can be anywhere. A replay left or stopped at its `time_limit` ends `UNDECIDED`
+  ([playing back a replay](../replays.md)).
 
 ## Events
 

@@ -374,8 +374,8 @@ class Api:
     def leave_game(self) -> None:
         """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
         gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
-        nothing to a client that has left, even when both players leave in the same step (in game). Asking again in
-        the turn changes nothing.
+        nothing to a client that has left, even when both players leave in the same step (in game). Leaving a replay
+        stops its playback, and `play` returns `Result.UNDECIDED`. Asking again in the turn changes nothing.
         """
         self._current_game().leaving = True
 
@@ -392,9 +392,10 @@ class Api:
         """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
         for this player.
 
-        `run_local`, `run_ladder` and `run_recording` call this. Call it directly to play a game connected some other
-        way. `time_limit`, in game seconds, calls a game that reaches it a tie. `realtime` must say how the game
-        was created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
+        `run_local`, `run_ladder`, `run_replay` and `run_recording` call this. Call it directly to play a game
+        connected some other way. `time_limit`, in game seconds, calls a game that reaches it a tie, and stops a replay
+        at it `Result.UNDECIDED`. `realtime` must say how the game was created: a stepped game played in real time
+        never moves, which raises `ValueError` on the first turn.
         `enemy_ladder_id` is the ladder's id for the opponent, which `enemy.ladder_id` reads.
 
         `save_replay_to` is a file to save the game's replay to, however the game ends: at its end, at the time
@@ -452,6 +453,9 @@ class Api:
         events, client = self._events, game.client
         while (result := game.outcome()) is None:
             if time_limit is not None and self.time >= time_limit:
+                if client.in_replay:
+                    logger.info("Stopping the replay at its {:.0f} second limit", time_limit)
+                    return game.finish(Result.UNDECIDED)
                 logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
                 return game.finish(Result.TIE)
 
@@ -462,7 +466,7 @@ class Api:
                 game.send_turn()
                 if game.leaving:
                     # Left once the replay is saved, which the game gives no client that has left (in game).
-                    return game.finish(Result.DEFEAT)
+                    return game.finish(Result.UNDECIDED if client.in_replay else Result.DEFEAT)
                 if not realtime:
                     client.step(steps_per_turn)
             except GameEndedError:

@@ -1811,7 +1811,8 @@ class TestAgainstTheRealGame:
 
         print("marines in production, turn by turn:", bot.in_production)
         print("refused:", failures)
-        assert bot.cost == Cost(150, 0, supply=3)
+        # The three trains' steps added up, as `pending_cost` adds them: a marine takes 400 in the tables (in game).
+        assert bot.cost == Cost(150, 0, supply=3, steps=1200)
         assert max(bot.in_production) == 3
         assert not [failure for failure in failures if failure.ability is _TRAIN_MARINE]
 

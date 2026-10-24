@@ -143,6 +143,44 @@ class TestJoining:
             client.join_game(Race.PROTOSS)
 
 
+class TestReplays:
+    def test_a_replay_is_played_back_from_its_bytes_as_the_player_asked(self) -> None:
+        client, transport = make_client(make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()))
+        client.start_replay(b"MPQ\x1b replay", player_id=2)
+        request = transport.requests[0].start_replay
+        assert (request.replay_data, request.observed_player_id) == (b"MPQ\x1b replay", 2)
+        assert not request.disable_fog and not request.realtime
+        assert request.options.raw and not request.options.HasField("render")
+        assert client.player_id == 2
+        assert client.in_replay and client.in_game
+
+    def test_a_game_is_not_a_replay(self) -> None:
+        client, _ = make_client(make_response(Status.IN_GAME, join_game=sc2api_pb2.ResponseJoinGame(player_id=1)))
+        client.join_game(Race.TERRAN)
+        assert client.in_game and not client.in_replay
+
+    def test_a_refused_replay_raises_with_the_games_reason_and_keeps_no_player(self) -> None:
+        refusal = sc2api_pb2.ResponseStartReplay(
+            error=sc2api_pb2.ResponseStartReplay.InvalidObservedPlayerId, error_details="no player 3"
+        )
+        client, _ = make_client(make_response(Status.LAUNCHED, start_replay=refusal))
+        with pytest.raises(ProtocolError, match="InvalidObservedPlayerId: no player 3"):
+            client.start_replay(b"replay", player_id=3)
+        assert client.player_id is None
+
+    def test_the_info_of_a_replay_is_what_the_game_read_from_its_bytes(self) -> None:
+        info = sc2api_pb2.ResponseReplayInfo(map_name="Pylon AIE", base_build=75689, game_duration_loops=6720)
+        client, transport = make_client(make_response(Status.LAUNCHED, replay_info=info))
+        assert client.replay_info(b"replay") == info
+        assert transport.requests[0].replay_info.replay_data == b"replay"
+
+    def test_a_replay_the_game_cannot_read_raises(self) -> None:
+        unread = sc2api_pb2.ResponseReplayInfo(error=sc2api_pb2.ResponseReplayInfo.ParsingError)
+        client, _ = make_client(make_response(Status.LAUNCHED, replay_info=unread))
+        with pytest.raises(ProtocolError, match="could not read the replay, as ParsingError: no detail given"):
+            client.replay_info(b"not a replay")
+
+
 class TestGameAfterGame:
     """One connection can play game after game, so nothing from one game may carry into the next."""
 
@@ -644,7 +682,7 @@ def _truncated(tmp_path: Path, *, cut: int) -> Path:
     return path
 
 
-class TestReplay:
+class TestPlayback:
     def _recorded(self, tmp_path: Path) -> Recording:
         """A recording of a game created, joined and observed once."""
         recorder = _recorder(
@@ -777,6 +815,24 @@ class TestRecordedSetup:
         recording = _recording_of(tmp_path / "game.sc2rec")
         assert not recording.created_its_game
         assert not recording.played_in_real_time
+        assert recording.start_replay_request is None
+
+    def test_a_replay_played_back_holds_the_request_that_started_it(self, tmp_path: Path) -> None:
+        start = sc2api_pb2.RequestStartReplay(replay_data=b"replay", observed_player_id=2)
+        started = make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay())
+        recording = _recording_of(
+            tmp_path / "replay.sc2rec",
+            (sc2api_pb2.Request(start_replay=start), started),
+            (_OBSERVE, _observed(0)),
+        )
+        assert recording.start_replay_request == start
+        assert not recording.created_its_game
+
+    @pytest.mark.parametrize("created", [False, True], ids=["joined", "created"])
+    def test_a_game_played_holds_no_replay_start(self, tmp_path: Path, created: bool) -> None:
+        setup = [_create(realtime=False)] if created else []
+        recording = _recording_of(tmp_path / "game.sc2rec", *setup, (_JOIN, _JOINED), (_OBSERVE, _observed(16)))
+        assert recording.start_replay_request is None
 
 
 class TestPermissivePlayback:
