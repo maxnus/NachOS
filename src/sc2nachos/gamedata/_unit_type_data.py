@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Self, final
@@ -173,9 +174,11 @@ class UnitTypeData:
     400 included. Its steps are the build steps of each stage that costs something: an orbital command's 2160 are the
     command center's 1600 and its own 560, and a sieged tank's or a warp gate's are the tank's 720 or the gateway's
     1040, since the switch costs nothing."""
-    build_steps: float
-    """Steps to make one; for a morph, only the last stage. A type the table gives none takes the build time of the one
-    other type its creation ability makes: a rich gas building its plain one's."""
+    build_steps: int
+    """Steps to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
+    as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking 403 of
+    554 (in game; `docs/reference/game-behavior/upgrades-and-tables.md`). A type the table gives none takes the build
+    time of the one other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int
@@ -257,7 +260,7 @@ class UnitTypeData:
             id=unit_type,
             race=Race(unit.race),
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
-            build_steps=unit.build_time,
+            build_steps=math.ceil(unit.build_time),
             supply_provided=unit.food_provided,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,

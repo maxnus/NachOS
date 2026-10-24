@@ -700,8 +700,8 @@ class Unit[K: UnitType.AnyType]:
     @property
     def required_repair_cost(self) -> Cost | None:
         """What one SCV's repair of the unit from its health now to whole takes: the steps and resources of
-        `total_repair_cost` for the share of its health missing, each resource rounded up (in game), and nothing for a
-        unit whole. `None` wherever `total_repair_cost` is."""
+        `total_repair_cost` for the share of its health missing, each rounded up to a whole one (in game), and nothing
+        for a unit whole. `None` wherever `total_repair_cost` is."""
         return self._repair_cost_of(self.health_max - self.health)
 
     @property
@@ -725,7 +725,7 @@ class Unit[K: UnitType.AnyType]:
         return Cost(
             math.ceil(missing_health * type_cost.minerals * REPAIR_COST_FRACTION / health_max),
             math.ceil(missing_health * type_cost.vespene * REPAIR_COST_FRACTION / health_max),
-            steps=whole_repair_steps * missing_health / health_max,
+            steps=math.ceil(whole_repair_steps * missing_health / health_max),
         )
 
     # Combat.

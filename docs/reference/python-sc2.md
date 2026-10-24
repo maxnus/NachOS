@@ -533,7 +533,7 @@ it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps |
-| `unit_data.cost.time` | `unit_data.build_steps`, a morph's own alone, as python-sc2's; `unit_data.cost.steps` counts what it morphed from too |
+| `unit_data.cost.time` | `unit_data.build_steps`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.steps` counts what it morphed from too |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
@@ -541,7 +541,7 @@ it.
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
-| `upgrade_data.cost.time` | `upgrade_data.cost.steps`, or `upgrade_data.research_steps` |
+| `upgrade_data.cost.time` | `upgrade_data.cost.steps` |
 | `weapon.speed`, in Normal-speed seconds | `weapon.base_cooldown_steps`; `average_cooldown_steps` counts the random delay the game adds to each attack |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |

@@ -25,8 +25,9 @@ class Cost:
     supply: float = 0.0
     """Supply taken, or given back when negative: -1 for a spawning pool, which uses up a drone."""
     steps: float = 0.0
-    """The steps of production it takes, at the normal rate: 0 for an order that makes nothing, for a switch that costs
-    nothing, such as a siege, and where the tables give none, as for an interceptor."""
+    """The steps of production it takes, at the normal rate: a whole number from the tables, fractional once scaled or
+    divided; 0 for an order that makes nothing, for a switch that costs nothing, such as a siege, and where the tables
+    give none, as for an interceptor."""
 
     @property
     def resources(self) -> Resources:

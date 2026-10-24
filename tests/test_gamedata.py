@@ -243,7 +243,13 @@ class TestReadingTheTables:
 
     def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
-        assert data.units[UnitTypeId.MARINE].build_steps == 400.0
+        assert data.units[UnitTypeId.MARINE].build_steps == 400
+
+    def test_a_fractional_build_time_is_rounded_up_to_the_whole_step_a_train_takes(self) -> None:
+        """A void ray's 963.2 took 964 steps to train (in game)."""
+        void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY, build_time=963.19921875)
+        unit_row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
+        assert (unit_row.build_steps, unit_row.cost.steps) == (964, 964)
 
     def test_a_type_the_table_gives_no_build_time_takes_that_of_what_its_creation_ability_builds(self) -> None:
         """A rich refinery's row reads no build time on the ladder, and the refinery an SCV's build puts up on a rich
@@ -454,7 +460,7 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
         assert row.cost == Cost(minerals=100, vespene=100, steps=2240)
-        assert row.research_steps == 2240 and isinstance(row.research_steps, int)
+        assert isinstance(row.cost.steps, int)
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
@@ -534,14 +540,15 @@ class TestARecordedGamesTables:
         assert lost == _NO_MAKER
 
     def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
-        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing."""
+        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing. Every other
+        type takes its row's, rounded up."""
         answer = _answer(path)
         data = GameData(answer)
-        tabled = {row.unit_id: row.build_time for row in answer.units}
+        tabled = {row.unit_id: math.ceil(row.build_time) for row in answer.units}
         borrowed = {unit_type for unit_type, row in data.units.items() if row.build_steps != tabled[unit_type]}
         assert borrowed <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
-            assert data.units[rich].build_steps == data.units[plain].build_steps == 480.0, rich.name
+            assert data.units[rich].build_steps == data.units[plain].build_steps == 480, rich.name
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
@@ -793,7 +800,7 @@ class TestARecordedGamesTables:
         orbital_morph = ability_rows[AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND]
         assert orbital_morph.cost.steps == unit_rows[UnitTypeId.ORBITAL_COMMAND].build_steps
         stimpack_research = ability_rows[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
-        assert stimpack_research.cost.steps == game_data.upgrades[UpgradeId.STIMPACK].research_steps
+        assert stimpack_research.cost.steps == game_data.upgrades[UpgradeId.STIMPACK].cost.steps
         switch_abilities = (AbilityId.SIEGE, AbilityId.UNSIEGE, AbilityId.LIFT)
         assert [ability_rows[switch_ability].cost.steps for switch_ability in switch_abilities] == [0] * 3
 
@@ -937,7 +944,7 @@ class TestARecordedGamesTables:
         data = _tables(path)
         for upgrade in UpgradeId:
             row = data.upgrades[upgrade]
-            assert row.research_steps > 0
+            assert row.cost.steps > 0
             assert row.research_ability is not None, f"{upgrade} cannot be researched"
 
     def test_a_misnamed_research_ability_stands_in_only_where_the_table_names_a_dead_one(self, path: Path) -> None:

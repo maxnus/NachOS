@@ -224,8 +224,8 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
         # One order makes two zerglings; the row prices one, with its half supply.
         AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, steps=384),
         # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, steps
-        # too. The morph takes the 336 steps its row gives.
-        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, steps=336.015625),
+        # too. These are its row's 336.016 rounded up, as every row's are, though the morph took 336 (in game).
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, steps=337),
         # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges, and the
         # turret's build steps.
         AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0, steps=16),

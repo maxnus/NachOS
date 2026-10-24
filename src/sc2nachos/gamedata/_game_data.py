@@ -115,10 +115,10 @@ def _with_steps_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mappin
     )
 
 
-def _build_steps_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> float:
+def _build_steps_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> int:
     """The build steps of each stage of `type_row`'s type, back along `morphed_from`, whose resources differ from the
     stage before it, as a morph's do and a switch's do not, and of the first stage, whatever it costs."""
-    counted_steps, stage_row, stages_passed = 0.0, type_row, {type_row.id}
+    counted_steps, stage_row, stages_passed = 0, type_row, {type_row.id}
     while (source_type := stage_row.morphed_from) is not None and source_type not in stages_passed:
         if (row_before := unit_rows.get(source_type)) is None:
             break

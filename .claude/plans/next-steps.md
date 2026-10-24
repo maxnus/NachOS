@@ -456,7 +456,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `Cost.steps`, 0 where nothing is made; in a unit type's row the build steps of each stage that costs something,
     so that a switch that costs nothing adds none and every form of a unit reads alike (review of #159, over no time
     on `Cost`, and over counting a switch's own steps); `build_steps` stays the last stage alone, and
-    `research_steps` stays beside `cost.steps` until the duration type;
+    `research_steps` goes for `cost.steps` (review of #159, over keeping both until the duration type);
+  - every step count read from the tables whole: a build time rounded up, as a train was seen to take it, and a
+    repair's share rounded up, with `Cost.steps` still a float, since a cost scales (review of #159, over int-typed
+    steps, and over the tables' fractions);
   - a duration type for every duration, with steps and seconds, as its own pull request, planned first (review of
     #159, over seconds for repair alone, and over one type for repair first);
   - the warp gate's source, the gateway, from `SELF_MORPHS` in this pull request, so that it costs the gateway's steps

@@ -601,7 +601,7 @@ class TestRepair:
         """A bunker missing 112 of its 400 health costs 7 of a quarter of 100 minerals, which a share of the cost worked
         out first would make a little more than 7."""
         bunker = _one(make_unit(1, UnitTypeId.BUNKER, health=288.0, health_max=400.0, build_progress=1.0))
-        assert bunker.required_repair_cost == Cost(7, 0, steps=179.2)
+        assert bunker.required_repair_cost == Cost(7, 0, steps=180)
 
     def test_a_unit_whole_takes_no_steps_and_costs_nothing(self) -> None:
         assert self._tank(175.0).required_repair_cost == Cost(0, 0)
