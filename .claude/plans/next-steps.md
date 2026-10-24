@@ -512,6 +512,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     it, and an integration test plays one replay with the fog on and off a step at a turn and finds the player's views
     the same at every step. With more steps a turn the fog on can remember a structure afresh between two turns, which
     NachOS reads as one found dead and another first seen, in a game too (`not-understood-yet.md`).
+  - From my review of #163 (the owner, over changing them): no guard against `id_of_tag` giving an id a unit already
+    holds, since no path to it was found; and each fog-off observation stays copied whole, some 0.3 ms of a 4.0 ms
+    turn.
 
 ## Next
 
