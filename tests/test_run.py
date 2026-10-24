@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,10 +10,23 @@ from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
 import sc2nachos.run
-from sc2nachos import AIBuild, Api, Computer, Difficulty, Race, Result, run_from_command_line, run_local, run_recording
+from sc2nachos import (
+    AbilityId,
+    AIBuild,
+    Api,
+    Computer,
+    Difficulty,
+    Race,
+    Result,
+    UnitTypeId,
+    run_from_command_line,
+    run_local,
+    run_recording,
+    run_replay,
+)
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.constants import steps_to_seconds
-from sc2nachos.events import TurnEvent
+from sc2nachos.events import OwnActionEvent, TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
@@ -23,8 +36,10 @@ from sc2nachos.protocol import (
     Exchange,
     ProtocolError,
     Recording,
+    Status,
     WebSocketTransport,
 )
+from sc2nachos.state import UnitCommand
 from support import make_response, recorded_observations, write_recording
 
 # A map from the current AIE ladder pool, for the test games.
@@ -302,6 +317,25 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
+def _played_back(exchanges: Iterable[Exchange]) -> Iterator[Exchange]:
+    """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as
+    holds them: the replay started where the game was joined, never created, and played back rather than played."""
+    for exchange in exchanges:
+        asked_kind = exchange.request.WhichOneof("request")
+        if asked_kind == "create_game":
+            continue
+        if asked_kind == "join_game":
+            start = sc2api_pb2.RequestStartReplay(
+                replay_data=b"the replay", observed_player_id=exchange.response.join_game.player_id
+            )
+            started = make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay())
+            yield Exchange(sc2api_pb2.Request(start_replay=start), started)
+            continue
+        if exchange.response.status == sc2api_pb2.Status.in_game:
+            exchange.response.status = sc2api_pb2.Status.in_replay
+        yield exchange
+
+
 def _last_recorded_step(recording: Recording) -> int:
     """The step of the last observation in `recording`."""
     return recorded_observations(recording)[-1].observation.game_loop
@@ -417,6 +451,70 @@ class TestPlayingARecording:
         assert api.step == _last_recorded_step(rewritten)
 
 
+class TestPlayingARecordedReplay:
+    """A recording of a replay played back by `run_replay`, played back again with no game."""
+
+    def test_it_plays_back_as_the_player_it_was_played_for_to_the_replays_end(self, tmp_path: Path) -> None:
+        recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
+        start_replay_request = recording.start_replay_request
+        assert start_replay_request is not None
+        api = Api()
+        assert run_recording(recording, api) is Result.DEFEAT
+        assert api.player.id == start_replay_request.observed_player_id
+        assert api.step == _last_recorded_step(recording)
+
+    def test_at_the_time_limit_it_is_undecided(self, tmp_path: Path) -> None:
+        recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
+        api = Api()
+        assert run_recording(recording, api, time_limit=60) is Result.UNDECIDED
+        assert 60 <= api.time < 61
+
+    def test_a_bot_that_leaves_it_is_undecided_where_it_left(self, tmp_path: Path) -> None:
+        recording = write_recording(tmp_path / "replay.sc2rec", _played_back(_pylon_game_stopped_after(100)))
+        last_step = _last_recorded_step(recording)
+        api = Api()
+
+        @api.on(TurnEvent)
+        def leave(_: TurnEvent) -> None:
+            if api.step >= last_step:
+                api.leave_game()
+
+        assert run_recording(recording, api) is Result.UNDECIDED
+        assert api.step == last_step
+
+    def test_it_is_refused_permissive(self, tmp_path: Path) -> None:
+        recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
+        with pytest.raises(ValueError, match="is a replay played back, which plays back only as it was recorded"):
+            run_recording(recording, Api(), permissive=True)
+
+
+class TestTheReplaysPlayer:
+    def _replay_info_of_players(self, *types: sc2api_pb2.PlayerType.ValueType) -> sc2api_pb2.ResponseReplayInfo:
+        """The info of a replay of players of `types`, numbered from 1."""
+        info = sc2api_pb2.ResponseReplayInfo()
+        for player_id, player_type in enumerate(types, start=1):
+            info.player_info.add().player_info.CopyFrom(sc2api_pb2.PlayerInfo(player_id=player_id, type=player_type))
+        return info
+
+    @pytest.mark.parametrize("player_id", [1, 2])
+    def test_either_player_of_a_game_against_the_computer_may_be_played_for(self, player_id: int) -> None:
+        info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
+        sc2nachos.run._check_replay_player(info, player_id)
+
+    @pytest.mark.parametrize("player_id", [0, 3])
+    def test_a_player_the_replay_does_not_list_is_refused(self, player_id: int) -> None:
+        info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
+        with pytest.raises(ValueError, match=f"the replay's players are 1 and 2, and {player_id} is not one of them"):
+            sc2nachos.run._check_replay_player(info, player_id)
+
+    def test_an_observer_is_not_one_of_its_players(self) -> None:
+        info = self._replay_info_of_players(
+            sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Observer
+        )
+        with pytest.raises(ValueError, match="the replay's players are 1 and 2, and 3 is not one of them"):
+            sc2nachos.run._check_replay_player(info, 3)
+
+
 class _ClientStarted(Exception):
     """Raised where a client would have started."""
 
@@ -454,7 +552,7 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     tmp_path: Path,
 ) -> None:
     """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins, then
-    replays it exactly from its recording."""
+    plays it back exactly from its recording."""
     try:
         game_map = MapFile.find(_LADDER_MAP)
     except MapNotFoundError as missing:
@@ -494,3 +592,90 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     assert run_recording(record, api, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
     assert (api.step, api.enemy.ladder_id) == (left_at_step, "5a1f")
     assert replayed.read_bytes() == replay.read_bytes()
+
+
+class _GameWatcher:
+    """An api that notes, every turn, its own units and how many units it is shown, and every order it gives."""
+
+    def __init__(self) -> None:
+        self.api = Api()
+        self.own_units: dict[int, list[tuple[UnitTypeId, float, float, float]]] = {}
+        self.units_shown: dict[int, int] = {}
+        self.orders_given: list[tuple[int, AbilityId]] = []
+        self.api.on(TurnEvent)(self._note_the_units)
+        self.api.on(OwnActionEvent)(self._note_the_order)
+
+    def _note_the_units(self, event: TurnEvent) -> None:
+        own = self.api.units.own
+        self.own_units[event.step] = sorted(
+            (unit.type_id, round(unit.position.x, 3), round(unit.position.y, 3), unit.health) for unit in own
+        )
+        self.units_shown[event.step] = len(self.api.units)
+
+    def _note_the_order(self, event: OwnActionEvent) -> None:
+        if isinstance(event.action, UnitCommand):
+            self.orders_given.append((event.step, event.action.ability))
+
+
+def _train_an_scv_on_the_first_turn(api: Api) -> None:
+    """Have `api`, playing Terran, train an SCV on its first turn."""
+
+    @api.on(TurnEvent, once=True)
+    def train(_: TurnEvent) -> None:
+        api.orders.issue(api.units.own.townhalls[0], AbilityId.COMMAND_CENTER_TRAIN_SCV)
+
+
+def _send_a_worker_to_the_natural(api: Api, *, at_step: int) -> None:
+    """Have `api` send one of its workers to its natural at `at_step`."""
+
+    @api.on(TurnEvent, at_step=at_step)
+    def send(_: TurnEvent) -> None:
+        api.orders.issue(api.units.own.workers[0], AbilityId.MOVE, target=api.expansions[1].center)
+
+
+@pytest.mark.integration
+def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays 20 seconds of a game the bot gives orders in, saving its replay, then
+    plays the replay back as the bot's player, recorded, as the computer's, which may not order, and from the recording
+    with no game."""
+    try:
+        game_map = MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    replay = tmp_path / "game.SC2Replay"
+    record = tmp_path / "played-back.sc2rec"
+    played = _GameWatcher()
+    _train_an_scv_on_the_first_turn(played.api)
+    _send_a_worker_to_the_natural(played.api, at_step=40)
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    result = run_local(
+        game_map, played.api, opponent, race=Race.TERRAN, steps_per_turn=8, time_limit=20, save_replay_to=replay
+    )
+    assert result is Result.TIE
+    assert {ability for _, ability in played.orders_given} == {AbilityId.COMMAND_CENTER_TRAIN_SCV, AbilityId.MOVE}
+
+    as_the_bot = _GameWatcher()
+    assert run_replay(replay, as_the_bot.api, player_id=1, steps_per_turn=8, record_to=record) is Result.UNDECIDED
+    assert (as_the_bot.api.player.id, as_the_bot.api.enemy.id) == (1, 2)
+    steps_in_both = played.own_units.keys() & as_the_bot.own_units.keys()
+    assert len(steps_in_both) >= len(played.own_units) - 1
+    assert all(played.own_units[step] == as_the_bot.own_units[step] for step in steps_in_both)
+    assert as_the_bot.orders_given == played.orders_given
+
+    as_the_computer = _GameWatcher()
+    _send_a_worker_to_the_natural(as_the_computer.api, at_step=80)
+    with pytest.raises(ProtocolError, match="Can't issue actions in a replay"):
+        run_replay(replay, as_the_computer.api, player_id=2, steps_per_turn=8)
+    assert (as_the_computer.api.player.id, as_the_computer.api.player.race) == (2, Race.ZERG)
+    own_types = {unit_type for units in as_the_computer.own_units.values() for unit_type, *_ in units}
+    assert UnitTypeId.DRONE in own_types
+    assert all(as_the_computer.api.data.units[unit_type].race is Race.ZERG for unit_type in own_types)
+
+    with pytest.raises(ValueError, match="the replay's players are 1 and 2, and 0 is not one of them"):
+        run_replay(replay, Api(), player_id=0)
+
+    from_the_recording = _GameWatcher()
+    assert run_recording(record, from_the_recording.api) is Result.UNDECIDED
+    assert from_the_recording.own_units == as_the_bot.own_units
+    assert from_the_recording.units_shown == as_the_bot.units_shown
+    assert from_the_recording.orders_given == played.orders_given

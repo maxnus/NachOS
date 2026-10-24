@@ -100,9 +100,9 @@ An argument of the other kind of game, such as `--Map` given to a ladder game, i
 map's display name in a ladder game, where no map file is known.
 
 `--RecordFile` records the whole conversation with the game there, as `record_to` does, so that `run_recording` can
-replay the bot through the game exactly, with no game client, and reproduce a handler's exception as it was raised
-([testing](testing.md#replaying-a-bots-own-game-exactly)). The ladder passes only its own arguments, so a script that
-records its ladder games adds this one to those it hands over, naming a file in a folder the ladder keeps, such as
+play the bot through the game again exactly, with no game client, and reproduce a handler's exception as it was raised
+([testing](testing.md#playing-a-bots-own-game-back-exactly)). The ladder passes only its own arguments, so a script
+that records its ladder games adds this one to those it hands over, naming a file in a folder the ladder keeps, such as
 AI Arena's `data`:
 
 ```python
@@ -121,10 +121,10 @@ The folder must exist: if it does not, the run raises `FileNotFoundError` before
 plays it. The file is overwritten by the next game, and complete once `run_from_command_line` returns or raises; a run
 killed before then leaves only part of it.
 
-To replay a ladder game, give `run_recording` the ladder's `--OpponentId` as `enemy_ladder_id`, since the recording
+To play a ladder game back, give `run_recording` the ladder's `--OpponentId` as `enemy_ladder_id`, since the recording
 does not hold it, and `save_replay_to` if the game was given `--ReplayFile`. The bot must also read what it read then,
-such as its own files in `data`, or it asks something else and the replay raises `ProtocolError`. A game the ladder
-closed replays up to the close, then raises `ProtocolError` where the run returned `Result.UNDECIDED`: the recording
+such as its own files in `data`, or it asks something else and the playback raises `ProtocolError`. A game the ladder
+closed plays back up to the close, then raises `ProtocolError` where the run returned `Result.UNDECIDED`: the recording
 holds no answer to the request the close cut off.
 
 A ladder game has no time limit. A bot ends one early only by leaving it, with `api.leave_game()`, which concedes it.

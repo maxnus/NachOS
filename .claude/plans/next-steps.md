@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #157. On this branch, `uv run pytest` passes 2651 tests; `uv run pytest -m
-  integration` passed 37 against a real game on #156's branch (run 2026-10-22).
+- nachOS `main` has every PR to #158. On this branch, `uv run pytest` passes 2670 tests; `uv run pytest -m
+  integration` passed 38 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -450,6 +450,30 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
     and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
+- **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
+  of either player saw the game, in a branch of its own beside M5:
+  - `run_replay(replay, api, *, player_id, steps_per_turn=1, time_limit=None, record_to=None, installation=None,
+    window=(1024, 768))`, beside the other runners, through `Client.replay_info` and `Client.start_replay`. The newest
+    build installed reads which build a replay needs, and a second client starts when that is another.
+  - `player_id` is required, 1 or 2, and 0 or any id the replay does not list as a player raises `ValueError`: the
+    game's player 0 lists every unit, but as nobody's (tool `sweep_replays`, `views`). Chosen over a default of 1, and,
+    once the owner asked whether 0 is how the fog lifts, over three views (each player, and everything), since a view
+    with the fog off still has a side.
+  - No fog-off view yet (found building it, the owner over keeping `disable_fog` documented and over fixing the reading
+    in the same PR): the game reports the units a player never saw in full but for their orders, displayed `Hidden` or
+    as remembered, and NachOS reads them as units out of sight, a `Hidden` one `INVISIBLE` with `in_sight` True and its
+    health raising `NotReportedError`. A PR of its own teaches NachOS to read a fog-off report, keeping what the player
+    saw apart from the rest.
+  - Orders, chat, drawings and camera moves get no special code: the game refuses the turn's request, and `play`
+    raises `ProtocolError` with its words (over raising at the call and over dropping them with a log). The observer's
+    camera move, which the game takes, is left out.
+  - A replay stopped before its end, by `api.leave_game()` or at `time_limit`, returns `UNDECIDED` (over `DEFEAT` and
+    `TIE` as in a game, and over the result the replay's info gives).
+  - `record_to`, and `run_recording` plays a recorded playback back exactly, which `Recording.start_replay_request`
+    finds; `permissive` raises `ValueError` for one (over the next PR, and over leaving it to tables made for queries).
+  - Found building it: a computer's `Player.race` is the race it asked for, since the game gives a computer none, as
+    when a replay is played back as one; a replay is the game's file and a recording NachOS's, never named for each
+    other (`docs/maintaining/code-style.md`).
 
 ## Next
 
@@ -463,6 +487,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measured by a sweep, then `Unit.repair_cost` and `Unit.repair_steps`; and turning, measured by a sweep of each
   type's turn rate, then `Unit.time_to_face(target)`.
 - M5, in AvocaDOS (section 3).
+- Beside M5: replay playback (this branch), then reading a playback with the fog off, its design planned with the
+  owner first (2026-10-24, above).
 
 ## 1. Waiting until something needs them
 

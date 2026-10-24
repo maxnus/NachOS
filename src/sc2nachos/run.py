@@ -3,10 +3,11 @@
 import json
 import random
 from collections.abc import Sequence
-from contextlib import closing
+from contextlib import ExitStack, closing
 from pathlib import Path
 
 from loguru import logger
+from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._checks import check_file_to_write
 from sc2nachos._command_line_arguments import _CommandLineArguments
@@ -119,6 +120,66 @@ def run_ladder(
             client.leave_game()
 
 
+def run_replay(
+    replay: Path | str,
+    api: Api,
+    *,
+    player_id: int,
+    steps_per_turn: int = 1,
+    time_limit: float | None = None,
+    record_to: Path | str | None = None,
+    installation: Installation | None = None,
+    window: tuple[int, int] = (1024, 768),
+) -> Result:
+    """Start a game client, play back the replay in the file `replay` for `api` as the player `player_id` saw it, a
+    turn every `steps_per_turn` steps, and return how it ended for that player.
+
+    The api sees what that player saw when the game was played (in game): `api.player` is that player, `api.units.own`
+    its units, and each action it took comes as an `OwnActionEvent`. The game takes no actions or debug commands in a
+    replay, so a turn that orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run
+    (in game). Leaving the replay, or reaching `time_limit` in game seconds, stops it `Result.UNDECIDED`.
+
+    Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
+    on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
+    it is, and a second client is started when that is not the one. `record_to` is a file to record the whole
+    conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends, the client is
+    stopped and its temporary directory removed.
+    """
+    _check_output_files(record_to, None)
+    replay_data = Path(replay).read_bytes()
+    installation = installation or Installation.find()
+    newest_build = installation.build_to_launch()
+    with ExitStack() as running:
+        game = running.enter_context(GameProcess.launch(installation, base_build=newest_build, window=window))
+        with closing(Client(WebSocketTransport.connect(game.url))) as reader:
+            info = reader.replay_info(replay_data)
+        _check_replay_player(info, player_id)
+        if info.base_build != newest_build:
+            replay_build = installation.build_to_launch(base_build=info.base_build)
+            game.terminate()
+            game = running.enter_context(GameProcess.launch(installation, base_build=replay_build, window=window))
+        _check_tech_tree_build(info.base_build)
+        with closing(_connect(game.url, record_to)) as client:
+            try:
+                client.start_replay(replay_data, player_id=player_id)
+                return api.play(client, steps_per_turn=steps_per_turn, time_limit=time_limit)
+            finally:
+                client.leave_game()
+                client.quit()
+
+
+def _check_replay_player(info: sc2api_pb2.ResponseReplayInfo, player_id: int) -> None:
+    """Raise `ValueError` unless `player_id` is one of the players, observers aside, of the replay `info` describes."""
+    players = sorted(
+        entry.player_info.player_id
+        for entry in info.player_info
+        if entry.player_info.type != sc2api_pb2.PlayerType.Observer
+    )
+    if player_id not in players:
+        listed = " and ".join(str(player) for player in players) or "none"
+        raise ValueError(f"the replay's players are {listed}, and {player_id} is not one of them")
+
+
 def run_recording(
     recording: Recording | Path | str,
     api: Api,
@@ -144,19 +205,28 @@ def run_recording(
     recording stops before the game's end, as one made with a time limit does, and `DEFEAT` if the bot leaves first,
     and saves no replay, logging a save asked for as failed. A request the recording cannot answer raises
     `ProtocolError`.
+
+    A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for,
+    by default only: `permissive` raises `ValueError` for one.
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
+    start_replay_request = recording.start_replay_request
+    if start_replay_request is not None and permissive:
+        raise ValueError(f"{recording.path} is a replay played back, which plays back only as it was recorded")
     transport: Transport = PermissivePlaybackTransport(recording) if permissive else PlaybackTransport(recording)
     with closing(Client(transport)) as client:
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
         # details. A permissive one makes up a create and every step.
-        if permissive or recording.created_its_game:
-            client.create_game("recorded", [Participant(), Computer()])
-        client.join_game(Race.RANDOM)
+        if start_replay_request is not None:
+            client.start_replay(start_replay_request.replay_data, player_id=start_replay_request.observed_player_id)
+        else:
+            if permissive or recording.created_its_game:
+                client.create_game("recorded", [Participant(), Computer()])
+            client.join_game(Race.RANDOM)
         return api.play(
             client,
-            realtime=not permissive and recording.played_in_real_time,
+            realtime=not permissive and start_replay_request is None and recording.played_in_real_time,
             time_limit=time_limit,
             enemy_ladder_id=enemy_ladder_id,
             save_replay_to=save_replay_to,

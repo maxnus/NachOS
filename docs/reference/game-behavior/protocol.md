@@ -77,6 +77,41 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   results and the whole game's length. Once the client has left the game, ended or not, the game answers "Not in a
   game" and gives none (tool `sweep_requests`, `replay`, build 75689).
 
+## Playing a replay back
+
+What follows was seen on one game unless an entry says otherwise: the demo bot against the computer at Medium on
+`PylonAIE_v4`, 300 game seconds, a turn every 8 steps, recorded and its replay saved at its time limit (tool
+`sweep_replays`, build 75689).
+
+- The game plays a replay back from its bytes, and from its path though it lies outside the installation's `Replays`.
+  Starting one takes some 3 seconds. Leaving one returns the client to `launched`, and the next can start on the same
+  client (`requests`).
+- Played back as one of its players, a replay shows what that player saw when the game was played. At each of the 841
+  steps the bot observed, every unit in both had the same type, owner, display, position, health, shields, energy and
+  number of orders, and the actions reported were the same 465. Only mineral fields and vespene geysers remembered in
+  the fog came under other tags, 631 times, each matched by type, alliance, display and position (`views`).
+- An observation's actions are the player's own since the observation before, a computer's too: played back as the
+  computer, its moves and trains (`views`).
+- As player 0, the game lists every unit, as nobody's: the map's units read as its own and both players' as neutral,
+  and its minerals, supply, score, tiles in sight and actions are all 0, with the fog on or off. The game's info lists
+  no player 0 (`views`).
+- With the fog off, a player is shown what it was with the fog on, the same units, tiles in sight and score, and every
+  enemy unit it did not see besides: a structure displayed as remembered, `Snapshot`, and any other unit `Hidden`. The
+  game reports those as their owner saw them, in type, health, shields, energy, build progress, flight, burrowing,
+  weapon cooldown and facing, but not their orders. A structure a player has ordered and not yet placed, a
+  `Placeholder`, is in its own view alone (`views`).
+- In a replay the game refuses every action, an empty one, chat and a camera move included, with "Can't issue actions
+  in a replay"; every debug command, with "Not allowed during replays"; and a save, with "Can't save a replay of a
+  replay". It answers an observer's camera move, the queries for abilities and pathing, the tables and the game
+  info, which gives no player a name and the computer no `race_actual` (`requests`).
+- At its end, a replay's last observation says `ended` and gives each player's result; a step after it is answered
+  "Game has already ended". A game won through `DebugEndGame` ends in the victory and the defeat its info gives. The
+  shared game, saved at its time limit before it ended, ends `Undecided` for both players at step 6720, its length,
+  though its info gives both a tie (`ending`).
+- Played back 8 steps a turn, observing each, the 300 seconds took some 3.6 seconds, 1,900 steps a second, with the
+  fog on or off; observing every step, some 7 seconds, 900 to 950 steps a second. An observation is about 84 KB, and 96 KB
+  with the fog off (`speed`).
+
 ## Time and steps
 
 - Normal speed is 16 steps a second, and Faster, the ladder's, 22.4: 224 steps are 10 seconds (#25).
