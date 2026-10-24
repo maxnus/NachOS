@@ -38,15 +38,15 @@ class _Tracker:
     )
 
     def __init__(
-        self, game_data: GameData, enemy: Enemy | None, *, id_of_tag: Callable[[int], int] | None = None
+        self, game_data: GameData, enemy: Enemy | None, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
-        alliance's next id, or under the one `id_of_tag` gives the tag it is first reported under."""
+        alliance's next id, or under the one `id_provider` gives the report it is first seen in."""
         self._game_data = game_data
         self._enemy = enemy
         # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
-        self._unit_tracker = _UnitTracker(self, id_of_tag=id_of_tag)
+        self._unit_tracker = _UnitTracker(self, id_provider=id_provider)
         self._builder_tracker = _BuilderTracker(self)
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)

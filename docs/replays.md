@@ -64,6 +64,8 @@ run_replay("games/ladder.SC2Replay", api, player_id=1, disable_fog=True)
 - Every unit of `api.all_units` is read in full and reads `VISIBLE`, but one undetected in the player's sight: the game
   reports no health and the like for it, with the fog off too, so it reads as last reported in full. A burrowed
   zergling undetected in the player's sight is in neither: the game lists it in neither view.
+- An enemy unit of `api.all_units` is a `Unit`, as in `api.units`, and reads no orders: the game reports none of the
+  enemy's with the fog off either ([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)).
 - No event comes of `api.all_units`: the events are the player's, as with the fog on.
 - In a game, or a replay played back with the fog on, reading `api.all_units` raises `FogOnError`.
 
@@ -72,9 +74,9 @@ NachOS makes the player's view from it: what the player did not see left out, an
 remembers in the fog listed as copies, as the game lists them with the fog on
 ([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)). Played back a step at a turn, the
 player's view reads as a playback with the fog on does, at every step. A structure that died or moved off out of sight
-is forgotten once the tile under it reads in sight, which may come at another step than with the fog on. With more steps a turn, a geyser remembered in
-the fog was seen to come under a new tag between two turns with the fog on, which NachOS reads as one found dead and
-another first seen, where with the fog off it stays the one unit
+is forgotten once the tile under it reads in sight, which may come at another step than with the fog on. With more
+steps a turn, a geyser remembered in the fog was seen to come under a new tag between two turns with the fog on, which
+NachOS reads as one found dead and another first seen, where with the fog off it stays the one unit
 ([not understood yet](reference/game-behavior/not-understood-yet.md)).
 
 ## What the api can do in a replay

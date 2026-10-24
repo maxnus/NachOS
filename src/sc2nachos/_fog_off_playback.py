@@ -8,13 +8,12 @@ from typing import TYPE_CHECKING, Final
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
 from sc2nachos.gamemap._image_data import image_array
-from sc2nachos.geometry import Rectangle
+from sc2nachos.geometry import Grid, Rectangle
 from sc2nachos.units._tracking._tracker import _Tracker
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy import ndarray
     from s2clientprotocol import common_pb2
 
     from sc2nachos.enemy import Enemy
@@ -39,7 +38,13 @@ class _FogOffPlayback:
     """A replay played back with the fog off, read from each observation in turn as two views: what its player was
     shown, as the fog on would have shown it, and every unit, in a tracker of its own."""
 
-    __slots__ = ("_copy_tags", "_enemy_tags_seen", "_real_tags_of_copies", "_remembered", "_whole_game_tracker")
+    __slots__ = (
+        "_copies_by_unit_tag",
+        "_copy_tags",
+        "_enemy_tags_seen",
+        "_real_tags_of_copies",
+        "_whole_game_tracker",
+    )
 
     def __init__(self, game_data: GameData, enemy: Enemy | None) -> None:
         """Read a playback of a game whose tables are `game_data`, against `enemy`, from its first observation."""
@@ -48,7 +53,7 @@ class _FogOffPlayback:
         self._enemy_tags_seen: set[int] = set()
         # The copy of each unit the player remembers in the fog, by the unit's tag: its report as it went into the fog,
         # under a tag of its own.
-        self._remembered: dict[int, raw_pb2.Unit] = {}
+        self._copies_by_unit_tag: dict[int, raw_pb2.Unit] = {}
         # The unit's tag behind each copy's.
         self._real_tags_of_copies: dict[int, int] = {}
         self._copy_tags: Iterator[int] = itertools.count(_FIRST_COPY_TAG)
@@ -58,111 +63,110 @@ class _FogOffPlayback:
         """Every unit of the game, each read in full."""
         return self._whole_game_tracker
 
-    def read(self, fog_off: sc2api_pb2.ResponseObservation, step: int) -> sc2api_pb2.ResponseObservation:
-        """Take every unit of `fog_off`, the observation at `step`, into the whole game's tracker, and return what the
-        player was shown of it. Call it once for each observation, in order."""
-        self._whole_game_tracker.update(every_unit_in_full(fog_off), step)
-        return self.player_view(fog_off)
+    def read(self, fog_off_observation: sc2api_pb2.ResponseObservation, step: int) -> sc2api_pb2.ResponseObservation:
+        """Take every unit of `fog_off_observation`, the observation at `step`, into the whole game's tracker, and
+        return what the player was shown of it. Call it once for each observation, in order."""
+        self._whole_game_tracker.update(_raw_data_with_unseen_units_shown_visible(fog_off_observation), step)
+        return self.player_view(fog_off_observation)
 
-    def id_in_the_whole_game(self, tag: int) -> int:
-        """The id the whole game's tracker gives the unit the player's view lists under `tag`."""
-        return self._whole_game_tracker.unit_tracker.by_tag(self.real_tag(tag)).id
-
-    def real_tag(self, tag: int) -> int:
-        """The game's tag of the unit the player's view lists under `tag`: a copy's unit's, or `tag` itself."""
-        return self._real_tags_of_copies.get(tag, tag)
+    def id_of_unit(self, unit: raw_pb2.Unit) -> int:
+        """The id the whole game's tracker gives the unit the player's view lists as `unit`: a copy's unit's, or
+        `unit`'s own."""
+        real_tag = self._real_tags_of_copies.get(unit.tag, unit.tag)
+        return self._whole_game_tracker.unit_tracker.by_tag(real_tag).id
 
     def end(self) -> None:
         """Mark every unit of the whole game stale: the game is over."""
         self._whole_game_tracker.end()
 
-    def player_view(self, fog_off: sc2api_pb2.ResponseObservation) -> sc2api_pb2.ResponseObservation:
-        """`fog_off` as the player would have been shown it with the fog on: without the enemy units it does not see,
-        and with the units it remembers in the fog listed as copies. Call it once for each observation, in order."""
-        view = sc2api_pb2.ResponseObservation()
-        view.CopyFrom(fog_off)
-        raw = view.observation.raw_data
-        listed: list[raw_pb2.Unit] = []
+    def player_view(self, fog_off_observation: sc2api_pb2.ResponseObservation) -> sc2api_pb2.ResponseObservation:
+        """`fog_off_observation` as the player would have been shown it with the fog on: without the enemy units it
+        does not see, and with the units it remembers in the fog listed as copies. Call it once for each observation,
+        in order."""
+        player_observation = sc2api_pb2.ResponseObservation()
+        player_observation.CopyFrom(fog_off_observation)
+        raw_data = player_observation.observation.raw_data
+        units_listed: list[raw_pb2.Unit] = []
         positions_listed: dict[int, tuple[float, float]] = {}
         shown_visible: set[int] = set()
-        for unit in fog_off.observation.raw_data.units:
+        for unit in fog_off_observation.observation.raw_data.units:
             alliance = unit.alliance
             display = unit.display_type
             positions_listed[unit.tag] = (unit.pos.x, unit.pos.y)
             if alliance == _OWN_ALLIANCE:
-                listed.append(unit)
+                units_listed.append(unit)
             elif display == _VISIBLE_DISPLAY:
                 shown_visible.add(unit.tag)
                 if alliance == _ENEMY_ALLIANCE:
                     self._enemy_tags_seen.add(unit.tag)
-                self._forget(unit.tag)
-                listed.append(unit)
+                self._forget_copy_of(unit.tag)
+                units_listed.append(unit)
             elif display == _IN_FOG_DISPLAY:
                 # The map's units are known from the start; an enemy's, once seen.
-                known = alliance != _ENEMY_ALLIANCE or unit.tag in self._enemy_tags_seen
-                if known and unit.tag and unit.tag not in self._remembered:
-                    self._remember(unit)
-            elif display == _HIDDEN_DISPLAY and _is_undetected_in_sight(unit):
-                # An enemy's placeholder is in its own view alone (in game).
-                listed.append(unit)
-        in_sight = None
-        for tag, copy in list(self._remembered.items()):
-            if tag in shown_visible:
+                known_to_the_player = alliance != _ENEMY_ALLIANCE or unit.tag in self._enemy_tags_seen
+                if known_to_the_player and unit.tag and unit.tag not in self._copies_by_unit_tag:
+                    self._remember_copy_of(unit)
+            elif display == _HIDDEN_DISPLAY and not unit.owner:
+                # Undetected in the player's sight: the game reports no owner for it then, where one out of its sight
+                # reports its owner, though the tile under it may read in sight (in game).
+                units_listed.append(unit)
+            # An enemy's placeholder, a structure ordered and not yet placed, is in its own view alone (in game).
+        tiles_in_sight = None
+        for unit_tag, remembered_copy in list(self._copies_by_unit_tag.items()):
+            if unit_tag in shown_visible:
                 continue
-            if positions_listed.get(tag) != (copy.pos.x, copy.pos.y):
+            if positions_listed.get(unit_tag) != (remembered_copy.pos.x, remembered_copy.pos.y):
                 # Gone from its spot, dead or moved off: remembered until the spot is in sight.
-                if in_sight is None:
-                    in_sight = _tiles_in_sight(raw.map_state.visibility)
-                if _stands_in_sight(copy, in_sight):
-                    self._forget(tag)
+                if tiles_in_sight is None:
+                    tiles_in_sight = _tiles_in_sight(raw_data.map_state.visibility)
+                if tiles_in_sight[remembered_copy.pos.x, remembered_copy.pos.y]:
+                    self._forget_copy_of(unit_tag)
                     continue
-            listed.append(copy)
-        del raw.units[:]
-        raw.units.extend(listed)
-        return view
+            units_listed.append(remembered_copy)
+        del raw_data.units[:]
+        raw_data.units.extend(units_listed)
+        return player_observation
 
-    def _remember(self, unit: raw_pb2.Unit) -> None:
-        """Remember `unit`, gone into the fog, as it is now, under a tag of its own."""
-        copy = raw_pb2.Unit()
-        copy.CopyFrom(unit)
-        copy.tag = next(self._copy_tags)
-        self._remembered[unit.tag] = copy
-        self._real_tags_of_copies[copy.tag] = unit.tag
+    def _remember_copy_of(self, unit: raw_pb2.Unit) -> None:
+        """Remember `unit`, gone into the fog, as it is now, as a copy under a tag of its own."""
+        remembered_copy = raw_pb2.Unit()
+        remembered_copy.CopyFrom(unit)
+        remembered_copy.tag = next(self._copy_tags)
+        self._copies_by_unit_tag[unit.tag] = remembered_copy
+        self._real_tags_of_copies[remembered_copy.tag] = unit.tag
 
-    def _forget(self, tag: int) -> None:
-        """Forget the copy of the unit under `tag`, if it is remembered."""
-        if (copy := self._remembered.pop(tag, None)) is not None:
-            del self._real_tags_of_copies[copy.tag]
+    def _forget_copy_of(self, unit_tag: int) -> None:
+        """Forget the copy of the unit under `unit_tag`, if one is remembered."""
+        if (remembered_copy := self._copies_by_unit_tag.pop(unit_tag, None)) is not None:
+            del self._real_tags_of_copies[remembered_copy.tag]
 
 
-def every_unit_in_full(fog_off: sc2api_pb2.ResponseObservation) -> raw_pb2.ObservationRaw:
-    """The units and deaths of `fog_off`, each unit out of the player's sight shown visible, so that it is read in full:
-    the game reports such a unit in full with the fog off (in game). One undetected in the player's sight reports no
-    health and the like (in game), and is shown as reported."""
-    raw = fog_off.observation.raw_data
-    every_unit = raw_pb2.ObservationRaw(player=raw.player, event=raw.event)
-    for unit in raw.units:
+def _raw_data_with_unseen_units_shown_visible(
+    fog_off_observation: sc2api_pb2.ResponseObservation,
+) -> raw_pb2.ObservationRaw:
+    """The units and deaths of `fog_off_observation`, for the whole game's tracker, with each unit the player does not
+    see shown visible.
+
+    A tracker reads a unit's health and the like from the last report that lists it visible, and with the fog off the
+    game lists a unit out of the player's sight hidden, or a structure there in the fog, yet reports it in full (in
+    game). Shown visible, such a unit is read as it is. A unit undetected in the player's sight reports no owner, and no
+    health and the like, with the fog off too (in game): it keeps its display, and so reads as last reported in full.
+    """
+    raw_data = fog_off_observation.observation.raw_data
+    raw_data_shown = raw_pb2.ObservationRaw(player=raw_data.player, event=raw_data.event)
+    for unit in raw_data.units:
         display = unit.display_type
-        if display == _IN_FOG_DISPLAY or (display == _HIDDEN_DISPLAY and not _is_undetected_in_sight(unit)):
-            shown = every_unit.units.add()
-            shown.CopyFrom(unit)
-            shown.display_type = _VISIBLE_DISPLAY
+        # A hidden unit that reports its owner is out of the player's sight, not undetected in it (in game).
+        if display == _IN_FOG_DISPLAY or (display == _HIDDEN_DISPLAY and unit.owner):
+            unit_shown = raw_data_shown.units.add()
+            unit_shown.CopyFrom(unit)
+            unit_shown.display_type = _VISIBLE_DISPLAY
         else:
-            every_unit.units.append(unit)
-    return every_unit
+            raw_data_shown.units.append(unit)
+    return raw_data_shown
 
 
-def _is_undetected_in_sight(unit: raw_pb2.Unit) -> bool:
-    """Whether `unit`, listed hidden, is undetected in the player's sight: the game then reports no owner for it, where
-    one out of its sight with the fog off reports its owner, though the tile under it may read in sight (in game)."""
-    return not unit.owner
-
-
-def _tiles_in_sight(visibility: common_pb2.ImageData) -> ndarray:
-    """Whether the player sees each tile of the map, indexed `[x, y]`."""
-    return image_array(visibility, Rectangle(0, 0, visibility.size.x, visibility.size.y)) == _TILE_IN_SIGHT
-
-
-def _stands_in_sight(unit: raw_pb2.Unit, in_sight: ndarray) -> bool:
-    """Whether the tile under `unit`'s center is in the player's sight."""
-    return bool(in_sight[int(unit.pos.x), int(unit.pos.y)])
+def _tiles_in_sight(visibility: common_pb2.ImageData) -> Grid[bool]:
+    """Whether the player sees each tile of the map."""
+    whole_map = Rectangle(0, 0, visibility.size.x, visibility.size.y)
+    return Grid(image_array(visibility, whole_map) == _TILE_IN_SIGHT, outside=False)

@@ -518,13 +518,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
     answer the zero" has it.
   - Found building it: the player's view rebuilds the fog-on observation, the structures and map's units in the fog as
     copies under tags of their own, remembered as they went until their spot is in sight without them, so that the
-    tracker reads it unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner, not the tile under
-    it, and an integration test plays one replay with the fog on and off a step at a turn and finds the player's views
-    the same at every step. With more steps a turn the fog on can remember a structure afresh between two turns, which
-    NachOS reads as one found dead and another first seen, in a game too (`not-understood-yet.md`).
-  - From my review of #163 (the owner, over changing them): no guard against `id_of_tag` giving an id a unit already
+    tracker reads it unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner,
+    not the tile under it, and an integration test plays one replay with the fog on and off a step at a turn and finds
+    the player's views the same at every step. With more steps a turn the fog on can remember a structure afresh
+    between two turns, which NachOS reads as one found dead and another first seen, in a game too
+    (`not-understood-yet.md`).
+  - From my review of #163 (the owner, over changing them): no guard against `id_provider` giving an id a unit already
     holds, since no path to it was found; and each fog-off observation stays copied whole, some 0.3 ms of a 4.0 ms
     turn.
+  - From the owner's review of #163: the tracker takes each new unit's id from one callable, `id_provider`, given the
+    report the unit is first seen in, its alliance's next id unless another is given, over a branch on an optional
+    `id_of_tag` (11 ns more a new unit). An enemy unit of `api.all_units` stays a `Unit`, with no sweep of the fields
+    only `OwnUnit` reads: the fog off reports no enemy orders, and the rest was not compared.
 
 ## Next
 
