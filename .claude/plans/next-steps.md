@@ -474,6 +474,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Found building it: a computer's `Player.race` is the race it asked for, since the game gives a computer none, as
     when a replay is played back as one; a replay is the game's file and a recording NachOS's, never named for each
     other (`docs/maintaining/code-style.md`).
+  - From my review of #160 (the owner, over changing them): a Random computer's `Player.race` stays `RANDOM` in a
+    replay played back as it, as documented, a niche case; a recording that asks something before starting its replay
+    is not played back, as a recorded game with a request before its setup is not; and `run_recording` reads the start
+    of a recording up to three times, a few kilobytes each.
 
 ## Next
 
@@ -491,6 +495,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   owner first (2026-10-24, above).
 
 ## 1. Waiting until something needs them
+
+- A launch passes no data version, only the base build: a replay whose data version is not its base build's default
+  may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).
 
 - Keeping the selections a turn's units hand out, rather than building them at every read, about 15 ns a unit: the
   owner chose to decide it once the swap runs and AvocaDOS's exit gate measures what its reads cost (review of
