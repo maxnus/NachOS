@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, cast, final
 import numpy
 
 from sc2nachos._checks import is_whole_number
-from sc2nachos._rounding import rounded_half_up
 from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -103,7 +103,7 @@ class Footprint:
     def _lower_left_tile(self, *, at: PointLike) -> tuple[int, int]:
         """The lower left tile of `mask`, with the footprint placed at `at` and centered as the game snaps it."""
         x, y = at[0], at[1]
-        return rounded_half_up(x - self.width / 2), rounded_half_up(y - self.height / 2)
+        return _rounded_half_up(x - self.width / 2), _rounded_half_up(y - self.height / 2)
 
     def tiles(self, *, at: PointLike) -> TileSet:
         """The tiles the footprint covers, placed at `at` and centered as the game snaps it."""

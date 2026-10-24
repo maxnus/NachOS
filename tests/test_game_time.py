@@ -61,7 +61,8 @@ class TestConversions:
 
 class TestNearestStep:
     @pytest.mark.parametrize(
-        ("steps", "nearest"), [(96, 96), (22.4, 22), (22.6, 23), (-3.4, -3), (-3.6, -4), (0.49999999999999994, 0)]
+        ("steps", "nearest"),
+        [(96, 96), (22.4, 22), (22.6, 23), (-3.4, -3), (-3.6, -4), (0.49999999999999994, 0), (2.0**52 + 1, 2**52 + 1)],
     )
     def test_is_the_nearest_whole_step(self, steps, nearest):
         assert GameTime(steps=steps).nearest_step == nearest

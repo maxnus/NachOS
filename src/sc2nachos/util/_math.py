@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import math
 
-from sc2nachos._rounding import rounded_half_up
-
 
 def clip[T: float](value: T, minimum: T = 0, maximum: T = 1) -> T:
     """`value` clamped to `[minimum, maximum]`, by default the unit interval."""
@@ -37,7 +35,14 @@ def sticky_round(value: float, previous_value: int, *, tolerance: float = 1.0) -
     """
     if abs(value - previous_value) < tolerance:
         return previous_value
-    return rounded_half_up(value)
+    return _rounded_half_up(value)
+
+
+def _rounded_half_up(value: float) -> int:
+    """`value` rounded to the nearest integer, a tie up, toward the larger one."""
+    # Not `math.floor(value + 0.5)`: the addition itself rounds, taking 0.49999999999999994 to 1.0.
+    floored = math.floor(value)
+    return floored + (value - floored >= 0.5)
 
 
 def damp(start: float, end: float, *, decay: float, seconds: float) -> float:
