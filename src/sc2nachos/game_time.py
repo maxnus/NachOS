@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 import numbers
 from dataclasses import dataclass
-from typing import overload
+from typing import ClassVar, overload
 
-from sc2nachos.constants import SECONDS_PER_STEP
+from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
 
 # 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
 # exact up to the division, which rounds once, so a whole number of steps comes out whole; multiplying by the stored
@@ -24,12 +24,15 @@ class GameTime:
     A moment is a whole number of steps; a length may be fractional, as a weapon's cooldown is. Two add, subtract and
     take `%` to a `GameTime`, and divide, `/` or `//`, to a plain number; one multiplies by a plain number and divides
     by one to a `GameTime`. It orders against another `GameTime` alone: compared with a plain number it raises
-    `TypeError`, and it equals none. Zero is false.
+    `TypeError`, and it equals none. Zero is false, and is `GameTime.zero`.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * time`, hand over to `__rmul__` instead of reading the time
     # as an array.
     __array_ufunc__ = None
+
+    zero: ClassVar[GameTime]
+    """No time: the game's start, or a length of none."""
 
     steps: float
     """The steps of the game it counts."""
@@ -39,10 +42,21 @@ class GameTime:
         """The game time of `seconds` at the Faster speed, unrounded."""
         return cls(steps=seconds * _STEPS_PER_FIVE_SECONDS / 5)
 
+    @classmethod
+    def from_normal_seconds(cls, normal_seconds: float) -> GameTime:
+        """The game time of `normal_seconds` at the Normal speed, 16 steps a second, in which the game gives some
+        times, such as a weapon's cooldown. Exact, 16 being a power of two."""
+        return cls(steps=normal_seconds * STEPS_PER_NORMAL_SECOND)
+
     @property
     def seconds(self) -> float:
         """The seconds it counts at the Faster speed, unrounded."""
         return self.steps * SECONDS_PER_STEP
+
+    @property
+    def normal_seconds(self) -> float:
+        """The seconds it counts at the Normal speed, 16 steps a second. Exact, 16 being a power of two."""
+        return self.steps / STEPS_PER_NORMAL_SECOND
 
     def is_integer(self) -> bool:
         """Whether it is a whole number of steps."""
@@ -144,6 +158,8 @@ class GameTime:
     def __abs__(self) -> GameTime:
         return GameTime(steps=abs(self.steps))
 
+
+GameTime.zero = GameTime(steps=0)
 
 # The plain numbers a game time multiplies and divides by, as a constant: an inline `a | b` union is rebuilt on every
 # call. `numbers.Real` catches numpy scalars, which subclass neither `int` nor `float`; it comes last, being the

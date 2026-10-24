@@ -64,8 +64,8 @@ class Api:
     ordinary functions.
 
     Time is counted in steps: one step is one game loop, and 22.4 make a second. A moment or a length of game time is a
-    `GameTime`, but for the counts of steps: `step`, `steps_per_turn` and a `TimeSeries`' index. The bot takes a turn
-    every `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
+    `GameTime`, but for the two counts of steps, `step` and `steps_per_turn`. The bot takes a turn every
+    `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
     the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
     Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps

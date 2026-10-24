@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
 # and the one after that on the ladder or in realtime (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
-_GAME_START = GameTime(steps=0)
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
 # `UNLOAD`.
 _IS_AIMED_AT_ITSELF = MappingProxyType(
@@ -88,7 +87,7 @@ class OrderBook:
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
-        self._time = _GAME_START
+        self._time = GameTime.zero
 
     @overload
     def issue(

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #164. On this branch, `uv run pytest` passes 2858 tests; `uv run pytest -m
+- nachOS `main` has every PR to #164. On this branch, `uv run pytest` passes 2871 tests; `uv run pytest -m
   integration` passed 40 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -479,13 +479,19 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - one type for every moment and length of game time, `sc2nachos.GameTime` (the owner, 2026-10-24, one question at a
     time, over `Duration`, a length alone, and over `Time`), so `api.time` returns one too:
     - every moment one, under a `time` name: `event.time`, `action.time`, `order.issued_time`, `reservation.time`,
-      `unit.last_seen`, and a series' `start_time` and `last_time` beside its index of steps; `api.step` stays the
-      one int counter (over dropping it, and over changing `api.time` alone; the series over keeping it wholly by the
-      step counter, and over indexing it by `GameTime`);
+      `unit.last_seen`, and a series' `start_time` and `last_time`; `api.step` stays the one int counter (over
+      dropping it, and over changing `api.time` alone);
+    - a `TimeSeries` indexed by `GameTime` throughout: `TimeSeries(buffer, start_time, size)`, `append(time, value)`
+      at a whole number of steps, `at(time)` (`at_time` folded in), `series[time]` and its slices, iteration by
+      `(GameTime, value)` and `derivative_at(time)`, a time between two steps read at the nearest, a tie the later
+      (the owner's review, reversing the index of steps with `start_time` and `last_time` beside it, chosen over
+      keeping the series wholly by the step counter; the nearest step over whole steps alone);
     - a frozen, slotted dataclass of one keyword-only field, `steps: float`, with `seconds` worked out and
       `from_seconds` (over a `float` subclass, and over holding seconds, and in the owner's review over `GameSteps`
       with its field positional), made once an observation for its events; `is_integer()` says whether it is a whole
-      number of steps (the owner's review, over a private helper);
+      number of steps (the owner's review, over a private helper), `GameTime.zero` is the one zero (the owner's
+      review, over a module constant each), and `from_normal_seconds` and `normal_seconds` read the times the game
+      gives at the Normal speed, 16 steps a second: a weapon's cooldown, the score's idle times (the owner's review);
     - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
       to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
       false (over the least needed, and over a plain number read as steps);

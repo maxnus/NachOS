@@ -197,11 +197,11 @@ class _EventBus:
         for handler in todo:
             if handler.done:
                 continue
-            if (interval_steps := handler.min_interval_steps) is not None:
+            if (min_interval := handler.min_interval) is not None:
                 last_steps = handler.last_steps
-                if last_steps is not None and event_steps - last_steps < interval_steps:
+                if last_steps is not None and event_steps - last_steps < min_interval.steps:
                     continue
-            elif (at_steps := handler.at_steps) is not None and event_steps < at_steps:
+            elif (at_time := handler.at_time) is not None and event_steps < at_time.steps:
                 continue
             handler.last_steps = event_steps
             if handler.once:

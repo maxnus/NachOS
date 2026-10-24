@@ -25,8 +25,6 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTreeAbilities
     from sc2nachos.ids import AbilityId, EffectId, UpgradeId
 
-_NO_TIME = GameTime(steps=0)
-
 
 @final
 class GameData:
@@ -146,7 +144,7 @@ def _with_build_times_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> 
 def _build_time_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> GameTime:
     """The build time of each stage of `type_row`'s type, back along `morphed_from`, whose resources differ from the
     stage before it, as a morph's do and a switch's do not, and of the first stage, whatever it costs."""
-    counted_time, stage_row, stages_passed = _NO_TIME, type_row, {type_row.id}
+    counted_time, stage_row, stages_passed = GameTime.zero, type_row, {type_row.id}
     while (source_type := stage_row.morphed_from) is not None and source_type not in stages_passed:
         if (row_before := unit_rows.get(source_type)) is None:
             break

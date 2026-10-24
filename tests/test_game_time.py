@@ -35,6 +35,20 @@ class TestConversions:
         assert GameTime.from_seconds(0).steps == 0
         assert GameTime(steps=0).seconds == 0
 
+    def test_the_zero_constant_is_no_time(self):
+        assert GameTime.zero == GameTime(steps=0)
+        assert not GameTime.zero
+        assert isinstance(GameTime.zero, GameTime)
+
+    def test_a_normal_second_is_16_steps(self):
+        assert GameTime.from_normal_seconds(1) == GameTime(steps=16)
+        assert GameTime(steps=24).normal_seconds == 1.5
+
+    def test_normal_seconds_round_trip_exactly(self):
+        """16 is a power of two, so neither way rounds: a weapon's 0.8608 Normal seconds come back as given."""
+        for normal_seconds in (0.8608, 1.5, 0.1, 1e-9, 1234.5678):
+            assert GameTime.from_normal_seconds(normal_seconds).normal_seconds == normal_seconds
+
     def test_takes_its_steps_by_keyword_alone(self):
         with pytest.raises(TypeError):
             GameTime(96)  # type: ignore[misc]

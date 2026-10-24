@@ -18,7 +18,6 @@ class _Handler:
     often it runs and what it has done in the current game."""
 
     __slots__ = (
-        "at_steps",
         "at_time",
         "catch_exceptions",
         "done",
@@ -26,7 +25,6 @@ class _Handler:
         "instance",
         "last_steps",
         "min_interval",
-        "min_interval_steps",
         "name",
         "once",
         "order",
@@ -54,9 +52,6 @@ class _Handler:
         self.priority = priority
         self.min_interval = min_interval
         self.at_time = at_time
-        # The two in steps, read on every event.
-        self.min_interval_steps = None if min_interval is None else min_interval.steps
-        self.at_steps = None if at_time is None else at_time.steps
         self.once = once or at_time is not None
         self.catch_exceptions = catch_exceptions
         self.instance = instance

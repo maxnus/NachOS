@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
@@ -146,8 +146,8 @@ class Weapon:
             attacks=weapon.attacks,
             range=weapon.range,
             # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
-            # seconds at Normal speed, 16 steps a second.
-            base_cooldown=GameTime(steps=weapon.speed * STEPS_PER_NORMAL_SECOND),
+            # seconds at Normal speed.
+            base_cooldown=GameTime.from_normal_seconds(weapon.speed),
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 

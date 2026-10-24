@@ -1,9 +1,9 @@
-"""A growable series of values indexed by step."""
+"""A growable series of values indexed by game time."""
 
 from __future__ import annotations
 
 import numbers
-from typing import TYPE_CHECKING, Self, final, overload
+from typing import TYPE_CHECKING, final, overload
 
 import numpy
 import scipy.ndimage
@@ -23,12 +23,13 @@ INITIAL_BUFFER = 128
 
 @final
 class TimeSeries[T: float]:
-    """Values recorded against the step they were observed at.
+    """Values recorded against the game time they were observed at, one a step.
 
-    Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
-    of the series; `start_time` and `last_time` give the first and last as `GameTime`s. A slice is a copy, sharing no
-    memory with the series. Steps are contiguous: a gap between appends is filled by linear interpolation, rounded to
-    the nearest whole number in an integer series, a tie up.
+    Indexing and slicing are by `GameTime`, not buffer position, so `series[time]` means the same thing for the whole
+    life of the series. A time between two steps reads the nearest, a tie the later: `series.at(api.time -
+    GameTime.from_seconds(1))` reads 22 steps back. A slice is a copy, sharing no memory with the series. Steps are
+    contiguous: a gap between appends is filled by linear interpolation, rounded to the nearest whole number in an
+    integer series, a tie up.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
@@ -39,12 +40,25 @@ class TimeSeries[T: float]:
     _start: int | None
     _size: int
 
-    def __init__(self, buffer: ndarray, start: int | None, size: int) -> None:
-        """A series over `buffer`, holding the `size` values recorded from step `start` onward.
+    def __init__(self, buffer: ndarray, start_time: GameTime | None, size: int) -> None:
+        """A series over `buffer`, holding the `size` values recorded one a step from `start_time` onward, a whole
+        number of steps.
 
         `buffer` may be longer than `size`, leaving room to append. An empty series has no start; the first append
-        sets it.
+        sets it. Raises `TypeError` for a `start_time` that is not a `GameTime`, and `ValueError` for one that is not
+        a whole number of steps.
         """
+        self._set_up(buffer, None if start_time is None else _whole_step_of(start_time, "start_time"), size)
+
+    @classmethod
+    def _from_steps(cls, buffer: ndarray, start: int | None, size: int) -> TimeSeries[T]:
+        """A series over `buffer` from step `start`, made without a `GameTime`, for the operations that make one."""
+        series = cls.__new__(cls)
+        series._set_up(buffer, start, size)
+        return series
+
+    def _set_up(self, buffer: ndarray, start: int | None, size: int) -> None:
+        """Hold the `size` values of `buffer` from step `start`, once they are checked."""
         if not len(buffer):
             raise ValueError("buffer must not be empty; a series needs room to record at least one value")
         if size < 0:
@@ -52,19 +66,19 @@ class TimeSeries[T: float]:
         if size > len(buffer):
             raise ValueError(f"buffer of {len(buffer)} is too small for {size} values")
         if size and start is None:
-            raise ValueError(f"a series of {size} values needs a start step")
+            raise ValueError(f"a series of {size} values needs a start time")
         self._buffer = buffer
         self._start = start if size else None
         self._size = size
 
     @classmethod
     def empty(cls, dtype: type[T], *, initial_size: int = INITIAL_BUFFER) -> TimeSeries[T]:
-        """An empty series; the step of the first append becomes its start."""
-        return cls(numpy.zeros(initial_size, dtype=dtype), None, 0)
+        """An empty series; the time of the first append becomes its start."""
+        return cls._from_steps(numpy.zeros(initial_size, dtype=dtype), None, 0)
 
-    def _empty_like(self) -> Self:
+    def _empty_like(self) -> TimeSeries[T]:
         """An empty series of the same type, for an operation whose result holds no values."""
-        return type(self)(numpy.zeros(INITIAL_BUFFER, dtype=self.dtype), None, 0)
+        return TimeSeries._from_steps(numpy.zeros(INITIAL_BUFFER, dtype=self.dtype), None, 0)
 
     @property
     def size(self) -> int:
@@ -113,11 +127,16 @@ class TimeSeries[T: float]:
     def __len__(self) -> int:
         return self._size
 
-    def __iter__(self) -> Iterator[tuple[int, T]]:
-        yield from enumerate(self.values.tolist(), start=self._start or 0)
+    def __iter__(self) -> Iterator[tuple[GameTime, T]]:
+        """Each recorded step's time and value, in order."""
+        for step, value in enumerate(self.values.tolist(), start=self._start or 0):
+            yield GameTime(steps=step), value
 
-    def append(self, step: int, value: T) -> None:
-        """Record `value` at `step`, interpolating linearly across any gap since the last recorded step."""
+    def append(self, time: GameTime, value: T) -> None:
+        """Record `value` at `time`, interpolating linearly across any gap since the last recorded step. Raises
+        `TypeError` for a `time` that is not a `GameTime`, and `ValueError` for one that is not a whole number of
+        steps, or is not after the last recorded."""
+        step = _whole_step_of(time, "time")
         if self._size == 0:
             self._start = step
             self._buffer[0] = value
@@ -144,20 +163,16 @@ class TimeSeries[T: float]:
             self._buffer[index - gap + 1 : index + 1] = interpolated[1:]
         self._size += gap
 
-    def at(self, step: int) -> T | None:
-        """The value at `step`, or `None` if that step was never recorded."""
+    def at(self, time: GameTime) -> T | None:
+        """The value at `time`, taken from the nearest step, a tie the later, or `None` if that step was never
+        recorded. Raises `TypeError` for a `time` that is not a `GameTime`."""
+        step = _nearest_step_of(time, "time")
         if self._start is None:
             return None
         index = step - self._start
         if not 0 <= index < self._size:
             return None
         return self._buffer.item(index)
-
-    def at_time(self, time: GameTime) -> T | None:
-        """The value at `time`, taken from the nearest step, a tie the later, or `None` if that step was never
-        recorded. Raises `TypeError` for a `time` that is not a `GameTime`."""
-        check_game_time(time, "time")
-        return self.at(_rounded_half_up(time.steps))
 
     def _index(self, step: int) -> int:
         """The buffer position of a recorded step."""
@@ -168,40 +183,45 @@ class TimeSeries[T: float]:
             raise IndexError(f"step {step} outside the recorded range {self._start}-{self._last_step}")
         return index
 
-    def _slice(self, item: slice) -> slice:
-        """A range of steps as a range of buffer positions: none in an empty series."""
+    def _slice(self, item: slice) -> tuple[slice, int | None]:
+        """A range of times as a range of buffer positions, none in an empty series, and the step it starts at, or
+        `None` from the start."""
         if item.step is not None:
             raise NotImplementedError("TimeSeries does not support strided slicing")
+        start_step = None if item.start is None else _nearest_step_of(item.start, "a slice's start")
+        stop_step = None if item.stop is None else _nearest_step_of(item.stop, "a slice's stop")
         if self._start is None:
-            return slice(0, 0)
-        start = 0 if item.start is None else item.start - self._start
-        stop = self._size if item.stop is None else item.stop - self._start
+            return slice(0, 0), start_step
+        start = 0 if start_step is None else start_step - self._start
+        stop = self._size if stop_step is None else stop_step - self._start
         if start < 0 or stop < 0:
-            raise IndexError(f"slice {item.start}:{item.stop} begins before the first recorded step {self._start}")
-        return slice(start, stop)
+            raise IndexError(f"steps {start_step}:{stop_step} begin before the first recorded step {self._start}")
+        return slice(start, stop), start_step
 
     @overload
-    def __getitem__(self, item: int) -> T: ...
+    def __getitem__(self, item: GameTime) -> T: ...
 
     @overload
     def __getitem__(self, item: slice) -> TimeSeries[T]: ...
 
-    def __getitem__(self, item: int | slice) -> T | TimeSeries[T]:
-        """The value at a step, or a copy of the series over a range of steps. Raises `IndexError` for a step not
-        recorded, or a range that begins before the first."""
+    def __getitem__(self, item: GameTime | slice) -> T | TimeSeries[T]:
+        """The value at a time, or a copy of the series over a range of times, each read at the nearest step, a tie
+        the later. Raises `IndexError` for a step not recorded, or a range that begins before the first, and
+        `TypeError` for anything but a `GameTime` or a slice of them."""
         if isinstance(item, slice):
-            values = self.values[self._slice(item)]
+            positions, start_step = self._slice(item)
+            values = self.values[positions]
             if not len(values):
                 return self._empty_like()
-            start = self._start if item.start is None else item.start
-            return TimeSeries(values.copy(), start, len(values))
-        return self._buffer.item(self._index(item))
+            start = self._start if start_step is None else start_step
+            return TimeSeries._from_steps(values.copy(), start, len(values))
+        return self._buffer.item(self._index(_nearest_step_of(item, "an index")))
 
-    def __setitem__(self, item: int | slice, value: T | ndarray) -> None:
+    def __setitem__(self, item: GameTime | slice, value: T | ndarray) -> None:
         if isinstance(item, slice):
-            self.values[self._slice(item)] = value
+            self.values[self._slice(item)[0]] = value
         else:
-            self.values[self._index(item)] = value
+            self.values[self._index(_nearest_step_of(item, "an index"))] = value
 
     def min(self) -> T:
         """The smallest recorded value."""
@@ -223,13 +243,14 @@ class TimeSeries[T: float]:
         """The standard deviation of the recorded values. A float even for an integer series."""
         return self.values.std().item()
 
-    def derivative_at(self, step: int, *, window: GameTime = GameTime(steps=100)) -> float | None:
-        """The rate of change per second over the `window` ending at `step`, the window rounded to the nearest whole
-        step, a tie up.
+    def derivative_at(self, time: GameTime, *, window: GameTime = GameTime(steps=100)) -> float | None:
+        """The rate of change per second over the `window` ending at `time`, each rounded to the nearest whole step, a
+        tie up.
 
-        `None` if the series does not cover the whole range. Raises `TypeError` for a `window` that is not a
-        `GameTime`, and `ValueError` for one under one step once rounded.
+        `None` if the series does not cover the whole range. Raises `TypeError` for a `time` or a `window` that is not
+        a `GameTime`, and `ValueError` for a window under one step once rounded.
         """
+        step = _nearest_step_of(time, "time")
         check_game_time(window, "window")
         window_steps = _rounded_half_up(window.steps)
         if window_steps <= 0:
@@ -250,7 +271,7 @@ class TimeSeries[T: float]:
         if not self._size:
             return TimeSeries.empty(float)
         filtered = scipy.ndimage.gaussian_filter1d(self.values.astype(float), sigma=sigma.steps, mode=mode)
-        return TimeSeries(filtered, self._start, self._size)
+        return TimeSeries._from_steps(filtered, self._start, self._size)
 
     def uniform_filter(self, *, size: GameTime, mode: str = "nearest") -> TimeSeries[float]:
         """A copy with a moving average over `size` applied along the series. Raises `TypeError` for a `size` that is
@@ -261,20 +282,20 @@ class TimeSeries[T: float]:
         if not self._size:
             return TimeSeries.empty(float)
         filtered = scipy.ndimage.uniform_filter(self.values.astype(float), size=int(size.steps), mode=mode)
-        return TimeSeries(filtered, self._start, self._size)
+        return TimeSeries._from_steps(filtered, self._start, self._size)
 
-    def copy(self) -> Self:
+    def copy(self) -> TimeSeries[T]:
         """An independent copy, sharing no memory with this series."""
         if not self._size:
             return self._empty_like()
-        return type(self)(self.values.copy(), self._start, self._size)
+        return TimeSeries._from_steps(self.values.copy(), self._start, self._size)
 
     def _combine(self, other: TimeSeries[T] | T, op: Callable[[ndarray, ndarray | T], ndarray]) -> TimeSeries[T]:
         """`op` applied with a scalar, or with another series over the steps both record."""
         if not isinstance(other, TimeSeries):
             if self._start is None:
                 return self._empty_like()
-            return TimeSeries(op(self.values, other), self._start, self._size)
+            return TimeSeries._from_steps(op(self.values, other), self._start, self._size)
         if self._start is None or other._start is None:
             return self._empty_like()
         start = max(self._start, other._start)
@@ -283,7 +304,7 @@ class TimeSeries[T: float]:
             return self._empty_like()
         mine = self._buffer[start - self._start : start - self._start + size]
         theirs = other._buffer[start - other._start : start - other._start + size]
-        return TimeSeries(op(mine, theirs), start, size)
+        return TimeSeries._from_steps(op(mine, theirs), start, size)
 
     def __add__(self, other: TimeSeries[T] | T) -> TimeSeries[T]:
         if not isinstance(other, OPERAND_TYPES):
@@ -312,6 +333,22 @@ class TimeSeries[T: float]:
         if self._size == 0:
             return f"{type(self).__name__}(empty, dtype={self.dtype})"
         return f"{type(self).__name__}(steps {self._start}-{self._last_step}, dtype={self.dtype})"
+
+
+def _whole_step_of(time: GameTime, argument_name: str) -> int:
+    """The step `time`, given as `argument_name`, is: raises `TypeError` for anything but a `GameTime`, and
+    `ValueError` for one that is not a whole number of steps."""
+    check_game_time(time, argument_name)
+    if not time.is_integer():
+        raise ValueError(f"{argument_name} is a whole number of steps, not {time!r}")
+    return int(time.steps)
+
+
+def _nearest_step_of(time: GameTime, argument_name: str) -> int:
+    """The step nearest `time`, given as `argument_name`, a tie the later: raises `TypeError` for anything but a
+    `GameTime`."""
+    check_game_time(time, argument_name)
+    return _rounded_half_up(time.steps)
 
 
 # The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They

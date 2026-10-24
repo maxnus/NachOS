@@ -33,7 +33,6 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 # facing their target to within a degree (in game), though a zealot, a reaper and a marauder were seen to fire some 10
 # degrees off.
 _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
-_NO_TURN = GameTime(steps=0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
@@ -733,11 +732,11 @@ class Unit[K: UnitType.AnyType]:
             return None
         target_position = target._position if isinstance(target, Unit) else target
         if self._position.distance_to(target_position) == 0:
-            return _NO_TURN
+            return GameTime.zero
         bearing = self._position.angle_to(target_position)
         angle_to_turn = abs((bearing - self.facing + math.pi) % math.tau - math.pi)
         if angle_to_turn <= facing_tolerance:
-            return _NO_TURN
+            return GameTime.zero
         return GameTime(steps=math.ceil(angle_to_turn / turn_rate))
 
     def _repair_cost_of(self, missing_health: float) -> Cost | None:

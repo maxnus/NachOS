@@ -16,7 +16,6 @@ from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 
 _NO_BONUS: Final[Mapping[Attribute, float]] = MappingProxyType({})
-_NO_DELAY = GameTime(steps=0)
 
 MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyType(
     {
@@ -29,7 +28,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=_NO_DELAY,
+                mean_delay=GameTime.zero,
             ),
             Weapon(
                 TargetDomain.AIR,
@@ -38,7 +37,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=_NO_DELAY,
+                mean_delay=GameTime.zero,
             ),
         ),
         # Its beam, which fires only while it is on, and at nothing in the air (in game).
@@ -51,7 +50,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 base_cooldown=GameTime(steps=14.0),
                 damage_bonuses=MappingProxyType({Attribute.LIGHT: 7.0}),
                 ignores_armor=True,
-                mean_delay=_NO_DELAY,
+                mean_delay=GameTime.zero,
             ),
         ),
         UnitTypeId.VOID_RAY: (
@@ -62,7 +61,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=6.0,
                 base_cooldown=GameTime(steps=8.0),
                 damage_bonuses=MappingProxyType({Attribute.ARMORED: 4.0}),
-                mean_delay=_NO_DELAY,
+                mean_delay=GameTime.zero,
             ),
         ),
         UnitTypeId.SENTRY: (
@@ -73,7 +72,7 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 range=5.0,
                 base_cooldown=GameTime(steps=16.0),
                 damage_bonuses=_NO_BONUS,
-                mean_delay=_NO_DELAY,
+                mean_delay=GameTime.zero,
             ),
         ),
     }

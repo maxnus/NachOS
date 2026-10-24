@@ -8,8 +8,6 @@ from typing import final
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._resources import Resources
 
-_NO_TIME = GameTime(steps=0)
-
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -27,7 +25,7 @@ class Cost:
     """Vespene."""
     supply: float = 0.0
     """Supply taken, or given back when negative: -1 for a spawning pool, which uses up a drone."""
-    time: GameTime = _NO_TIME
+    time: GameTime = GameTime.zero
     """The time production takes, at the normal rate: a whole number of steps from the tables, fractional once scaled
     or divided; zero for an order that makes nothing, for a switch that costs nothing, such as a siege, and where the
     tables give none, as for an interceptor."""
