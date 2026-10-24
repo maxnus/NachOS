@@ -166,7 +166,7 @@ budget = api.resources - api.orders.pending_cost.resources
 `pending_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,
 and nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the
 difference for a morph, 150 for an orbital command rather than its type's 550; `cost.supply` is what the ability takes
-of the cap as it starts; and `cost.steps` how long it takes at the normal rate, 560 steps for the orbital command, and
+of the cap as it starts; and `cost.time` how long it takes at the normal rate, 560 steps for the orbital command, and
 none for a switch that costs nothing, such as a siege.
 
 A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted
@@ -178,12 +178,12 @@ one step at a time, renewed each turn the worker walks:
 ```python
 if scv.distance_to(site) > 2.5:
     api.orders.issue(scv, AbilityId.MOVE, target=site)
-    api.placement.reserve(UnitTypeId.SUPPLY_DEPOT, at=site, max_steps=1)
+    api.placement.reserve(UnitTypeId.SUPPLY_DEPOT, at=site, max_time=GameTime(steps=1))
 else:
     api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
 ```
 
-Once ordered, the build reserves its site itself. A reservation without `max_steps` lasts until it is withdrawn or
+Once ordered, the build reserves its site itself. A reservation without `max_time` lasts until it is withdrawn or
 one of this player's structures stands on its site.
 
 To take back an order before its turn is sent, withdraw it: what the game already has needs a cancel. A cancel is

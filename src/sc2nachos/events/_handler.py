@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.events._event_filter import EventFilter
     from sc2nachos.events._event_priority import EventPriority
+    from sc2nachos.game_time import GameTime
 
 
 @final
@@ -17,13 +18,13 @@ class _Handler:
     often it runs and what it has done in the current game."""
 
     __slots__ = (
-        "at_step",
+        "at_time",
         "catch_exceptions",
         "done",
-        "every_steps",
         "function",
         "instance",
-        "last_step",
+        "last_steps",
+        "min_interval",
         "name",
         "once",
         "order",
@@ -37,8 +38,8 @@ class _Handler:
         selects: EventFilter[Any],
         *,
         priority: EventPriority,
-        every_steps: int | None,
-        at_step: int | None,
+        min_interval: GameTime | None,
+        at_time: GameTime | None,
         once: bool,
         catch_exceptions: bool,
         instance: object | None = None,
@@ -49,24 +50,24 @@ class _Handler:
         self.selects = selects
         """The events it is handed: those of a type, or what `only`, `of` and `where` select of them."""
         self.priority = priority
-        self.every_steps = every_steps
-        self.at_step = at_step
-        self.once = once or at_step is not None
+        self.min_interval = min_interval
+        self.at_time = at_time
+        self.once = once or at_time is not None
         self.catch_exceptions = catch_exceptions
         self.instance = instance
         # Its place in subscription order across the whole bus, which orders one priority's handlers across event types.
         self.order = 0
         # What it has done this game; the next game resets it. An unsubscribed handler is `done` too, since an event
         # being handed out may still reach it.
-        self.last_step: int | None = None
+        self.last_steps: float | None = None
         self.done = False
 
     def __repr__(self) -> str:
         details = [self.name, *self.selects._details(), f"priority={self.priority.name}"]
-        if self.every_steps is not None:
-            details.append(f"every_steps={self.every_steps}")
-        if self.at_step is not None:
-            details.append(f"at_step={self.at_step}")
+        if self.min_interval is not None:
+            details.append(f"min_interval={self.min_interval!r}")
+        if self.at_time is not None:
+            details.append(f"at_time={self.at_time!r}")
         elif self.once:
             details.append("once=True")
         if self.catch_exceptions:

@@ -7,6 +7,7 @@ from typing import ClassVar, final
 
 from loguru import logger
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 
 
@@ -66,9 +67,10 @@ class _CommandLineArguments:
         return self._arguments.Map
 
     @property
-    def time_limit(self) -> float | None:
-        """The game seconds after which a local game ends as a tie."""
-        return self._arguments.TimeLimit
+    def time_limit(self) -> GameTime | None:
+        """The game time after which a local game ends as a tie, given in seconds."""
+        seconds = self._arguments.TimeLimit
+        return None if seconds is None else GameTime.from_seconds(seconds)
 
     @property
     def realtime(self) -> bool:

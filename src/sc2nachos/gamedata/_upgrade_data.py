@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
 from sc2nachos._enum import ReadableIntEnum
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.ids import AbilityId, UpgradeId
 
@@ -36,8 +37,8 @@ class UpgradeData:
     id: UpgradeId
     """The upgrade described."""
     cost: Cost
-    """The cost of researching it. Its steps are the research time, a whole number for every upgrade in the game's
-    tables and above 0 for every curated one (corpus), which a research takes exactly (in game)."""
+    """The cost of researching it. Its time is the research time, a whole number of steps for every upgrade in the
+    game's tables and above 0 for every curated one (corpus), which a research takes exactly (in game)."""
     research_ability: AbilityId | None
     """The ability that researches it."""
     upgrade_type: UpgradeType
@@ -51,7 +52,7 @@ class UpgradeData:
         upgrade = UpgradeId(data.upgrade_id)
         return cls(
             id=upgrade,
-            cost=Cost(data.mineral_cost, data.vespene_cost, steps=round(data.research_time)),
+            cost=Cost(data.mineral_cost, data.vespene_cost, time=GameTime(steps=round(data.research_time))),
             research_ability=AbilityId.get(data.ability_id) or tech_tree_upgrades.research_abilities.get(upgrade),
             upgrade_type=tech_tree_upgrades.types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree_upgrades.levels.get(upgrade, 0),

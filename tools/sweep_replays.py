@@ -63,7 +63,7 @@ from _sandbox import MAP, Cheat, OpenGround, playing, playing_rivals
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import AbilityId, Api, Computer, Difficulty, Race, run_local, run_recording, run_replay
+from sc2nachos import AbilityId, Api, Computer, Difficulty, GameTime, Race, run_local, run_recording, run_replay
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_array
@@ -135,7 +135,7 @@ def _record_the_shared_game(directory: Path) -> tuple[Path, Path]:
         Computer(Race.ZERG, Difficulty.MEDIUM),
         race=Race.TERRAN,
         steps_per_turn=_STEPS_PER_TURN,
-        time_limit=_GAME_SECONDS,
+        time_limit=GameTime.from_seconds(_GAME_SECONDS),
         random_seed=11,
         record_to=recording,
         save_replay_to=replay,
@@ -756,7 +756,7 @@ def _replay_of_a_scouting_game(installation: Installation, random_seed: int) -> 
         scout_ids.append(scout.id)
         api.orders.issue(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
 
-    @api.on(TurnEvent, at_step=_SCOUT_BACK_AT_STEP)
+    @api.on(TurnEvent, at_time=GameTime(steps=_SCOUT_BACK_AT_STEP))
     def come_back(_: TurnEvent) -> None:
         if (scout := api.units.own.get(scout_ids[0])) is not None:
             api.orders.issue(scout, AbilityId.MOVE, target=api.map.start_location)
@@ -770,7 +770,7 @@ def _replay_of_a_scouting_game(installation: Installation, random_seed: int) -> 
             computer,
             race=Race.TERRAN,
             steps_per_turn=_STEPS_PER_TURN,
-            time_limit=_SCOUTING_SECONDS,
+            time_limit=GameTime.from_seconds(_SCOUTING_SECONDS),
             random_seed=random_seed,
             save_replay_to=replay,
             installation=installation,

@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Self, final
 from s2clientprotocol import data_pb2
 
 from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED, STEPS_PER_NORMAL_SECOND, STEPS_PER_SECOND
+from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech_requirements import TechRequirements
@@ -33,7 +34,7 @@ _NO_CHANGE = UnitTypeUpgrade()
 _NO_WEAPON_CHANGE = WeaponUpgrade()
 
 # Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
-_MEAN_ATTACK_DELAY_STEPS = -1 + 3 * (4095 / 2) / 4096
+_MEAN_ATTACK_DELAY = GameTime(steps=-1 + 3 * (4095 / 2) / 4096)
 # The least a hit takes off health, whatever the armor (in game).
 _MINIMUM_DAMAGE = 0.5
 
@@ -75,17 +76,17 @@ class Weapon:
     """Hits per attack: two for a colossus."""
     range: float
     """Its range."""
-    base_cooldown_steps: float
-    """The steps from one attack to the next before the random delay the game adds to each: the tables' cooldown,
+    base_cooldown: GameTime
+    """The time from one attack to the next before the random delay the game adds to each: the tables' cooldown,
     shortened by an upgrade that speeds the attack."""
     damage_bonuses: Mapping[Attribute, float]
     """The extra damage per hit against a target with each attribute."""
     ignores_armor: bool = False
     """Whether a hit takes off its whole damage, whatever the target's armor and shield armor: an oracle's beam's (in
     game)."""
-    mean_delay_steps: float = _MEAN_ATTACK_DELAY_STEPS
+    mean_delay: GameTime = _MEAN_ATTACK_DELAY
     """The mean of the random delay the game adds to each attack: 0.4996 steps for a weapon from the tables, whose delay
-    runs from -1 to 2, and nothing for the weapons measured for the types the tables give none (in game)."""
+    runs from -1 to 2 steps, and nothing for the weapons measured for the types the tables give none (in game)."""
     turns_to_fire: bool = True
     """Whether its unit must face a target to fire it, as most do, to within a degree; false for one that fires at any
     angle off its facing, such as a battlecruiser's or a planetary fortress's, though a turret the game does not report
@@ -93,17 +94,17 @@ class Weapon:
     weapon never seen to fire, such as a sieged liberator's."""
 
     @property
-    def average_cooldown_steps(self) -> float:
-        """The steps from one attack to the next on average, the random delay counted. A thor's and an ultralisk's
-        attacks were not seen to keep to it. A unit's own `weapon_cooldown_steps` counts down the delay drawn for its
-        last attack."""
-        return self.base_cooldown_steps + self.mean_delay_steps
+    def average_cooldown(self) -> GameTime:
+        """The time from one attack to the next on average, the random delay counted. A thor's and an ultralisk's
+        attacks were not seen to keep to it. A unit's own `weapon_cooldown` counts down the delay drawn for its last
+        attack."""
+        return self.base_cooldown + self.mean_delay
 
     @property
     def dps(self) -> float:
         """Damage per second of real time at the game's Faster speed: every hit of an attack, each
-        `average_cooldown_steps`, against a target with no armor and no attribute it has a bonus against."""
-        return self.damage * self.attacks * STEPS_PER_SECOND / self.average_cooldown_steps
+        `average_cooldown`, against a target with no armor and no attribute it has a bonus against."""
+        return self.damage * self.attacks / self.average_cooldown.seconds
 
     def damage_against(
         self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shield: float = 0.0
@@ -145,8 +146,8 @@ class Weapon:
             attacks=weapon.attacks,
             range=weapon.range,
             # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
-            # seconds at Normal speed, 16 steps a second.
-            base_cooldown_steps=weapon.speed * STEPS_PER_NORMAL_SECOND,
+            # seconds at Normal speed.
+            base_cooldown=GameTime.from_normal_seconds(weapon.speed),
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
@@ -160,7 +161,7 @@ class Weapon:
             self,
             damage=self.damage + change.damage,
             range=self.range + change.range,
-            base_cooldown_steps=self.base_cooldown_steps / change.attack_speed_multiplier,
+            base_cooldown=self.base_cooldown / change.attack_speed_multiplier,
             damage_bonuses=MappingProxyType(bonuses),
         )
 
@@ -176,14 +177,14 @@ class UnitTypeData:
     """The race it belongs to."""
     cost: Cost
     """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
-    400 included. Its steps are the build steps of each stage that costs something: an orbital command's 2160 are the
-    command center's 1600 and its own 560, and a sieged tank's or a warp gate's are the tank's 720 or the gateway's
+    400 included. Its time is the build time of each stage that costs something: an orbital command's 2160 steps are
+    the command center's 1600 and its own 560, and a sieged tank's or a warp gate's are the tank's 720 or the gateway's
     1040, since the switch costs nothing."""
-    build_steps: int
-    """Steps to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
-    as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking 403 of
-    554 (in game; `docs/reference/game-behavior/upgrades-and-tables.md`). A type the table gives none takes the build
-    time of the one other type its creation ability makes: a rich gas building its plain one's."""
+    build_time: GameTime
+    """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
+    steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
+    403 of 554 (in game; `docs/reference/game-behavior/upgrades-and-tables.md`). A type the table gives none takes the
+    build time of the one other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
     cargo_size: int
@@ -274,7 +275,7 @@ class UnitTypeData:
             id=unit_type,
             race=Race(unit.race),
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
-            build_steps=math.ceil(unit.build_time),
+            build_time=GameTime(steps=math.ceil(unit.build_time)),
             supply_provided=unit.food_provided,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,

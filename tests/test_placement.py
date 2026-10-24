@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import Api
+from sc2nachos import Api, GameTime
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
@@ -107,7 +107,7 @@ class _Game:
         self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
         present = self.tracker.unit_tracker.present
-        self.book._observe(step, [*changes.units_died, *changes.units_found_dead])
+        self.book._observe(GameTime(steps=step), [*changes.units_died, *changes.units_found_dead])
         state = _State(observation, self.tracker, self.map)
         if self.grids is None:
             self.grids = PlacementGrids._build_at_start(
@@ -361,10 +361,10 @@ class TestReservingASite:
         reservation = grids.reserve(_DEPOT, at=Point((8.3, 7.8)))
 
         assert reservation.at == Point((8.0, 8.0))
-        assert (reservation.type_id, reservation.margin, reservation.step, reservation.max_steps) == (
+        assert (reservation.type_id, reservation.margin, reservation.time, reservation.max_time) == (
             _DEPOT,
             0,
-            0,
+            GameTime(steps=0),
             None,
         )
         assert grids.reservations == (reservation,)
@@ -416,17 +416,24 @@ class TestReservingASite:
 
         assert game.observe(1000, _scv(1)).reserved[Point((8.0, 8.0))]
 
-    def test_it_ends_once_max_steps_steps_have_passed(self) -> None:
+    def test_it_ends_once_its_max_time_has_passed(self) -> None:
         game = _Game()
-        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_steps=8)
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime(steps=8))
 
         assert game.observe(7, _scv(1)).reservations
         assert not game.observe(8, _scv(1)).reservations
 
+    def test_a_max_time_of_a_second_ends_it_once_22_4_steps_have_passed(self) -> None:
+        game = _Game()
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime.from_seconds(1))
+
+        assert game.observe(22, _scv(1)).reservations
+        assert not game.observe(23, _scv(1)).reservations
+
     def test_one_step_keeps_it_for_its_own_turn_alone(self) -> None:
         game = _Game()
         grids = game.observe(16, _scv(1))
-        grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=1)
+        grids.reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime(steps=1))
 
         assert grids.reserved.any()
         assert not game.observe(17, _scv(1)).reserved.any()
@@ -450,19 +457,22 @@ class TestReservingASite:
         assert game.observe(8, _scv(1), theirs).reservations
 
     @pytest.mark.parametrize(
-        ("unit_type", "max_steps", "message"),
+        ("unit_type", "max_time", "message"),
         [
             (UnitTypeId.MARINE, None, "MARINE has no footprint"),
             (UnitTypeId.REFINERY, None, "REFINERY stands on a geyser"),
-            (_DEPOT, 0, "max_steps is a number of steps, at least 1, not 0"),
+            (_DEPOT, GameTime(steps=0), "max_time is at least one step"),
+            (_DEPOT, GameTime(steps=0.5), "max_time is at least one step"),
         ],
-        ids=["no footprint", "gas building", "no steps"],
+        ids=["no footprint", "gas building", "no steps", "half a step"],
     )
-    def test_what_cannot_be_reserved_raises(self, unit_type: UnitTypeId, max_steps: int | None, message: str) -> None:
+    def test_what_cannot_be_reserved_raises(
+        self, unit_type: UnitTypeId, max_time: GameTime | None, message: str
+    ) -> None:
         grids = _Game().observe(0, _scv(1))
 
         with pytest.raises(ValueError, match=message):
-            grids.reserve(unit_type, at=(8.0, 8.0), max_steps=max_steps)
+            grids.reserve(unit_type, at=(8.0, 8.0), max_time=max_time)
 
         assert grids.reservations == ()
 
@@ -475,12 +485,12 @@ class TestReservingASite:
 
         assert grids.reservations == ()
 
-    @pytest.mark.parametrize("max_steps", [True, 1.5], ids=["a bool", "a fraction"])
-    def test_max_steps_that_is_not_a_whole_number_raises(self, max_steps: Any) -> None:
+    @pytest.mark.parametrize("max_time", [8, 1.5], ids=["a whole number", "a fraction"])
+    def test_a_max_time_in_plain_numbers_raises(self, max_time: Any) -> None:
         grids = _Game().observe(0, _scv(1))
 
-        with pytest.raises(TypeError, match="max_steps is a whole number of steps"):
-            grids.reserve(_DEPOT, at=(8.0, 8.0), max_steps=max_steps)
+        with pytest.raises(TypeError, match="max_time is a GameTime"):
+            grids.reserve(_DEPOT, at=(8.0, 8.0), max_time=max_time)
 
 
 # Creep over the right half of the drawn map, top row first.
@@ -1016,7 +1026,7 @@ class TestAgainstTheRealGame:
             api = Api()
             bot = _DepotBot(api, transport)
             api.on(TurnEvent)(bot.turn)
-            api.play(client, steps_per_turn=8, time_limit=60)
+            api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
 
         print("the site, turn by turn (depot stands, reserved, open):", bot.turns)
         before = [turn for turn in bot.turns if not turn[0]]

@@ -12,7 +12,6 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._fog_off_playback import _FogOffPlayback
 from sc2nachos.camera import Camera
-from sc2nachos.constants import steps_to_seconds
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
@@ -64,6 +63,7 @@ from sc2nachos.events import (
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Area
@@ -127,8 +127,10 @@ class _Game:
     _enemy_race_to_report: bool = False
     # The turn's chat, in the order given, as the actions that send it.
     _chat_to_send: list[sc2api_pb2.Action] = field(default_factory=list)
-    # Kept beside the observation: reading it out of the protobuf costs over ten times as much.
+    # Kept beside the observation: reading it out of the protobuf costs over ten times as much. The time is the step's,
+    # made once for every event of the observation.
     step: int
+    time: GameTime
     result: Result | None = None
 
     @classmethod
@@ -180,6 +182,7 @@ class _Game:
             _chat_event_types=_chat_event_types_by_player(info, player_id),
             _enemy_race_to_report=enemy is not None and enemy.race is not None,
             step=step,
+            time=GameTime(steps=step),
             _fog_off_playback=fog_off_playback,
         )
         game._read(observation, step)
@@ -214,6 +217,7 @@ class _Game:
         and the rest it reports."""
         self.observation = observation
         self.step = step
+        self.time = GameTime(steps=step)
         self.state = _State(observation, self.tracker, self.game_map)
         self.placement._update(self.tracker.unit_tracker.present, self.state, step)
         self.pathing._update(self.tracker.unit_tracker.present)
@@ -222,7 +226,7 @@ class _Game:
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
-        self.orders._observe(step, lost)
+        self.orders._observe(self.time, lost)
         if self.enemy is not None:
             self._read_enemy(self.enemy, changes.enemy_units_first_seen)
 
@@ -267,7 +271,7 @@ class _Game:
             return
         self._enemy_race_to_report = False
         if subscriptions.wants_every(EnemyRaceKnownEvent):
-            happened.append(EnemyRaceKnownEvent(enemy.race, step=self.step))
+            happened.append(EnemyRaceKnownEvent(enemy.race, time=self.time))
 
     def _report_units_coming_and_changing(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` the units first seen, and those that changed type or sides, that a handler wants."""
@@ -349,21 +353,21 @@ class _Game:
     def _report_actions_chat_and_alerts(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` this player's actions, the chat and the alerts of the last observation that a handler
         wants."""
-        observation, add, step = self.observation, happened.append, self.step
+        observation, add, game_time = self.observation, happened.append, self.time
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
-                add(OwnActionEvent(action, step=step))
+                add(OwnActionEvent(action, time=game_time))
         if observation.chat and any(subscriptions.wants_every(event_type) for event_type in _CHAT_EVENT_TYPES):
             for message in observation.chat:
                 event_type = self._chat_event_type(message.player_id)
                 if event_type is not None and subscriptions.wants_every(event_type):
-                    add(event_type(message.player_id, message.message, step=step))
+                    add(event_type(message.player_id, message.message, time=game_time))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
                 # `AlertError` and `TrainError` have no member and are skipped.
                 if (alert := _ALERT_BY_VALUE.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
-                    add(AlertEvent(alert, step=step))
+                    add(AlertEvent(alert, time=game_time))
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker compare each unit with the update before, for the damage, energy lost, cloak and buff
@@ -431,14 +435,14 @@ class _Game:
         every, keys = _wanted(subscriptions, event_type)
         if not (every or keys):
             return
-        add, step, key_of = happened.append, self.step, event_type._key_of
+        add, game_time, key_of = happened.append, self.time, event_type._key_of
         make = cast("Callable[..., Event]", event_type)
         for item in found:
             if tuples:
                 if every or key_of(*item) in keys:
-                    add(make(*item, step=step))
+                    add(make(*item, time=game_time))
             elif every or key_of(item) in keys:
-                add(make(item, step=step))
+                add(make(item, time=game_time))
 
     def _add_wanted_events_by_alliance(
         self,
@@ -457,7 +461,7 @@ class _Game:
         wanted = {alliance: _wanted(subscriptions, event_type) for alliance, event_type in event_types.items()}
         if not any(every or keys for every, keys in wanted.values()):
             return
-        add, step = happened.append, self.step
+        add, game_time = happened.append, self.time
         for item in found:
             made_of = item if tuples else (item,)
             alliance = made_of[0].alliance
@@ -465,7 +469,7 @@ class _Game:
                 continue
             every, keys = wanted[alliance]
             if every or (keys and event_type._key_of(*made_of) in keys):
-                add(cast("Callable[..., Event]", event_type)(*made_of, step=step))
+                add(cast("Callable[..., Event]", event_type)(*made_of, time=game_time))
 
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by
@@ -531,8 +535,7 @@ class _Game:
     def finish(self, result: Result) -> Result:
         """Record `result` as how the game ended, and log it."""
         self.result = result
-        seconds = steps_to_seconds(self.step)
-        logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, seconds)
+        logger.info("The game ended in a {} at step {}, {:.0f} seconds in", result, self.step, self.time.seconds)
         return result
 
 

@@ -62,8 +62,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 ```
 
 - **No subclass and no `async`.** Handlers subscribe to an `Api`, which can be made at import time, anywhere in the bot.
-- **`iteration == 0` is `once=True`.** There is no iteration: `event.step` is the game loop, and `every_steps` counts
-  steps.
+- **`iteration == 0` is `once=True`.** There is no iteration: `event.time` is when the event came, and `min_interval`
+  counts game time.
 - **An order goes to the units given, all at once**, and is sent when the turn's handlers have run.
 - **Nothing is subtracted as you order.** `can_afford` is the bot's own: what the turn's orders will cost is
   `api.orders.pending_cost`.
@@ -76,7 +76,9 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   other hooks become events, and a handler selects the ones it wants ([events](events.md),
   [in detail](reference/python-sc2.md#events)).
 - **Game time is counted in steps**, the game loop, never in iterations. A turn is one step unless `steps_per_turn`
-  says otherwise ([in detail](reference/python-sc2.md#running-a-game)).
+  says otherwise ([in detail](reference/python-sc2.md#running-a-game)). Every moment and length of game time is a
+  `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime.from_seconds(300)`, and
+  `self.time` alone `api.time.seconds` ([in detail](reference/python-sc2.md#time)).
 - **A unit is one object under one id for the whole game.** Out of sight it is stale, not gone, and only death ends it.
   A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).
 - **Your own units are `OwnUnit`s**, the only ones with orders, cargo and weapon cooldown. A unit's type can be a type

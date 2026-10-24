@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
-from sc2nachos.constants import STEPS_PER_NORMAL_SECOND
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
 
 if TYPE_CHECKING:
@@ -82,10 +82,11 @@ class Score:
     score: int
     """The score the game shows at the end of a game: the value of all units and structures, finished or not, plus
     the resources in the bank."""
-    idle_production_steps: int
-    """The steps production structures have spent producing nothing, summed over the structures."""
-    idle_worker_steps: int
-    """The steps workers have spent neither mining nor building, summed over the workers."""
+    idle_production_time: GameTime
+    """The time production structures have spent producing nothing, summed over the structures: a whole number of
+    steps."""
+    idle_worker_time: GameTime
+    """The time workers have spent neither mining nor building, summed over the workers: a whole number of steps."""
     total_value: ValueScore
     """The value of the finished units and structures."""
     killed_value: ValueScore
@@ -135,8 +136,8 @@ class Score:
         return cls(
             score=proto.score,
             # The game counts these in seconds at Normal speed, always a whole number of steps (corpus).
-            idle_production_steps=round(details.idle_production_time * STEPS_PER_NORMAL_SECOND),
-            idle_worker_steps=round(details.idle_worker_time * STEPS_PER_NORMAL_SECOND),
+            idle_production_time=GameTime.from_normal_seconds(details.idle_production_time),
+            idle_worker_time=GameTime.from_normal_seconds(details.idle_worker_time),
             total_value=ValueScore(details.total_value_units, details.total_value_structures),
             killed_value=ValueScore(details.killed_value_units, details.killed_value_structures),
             collected=Resources(details.collected_minerals, details.collected_vespene),

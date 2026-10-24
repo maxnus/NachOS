@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from loguru import logger
 
+from sc2nachos._checks import check_game_time
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
@@ -20,6 +21,7 @@ from sc2nachos.events._event_subscriber import EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timing import HandlerTiming
+from sc2nachos.game_time import GameTime
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -31,7 +33,7 @@ class _EventBus:
     `api.on`, `api.subscribe`, `api.unsubscribe`, `api.emit` and `api.handler_timings`, whose docstrings hold the
     contracts."""
 
-    __slots__ = ("_marks", "_step", "_subscriptions", "_timings")
+    __slots__ = ("_marks", "_subscriptions", "_time", "_timings")
 
     def __init__(self, *, time_handlers: bool = False) -> None:
         """Time every handler call if `time_handlers`."""
@@ -41,8 +43,8 @@ class _EventBus:
         self._marks: weakref.WeakKeyDictionary[FunctionType, list[tuple[EventFilter[Any], Mapping[str, Any]]]] = (
             weakref.WeakKeyDictionary()
         )
-        # The current step, given to an event emitted without one, or `None` between games.
-        self._step: int | None = None
+        # The current time, given to an event emitted without one, or `None` between games.
+        self._time: GameTime | None = None
         self._timings: dict[type[Event], dict[str, HandlerTiming]] | None = {} if time_handlers else None
 
     def __repr__(self) -> str:
@@ -56,8 +58,8 @@ class _EventBus:
         /,
         *,
         priority: EventPriority = EventPriority.MEDIUM,
-        every_steps: int | None = None,
-        at_step: int | None = None,
+        min_interval: GameTime | None = None,
+        at_time: GameTime | None = None,
         once: bool = False,
         catch_exceptions: bool = False,
     ) -> EventSubscriber[Any]:
@@ -69,18 +71,21 @@ class _EventBus:
         if selects.keys is None and issubclass(selected, ParameterizedEvent):
             name = selected.__name__
             raise TypeError(f"a handler subscribes to {name} through `of`, as in `{name}.of(...)`")
-        if every_steps is not None:
-            if every_steps < 1:
-                raise ValueError(f"every_steps is at least 1, not {every_steps}")
-            if at_step is not None:
-                raise ValueError("a handler runs every so many steps or at one step, not both")
+        if at_time is not None:
+            check_game_time(at_time, "at_time")
+        if min_interval is not None:
+            check_game_time(min_interval, "min_interval")
+            if min_interval.steps <= 0:
+                raise ValueError(f"min_interval is above zero, not {min_interval!r}")
+            if at_time is not None:
+                raise ValueError("a handler runs at a least interval or at one time, not both")
             if once:
-                raise ValueError("a handler runs every so many steps or once, not both")
+                raise ValueError("a handler runs at a least interval or once, not both")
 
         options = {
             "priority": priority,
-            "every_steps": every_steps,
-            "at_step": at_step,
+            "min_interval": min_interval,
+            "at_time": at_time,
             "once": once,
             "catch_exceptions": catch_exceptions,
         }
@@ -155,16 +160,16 @@ class _EventBus:
         if self._timings is not None:
             self._timings = {}
 
-    def _set_step(self, step: int | None) -> None:
-        """Set the step given to events emitted without one: the game's, or `None` once it has ended."""
-        self._step = step
+    def _set_time(self, time: GameTime | None) -> None:
+        """Set the time given to events emitted without one: the game's, or `None` once it has ended."""
+        self._time = time
 
     def emit(self, event: Event) -> None:
         """Hand `event` to its handlers, as `api.emit` says."""
-        if event.step < 0:
-            if self._step is None:
-                raise ValueError(f"{event!r} has no step, and no game is being played to give it one")
-            event = dataclasses.replace(event, step=self._step)
+        if event.time.steps < 0:
+            if self._time is None:
+                raise ValueError(f"{event!r} has no time, and no game is being played to give it one")
+            event = dataclasses.replace(event, time=self._time)
         subscriptions = self._subscriptions
         if (handlers := subscriptions.resolved.get(type(event))) is None:
             handlers = subscriptions.resolve(type(event))
@@ -188,16 +193,17 @@ class _EventBus:
         key or predicate, so each is checked."""
         todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
-        step = event.step
+        event_steps = event.time.steps
         for handler in todo:
             if handler.done:
                 continue
-            if (every := handler.every_steps) is not None:
-                if (last := handler.last_step) is not None and step - last < every:
+            if (min_interval := handler.min_interval) is not None:
+                last_steps = handler.last_steps
+                if last_steps is not None and event_steps - last_steps < min_interval.steps:
                     continue
-            elif (at := handler.at_step) is not None and step < at:
+            elif (at_time := handler.at_time) is not None and event_steps < at_time.steps:
                 continue
-            handler.last_step = step
+            handler.last_steps = event_steps
             if handler.once:
                 handler.done = True
             try:

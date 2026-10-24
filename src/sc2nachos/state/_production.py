@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import OrderBehavior
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
@@ -59,9 +60,12 @@ class _Production:
             product = _ability_product(row, unit.type_id)
             if isinstance(product, UpgradeId):
                 if product not in self._researches:
-                    total = round(game_data.upgrades[product].cost.steps)
+                    total_steps = game_data.upgrades[product].cost.time.nearest_step
                     # The game's progress is the steps done over the total, as a 32-bit float (in game).
-                    self._researches[product] = Research(product, unit, total, round((1 - order.progress) * total))
+                    steps_left = round((1 - order.progress) * total_steps)
+                    self._researches[product] = Research(
+                        product, unit, GameTime(steps=total_steps), GameTime(steps=steps_left)
+                    )
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
 

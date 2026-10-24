@@ -13,7 +13,7 @@ api = Api()
 
 @api.on(EnemyUnitFirstSeenEvent)
 def note(event: EnemyUnitFirstSeenEvent) -> None:
-    print(f"{api.time:.0f} s: {event.unit.type_id.name}")
+    print(f"{api.time.to_string()}: {event.unit.type_id.name}")
 
 
 run_replay("games/ladder.SC2Replay", api, player_id=1)
@@ -43,17 +43,17 @@ every event are what that player knew, as with the fog on. Besides, `api.all_uni
 is, those the player did not see included:
 
 ```python
-from sc2nachos import Api, UnitType, run_replay
+from sc2nachos import Api, GameTime, UnitType, run_replay
 from sc2nachos.events import TurnEvent
 
 api = Api()
 
 
-@api.on(TurnEvent, every_steps=224)
+@api.on(TurnEvent, min_interval=GameTime(steps=224))
 def compare(_: TurnEvent) -> None:
     known = len(api.units.enemy.of_type(UnitType.AnyZergling))
     there = len(api.all_units.enemy.of_type(UnitType.AnyZergling))
-    print(f"{api.time:.0f} s: {known} zerglings known of, {there} there")
+    print(f"{api.time.to_string(0)}: {known} zerglings known of, {there} there")
 
 
 run_replay("games/ladder.SC2Replay", api, player_id=1, disable_fog=True)
@@ -90,7 +90,7 @@ so an api that only reads plays any replay through.
 
 A replay played to its end returns what its last observation gives the player: `VICTORY` or `DEFEAT`, or `UNDECIDED`
 for a replay saved before its game ended, as `save_replay_to` saves one at a time limit. `api.leave_game()` stops it,
-and so does reaching `time_limit`, in game seconds; either returns `UNDECIDED`, since nothing was conceded or drawn.
+and so does reaching `time_limit`, a `GameTime`; either returns `UNDECIDED`, since nothing was conceded or drawn.
 
 ## The replay's build
 

@@ -21,8 +21,8 @@ class Economy:
 
 A function is subscribed when it is defined, a static method included. A method, which takes `self` and the event, is
 marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method or
-an instance off again. `on` takes a `priority`, and `every_steps`, `at_step` or `once` to limit when the handler runs. A
-handler that returns `Done` is not called again that game. All of this starts over with each game. An api made with
+an instance off again. `on` takes a `priority`, and `min_interval`, `at_time` or `once` to limit when the handler runs,
+the first two a `GameTime`. A handler that returns `Done` is not called again that game. All of this starts over with each game. An api made with
 `time_handlers=True` says how long each handler took in `api.handler_timings`.
 
 ## Selecting some events
@@ -48,7 +48,7 @@ handler that returns `Done` is not called again that game. All of this starts ov
   subscribes every handler it decorates. A handler's predicate is called when the handler's turn comes, after the
   handlers before it have run.
 
-`once`, `every_steps`, `at_step` and `Done` count only the events a handler selects: `once` with `where` fires on
+`once`, `min_interval`, `at_time` and `Done` count only the events a handler selects: `once` with `where` fires on
 the first event the predicate passes. `only` and `of` also save NachOS from making events no handler wants, and `of`
 from watching what no handler asked for. `where` cannot: a handler with a predicate makes NachOS produce every event
 of the type.
@@ -94,10 +94,10 @@ api.emit(ExpansionTakenEvent(natural))
 ```
 
 A subclass of `Event` is a frozen, slotted dataclass of the fields it declares; a `@dataclass` decorator of its own
-fails. Every event has a `step`, passed by keyword; an event made without one is handed out as a copy with the current
-step of the game being played, so one made once can be emitted every turn. `api.emit` hands an event to its handlers in
-priority order and returns once they have all run. A handler may itself emit an event. `emit` takes NachOS's own events
-too, so a bot's handlers can be tested without a game, given a step.
+fails. Every event has a `time`, a `GameTime` passed by keyword; an event made without one is handed out as a copy
+with the current time of the game being played, so one made once can be emitted every turn. `api.emit` hands an event
+to its handlers in priority order and returns once they have all run. A handler may itself emit an event. `emit` takes
+NachOS's own events too, so a bot's handlers can be tested without a game, given a time.
 
 ## When events come
 
@@ -111,7 +111,7 @@ out `TurnStartEvent`, then the events its observation reports, in the order of t
   sees every death and sighting of a turn before any handler at `MEDIUM` acts on one, and a bot's `TurnEvent` handler
   runs after the turn's other events at its priority. An event a handler emits goes out at once, in its own handlers'
   priority order.
-- **An event's step is the step NachOS learned of it.** What happened out of sight is reported when it is next seen:
+- **An event's time is when NachOS learned of it.** What happened out of sight is reported when it is next seen:
   a morph in the fog, a structure that died there, energy a unit regenerated.
 - **The first turn reports the units the game starts with as created.** The last observation of a game gets no turn,
   so nothing it reports is handed out.
@@ -126,11 +126,11 @@ base its events share, for a handler that wants the whole kind.
 
 | event | fields | comes |
 |---|---|---|
-| `GameStartEvent` | `step` | once a game has started |
-| `TurnStartEvent` | `step` | as a turn starts, before anything else of it |
-| `TurnEvent` | `step` | a bot's turn, after what the observation reports |
-| `GameEndEvent` | `step`, `result` | once the game has ended and its last observation has been read |
-| `EnemyRaceKnownEvent` | `step`, `race` | once the enemy's race is known: on the first turn, unless the enemy is a computer that asked for Random, which comes on the turn its first unit is seen; never in a game with no other player |
+| `GameStartEvent` | `time` | once a game has started |
+| `TurnStartEvent` | `time` | as a turn starts, before anything else of it |
+| `TurnEvent` | `time` | a bot's turn, after what the observation reports |
+| `GameEndEvent` | `time`, `result` | once the game has ended and its last observation has been read |
+| `EnemyRaceKnownEvent` | `time`, `race` | once the enemy's race is known: on the first turn, unless the enemy is a computer that asked for Random, which comes on the turn its first unit is seen; never in a game with no other player |
 
 ### Units coming and changing
 

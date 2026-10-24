@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Self, final
 
-from sc2nachos._checks import is_whole_number
+from sc2nachos._checks import check_game_time
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid, Point, Rectangle
 from sc2nachos.geometry._footprint import _margin_sides
@@ -109,7 +110,7 @@ class PlacementGrids:
 
     def _update(self, present_units: Units[Unit[Any]], state: _State, step: int) -> None:
         """Move on to a later observation of the same game, which `state` reads, made at `step`, and in which this
-        player knows of `present_units`. A reservation ends here if it has run its steps or one of this player's
+        player knows of `present_units`. A reservation ends here if it has run its time or one of this player's
         structures stands on its site."""
         self._present_units = present_units
         self._state = state
@@ -120,7 +121,7 @@ class PlacementGrids:
                 reservation
                 for reservation in self._reservations
                 if not reservation._withdrawn
-                and (reservation.max_steps is None or step < reservation.step + reservation.max_steps)
+                and (reservation._max_time is None or step < (reservation._time + reservation._max_time).steps)
                 and _placement_key(reservation.at) not in standing
             ]
         self._dynamic = None
@@ -163,28 +164,27 @@ class PlacementGrids:
         return tuple(reservation for reservation in self._reservations if not reservation._withdrawn)
 
     def reserve(
-        self, unit_type: UnitTypeId, *, at: PointLike, margin: Margin = 0, max_steps: int | None = None
+        self, unit_type: UnitTypeId, *, at: PointLike, margin: Margin = 0, max_time: GameTime | None = None
     ) -> PlacementReservation:
         """Keep the ground a structure of `unit_type` would cover at `at`, placed as the game snaps it, and with
         `margin`, every tile within it of one the footprint covers, as `is_free` takes it, out of `free`, `free_for`,
         `is_free` and `nearest_free` from now, the rest of this turn included, until the reservation is withdrawn, until
-        `max_steps` steps have passed if given, or until an observation shows one of this player's structures standing
-        on its site, whatever type it stands as. `max_steps=1` keeps it for this turn alone. Reservations may overlap,
-        and each game starts with none.
+        `max_time` has passed if given, or until an observation shows one of this player's structures standing on its
+        site, whatever type it stands as. `max_time=GameTime(steps=1)` keeps it for this turn alone. Reservations may
+        overlap, and each game starts with none.
 
-        Raises `TypeError` for a `max_steps` that is not a whole number or a margin that is neither a count of tiles nor
-        a tuple of four, and `ValueError` for a type with no footprint, for a gas building, which stands on a geyser,
-        for a negative margin and for a `max_steps` below 1."""
+        Raises `TypeError` for a `max_time` that is not a `GameTime` or a margin that is neither a count of tiles nor a
+        tuple of four, and `ValueError` for a type with no footprint, for a gas building, which stands on a geyser, for
+        a negative margin and for a `max_time` under one step."""
         footprint = self._footprint_of(unit_type)
         _margin_sides(margin)
-        if max_steps is not None:
-            if not is_whole_number(max_steps):
-                raise TypeError(f"max_steps is a whole number of steps, not {max_steps!r}")
-            if max_steps < 1:
-                raise ValueError(f"max_steps is a number of steps, at least 1, not {max_steps}")
+        if max_time is not None:
+            check_game_time(max_time, "max_time")
+            if max_time.steps < 1:
+                raise ValueError(f"max_time is at least one step, not {max_time!r}")
         center = footprint.snapped_center(at=at)
         reservation = PlacementReservation(
-            unit_type, footprint, at=center, margin=margin, step=self._step, max_steps=max_steps
+            unit_type, footprint, at=center, margin=margin, time=GameTime(steps=self._step), max_time=max_time
         )
         self._reservations.append(reservation)
         return reservation

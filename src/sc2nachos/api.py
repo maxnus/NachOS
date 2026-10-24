@@ -6,11 +6,10 @@ from typing import Any, overload
 
 from loguru import logger
 
-from sc2nachos._checks import check_file_to_write
+from sc2nachos._checks import check_file_to_write, check_game_time
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
-from sc2nachos.constants import steps_to_seconds
 from sc2nachos.debug import DebugCommands
 from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
@@ -26,6 +25,7 @@ from sc2nachos.events import (
     TurnStartEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Grid
@@ -63,7 +63,8 @@ class Api:
     `run_ladder` for every game it plays. Never subclass it: your own helpers belong in your own modules, as
     ordinary functions.
 
-    Time is counted in steps. One step is one game loop, 22.4 steps make a second, and the bot takes a turn every
+    Time is counted in steps: one step is one game loop, and 22.4 make a second. A moment or a length of game time is a
+    `GameTime`, but for the two counts of steps, `step` and `steps_per_turn`. The bot takes a turn every
     `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
     the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
@@ -92,8 +93,8 @@ class Api:
         /,
         *,
         priority: EventPriority = ...,
-        every_steps: int | None = ...,
-        at_step: int | None = ...,
+        min_interval: GameTime | None = ...,
+        at_time: GameTime | None = ...,
         once: bool = ...,
         catch_exceptions: bool = ...,
     ) -> None: ...
@@ -105,8 +106,8 @@ class Api:
         /,
         *,
         priority: EventPriority = ...,
-        every_steps: int | None = ...,
-        at_step: int | None = ...,
+        min_interval: GameTime | None = ...,
+        at_time: GameTime | None = ...,
         once: bool = ...,
         catch_exceptions: bool = ...,
     ) -> EventSubscriber[E]: ...
@@ -129,11 +130,12 @@ class Api:
 
         `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
         among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
-        before any handler of the next. The handler runs on every event unless held back: `every_steps` waits until
-        that many steps have passed since it last ran, `at_step` runs it once, on the first event at or after that
-        step, and `once` on the first event; `every_steps` with either of the others raises `ValueError`. These count
-        only the events selected, and start afresh each game, as does a handler that returned `Done`. An exception it
-        raises ends the game, unless `catch_exceptions`, which logs it and goes on.
+        before any handler of the next. The handler runs on every event unless held back: `min_interval` waits until
+        that long has passed since it last ran, `at_time` runs it once, on the first event at or after that time, and
+        `once` on the first event. `min_interval` with either of the others, or not above zero, raises `ValueError`,
+        and either of the two not a `GameTime`, `TypeError`. These count only the events selected, and start afresh
+        each game, as does a handler that returned `Done`. An exception it raises ends the game, unless
+        `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -160,7 +162,7 @@ class Api:
         """Hand `event` to every handler of its type or a base type that selects it and is due to run. All have returned
         when this returns. A handler may itself emit an event.
 
-        An event made without a step is handed out as a copy with the current step, and the one passed in keeps none,
+        An event made without a time is handed out as a copy with the current time, and the one passed in keeps none,
         so it can be emitted again. Raises `ValueError` for one when no game is being played.
         """
         self._events.emit(event)
@@ -208,9 +210,9 @@ class Api:
         return self._current_game().step
 
     @property
-    def time(self) -> float:
-        """The game time in seconds."""
-        return steps_to_seconds(self.step)
+    def time(self) -> GameTime:
+        """The time of the last observation: `step` as a `GameTime`."""
+        return self._current_game().time
 
     @property
     def result(self) -> Result | None:
@@ -402,17 +404,17 @@ class Api:
         *,
         steps_per_turn: int = 1,
         realtime: bool = False,
-        time_limit: float | None = None,
+        time_limit: GameTime | None = None,
         enemy_ladder_id: str | None = None,
         save_replay_to: Path | str | None = None,
     ) -> Result:
         """Play the game `client` has joined to its end, a turn every `steps_per_turn` steps, and return how it ended
         for this player.
 
-        `run_local`, `run_ladder`, `run_replay` and `run_recording` call this. Call it directly to play a game
-        connected some other way. `time_limit`, in game seconds, calls a game that reaches it a tie, and stops a replay
-        at it `Result.UNDECIDED`. `realtime` must say how the game was created: a stepped game played in real time
-        never moves, which raises `ValueError` on the first turn.
+        `run_local`, `run_ladder`, `run_replay` and `run_recording` call this. Call it directly to play a game connected
+        some other way. `time_limit` calls a game that reaches it a tie, and stops a replay at it `Result.UNDECIDED`;
+        one that is not a `GameTime` raises `TypeError` before the game starts. `realtime` must say how the game was
+        created: a stepped game played in real time never moves, which raises `ValueError` on the first turn.
         `enemy_ladder_id` is the ladder's id for the opponent, which `enemy.ladder_id` reads.
 
         `save_replay_to` is a file to save the game's replay to, however the game ends: at its end, at the time
@@ -423,6 +425,8 @@ class Api:
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
         """
+        if time_limit is not None:
+            check_game_time(time_limit, "time_limit")
         replay_path = None if save_replay_to is None else Path(save_replay_to)
         if replay_path is not None:
             check_file_to_write(replay_path, "save the replay into")
@@ -435,7 +439,7 @@ class Api:
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._events
         events._start_game()
-        events._set_step(game.step)
+        events._set_time(game.time)
         try:
             result = self._play_saving_the_replay(
                 game,
@@ -447,37 +451,43 @@ class Api:
             if game.leaving and client.in_game:
                 logger.info("Leaving the game")
                 client.leave_game()
-            events.emit(GameEndEvent(result, step=game.step))
+            events.emit(GameEndEvent(result, time=game.time))
         finally:
-            # Ended, or ended by a handler that raised: no game is being played to give an event its step.
-            events._set_step(None)
+            # Ended, or ended by a handler that raised: no game is being played to give an event its time.
+            events._set_time(None)
         return result
 
     def _play_saving_the_replay(
-        self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: float | None, save_replay_to: Path | None
+        self,
+        game: _Game,
+        *,
+        steps_per_turn: int,
+        realtime: bool,
+        time_limit: GameTime | None,
+        save_replay_to: Path | None,
     ) -> Result:
         """Start `game` and take its turns until it ends, or the bot asks to leave it, and return how it ended. Then,
         however the turns ended, save its replay to `save_replay_to` if given, while the client is still in the game."""
         try:
-            self._events.emit(GameStartEvent(step=game.step))
+            self._events.emit(GameStartEvent(time=game.time))
             return self._play_turns(game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
         finally:
             if save_replay_to is not None:
                 _save_replay(game.client, save_replay_to)
 
-    def _play_turns(self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: float | None) -> Result:
+    def _play_turns(self, game: _Game, *, steps_per_turn: int, realtime: bool, time_limit: GameTime | None) -> Result:
         """Take the turns of `game` until it ends or the bot asks to leave it, and return how it ended."""
         events, client = self._events, game.client
         while (result := game.outcome()) is None:
-            if time_limit is not None and self.time >= time_limit:
+            if time_limit is not None and game.time >= time_limit:
                 if client.in_replay:
-                    logger.info("Stopping the replay at its {:.0f} second limit", time_limit)
+                    logger.info("Stopping the replay at its {:.0f} second limit", time_limit.seconds)
                     return game.finish(Result.UNDECIDED)
-                logger.info("Calling the game a tie at its {:.0f} second limit", time_limit)
+                logger.info("Calling the game a tie at its {:.0f} second limit", time_limit.seconds)
                 return game.finish(Result.TIE)
 
-            events.emit(TurnStartEvent(step=game.step))
-            events._hand_out([*game.report(events), TurnEvent(step=game.step)])
+            events.emit(TurnStartEvent(time=game.time))
+            events._hand_out([*game.report(events), TurnEvent(time=game.time)])
             try:
                 # The turn's handlers have all returned, so what they asked for goes out now.
                 game.send_turn()
@@ -495,7 +505,7 @@ class Api:
                     _observe_realtime(game, game.step + steps_per_turn)
                 else:
                     game.observe()
-            events._set_step(game.step)
+            events._set_time(game.time)
         return result
 
 

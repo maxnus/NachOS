@@ -7,6 +7,7 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
@@ -39,8 +40,8 @@ class GameData:
         unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
-        self._units = _with_steps_in_costs(
-            _with_turning(with_missing_attacks(_with_build_steps_borrowed(unit_rows, TECH_TREE.abilities)))
+        self._units = _with_build_times_in_costs(
+            _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE.abilities)))
         )
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
@@ -85,23 +86,23 @@ class GameData:
         return self._effects
 
 
-def _with_build_steps_borrowed(
+def _with_build_times_borrowed(
     units: Mapping[UnitTypeId, UnitTypeData], tech_tree_abilities: TechTreeAbilities
 ) -> Mapping[UnitTypeId, UnitTypeData]:
     """`units`, where a type the table gives no build time takes the build time of the one other type its creation
     ability makes: a rich gas building, which builds in the same time as its plain one, takes its plain one's (tool
     `sweep_orders`)."""
-    rows_with_build_steps = dict(units)
+    rows_with_build_times = dict(units)
     for unit_type, row in units.items():
-        if row.build_steps or row.creation_ability is None:
+        if row.build_time or row.creation_ability is None:
             continue
         products = tech_tree_abilities.products.get(row.creation_ability, {}).values()
         types_made = {product for product in products if isinstance(product, UnitTypeId)}
         if len(types_made) != 1 or unit_type in types_made:
             continue
         if (built_as := units.get(types_made.pop())) is not None:
-            rows_with_build_steps[unit_type] = replace(row, build_steps=built_as.build_steps)
-    return MappingProxyType(rows_with_build_steps)
+            rows_with_build_times[unit_type] = replace(row, build_time=built_as.build_time)
+    return MappingProxyType(rows_with_build_times)
 
 
 # The game turns a unit in 1/4096 of a full turn, `TURN_RATE_UNITS`'s unit.
@@ -127,31 +128,31 @@ def _row_with_turning(type_row: UnitTypeData) -> UnitTypeData:
     )
 
 
-def _with_steps_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each cost given the build steps of each stage of its type that costs something. A switch that costs
-    nothing, such as a tank's siege or a depot's lowering, adds none, so every form of a unit costs the same steps."""
+def _with_build_times_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`unit_rows`, each cost given the build time of each stage of its type that costs something. A switch that costs
+    nothing, such as a tank's siege or a depot's lowering, adds none, so every form of a unit costs the same time."""
     return MappingProxyType(
         {
             unit_type: replace(
-                type_row, cost=replace(type_row.cost, steps=_build_steps_of_stages_that_cost(type_row, unit_rows))
+                type_row, cost=replace(type_row.cost, time=_build_time_of_stages_that_cost(type_row, unit_rows))
             )
             for unit_type, type_row in unit_rows.items()
         }
     )
 
 
-def _build_steps_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> int:
-    """The build steps of each stage of `type_row`'s type, back along `morphed_from`, whose resources differ from the
+def _build_time_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> GameTime:
+    """The build time of each stage of `type_row`'s type, back along `morphed_from`, whose resources differ from the
     stage before it, as a morph's do and a switch's do not, and of the first stage, whatever it costs."""
-    counted_steps, stage_row, stages_passed = 0, type_row, {type_row.id}
+    counted_time, stage_row, stages_passed = GameTime.ZERO, type_row, {type_row.id}
     while (source_type := stage_row.morphed_from) is not None and source_type not in stages_passed:
         if (row_before := unit_rows.get(source_type)) is None:
             break
         if stage_row.cost.resources != row_before.cost.resources:
-            counted_steps += stage_row.build_steps
+            counted_time += stage_row.build_time
         stage_row = row_before
         stages_passed.add(source_type)
-    return counted_steps + stage_row.build_steps
+    return counted_time + stage_row.build_time
 
 
 def _read_table[MessageT, IdT, RowT](

@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import Api
+from sc2nachos import Api, GameTime
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
@@ -117,7 +117,7 @@ class _Game:
         changes = self.tracker.last_changes
         changed_hands = [unit for unit, _ in changes.units_alliance_changed]
         lost = [*changes.units_died, *changes.units_found_dead, *changed_hands]
-        self.book._observe(step, lost)
+        self.book._observe(GameTime(steps=step), lost)
 
     def flush(self, *, then: Sequence[sc2api_pb2.Action] = ()) -> sc2api_pb2.RequestAction | None:
         """Send the turn's orders, and `then` after them, and return the request that went out, or `None` if none
@@ -909,7 +909,7 @@ class TestWhatTheGameRefused:
 
         assert game.refused() == [(1, _MOVE, ActionResult.NOT_SUPPORTED)]
         (failure,) = game.book._refusals
-        assert failure.step == 16
+        assert failure.time == GameTime(steps=16)
 
     def test_a_refused_command_is_listed_once_for_each_unit_it_named(self) -> None:
         game = _Game([ActionResult.ERROR])
@@ -1465,7 +1465,7 @@ class _OrderingBot:
         marines = api.units.own.of_type(UnitTypeId.GHOST)
         middle = api.map.playable_area.center
         if not marines:
-            if event.step < 64:
+            if event.time.steps < 64:
                 api.client.debug([_create(UnitTypeId.GHOST, middle, self.player, quantity=2)])
             return
         if self.moved is None and len(marines) >= 2:
@@ -1497,7 +1497,7 @@ class _UnloadingBot:
         self.move: Order[None] | None = None
         self.unload: Order[None] | None = None
         self.unloaded_at: dict[int, Point] = {}
-        self.reported: list[tuple[int, list[str]]] = []
+        self.reported: list[tuple[float, list[str]]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1505,10 +1505,10 @@ class _UnloadingBot:
         marines = api.units.own.of_type(UnitTypeId.MARINE)
         middle = api.map.playable_area.center
         if self.unload is not None:
-            self.reported.append((event.step, [order.ability.name for medivac in medivacs for order in medivac.orders]))
+            self.reported.append((api.step, [order.ability.name for medivac in medivacs for order in medivac.orders]))
             return
         if len(medivacs) < 2:
-            if event.step < 64:
+            if event.time.steps < 64:
                 api.client.debug(
                     [
                         _create(UnitTypeId.MEDIVAC, middle, self.player, quantity=2),
@@ -1546,21 +1546,21 @@ class _SiegingBot:
         api = self.api
         liberators = api.units.own.of_type([UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED])
         if not liberators:
-            if event.step < 64:
+            if event.time.steps < 64:
                 api.client.debug([_create(UnitTypeId.LIBERATOR, api.map.playable_area.center, self.player, quantity=1)])
             return
         liberator = liberators[0]
         orders = [(order.ability, order.target is liberator) for order in liberator.orders]
-        self.reported.append((event.step, liberator.type_id, orders))
+        self.reported.append((api.step, liberator.type_id, orders))
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
-        if self._siege_due(event.step):
+        if self._siege_due(api.step):
             self.sieges.append(api.orders.issue(liberator, _SIEGE_AT, target=self.zone))
 
     def _siege_due(self, step: int) -> bool:
         """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
         shows the first."""
-        return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].issued_step + 32)
+        return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].issued_time.steps + 32)
 
 
 class _GroupSiegingBot:
@@ -1579,7 +1579,7 @@ class _GroupSiegingBot:
         units = api.units.own.of_type(_SIEGE_FORMS)
         middle = api.map.playable_area.center
         if len(units) < 2:
-            if event.step < 64:
+            if event.time.steps < 64:
                 api.client.debug(
                     [
                         _create(UnitTypeId.SIEGE_TANK, middle, self.player, quantity=1),
@@ -1613,7 +1613,7 @@ class _GroupUnloadingBot:
         marines = api.units.own.of_type(UnitTypeId.MARINE)
         middle = api.map.playable_area.center
         if len(transports) < 2:
-            if event.step < 64:
+            if event.time.steps < 64:
                 api.client.debug(
                     [
                         _create(UnitTypeId.BUNKER, middle, self.player, quantity=1),
@@ -1649,7 +1649,7 @@ class _ProductionBot:
         self.made = False
         self.ordered = False
         self.reads: list[tuple[int, float | None, float | None]] = []
-        self.steps_left: list[tuple[int, int]] = []
+        self.times_left: list[tuple[int, float]] = []
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1676,7 +1676,7 @@ class _ProductionBot:
             marines = api.in_production(UnitType.Marine)
             self.reads.append((len(marines), progress, marines[0].progress if marines else None))
             if research is not None:
-                self.steps_left.append((api.step, research.steps_left))
+                self.times_left.append((api.step, research.time_left.steps))
 
 
 class _GroupTrainingBot:
@@ -1761,9 +1761,9 @@ class TestAgainstTheRealGame:
         bot, failures = _play_a_minute(_SiegingBot)
 
         print("the liberator, turn by turn:", bot.reported[:12])
-        print("sieges:", [order.issued_step for order in bot.sieges], "refused or given up:", failures)
-        refused = [(failure.step, failure.ability, failure.action_result) for failure in failures]
-        assert refused == [(order.issued_step, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
+        print("sieges:", [order.issued_time.steps for order in bot.sieges], "refused or given up:", failures)
+        refused = [(failure.time.steps, failure.ability, failure.action_result) for failure in failures]
+        assert refused == [(order.issued_time.steps, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
         # Each order as its ability and whether it is aimed at the liberator itself.
         (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
         assert first == [(_SIEGE_AT, True)]
@@ -1799,8 +1799,8 @@ class TestAgainstTheRealGame:
         assert progress == sorted(progress)
         assert 0.0 < progress[-1] < 1.0
         # Every read of the steps a research has left names one step for it to finish at.
-        assert len(bot.steps_left) > 1
-        assert len({step + left for step, left in bot.steps_left}) == 1
+        assert len(bot.times_left) > 1
+        assert len({step + left for step, left in bot.times_left}) == 1
         assert all(marine is not None for count, _, marine in bot.reads if count)
         marine = [each for count, _, each in bot.reads if count == 2 and each is not None]
         assert marine == sorted(marine)
@@ -1812,7 +1812,7 @@ class TestAgainstTheRealGame:
         print("marines in production, turn by turn:", bot.in_production)
         print("refused:", failures)
         # The three trains' steps added up, as `pending_cost` adds them: a marine takes 400 in the tables (in game).
-        assert bot.cost == Cost(150, 0, supply=3, steps=1200)
+        assert bot.cost == Cost(150, 0, supply=3, time=GameTime(steps=1200))
         assert max(bot.in_production) == 3
         assert not [failure for failure in failures if failure.ability is _TRAIN_MARINE]
 
@@ -1847,5 +1847,5 @@ def _play_a_minute[
         failures: list[ActionFailure] = []
         api.on(TurnEvent)(lambda _: failures.extend(api.action_failures))
         api.on(TurnEvent)(bot.turn)
-        api.play(client, steps_per_turn=8, time_limit=60)
+        api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
     return bot, failures

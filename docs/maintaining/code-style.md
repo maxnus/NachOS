@@ -64,7 +64,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **A replay is the game's `.SC2Replay` file, and a recording NachOS's `.sc2rec`**, the whole conversation with the
   game. `run_replay` plays a replay back and `run_recording` a recording, and neither is named for the other: a test
   that plays a recording is `TestPlayback`, never `TestReplay`.
-- **One game loop is a step.** Above the protocol layer, time is counted in steps -- `Api.step`,
-  `steps_per_turn`, `steps_to_seconds` -- and the bot's own cycle is a turn, which nothing counts. The protocol
-  layer keeps Blizzard's `game_loop`, since the messages it hands back carry that field, and `Api.play` is the one
-  place the two meet. Never write "frame" for either.
+- **One game loop is a step.** Above the protocol layer, time is counted in steps, and the bot's own cycle is a turn,
+  which nothing counts. The protocol layer keeps Blizzard's `game_loop`, since the messages it hands back carry that
+  field, and `Api.play` is the one place the two meet. Never write "frame" for either.
+- **A moment or a length of game time is a `GameTime`, named for what it times**: `api.time`, `event.time`,
+  `build_time`, `weapon_cooldown`, `min_interval`, never a name ending in `_steps`. A name ending in `_steps` holds a
+  plain count of steps, as `steps_per_turn` does, and `api.step` is the one counter of them.

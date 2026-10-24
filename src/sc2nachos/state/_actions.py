@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self, final
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.state._action_result import ActionResult
@@ -22,8 +23,8 @@ class Action:
     """An action of this player's, as the game carried it out: a `UnitCommand`, an `AutocastToggle` or a
     `CameraMove`."""
 
-    step: int
-    """The step the game carried it out at."""
+    time: GameTime
+    """When the game carried it out."""
 
 
 @final
@@ -42,7 +43,7 @@ class UnitCommand(Action):
 
     @classmethod
     def _from_proto(
-        cls, step: int, command: raw_pb2.ActionRawUnitCommand, unit_by_tag: Callable[[int], Unit[Any]]
+        cls, time: GameTime, command: raw_pb2.ActionRawUnitCommand, unit_by_tag: Callable[[int], Unit[Any]]
     ) -> Self:
         match command.WhichOneof("target"):
             case "target_world_space_pos":
@@ -53,7 +54,7 @@ class UnitCommand(Action):
             case _:
                 target = None
         units = tuple(unit_by_tag(tag) for tag in command.unit_tags)
-        return cls(step, AbilityId.read(command.ability_id), units, target, command.queue_command)
+        return cls(time, AbilityId.read(command.ability_id), units, target, command.queue_command)
 
 
 @final
@@ -66,9 +67,9 @@ class AutocastToggle(Action):
 
     @classmethod
     def _from_proto(
-        cls, step: int, toggle: raw_pb2.ActionRawToggleAutocast, unit_by_tag: Callable[[int], Unit[Any]]
+        cls, time: GameTime, toggle: raw_pb2.ActionRawToggleAutocast, unit_by_tag: Callable[[int], Unit[Any]]
     ) -> Self:
-        return cls(step, AbilityId.read(toggle.ability_id), tuple(unit_by_tag(tag) for tag in toggle.unit_tags))
+        return cls(time, AbilityId.read(toggle.ability_id), tuple(unit_by_tag(tag) for tag in toggle.unit_tags))
 
 
 @final
@@ -89,8 +90,8 @@ class ActionFailure:
     exception either: the game reports it, and nothing raises it.
     """
 
-    step: int
-    """The step the order was refused at, which is the step it was issued at, or the step the game gave up at."""
+    time: GameTime
+    """When the order was refused, which is when it was issued, or when the game gave up on it."""
     unit: Unit[Any] | None
     """The unit whose order was refused or given up, or `None` if the game named none. A refusal always names one."""
     ability: AbilityId | None
@@ -100,15 +101,17 @@ class ActionFailure:
     left, `CANT_BUILD_LOCATION_INVALID` for a site taken meanwhile."""
 
     @classmethod
-    def _from_proto(cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], step: int) -> Self:
-        """Read an action error (the protocol's name for it) from the observation at `step`, looking up its unit
+    def _from_proto(
+        cls, error: sc2api_pb2.ActionError, unit_by_tag: Callable[[int], Unit[Any]], time: GameTime
+    ) -> Self:
+        """Read an action error (the protocol's name for it) from the observation at `time`, looking up its unit
         through `unit_by_tag`.
 
         Raises `UncuratedIdError` if it names an ability the curated ids leave out.
         """
         unit = unit_by_tag(error.unit_tag) if error.HasField("unit_tag") else None
         ability = AbilityId.read(error.ability_id) if error.HasField("ability_id") else None
-        return cls(step, unit, ability, ActionResult.read(error.result))
+        return cls(time, unit, ability, ActionResult.read(error.result))
 
 
 def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any]]) -> Action | None:
@@ -118,14 +121,14 @@ def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any
     Raises `UncuratedIdError` for an ability the curated ids leave out.
     """
     raw = action.action_raw
-    step = action.game_loop
+    time = GameTime(steps=action.game_loop)
     match raw.WhichOneof("action"):
         case "unit_command":
-            return UnitCommand._from_proto(step, raw.unit_command, unit_by_tag)
+            return UnitCommand._from_proto(time, raw.unit_command, unit_by_tag)
         case "toggle_autocast":
-            return AutocastToggle._from_proto(step, raw.toggle_autocast, unit_by_tag)
+            return AutocastToggle._from_proto(time, raw.toggle_autocast, unit_by_tag)
         case "camera_move":
             center = raw.camera_move.center_world_space
-            return CameraMove(step, Point((center.x, center.y)))
+            return CameraMove(time, Point((center.x, center.y)))
         case _:
             return None

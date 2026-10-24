@@ -86,7 +86,7 @@ class _EventSubscriptions:
     def start_game(self) -> None:
         """Forget what every handler has done."""
         for handler in self:
-            handler.last_step = None
+            handler.last_steps = None
             handler.done = False
         self._wanted.clear()
 

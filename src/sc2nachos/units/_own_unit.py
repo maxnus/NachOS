@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
@@ -47,16 +48,16 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return not self._latest_report.orders
 
     @property
-    def weapon_cooldown_steps(self) -> float:
-        """The steps until the unit can attack again, as the game reports it: the cooldown of its last attack, with the
-        random delay drawn for it, counting down by 1 a step. 0 for a unit without a weapon.
+    def weapon_cooldown(self) -> GameTime:
+        """The time until the unit can attack again, as the game reports it: the cooldown of its last attack, with the
+        random delay drawn for it, counting down one step each step. Zero for a unit without a weapon.
 
         It reads 0 too while an attack is under way, for 0 to 6 steps before it by type and up to 8 for an ultralisk,
         and a move ordered 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a unit
         that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
         `docs/reference/game-behavior/damage-and-buffs.md` has the steps each type reads 0.
         """
-        return self._latest_report.weapon_cooldown
+        return GameTime(steps=self._latest_report.weapon_cooldown)
 
     @property
     def assigned_harvesters(self) -> int:

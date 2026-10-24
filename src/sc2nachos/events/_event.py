@@ -6,6 +6,7 @@ from typing import Any, Self
 
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_meta import _EventMeta
+from sc2nachos.game_time import GameTime
 from sc2nachos.geometry import Area
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race, Result
@@ -13,24 +14,24 @@ from sc2nachos.state import Action, Alert
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, VitalType
 from sc2nachos.units._units import _unit_type_ids_in
 
-# The step of an event made without one; `api.emit` hands out a copy with the current step.
-_NO_STEP = -1
+# The time of an event made without one; `api.emit` hands out a copy with the current time.
+_NO_TIME = GameTime(steps=-1)
 
 
 class Event(metaclass=_EventMeta):
-    """Something that happened in the game, stamped with the step the bot learns of it.
+    """Something that happened in the game, stamped with the time the bot learns of it.
 
     A subclass is a new event, made a frozen, slotted dataclass of the fields it declares; adding `@dataclass` to
     it fails. A handler of a class is handed the events of its subclasses too.
     """
 
-    step: int = field(default=_NO_STEP, kw_only=True)
-    """The step of the observation it comes with. An event made without one is emitted as a copy with the current
-    step."""
+    time: GameTime = field(default=_NO_TIME, kw_only=True)
+    """The time of the observation it comes with. An event made without one is emitted as a copy with the current
+    time."""
 
     @classmethod
     def _key_of(cls, *made_of: Any) -> Hashable:
-        """The key `only` or `of` selects an event of this type by, from what it is made of: its fields but `step`, in
+        """The key `only` or `of` selects an event of this type by, from what it is made of: its fields but `time`, in
         order. `None` for a type with neither."""
         return None
 
@@ -481,7 +482,7 @@ class OwnActionEvent(Event):
     """The game carried out an action of this player's."""
 
     action: Action
-    """The action. Its `step` is when the game carried it out."""
+    """The action. Its `time` is when the game carried it out."""
 
 
 class AnyChatEvent(Event):

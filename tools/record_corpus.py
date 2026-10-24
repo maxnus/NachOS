@@ -77,7 +77,7 @@ def record(game: CorpusGame) -> None:
         record_to=game.path,
         window=(640, 480),
     )
-    logger.info("{} ended in a {} after {:.0f} seconds", game.name, result, api.time)
+    logger.info("{} ended in a {} after {:.0f} seconds", game.name, result, api.time.seconds)
 
 
 def main(names: Sequence[str]) -> None:

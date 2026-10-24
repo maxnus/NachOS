@@ -9,22 +9,23 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 ## Drawing
 
 ```python
+from sc2nachos import GameTime
 from sc2nachos.debug import Color, DebugBox, DebugGroup, DebugLine, DebugMark, DebugText, Marker
 
 
 @api.on(GameStartEvent)
 def set_up(event: GameStartEvent) -> None:
-    api.debug.refresh_steps = 4
+    api.debug.refresh_interval = GameTime(steps=4)
     api.debug.default_color = Color.YELLOW
     for expansion in api.expansions:
-        api.debug.draw(expansion.center, DebugMark(Marker.HEXAGON, radius=6), steps=None)
+        api.debug.draw(expansion.center, DebugMark(Marker.HEXAGON, radius=6), shown_for=None)
 
 
 @api.on(TurnEvent)
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.debug.draw(marine, DebugBox(1, 1), DebugText(f"{marine.health:.0f}", offset=(0, 0, 1.5)))
-    api.debug.draw_text_on_screen(f"step {event.step}", at=(0.01, 0.01))
+    api.debug.draw_text_on_screen(event.time.to_string(), at=(0.01, 0.01))
 ```
 
 `api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. `api.debug.draw(at,
@@ -38,17 +39,17 @@ def label(event: TurnEvent) -> None:
   where it stands, and a drawing at a unit follows it, as does a line to a unit. Out of sight, the unit is drawn where
   it was last seen, and the drawing ends once the unit is dead. Each shape and each group takes an `offset` from where
   it is drawn, and a line a `to_offset` from where it ends.
-- **How long.** A drawing lasts the `steps` it is given, 1 by default, which is the turn it is made in. With
-  `steps=None` it lasts until `drawing.remove()`.
-- **How often.** `api.debug.refresh_steps`, 1 unless set, is the fewest steps between two refreshes of the drawing;
-  meanwhile the screen keeps the last one sent. A refresh whose drawing is what the screen already shows sends nothing,
-  so a drawing that never changes costs a request at the first refresh after it is made and one at the first after it
-  ends. A cheat or a command goes out at once, with the drawing as it stands.
+- **How long.** A drawing is shown for the `shown_for` it is given, a whole number of steps, one by default, which is
+  the turn it is made in. With `shown_for=None` it lasts until `drawing.remove()`.
+- **How often.** `api.debug.refresh_interval`, a step unless set, is the least time between two refreshes of the
+  drawing, a whole number of steps; meanwhile the screen keeps the last one sent. A refresh whose drawing is what the
+  screen already shows sends nothing, so a drawing that never changes costs a request at the first refresh after it is
+  made and one at the first after it ends. A cheat or a command goes out at once, with the drawing as it stands.
 - **Colors** are a `Color`, such as `Color.RED`, or any red, green and blue, each from 0 to 255. A shape with no color
   of its own takes its group's, then the drawing's, then `api.debug.default_color`, white unless set; text with no size
   is `api.debug.default_text_size` pixels high, 8 unless set.
 
-Each game starts afresh, so a `GameStartEvent` handler sets `refresh_steps` and the defaults for every game.
+Each game starts afresh, so a `GameStartEvent` handler sets `refresh_interval` and the defaults for every game.
 
 ## Cheats
 
