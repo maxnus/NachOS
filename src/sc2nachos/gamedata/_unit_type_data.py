@@ -86,6 +86,11 @@ class Weapon:
     mean_delay_steps: float = _MEAN_ATTACK_DELAY_STEPS
     """The mean of the random delay the game adds to each attack: 0.4996 steps for a weapon from the tables, whose delay
     runs from -1 to 2, and nothing for the weapons measured for the types the tables give none (in game)."""
+    turns_to_fire: bool | None = None
+    """Whether its unit must face a target to fire it, as most do, to within a degree; false for one that fires at any
+    angle off its facing, such as a battlecruiser's or a planetary fortress's, though a turret the game does not report
+    may still take some steps to come round (in game; `docs/reference/game-behavior/damage-and-buffs.md`). `None` where
+    it was not measured, as for a sieged liberator's."""
 
     @property
     def average_cooldown_steps(self) -> float:
@@ -223,6 +228,15 @@ class UnitTypeData:
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
     An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
+    turn_rate: float | None = None
+    """The most it turns in a step, in radians: 62.6 degrees for a marine, 45.1 for a thor (in game). A unit ordered to
+    move turns from the step after the order, and takes its angle over this, rounded up, in steps, give or take one.
+    `None` for a type whose facing the game never changes, such as a colossus or an immortal, and for one that does not
+    move (`docs/reference/game-behavior/units.md`)."""
+    sets_off_while_turning: bool | None = None
+    """Whether a unit of this type sets off while it still turns, in the step after its turn begins, as most do; false
+    for a thor, an ultralisk and a siege tank, which set off only once they face where they go (in game). `None`
+    wherever `turn_rate` is."""
 
     @property
     def abilities(self) -> frozenset[AbilityId]:

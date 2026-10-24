@@ -465,7 +465,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - the warp gate's source, the gateway, from `SELF_MORPHS` in this pull request, so that it costs the gateway's steps
     (review of #159, over a task of its own, and over the tech tree's sweep turning a warp gate back first, which the
     next sweep of the tech tree does);
-  - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
+  - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap;
+    the sweep measuring whether a unit sets off before it faces and whether it turns to fire too (over the turn rate
+    alone); the values on the rows, `UnitTypeData.turn_rate` and `sets_off_while_turning` (over internal, as repair,
+    and over the rate alone), and `Weapon.turns_to_fire`, a bool, once the sweep found the firing angle measurable only
+    as whether a unit turns (over the planned `Weapon.firing_arc`); `Unit.time_to_face` in steps, the order's own step
+    included (over `steps_to_face`, and over the turn alone), all settled at a stop point after the sweep;
 
 ## Next
 
@@ -477,7 +482,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
   next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
-  measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`.
+  measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `sets_off_while_turning`,
+  `Weapon.turns_to_fire` and `Unit.time_to_face(target)`.
 - **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
   the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
   stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`

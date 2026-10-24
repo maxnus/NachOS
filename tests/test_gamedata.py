@@ -290,9 +290,11 @@ class TestReadingTheTables:
         assert weapon.dps == pytest.approx(6 * 22.4 / (0.86 * 16 + 0.4996), abs=1e-3)
 
     def test_a_type_the_tables_give_no_weapon_takes_the_weapons_measured_with_their_upgrades(self) -> None:
+        """And whether each turns to fire, which a void ray's does (tool `sweep_turning`)."""
         void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY)
         row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
-        assert row.weapons == MISSING_WEAPONS[UnitTypeId.VOID_RAY]
+        measured = MISSING_WEAPONS[UnitTypeId.VOID_RAY]
+        assert row.weapons == tuple(replace(weapon, turns_to_fire=True) for weapon in measured)
         assert row.with_upgrades({UpgradeId.PROTOSS_AIR_WEAPONS_1}).weapons[0].damage == 7.0
 
     def test_a_weapon_the_tables_leave_out_attacks_with_no_random_delay(self) -> None:
@@ -770,6 +772,28 @@ class TestARecordedGamesTables:
             assert grew != came_from
         # The build time is the morph alone, shorter than building what it morphed from.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
+
+    def test_a_type_that_turns_has_its_rate_and_whether_it_sets_off_while_turning(self, path: Path) -> None:
+        """As `tools/sweep_turning.py` measured them; none for one whose facing never changes, or that cannot move."""
+        unit_rows = _tables(path).units
+        marine, thor = unit_rows[UnitTypeId.MARINE], unit_rows[UnitTypeId.THOR]
+        assert (math.degrees(marine.turn_rate or 0), marine.sets_off_while_turning) == (pytest.approx(62.6), True)
+        assert (math.degrees(thor.turn_rate or 0), thor.sets_off_while_turning) == (pytest.approx(45.1), False)
+        for unit_type in (UnitTypeId.COLOSSUS, UnitTypeId.BARRACKS, UnitTypeId.SIEGE_TANK_SIEGED):
+            assert (unit_rows[unit_type].turn_rate, unit_rows[unit_type].sets_off_while_turning) == (None, None)
+
+    def test_a_weapon_says_whether_its_unit_turns_to_fire_it(self, path: Path) -> None:
+        """A marine's does, a planetary fortress's and a battlecruiser's, whose the tables leave out, do not, and a
+        void ray's, which hits both, does at both; a sieged liberator's was never seen to fire."""
+        unit_rows = _tables(path).units
+
+        def turns_to_fire(unit_type: UnitTypeId) -> set[bool | None]:
+            """Whether each of `unit_type`'s weapons turns to fire."""
+            return {weapon.turns_to_fire for weapon in unit_rows[unit_type].weapons}
+
+        assert turns_to_fire(UnitTypeId.MARINE) == turns_to_fire(UnitTypeId.VOID_RAY) == {True}
+        assert turns_to_fire(UnitTypeId.PLANETARY_FORTRESS) == turns_to_fire(UnitTypeId.BATTLECRUISER) == {False}
+        assert turns_to_fire(UnitTypeId.LIBERATOR_SIEGED) == {None}
 
     def test_a_types_steps_are_those_of_each_of_its_stages_that_costs_something(self, path: Path) -> None:
         """A morph adds its source's steps, and a switch that costs nothing adds none, so every form of a unit costs

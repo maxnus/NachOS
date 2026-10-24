@@ -71,6 +71,8 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(
         unit_id=UnitTypeId.MULE, race=Race.TERRAN.value, mineral_cost=50, attributes=[data_pb2.Attribute.Mechanical]
     ),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.THOR),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.COLOSSUS),
     data_pb2.UnitTypeData(
         unit_id=UnitTypeId.STALKER,
         race=Race.PROTOSS.value,
@@ -617,6 +619,33 @@ class TestRepair:
         """An SCV ordered to repair one is refused `CantTargetUnderConstructionUnits` (in game)."""
         bunker = _one(make_unit(1, UnitTypeId.BUNKER, health=100.0, health_max=400.0, build_progress=0.5))
         assert (bunker.required_repair_cost, bunker.total_repair_cost) == (None, None)
+
+
+class TestTurning:
+    """The steps from an order until a unit faces where it is sent: the order's own, then its turn at its type's rate,
+    62.6 degrees a step for a marine and 45.1 for a thor, as `tools/sweep_turning.py` measured them."""
+
+    @staticmethod
+    def _facing_east(unit_type: UnitTypeId, tag: int = 1, at: tuple[float, float] = (10.0, 10.0)) -> Unit[Any]:
+        return _one(make_unit(tag, unit_type, at=at, facing=0.0))
+
+    def test_a_turn_takes_the_orders_step_and_its_angle_over_the_rate_rounded_up(self) -> None:
+        """90 degrees is two steps of 45 for a thor, and 180 three of 62.6 for a marine."""
+        thor, marine = self._facing_east(UnitTypeId.THOR), self._facing_east(UnitTypeId.MARINE)
+        assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (3, 4)
+
+    def test_it_turns_to_face_another_unit_as_it_would_its_position(self) -> None:
+        marine = self._facing_east(UnitTypeId.MARINE)
+        (behind,) = _Game().observe(0, make_unit(2, UnitTypeId.MARINE, at=(0.0, 10.0), alliance=_ENEMY))
+        assert marine.time_to_face(behind) == 4
+
+    def test_a_unit_that_faces_its_target_to_within_a_degree_takes_no_steps(self) -> None:
+        marine = self._facing_east(UnitTypeId.MARINE)
+        assert [marine.time_to_face(target) for target in ((20.0, 10.1), (10.0, 10.0))] == [0, 0]
+
+    def test_a_type_whose_facing_never_changes_has_no_time_to_face(self) -> None:
+        """A colossus moves with its facing as it was (in game)."""
+        assert self._facing_east(UnitTypeId.COLOSSUS).time_to_face((0.0, 10.0)) is None
 
 
 class TestUnitsThatBecomeStructures:

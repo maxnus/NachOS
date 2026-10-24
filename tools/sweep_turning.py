@@ -20,8 +20,9 @@ turned first and how far off its target it faced as it fired::
     uv run python tools/sweep_turning.py turning --out turning.json
     uv run python tools/sweep_turning.py firing --types MARINE THOR --out firing.json
 
-It writes `data/turning.json`, the build swept on and each mode's findings by type, or for a mode or types named, the
-file `--out` names. A trial the game would not set up is recorded as its error.
+It writes `data/turning.json`, which `tools/generate_turning.py` turns into NachOS's tables, the build swept on and each
+mode's findings by type, or for a mode or types named, the file `--out` names. A trial the game would not set up is
+recorded as its error.
 """
 
 import argparse
