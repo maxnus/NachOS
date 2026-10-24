@@ -288,6 +288,8 @@ it.
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
+| `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == 0`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the steps the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
+| nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
 | `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them, and `unit.weapon_against(target)` |

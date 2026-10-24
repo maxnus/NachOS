@@ -7,8 +7,8 @@ where to look one up, and where a new finding goes, in its topic's page.
 
 - [The connection, launching and time](protocol.md)
 - [Cheats and debug commands](cheats.md)
-- [Units](units.md): what an observation lists and what it reports of a unit, units coming, changing and going, and
-  vision
+- [Units](units.md): what an observation lists and what it reports of a unit, turning, units coming, changing and
+  going, and vision
 - [Damage, energy, spells and buffs](damage-and-buffs.md)
 - [Upgrades and the game's tables](upgrades-and-tables.md)
 - [Abilities and orders](abilities-and-orders.md), and the actions the game reports

@@ -77,12 +77,39 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   Nothing a unit reports says how far a morph has got. Each was done once the table's build time had passed since
   the order, to within the 16 steps between reads, except the lurker egg, which hatched 402 to 418 steps after the
   order against the table's 553 (tool `sweep_orders`, build 75689).
-- Points come back in single precision (tested). Facing is in radians from the +x axis, and z is on the
-  terrain-height scale (stated).
+- Points come back in single precision (tested). Facing is in radians from the +x axis, in whole 1/4096 radians to
+  within 0.02 of one (tool `sweep_turning`, build 75689), and z is on the terrain-height scale (stated).
 - Units on flat ground stand up to 0.03 below the map's height or up to 0.16 above it (corpus).
 - A unit reports its owner's upgrade levels. `attack_upgrade_level` and `shield_upgrade_level` count levels, but
   `armor_upgrade_level` is the armor added: an ultralisk with Chitinous Plating and three levels reports 5, a
   structure with Neosteel Armor 2 (#30).
+
+## Turning
+
+- **A unit ordered to move turns toward where it goes from the step after the order, by at most its rate a step, so a
+  turn takes as many steps as its angle over the rate, rounded up, give or take one.** A full step comes out at a whole
+  number of 1/4096 of a full turn, or a unit or so above it, and the rate is that whole number: 256 (22.5°, 360° a
+  Normal second) for a cyclone and a swarm host; 512 (45°, 720°) for a thor in either mode, an ultralisk, a siege tank,
+  a hellion, a hellbat, a widow mine, a locust, a landed viking, a tempest, a carrier, a battlecruiser, a brood lord, a
+  warp prism, an observer and every flying structure; 1067 (93.78°, some 1500°) for a banshee, a liberator, a mutalisk
+  and a phoenix; and 711 (62.49°, 999.84°) for every other type that moves. A marine turned 120° in two steps and 130°
+  in three, a thor 130° in three and 140° in four. A turn while moving of more than two steps takes the rate in all but
+  the last two, which share the rest: a thor's 170° went 45°, 45°, 40° and 40°. Of the 690 turns of 45° to 170° run in
+  two runs, 630 came out the same and 53 a step apart: a battlecruiser and a carrier at times began a step late, and a
+  few flyers and workers turned 2° or 3° more as they set off, a MULE for some steps more (tool `sweep_turning`, build
+  75689).
+- **An attacker set upon a target turns to face it where it stands, to its bearing exactly, at the full rate in all but
+  its last step.** In place, a banshee, a liberator and a mutalisk turned 93.75° in one step and 94° in two, the first
+  93.72° to 93.83°. A phoenix, which fires without turning, does not turn in place; while moving it turned 96° in one
+  step and 98° in two, as the other three do (tool `sweep_turning`, `in-place`, build 75689).
+- **Most units set off while they turn, in the step after their turn begins, whatever is left of it; a thor in either
+  mode, an ultralisk and a siege tank set off only once they face where they go.** Workers, a MULE, an overlord in
+  either form, an overseer, a medivac, a raven, a void ray, an observer, a carrier, a battlecruiser, a brood lord, a
+  mothership and every flying structure set off a step later than the rest, in the fourth step after the order (tool
+  `sweep_turning`, build 75689).
+- **The facing the game reports never changes for a colossus, a disruptor, an immortal, a mothership, a purification
+  nova and an uprooted spine or spore crawler**, ordered to move at any angle, though each sets off as the rest do (tool
+  `sweep_turning`, build 75689).
 
 ## Units coming, changing and going
 
