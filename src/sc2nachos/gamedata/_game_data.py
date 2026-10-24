@@ -106,9 +106,6 @@ def _with_build_steps_borrowed(
 
 # The game turns a unit in 1/4096 of a full turn, `TURN_RATE_UNITS`'s unit.
 _RADIANS_A_TURN_UNIT = math.tau / 4096
-_TURN_RATE_UNITS_BY_TYPE = MappingProxyType(
-    {unit_type: rate_units for rate_units, unit_types in TURN_RATE_UNITS.items() for unit_type in unit_types}
-)
 
 
 def _with_turning(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
@@ -121,7 +118,7 @@ def _row_with_turning(type_row: UnitTypeData) -> UnitTypeData:
     """`type_row` given how its type turns, where it turns, and whether its weapons turn to fire."""
     if type_row.id in FIRE_WITHOUT_TURNING_UNITS:
         type_row = replace(type_row, weapons=tuple(replace(weapon, turns_to_fire=False) for weapon in type_row.weapons))
-    if (rate_units := _TURN_RATE_UNITS_BY_TYPE.get(type_row.id)) is None:
+    if (rate_units := TURN_RATE_UNITS.get(type_row.id)) is None:
         return type_row
     return replace(
         type_row,

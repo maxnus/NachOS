@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from sc2nachos.constants import STEPS_PER_NORMAL_SECOND
 from sc2nachos.ids import UnitTypeId
 
 REPO = Path(__file__).parents[1]
@@ -41,6 +42,9 @@ _STEPS_NEAR_THE_RATE = 2
 # The steps at the end of a turn that share what is left of it, while moving and in place (in game).
 _STEPS_SHARING_THE_REST_MOVING = 2
 _STEPS_SHARING_THE_REST_IN_PLACE = 1
+# A rate's constant is named for the degrees a Normal second it makes, to the nearest this many: 711 a step makes
+# 999.84, named 1000.
+_DEGREES_A_SECOND_NAMED_TO = 10
 # The shots that tell whether an attacker turns to fire: those at a target this far off its facing or more, which no
 # attacker that turns could have fired at without turning most of the way.
 _WIDE_ANGLE_DEGREES = 90.0
@@ -203,19 +207,19 @@ def _fire_without_turning(firing: Mapping[str, Sequence[Mapping[str, Any]]]) -> 
 
 
 def render(turning: Turning, base_build: int) -> str:
-    """The module source for `turning`, each set sorted by name, the rates from the slowest."""
-    types_by_rate: dict[int, list[UnitTypeId]] = {}
-    for unit_type, rate_units in turning.turn_rate_units.items():
-        types_by_rate.setdefault(rate_units, []).append(unit_type)
+    """The module source for `turning`: a constant for each rate, named for the degrees a Normal second it makes, the
+    slowest first, then each type by its rate's constant and each set, sorted by name."""
+    rate_names = _rate_names(set(turning.turn_rate_units.values()))
+    rate_constants = "".join(f"{rate_names[rate_units]}: Final = {rate_units}\n" for rate_units in sorted(rate_names))
     rate_entries = "".join(
-        f"        {rate_units}: frozenset(\n            {{\n"
-        + "".join(f"                UnitTypeId.{unit_type.name},\n" for unit_type in _sorted_by_name(unit_types))
-        + "            }\n        ),\n"
-        for rate_units, unit_types in sorted(types_by_rate.items())
+        f"        UnitTypeId.{unit_type.name}: {rate_names[turning.turn_rate_units[unit_type]]},\n"
+        for unit_type in _sorted_by_name(turning.turn_rate_units)
     )
     return (
         HEADER.format(base_build=base_build)
-        + "\n# The types that turn each of these in a step, in 1/4096 of a full turn.\n"
+        + "\n# The rates of turn, in 1/4096 of a full turn a step, by the degrees a Normal second each makes.\n"
+        + rate_constants
+        + "\n# How far each type that turns turns in a step.\n"
         + f"TURN_RATE_UNITS: Final = MappingProxyType(\n    {{\n{rate_entries}    }}\n)\n"
         + _rendered_set(
             "TURN_BEFORE_MOVE_UNITS",
@@ -230,6 +234,20 @@ def render(turning: Turning, base_build: int) -> str:
             turning.fire_without_turning,
         )
     )
+
+
+def _rate_names(rates_units: Iterable[int]) -> dict[int, str]:
+    """A constant's name for each of `rates_units`, for the degrees a Normal second it makes, to the nearest
+    `_DEGREES_A_SECOND_NAMED_TO`. Raises `ValueError` where two rates would take one name."""
+    rate_names: dict[int, str] = {}
+    for rate_units in sorted(rates_units):
+        degrees_a_second = rate_units * 360 / UNITS_A_FULL_TURN * STEPS_PER_NORMAL_SECOND
+        rounded_degrees = round(degrees_a_second / _DEGREES_A_SECOND_NAMED_TO) * _DEGREES_A_SECOND_NAMED_TO
+        rate_name = f"TURNS_{rounded_degrees}_DEGREES_A_SECOND"
+        if rate_name in rate_names.values():
+            raise ValueError(f"two rates, one of them {rate_units}, would both be named {rate_name}")
+        rate_names[rate_units] = rate_name
+    return rate_names
 
 
 def _sorted_by_name(unit_types: Iterable[UnitTypeId]) -> list[UnitTypeId]:

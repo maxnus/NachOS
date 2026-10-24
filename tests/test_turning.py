@@ -174,13 +174,29 @@ class TestTheModule:
         turning = generator.read(_findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS}, firing))
         namespace: dict[str, Any] = {}
         exec(generator.render(turning, base_build=1), namespace)  # noqa: S102
-        rendered_rates = {
-            unit_type: rate_units
-            for rate_units, unit_types in namespace["TURN_RATE_UNITS"].items()
-            for unit_type in unit_types
-        }
-        rendered = (rendered_rates, namespace["TURN_BEFORE_MOVE_UNITS"], namespace["FIRE_WITHOUT_TURNING_UNITS"])
+        rendered = (
+            namespace["TURN_RATE_UNITS"],
+            namespace["TURN_BEFORE_MOVE_UNITS"],
+            namespace["FIRE_WITHOUT_TURNING_UNITS"],
+        )
         assert rendered == (turning.turn_rate_units, turning.turn_before_move, turning.fire_without_turning)
+
+    def test_each_rate_is_a_constant_named_for_the_degrees_a_normal_second_it_makes(self) -> None:
+        """711 a step makes 999.84 degrees a Normal second, 512 makes 720."""
+        generator = _generator()
+        turning = generator.Turning({UnitTypeId.MARINE: 711, UnitTypeId.THOR: 512}, frozenset(), frozenset())
+        namespace: dict[str, Any] = {}
+        exec(generator.render(turning, base_build=1), namespace)  # noqa: S102
+        rates = (namespace["TURNS_1000_DEGREES_A_SECOND"], namespace["TURNS_720_DEGREES_A_SECOND"])
+        assert rates == (711, 512)
+        assert "UnitTypeId.MARINE: TURNS_1000_DEGREES_A_SECOND," in generator.render(turning, base_build=1)
+
+    def test_two_rates_that_would_take_one_name_are_refused(self) -> None:
+        """711 and 712 make 999.84 and 1001.25 degrees a Normal second, both named 1000."""
+        generator = _generator()
+        turning = generator.Turning({UnitTypeId.MARINE: 711, UnitTypeId.ZEALOT: 712}, frozenset(), frozenset())
+        with pytest.raises(ValueError, match="would both be named TURNS_1000_DEGREES_A_SECOND"):
+            generator.render(turning, base_build=1)
 
     def test_it_is_as_generated_from_the_findings(self) -> None:
         generator = _generator()
