@@ -62,11 +62,14 @@ is its creation ability; otherwise the ability makes this type as well as the on
 
 SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
     {
-        # A gateway turns itself into a warp gate once the research is done, and is offered nothing to order it.
+        # The game orders every gateway to turn into a warp gate once the research is done, so the tech tree's sweep,
+        # which never turned one back, saw no gateway offered it. One turned back from a warp gate is offered it, and
+        # takes it (in game, #159).
         AbilityId.GATEWAY_MORPH_WARP_GATE: UnitTypeId.GATEWAY,
     }
 )
-"""The unit type that carries out each ability it is never offered, turning itself into the ability's product."""
+"""The unit type that carries out each ability the tech tree's sweep never saw it offered, turning itself into the
+ability's product, which takes it as its source."""
 
 PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
@@ -216,9 +219,6 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
         # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
         # should read 350. It reads 325, and taking off the drone leaves 275 where the game charges 300.
         AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1, steps=1600),
-        # A gateway turns itself into a warp gate once the research is done, for nothing, and so for no steps, as
-        # every switch that costs nothing. Its row holds the gateway's 150 and names no source type.
-        AbilityId.GATEWAY_MORPH_WARP_GATE: Cost(0, 0),
         # A nuke is not a unit, so nothing is derived for it, nor its steps.
         AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
         # One order makes two zerglings; the row prices one, with its half supply.

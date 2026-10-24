@@ -459,6 +459,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `research_steps` stays beside `cost.steps` until the duration type;
   - a duration type for every duration, with steps and seconds, as its own pull request, planned first (review of
     #159, over seconds for repair alone, and over one type for repair first);
+  - the warp gate's source, the gateway, from `SELF_MORPHS` in this pull request, so that it costs the gateway's steps
+    (review of #159, over a task of its own, and over the tech tree's sweep turning a warp gate back first, which the
+    next sweep of the tech tree does);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
 
 ## Next
@@ -500,7 +503,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
   as a remembered copy, which the tracker assumes (the owner, review of #71).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
-  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry.
+  the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
+  back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that
+  the tech tree records a gateway offered `GATEWAY_MORPH_WARP_GATE` and `SELF_MORPHS` can go (#159). Recorded as it
+  stands, the turn back would make the warp gate the gateway's source too, a loop that would break the gateway's cost:
+  plan with the owner which way a switch both ways gives the source.
 - When the corpus is next recorded, `run_ladder` pings the client for its build and warns of one the tech tree was not
   swept on, as `run_local` warns from the installation without asking the game (the owner, #75).
 - Autocast switches sent by NachOS, which it only reads now (`AutocastToggle`). `allows_autocast` is a bool, though

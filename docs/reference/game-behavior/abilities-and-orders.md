@@ -334,6 +334,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   becomes an egg carrying only the last of them, and the hatchery's own orders stay empty. Every larva of a hatchery
   given a drone becomes a drone egg, and a second order to a larva already spoken for changes nothing (tool
   `sweep_orders`).
+- Once Warp Gate is researched, the game gives every idle gateway a `Morph_WarpGate` order itself, which shows in the
+  observation after the research, and the gateway is then offered only its rally and smart. Before the research a
+  gateway is not offered the morph, and an order of it is refused `NotSupported`. A warp gate ordered back is a gateway
+  160 steps later under the same tag, its type changing a step before its order ends; that gateway is offered the morph
+  and does not turn again by itself (watched 640 steps), and ordered it, is a warp gate 160 steps later in the same way.
+  While it trains a zealot it is not offered the morph (probe in #159, under `free`, local game, Linux build 75689).
 - A warp gate keeps no queue either: given two zealot warp-ins in one request, both answered `Success`, it shows no
   orders at all, then or 16 steps later (tool `sweep_orders`).
 - A warp gate waits after each warp-in: 448 steps after a zealot or an adept, 512 after a stalker or a sentry, and 720

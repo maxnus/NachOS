@@ -243,9 +243,9 @@ class AbilityData:
     performers: frozenset[UnitTypeId]
     """The unit types offered it. An action several types perform is offered to each under its one id, though the
     game offers each type its own. The off half of a toggle, offered only once its on half has taken, has its on half's.
-    Empty for an ability the sweep never saw offered: `GATEWAY_MORPH_WARP_GATE`, which a gateway carries out by itself
-    once the research is done; `MORPH_ARCHON`, which two templar carry out together; and
-    `CARRIER_BUILD_INTERCEPTORS`."""
+    Empty for an ability the sweep never saw offered: `GATEWAY_MORPH_WARP_GATE`, which the game orders every gateway to
+    carry out once the research is done, and offers a gateway turned back from a warp gate (in game); `MORPH_ARCHON`,
+    which two templar carry out together; and `CARRIER_BUILD_INTERCEPTORS`."""
     products: Mapping[UnitTypeId, UnitTypeId | UpgradeId] = field(hash=False)
     """The unit type it makes, or the upgrade it researches, by the unit type that carries it out: `LIFT`
     makes a flying barracks of a barracks and a flying starport of a starport. Empty for an ability that makes

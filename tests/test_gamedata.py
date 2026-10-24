@@ -782,6 +782,7 @@ class TestARecordedGamesTables:
             (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
             (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitTypeId.SUPPLY_DEPOT),
             (UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.ORBITAL_COMMAND),
+            (UnitTypeId.WARP_GATE, UnitTypeId.GATEWAY),
         ):
             assert unit_rows[switched_type].cost.steps == unit_rows[unswitched_type].cost.steps, switched_type.name
 
