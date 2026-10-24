@@ -11,12 +11,17 @@ def is_whole_number(value: object) -> bool:
     return isinstance(value, Integral) and not isinstance(value, bool)
 
 
-def whole_steps_of(time: GameTime) -> int | None:
-    """The steps of `time` as an `int`, or `None` if they are not a whole number. Raises `TypeError` for anything but
-    a `GameTime`."""
-    if not isinstance(time, GameTime):
-        raise TypeError(f"a game time is a GameTime, not {time!r}")
-    return int(time.steps) if float(time.steps).is_integer() else None
+def check_game_time(value: object, argument_name: str) -> None:
+    """Raise `TypeError` unless `value`, given as `argument_name`, is a `GameTime`."""
+    if not isinstance(value, GameTime):
+        raise TypeError(f"{argument_name} is a GameTime, not {value!r}")
+
+
+def whole_steps_of(game_time: GameTime) -> int | None:
+    """The steps of `game_time` as an `int`, or `None` if they are not a whole number. Raises `TypeError` for anything
+    but a `GameTime`."""
+    check_game_time(game_time, "a game time")
+    return int(game_time.steps) if float(game_time.steps).is_integer() else None
 
 
 def check_file_to_write(path: Path, purpose: str) -> None:

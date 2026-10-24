@@ -813,8 +813,9 @@ class Unit[K: UnitType.AnyType]:
             raise self._never_seen_error("buffs")
         # What speeds an attack divides the base cooldown, and leaves the random delay as it is (in game).
         attack_speed_multiplier = math.prod(_ATTACK_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in report.buff_ids)
-        cooldown = weapon.base_cooldown / attack_speed_multiplier + weapon.mean_delay
-        return damage / cooldown.seconds
+        # In plain steps, which spares two `GameTime`s a call in a targeting loop.
+        cooldown_steps = weapon.base_cooldown.steps / attack_speed_multiplier + weapon.mean_delay.steps
+        return damage * STEPS_PER_SECOND / cooldown_steps
 
 
 def _damage_of_one_attack(weapon: Weapon, target: Unit[Any]) -> float:

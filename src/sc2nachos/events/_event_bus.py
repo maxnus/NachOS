@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from loguru import logger
 
+from sc2nachos._checks import check_game_time
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
@@ -70,11 +71,10 @@ class _EventBus:
         if selects.keys is None and issubclass(selected, ParameterizedEvent):
             name = selected.__name__
             raise TypeError(f"a handler subscribes to {name} through `of`, as in `{name}.of(...)`")
-        if at_time is not None and not isinstance(at_time, GameTime):
-            raise TypeError(f"at_time is a GameTime, not {at_time!r}")
+        if at_time is not None:
+            check_game_time(at_time, "at_time")
         if min_interval is not None:
-            if not isinstance(min_interval, GameTime):
-                raise TypeError(f"min_interval is a GameTime, not {min_interval!r}")
+            check_game_time(min_interval, "min_interval")
             if min_interval.steps <= 0:
                 raise ValueError(f"min_interval is above zero, not {min_interval!r}")
             if at_time is not None:
@@ -193,16 +193,17 @@ class _EventBus:
         key or predicate, so each is checked."""
         todo: Iterable[_Handler] = _selecting_handlers(handlers, event) if selecting else handlers
         timings = None if self._timings is None else self._timings.setdefault(type(event), {})
-        steps = event.time.steps
+        event_steps = event.time.steps
         for handler in todo:
             if handler.done:
                 continue
-            if (interval := handler.min_interval_steps) is not None:
-                if (last := handler.last_steps) is not None and steps - last < interval:
+            if (interval_steps := handler.min_interval_steps) is not None:
+                last_steps = handler.last_steps
+                if last_steps is not None and event_steps - last_steps < interval_steps:
                     continue
-            elif (at := handler.at_steps) is not None and steps < at:
+            elif (at_steps := handler.at_steps) is not None and event_steps < at_steps:
                 continue
-            handler.last_steps = steps
+            handler.last_steps = event_steps
             if handler.once:
                 handler.done = True
             try:

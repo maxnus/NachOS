@@ -23,6 +23,11 @@ class TestConversions:
         assert GameTime(steps=4480).seconds == 200.0
         assert GameTime(steps=336).seconds == 15.0
 
+    def test_seconds_that_make_whole_steps_make_them_exactly(self):
+        """Multiplying by the stored 22.4 took 45 seconds to 1007.9999999999999 steps."""
+        assert GameTime.from_seconds(45) == GameTime(steps=1008)
+        assert all(GameTime.from_seconds(seconds).steps == seconds * 224 // 10 for seconds in range(0, 100_000, 5))
+
     def test_is_not_rounded(self):
         assert GameTime.from_seconds(1.0).steps == 22.4
 

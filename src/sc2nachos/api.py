@@ -6,7 +6,7 @@ from typing import Any, overload
 
 from loguru import logger
 
-from sc2nachos._checks import check_file_to_write
+from sc2nachos._checks import check_file_to_write, check_game_time
 from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
@@ -59,9 +59,9 @@ class Api:
     `run_ladder` for every game it plays. Never subclass it: your own helpers belong in your own modules, as
     ordinary functions.
 
-    Time is counted in steps: one step is one game loop, and 22.4 make a second. Every moment and length of game time
-    the api gives or takes is a `GameTime`, and the bot takes a turn every `steps_per_turn` steps, which the game is
-    played with. Each turn hands its handlers a `TurnStartEvent`, then
+    Time is counted in steps: one step is one game loop, and 22.4 make a second. A moment or a length of game time is a
+    `GameTime`, but for the counts of steps: `step`, `steps_per_turn` and a `TimeSeries`' index. The bot takes a turn
+    every `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
     the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
     Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
@@ -408,8 +408,8 @@ class Api:
         Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
         one game to the next; what each has done starts afresh.
         """
-        if time_limit is not None and not isinstance(time_limit, GameTime):
-            raise TypeError(f"time_limit is a GameTime, not {time_limit!r}")
+        if time_limit is not None:
+            check_game_time(time_limit, "time_limit")
         replay_path = None if save_replay_to is None else Path(save_replay_to)
         if replay_path is not None:
             check_file_to_write(replay_path, "save the replay into")

@@ -9,6 +9,7 @@ client renders nothing, so a drawing shows only in the game's window on Windows 
 ## Drawing
 
 ```python
+from sc2nachos import GameTime
 from sc2nachos.debug import Color, DebugBox, DebugGroup, DebugLine, DebugMark, DebugText, Marker
 
 

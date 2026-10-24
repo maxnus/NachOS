@@ -9,7 +9,7 @@ from pathlib import Path
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._checks import check_file_to_write
+from sc2nachos._checks import check_file_to_write, check_game_time
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.api import Api, NotPlayingError
 from sc2nachos.game_time import GameTime
@@ -51,11 +51,12 @@ def run_local(
     `name`, and without an `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so.
     `record_to` is a file to record the whole conversation into, and `save_replay_to` one to save the game's replay to,
     as `Api.play` says. Each must be in a folder that exists, or `FileNotFoundError` is raised before the game starts,
-    and `IsADirectoryError` if it names a folder. However the game ends, the client is stopped and its temporary
-    directory removed. The newest build installed is played, with a warning if it is not the one the tech tree was swept
-    on.
+    and `IsADirectoryError` if it names a folder; so is `TypeError` for a `time_limit` that is not a `GameTime`. However
+    the game ends, the client is stopped and its temporary directory removed. The newest build installed is played, with
+    a warning if it is not the one the tech tree was swept on.
     """
     _check_output_files(record_to, save_replay_to)
+    _check_time_limit(time_limit)
     installation = installation or Installation.find()
     if isinstance(map_file, str):
         map_file = MapFile.find(map_file, installation=installation)
@@ -147,6 +148,7 @@ def run_replay(
     stopped and its temporary directory removed.
     """
     _check_output_files(record_to, None)
+    _check_time_limit(time_limit)
     replay_data = Path(replay).read_bytes()
     installation = installation or Installation.find()
     newest_build = installation.build_to_launch()
@@ -210,6 +212,7 @@ def run_recording(
     A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for,
     by default only: `permissive` raises `ValueError` for one.
     """
+    _check_time_limit(time_limit)
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
     start_replay_request = recording.start_replay_request
@@ -369,6 +372,12 @@ def _check_output_files(record_to: Path | str | None, save_replay_to: Path | str
         check_file_to_write(Path(record_to), "record into")
     if save_replay_to is not None:
         check_file_to_write(Path(save_replay_to), "save the replay into")
+
+
+def _check_time_limit(time_limit: GameTime | None) -> None:
+    """Raise `TypeError`, before a game starts, for a `time_limit` that is not a `GameTime`."""
+    if time_limit is not None:
+        check_game_time(time_limit, "time_limit")
 
 
 def _connect(url: str, record_to: Path | str | None) -> Client:

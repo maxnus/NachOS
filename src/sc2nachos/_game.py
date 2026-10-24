@@ -328,21 +328,21 @@ class _Game:
     def _report_actions_chat_and_alerts(self, subscriptions: _EventSubscriptions, happened: list[Event]) -> None:
         """Add to `happened` this player's actions, the chat and the alerts of the last observation that a handler
         wants."""
-        observation, add, time = self.observation, happened.append, self.time
+        observation, add, game_time = self.observation, happened.append, self.time
         if observation.actions and subscriptions.wants_every(OwnActionEvent):
             for action in self.state.actions:
-                add(OwnActionEvent(action, time=time))
+                add(OwnActionEvent(action, time=game_time))
         if observation.chat and any(subscriptions.wants_every(event_type) for event_type in _CHAT_EVENT_TYPES):
             for message in observation.chat:
                 event_type = self._chat_event_type(message.player_id)
                 if event_type is not None and subscriptions.wants_every(event_type):
-                    add(event_type(message.player_id, message.message, time=time))
+                    add(event_type(message.player_id, message.message, time=game_time))
         if observation.observation.alerts and _wants_any(subscriptions, AlertEvent):
             every, keys = subscriptions.wants_every(AlertEvent), subscriptions.wanted_keys(AlertEvent)
             for value in observation.observation.alerts:
                 # `AlertError` and `TrainError` have no member and are skipped.
                 if (alert := _ALERT_BY_VALUE.get(value)) is not None and (every or AlertEvent._key_of(alert) in keys):
-                    add(AlertEvent(alert, time=time))
+                    add(AlertEvent(alert, time=game_time))
 
     def _compare(self, subscriptions: _EventSubscriptions) -> bool:
         """Have the tracker compare each unit with the update before, for the damage, energy lost, cloak and buff
@@ -410,14 +410,14 @@ class _Game:
         every, keys = _wanted(subscriptions, event_type)
         if not (every or keys):
             return
-        add, time, key_of = happened.append, self.time, event_type._key_of
+        add, game_time, key_of = happened.append, self.time, event_type._key_of
         make = cast("Callable[..., Event]", event_type)
         for item in found:
             if tuples:
                 if every or key_of(*item) in keys:
-                    add(make(*item, time=time))
+                    add(make(*item, time=game_time))
             elif every or key_of(item) in keys:
-                add(make(item, time=time))
+                add(make(item, time=game_time))
 
     def _add_wanted_events_by_alliance(
         self,
@@ -436,7 +436,7 @@ class _Game:
         wanted = {alliance: _wanted(subscriptions, event_type) for alliance, event_type in event_types.items()}
         if not any(every or keys for every, keys in wanted.values()):
             return
-        add, time = happened.append, self.time
+        add, game_time = happened.append, self.time
         for item in found:
             made_of = item if tuples else (item,)
             alliance = made_of[0].alliance
@@ -444,7 +444,7 @@ class _Game:
                 continue
             every, keys = wanted[alliance]
             if every or (keys and event_type._key_of(*made_of) in keys):
-                add(cast("Callable[..., Event]", event_type)(*made_of, time=time))
+                add(cast("Callable[..., Event]", event_type)(*made_of, time=game_time))
 
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by

@@ -7,9 +7,14 @@ import numbers
 from dataclasses import dataclass
 from typing import overload
 
-from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_SECOND
+from sc2nachos.constants import SECONDS_PER_STEP
 
 _MILLISECONDS_PER_MINUTE = 60_000
+# 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
+# exact up to the division, which rounds once, so a whole number of steps comes out whole; multiplying by the stored
+# 22.4, a little under it, takes 45 seconds to 1007.9999999999999 steps.
+_STEPS_PER_FIVE_SECONDS = 112
+_MILLISECONDS_PER_FIVE_SECONDS = 5000
 
 
 @dataclass(frozen=True, slots=True, kw_only=True, eq=False)
@@ -33,7 +38,7 @@ class GameTime:
     @classmethod
     def from_seconds(cls, seconds: float) -> GameTime:
         """The game time of `seconds` at the Faster speed, unrounded."""
-        return cls(steps=seconds * STEPS_PER_SECOND)
+        return cls(steps=seconds * _STEPS_PER_FIVE_SECONDS / 5)
 
     @property
     def seconds(self) -> float:
@@ -44,8 +49,8 @@ class GameTime:
     def time_string(self) -> str:
         """Minutes, seconds and milliseconds, `"3:20.000"` at step 4480: the milliseconds rounded down, which tells
         every step from the next, since a step is 44.6 milliseconds. A negative length reads `"-0:04.285"`."""
-        # Dividing by the step rate, which is stored a little under 22.4, never rounds a whole second down.
-        milliseconds = math.floor(abs(self.steps) * 1000 / STEPS_PER_SECOND)
+        # One division, so a whole millisecond comes out whole and nothing is rounded up past one.
+        milliseconds = math.floor(abs(self.steps) * _MILLISECONDS_PER_FIVE_SECONDS / _STEPS_PER_FIVE_SECONDS)
         minutes, milliseconds_in_minute = divmod(milliseconds, _MILLISECONDS_PER_MINUTE)
         seconds, milliseconds_in_second = divmod(milliseconds_in_minute, 1000)
         sign = "-" if self.steps < 0 else ""

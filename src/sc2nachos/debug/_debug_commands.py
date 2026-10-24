@@ -58,7 +58,6 @@ class DebugCommands:
         "_last_refresh",
         "_opponent_id",
         "_refresh_interval",
-        "_refresh_steps",
         "_shown",
         "_step",
         "_toggled_cheats",
@@ -72,7 +71,6 @@ class DebugCommands:
         self._opponent_id = opponent_id
         self._step = step
         self._refresh_interval = _ONE_STEP
-        self._refresh_steps = 1
         self._default_color: Color | tuple[int, int, int] = Color.WHITE
         self._default_rgb = _rgb_of(Color.WHITE)
         self._default_text_size = 8
@@ -94,11 +92,12 @@ class DebugCommands:
         return self._refresh_interval
 
     @refresh_interval.setter
-    def refresh_interval(self, interval: GameTime) -> None:
-        if (steps := whole_steps_of(interval)) is None or steps < 1:
-            raise ValueError(f"drawings are refreshed every whole number of steps, at least 1, not {interval!r}")
-        self._refresh_interval = interval
-        self._refresh_steps = steps
+    def refresh_interval(self, refresh_interval: GameTime) -> None:
+        if (interval_steps := whole_steps_of(refresh_interval)) is None or interval_steps < 1:
+            raise ValueError(
+                f"drawings are refreshed every whole number of steps, at least 1, not {refresh_interval!r}"
+            )
+        self._refresh_interval = refresh_interval
 
     @property
     def default_color(self) -> Color | tuple[int, int, int]:
@@ -196,11 +195,11 @@ class DebugCommands:
         """The step a drawing made now that is shown for `shown_for` ends at, or `None` if it lasts until removed."""
         if shown_for is None:
             return None
-        if (steps := whole_steps_of(shown_for)) is None or steps < 1:
+        if (shown_steps := whole_steps_of(shown_for)) is None or shown_steps < 1:
             raise ValueError(
                 f"a drawing is shown for a whole number of steps, at least 1, or until removed, not {shown_for!r}"
             )
-        return self._step + steps
+        return self._step + shown_steps
 
     def _add(self, drawing: Drawing) -> Drawing:
         self._drawings.append(drawing)
@@ -338,7 +337,7 @@ class DebugCommands:
         ]
         commands += self._commands
         self._toggled_cheats, self._commands = set(), []
-        due = self._last_refresh is None or step - self._last_refresh >= self._refresh_steps
+        due = self._last_refresh is None or step - self._last_refresh >= self._refresh_interval.steps
         if not commands and not due:
             return
         draw = _draw_all(self._drawings)

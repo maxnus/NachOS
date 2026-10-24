@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Self, final, overload
 import numpy
 import scipy.ndimage
 
-from sc2nachos._checks import whole_steps_of
+from sc2nachos._checks import check_game_time, whole_steps_of
 from sc2nachos.game_time import GameTime
+from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -26,9 +27,9 @@ class TimeSeries[T: float]:
     """Values recorded against the step they were observed at.
 
     Indexing and slicing are by step, not buffer position, so `series[step]` means the same thing for the whole life
-    of the series, and `series[series.last_time.steps]` is the newest value. A slice is a copy, sharing no memory with
-    the series. Steps are contiguous: a gap between appends is filled by linear interpolation, rounded to the nearest
-    whole number in an integer series, a tie up.
+    of the series; `start_time` and `last_time` give the first and last as `GameTime`s. A slice is a copy, sharing no
+    memory with the series. Steps are contiguous: a gap between appends is filled by linear interpolation, rounded to
+    the nearest whole number in an integer series, a tie up.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
@@ -154,8 +155,10 @@ class TimeSeries[T: float]:
         return self._buffer.item(index)
 
     def at_time(self, time: GameTime) -> T | None:
-        """The value at `time`, taken from the nearest step, or `None` if that step was never recorded."""
-        return self.at(round(time.steps))
+        """The value at `time`, taken from the nearest step, a tie the later, or `None` if that step was never
+        recorded. Raises `TypeError` for a `time` that is not a `GameTime`."""
+        check_game_time(time, "time")
+        return self.at(_rounded_half_up(time.steps))
 
     def _index(self, step: int) -> int:
         """The buffer position of a recorded step."""
@@ -223,12 +226,13 @@ class TimeSeries[T: float]:
 
     def derivative_at(self, step: int, *, window: GameTime = _DEFAULT_DERIVATIVE_WINDOW) -> float | None:
         """The rate of change per second over the `window` ending at `step`, the window rounded to the nearest whole
-        step.
+        step, a tie up.
 
-        `None` if the series does not cover the whole range. Raises `ValueError` for a `window` under one step once
-        rounded.
+        `None` if the series does not cover the whole range. Raises `TypeError` for a `window` that is not a
+        `GameTime`, and `ValueError` for one under one step once rounded.
         """
-        window_steps = round(window.steps)
+        check_game_time(window, "window")
+        window_steps = _rounded_half_up(window.steps)
         if window_steps <= 0:
             raise ValueError(f"a window is at least one step, not {window!r}")
         if self._start is None:
@@ -241,7 +245,9 @@ class TimeSeries[T: float]:
         return (high - low) / GameTime(steps=window_steps).seconds
 
     def gaussian_filter(self, *, sigma: GameTime, mode: str = "nearest") -> TimeSeries[float]:
-        """A copy with a Gaussian filter of standard deviation `sigma` applied along the series."""
+        """A copy with a Gaussian filter of standard deviation `sigma` applied along the series. Raises `TypeError` for
+        a `sigma` that is not a `GameTime`."""
+        check_game_time(sigma, "sigma")
         if not self._size:
             return TimeSeries.empty(float)
         filtered = scipy.ndimage.gaussian_filter1d(self.values.astype(float), sigma=sigma.steps, mode=mode)

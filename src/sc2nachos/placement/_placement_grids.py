@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Self, final
 
+from sc2nachos._checks import check_game_time
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import CreepRequirement
 from sc2nachos.geometry import Grid, Point, Rectangle
@@ -178,8 +179,7 @@ class PlacementGrids:
         footprint = self._footprint_of(unit_type)
         _margin_sides(margin)
         if max_time is not None:
-            if not isinstance(max_time, GameTime):
-                raise TypeError(f"max_time is a GameTime, not {max_time!r}")
+            check_game_time(max_time, "max_time")
             if max_time.steps < 1:
                 raise ValueError(f"max_time is at least one step, not {max_time!r}")
         center = footprint.snapped_center(at=at)

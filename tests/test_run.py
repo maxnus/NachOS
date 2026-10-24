@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
@@ -279,6 +279,21 @@ def test_an_installation_without_maps_is_reported(tmp_path: Path, monkeypatch: p
 
 
 _PYLON_GAME = Path(__file__).parent / "corpus" / "PylonAIE_v4-TvZ.sc2rec"
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        lambda limit: run_local("PylonAIE_v4", Api(), race=Race.TERRAN, time_limit=limit),
+        lambda limit: run_replay("no such replay.SC2Replay", Api(), player_id=1, time_limit=limit),
+        lambda limit: run_recording("no such recording.sc2rec", Api(), time_limit=limit),
+    ],
+    ids=["run_local", "run_replay", "run_recording"],
+)
+def test_a_time_limit_in_plain_seconds_is_refused_before_anything_starts(run: Callable[[Any], Result]) -> None:
+    """Before looking for StarCraft II, which this test run has none of, or opening the file."""
+    with pytest.raises(TypeError, match="time_limit is a GameTime"):
+        run(600)
 
 
 def _pylon_game_rewritten(*, created: bool, stepped: bool) -> Iterator[Exchange]:

@@ -228,6 +228,13 @@ class TestValue:
         assert ramp.at_time(GameTime.from_seconds(4 / STEPS_PER_SECOND)) == 4.0
         assert ramp.at_time(GameTime(steps=3.6)) == 4.0
 
+    def test_at_time_between_two_steps_reads_the_later(self, ramp):
+        assert ramp.at_time(GameTime(steps=3.5)) == 4.0
+
+    def test_at_time_in_plain_seconds_raises(self, ramp):
+        with pytest.raises(TypeError, match="time is a GameTime"):
+            ramp.at_time(4.0)  # pyright: ignore[reportArgumentType]
+
     def test_at_time_outside_the_range_is_none(self, ramp):
         assert ramp.at_time(GameTime.from_seconds(100.0)) is None
 
@@ -285,6 +292,18 @@ class TestDerivativeAt:
         rate = series.derivative_at(100, window=GameTime.from_seconds(1))
         assert rate == pytest.approx((2 * 100 - 22) * STEPS_PER_SECOND)
 
+    def test_a_window_halfway_between_two_steps_is_the_longer(self):
+        series = TimeSeries.empty(float)
+        for step in range(200):
+            series.append(step, float(step**2))
+        assert series.derivative_at(100, window=GameTime(steps=22.5)) == pytest.approx(
+            (2 * 100 - 23) * STEPS_PER_SECOND
+        )
+
+    def test_a_window_in_plain_steps_raises(self, ramp):
+        with pytest.raises(TypeError, match="window is a GameTime"):
+            ramp.derivative_at(5, window=5)  # pyright: ignore[reportArgumentType]
+
     def test_measures_before_the_last_step(self, ramp):
         assert ramp.derivative_at(5, window=GameTime(steps=5)) == pytest.approx(STEPS_PER_SECOND)
 
@@ -308,6 +327,10 @@ class TestFilters:
         filtered = ramp.gaussian_filter(sigma=GameTime(steps=1.0))
         assert filtered.start_time.steps == ramp.start_time.steps
         assert filtered.size == ramp.size
+
+    def test_gaussian_filter_with_a_plain_sigma_raises(self, ramp):
+        with pytest.raises(TypeError, match="sigma is a GameTime"):
+            ramp.gaussian_filter(sigma=1.0)  # pyright: ignore[reportArgumentType]
 
     def test_uniform_filter_keeps_the_geometry(self, ramp):
         filtered = ramp.uniform_filter(size=GameTime(steps=3))
