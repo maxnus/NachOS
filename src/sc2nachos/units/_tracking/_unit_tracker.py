@@ -16,7 +16,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from sc2nachos.units._tracking._tracker import _Tracker
 
@@ -41,6 +41,7 @@ class _UnitTracker:
 
     __slots__ = (
         "_by_tag",
+        "_id_of_tag",
         "_ids",
         "_ignored_tags",
         "_in_fog_tags",
@@ -55,8 +56,11 @@ class _UnitTracker:
         "_units_seen_per_alliance",
     )
 
-    def __init__(self, tracker: _Tracker) -> None:
+    def __init__(self, tracker: _Tracker, *, id_of_tag: Callable[[int], int] | None = None) -> None:
+        """Track the units of `tracker`'s game, each new one under its alliance's next id, or under the id
+        `id_of_tag` gives the tag it is first reported under."""
         self._tracker = tracker
+        self._id_of_tag = id_of_tag
         # Every tag of a living unit: a tag in sight for good, a tag in the fog until it leaves.
         self._by_tag: _UnitsByTag = {}
         # The tags among those of structures in the fog. Such a tag never comes back once it leaves.
@@ -302,15 +306,18 @@ class _UnitTracker:
                 self._stale_units[unit._id] = unit
 
     def _create_unit(self, report: raw_pb2.Unit, step: int) -> Unit[Any]:
-        """Create the unit first seen in `report`, under its alliance's next id."""
+        """Create the unit first seen in `report`, under its alliance's next id, or the one `id_of_tag` gives."""
         alliance = report.alliance
-        count = self._units_seen_per_alliance[alliance] + 1
-        if count >= _IDS_PER_ALLIANCE:
-            raise UnitIdsExhaustedError(
-                f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
-            )
-        self._units_seen_per_alliance[alliance] = count
-        unit_id = alliance * _IDS_PER_ALLIANCE + count
+        if self._id_of_tag is not None:
+            unit_id = self._id_of_tag(report.tag)
+        else:
+            count = self._units_seen_per_alliance[alliance] + 1
+            if count >= _IDS_PER_ALLIANCE:
+                raise UnitIdsExhaustedError(
+                    f"a game has seen {_IDS_PER_ALLIANCE - 1} units of alliance {alliance}, all its ids"
+                )
+            self._units_seen_per_alliance[alliance] = count
+            unit_id = alliance * _IDS_PER_ALLIANCE + count
         changes = self._tracker.last_changes
         if alliance == _OWN:
             own: OwnUnit[Any] = OwnUnit(report, self._tracker, unit_id, step)

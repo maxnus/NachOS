@@ -83,6 +83,7 @@ class Client:
         self._transport = transport
         self._status: Status | None = None
         self._player_id: int | None = None
+        self._fog_disabled = False
         self._results: dict[int, Result] = {}
 
     @property
@@ -100,6 +101,11 @@ class Client:
     def in_replay(self) -> bool:
         """Whether a replay is being played back, rather than a game played, or nothing running."""
         return self._status is Status.IN_REPLAY
+
+    @property
+    def fog_disabled(self) -> bool:
+        """Whether the replay being played back was started with the fog off, as `start_replay` says."""
+        return self._fog_disabled
 
     @property
     def player_id(self) -> int | None:
@@ -203,9 +209,11 @@ class Client:
             raise ProtocolError(f"the game could not read the replay, as {reason}: {detail}")
         return info
 
-    def start_replay(self, replay: bytes, *, player_id: int) -> None:
+    def start_replay(self, replay: bytes, *, player_id: int, disable_fog: bool = False) -> None:
         """Play back `replay`, the bytes of a `.SC2Replay` file, as the player `player_id` saw it, which then stands
-        for the player id a join assigns.
+        for the player id a join assigns. With `disable_fog`, the game also lists every unit that player did not see,
+        out of its sight in full but for orders, and one undetected in its sight with its health and the like at 0 (in
+        game).
 
         The game then answers observations, steps, queries and the rest as in a game, and as that player saw the game
         when it was played, but refuses every action and debug command (in game). It is played stepped, never in real
@@ -216,6 +224,7 @@ class Client:
             replay_data=replay,
             observed_player_id=player_id,
             options=_raw_interface(raw_affects_selection=False),
+            disable_fog=disable_fog,
             realtime=False,
         )
         started = self._send(sc2api_pb2.Request(start_replay=request), "start_replay").start_replay
@@ -225,7 +234,8 @@ class Client:
             detail = started.error_details or "no detail given"
             raise ProtocolError(f"the game refused to play the replay back, as {reason}: {detail}")
         self._player_id = player_id
-        logger.info("Playing a replay back as player {}", player_id)
+        self._fog_disabled = disable_fog
+        logger.info("Playing a replay back as player {}{}", player_id, " with the fog off" if disable_fog else "")
 
     def game_info(self) -> sc2api_pb2.ResponseGameInfo:
         """The map: its size, terrain, start locations and players."""
@@ -324,6 +334,7 @@ class Client:
     def _forget_game(self) -> None:
         """Drop what the client kept of the last game, so none of it carries over to the next."""
         self._player_id = None
+        self._fog_disabled = False
         self._results = {}
 
     def _observe(self, game_loop: int | None) -> sc2api_pb2.ResponseObservation:

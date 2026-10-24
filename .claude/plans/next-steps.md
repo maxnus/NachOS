@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
-  integration` passed 38 against a real game on this branch (run 2026-10-24).
+- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2736 tests; `uv run pytest -m
+  integration` passed 39 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -494,6 +494,24 @@ Keep this file current: when a step is done, say so here in the same pull reques
     replay played back as it, as documented, a niche case; a recording that asks something before starting its replay
     is not played back, as a recorded game with a request before its setup is not; and `run_recording` reads the start
     of a recording up to three times, a few kilobytes each.
+- **Reading a playback with the fog off** (the owner, 2026-10-24, one question at a time):
+  - Two collections, over one list marking the unseen with a new `Visibility.UNSEEN` and over the truth alone. The
+    owner: "We don't really want to make things more complicated for writing a bot, just for the purpose of supporting
+    the replay functionality." `api.units`, `Visibility` and every event stay what the player knew, as with the fog on.
+  - The second holds every unit, the whole game, as objects of its own read in full from a second tracker, over only
+    the rest: a unit the player lost sight of is stale in `api.known_units`, read as last seen, and in the whole game
+    as it is.
+  - `api.all_units`, over `api.units_with_fog_off` (my recommendation) and `api.whole_game.units`; where the fog is on,
+    reading it raises a new `FogOnError`, as `api.enemy` raises `NoEnemyError`.
+  - The same id in both, over a lookup by tag: the player's view takes each unit's id from the whole game's.
+  - A unit undetected in the player's sight reads as last reported in full in `api.all_units`, as AGENTS.md's "never
+    answer the zero" has it.
+  - Found building it: the player's view rebuilds the fog-on observation, the structures and map's units in the fog as
+    copies under tags of their own, remembered as they went until their spot is in sight, so that the tracker reads it
+    unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner, not the tile under
+    it, and an integration test plays one replay with the fog on and off a step at a turn and finds the player's views
+    the same at every step. With more steps a turn the fog on can remember a structure afresh between two turns, which
+    NachOS reads as one found dead and another first seen, in a game too (`not-understood-yet.md`).
 
 ## Next
 
@@ -513,8 +531,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
   cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
-- Beside M5: reading a playback with the fog off (this branch), its design planned with the owner first, after
-  replay playback (#160; 2026-10-24, above). `tools/sweep_replays.py`, `unseen`, measured what it rests on.
+- Beside M5: reading a playback with the fog off (this branch), after replay playback (#160; both 2026-10-24, above).
+  `tools/sweep_replays.py`, `unseen` and `scouting`, measured what it rests on.
 
 ## 1. Waiting until something needs them
 
