@@ -275,7 +275,7 @@ it.
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
-| `unit.repairable` | `unit.repair_steps is not None`, with `unit.repair_cost`; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
+| `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |

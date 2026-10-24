@@ -9,8 +9,8 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Resources
-from sc2nachos.gamedata._repair_steps import REPAIR_STEPS
+from sc2nachos.gamedata import Cost
+from sc2nachos.gamedata._repair_steps import REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
@@ -50,8 +50,35 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.EXTRACTOR, ability_id=AbilityId.DRONE_MORPH_EXTRACTOR),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY, ability_id=AbilityId.SCV_BUILD_REFINERY),
-    data_pb2.UnitTypeData(unit_id=UnitTypeId.BUNKER, mineral_cost=100, attributes=[data_pb2.Attribute.Structure]),
-    data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK, mineral_cost=150, vespene_cost=125),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.BUNKER,
+        race=Race.TERRAN.value,
+        mineral_cost=100,
+        build_time=640.0,
+        attributes=[data_pb2.Attribute.Structure, data_pb2.Attribute.Mechanical],
+    ),
+    *(
+        data_pb2.UnitTypeData(
+            unit_id=tank,
+            race=Race.TERRAN.value,
+            mineral_cost=150,
+            vespene_cost=125,
+            build_time=build_steps,
+            attributes=[data_pb2.Attribute.Mechanical],
+        )
+        for tank, build_steps in ((UnitTypeId.SIEGE_TANK, 720.0), (UnitTypeId.SIEGE_TANK_SIEGED, 68.67))
+    ),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.MULE, race=Race.TERRAN.value, mineral_cost=50, attributes=[data_pb2.Attribute.Mechanical]
+    ),
+    data_pb2.UnitTypeData(
+        unit_id=UnitTypeId.STALKER,
+        race=Race.PROTOSS.value,
+        mineral_cost=125,
+        vespene_cost=50,
+        build_time=432.0,
+        attributes=[data_pb2.Attribute.Mechanical],
+    ),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
@@ -545,40 +572,51 @@ class TestFootprint:
 
 
 class TestRepair:
-    """What one SCV's repair of a unit from its health now takes, from the steps `tools/sweep_repair.py` measured a
-    whole repair of each type taking, and what it costs."""
+    """What one SCV's repair of a unit takes, from its health now and from none: the steps its type costs, but for the
+    types `tools/sweep_repair.py` measured taking others, and a quarter of the resources its type costs."""
 
     @staticmethod
-    def _tank(health: float) -> Unit[Any]:
-        """A siege tank, which costs 150 minerals and 125 vespene, at `health` of its 175."""
-        return _one(make_unit(1, UnitTypeId.SIEGE_TANK, health=health, health_max=175.0, build_progress=1.0))
+    def _tank(health: float, unit_type: UnitTypeId = UnitTypeId.SIEGE_TANK) -> Unit[Any]:
+        """A siege tank, which costs 150 minerals, 125 vespene and 720 steps, at `health` of its 175."""
+        return _one(make_unit(1, unit_type, health=health, health_max=175.0, build_progress=1.0))
 
-    def test_it_takes_the_share_of_its_types_whole_repair_that_its_health_misses(self) -> None:
-        assert self._tank(87.5).repair_steps == REPAIR_STEPS[UnitTypeId.SIEGE_TANK] / 2
+    def test_a_whole_repair_takes_the_steps_its_type_costs_and_a_quarter_of_its_resources_rounded_up(self) -> None:
+        """A quarter of 150 minerals and 125 vespene is 37.5 and 31.25."""
+        assert self._tank(87.5).total_repair_cost == Cost(38, 32, steps=720)
 
-    def test_it_costs_a_quarter_of_its_types_cost_for_the_share_missing_each_resource_rounded_up(self) -> None:
+    def test_a_form_switched_into_for_nothing_is_repaired_as_the_form_it_switched_from(self) -> None:
+        """A sieged tank costs the tank's steps, its siege's left out (in game)."""
+        assert self._tank(87.5, UnitTypeId.SIEGE_TANK_SIEGED).total_repair_cost == Cost(38, 32, steps=720)
+
+    def test_a_type_measured_taking_other_steps_than_it_costs_takes_those(self) -> None:
+        """A MULE, whose row gives it no build steps, is repaired in 270 (in game)."""
+        mule = _one(make_unit(1, UnitTypeId.MULE, health=30.0, health_max=60.0, build_progress=1.0))
+        assert mule.total_repair_cost == Cost(13, 0, steps=REPAIR_STEPS_EXCEPTIONS[UnitTypeId.MULE])
+
+    def test_it_takes_the_share_of_a_whole_repair_that_its_health_misses_each_resource_rounded_up(self) -> None:
         """Half of a quarter of 150 minerals and 125 vespene is 18.75 and 15.625."""
-        assert self._tank(87.5).repair_cost == Resources(19, 16)
+        assert self._tank(87.5).required_repair_cost == Cost(19, 16, steps=360)
 
     def test_a_cost_that_comes_out_whole_is_not_rounded_up(self) -> None:
         """A bunker missing 112 of its 400 health costs 7 of a quarter of 100 minerals, which a share of the cost worked
         out first would make a little more than 7."""
         bunker = _one(make_unit(1, UnitTypeId.BUNKER, health=288.0, health_max=400.0, build_progress=1.0))
-        assert bunker.repair_cost == Resources(7, 0)
+        assert bunker.required_repair_cost == Cost(7, 0, steps=179.2)
 
     def test_a_unit_whole_takes_no_steps_and_costs_nothing(self) -> None:
-        tank = self._tank(175.0)
-        assert (tank.repair_steps, tank.repair_cost) == (0.0, Resources(0, 0))
+        assert self._tank(175.0).required_repair_cost == Cost(0, 0)
 
     def test_a_unit_an_scv_is_refused_has_no_repair(self) -> None:
-        """A marine is not mechanical (in game)."""
+        """A marine is not mechanical (in game), and a stalker, though mechanical, is not Terran."""
         marine = _one(make_unit(1, UnitTypeId.MARINE, health=20.0, health_max=45.0, build_progress=1.0))
-        assert (marine.repair_steps, marine.repair_cost) == (None, None)
+        stalker = _one(make_unit(2, UnitTypeId.STALKER, health=20.0, health_max=80.0, build_progress=1.0))
+        repair_costs = [(unit.required_repair_cost, unit.total_repair_cost) for unit in (marine, stalker)]
+        assert repair_costs == [(None, None), (None, None)]
 
     def test_a_structure_under_construction_has_no_repair(self) -> None:
         """An SCV ordered to repair one is refused `CantTargetUnderConstructionUnits` (in game)."""
         bunker = _one(make_unit(1, UnitTypeId.BUNKER, health=100.0, health_max=400.0, build_progress=0.5))
-        assert (bunker.repair_steps, bunker.repair_cost) == (None, None)
+        assert (bunker.required_repair_cost, bunker.total_repair_cost) == (None, None)
 
 
 class TestUnitsThatBecomeStructures:

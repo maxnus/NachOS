@@ -6,11 +6,11 @@ middle of the map so that it can neither fight nor train, under the `all_resourc
 starting workers removed, so that no mining adds to the minerals. For each type in turn, every Terran type the game's
 tables call mechanical unless types are named, it creates an SCV and the target beside it, sets the target's life to
 half its maximum, orders the SCV to repair it, and records, every step, the target's health and this player's minerals
-and vespene, until the target is whole or gone, or twice its build time, and at least 1000 steps, have passed. A target
-the game reports flying is made again over the ground its SCV stands on, a gas building on a geyser of the map, and an
-add-on the game does not create on its own is built on a structure made for it. It also records what the game answers an
-SCV ordered to repair a marine, which is not mechanical, a supply depot another SCV is building, and a target whose life
-was set with no observation asked for since::
+and vespene, until the target is whole or gone, or twice the steps its type costs, and at least 1000 steps, have passed.
+A target the game reports flying is made again over the ground its SCV stands on, a gas building on a geyser of the map,
+and an add-on the game does not create on its own is built on a structure made for it. It also records what the game
+answers an SCV ordered to repair a marine, which is not mechanical, a supply depot another SCV is building, and a target
+whose life was set with no observation asked for since::
 
     uv run python tools/sweep_repair.py
     uv run python tools/sweep_repair.py SIEGE_TANK MULE --out repair.json --samples samples.json
@@ -74,9 +74,9 @@ _STRUCTURE_LEFT_OF_THE_MIDDLE = 1.0
 # most.
 _WIDEST_GROUND_HALF_SIZE = 3
 _DEFAULT_GROUND_HALF_SIZE = 2
-# A repair is watched for at most this many times the target's build time, and at least this many steps, which an
-# add-on, whose build time in the tables is 2 steps, needs.
-_WATCH_BUILD_TIMES = 2.0
+# A repair is watched for at most this many times the steps the target's type costs, and at least this many steps,
+# which an add-on, whose build time in the tables is 2 steps, needs.
+_WATCH_COST_STEPS_TIMES = 2.0
 _MINIMUM_WATCH_STEPS = 1000
 # The most steps a unit is waited for, to appear and to be finished, and the steps between looks.
 _WAIT_STEPS = 1600
@@ -102,7 +102,7 @@ class RepairFinding:
     minerals_cost: float
     vespene_cost: float
     build_steps: float
-    chain_build_steps: float
+    cost_steps: float
     order_result: str
     started_step: int | None = None
     finished_step: int | None = None
@@ -356,25 +356,20 @@ class RepairSweep:
     def _finding_for(self, target_type: UnitTypeId, target: raw_pb2.Unit) -> RepairFinding:
         """A finding for `target`, holding what the tables say of its type and the repair not yet watched."""
         table_row = self.data.units[target_type]
-        chain_build_steps = 0.0
-        chain_stage: UnitTypeId | None = target_type
-        while chain_stage is not None:
-            chain_build_steps += self.data.units[chain_stage].build_steps
-            chain_stage = self.data.units[chain_stage].morphed_from
         return RepairFinding(
             target=target_type.name,
             health_max=target.health_max,
             minerals_cost=table_row.cost.minerals,
             vespene_cost=table_row.cost.vespene,
             build_steps=table_row.build_steps,
-            chain_build_steps=chain_build_steps,
+            cost_steps=table_row.cost.steps,
             order_result="",
         )
 
     def _watch(self, finding: RepairFinding, tag: int) -> None:
         """Step one at a time and sample the target and the resources until it is whole or gone or the watch runs out,
         then work out what a repair of its whole health comes to."""
-        watch_steps = max(_MINIMUM_WATCH_STEPS, round(_WATCH_BUILD_TIMES * finding.chain_build_steps))
+        watch_steps = max(_MINIMUM_WATCH_STEPS, round(_WATCH_COST_STEPS_TIMES * finding.cost_steps))
         if (first_sample := self._sample(tag)) is None:
             return
         samples = finding.samples

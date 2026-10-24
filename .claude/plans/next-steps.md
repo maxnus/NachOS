@@ -447,11 +447,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
     reports it (over leaving it out, after a sweep); its report kept in a slot of its own beside `velocity`'s position
     and step, which keep other rules (review of #158, over one record for the three, which made intake some 8%
     slower and would have changed `velocity`);
-  - repair measured by a sweep first, then `Unit.repair_cost`, what repairing it to full costs from its health now,
-    and `Unit.repair_steps`, the steps one SCV takes (over the same per type in the tables); every Terran mechanical
-    type swept into a generated table (over the rule and a hand-written table of its exceptions), once the sweep's
-    air units that were never repaired were found to be the sweep's own doing (over answering `None` for them)
-    (#159);
+  - repair measured by a sweep first, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, from the health
+    now and from none, each a `Cost` whose steps are one SCV's (review of #159, over `repair_cost` and `repair_steps`,
+    over a class of their own for the two, and over the same per type in the tables); every Terran mechanical type
+    swept, with the generated table keeping only the six not repaired in the steps their type costs (review of #159,
+    over every type measured, and over a hand-written table of the exceptions), once the sweep's air units that were
+    never repaired were found to be the sweep's own doing (over answering `None` for them) (#159);
+  - `Cost.steps`, 0 where nothing is made; in a unit type's row the build steps of each stage that costs something,
+    so that a switch that costs nothing adds none and every form of a unit reads alike (review of #159, over no time
+    on `Cost`, and over counting a switch's own steps); `build_steps` stays the last stage alone, and
+    `research_steps` stays beside `cost.steps` until the duration type;
+  - a duration type for every duration, with steps and seconds, as its own pull request, planned first (review of
+    #159, over seconds for repair alone, and over one type for repair first);
   - turning measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`, now, over after the swap.
 
 ## Next
@@ -463,8 +470,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
   #155), and ramp wall-in sites with their sweep (#156), the last of them.
 - **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
   next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
-  sweep, then `Unit.repair_cost` and `Unit.repair_steps` (#159); and turning, measured by a sweep of each type's
-  turn rate, then `Unit.time_to_face(target)`.
+  sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
+  measured by a sweep of each type's turn rate, then `Unit.time_to_face(target)`.
+- **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
+  the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
+  stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`
+  today), and whether the inputs (`steps_per_turn`, `every_steps=`, `debug.refresh_steps`) take it too. Then one pull
+  request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
+  cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
