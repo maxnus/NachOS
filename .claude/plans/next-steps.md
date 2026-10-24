@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161 but #160. On this branch, `uv run pytest` passes 2718 tests; `uv run pytest -m
+- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2751 tests; `uv run pytest -m
   integration` passed 38 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -470,7 +470,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
     alone); the values on the rows, `UnitTypeData.turn_rate` and `sets_off_while_turning` (over internal, as repair,
     and over the rate alone), and `Weapon.turns_to_fire`, a bool, once the sweep found the firing angle measurable only
     as whether a unit turns (over the planned `Weapon.firing_arc`); `Unit.time_to_face` in steps, the order's own step
-    included (over `steps_to_face`, and over the turn alone), all settled at a stop point after the sweep;
+    included (over `steps_to_face`, and over the turn alone), all settled at a stop point after the sweep (#162);
 - **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
   of either player saw the game, in a branch of its own beside M5:
   - `run_replay(replay, api, *, player_id, steps_per_turn=1, time_limit=None, record_to=None, installation=None,
@@ -511,7 +511,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `sets_off_while_turning`,
-  `Weapon.turns_to_fire` and `Unit.time_to_face(target)`.
+  `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
   the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
   stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`

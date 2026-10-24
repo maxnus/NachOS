@@ -17,6 +17,7 @@ from sc2nachos.gamedata import (
     TargetDomain,
     TargetType,
     UnitTypeUpgrade,
+    _game_data,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
 from sc2nachos.gamedata._game_data import _build_steps_of_stages_that_cost
@@ -259,6 +260,15 @@ class TestReadingTheTables:
         data = GameData(sc2api_pb2.ResponseData(units=[refinery, rich]))
         assert data.units[UnitTypeId.REFINERY_RICH].build_steps == 480.0
         assert data.units[UnitTypeId.REFINERY_RICH].cost.steps == 480.0
+
+    def test_a_weapon_that_hits_both_says_nothing_where_its_unit_turned_for_one_and_not_the_other(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No type was seen to, but a weapon that hits both would then have no one answer."""
+        monkeypatch.setattr(_game_data, "TURNS_TO_FIRE_AT_GROUND", {UnitTypeId.VOID_RAY: True})
+        monkeypatch.setattr(_game_data, "TURNS_TO_FIRE_AT_AIR", {UnitTypeId.VOID_RAY: False})
+        assert _game_data._turns_to_fire(UnitTypeId.VOID_RAY, TargetDomain.ANY) is None
+        assert _game_data._turns_to_fire(UnitTypeId.VOID_RAY, TargetDomain.AIR) is False
 
     def test_a_morph_whose_source_has_no_row_costs_its_own_steps_alone(self) -> None:
         orbital = data_pb2.UnitTypeData(unit_id=UnitTypeId.ORBITAL_COMMAND, mineral_cost=550, build_time=560.0)
@@ -777,8 +787,8 @@ class TestARecordedGamesTables:
         """As `tools/sweep_turning.py` measured them; none for one whose facing never changes, or that cannot move."""
         unit_rows = _tables(path).units
         marine, thor = unit_rows[UnitTypeId.MARINE], unit_rows[UnitTypeId.THOR]
-        assert (math.degrees(marine.turn_rate or 0), marine.sets_off_while_turning) == (pytest.approx(62.6), True)
-        assert (math.degrees(thor.turn_rate or 0), thor.sets_off_while_turning) == (pytest.approx(45.1), False)
+        assert (math.degrees(marine.turn_rate or 0), marine.sets_off_while_turning) == (pytest.approx(62.5), True)
+        assert (math.degrees(thor.turn_rate or 0), thor.sets_off_while_turning) == (pytest.approx(45.0), False)
         for unit_type in (UnitTypeId.COLOSSUS, UnitTypeId.BARRACKS, UnitTypeId.SIEGE_TANK_SIEGED):
             assert (unit_rows[unit_type].turn_rate, unit_rows[unit_type].sets_off_while_turning) == (None, None)
 

@@ -229,7 +229,8 @@ class UnitTypeData:
     """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
     An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
     turn_rate: float | None = None
-    """The most it turns in a step, in radians: 62.6 degrees for a marine, 45.1 for a thor (in game). A unit ordered to
+    """The most it turns in a step, in radians, to the nearest half degree: 62.5 degrees for a marine, 45 for a thor
+    (in game). A unit ordered to
     move turns from the step after the order, and takes its angle over this, rounded up, in steps, give or take one.
     `None` for a type whose facing the game never changes, such as a colossus or an immortal, and for one that does not
     move (`docs/reference/game-behavior/units.md`)."""

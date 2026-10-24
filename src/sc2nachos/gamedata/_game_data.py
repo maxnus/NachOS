@@ -117,14 +117,14 @@ def _with_turning(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitT
 
 def _row_with_turning(type_row: UnitTypeData) -> UnitTypeData:
     """`type_row` given how its type turns and whether each of its weapons turns to fire, where measured."""
-    weapons = tuple(
+    weapons_with_turning = tuple(
         replace(weapon, turns_to_fire=_turns_to_fire(type_row.id, weapon.target_domain)) for weapon in type_row.weapons
     )
     if (turn_rate_degrees := TURN_RATE_DEGREES.get(type_row.id)) is None:
-        return replace(type_row, weapons=weapons)
+        return replace(type_row, weapons=weapons_with_turning)
     return replace(
         type_row,
-        weapons=weapons,
+        weapons=weapons_with_turning,
         turn_rate=math.radians(turn_rate_degrees),
         sets_off_while_turning=type_row.id not in SET_OFF_ONLY_FACING,
     )
@@ -138,8 +138,8 @@ def _turns_to_fire(unit_type: UnitTypeId, target_domain: TargetDomain) -> bool |
         return at_ground
     if target_domain is TargetDomain.AIR:
         return at_air
-    measured = {turns_to_fire for turns_to_fire in (at_ground, at_air) if turns_to_fire is not None}
-    return measured.pop() if len(measured) == 1 else None
+    measured_answers = {turns_to_fire for turns_to_fire in (at_ground, at_air) if turns_to_fire is not None}
+    return measured_answers.pop() if len(measured_answers) == 1 else None
 
 
 def _with_steps_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:

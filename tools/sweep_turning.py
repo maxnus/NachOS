@@ -123,16 +123,16 @@ class TurnFinding:
     ordered_off_facing_degrees: float
     start_facing: float
     turned_degrees: list[float] = field(default_factory=list)
-    """How far it turned in each step after the order, counterclockwise positive."""
+    """How far it turned in each step after the order, counterclockwise positive, up to the last of its first steps
+    of turning; empty if it never turned. A unit turns a little more as it arrives, which this leaves out."""
+    turning_steps: int | None = None
+    """How many steps after the order it turned in, one after another, or None if it never turned."""
     steps_until_turned: int | None = None
-    """The last step of the first steps after the order in which it turned, one after another, or None if it never
-    turned. A unit turns a little more as it arrives, which this leaves out."""
+    """The last of those steps, counted from the order, or None if it never turned."""
     largest_turn_degrees: float | None = None
     """The most it turned in one of those steps."""
     steps_until_moving: int | None = None
     """The first step after the order in which it stood away from where it was, or None if it never did."""
-    end_off_destination_degrees: float | None = None
-    """How far its facing was off the bearing to its destination at the last step watched."""
 
 
 @dataclass(slots=True)
@@ -158,27 +158,29 @@ def _degrees_between(from_angle: float, to_angle: float) -> float:
     return math.degrees((to_angle - from_angle + math.pi) % math.tau - math.pi)
 
 
-def _first_run_of_turns(turned_degrees: Sequence[float]) -> list[int]:
+def _first_turning_indexes(turned_degrees: Sequence[float]) -> list[int]:
     """The indexes of the first steps of `turned_degrees` that turned, one after another: empty if none did."""
-    run: list[int] = []
-    for index, turned in enumerate(turned_degrees):
-        if abs(turned) > _SMALLEST_TURN_DEGREES:
-            run.append(index)
-        elif run:
+    turning_indexes: list[int] = []
+    for index, turned_that_step in enumerate(turned_degrees):
+        if abs(turned_that_step) > _SMALLEST_TURN_DEGREES:
+            turning_indexes.append(index)
+        elif turning_indexes:
             break
-    return run
+    return turning_indexes
 
 
 def _position_of(unit: raw_pb2.Unit) -> Point:
+    """Where `unit` stands, on the ground plane."""
     return Point((unit.pos.x, unit.pos.y))
 
 
-def _bearing(from_point: Point, to_point: Point) -> float:
+def _bearing_between(from_point: Point, to_point: Point) -> float:
     """The direction from `from_point` to `to_point`, in radians from the positive x-axis."""
     return math.atan2(to_point.y - from_point.y, to_point.x - from_point.x)
 
 
 def _point_toward(start: Point, direction: float, distance: float) -> Point:
+    """The point `distance` from `start` in `direction`, in radians from the positive x-axis."""
     return Point((start.x + distance * math.cos(direction), start.y + distance * math.sin(direction)))
 
 
@@ -234,31 +236,30 @@ class TurningSweep:
 
     def turn(self, unit_type: UnitTypeId, off_facing_degrees: float) -> TurnFinding:
         """Make a `unit_type`, order it to move `off_facing_degrees` off its facing, and watch it turn."""
-        unit = self._make(unit_type, self._me.player, self._ground_center)
+        made_unit = self._make(unit_type, self._me.player, self._ground_center)
         try:
             self._rivals.step(_SETTLING_STEPS)
-            unit = self._listed(unit.tag)
-            start, start_facing = _position_of(unit), unit.facing
+            watched_unit = self._listed(made_unit.tag)
+            start, start_facing = _position_of(watched_unit), watched_unit.facing
             destination = _point_toward(start, start_facing + math.radians(off_facing_degrees), _DESTINATION_DISTANCE)
-            self._me.order(RawAbilityId.Move_Move, unit.tag, destination)
-            finding = TurnFinding(off_facing_degrees, start_facing)
-            watched = unit
+            self._me.order(RawAbilityId.Move_Move, made_unit.tag, destination)
+            turn_finding = TurnFinding(off_facing_degrees, start_facing)
+            turned_each_step: list[float] = []
             for step in range(1, _TURN_WATCH_STEPS + 1):
                 self._rivals.step(1)
-                previous_facing, watched = watched.facing, self._listed(unit.tag)
-                turned = _degrees_between(previous_facing, watched.facing)
-                finding.turned_degrees.append(round(turned, 3))
-                if finding.steps_until_moving is None and _position_of(watched).distance_to(start) > _SMALLEST_MOVE:
-                    finding.steps_until_moving = step
-            first_turning_steps = _first_run_of_turns(finding.turned_degrees)
-            if first_turning_steps:
-                finding.steps_until_turned = first_turning_steps[-1] + 1
-                finding.largest_turn_degrees = max(abs(finding.turned_degrees[index]) for index in first_turning_steps)
-            last_bearing = _bearing(_position_of(watched), destination)
-            finding.end_off_destination_degrees = round(_degrees_between(watched.facing, last_bearing), 3)
-            return finding
+                previous_facing, watched_unit = watched_unit.facing, self._listed(made_unit.tag)
+                turned_each_step.append(round(_degrees_between(previous_facing, watched_unit.facing), 3))
+                has_moved = _position_of(watched_unit).distance_to(start) > _SMALLEST_MOVE
+                if turn_finding.steps_until_moving is None and has_moved:
+                    turn_finding.steps_until_moving = step
+            if turning_indexes := _first_turning_indexes(turned_each_step):
+                turn_finding.turned_degrees = turned_each_step[: turning_indexes[-1] + 1]
+                turn_finding.turning_steps = len(turning_indexes)
+                turn_finding.steps_until_turned = turning_indexes[-1] + 1
+                turn_finding.largest_turn_degrees = max(abs(turned_each_step[index]) for index in turning_indexes)
+            return turn_finding
         finally:
-            self._remove([unit.tag])
+            self._remove([made_unit.tag])
 
     def shot(self, attacker_type: UnitTypeId, target_type: UnitTypeId, off_facing_degrees: float) -> ShotFinding:
         """Make a `attacker_type` holding its position and a `target_type` of the other player's `off_facing_degrees`
@@ -287,33 +288,38 @@ class TurningSweep:
             self._rivals.enemy.order(RawAbilityId.HoldPosition_Hold, target.tag)
             attacker, target = self._listed(attacker.tag), self._listed(target.tag)
             start_facing = attacker.facing
-            finding = ShotFinding(
+            start_bearing = _bearing_between(_position_of(attacker), _position_of(target))
+            shot_finding = ShotFinding(
                 target_type.name,
                 off_facing_degrees,
-                round(_degrees_between(start_facing, _bearing(_position_of(attacker), _position_of(target))), 3),
+                round(_degrees_between(start_facing, start_bearing), 3),
                 round(_position_of(attacker).distance_to(_position_of(target)), 3),
             )
             self._me.order(RawAbilityId.Attack, attacker.tag, target.tag)
             target_life = target.health + target.shield
             for step in range(1, _SHOT_WATCH_STEPS + 1):
                 self._rivals.step(1)
-                listed = {unit.tag: unit for unit in self._me.units()}
-                attacker_now, target_now = listed.get(attacker.tag), listed.get(target.tag)
+                listed_by_tag = {unit.tag: unit for unit in self._me.units()}
+                attacker_now, target_now = listed_by_tag.get(attacker.tag), listed_by_tag.get(target.tag)
                 if attacker_now is None:
                     raise RuntimeError(f"the {attacker_type.name} was gone at step {step}")
-                fired = (
+                has_fired = (
                     attacker_now.weapon_cooldown > 0
                     or target_now is None
                     or target_now.health + target_now.shield < target_life
                 )
-                if fired:
-                    finding.steps_until_shot = step
-                    finding.turned_degrees_before_shot = round(_degrees_between(start_facing, attacker_now.facing), 3)
+                if has_fired:
+                    shot_finding.steps_until_shot = step
+                    shot_finding.turned_degrees_before_shot = round(
+                        _degrees_between(start_facing, attacker_now.facing), 3
+                    )
                     if target_now is not None:
-                        bearing = _bearing(_position_of(attacker_now), _position_of(target_now))
-                        finding.off_facing_at_shot_degrees = round(_degrees_between(attacker_now.facing, bearing), 3)
+                        bearing_to_target = _bearing_between(_position_of(attacker_now), _position_of(target_now))
+                        shot_finding.off_facing_at_shot_degrees = round(
+                            _degrees_between(attacker_now.facing, bearing_to_target), 3
+                        )
                     break
-            return finding
+            return shot_finding
         finally:
             self._remove(made_tags)
 
@@ -322,13 +328,13 @@ class TurningSweep:
         or nearly touching for a melee one."""
         target_flies = target_type is _AIR_TARGET
         hitting = TargetDomain.AIR if target_flies else TargetDomain.GROUND
-        ranges = [
+        weapon_ranges = [
             weapon.range
             for weapon in self.data.units[attacker_type].weapons
             if weapon.target_domain in (hitting, TargetDomain.ANY)
         ]
         both_radii = attacker.radius + _TARGET_RADII[target_type]
-        weapon_range = max(ranges)
+        weapon_range = max(weapon_ranges)
         if weapon_range < _MELEE_RANGE:
             return both_radii + _MELEE_GAP
         return min(weapon_range + both_radii - _INSIDE_REACH, _FARTHEST_TARGET)

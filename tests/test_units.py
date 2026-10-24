@@ -623,14 +623,15 @@ class TestRepair:
 
 class TestTurning:
     """The steps from an order until a unit faces where it is sent: the order's own, then its turn at its type's rate,
-    62.6 degrees a step for a marine and 45.1 for a thor, as `tools/sweep_turning.py` measured them."""
+    62.5 degrees a step for a marine and 45.0 for a thor, as `tools/sweep_turning.py` measured them."""
 
     @staticmethod
     def _facing_east(unit_type: UnitTypeId, tag: int = 1, at: tuple[float, float] = (10.0, 10.0)) -> Unit[Any]:
+        """A `unit_type` of this player's at `at`, facing along the positive x-axis."""
         return _one(make_unit(tag, unit_type, at=at, facing=0.0))
 
     def test_a_turn_takes_the_orders_step_and_its_angle_over_the_rate_rounded_up(self) -> None:
-        """90 degrees is two steps of 45 for a thor, and 180 three of 62.6 for a marine."""
+        """90 degrees is two steps of 45 for a thor, and 180 three of 62.5 for a marine."""
         thor, marine = self._facing_east(UnitTypeId.THOR), self._facing_east(UnitTypeId.MARINE)
         assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (3, 4)
 

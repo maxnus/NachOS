@@ -84,13 +84,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   turn takes as many steps as its angle over the rate, rounded up, give or take one.** The rates: 22.5° a step (360° a
   Normal second) for a cyclone and a swarm host; 45° (720°) for a thor in either mode, an ultralisk, a siege tank, a
   hellion, a hellbat, a widow mine, a locust, a landed viking, a tempest, a carrier, a battlecruiser, a brood lord, a
-  warp prism, an observer and every flying structure; some 93° for a banshee, a mutalisk and a phoenix, which turned 96°
-  in one step and 98° in two, and some 91° for a liberator, which turned 94° in one and 96° in two; and 62.5° (1000°)
-  for every other type that moves. A marine turned 120° in two steps and 130° in three, a thor 130° in three and 140° in
-  four. A turn of more than two steps takes the rate in all but the last two, which share the rest: a thor's 170° went
-  45°, 45°, 40° and 40°. Of the 690 turns of 45° to 170° run in two runs, 630 came out the same and 53 a step apart: a
-  battlecruiser and a carrier at times began a step late, and a few flyers and workers turned 2° or 3° more as they set
-  off, a MULE for some steps more (tool `sweep_turning`, build 75689).
+  warp prism, an observer and every flying structure; some 92° or 93° for a banshee, a mutalisk and a phoenix, which
+  turned 94° in one step and 98° in two, and 96° in one, but for a banshee in two in one run of the two; and some 91°
+  for a liberator, which turned 94° in one and 96° in two; and 62.5° (1000°) for every other type that moves. A marine
+  turned 120° in two steps and 130° in three, a thor 130° in three and 140° in four. A turn of more than two steps takes
+  the rate in all but the last two, which share the rest: a thor's 170° went 45°, 45°, 40° and 40°. Of the 690 turns of
+  45° to 170° run in two runs, 630 came out the same and 53 a step apart: a battlecruiser and a carrier at times began a
+  step late, and a few flyers and workers turned 2° or 3° more as they set off, a MULE for some steps more (tool
+  `sweep_turning`, build 75689).
 - **Most units set off while they turn, in the step after their turn begins, whatever is left of it; a thor in either
   mode, an ultralisk and a siege tank set off only once they face where they go.** Workers, a MULE, an overlord in
   either form, an overseer, a medivac, a raven, a void ray, an observer, a carrier, a battlecruiser, a brood lord, a

@@ -18,24 +18,24 @@ def _generator() -> ModuleType:
     return load_tool("generate_turning")
 
 
-def _turn(off_facing_degrees: float, turned_degrees: list[float], steps_until_moving: int) -> dict[str, object]:
-    """One turn as the sweep writes it, from the steps it turned in, each after the order's own."""
-    turning_steps = [index for index, turned in enumerate(turned_degrees) if turned]
+def _turn(off_facing_degrees: float, turned_degrees: list[float], steps_until_moving: int | None) -> dict[str, object]:
+    """One turn as the sweep writes it, from the steps after the order up to the last it turned in."""
+    turning_indexes = [index for index, turned_that_step in enumerate(turned_degrees) if turned_that_step]
     return {
         "ordered_off_facing_degrees": off_facing_degrees,
         "start_facing": 0.0,
         "turned_degrees": turned_degrees,
-        "steps_until_turned": turning_steps[-1] + 1 if turning_steps else None,
+        "turning_steps": len(turning_indexes) or None,
+        "steps_until_turned": turning_indexes[-1] + 1 if turning_indexes else None,
         "largest_turn_degrees": max((abs(turned) for turned in turned_degrees), default=None) or None,
         "steps_until_moving": steps_until_moving,
-        "end_off_destination_degrees": 0.0,
     }
 
 
 # A marine's turns, setting off while it turns, and a thor's, setting off once it faces where it goes (in game).
-_MARINE_TURNS = [_turn(45.0, [0.0, 42.2, 0.0], 3), _turn(170.0, [0.0, 62.582, 52.3, 52.3, 0.0], 3)]
-_THOR_TURNS = [_turn(45.0, [0.0, 45.0, 0.0], 3), _turn(170.0, [0.0, 45.04, 45.0, 40.0, 40.0, 0.0], 6)]
-_COLOSSUS_TURNS = [_turn(45.0, [0.0, 0.0, 0.0], 3), _turn(170.0, [0.0, 0.0, 0.0], 3)]
+_MARINE_TURNS = [_turn(45.0, [0.0, 42.2], 3), _turn(170.0, [0.0, 62.582, 52.3, 52.3], 3)]
+_THOR_TURNS = [_turn(45.0, [0.0, 45.0], 3), _turn(170.0, [0.0, 45.04, 45.0, 40.0, 40.0], 6)]
+_COLOSSUS_TURNS = [_turn(45.0, [], 3), _turn(170.0, [], 3)]
 
 
 def _shot(target: str, off_facing_degrees: float, turned_degrees: float, *, fired: bool = True) -> dict[str, object]:
@@ -57,9 +57,12 @@ def _findings(turning: dict[str, Any] | None = None, firing: dict[str, Any] | No
 
 
 class TestReadingTheTurns:
-    def test_a_types_rate_is_the_most_it_turned_in_a_step_to_a_tenth_of_a_degree(self) -> None:
-        turning = _generator().read(_findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS}))
-        assert turning.turn_rate_degrees == {UnitTypeId.MARINE: 62.6, UnitTypeId.THOR: 45.0}
+    def test_a_types_rate_is_the_most_it_turned_in_a_step_to_the_nearest_half_degree(self) -> None:
+        """A full step comes back up to 0.11 degrees either side of the rate, in single precision (in game)."""
+        viper_turns = [_turn(45.0, [0.0, 43.1], 3), _turn(170.0, [0.0, 62.471, 53.1, 52.8], 3)]
+        findings = _findings({"MARINE": _MARINE_TURNS, "THOR": _THOR_TURNS, "VIPER": viper_turns})
+        turning = _generator().read(findings)
+        assert turning.turn_rate_degrees == {UnitTypeId.MARINE: 62.5, UnitTypeId.THOR: 45.0, UnitTypeId.VIPER: 62.5}
 
     def test_a_type_that_set_off_only_once_it_faced_where_it_went_is_set_apart(self) -> None:
         """A turn of one step shows nothing of it: every type sets off after that."""
@@ -73,6 +76,11 @@ class TestReadingTheTurns:
     def test_a_type_that_turned_in_some_trials_and_not_others_is_refused(self) -> None:
         with pytest.raises(ValueError, match="turned in some trials"):
             _generator().read(_findings({"MARINE": [*_MARINE_TURNS, _COLOSSUS_TURNS[0]]}))
+
+    def test_a_type_that_never_set_off_is_refused(self) -> None:
+        held_up = [*_MARINE_TURNS, _turn(90.0, [0.0, 43.6, 43.7], None)]
+        with pytest.raises(ValueError, match="never set off when ordered to move 90.0 degrees"):
+            _generator().read(_findings({"MARINE": held_up}))
 
     def test_a_type_with_no_turn_of_two_steps_is_refused(self) -> None:
         with pytest.raises(ValueError, match="no turn of a MARINE took two steps"):

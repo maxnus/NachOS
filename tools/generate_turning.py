@@ -1,11 +1,12 @@
 """Generate `sc2nachos/gamedata/_turning.py` from `data/turning.json`, written by `tools/sweep_turning.py`.
 
-For each type the sweep turned, the most it turned in one step, rounded to `_RATE_DECIMALS` places, and whether it set
+For each type the sweep turned, the most it turned in one step, to the nearest `_RATE_STEP_DEGREES`, and whether it set
 off before its turn ended in any turn of two steps or more; a type whose facing never changed is left out, as it turns
 not at all. For each type the sweep set upon a target on the ground or in the air, whether it turned to face the target
 before its first shot, from the shots at `_WIDE_ANGLE_DEGREES` or more off its facing; a type that fired at no target
 there is left out. Refuses findings with a trial the sweep could not set up, a type that turned in some trials and not
-others, or one that turned before some shots and not others. Runs without StarCraft II::
+others or never set off when ordered to move, or one that turned before some shots and not others. Runs without
+StarCraft II::
 
     uv run python tools/generate_turning.py
 """
@@ -21,10 +22,9 @@ from sc2nachos.ids import UnitTypeId
 REPO = Path(__file__).parents[1]
 INPUT = REPO / "data" / "turning.json"
 OUTPUT = REPO / "src" / "sc2nachos" / "gamedata" / "_turning.py"
-# A rate is kept to this many decimal places of a degree: a facing comes back in single precision.
-_RATE_DECIMALS = 1
-# A turn this small in a step is no turn, as the sweep counts them.
-_SMALLEST_TURN_DEGREES = 0.05
+# A rate is kept to the nearest of these: a facing comes back in single precision, and every full step of a type that
+# turns 22.5, 45 or 62.5 degrees a step came out within 0.11 of it (in game).
+_RATE_STEP_DEGREES = 0.5
 # The shots that tell whether an attacker turns to fire: those at a target this far off its facing or more, which no
 # attacker that turns could have fired at without turning most of the way.
 _WIDE_ANGLE_DEGREES = 90.0
@@ -74,7 +74,8 @@ def read(findings: Mapping[str, Any]) -> Turning:
             continue
         if not all(turned_at_all):
             raise ValueError(f"a {name} turned in some trials and not in others")
-        turn_rate_degrees[unit_type] = round(max(turn["largest_turn_degrees"] for turn in turns), _RATE_DECIMALS)
+        largest_turn_degrees = max(turn["largest_turn_degrees"] for turn in turns)
+        turn_rate_degrees[unit_type] = round(largest_turn_degrees / _RATE_STEP_DEGREES) * _RATE_STEP_DEGREES
         if not _sets_off_while_turning(name, turns):
             set_off_only_facing.add(unit_type)
     turns_to_fire = {target: _turns_to_fire_at(findings["firing"], target) for target in (_GROUND_TARGET, _AIR_TARGET)}
@@ -88,21 +89,13 @@ def read(findings: Mapping[str, Any]) -> Turning:
 
 def _sets_off_while_turning(name: str, turns: Sequence[Mapping[str, Any]]) -> bool:
     """Whether a type set off before its turn ended in any of `turns` that took two steps or more."""
-    long_turns = [turn for turn in turns if len(_turning_steps(turn["turned_degrees"])) >= 2]
+    if never_moving := next((turn for turn in turns if turn["steps_until_moving"] is None), None):
+        angle = never_moving["ordered_off_facing_degrees"]
+        raise ValueError(f"a {name} never set off when ordered to move {angle} degrees off its facing")
+    long_turns = [turn for turn in turns if turn["turning_steps"] >= 2]
     if not long_turns:
         raise ValueError(f"no turn of a {name} took two steps, which shows whether it sets off while turning")
     return any(turn["steps_until_moving"] <= turn["steps_until_turned"] for turn in long_turns)
-
-
-def _turning_steps(turned_degrees: Sequence[float]) -> list[int]:
-    """The first steps of `turned_degrees` that turned, one after another, as the sweep counts them."""
-    run: list[int] = []
-    for index, turned in enumerate(turned_degrees):
-        if abs(turned) > _SMALLEST_TURN_DEGREES:
-            run.append(index)
-        elif run:
-            break
-    return run
 
 
 def _turns_to_fire_at(firing: Mapping[str, Sequence[Mapping[str, Any]]], target: str) -> dict[UnitTypeId, bool]:
@@ -158,6 +151,7 @@ def render(turning: Turning, base_build: int) -> str:
 
 
 def _sorted_by_name(unit_types: Iterable[UnitTypeId]) -> list[UnitTypeId]:
+    """`unit_types` in the order of their names."""
     return sorted(unit_types, key=lambda unit_type: unit_type.name)
 
 

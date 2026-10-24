@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     from sc2nachos.units._values import UnitOrder
 
 _VISIBLE = raw_pb2.DisplayType.Visible
-# A unit this close to facing a target faces it: an attacker fires facing its target to within a degree (in game).
+# A unit this close to facing a target counts as facing it: most attackers fire facing their target to within a
+# degree (in game), though a zealot, a reaper and a marauder were seen to fire some 10 degrees off.
 _FACING_TOLERANCE = math.radians(1.0)
 # A unit ordered to move begins its turn in the step after the order (in game).
 _STEPS_FOR_AN_ORDER_TO_LAND = 1
