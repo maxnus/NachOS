@@ -1752,6 +1752,7 @@ TECH_TREE: Final = TechTree(
             UnitTypeId.ULTRALISK_CAVERN: UnitTypeId.DRONE,
             UnitTypeId.VIKING_LANDED: UnitTypeId.VIKING,
             UnitTypeId.VIPER: UnitTypeId.LARVA,
+            UnitTypeId.WARP_GATE: UnitTypeId.GATEWAY,
             UnitTypeId.WARP_PRISM_PHASING: UnitTypeId.WARP_PRISM,
             UnitTypeId.WIDOW_MINE_BURROWED: UnitTypeId.WIDOW_MINE,
             UnitTypeId.ZERGLING: UnitTypeId.LARVA,

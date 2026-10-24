@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Attribute, TargetDomain
+from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
+from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
@@ -695,6 +696,37 @@ class Unit[K: UnitType.AnyType]:
                 self._radius_footprint = Footprint.square(side)
             return self._radius_footprint
         return row.footprint
+
+    @property
+    def required_repair_cost(self) -> Cost | None:
+        """What one SCV's repair of the unit from its health now to whole takes: the steps and resources of
+        `total_repair_cost` for the share of its health missing, each rounded up to a whole one (in game), and nothing
+        for a unit whole. `None` wherever `total_repair_cost` is."""
+        return self._repair_cost_of(self.health_max - self.health)
+
+    @property
+    def total_repair_cost(self) -> Cost | None:
+        """What one SCV's repair of a unit of this type from no health to whole takes: the steps its type costs, but for
+        a MULE, an auto-turret, a widow mine and an add-on standing on its own, and a quarter of the resources its type
+        costs, each rounded up, with no supply (in game). `None` for a structure under construction, which an SCV is
+        refused, and for any type but a Terran mechanical one. `docs/reference/game-behavior/damage-and-buffs.md` has
+        what was measured."""
+        return self._repair_cost_of(self.health_max)
+
+    def _repair_cost_of(self, missing_health: float) -> Cost | None:
+        """What one SCV's repair of `missing_health` of the unit takes; `None` wherever `total_repair_cost` is."""
+        type_data = self.type_data
+        is_terran_and_mechanical = type_data.race is Race.TERRAN and Attribute.MECHANICAL in type_data.attributes
+        if not is_terran_and_mechanical or not self.is_complete:
+            return None
+        type_cost, health_max = type_data.cost, self.health_max
+        whole_repair_steps = REPAIR_STEPS_EXCEPTIONS.get(self.type_id, type_cost.steps)
+        # Multiplied out before the one division, so that a whole number of resources comes out whole.
+        return Cost(
+            math.ceil(missing_health * type_cost.minerals * REPAIR_COST_FRACTION / health_max),
+            math.ceil(missing_health * type_cost.vespene * REPAIR_COST_FRACTION / health_max),
+            steps=math.ceil(whole_repair_steps * missing_health / health_max),
+        )
 
     # Combat.
 

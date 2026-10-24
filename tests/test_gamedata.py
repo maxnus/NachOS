@@ -1,6 +1,7 @@
 """The game data, from tables written here and from the recorded games."""
 
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from sc2nachos.gamedata import (
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _derived_cost
+from sc2nachos.gamedata._game_data import _build_steps_of_stages_that_cost
 from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
@@ -177,9 +179,10 @@ class TestResources:
 
 
 class TestCost:
-    def test_a_cost_adds_subtracts_and_scales_its_supply_with_the_rest(self) -> None:
+    def test_a_cost_adds_subtracts_and_scales_its_supply_and_steps_with_the_rest(self) -> None:
         marine = Cost(50, 0, 1)
         assert marine + Cost(100, 25, 2) == Cost(150, 25, 3)
+        assert Cost(50, 0, 1, steps=400) + Cost(100, 25, 2, steps=640) == Cost(150, 25, 3, steps=1040)
         assert Cost(550, 0, 0) - Cost(400, 0, 0) == Cost(150, 0)
         assert 3 * marine == marine * 3 == Cost(150, 0, 3)
 
@@ -201,7 +204,7 @@ class TestReadingTheTables:
         marine = data.units[UnitTypeId.MARINE]
         assert marine.id is UnitTypeId.MARINE
         assert marine.race is Race.TERRAN
-        assert marine.cost == Cost(minerals=50, vespene=0, supply=1)
+        assert marine.cost == Cost(minerals=50, vespene=0, supply=1, steps=400)
         assert marine.attributes == {Attribute.LIGHT, Attribute.BIOLOGICAL}
         assert marine.creation_ability is AbilityId.BARRACKS_TRAIN_MARINE
 
@@ -240,7 +243,13 @@ class TestReadingTheTables:
 
     def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
-        assert data.units[UnitTypeId.MARINE].build_steps == 400.0
+        assert data.units[UnitTypeId.MARINE].build_steps == 400
+
+    def test_a_fractional_build_time_is_rounded_up_to_the_whole_step_a_train_takes(self) -> None:
+        """A void ray's 963.2 took 964 steps to train (in game)."""
+        void_ray = data_pb2.UnitTypeData(unit_id=UnitTypeId.VOID_RAY, build_time=963.19921875)
+        unit_row = GameData(sc2api_pb2.ResponseData(units=[void_ray])).units[UnitTypeId.VOID_RAY]
+        assert (unit_row.build_steps, unit_row.cost.steps) == (964, 964)
 
     def test_a_type_the_table_gives_no_build_time_takes_that_of_what_its_creation_ability_builds(self) -> None:
         """A rich refinery's row reads no build time on the ladder, and the refinery an SCV's build puts up on a rich
@@ -249,6 +258,20 @@ class TestReadingTheTables:
         rich = data_pb2.UnitTypeData(unit_id=UnitTypeId.REFINERY_RICH, unit_alias=UnitTypeId.REFINERY)
         data = GameData(sc2api_pb2.ResponseData(units=[refinery, rich]))
         assert data.units[UnitTypeId.REFINERY_RICH].build_steps == 480.0
+        assert data.units[UnitTypeId.REFINERY_RICH].cost.steps == 480.0
+
+    def test_a_morph_whose_source_has_no_row_costs_its_own_steps_alone(self) -> None:
+        orbital = data_pb2.UnitTypeData(unit_id=UnitTypeId.ORBITAL_COMMAND, mineral_cost=550, build_time=560.0)
+        data = GameData(sc2api_pb2.ResponseData(units=[orbital]))
+        assert data.units[UnitTypeId.ORBITAL_COMMAND].cost.steps == 560.0
+
+    def test_counting_a_types_steps_stops_at_a_stage_it_passed(self) -> None:
+        """No table makes two types each other's source, but one that did would not loop."""
+        game_data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
+        marine = replace(game_data.units[UnitTypeId.MARINE], morphed_from=UnitTypeId.MARAUDER)
+        marauder = replace(marine, id=UnitTypeId.MARAUDER, cost=Cost(100, 25, 2), morphed_from=UnitTypeId.MARINE)
+        unit_rows = {UnitTypeId.MARINE: marine, UnitTypeId.MARAUDER: marauder}
+        assert _build_steps_of_stages_that_cost(marine, unit_rows) == 2 * marine.build_steps
 
     def test_a_weapon_says_what_it_hits_and_how_long_it_waits(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
@@ -436,8 +459,8 @@ class TestReadingTheTables:
         )
         data = GameData(sc2api_pb2.ResponseData(upgrades=[stimpack]))
         row = data.upgrades[UpgradeId.STIMPACK]
-        assert row.cost == Cost(minerals=100, vespene=100)
-        assert row.research_steps == 2240 and isinstance(row.research_steps, int)
+        assert row.cost == Cost(minerals=100, vespene=100, steps=2240)
+        assert isinstance(row.cost.steps, int)
         assert row.research_ability is AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 
     def test_an_effect_is_read_with_the_ground_it_covers(self) -> None:
@@ -517,14 +540,15 @@ class TestARecordedGamesTables:
         assert lost == _NO_MAKER
 
     def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
-        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing."""
+        """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing. Every other
+        type takes its row's, rounded up."""
         answer = _answer(path)
         data = GameData(answer)
-        tabled = {row.unit_id: row.build_time for row in answer.units}
+        tabled = {row.unit_id: math.ceil(row.build_time) for row in answer.units}
         borrowed = {unit_type for unit_type, row in data.units.items() if row.build_steps != tabled[unit_type]}
         assert borrowed <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
-            assert data.units[rich].build_steps == data.units[plain].build_steps == 480.0, rich.name
+            assert data.units[rich].build_steps == data.units[plain].build_steps == 480, rich.name
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
@@ -747,10 +771,57 @@ class TestARecordedGamesTables:
         # The build time is the morph alone, shorter than building what it morphed from.
         assert data.units[UnitTypeId.ORBITAL_COMMAND].build_steps < data.units[UnitTypeId.COMMAND_CENTER].build_steps
 
+    def test_a_types_steps_are_those_of_each_of_its_stages_that_costs_something(self, path: Path) -> None:
+        """A morph adds its source's steps, and a switch that costs nothing adds none, so every form of a unit costs
+        the same steps. A drone's are in what it becomes, as its 50 minerals are."""
+        unit_rows = _tables(path).units
+
+        def build_steps_of(unit_type: UnitTypeId) -> float:
+            """The tables' build steps of `unit_type` alone."""
+            return unit_rows[unit_type].build_steps
+
+        assert unit_rows[UnitTypeId.MARINE].cost.steps == build_steps_of(UnitTypeId.MARINE)
+        orbital_command, spawning_pool = unit_rows[UnitTypeId.ORBITAL_COMMAND], unit_rows[UnitTypeId.SPAWNING_POOL]
+        assert orbital_command.cost.steps == build_steps_of(UnitTypeId.COMMAND_CENTER) + orbital_command.build_steps
+        assert spawning_pool.cost.steps == build_steps_of(UnitTypeId.DRONE) + spawning_pool.build_steps
+        for switched_type, unswitched_type in (
+            (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
+            (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
+            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitTypeId.SUPPLY_DEPOT),
+            (UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.ORBITAL_COMMAND),
+            (UnitTypeId.WARP_GATE, UnitTypeId.GATEWAY),
+        ):
+            assert unit_rows[switched_type].cost.steps == unit_rows[unswitched_type].cost.steps, switched_type.name
+
+    def test_an_order_takes_the_steps_of_what_it_makes_and_a_switch_none(self, path: Path) -> None:
+        game_data = _tables(path)
+        ability_rows, unit_rows = game_data.abilities, game_data.units
+        assert ability_rows[AbilityId.BARRACKS_TRAIN_MARINE].cost.steps == unit_rows[UnitTypeId.MARINE].build_steps
+        orbital_morph = ability_rows[AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND]
+        assert orbital_morph.cost.steps == unit_rows[UnitTypeId.ORBITAL_COMMAND].build_steps
+        stimpack_research = ability_rows[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
+        assert stimpack_research.cost.steps == game_data.upgrades[UpgradeId.STIMPACK].cost.steps
+        switch_abilities = (AbilityId.SIEGE, AbilityId.UNSIEGE, AbilityId.LIFT)
+        assert [ability_rows[switch_ability].cost.steps for switch_ability in switch_abilities] == [0] * 3
+
+    def test_a_cost_written_down_takes_the_steps_the_tables_give_what_it_makes_or_none(self, path: Path) -> None:
+        """So an entry whose product's build time changes in a patch fails here, rather than going stale."""
+        game_data = _tables(path)
+        for ability, written_cost in COST_OVERRIDES.items():
+            ability_row = game_data.abilities.get(ability)
+            products = ability_row.products.values() if ability_row is not None else ()
+            build_steps_of_products = {
+                game_data.units[product].build_steps
+                for product in products
+                if isinstance(product, UnitTypeId) and product in game_data.units
+            }
+            assert written_cost.steps in {0.0, *build_steps_of_products}, f"{ability.name}: {written_cost.steps}"
+
     def test_an_ability_is_charged_what_the_game_takes_as_it_is_ordered(self, path: Path) -> None:
-        """Not what its type's row holds, which for a morph is everything spent to reach it."""
+        """Not what its type's row holds, which for a morph is everything spent to reach it. A refund shows no steps,
+        so they are left out here."""
         data = _tables(path)
-        charged = {ability: data.abilities[ability].cost for ability in _CHARGED}
+        charged = {ability: replace(data.abilities[ability].cost, steps=0.0) for ability in _CHARGED}
         assert charged == _CHARGED
 
     def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
@@ -769,18 +840,18 @@ class TestARecordedGamesTables:
             assert _derived(data, ability) != cost, f"the tables now charge {ability.name} {cost}"
 
     def test_an_action_several_types_perform_costs_what_each_makes_and_each_level_its_own(self, path: Path) -> None:
-        """Every tech lab is 50/25, and each level of a research is priced apart."""
+        """Every tech lab is 50/25 and 400 steps, and each level of a research is priced apart."""
         data = _tables(path)
-        assert data.abilities[AbilityId.BUILD_TECH_LAB].cost == Cost(50, 25)
+        assert data.abilities[AbilityId.BUILD_TECH_LAB].cost == Cost(50, 25, steps=400)
         levels = (
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
             AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3,
         )
         assert [data.abilities[level].cost for level in levels] == [
-            Cost(100, 100),
-            Cost(150, 150),
-            Cost(200, 200),
+            Cost(100, 100, steps=2560),
+            Cost(150, 150, steps=3040),
+            Cost(200, 200, steps=3520),
         ]
 
     def test_what_an_action_makes_costs_the_same_whichever_type_carries_it_out(self, path: Path) -> None:
@@ -873,7 +944,7 @@ class TestARecordedGamesTables:
         data = _tables(path)
         for upgrade in UpgradeId:
             row = data.upgrades[upgrade]
-            assert row.research_steps > 0
+            assert row.cost.steps > 0
             assert row.research_ability is not None, f"{upgrade} cannot be researched"
 
     def test_a_misnamed_research_ability_stands_in_only_where_the_table_names_a_dead_one(self, path: Path) -> None:

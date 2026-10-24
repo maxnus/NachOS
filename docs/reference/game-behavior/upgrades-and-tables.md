@@ -58,6 +58,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
   and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
   longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
+- A train takes its row's build time rounded up to a whole step, counted from the step the order is sent after to the
+  step its unit is first listed: a void ray 964 of its 963.2, a zealot 608 and a drone 272 of theirs. A unit's morph
+  does not keep to its row: an overseer took 267 of its 266.68, a brood lord 542 of 541.35, an overlord transport 336 of
+  336.02, two banelings 319 of 320, a ravager 271 of 272 and two lurkers 403 of 553.33 (probe in #159, under `free` and
+  `food`, local game, Linux build 75689).
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
   done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
   give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).

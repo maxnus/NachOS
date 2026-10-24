@@ -165,8 +165,9 @@ budget = api.resources - api.orders.pending_cost.resources
 
 `pending_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,
 and nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the
-difference for a morph, 150 for an orbital command rather than its type's 550; and `cost.supply` is what the ability
-takes of the cap as it starts.
+difference for a morph, 150 for an orbital command rather than its type's 550; `cost.supply` is what the ability takes
+of the cap as it starts; and `cost.steps` how long it takes at the normal rate, 560 steps for the orbital command, and
+none for a switch that costs nothing, such as a siege.
 
 A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted
 structure, which lands first (in game). A bot that would rather pay on arrival moves the worker itself and orders the
