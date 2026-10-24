@@ -38,7 +38,7 @@ import tempfile
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -48,23 +48,18 @@ from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_p
 
 from sc2nachos import Api, Computer, Difficulty, Race, run_local, run_recording, run_replay
 from sc2nachos.launch import GameProcess, Installation
-from sc2nachos.protocol import Recording, WebSocketTransport
+from sc2nachos.protocol import ConnectionClosedError, Recording, WebSocketTransport
+from sc2nachos.protocol._client import _raw_interface
 
 _DEMO_BOT = Path(__file__).parents[1] / "examples" / "demo_bot.py"
 _GAME_SECONDS = 300
 _STEPS_PER_TURN = 8
 _IN_REPLAY = sc2api_pb2.Status.in_replay
-_ENDED = sc2api_pb2.Status.ended
-_INTERFACE = sc2api_pb2.InterfaceOptions(
-    raw=True,
-    score=True,
-    show_cloaked=True,
-    show_burrowed_shadows=True,
-    show_placeholders=True,
-    raw_crop_to_playable_area=False,
-)
+_ENDED_STATUS = sc2api_pb2.Status.ended
+# The interface NachOS plays a replay back on, so that the sweep sees what the library does.
+_RAW_INTERFACE = _raw_interface(raw_affects_selection=False)
 _MOVE_ABILITY = 16
-_SCV = 45
+_SCV_TYPE = 45
 # The steps at which `views` compares the views.
 _VIEW_STEPS = (0, 2240, 4480, 6712)
 _UNIT_FIELDS = ("type", "owner", "display", "x", "y", "health", "shield", "energy", "orders")
@@ -118,7 +113,9 @@ def _replay_client(installation: Installation) -> Iterator[WebSocketTransport]:
         try:
             yield transport
         finally:
-            transport.request(sc2api_pb2.Request(quit=sc2api_pb2.RequestQuit()))
+            # A client that died mid-sweep cannot quit, and the error that stopped the sweep is the one to see.
+            with suppress(ConnectionClosedError):
+                transport.request(sc2api_pb2.Request(quit=sc2api_pb2.RequestQuit()))
             transport.close()
 
 
@@ -172,7 +169,7 @@ def _start_replay(
     and return what the game answered and how long it took."""
     if _answer_to(transport, ping=sc2api_pb2.RequestPing()).status != sc2api_pb2.Status.launched:
         _answer_to(transport, leave_game=sc2api_pb2.RequestLeaveGame())
-    request = sc2api_pb2.RequestStartReplay(observed_player_id=player, options=_INTERFACE, disable_fog=disable_fog)
+    request = sc2api_pb2.RequestStartReplay(observed_player_id=player, options=_RAW_INTERFACE, disable_fog=disable_fog)
     if replay_data is not None:
         request.replay_data = replay_data
     if replay_path is not None:
@@ -294,10 +291,11 @@ def _compare_with_the_recording(transport: WebSocketTransport, replay_data: byte
 def _view_at_steps(
     transport: WebSocketTransport, replay_data: bytes, *, player: int, disable_fog: bool
 ) -> dict[int, dict[str, Any]]:
-    """What the replay shows `player` at each of `_VIEW_STEPS`, with the tags it lists."""
+    """What the replay shows `player` at each of `_VIEW_STEPS`, with the tags it lists. Raises `RuntimeError` if the
+    game refuses to start it."""
     start = _start_replay(transport, player=player, disable_fog=disable_fog, replay_data=replay_data)
     if start["errors"] or start["error"]:
-        return {-1: {"start": start}}
+        raise RuntimeError(f"the game refused to play the replay back as player {player}: {start}")
     seen: dict[int, dict[str, Any]] = {}
     for step in _VIEW_STEPS:
         observation = _observe_the_replay(transport).observation
@@ -399,7 +397,7 @@ def sweep_views(installation: Installation, replay: Path, recording: Path) -> di
 def _requests_in_a_replay(transport: WebSocketTransport) -> dict[str, Any]:
     """What the game answers each request a bot makes besides observing, in a replay."""
     units = _observe_the_replay(transport).observation.observation.raw_data.units
-    scv = next(unit for unit in units if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type == _SCV)
+    scv = next(unit for unit in units if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type == _SCV_TYPE)
     point = common_pb2.Point2D(x=60, y=60)
     move = raw_pb2.ActionRawUnitCommand(ability_id=_MOVE_ABILITY, target_world_space_pos=point, unit_tags=[scv.tag])
     camera = raw_pb2.ActionRawCameraMove(center_world_space=common_pb2.Point(x=60, y=60))
@@ -469,7 +467,7 @@ def _replay_of_a_game_won(installation: Installation) -> bytes:
         victory = debug_pb2.DebugEndGame(end_result=debug_pb2.DebugEndGame.DeclareVictory)
         request(sc2api_pb2.Request(debug=sc2api_pb2.RequestDebug(debug=[debug_pb2.DebugCommand(end_game=victory)])))
         for _ in range(16):
-            if request(sc2api_pb2.Request(observation=sc2api_pb2.RequestObservation())).status == _ENDED:
+            if request(sc2api_pb2.Request(observation=sc2api_pb2.RequestObservation())).status == _ENDED_STATUS:
                 break
             request(sc2api_pb2.Request(step=sc2api_pb2.RequestStep(count=2)))
         return request(sc2api_pb2.Request(save_replay=sc2api_pb2.RequestSaveReplay())).save_replay.data
@@ -557,7 +555,7 @@ def sweep_speed(installation: Installation, replay: Path, recording: Path) -> di
     return findings
 
 
-_SWEEPS: dict[str, Callable[[Installation, Path, Path], object]] = {
+_SWEEPS_BY_NAME: dict[str, Callable[[Installation, Path, Path], object]] = {
     "views": sweep_views,
     "requests": sweep_requests_answered,
     "ending": sweep_ending,
@@ -568,17 +566,17 @@ _SWEEPS: dict[str, Callable[[Installation, Path, Path], object]] = {
 def main(argv: Sequence[str]) -> None:
     """Play the shared game, run the sweeps named, or all of them, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("sweeps", nargs="*", help=f"{', '.join(_SWEEPS)}; all when none are named")
+    parser.add_argument("sweeps", nargs="*", help=f"{', '.join(_SWEEPS_BY_NAME)}; all when none are named")
     parser.add_argument("--out", type=Path, default=Path("replays.json"), help="where to write the findings")
     arguments = parser.parse_args(argv)
-    if unknown := set(arguments.sweeps) - set(_SWEEPS):
+    if unknown := set(arguments.sweeps) - set(_SWEEPS_BY_NAME):
         raise SystemExit(f"No sweep is called {', '.join(sorted(unknown))}")
     installation = Installation.find()
     with tempfile.TemporaryDirectory() as directory:
         replay, recording = _record_the_shared_game(Path(directory))
         findings = {
             name: sweep(installation, replay, recording)
-            for name, sweep in _SWEEPS.items()
+            for name, sweep in _SWEEPS_BY_NAME.items()
             if name in arguments.sweeps or not arguments.sweeps
         }
     arguments.out.write_text(json.dumps(findings, indent=2, default=str, ensure_ascii=False), encoding="utf-8")

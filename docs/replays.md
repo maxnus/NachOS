@@ -34,8 +34,7 @@ window=(1024, 768))` returns how the replay ended for that player.
   under others ([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)).
 
 To follow both sides, play the replay once as each. Any other `player_id` raises `ValueError`, 0 included: the game's
-player 0 lists every unit, but as nobody's, the map's minerals as its own and both players' units as neutral, with no
-minerals, supply, score, vision or actions.
+player 0 is no player's view ([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)).
 
 ## What the api can do in a replay
 

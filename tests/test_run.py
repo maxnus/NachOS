@@ -3,7 +3,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from loguru import logger
@@ -28,7 +28,7 @@ from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.constants import steps_to_seconds
 from sc2nachos.events import OwnActionEvent, TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
+from sc2nachos.launch import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
 from sc2nachos.protocol import (
     Client,
@@ -40,7 +40,7 @@ from sc2nachos.protocol import (
     WebSocketTransport,
 )
 from sc2nachos.state import UnitCommand
-from support import make_response, recorded_observations, write_recording
+from support import FakeTransport, make_response, recorded_observations, write_recording
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -547,6 +547,98 @@ def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
     assert any("tech tree" in message for message in messages) is warned
 
 
+class _ClientLaunched:
+    """A game client `run_replay` launched, which records whether it was stopped."""
+
+    def __init__(self) -> None:
+        self.url = "ws://127.0.0.1:1/sc2api"
+        self.terminated = False
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.terminate()
+
+
+class TestTheReplaysBuild:
+    """Which client `run_replay` starts for a replay, stopped where it would start playing."""
+
+    _NEWEST = TECH_TREE.base_build + 1
+    _OLDER = TECH_TREE.base_build
+
+    def _run(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        installed: tuple[int, ...],
+        replay_build: int,
+        raising: type[Exception] = _ClientStarted,
+    ) -> tuple[list[int | None], list[_ClientLaunched]]:
+        """Run `run_replay` on an installation of the `installed` builds for a replay of `replay_build`, where it would
+        connect to play raising `_ClientStarted`, expecting it to raise `raising`, and return the builds it launched and
+        the clients."""
+        for build in installed:
+            (tmp_path / "Versions" / f"Base{build}").mkdir(parents=True)
+        replay = tmp_path / "game.SC2Replay"
+        replay.write_bytes(b"the replay")
+        launched_builds: list[int | None] = []
+        launched_clients: list[_ClientLaunched] = []
+
+        def launch(installation: Installation, **kwargs: Any) -> _ClientLaunched:
+            launched_builds.append(kwargs.get("base_build"))
+            if launched_clients and not launched_clients[0].terminated:
+                raise AssertionError("a second client was started while the first still ran")
+            if len(launched_builds) > 1:
+                raise _ClientStarted
+            launched_clients.append(_ClientLaunched())
+            return launched_clients[-1]
+
+        def connect(url: str) -> FakeTransport:
+            info = sc2api_pb2.ResponseReplayInfo(base_build=replay_build)
+            info.player_info.add().player_info.CopyFrom(sc2api_pb2.PlayerInfo(player_id=1))
+            return FakeTransport(make_response(Status.LAUNCHED, replay_info=info))
+
+        def connect_to_play(url: str, record_to: Path | str | None) -> Client:
+            raise _ClientStarted
+
+        monkeypatch.setattr(GameProcess, "launch", launch)
+        monkeypatch.setattr(WebSocketTransport, "connect", connect)
+        monkeypatch.setattr(sc2nachos.run, "_connect", connect_to_play)
+        with pytest.raises(raising):
+            run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
+        return launched_builds, launched_clients
+
+    def test_a_replay_of_the_newest_build_installed_plays_on_the_client_that_read_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        installed = (self._OLDER, self._NEWEST)
+        launched, clients = self._run(tmp_path, monkeypatch, installed=installed, replay_build=self._NEWEST)
+        assert launched == [self._NEWEST]
+        assert clients[0].terminated
+
+    def test_a_replay_of_an_older_build_installed_stops_that_client_and_starts_its_own(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        installed = (self._OLDER, self._NEWEST)
+        launched, clients = self._run(tmp_path, monkeypatch, installed=installed, replay_build=self._OLDER)
+        assert launched == [self._NEWEST, self._OLDER]
+        assert clients[0].terminated
+
+    def test_a_replay_of_a_build_not_installed_is_refused_once_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        launched, clients = self._run(
+            tmp_path, monkeypatch, installed=(self._NEWEST,), replay_build=self._OLDER, raising=GameVersionError
+        )
+        assert launched == [self._NEWEST]
+        assert clients[0].terminated
+
+
 @pytest.mark.integration
 def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay_and_recording_are_read(
     tmp_path: Path,
@@ -657,8 +749,10 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
     as_the_bot = _GameWatcher()
     assert run_replay(replay, as_the_bot.api, player_id=1, steps_per_turn=8, record_to=record) is Result.UNDECIDED
     assert (as_the_bot.api.player.id, as_the_bot.api.enemy.id) == (1, 2)
+    # Only the last turn may be the game's alone or the replay's alone: they end differently.
+    last_steps = {max(played.own_units), max(as_the_bot.own_units)}
+    assert played.own_units.keys() ^ as_the_bot.own_units.keys() <= last_steps
     steps_in_both = played.own_units.keys() & as_the_bot.own_units.keys()
-    assert len(steps_in_both) >= len(played.own_units) - 1
     assert all(played.own_units[step] == as_the_bot.own_units[step] for step in steps_in_both)
     assert as_the_bot.orders_given == played.orders_given
 

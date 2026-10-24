@@ -151,8 +151,8 @@ def run_replay(
     newest_build = installation.build_to_launch()
     with ExitStack() as running:
         game = running.enter_context(GameProcess.launch(installation, base_build=newest_build, window=window))
-        with closing(Client(WebSocketTransport.connect(game.url))) as reader:
-            info = reader.replay_info(replay_data)
+        with closing(Client(WebSocketTransport.connect(game.url))) as info_client:
+            info = info_client.replay_info(replay_data)
         _check_replay_player(info, player_id)
         if info.base_build != newest_build:
             replay_build = installation.build_to_launch(base_build=info.base_build)
