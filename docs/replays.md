@@ -75,9 +75,8 @@ remembers in the fog listed as copies, as the game lists them with the fog on
 ([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)). Played back a step at a turn, the
 player's view reads as a playback with the fog on does, at every step. A structure that died or moved off out of sight
 is forgotten once the tile under it reads in sight, which may come at another step than with the fog on. With more
-steps a turn, a geyser remembered in the fog was seen to come under a new tag between two turns with the fog on, which
-NachOS reads as one found dead and another first seen, where with the fog off it stays the one unit
-([not understood yet](reference/game-behavior/not-understood-yet.md)).
+steps a turn, a structure or geyser seen and lost again between two turns comes under a new tag with the fog on, and
+stays the one unit in both views ([game behavior](reference/game-behavior/units.md#what-an-observation-lists)).
 
 ## What the api can do in a replay
 

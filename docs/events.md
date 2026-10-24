@@ -237,6 +237,13 @@ A handler of `AnyUnitDiedEvent` gets all three kinds; a unit of an ally's gets n
 killed dead ([game behavior](reference/game-behavior/units.md#units-coming-changing-and-going)). A unit created
 and dead within one observation gets both its creation and its death, in that order.
 
+A structure in the fog that was seen and lost again between two turns comes back under a new tag at its spot, and
+stays the one unit, with no event. So does one killed out of sight and built again on its spot and seen so, since the
+game shows the two alike ([game behavior](reference/game-behavior/units.md#what-an-observation-lists)): it is taken
+for the old one, and one of another type for the old one changing type, with an `EnemyUnitTypeChangedEvent`, until
+its spot is in sight at a turn, when the old one comes as a `UnitFoundDeadEvent` and the new one as an
+`EnemyUnitFirstSeenEvent`.
+
 ### Actions, chat and alerts
 
 | event | fields | selected by | comes when |

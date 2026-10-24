@@ -24,10 +24,6 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   6720. In a game of two and in a realtime game, where nothing had been observed, each read back the step it was saved
   at (tool `sweep_requests`, `replay`, build 75689). One saved at a 300 second time limit, just after the observation
   at step 6720, read back 6720 and played back to 6720 (tool `sweep_replays`, `ending`, build 75689).
-- **Why a geyser remembered in the fog came under a new tag.** Played back with the fog on, 8 steps a turn, the copy
-  of a geyser player 1's SCV had passed took another tag between steps 696 and 704 of one of four games while it stayed
-  `Snapshot`, as a structure's copy does each time it goes out of sight, so it may have been seen in between; the
-  fog-off view kept the geyser under its own tag (tool `sweep_replays`, `scouting`, build 75689).
 - **Why an enemy SCV far from any tile in sight is `Visible`.** Played back as player 1 two seconds after its marine
   was killed in the enemy's main, both the fog-on and the fog-off view list an enemy SCV the marine had damaged as
   `Visible`, 128 from the nearest tile player 1 sees (tool `sweep_replays`, `unseen`, build 75689).

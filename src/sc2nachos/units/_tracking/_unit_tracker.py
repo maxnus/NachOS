@@ -235,18 +235,21 @@ class _UnitTracker:
         new unit.
 
         A structure going out of sight is replaced, in the same observation, by a fog copy at the same position under
-        a new tag. A fog copy shown visible swaps the other way only for a unit never seen visible, such as a mineral
-        field first listed in the fog: one seen visible comes back under its first tag (in game), so a new tag shown
-        visible at its spot is a new unit, such as a structure rebuilt where it died out of sight. The type
-        is not compared, since a structure can change form between the two observations, as a supply depot lowering
-        does (in game). The alliance is compared, since a refinery stands at the same position as its geyser.
+        a new tag. So is a fog copy, when the structure was seen and lost again between two observations (in game);
+        a structure killed out of sight and made again at its spot, seen so, comes the same way, and is taken for the
+        old one until it is seen. A fog copy shown visible swaps the other way only for a unit never seen visible,
+        such as a mineral field first listed in the fog: one seen visible comes back under its first tag (in game), so
+        a new tag shown visible at its spot is a new unit, such as a structure rebuilt where it died out of sight. The
+        type is not compared, since a structure can change form between the two observations, as a supply depot
+        lowering does (in game). The alliance is compared, since a refinery stands at the same position as its geyser.
+        A unit reported dead under either of its tags is none of them.
         """
         # The units that left this observation without dying or being updated under another tag, and among them this
         # player's units that had an order, one of which may have become a structure.
         departed: dict[tuple[int, float, float], Unit[Any]] = {}
         ordered: list[OwnUnit[Any]] = []
-        for tag, unit in previous.items():
-            if unit._step != step and tag not in dead:
+        for unit in previous.values():
+            if unit._step != step and not _holds_a_tag_of(dead, unit):
                 last_report = unit._latest_report
                 departed[(last_report.alliance, last_report.pos.x, last_report.pos.y)] = unit
                 if isinstance(unit, OwnUnit) and last_report.orders:
@@ -255,7 +258,8 @@ class _UnitTracker:
             display = report.display_type
             unit = departed.pop((report.alliance, report.pos.x, report.pos.y), None)
             if unit is not None and _new_tag_is_same_unit(unit, display):
-                if report.alliance == _ENEMY_ALLIANCE:
+                # A copy remembered afresh was out of sight at both observations, so it entered and left nothing.
+                if report.alliance == _ENEMY_ALLIANCE and unit._latest_report.display_type != display:
                     changes = self._tracker.last_changes
                     entered = display == _VISIBLE_DISPLAY
                     sight = changes.enemy_units_entered_sight if entered else changes.enemy_units_left_sight
@@ -371,8 +375,11 @@ def _holds_a_tag_of(tags: set[int], unit: Unit[Any]) -> bool:
 
 def _new_tag_is_same_unit(unit: Unit[Any], display: int) -> bool:
     """Whether a report under a new tag, shown as `display` at the spot `unit` left, is `unit`: a structure gone from
-    visible into the fog, or a fog copy of a unit never seen visible shown visible."""
-    before = unit._latest_report.display_type
-    if before == _VISIBLE_DISPLAY:
+    visible into the fog; a fog copy remembered afresh, as when the structure was seen and lost again between two
+    observations; or a fog copy of a unit never seen visible shown visible."""
+    previous_display = unit._latest_report.display_type
+    if previous_display == _VISIBLE_DISPLAY:
         return display == _IN_FOG_DISPLAY
-    return before == _IN_FOG_DISPLAY and display == _VISIBLE_DISPLAY and unit._latest_visible_report is None
+    if previous_display != _IN_FOG_DISPLAY:
+        return False
+    return display == _IN_FOG_DISPLAY or (display == _VISIBLE_DISPLAY and unit._latest_visible_report is None)

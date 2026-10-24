@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #162. On this branch, `uv run pytest` passes 2777 tests; `uv run pytest -m
-  integration` passed 39 against a real game on this branch (run 2026-10-24).
+- nachOS `main` has every PR to #163. On this branch, `uv run pytest` passes 2783 tests; `uv run pytest -m
+  integration` passed 40 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -488,8 +488,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - No fog-off view yet (found building it, the owner over keeping `disable_fog` documented and over fixing the reading
     in the same PR): the game reports the units a player never saw in full but for their orders, displayed `Hidden` or
     as remembered, and NachOS reads them as units out of sight, a `Hidden` one `INVISIBLE` with `in_sight` True and its
-    health raising `NotReportedError`. A PR of its own teaches NachOS to read a fog-off report, keeping what the player
-    saw apart from the rest.
+    health raising `NotReportedError`. #163 then taught NachOS to read a fog-off report, keeping what the player saw
+    apart from the rest.
   - Orders, chat, drawings and camera moves get no special code: the game refuses the turn's request, and `play`
     raises `ProtocolError` with its words (over raising at the call and over dropping them with a log). The observer's
     camera move, which the game takes, is left out.
@@ -521,8 +521,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     tracker reads it unchanged. What tells an enemy undetected in sight from one unseen is that it reports no owner,
     not the tile under it, and an integration test plays one replay with the fog on and off a step at a turn and finds
     the player's views the same at every step. With more steps a turn the fog on can remember a structure afresh
-    between two turns, which NachOS reads as one found dead and another first seen, in a game too
-    (`not-understood-yet.md`).
+    between two turns, which NachOS read as one found dead and another first seen, in a game too, until #164 took it
+    for the one unit (below).
   - From my review of #163 (the owner, over changing them): no guard against `id_provider` giving an id a unit already
     holds, since no path to it was found; and each fog-off observation stays copied whole, some 0.3 ms of a 4.0 ms
     turn.
@@ -530,6 +530,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     report the unit is first seen in, its alliance's next id unless another is given, over a branch on an optional
     `id_of_tag` (11 ns more a new unit). An enemy unit of `api.all_units` stays a `Unit`, with no sweep of the fields
     only `OwnUnit` reads: the fog off reports no enemy orders, and the rest was not compared.
+- **A structure remembered afresh between two turns** (the owner, 2026-10-24, over leaving it found dead and first
+  seen, documented): a fog copy that comes under a new tag at the bit-identical spot of the same alliance is the same
+  unit, with no event. `tools/sweep_fog.py` measured it (`retag`): a structure seen and lost again between two
+  observations comes so, and NachOS read it as one found dead and another first seen. The game shows one killed out
+  of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
+  in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
+  display changes, and a unit reported dead under either of its tags is matched to no copy.
 
 ## Next
 
@@ -550,8 +557,6 @@ Keep this file current: when a step is done, say so here in the same pull reques
   request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
   cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
-- Beside M5: reading a playback with the fog off (this branch), after replay playback (#160; both 2026-10-24, above).
-  `tools/sweep_replays.py`, `unseen` and `scouting`, measured what it rests on.
 
 ## 1. Waiting until something needs them
 
@@ -573,8 +578,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
-- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
-  as a remembered copy, which the tracker assumes (the owner, review of #71).
+- The next trial of `tools/sweep_fog.py` (begun with `retag` and `rebuilt`, 2026-10-24) checks that a structure lifted
+  off or uprooted, and a viking in either form, is never left as a remembered copy, which the tracker assumes (the
+  owner, review of #71). It also measures whether a remembered copy reports its structure's build progress. If it
+  does, a copy under a new tag whose build progress went down is another unit: a structure built again on its spot
+  starts unfinished (the owner, review of #164).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
   the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
   back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that
