@@ -32,12 +32,13 @@ api = Api()
 
 ```python
 # my_bot/economy.py — anywhere else in your bot
+from sc2nachos import GameTime
 from sc2nachos.events import TurnEvent
 
 from my_bot.api import api
 
 
-@api.on(TurnEvent, every_steps=4)
+@api.on(TurnEvent, min_interval=GameTime(steps=4))
 def manage_workers(event):
     for worker in api.units.own.workers.idle:
         ...

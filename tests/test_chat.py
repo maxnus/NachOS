@@ -3,7 +3,7 @@
 import pytest
 from s2clientprotocol import error_pb2, sc2api_pb2
 
-from sc2nachos import Api, NotPlayingError
+from sc2nachos import Api, GameTime, NotPlayingError
 from sc2nachos.events import AnyChatEvent, TurnEvent
 from sc2nachos.ids import AbilityId
 from sc2nachos.launch import MapFile, MapNotFoundError
@@ -98,7 +98,7 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
 
     @api.on(TurnEvent)
     def talk(event: TurnEvent) -> None:
-        if event.step == 0:
+        if event.time.steps == 0:
             api.chat("gl hf ✓")
 
     @api.on(AnyChatEvent)
@@ -106,6 +106,14 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
         heard.append((event.player_id, event.text))
 
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
-    run_local("PylonAIE_v4", api, opponent, race=Race.TERRAN, steps_per_turn=8, time_limit=5, window=(640, 480))
+    run_local(
+        "PylonAIE_v4",
+        api,
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=8,
+        time_limit=GameTime.from_seconds(5),
+        window=(640, 480),
+    )
 
     assert heard == [(1, "gl hf ✓")]

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, final, overload
 
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
 from sc2nachos.geometry import Point
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 # The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
 # and the one after that on the ladder or in realtime (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
+_GAME_START = GameTime(steps=0)
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
 # `UNLOAD`.
 _IS_AIMED_AT_ITSELF = MappingProxyType(
@@ -65,7 +67,7 @@ class OrderBook:
         "_observations",
         "_sent_not_replacing",
         "_refusals",
-        "_step",
+        "_time",
     )
 
     def __init__(self, game_data: GameData) -> None:
@@ -86,7 +88,7 @@ class OrderBook:
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
-        self._step = 0
+        self._time = _GAME_START
 
     @overload
     def issue(
@@ -170,7 +172,7 @@ class OrderBook:
             aimed,
             queued=queued,
             data=data,
-            step=self._step,
+            issued_time=self._time,
         )
         self._add(order)
         if force:
@@ -199,7 +201,7 @@ class OrderBook:
     def pending_cost(self) -> Cost:
         """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
         `cost` in the game's tables for each unit it goes out to. A unit given orders that replace one another pays for
-        the last, and one already carrying an order out pays nothing for it again. Its steps are every order's added up,
+        the last, and one already carrying an order out pays nothing for it again. Its time is every order's added up,
         though the units may carry them out side by side."""
         total = Cost(0, 0)
         for order, units in self._orders_to_send(self._issued, self._forced):
@@ -232,14 +234,14 @@ class OrderBook:
         for (order, _, units), result in zip(commands, results, strict=False):
             action_result = ActionResult.read(result)
             if action_result is not ActionResult.SUCCESS:
-                refusals += [ActionFailure(self._step, unit, order.ability, action_result) for unit in units]
+                refusals += [ActionFailure(self._time, unit, order.ability, action_result) for unit in units]
             else:
                 self._remember_sent(order, units)
         self._refusals = tuple(refusals)
 
-    def _observe(self, step: int, lost: Iterable[Unit[Any]]) -> None:
-        """Take in the observation at `step`, which found `lost` dead or no longer this player's."""
-        self._step = step
+    def _observe(self, time: GameTime, lost: Iterable[Unit[Any]]) -> None:
+        """Take in the observation at `time`, which found `lost` dead or no longer this player's."""
+        self._time = time
         self._observations += 1
         for unit in lost:
             self._last_sent.pop(unit.id, None)

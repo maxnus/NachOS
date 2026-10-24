@@ -212,7 +212,7 @@ class TestDamage:
 class TestDps:
     def test_a_unit_does_one_attack_each_cooldown(self, first_corpus_tables: GameData) -> None:
         marine, scv = _units_observed(first_corpus_tables, make_unit(1), _enemy_report(2, UnitTypeId.SCV))
-        cooldown = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].average_cooldown_steps
+        cooldown = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].average_cooldown.steps
         assert marine.dps_against(scv) == pytest.approx(6.0 * 22.4 / cooldown)
 
     def test_stim_has_a_marine_attack_one_and_a_half_times_as_often(self, first_corpus_tables: GameData) -> None:
@@ -220,7 +220,7 @@ class TestDps:
         marine, scv = _units_observed(
             first_corpus_tables, make_unit(1, buff_ids=[BuffId.MARINE_STIMMED]), _enemy_report(2, UnitTypeId.SCV)
         )
-        tables_cooldown = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].base_cooldown_steps
+        tables_cooldown = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].base_cooldown.steps
         assert marine.dps_against(scv) == pytest.approx(6.0 * 22.4 / (tables_cooldown / 1.5 + _MEAN_DELAY), abs=1e-3)
 
     def test_stim_has_a_marauder_attack_one_and_a_half_times_as_often(self, first_corpus_tables: GameData) -> None:
@@ -229,5 +229,5 @@ class TestDps:
             make_unit(1, UnitTypeId.MARAUDER, buff_ids=[BuffId.MARAUDER_STIMMED]),
             _enemy_report(2, UnitTypeId.SCV),
         )
-        tables_cooldown = first_corpus_tables.units[UnitTypeId.MARAUDER].weapons[0].base_cooldown_steps
+        tables_cooldown = first_corpus_tables.units[UnitTypeId.MARAUDER].weapons[0].base_cooldown.steps
         assert marauder.dps_against(scv) == pytest.approx(10.0 * 22.4 / (tables_cooldown / 1.5 + _MEAN_DELAY), abs=1e-3)

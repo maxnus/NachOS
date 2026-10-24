@@ -361,8 +361,8 @@ class RepairSweep:
             health_max=target.health_max,
             minerals_cost=table_row.cost.minerals,
             vespene_cost=table_row.cost.vespene,
-            build_steps=table_row.build_steps,
-            cost_steps=table_row.cost.steps,
+            build_steps=table_row.build_time.steps,
+            cost_steps=table_row.cost.time.steps,
             order_result="",
         )
 

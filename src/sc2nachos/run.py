@@ -12,6 +12,7 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos._checks import check_file_to_write
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.api import Api, NotPlayingError
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Participant, Player, Race, Result
@@ -37,7 +38,7 @@ def run_local(
     name: str | None = None,
     steps_per_turn: int = 1,
     realtime: bool = False,
-    time_limit: float | None = None,
+    time_limit: GameTime | None = None,
     random_seed: int | None = None,
     record_to: Path | str | None = None,
     save_replay_to: Path | str | None = None,
@@ -126,7 +127,7 @@ def run_replay(
     *,
     player_id: int,
     steps_per_turn: int = 1,
-    time_limit: float | None = None,
+    time_limit: GameTime | None = None,
     record_to: Path | str | None = None,
     installation: Installation | None = None,
     window: tuple[int, int] = (1024, 768),
@@ -137,7 +138,7 @@ def run_replay(
     The api sees what that player saw when the game was played (in game): `api.player` is that player, `api.units.own`
     its units, and each action it took comes as an `OwnActionEvent`. The game takes no actions or debug commands in a
     replay, so a turn that orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run
-    (in game). Leaving the replay, or reaching `time_limit` in game seconds, stops it `Result.UNDECIDED`.
+    (in game). Leaving the replay, or reaching `time_limit`, stops it `Result.UNDECIDED`.
 
     Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
     on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
@@ -185,13 +186,13 @@ def run_recording(
     api: Api,
     *,
     permissive: bool = False,
-    time_limit: float | None = None,
+    time_limit: GameTime | None = None,
     enemy_ladder_id: str | None = None,
     save_replay_to: Path | str | None = None,
 ) -> Result:
     """Play `api` through the game recorded in `recording`, with no game client, a turn at each recorded observation,
-    and return how it ended for the player recorded, or `TIE` at `time_limit`, in game seconds. `enemy_ladder_id` and
-    `save_replay_to` are as for `Api.play`.
+    and return how it ended for the player recorded, or `TIE` at `time_limit`. `enemy_ladder_id` and `save_replay_to`
+    are as for `Api.play`.
 
     By default the bot must ask what was asked when the game was recorded, and gets the game's own answers, as a
     `PlaybackTransport` gives them: a request of another kind raises `ProtocolError`. The game is created if the
@@ -315,7 +316,7 @@ def _play_ladder_game(
 def _game_time(api: Api) -> float | None:
     """The game seconds `api`'s last game lasted, to the millisecond, `None` if it began none."""
     try:
-        return round(api.time, 3)
+        return round(api.time.seconds, 3)
     except NotPlayingError:
         return None
 

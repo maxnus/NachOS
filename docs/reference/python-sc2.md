@@ -53,8 +53,8 @@ difference that rests on what the game does links there for its evidence.
   `api.subscribe(instance)`, usually by its own `__init__`.
 - **Keep `on_step` as one `TurnEvent` handler** that calls the bot's parts in the order it wants. Handlers run by
   priority, highest first, then in the order they subscribed, which is hard to follow across many modules.
-- **There is no `iteration`.** `event.step` is the game loop, and `every_steps` and `at_step` count steps, so a
-  handler runs as often in game time at any `steps_per_turn`.
+- **There is no `iteration`.** `event.time` is when the event came, and `min_interval` and `at_time` count game
+  time, so a handler runs as often in game time at any `steps_per_turn`.
 - **The last observation gets no turn, as in python-sc2, but it is taken in.** A `GameEndEvent` handler reads the
   game as it ended; python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`.** One that is is refused when it subscribes.
@@ -82,12 +82,12 @@ difference that rests on what the game does links there for its evidence.
 
 - **A handler selects the events it wants instead of testing each one.** `AlertEvent.only(Alert.X)`,
   `AnyUnitDiedEvent.only(UnitType.Structure)` and `on(OwnUnitDamagedEvent).where(predicate)` replace the `if` at the
-  top of a python-sc2 hook. `once` and `every_steps` then count only the selected events, and with `only` NachOS
+  top of a python-sc2 hook. `once` and `min_interval` then count only the selected events, and with `only` NachOS
   does not make the rest. What python-sc2 leaves the bot to compare every step, such as a caster's energy, is an
   event through `of`: `OwnUnitVitalReachedEvent.of(VitalType.ENERGY, 75, UnitType.HighTemplar)`.
 - **Priority orders a whole turn, not one event** ([events](../events.md#when-events-come)). In python-sc2 the hooks run
   in a fixed order before `on_step`; a bot keeps that by leaving its handlers at one priority.
-- **An event takes its step by keyword.** One a bot emits without it gets the game's.
+- **An event takes its time by keyword.** One a bot emits without it gets the game's.
 - **A handler of a class receives the events of its subclasses**, and one of `Event` every event, which makes NachOS
   produce every type ([events](../events.md#handlers-of-a-class-and-its-subclasses)).
 - **A bot can define its own events** by subclassing `Event`, and send them with `api.emit`. python-sc2
@@ -167,10 +167,10 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, DebugText(text))`, `draw(p, DebugLine(to=q))`, `draw(p, DebugBox(1, 1))`, `draw(p, DebugSphere(r))`, each lasting `steps=` and returning a `Drawing`; shapes compose in a `DebugGroup` |
+| `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, DebugText(text))`, `draw(p, DebugLine(to=q))`, `draw(p, DebugBox(1, 1))`, `draw(p, DebugSphere(r))`, each shown for `shown_for=` and returning a `Drawing`; shapes compose in a `DebugGroup` |
 | `client.debug_text_screen(text, pos)` | `api.debug.draw_text_on_screen(text, at=pos)` |
 | a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
-| `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_steps` |
+| `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_interval` |
 | `client.debug_show_map()`, `debug_god()`, `debug_fast_build()` and the other switches | `api.debug.turn_on(Cheat.SHOW_MAP)`, `turn_off`, and `api.debug.cheats` |
 | `client.debug_minerals()`, `debug_all_resources()`, `debug_upgrade()` | `api.debug.give_minerals()`, `give_resources()`, `give_upgrades()` |
 | `client.debug_gas()` | nothing: it gives no vespene (in game) |
@@ -184,7 +184,7 @@ it.
 
 - **A drawing lasts the steps you give it, and goes out only when it changes.** python-sc2 forgets every drawing after a
   step, so a bot draws it again each step. NachOS keeps it `steps` steps, or until `drawing.remove()`, follows a unit it
-  is drawn at until it dies, and sends it at most every `refresh_steps` ([debugging](../debugging.md#drawing)).
+  is drawn at until it dies, and sends it at most every `refresh_interval` ([debugging](../debugging.md#drawing)).
 - **A cheat is turned on or off.** python-sc2's `debug_show_map()` switches the map, so a bot keeps its own flag; NachOS
   keeps `api.debug.cheats` and sends only a change.
 - **A chat message of 1040 bytes or more raises `ValueError`.** It kills the game client (in game); python-sc2 sends
@@ -201,8 +201,14 @@ it.
 
 ## Time
 
-- **One game loop is one step.** `api.step` is python-sc2's `state.game_loop`, and `api.time` is its `time`.
-- **`api.time` differs from python-sc2's `time` in the last bit on about a quarter of steps.** Neither 22.4 nor
+- **One game loop is one step, and every moment and length of game time is a `GameTime`.** `api.step` is
+  python-sc2's `state.game_loop`, an int, and `api.time.seconds` its `time`. A `GameTime` adds to and compares with
+  another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime.from_seconds(120)` says which unit.
+  Where python-sc2 gives a length in seconds or in steps, as a float or an int, NachOS gives a `GameTime`: a cost's
+  time, a cooldown, a score's idle time.
+- **`api.time.time_string` is python-sc2's `time_formatted` to the millisecond**, `"3:20.000"` where python-sc2 reads
+  `"03:20"`, which tells every step from the next.
+- **`api.time.seconds` differs from python-sc2's `time` in the last bit on about a quarter of steps.** Neither 22.4 nor
   1 / 22.4 is exact in binary. python-sc2 divides by 22.4 and NachOS multiplies by 1 / 22.4, and the two round
   differently. NachOS lands exactly on every whole second. python-sc2 overshoots the whole seconds in the top
   quarter of each power of two, so 15 seconds comes out as `15.000000000000002` and 60 as `60.00000000000001`. A
@@ -280,7 +286,7 @@ it.
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
-| `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown_steps` |
+| `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
@@ -288,7 +294,7 @@ it.
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
-| `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == 0`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the steps the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
+| `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == GameTime(steps=0)`, which is false for a type `time_to_face` gives `None`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the time the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
 | nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
@@ -298,7 +304,7 @@ it.
 | `units.in_attack_range_of(u)` | `units.filter(lambda enemy: enemy.has_in_range(u))` |
 | `unit.calculate_damage_vs_target(t)[0]` | `unit.damage_against(t)`, one attack as the target stands |
 | `unit.calculate_dps_vs_target(t)` | `unit.dps_against(t)`, per second of Faster speed |
-| `unit.weapon_ready` | `unit.weapon_cooldown_steps == 0` |
+| `unit.weapon_ready` | `not unit.weapon_cooldown` |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
@@ -361,7 +367,7 @@ it.
   `calculate_speed(upgrades)` for anyone else's, and its `ground_range`, `ground_dps` and `armor` include none. For
   another set of upgrades, read `unit.type_data.with_upgrades(set)`.
 - **A dps is per second of Faster speed, and counts what the game does.** `weapon.dps` and `unit.dps_against` divide by
-  `average_cooldown_steps`: `base_cooldown_steps`, the tables' cooldown sped up by Adrenal Glands and Resonating
+  `average_cooldown`: `base_cooldown`, the tables' cooldown sped up by Adrenal Glands and Resonating
   Glaives, and the random delay the game adds to every attack, half a step on average. `dps_against` counts stim too,
   and `weapon.damage_against` works out one attack from a target's attributes, armor and shields alone. python-sc2's
   `ground_dps` is per Normal second, which leaves it 1.4 times too low, and leaves out the delay. NachOS also gives the
@@ -370,7 +376,7 @@ it.
   picks a weapon as python-sc2 does, the ground one for a colossus where there is one, and `has_in_range` keeps
   python-sc2's rule: exact for a unit that can move firing at a unit, it reaches some 0.1 too far for an attacker that
   cannot move and up to some 0.26 for a structure ([game behavior](game-behavior/damage-and-buffs.md)).
-- **`weapon_cooldown_steps` reads 0 while an attack is under way**, for up to 8 steps before it by type, and a move
+- **`weapon_cooldown` reads zero while an attack is under way**, for up to 8 steps before it by type, and a move
   ordered then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
   cooldown to rise ([game behavior](game-behavior/damage-and-buffs.md)).
 - **The enemy's upgrades are read off its units, once, for the whole player.** The game reports nothing of the
@@ -415,7 +421,7 @@ it.
 | `state.score.killed_minerals_army` | `api.score.killed_minerals.army`, and `.total` across the categories |
 | `state.score.collected_minerals`, `collection_rate_*`, `spent_*` | `api.score.collected.minerals`, `collection_rate`, `spent`, each a `Resources` |
 | `state.score.total_value_units`, `killed_value_structures` | `api.score.total_value.units`, `killed_value.structures` |
-| `state.score.idle_worker_time`, `idle_production_time` | `api.score.idle_worker_steps`, `idle_production_steps` |
+| `state.score.idle_worker_time`, `idle_production_time`, in seconds | `api.score.idle_worker_time`, `idle_production_time`, each a `GameTime` |
 | `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.resources.covers(cost.resources)` against a cost |
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
@@ -426,7 +432,7 @@ it.
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
-| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `steps_left`; once done, `u in api.upgrades` |
+| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `time_left`; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
@@ -542,7 +548,7 @@ it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps |
-| `unit_data.cost.time` | `unit_data.build_steps`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.steps` counts what it morphed from too |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` counts what it morphed from too |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
@@ -550,8 +556,8 @@ it.
 | `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
-| `upgrade_data.cost.time` | `upgrade_data.cost.steps` |
-| `weapon.speed`, in Normal-speed seconds | `weapon.base_cooldown_steps`; `average_cooldown_steps` counts the random delay the game adds to each attack |
+| `upgrade_data.cost.time`, in steps | `upgrade_data.cost.time`, a `GameTime` |
+| `weapon.speed`, in Normal-speed seconds | `weapon.base_cooldown`, a `GameTime`; `average_cooldown` counts the random delay the game adds to each attack |
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
@@ -603,12 +609,12 @@ it.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
   no path for yet ([game behavior](game-behavior/abilities-and-orders.md#loading-and-unloading)), so `UNLOAD`,
   and `UNLOAD_AT` put everyone down at once.
-- **A cost is minerals, vespene, supply and steps, and a type's steps are everything spent to reach it.** python-sc2's
+- **A cost is minerals, vespene, supply and time, and a type's time is everything spent to reach it.** python-sc2's
   `Cost` carries a `time` in steps too, which its `__add__` adds and its `__eq__` ignores, and for a morph it is the
-  morph's alone, an orbital command's 560. NachOS's `unit_data.cost.steps` adds the steps of each stage that costs
-  something, as the minerals do: an orbital command's 2160, the command center's 1600 included, and a sieged tank's the
-  tank's 720, since a switch that costs nothing adds none. `build_steps` is the last stage alone. NachOS's `Cost` adds,
-  subtracts, scales and compares every field; costs added up add their steps, which is production time one after
+  morph's alone, an orbital command's 560. NachOS's `unit_data.cost.time`, a `GameTime`, adds the time of each stage
+  that costs something, as the minerals do: an orbital command's 2160 steps, the command center's 1600 included, and a
+  sieged tank's the tank's 720, since a switch that costs nothing adds none. `build_time` is the last stage alone.
+  NachOS's `Cost` adds, subtracts, scales and compares every field; costs added up add their times, which is production time one after
   another, not how long they take side by side. What a player holds is `Resources`, minerals and vespene alone, which
   adds, subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
   fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole until
@@ -622,7 +628,7 @@ it.
   wrong for the hatchery, whose row is 325 rather than the drone's 50 and a hatchery's 300. An action several types
   perform costs the same whichever does it, every tech lab 50/25.
 - **A rich gas building's build time is its plain one's.** python-sc2's `cost.time` reads the game's row, which can
-  give it none; NachOS's `build_steps` reads its plain building's ([game behavior](game-behavior/upgrades-and-tables.md)).
+  give it none; NachOS's `build_time` reads its plain building's ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData` holds
   little of them ([game behavior](game-behavior/upgrades-and-tables.md)). python-sc2's dicts come from
   sc2-techtree, which read an older patch's data files; NachOS's come from `tools/sweep_tech_tree.py`, which asks the

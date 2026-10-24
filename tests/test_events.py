@@ -15,7 +15,7 @@ from typing import Any, assert_type, cast
 import pytest
 from loguru import logger
 
-from sc2nachos import Api
+from sc2nachos import Api, GameTime
 from sc2nachos.events import (
     AlertEvent,
     AnyUnitEvent,
@@ -44,7 +44,7 @@ from sc2nachos.units import UnitType, VitalType
 def _turns(bus: _EventBus, *steps: int) -> None:
     """A turn at each of `steps`."""
     for step in steps:
-        bus.emit(TurnEvent(step=step))
+        bus.emit(TurnEvent(time=GameTime(steps=step)))
 
 
 @pytest.fixture
@@ -58,22 +58,22 @@ def logged() -> Iterator[list[str]]:
 
 # Defined at module level, as a bot's would be, so they are plain module functions and a module class.
 _MODULE_BUS = _EventBus()
-_module_calls: list[int] = []
+_module_calls: list[float] = []
 
 
 @_MODULE_BUS.on(TurnEvent)
 def _on_turn(event: TurnEvent) -> None:
-    _module_calls.append(event.step)
+    _module_calls.append(event.time.steps)
 
 
 class _ModuleHandlers:
     def __init__(self) -> None:
-        self.calls: list[int] = []
+        self.calls: list[float] = []
         _MODULE_BUS.subscribe(self)
 
     @_MODULE_BUS.on(TurnEvent)
     def on_turn(self, event: TurnEvent) -> None:
-        self.calls.append(event.step)
+        self.calls.append(event.time.steps)
 
 
 class TestSubscribing:
@@ -103,10 +103,10 @@ class TestSubscribing:
     def test_a_method_already_bound_to_its_instance_is_subscribed_at_once(self) -> None:
         class Plain:
             def __init__(self) -> None:
-                self.calls: list[int] = []
+                self.calls: list[float] = []
 
             def on_turn(self, event: TurnEvent) -> None:
-                self.calls.append(event.step)
+                self.calls.append(event.time.steps)
 
         bus, instance = _EventBus(), Plain()
         bus.on(TurnEvent)(instance.on_turn)
@@ -119,7 +119,7 @@ class TestSubscribing:
         class Handlers:
             @bus.on(TurnEvent)
             def on_turn(self, event: TurnEvent) -> None:
-                calls.append(event.step)
+                calls.append(event.time.steps)
 
         handlers = Handlers()
         _turns(bus, 0)
@@ -158,13 +158,13 @@ class TestSubscribing:
 
         class Handlers:
             def __init__(self) -> None:
-                self.calls: list[int] = []
+                self.calls: list[float] = []
                 bus.subscribe(self)
 
             @bus.on(TurnEvent)
             @logged
             def on_turn(self, event: TurnEvent) -> None:
-                self.calls.append(event.step)
+                self.calls.append(event.time.steps)
 
         handlers = Handlers()
         _turns(bus, 4)
@@ -198,8 +198,8 @@ class TestSubscribing:
         def both(event: Event) -> None:
             calls.append(type(event))
 
-        bus.emit(TurnStartEvent(step=0))
-        bus.emit(TurnEvent(step=0))
+        bus.emit(TurnStartEvent(time=GameTime(steps=0)))
+        bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert calls == [TurnStartEvent, TurnEvent]
 
     def test_nothing_is_wanted_until_something_subscribes(self) -> None:
@@ -213,7 +213,7 @@ class TestSubscribing:
         bus = _EventBus()
         bus.on(TurnEvent, once=True)(lambda event: None)
         bus.on(TurnEvent)(lambda event: Done)
-        bus.emit(TurnEvent(step=0))
+        bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert not bus._subscriptions.wants_every(TurnEvent)
         bus._start_game()
         assert bus._subscriptions.wants_every(TurnEvent)
@@ -238,13 +238,21 @@ class TestSubscribing:
     @pytest.mark.parametrize(
         ("cadence", "message"),
         [
-            ({"every_steps": 0}, "every_steps is at least 1"),
-            ({"every_steps": 4, "at_step": 100}, "or at one step, not both"),
-            ({"every_steps": 4, "once": True}, "or once, not both"),
+            ({"min_interval": GameTime(steps=0)}, "min_interval is above zero"),
+            ({"min_interval": GameTime(steps=4), "at_time": GameTime(steps=100)}, "or at one time, not both"),
+            ({"min_interval": GameTime(steps=4), "once": True}, "or once, not both"),
         ],
     )
     def test_a_cadence_that_cannot_be_kept_is_refused(self, cadence: dict[str, Any], message: str) -> None:
         with pytest.raises(ValueError, match=message):
+            _EventBus().on(TurnEvent, **cadence)
+
+    @pytest.mark.parametrize(
+        ("cadence", "message"),
+        [({"min_interval": 16}, "min_interval is a GameTime"), ({"at_time": 500}, "at_time is a GameTime")],
+    )
+    def test_a_cadence_in_plain_numbers_is_refused(self, cadence: dict[str, Any], message: str) -> None:
+        with pytest.raises(TypeError, match=message):
             _EventBus().on(TurnEvent, **cadence)
 
 
@@ -266,36 +274,41 @@ class TestOrder:
     def test_a_handler_of_another_type_is_not_handed_the_event(self) -> None:
         bus, calls = _EventBus(), []
         bus.on(TurnEvent)(lambda event: calls.append("turn"))
-        bus.emit(TurnStartEvent(step=0))
-        bus.emit(GameStartEvent(step=0))
+        bus.emit(TurnStartEvent(time=GameTime(steps=0)))
+        bus.emit(GameStartEvent(time=GameTime(steps=0)))
         assert calls == []
 
 
 class TestCadence:
-    def _fired(self, bus: _EventBus, *steps: int, **cadence: int | bool) -> list[int]:
-        fired: list[int] = []
-        bus.on(TurnEvent, **cadence)(lambda event: fired.append(event.step))  # type: ignore
+    def _fired(self, bus: _EventBus, *steps: int, **cadence: GameTime | bool) -> list[float]:
+        fired: list[float] = []
+        bus.on(TurnEvent, **cadence)(lambda event: fired.append(event.time.steps))  # type: ignore
         _turns(bus, *steps)
         return fired
 
-    def test_every_steps_at_a_step_a_turn_fires_on_its_multiples(self) -> None:
+    def test_min_interval_at_a_step_a_turn_fires_on_its_multiples(self) -> None:
         """The steps where `step % 4 == 0`, since the first turn is step 0."""
-        assert self._fired(_EventBus(), *range(13), every_steps=4) == [0, 4, 8, 12]
+        assert self._fired(_EventBus(), *range(13), min_interval=GameTime(steps=4)) == [0, 4, 8, 12]
 
-    def test_every_steps_never_fires_closer_together_than_asked(self) -> None:
+    def test_min_interval_never_fires_closer_together_than_asked(self) -> None:
         """At three steps a turn, four steps apart is six."""
-        assert self._fired(_EventBus(), *range(0, 25, 3), every_steps=4) == [0, 6, 12, 18, 24]
+        assert self._fired(_EventBus(), *range(0, 25, 3), min_interval=GameTime(steps=4)) == [0, 6, 12, 18, 24]
+
+    def test_a_min_interval_of_a_second_fires_once_22_4_steps_have_passed(self) -> None:
+        """23 steps apart at a step a turn: 22 are less than a second."""
+        fired = self._fired(_EventBus(), *range(70), min_interval=GameTime.from_seconds(1))
+        assert fired == [0, 23, 46, 69]
 
     def test_a_handler_subscribed_part_way_through_a_game_counts_from_its_first_event(self) -> None:
         bus = _EventBus()
         _turns(bus, *range(990, 1001))
-        assert self._fired(bus, *range(1001, 1012), every_steps=8) == [1001, 1009]
+        assert self._fired(bus, *range(1001, 1012), min_interval=GameTime(steps=8)) == [1001, 1009]
 
-    def test_at_step_fires_once_on_the_first_turn_at_or_after_it(self) -> None:
-        assert self._fired(_EventBus(), 498, 499, 501, 502, 503, at_step=500) == [501]
+    def test_at_time_fires_once_on_the_first_turn_at_or_after_it(self) -> None:
+        assert self._fired(_EventBus(), 498, 499, 501, 502, 503, at_time=GameTime(steps=500)) == [501]
 
-    def test_at_step_already_past_fires_on_the_next_turn(self) -> None:
-        assert self._fired(_EventBus(), 900, 901, at_step=500) == [900]
+    def test_at_time_already_past_fires_on_the_next_turn(self) -> None:
+        assert self._fired(_EventBus(), 900, 901, at_time=GameTime(steps=500)) == [900]
 
     def test_once_fires_on_the_first_turn_only(self) -> None:
         assert self._fired(_EventBus(), 3, 4, 5, once=True) == [3]
@@ -307,8 +320,8 @@ class TestStopping:
 
         @bus.on(TurnEvent)
         def until_two(event: TurnEvent) -> type[Done] | None:
-            fired.append(event.step)
-            return Done if event.step >= 2 else None
+            fired.append(event.time.steps)
+            return Done if event.time.steps >= 2 else None
 
         _turns(bus, 0, 1, 2, 3, 4)
         assert fired == [0, 1, 2]
@@ -319,7 +332,7 @@ class TestStopping:
 
         @bus.on(TurnEvent)
         def truthy(event: TurnEvent) -> bool:
-            fired.append(event.step)
+            fired.append(event.time.steps)
             return True
 
         _turns(bus, 0, 1)
@@ -331,19 +344,21 @@ class TestStopping:
 
     def test_a_new_game_starts_what_every_handler_has_done_afresh(self) -> None:
         bus, fired = _EventBus(), []
-        bus.on(TurnEvent, once=True)(lambda event: fired.append(("once", event.step)))
-        bus.on(TurnEvent, at_step=4)(lambda event: fired.append(("at_step", event.step)))
-        bus.on(TurnEvent, every_steps=100)(lambda event: fired.append(("every_steps", event.step)))
+        bus.on(TurnEvent, once=True)(lambda event: fired.append(("once", event.time.steps)))
+        bus.on(TurnEvent, at_time=GameTime(steps=4))(lambda event: fired.append(("at_time", event.time.steps)))
+        bus.on(TurnEvent, min_interval=GameTime(steps=100))(
+            lambda event: fired.append(("min_interval", event.time.steps))
+        )
 
         @bus.on(TurnEvent)
         def done(event: TurnEvent) -> type[Done]:
-            fired.append(("done", event.step))
+            fired.append(("done", event.time.steps))
             return Done
 
         for _ in range(2):
             bus._start_game()
             _turns(bus, 0, 4, 8)
-        assert fired == 2 * [("once", 0), ("every_steps", 0), ("done", 0), ("at_step", 4)]
+        assert fired == 2 * [("once", 0), ("min_interval", 0), ("done", 0), ("at_time", 4)]
 
 
 class TestUnsubscribing:
@@ -352,7 +367,7 @@ class TestUnsubscribing:
 
         @bus.on(TurnEvent)
         def handler(event: TurnEvent) -> None:
-            fired.append(event.step)
+            fired.append(event.time.steps)
 
         _turns(bus, 0)
         bus.unsubscribe(handler)
@@ -378,11 +393,11 @@ class TestUnsubscribing:
 
         mine, other = Handlers(), Handlers()
         bus.unsubscribe(mine.turn)
-        bus.emit(TurnStartEvent(step=0))
+        bus.emit(TurnStartEvent(time=GameTime(steps=0)))
         _turns(bus, 0)
         assert mine.calls == ["start"]
         bus.unsubscribe(other)
-        bus.emit(TurnStartEvent(step=1))
+        bus.emit(TurnStartEvent(time=GameTime(steps=1)))
         _turns(bus, 1)
         assert other.calls == ["start", "turn"]
         assert mine.calls == ["start", "start"]
@@ -407,7 +422,7 @@ class TestUnsubscribing:
 
         @bus.on(TurnEvent, once=True)
         def subscribing(event: TurnEvent) -> None:
-            bus.on(TurnEvent)(lambda event: fired.append(event.step))
+            bus.on(TurnEvent)(lambda event: fired.append(event.time.steps))
 
         _turns(bus, 0, 1)
         assert fired == [1]
@@ -421,7 +436,7 @@ class TestInstances:
         class Handlers:
             @bus.on(TurnEvent)
             def on_turn(self, event: TurnEvent) -> None:
-                calls.append(event.step)
+                calls.append(event.time.steps)
 
         handlers = Handlers()
         reference = weakref.ref(handlers)
@@ -514,7 +529,7 @@ class TestInstances:
     def test_a_handler_reads_as_its_name_event_and_how_often_it_runs(self) -> None:
         bus = _EventBus()
 
-        @bus.on(TurnEvent, priority=EventPriority.LOW, every_steps=16, catch_exceptions=True)
+        @bus.on(TurnEvent, priority=EventPriority.LOW, min_interval=GameTime(steps=16), catch_exceptions=True)
         def planned(event: TurnEvent) -> None:
             pass
 
@@ -523,7 +538,7 @@ class TestInstances:
             pass
 
         assert repr(bus._subscriptions.by_type[TurnEvent][0]).endswith(
-            ".planned, TurnEvent, priority=LOW, every_steps=16, catch_exceptions=True)"
+            ".planned, TurnEvent, priority=LOW, min_interval=GameTime(steps=16), catch_exceptions=True)"
         )
         assert repr(bus._subscriptions.by_type[GameStartEvent][0]).endswith(
             ".started, GameStartEvent, priority=MEDIUM, once=True)"
@@ -663,7 +678,7 @@ class TestTyping:
     def test_what_only_of_and_where_select_is_typed_as_their_class(self) -> None:
         api = Api()
 
-        @api.on(AlertEvent.only(Alert.RESEARCH_COMPLETE)).where(lambda event: event.step > 0)
+        @api.on(AlertEvent.only(Alert.RESEARCH_COMPLETE)).where(lambda event: event.time.steps > 0)
         def alert(event: AlertEvent) -> None:
             pass
 
@@ -684,7 +699,7 @@ class TestTyping:
     def test_on_and_where_return_an_event_subscriber_of_the_event_type(self) -> None:
         api = Api()
         subscriber = api.on(TurnEvent)
-        narrowed = subscriber.where(lambda event: event.step > 0)
+        narrowed = subscriber.where(lambda event: event.time.steps > 0)
 
         damaged = api.on(OwnUnitDamagedEvent)
         any_unit_event: EventSubscriber[AnyUnitEvent] = damaged
@@ -715,10 +730,10 @@ class TestExceptions:
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 
-        bus.on(TurnEvent)(lambda event: fired.append(event.step))
+        bus.on(TurnEvent)(lambda event: fired.append(event.time.steps))
         _turns(bus, 0)
         assert fired == [0]
-        assert any("failing raised on TurnEvent(step=0)" in message for message in logged)
+        assert any("failing raised on TurnEvent(time=GameTime(steps=0))" in message for message in logged)
 
 
 class TestTimings:
@@ -748,7 +763,7 @@ class TestTimings:
     def test_a_new_game_starts_them_afresh(self) -> None:
         bus = _EventBus(time_handlers=True)
         bus.on(GameEndEvent)(lambda event: None)
-        bus.emit(GameEndEvent(Result.VICTORY, step=10))
+        bus.emit(GameEndEvent(Result.VICTORY, time=GameTime(steps=10)))
         assert bus.timings[GameEndEvent]
         bus._start_game()
         assert not bus.timings
@@ -769,15 +784,15 @@ class _ScoutedAgain(_Scouted):
 
 class TestEventsOfABotsOwn:
     def test_a_subclass_is_a_frozen_slotted_dataclass_of_the_fields_it_declares(self) -> None:
-        event = _Scouted("natural", step=5)
-        assert dataclasses.is_dataclass(event) and event == _Scouted("natural", 1, step=5)
+        event = _Scouted("natural", time=GameTime(steps=5))
+        assert dataclasses.is_dataclass(event) and event == _Scouted("natural", 1, time=GameTime(steps=5))
         assert not hasattr(event, "__dict__")
         with pytest.raises(dataclasses.FrozenInstanceError):
             event.times = 2  # type: ignore
 
     def test_a_subclass_of_one_adds_its_fields_to_those_it_inherits(self) -> None:
-        assert [field.name for field in dataclasses.fields(_ScoutedAgain)] == ["step", "place", "times", "by"]
-        assert _ScoutedAgain("main", step=1).by == "overlord"
+        assert [field.name for field in dataclasses.fields(_ScoutedAgain)] == ["time", "place", "times", "by"]
+        assert _ScoutedAgain("main", time=GameTime(steps=1)).by == "overlord"
 
     def test_one_decorated_as_a_dataclass_too_is_refused(self) -> None:
         with pytest.raises(TypeError, match="Cannot overwrite attribute __setattr__"):
@@ -792,11 +807,11 @@ class TestEventsOfABotsOwn:
         @bus.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             calls.append("turn")
-            bus.emit(_Scouted("natural", step=event.step))
+            bus.emit(_Scouted("natural", time=GameTime(steps=event.time.steps)))
             calls.append("turn done")
 
         bus.on(_Scouted)(lambda event: calls.append("scouted"))
-        bus.emit(TurnEvent(step=0))
+        bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert calls == ["turn", "scouted", "turn done"]
 
 
@@ -805,15 +820,19 @@ class TestDispatchByClass:
         bus, bases, subclasses = _EventBus(), [], []
         bus.on(_Scouted)(lambda event: bases.append(type(event)))
         bus.on(_ScoutedAgain)(lambda event: subclasses.append(type(event)))
-        bus.emit(_Scouted("main", step=0))
-        bus.emit(_ScoutedAgain("main", step=0))
+        bus.emit(_Scouted("main", time=GameTime(steps=0)))
+        bus.emit(_ScoutedAgain("main", time=GameTime(steps=0)))
         assert bases == [_Scouted, _ScoutedAgain]
         assert subclasses == [_ScoutedAgain]
 
     def test_a_handler_of_event_is_handed_every_event_and_wants_every_type(self) -> None:
         bus, seen = _EventBus(), []
         bus.on(Event)(lambda event: seen.append(type(event)))
-        for event in (TurnStartEvent(step=0), TurnEvent(step=0), GameEndEvent(Result.TIE, step=0)):
+        for event in (
+            TurnStartEvent(time=GameTime(steps=0)),
+            TurnEvent(time=GameTime(steps=0)),
+            GameEndEvent(Result.TIE, time=GameTime(steps=0)),
+        ):
             bus.emit(event)
         assert seen == [TurnStartEvent, TurnEvent, GameEndEvent]
         assert bus._subscriptions.wants_every(OwnUnitCreatedEvent)
@@ -824,21 +843,21 @@ class TestDispatchByClass:
         bus.on(_Scouted)(lambda event: calls.append("scouted"))
         bus.on(_ScoutedAgain)(lambda event: calls.append("again"))
         bus.on(Event, priority=EventPriority.HIGH)(lambda event: calls.append("any, high"))
-        bus.emit(_ScoutedAgain("main", step=0))
+        bus.emit(_ScoutedAgain("main", time=GameTime(steps=0)))
         assert calls == ["any, high", "scouted", "again", "again, low"]
 
     def test_a_handler_of_a_base_counts_from_the_event_after_it_subscribes_or_unsubscribes(self) -> None:
         bus, calls = _EventBus(), []
-        bus.on(_ScoutedAgain)(lambda event: calls.append(("again", event.step)))
-        bus.emit(_ScoutedAgain("main", step=0))
+        bus.on(_ScoutedAgain)(lambda event: calls.append(("again", event.time.steps)))
+        bus.emit(_ScoutedAgain("main", time=GameTime(steps=0)))
 
         @bus.on(Event)
         def any_event(event: Event) -> None:
-            calls.append(("any", event.step))
+            calls.append(("any", event.time.steps))
 
-        bus.emit(_ScoutedAgain("main", step=1))
+        bus.emit(_ScoutedAgain("main", time=GameTime(steps=1)))
         bus.unsubscribe(any_event)
-        bus.emit(_ScoutedAgain("main", step=2))
+        bus.emit(_ScoutedAgain("main", time=GameTime(steps=2)))
         assert calls == [("again", 0), ("again", 1), ("any", 1), ("again", 2)]
 
 
@@ -847,7 +866,7 @@ class TestOnlyAndOf:
         bus, seen = _EventBus(), []
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE))(lambda event: seen.append(event.alert))
         for alert in (Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED, Alert.UPGRADE_COMPLETE):
-            bus.emit(AlertEvent(alert, step=0))
+            bus.emit(AlertEvent(alert, time=GameTime(steps=0)))
         assert seen == [Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE]
 
     def test_a_unit_type_group_stands_for_each_type_in_it(self) -> None:
@@ -868,15 +887,15 @@ class TestOnlyAndOf:
         bus, seen = _EventBus(), []
         either = AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE)
         bus.on(either, once=True)(lambda event: seen.append(event))
-        bus.emit(AlertEvent(Alert.UPGRADE_COMPLETE, step=0))
-        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=1))
-        assert seen == [AlertEvent(Alert.UPGRADE_COMPLETE, step=0)]
+        bus.emit(AlertEvent(Alert.UPGRADE_COMPLETE, time=GameTime(steps=0)))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, time=GameTime(steps=1)))
+        assert seen == [AlertEvent(Alert.UPGRADE_COMPLETE, time=GameTime(steps=0))]
 
     def test_a_handler_of_the_type_and_one_of_a_key_are_handed_the_same_event(self) -> None:
         bus, seen = _EventBus(), []
         bus.on(AlertEvent)(lambda event: seen.append(event))
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE))(lambda event: seen.append(event))
-        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=0))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, time=GameTime(steps=0)))
         assert len(seen) == 2 and seen[0] is seen[1]
 
     def test_the_keys_wanted_are_those_of_the_handlers_not_done(self) -> None:
@@ -886,7 +905,7 @@ class TestOnlyAndOf:
         bus.on(AlertEvent.only(Alert.UPGRADE_COMPLETE))(lambda event: None)
         assert bus._subscriptions.wanted_keys(AlertEvent) == {Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE}
         assert not bus._subscriptions.wants_every(AlertEvent)
-        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, step=0))
+        bus.emit(AlertEvent(Alert.RESEARCH_COMPLETE, time=GameTime(steps=0)))
         assert bus._subscriptions.wanted_keys(AlertEvent) == {Alert.UPGRADE_COMPLETE}
         assert not bus._subscriptions.wanted_keys(OwnUnitVitalReachedEvent)
 
@@ -935,26 +954,26 @@ class TestOnlyAndOf:
         assert OwnUnitVitalReachedEvent.of(VitalType.LIFE, 500).keys
 
 
-class TestTheStep:
-    def test_an_event_made_without_a_step_is_given_the_games_as_it_is_emitted(self) -> None:
+class TestTheTime:
+    def test_an_event_made_without_a_time_is_given_the_games_as_it_is_emitted(self) -> None:
         bus, seen = _EventBus(), []
-        bus.on(_Scouted)(lambda event: seen.append(event.step))
-        bus._set_step(80)
+        bus.on(_Scouted)(lambda event: seen.append(event.time.steps))
+        bus._set_time(GameTime(steps=80))
         bus.emit(_Scouted("natural"))
-        bus.emit(_Scouted("natural", step=16))
+        bus.emit(_Scouted("natural", time=GameTime(steps=16)))
         assert seen == [80, 16]
 
-    def test_one_made_once_without_a_step_is_handed_out_with_each_steps_and_kept_as_it_was(self) -> None:
+    def test_one_made_once_without_a_time_is_handed_out_with_each_time_and_kept_as_it_was(self) -> None:
         bus, seen = _EventBus(), []
-        bus.on(_Scouted)(lambda event: seen.append(event.step))
+        bus.on(_Scouted)(lambda event: seen.append(event.time.steps))
         scouted = _Scouted("natural")
         for step in (0, 16, 32):
-            bus._set_step(step)
+            bus._set_time(GameTime(steps=step))
             bus.emit(scouted)
         assert seen == [0, 16, 32]
-        assert scouted.step < 0
+        assert scouted.time.steps < 0
 
-    def test_one_emitted_without_a_step_and_with_no_game_being_played_is_refused(self) -> None:
+    def test_one_emitted_without_a_time_and_with_no_game_being_played_is_refused(self) -> None:
         with pytest.raises(ValueError, match="no game is being played"):
             _EventBus().emit(_Scouted("natural"))
 
@@ -968,7 +987,13 @@ class TestATurnGoesOutPriorityFirst:
         bus.on(AlertEvent, priority=EventPriority.HIGH)(lambda event: calls.append("alert, high"))
         bus.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: calls.append("turn, high"))
         bus.on(TurnEvent)(lambda event: calls.append("turn"))
-        bus._hand_out([_Scouted("main", step=0), AlertEvent(Alert.RESEARCH_COMPLETE, step=0), TurnEvent(step=0)])
+        bus._hand_out(
+            [
+                _Scouted("main", time=GameTime(steps=0)),
+                AlertEvent(Alert.RESEARCH_COMPLETE, time=GameTime(steps=0)),
+                TurnEvent(time=GameTime(steps=0)),
+            ]
+        )
         assert calls == ["scouted, high", "alert, high", "turn, high", "alert", "turn", "scouted, low"]
 
     def test_a_subscription_during_a_turn_leaves_the_rest_of_it_selecting_as_before(self) -> None:
@@ -977,11 +1002,17 @@ class TestATurnGoesOutPriorityFirst:
         bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE), priority=EventPriority.LOW)(
             lambda event: alerts.append(event.alert)
         )
-        bus.on(TurnEvent, priority=EventPriority.LOW).where(lambda event: event.step > 0)(
-            lambda event: steps.append(event.step)
+        bus.on(TurnEvent, priority=EventPriority.LOW).where(lambda event: event.time.steps > 0)(
+            lambda event: steps.append(event.time.steps)
         )
         research, exhausted = Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED
-        bus._hand_out([AlertEvent(research, step=0), AlertEvent(exhausted, step=0), TurnEvent(step=0)])
+        bus._hand_out(
+            [
+                AlertEvent(research, time=GameTime(steps=0)),
+                AlertEvent(exhausted, time=GameTime(steps=0)),
+                TurnEvent(time=GameTime(steps=0)),
+            ]
+        )
         assert alerts == [research] and not steps
 
     def test_what_a_handler_emits_goes_out_at_once_all_priorities_through(self) -> None:
@@ -990,45 +1021,45 @@ class TestATurnGoesOutPriorityFirst:
         @bus.on(TurnEvent, priority=EventPriority.HIGH)
         def high(event: TurnEvent) -> None:
             calls.append("turn, high")
-            bus.emit(_Scouted("natural", step=event.step))
+            bus.emit(_Scouted("natural", time=GameTime(steps=event.time.steps)))
 
         bus.on(_Scouted, priority=EventPriority.LOWEST)(lambda event: calls.append("scouted, lowest"))
         bus.on(TurnEvent)(lambda event: calls.append("turn"))
-        bus._hand_out([TurnEvent(step=0)])
+        bus._hand_out([TurnEvent(time=GameTime(steps=0))])
         assert calls == ["turn, high", "scouted, lowest", "turn"]
 
 
 class TestWhere:
     def _turns(self, bus: _EventBus, *steps: int) -> None:
         for step in steps:
-            bus.emit(TurnEvent(step=step))
+            bus.emit(TurnEvent(time=GameTime(steps=step)))
 
     def test_a_predicate_selects_the_events_a_handler_is_handed(self) -> None:
         bus, fired = _EventBus(), []
-        bus.on(TurnEvent).where(lambda event: event.step % 2 == 0)(lambda event: fired.append(event.step))
+        bus.on(TurnEvent).where(lambda event: event.time.steps % 2 == 0)(lambda event: fired.append(event.time.steps))
         self._turns(bus, 0, 1, 2, 3)
         assert fired == [0, 2]
 
     @pytest.mark.parametrize(
         ("cadence", "expected"),
-        [({"once": True}, [1]), ({"every_steps": 4}, [1, 5]), ({"at_step": 4}, [5])],
-        ids=["once", "every_steps", "at_step"],
+        [({"once": True}, [1]), ({"min_interval": GameTime(steps=4)}, [1, 5]), ({"at_time": GameTime(steps=4)}, [5])],
+        ids=["once", "min_interval", "at_time"],
     )
     def test_what_a_handler_counts_counts_only_what_it_selects(
-        self, cadence: dict[str, int | bool], expected: list[int]
+        self, cadence: dict[str, GameTime | bool], expected: list[float]
     ) -> None:
         bus, fired = _EventBus(), []
         subscribing = bus.on(TurnEvent, **cadence)  # type: ignore
-        subscribing.where(lambda event: event.step % 2 == 1)(lambda event: fired.append(event.step))
+        subscribing.where(lambda event: event.time.steps % 2 == 1)(lambda event: fired.append(event.time.steps))
         self._turns(bus, *range(9))
         assert fired == expected
 
     def test_done_stops_a_handler_at_the_first_event_it_selects(self) -> None:
         bus, fired = _EventBus(), []
 
-        @bus.on(TurnEvent).where(lambda event: event.step >= 2)
+        @bus.on(TurnEvent).where(lambda event: event.time.steps >= 2)
         def later(event: TurnEvent) -> object:
-            fired.append(event.step)
+            fired.append(event.time.steps)
             return Done
 
         self._turns(bus, 0, 1, 2, 3)
@@ -1036,9 +1067,9 @@ class TestWhere:
 
     def test_one_decorator_subscribes_every_handler_it_decorates(self) -> None:
         bus, fired = _EventBus(), []
-        even = bus.on(TurnEvent).where(lambda event: event.step % 2 == 0)
-        even(lambda event: fired.append(("first", event.step)))
-        even(lambda event: fired.append(("second", event.step)))
+        even = bus.on(TurnEvent).where(lambda event: event.time.steps % 2 == 0)
+        even(lambda event: fired.append(("first", event.time.steps)))
+        even(lambda event: fired.append(("second", event.time.steps)))
         self._turns(bus, 0, 1)
         assert fired == [("first", 0), ("second", 0)]
 
@@ -1046,12 +1077,12 @@ class TestWhere:
         bus, seen = _EventBus(), []
         (
             bus.on(AlertEvent.only(Alert.RESEARCH_COMPLETE, Alert.UPGRADE_COMPLETE))
-            .where(lambda event: event.step > 0)
-            .where(lambda event: event.step < 3)
-        )(lambda event: seen.append((event.step, event.alert)))
+            .where(lambda event: event.time.steps > 0)
+            .where(lambda event: event.time.steps < 3)
+        )(lambda event: seen.append((event.time.steps, event.alert)))
         for step in range(4):
             for alert in (Alert.RESEARCH_COMPLETE, Alert.MINERALS_EXHAUSTED):
-                bus.emit(AlertEvent(alert, step=step))
+                bus.emit(AlertEvent(alert, time=GameTime(steps=step)))
         assert seen == [(1, Alert.RESEARCH_COMPLETE), (2, Alert.RESEARCH_COMPLETE)]
 
     def test_each_handler_selects_the_event_as_its_turn_comes(self) -> None:
@@ -1059,12 +1090,12 @@ class TestWhere:
 
         def take(event: TurnEvent) -> None:
             calls.append(len(taken))
-            taken.add(event.step)
+            taken.add(event.time.steps)
 
-        untaken = bus.on(TurnEvent).where(lambda event: event.step not in taken)
+        untaken = bus.on(TurnEvent).where(lambda event: event.time.steps not in taken)
         untaken(take)
         untaken(take)
-        bus.emit(TurnEvent(step=0))
+        bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert calls == [0]
 
     def test_a_predicate_that_raises_is_logged_if_its_handler_catches_and_otherwise_goes_on_up(
@@ -1072,8 +1103,8 @@ class TestWhere:
     ) -> None:
         bus, fired = _EventBus(), []
         bus.on(TurnEvent, catch_exceptions=True).where(lambda event: 1 / 0 > 0)(lambda event: fired.append(event))
-        bus.emit(TurnEvent(step=0))
+        bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert not fired and any("raised selecting" in message for message in logged)
         bus.on(TurnEvent).where(lambda event: 1 / 0 > 0)(lambda event: fired.append(event))
         with pytest.raises(ZeroDivisionError):
-            bus.emit(TurnEvent(step=1))
+            bus.emit(TurnEvent(time=GameTime(steps=1)))

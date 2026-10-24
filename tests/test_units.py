@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import Api, NachOSError
+from sc2nachos import Api, GameTime, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Cost
 from sc2nachos.gamedata._repair_steps import REPAIR_STEPS_EXCEPTIONS
@@ -194,7 +194,7 @@ class TestLifecycle:
         (zergling,) = game.observe(0, make_unit(1, alliance=_ENEMY, at=(5.0, 6.0), health=35.0))
         game.observe(16)
         assert zergling.is_stale
-        assert (zergling.position, zergling.health, zergling.last_seen) == (Point((5.0, 6.0)), 35.0, 0)
+        assert (zergling.position, zergling.health, zergling.last_seen) == (Point((5.0, 6.0)), 35.0, GameTime(steps=0))
         assert not game.tracker.unit_tracker.present
         assert list(game.tracker.unit_tracker.known) == [zergling]
 
@@ -273,10 +273,15 @@ class TestTheFog:
         assert remembered is depot
         assert (depot.id, depot.tag, depot.visibility) == (400001, 900, _IN_FOG)
         assert depot.health == 400.0
-        assert depot.last_seen == 0
+        assert depot.last_seen == GameTime(steps=0)
         (seen,) = game.observe(32, _depot(1, health=300.0))
         assert seen is depot
-        assert (depot.tag, depot.visibility, depot.health, depot.last_seen) == (1, Visibility.VISIBLE, 300.0, 32)
+        assert (depot.tag, depot.visibility, depot.health, depot.last_seen) == (
+            1,
+            Visibility.VISIBLE,
+            300.0,
+            GameTime(steps=32),
+        )
         (again,) = game.observe(48, _depot(901, visibility=_IN_FOG))
         assert again is depot
         assert [unit.id for unit in game.tracker.unit_tracker.known] == [400001]
@@ -429,7 +434,7 @@ class TestWhatAUnitReads:
             _INVISIBLE,
             CloakState.CLOAKED,
         )
-        assert (banshee.health, banshee.owner_id, banshee.last_seen) == (140.0, 2, 0)
+        assert (banshee.health, banshee.owner_id, banshee.last_seen) == (140.0, 2, GameTime(steps=0))
 
     def test_a_unit_is_visible_while_the_last_observation_shows_it_so(self) -> None:
         """Not once it is invisible, remembered in the fog, or gone from the observation, though its `visibility` then
@@ -585,26 +590,28 @@ class TestRepair:
 
     def test_a_whole_repair_takes_the_steps_its_type_costs_and_a_quarter_of_its_resources_rounded_up(self) -> None:
         """A quarter of 150 minerals and 125 vespene is 37.5 and 31.25."""
-        assert self._tank(87.5).total_repair_cost == Cost(38, 32, steps=720)
+        assert self._tank(87.5).total_repair_cost == Cost(38, 32, time=GameTime(steps=720))
 
     def test_a_form_switched_into_for_nothing_is_repaired_as_the_form_it_switched_from(self) -> None:
         """A sieged tank costs the tank's steps, its siege's left out (in game)."""
-        assert self._tank(87.5, UnitTypeId.SIEGE_TANK_SIEGED).total_repair_cost == Cost(38, 32, steps=720)
+        assert self._tank(87.5, UnitTypeId.SIEGE_TANK_SIEGED).total_repair_cost == Cost(
+            38, 32, time=GameTime(steps=720)
+        )
 
     def test_a_type_measured_taking_other_steps_than_it_costs_takes_those(self) -> None:
         """A MULE, whose row gives it no build steps, is repaired in 270 (in game)."""
         mule = _one(make_unit(1, UnitTypeId.MULE, health=30.0, health_max=60.0, build_progress=1.0))
-        assert mule.total_repair_cost == Cost(13, 0, steps=REPAIR_STEPS_EXCEPTIONS[UnitTypeId.MULE])
+        assert mule.total_repair_cost == Cost(13, 0, time=GameTime(steps=REPAIR_STEPS_EXCEPTIONS[UnitTypeId.MULE]))
 
     def test_it_takes_the_share_of_a_whole_repair_that_its_health_misses_each_resource_rounded_up(self) -> None:
         """Half of a quarter of 150 minerals and 125 vespene is 18.75 and 15.625."""
-        assert self._tank(87.5).required_repair_cost == Cost(19, 16, steps=360)
+        assert self._tank(87.5).required_repair_cost == Cost(19, 16, time=GameTime(steps=360))
 
     def test_a_cost_that_comes_out_whole_is_not_rounded_up(self) -> None:
         """A bunker missing 112 of its 400 health costs 7 of a quarter of 100 minerals, which a share of the cost worked
         out first would make a little more than 7."""
         bunker = _one(make_unit(1, UnitTypeId.BUNKER, health=288.0, health_max=400.0, build_progress=1.0))
-        assert bunker.required_repair_cost == Cost(7, 0, steps=180)
+        assert bunker.required_repair_cost == Cost(7, 0, time=GameTime(steps=180))
 
     def test_a_unit_whole_takes_no_steps_and_costs_nothing(self) -> None:
         assert self._tank(175.0).required_repair_cost == Cost(0, 0)
@@ -634,23 +641,26 @@ class TestTurning:
     def test_a_turn_takes_its_angle_over_the_rate_rounded_up(self) -> None:
         """90 degrees is two steps of 45 for a thor, and 180 three of 62.49 for a marine."""
         thor, marine = self._facing_east(UnitTypeId.THOR), self._facing_east(UnitTypeId.MARINE)
-        assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (2, 3)
+        assert (thor.time_to_face((10.0, 20.0)), marine.time_to_face((0.0, 10.0))) == (
+            GameTime(steps=2),
+            GameTime(steps=3),
+        )
 
     def test_it_turns_to_face_another_unit_as_it_would_its_position(self) -> None:
         marine = self._facing_east(UnitTypeId.MARINE)
         (behind,) = _Game().observe(0, make_unit(2, UnitTypeId.MARINE, at=(0.0, 10.0), alliance=_ENEMY))
-        assert marine.time_to_face(behind) == 3
+        assert marine.time_to_face(behind) == GameTime(steps=3)
 
     def test_a_unit_that_faces_its_target_to_within_a_degree_takes_no_steps(self) -> None:
         marine = self._facing_east(UnitTypeId.MARINE)
-        assert [marine.time_to_face(target) for target in ((20.0, 10.1), (10.0, 10.0))] == [0, 0]
+        assert [marine.time_to_face(target) for target in ((20.0, 10.1), (10.0, 10.0))] == [GameTime(steps=0)] * 2
 
     def test_how_near_facing_counts_as_facing_can_be_given(self) -> None:
         """A target 5 degrees off is a step's turn by default, and none within 10."""
         marine = self._facing_east(UnitTypeId.MARINE)
         target = (10.0 + 10 * math.cos(math.radians(5)), 10.0 + 10 * math.sin(math.radians(5)))
         within_ten_degrees = marine.time_to_face(target, facing_tolerance=math.radians(10))
-        assert (marine.time_to_face(target), within_ten_degrees) == (1, 0)
+        assert (marine.time_to_face(target), within_ten_degrees) == (GameTime(steps=1), GameTime(steps=0))
 
     def test_a_type_whose_facing_never_changes_has_no_time_to_face(self) -> None:
         """A colossus moves with its facing as it was (in game)."""
@@ -988,7 +998,7 @@ class TestOwnUnits:
     def test_the_weapon_cooldown_is_in_steps(self) -> None:
         marine = _one(make_unit(1, weapon_cooldown=11.0))
         assert isinstance(marine, OwnUnit)
-        assert marine.weapon_cooldown_steps == 11.0
+        assert marine.weapon_cooldown.steps == 11.0
 
     def test_a_bot_can_key_its_own_data_by_unit(self) -> None:
         marine = _one(make_unit(1))

@@ -496,7 +496,7 @@ def _weapons_of(game_data: GameData, unit_type: UnitTypeId) -> list[dict[str, An
             "damage": weapon.damage,
             "attacks": weapon.attacks,
             "range": weapon.range,
-            "cooldown_steps": weapon.base_cooldown_steps,
+            "cooldown_steps": weapon.base_cooldown.steps,
             "damage_bonuses": {attribute.name: bonus for attribute, bonus in weapon.damage_bonuses.items()},
         }
         for weapon in _tables_weapons(game_data, unit_type)
@@ -669,7 +669,7 @@ def _by_a_command_center(
     away = _MELEE_FROM_COMMAND_CENTER if _is_melee(game_data, attacker_type) else _RANGED_FROM_COMMAND_CENTER
     (attacker,) = _units_made(rivals, [(attacker_type, rivals.me.player, Point((target.pos.x - away, target.pos.y)))])
     weapons = _tables_weapons(game_data, attacker_type)
-    return attacker, target, weapons[0].base_cooldown_steps if weapons else None
+    return attacker, target, weapons[0].base_cooldown.steps if weapons else None
 
 
 class _AttackWatch:

@@ -1,6 +1,7 @@
 import numpy
 import pytest
 
+from sc2nachos import GameTime
 from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.util import TimeSeries
 
@@ -33,15 +34,15 @@ class TestEmpty:
     def test_has_no_start_until_the_first_append(self):
         series = TimeSeries.empty(float)
         with pytest.raises(ValueError, match="no start step"):
-            _ = series.start
+            _ = series.start_time.steps
         with pytest.raises(ValueError, match="no start step"):
-            _ = series.last_step
+            _ = series.last_time.steps
 
     def test_the_first_append_sets_the_start(self):
         series = TimeSeries.empty(float)
         series.append(500, 1.0)
-        assert series.start == 500
-        assert series.last_step == 500
+        assert series.start_time.steps == 500
+        assert series.last_time.steps == 500
 
     def test_the_constructor_requires_a_start(self):
         with pytest.raises(TypeError):
@@ -70,8 +71,8 @@ class TestEmpty:
 
 class TestAppend:
     def test_single(self, ramp):
-        assert ramp.start == 0
-        assert ramp.last_step == 9
+        assert ramp.start_time.steps == 0
+        assert ramp.last_time.steps == 9
         assert ramp.last_value == 9.0
 
     def test_consecutive(self, ramp):
@@ -130,8 +131,8 @@ class TestAppend:
     def test_first_append_sets_the_start(self):
         series = TimeSeries.empty(float)
         series.append(100, 1.0)
-        assert series.start == 100
-        assert series.last_step == 100
+        assert series.start_time.steps == 100
+        assert series.last_time.steps == 100
 
     def test_out_of_order_raises(self, ramp):
         # An `assert` here would vanish under `python -O`, corrupting the series instead.
@@ -168,13 +169,13 @@ class TestIndexing:
 
     def test_slice_is_by_step(self, ramp):
         window = ramp[2:5]
-        assert window.start == 2
+        assert window.start_time.steps == 2
         assert window.size == 3
         assert list(window.values) == [2.0, 3.0, 4.0]
 
     def test_open_slice_takes_the_whole_series(self, ramp):
         window = ramp[:]
-        assert window.start == 0
+        assert window.start_time.steps == 0
         assert window.size == 10
 
     def test_slice_past_the_end_clamps(self, ramp):
@@ -223,11 +224,12 @@ class TestValue:
         assert ramp.at(-1) is None
         assert ramp.at(10) is None
 
-    def test_at_time_converts_seconds_to_steps(self, ramp):
-        assert ramp.at_time(4 / STEPS_PER_SECOND) == 4.0
+    def test_at_time_reads_the_nearest_step(self, ramp):
+        assert ramp.at_time(GameTime.from_seconds(4 / STEPS_PER_SECOND)) == 4.0
+        assert ramp.at_time(GameTime(steps=3.6)) == 4.0
 
     def test_at_time_outside_the_range_is_none(self, ramp):
-        assert ramp.at_time(100.0) is None
+        assert ramp.at_time(GameTime.from_seconds(100.0)) is None
 
 
 class TestStatistics:
@@ -256,49 +258,70 @@ class TestDerivativeAt:
         series = TimeSeries.empty(float)
         for step in range(200):
             series.append(step, float(step))
-        assert series.derivative_at(199, window=100) == pytest.approx(STEPS_PER_SECOND)
+        assert series.derivative_at(199, window=GameTime(steps=100)) == pytest.approx(STEPS_PER_SECOND)
 
     def test_window_does_not_change_the_rate(self):
         series = TimeSeries.empty(float)
         for step in range(200):
             series.append(step, float(step))
-        assert series.derivative_at(199, window=10) == pytest.approx(series.derivative_at(199, window=150))
+        assert series.derivative_at(199, window=GameTime(steps=10)) == pytest.approx(
+            series.derivative_at(199, window=GameTime(steps=150))
+        )
 
     def test_insufficient_history_is_none(self, ramp):
-        assert ramp.derivative_at(9, window=100) is None
+        assert ramp.derivative_at(9, window=GameTime(steps=100)) is None
 
     @pytest.mark.parametrize("window", [0, -10])
     def test_a_window_of_no_steps_raises(self, ramp, window):
         """A negative window read the unrecorded buffer and answered -11.2; no window divided by zero."""
         with pytest.raises(ValueError, match="at least one step"):
-            ramp.derivative_at(5, window=window)
+            ramp.derivative_at(5, window=GameTime(steps=window))
+
+    def test_a_window_of_seconds_is_rounded_to_the_nearest_step(self):
+        """A second is 22.4 steps, read over 22: the square of the step rises by 2 * 100 - 22 a step over them."""
+        series = TimeSeries.empty(float)
+        for step in range(200):
+            series.append(step, float(step**2))
+        rate = series.derivative_at(100, window=GameTime.from_seconds(1))
+        assert rate == pytest.approx((2 * 100 - 22) * STEPS_PER_SECOND)
 
     def test_measures_before_the_last_step(self, ramp):
-        assert ramp.derivative_at(5, window=5) == pytest.approx(STEPS_PER_SECOND)
+        assert ramp.derivative_at(5, window=GameTime(steps=5)) == pytest.approx(STEPS_PER_SECOND)
 
     def test_handles_a_negative_start_step(self):
         series = TimeSeries.empty(float)
         for step in range(-10, 10):
             series.append(step, float(step))
-        assert series.derivative_at(0, window=5) == pytest.approx(STEPS_PER_SECOND)
+        assert series.derivative_at(0, window=GameTime(steps=5)) == pytest.approx(STEPS_PER_SECOND)
 
     def test_smoothing_is_done_by_composing_with_a_filter(self):
         series = TimeSeries.empty(float)
         for step in range(200):
             series.append(step, float(step))
-        assert series.gaussian_filter(sigma=2.0).derivative_at(150, window=100) == pytest.approx(STEPS_PER_SECOND)
+        assert series.gaussian_filter(sigma=GameTime(steps=2.0)).derivative_at(
+            150, window=GameTime(steps=100)
+        ) == pytest.approx(STEPS_PER_SECOND)
 
 
 class TestFilters:
     def test_gaussian_filter_keeps_the_geometry(self, ramp):
-        filtered = ramp.gaussian_filter(sigma=1.0)
-        assert filtered.start == ramp.start
+        filtered = ramp.gaussian_filter(sigma=GameTime(steps=1.0))
+        assert filtered.start_time.steps == ramp.start_time.steps
         assert filtered.size == ramp.size
 
     def test_uniform_filter_keeps_the_geometry(self, ramp):
-        filtered = ramp.uniform_filter(size=3)
-        assert filtered.start == ramp.start
+        filtered = ramp.uniform_filter(size=GameTime(steps=3))
+        assert filtered.start_time.steps == ramp.start_time.steps
         assert filtered.size == ramp.size
+
+    @pytest.mark.parametrize("size", [GameTime(steps=0), GameTime(steps=2.5), GameTime.from_seconds(1)])
+    def test_uniform_filter_over_anything_but_a_whole_number_of_steps_raises(self, ramp, size):
+        with pytest.raises(ValueError, match="whole number of steps"):
+            ramp.uniform_filter(size=size)
+
+    def test_uniform_filter_over_a_plain_number_raises(self, ramp):
+        with pytest.raises(TypeError, match="GameTime"):
+            ramp.uniform_filter(size=3)  # pyright: ignore[reportArgumentType]
 
 
 class TestCopyAndAdd:
@@ -309,7 +332,7 @@ class TestCopyAndAdd:
 
     def test_add_overlapping(self, ramp):
         combined = ramp + ramp
-        assert combined.start == 0
+        assert combined.start_time.steps == 0
         assert combined.size == 10
         assert combined[5] == 10.0
 
@@ -321,8 +344,8 @@ class TestCopyAndAdd:
         for step in range(3, 8):
             second.append(step, 10.0)
         combined = first + second
-        assert combined.start == 3
-        assert combined.last_step == 4
+        assert combined.start_time.steps == 3
+        assert combined.last_time.steps == 4
         assert list(combined.values) == [11.0, 11.0]
 
     def test_combining_disjoint_series_gives_an_empty_series(self):
@@ -351,8 +374,8 @@ class TestCopyAndAdd:
 
     def test_scalar_arithmetic_keeps_the_step_range(self, ramp):
         scaled = ramp * 2
-        assert scaled.start == ramp.start
-        assert scaled.last_step == ramp.last_step
+        assert scaled.start_time.steps == ramp.start_time.steps
+        assert scaled.last_time.steps == ramp.last_time.steps
 
     def test_scalar_arithmetic_reflects(self, ramp):
         assert (1 + ramp)[4] == 5.0
@@ -365,7 +388,7 @@ class TestCopyAndAdd:
         scalar = getattr(numpy, dtype)(2)
         for result in (ramp * scalar, scalar * ramp, ramp + scalar, scalar + ramp, ramp - scalar, scalar - ramp):
             assert isinstance(result, TimeSeries)
-            assert (result.start, result.last_step) == (0, 9)
+            assert (result.start_time.steps, result.last_time.steps) == (0, 9)
         assert (scalar * ramp)[4] == 8.0
         assert (scalar - ramp)[4] == -2.0
 
@@ -387,14 +410,14 @@ class TestCopyAndAdd:
 class TestConstruction:
     def test_wraps_an_existing_array(self):
         series = TimeSeries(numpy.array([1.0, 2.0, 3.0]), 10, 3)
-        assert series.start == 10
-        assert series.last_step == 12
+        assert series.start_time.steps == 10
+        assert series.last_time.steps == 12
         assert series[11] == 2.0
 
     def test_buffer_may_be_longer_than_the_recorded_size(self):
         series = TimeSeries(numpy.arange(10.0), 0, 3)
         assert series.size == 3
-        assert series.last_step == 2
+        assert series.last_time.steps == 2
         assert list(series.values) == [0.0, 1.0, 2.0]
 
     def test_size_beyond_the_buffer_raises(self):
@@ -421,7 +444,7 @@ class TestConstruction:
         for series in (ramp[5:5], TimeSeries.empty(float).copy()):
             assert series.size == 0
             series.append(7, 1.0)
-            assert series.start == 7
+            assert series.start_time.steps == 7
             assert series.last_value == 1.0
 
     def test_repr_names_the_step_range(self, ramp):

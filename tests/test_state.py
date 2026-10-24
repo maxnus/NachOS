@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 
-from sc2nachos import Api, NotPlayingError
+from sc2nachos import Api, GameTime, NotPlayingError
 from sc2nachos.events import AnyChatEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
@@ -208,7 +208,7 @@ class TestProduction:
         bays = [_done(1, UnitTypeId.ENGINEERING_BAY, weapons, armor), _done(2, UnitTypeId.ENGINEERING_BAY)]
         researches = _Game(tables=_MAKING_TABLES).observe(units=bays).production.researches
         assert [
-            (upgrade, research.unit.tag, research.total_steps, research.steps_left, research.progress)
+            (upgrade, research.unit.tag, research.total_time.steps, research.time_left.steps, research.progress)
             for upgrade, research in researches.items()
         ] == [
             (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 2560, 1920, 0.25),
@@ -262,7 +262,7 @@ class TestScore:
         """Measured in game: two idle drones add 20 to the idle worker time over 160 steps."""
         details = score_pb2.ScoreDetails(idle_production_time=10.0, idle_worker_time=20.0)
         score = _Game().observe(score=score_pb2.Score(score_details=details)).score
-        assert (score.idle_production_steps, score.idle_worker_steps) == (160, 320)
+        assert (score.idle_production_time.steps, score.idle_worker_time.steps) == (160, 320)
 
     def test_a_split_amount_totals_its_parts(self) -> None:
         assert CategoryScore(1.0, 2.0, 3.0, 4.0, 5.0).total == 15.0
@@ -388,9 +388,9 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1), make_unit(2)], dead=(9,), actions=actions)
         assert state.actions == (
-            UnitCommand(15, AbilityId.MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
-            UnitCommand(15, AbilityId.ATTACK, (marine,), enemy, queued=False),
-            UnitCommand(15, AbilityId.STOP, (other,), None, queued=True),
+            UnitCommand(GameTime(steps=15), AbilityId.MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
+            UnitCommand(GameTime(steps=15), AbilityId.ATTACK, (marine,), enemy, queued=False),
+            UnitCommand(GameTime(steps=15), AbilityId.STOP, (other,), None, queued=True),
         )
         assert enemy.is_dead
 
@@ -407,8 +407,8 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
         assert state.actions == (
-            AutocastToggle(3, AbilityId.MEDIVAC_HEAL, (medivac,)),
-            CameraMove(2, Point((30.75, 139.0))),
+            AutocastToggle(GameTime(steps=3), AbilityId.MEDIVAC_HEAL, (medivac,)),
+            CameraMove(GameTime(steps=2), Point((30.75, 139.0))),
         )
 
 
@@ -511,7 +511,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         messages = record(game.events, AnyChatEvent)
         game.turn(1)
         game.turn(1)
-        assert messages == [OwnChatEvent(game.player, "gl hf", step=messages[0].step)]
+        assert messages == [OwnChatEvent(game.player, "gl hf", time=messages[0].time)]
 
         # A unit that dies is among the dead units in one observation only.
         game.debug(game.kill(zergling))

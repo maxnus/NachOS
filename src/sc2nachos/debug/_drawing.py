@@ -34,7 +34,7 @@ class _PlacedShape:
 
 @final
 class Drawing:
-    """A drawing on the game's screen, shown until its steps have passed, a unit it stands at is dead, or it is
+    """A drawing on the game's screen, shown until its `shown_for` has passed, a unit it stands at is dead, or it is
     removed. `api.debug.draw` and `draw_text_on_screen` return it."""
 
     __slots__ = ("_anchor", "_parts", "_removed", "_until")

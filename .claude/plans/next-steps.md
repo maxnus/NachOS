@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #161. On this branch, `uv run pytest` passes 2751 tests; `uv run pytest -m
+- nachOS `main` has every PR to #162. On this branch, `uv run pytest` passes 2800 tests; `uv run pytest -m
   integration` passed 38 against a real game on this branch (run 2026-10-24).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -476,6 +476,28 @@ Keep this file current: when a step is done, say so here in the same pull reques
     grouping the types by rate, and over plain whole numbers); `Unit.time_to_face(target, *, facing_tolerance)` in steps, the turn
     alone, since how long an order takes to land is the connection's (over `steps_to_face`, and over counting the
     order's step); settled at a stop point after the sweep and in the owner's review (#162);
+  - one type for every moment and length of game time, `sc2nachos.GameTime` (the owner, 2026-10-24, one question at a
+    time, over `Duration`, a length alone, and over `Time`), so `api.time` returns one too:
+    - every moment one, under a `time` name: `event.time`, `action.time`, `order.issued_time`, `reservation.time`,
+      `unit.last_seen`, and a series' `start_time` and `last_time` beside its index of steps; `api.step` stays the
+      one int counter (over dropping it, and over changing `api.time` alone; the series over keeping it wholly by the
+      step counter, and over indexing it by `GameTime`);
+    - a frozen, slotted dataclass of one keyword-only field, `steps: float`, with `seconds` worked out and
+      `from_seconds` (over a `float` subclass, and over holding seconds), made once an observation for its events;
+    - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
+      to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
+      false (over the least needed, and over a plain number read as steps);
+    - every length one, its `_steps` dropped or made `_time`: `build_time`, `Cost.time`, `base_cooldown`,
+      `mean_delay`, `average_cooldown`, `weapon_cooldown`, what `time_to_face` returns, `Research.total_time` and
+      `time_left`, the score's `idle_production_time` and `idle_worker_time`, and `PlacementReservation.max_time`
+      (over a unit's cooldown kept a float, some 150 ns a read cheaper); rates stay as they are;
+    - the inputs too: `api.on(min_interval=, at_time=)`, a drawing's `shown_for`, `debug.refresh_interval`,
+      `reserve(max_time=)`, `time_limit`, and a series' `window`, `sigma` and `size`, a drawing's, the refresh's and a
+      moving average's a whole number of steps or `ValueError`; `steps_per_turn` stays an int and `--TimeLimit`
+      seconds (over plain step counts, and over taking either);
+    - no `str` of its own but `time_string`, minutes, seconds and milliseconds rounded down, which tells every step
+      from the next (the owner's, over `str` as the game's clock); `steps_to_seconds` and `seconds_to_steps` go for
+      it (this branch);
 - **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
   of either player saw the game, in a branch of its own beside M5:
   - `run_replay(replay, api, *, player_id, steps_per_turn=1, time_limit=None, record_to=None, installation=None,
@@ -517,15 +539,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
-- **A duration type for every duration NachOS gives** (the owner, review of #159), with steps and seconds. Plan it with
-  the owner first, one question at a time: its name (`Duration`, since `api.time` is a moment, not a length), one
-  stored field (steps, the seconds worked out), the comparisons and arithmetic it needs (`steps_left / total_steps`
-  today), and whether the inputs (`steps_per_turn`, `every_steps=`, `debug.refresh_steps`) take it too. Then one pull
-  request moves them all: `build_steps`, `research_steps`, `Research.total_steps` and `steps_left`, the weapons'
-  cooldowns, the score's idle steps, a placement reservation's `max_steps` and `Cost.steps`.
 - M5, in AvocaDOS (section 3).
-- Beside M5: replay playback (this branch), then reading a playback with the fog off, its design planned with the
-  owner first (2026-10-24, above).
+- Beside M5: reading a playback with the fog off, after replay playback (#160), its design planned with the owner
+  first (2026-10-24, above).
 
 ## 1. Waiting until something needs them
 

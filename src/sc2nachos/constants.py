@@ -15,13 +15,3 @@ FASTER_PER_NORMAL_SPEED = STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND
 # The game truncates a point it is given to this fraction of a tile: a move to x = 157.123456 is carried out and
 # reported at 157.123291 (in game).
 POINT_PRECISION = 1 / 4096
-
-
-def steps_to_seconds(steps: float) -> float:
-    """Game steps as seconds of real time."""
-    return steps * SECONDS_PER_STEP
-
-
-def seconds_to_steps(seconds: float) -> float:
-    """Seconds of real time as game steps, unrounded."""
-    return seconds * STEPS_PER_SECOND

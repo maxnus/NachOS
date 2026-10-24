@@ -11,6 +11,7 @@ import numpy
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
+from sc2nachos import GameTime
 from sc2nachos._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
@@ -381,11 +382,12 @@ def played(
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),
             _chat_event_types=_chat_event_types_by_player(_WITH_AN_OBSERVER, PLAYER_ID),
             step=step,
+            time=GameTime(steps=step),
         )
         game._read(observation, step)
     else:
         game._take_in(observation, step)
-    events._set_step(step)
+    events._set_time(GameTime(steps=step))
     events._hand_out(game.report(events))
     return game
 

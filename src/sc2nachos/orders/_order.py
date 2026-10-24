@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 if TYPE_CHECKING:
+    from sc2nachos.game_time import GameTime
     from sc2nachos.ids import AbilityId
     from sc2nachos.units import OwnUnit, Target
 
@@ -19,7 +20,7 @@ class Order[T]:
     __slots__ = (
         "_ability",
         "_data",
-        "_issued_step",
+        "_issued_time",
         "_queued",
         "_target",
         "_units",
@@ -34,15 +35,15 @@ class Order[T]:
         *,
         queued: bool,
         data: T,
-        step: int,
+        issued_time: GameTime,
     ) -> None:
-        """An order of `ability` to `units`, issued at `step`. Made by the order book, never by a bot."""
+        """An order of `ability` to `units`, issued at `issued_time`. Made by the order book, never by a bot."""
         self._ability = ability
         self._units = units
         self._target = target
         self._queued = queued
         self._data = data
-        self._issued_step = step
+        self._issued_time = issued_time
         self._withdrawn = False
 
     def __repr__(self) -> str:
@@ -75,9 +76,9 @@ class Order[T]:
         return self._data
 
     @property
-    def issued_step(self) -> int:
-        """The step of the observation the order was issued in."""
-        return self._issued_step
+    def issued_time(self) -> GameTime:
+        """The time of the observation the order was issued in."""
+        return self._issued_time
 
     def withdraw(self) -> None:
         """Take the order back while its turn's handlers run, so it never goes out. After its turn it does nothing."""

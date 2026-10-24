@@ -10,11 +10,13 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import Final
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._unit_type_data import Attribute, TargetDomain, UnitTypeData, Weapon
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 
 _NO_BONUS: Final[Mapping[Attribute, float]] = MappingProxyType({})
+_NO_DELAY = GameTime(steps=0)
 
 MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyType(
     {
@@ -25,18 +27,18 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 damage=8.0,
                 attacks=1,
                 range=6.0,
-                base_cooldown_steps=3.6,
+                base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay_steps=0.0,
+                mean_delay=_NO_DELAY,
             ),
             Weapon(
                 TargetDomain.AIR,
                 damage=5.0,
                 attacks=1,
                 range=6.0,
-                base_cooldown_steps=3.6,
+                base_cooldown=GameTime(steps=3.6),
                 damage_bonuses=_NO_BONUS,
-                mean_delay_steps=0.0,
+                mean_delay=_NO_DELAY,
             ),
         ),
         # Its beam, which fires only while it is on, and at nothing in the air (in game).
@@ -46,10 +48,10 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 damage=15.0,
                 attacks=1,
                 range=4.0,
-                base_cooldown_steps=14.0,
+                base_cooldown=GameTime(steps=14.0),
                 damage_bonuses=MappingProxyType({Attribute.LIGHT: 7.0}),
                 ignores_armor=True,
-                mean_delay_steps=0.0,
+                mean_delay=_NO_DELAY,
             ),
         ),
         UnitTypeId.VOID_RAY: (
@@ -58,9 +60,9 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 damage=6.0,
                 attacks=1,
                 range=6.0,
-                base_cooldown_steps=8.0,
+                base_cooldown=GameTime(steps=8.0),
                 damage_bonuses=MappingProxyType({Attribute.ARMORED: 4.0}),
-                mean_delay_steps=0.0,
+                mean_delay=_NO_DELAY,
             ),
         ),
         UnitTypeId.SENTRY: (
@@ -69,9 +71,9 @@ MISSING_WEAPONS: Final[Mapping[UnitTypeId, tuple[Weapon, ...]]] = MappingProxyTy
                 damage=6.0,
                 attacks=1,
                 range=5.0,
-                base_cooldown_steps=16.0,
+                base_cooldown=GameTime(steps=16.0),
                 damage_bonuses=_NO_BONUS,
-                mean_delay_steps=0.0,
+                mean_delay=_NO_DELAY,
             ),
         ),
     }

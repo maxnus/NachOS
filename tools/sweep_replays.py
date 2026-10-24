@@ -46,7 +46,7 @@ from _sandbox import MAP, playing
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, query_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import Api, Computer, Difficulty, Race, run_local, run_recording, run_replay
+from sc2nachos import Api, Computer, Difficulty, GameTime, Race, run_local, run_recording, run_replay
 from sc2nachos.launch import GameProcess, Installation
 from sc2nachos.protocol import ConnectionClosedError, Recording, WebSocketTransport
 from sc2nachos.protocol._client import _raw_interface
@@ -96,7 +96,7 @@ def _record_the_shared_game(directory: Path) -> tuple[Path, Path]:
         Computer(Race.ZERG, Difficulty.MEDIUM),
         race=Race.TERRAN,
         steps_per_turn=_STEPS_PER_TURN,
-        time_limit=_GAME_SECONDS,
+        time_limit=GameTime.from_seconds(_GAME_SECONDS),
         random_seed=11,
         record_to=recording,
         save_replay_to=replay,

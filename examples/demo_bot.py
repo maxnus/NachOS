@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from sc2nachos import AbilityId, Api, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
+from sc2nachos import AbilityId, Api, GameTime, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
 from sc2nachos.events import EventPriority, OwnConstructionFinishedEvent, TurnEvent
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ def train_workers(budget: Budget) -> None:
 
 
 # At a low priority, so it runs after `macro`, whose builders `issued_to` then shows.
-@api.on(TurnEvent, every_steps=8, priority=EventPriority.LOW)
+@api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
 def send_idle_workers_to_mine(event: TurnEvent) -> None:
     """Send each idle SCV that has not been ordered this turn to mine at the townhall with the most room."""
     for scv in api.units.own.workers.idle:
@@ -92,7 +92,7 @@ def send_idle_workers_to_mine(event: TurnEvent) -> None:
             api.orders.issue(scv, AbilityId.GATHER, target=field)
 
 
-@api.on(TurnEvent, every_steps=64, priority=EventPriority.LOW)
+@api.on(TurnEvent, min_interval=GameTime(steps=64), priority=EventPriority.LOW)
 def balance_workers(event: TurnEvent) -> None:
     """Move SCVs from a townhall with more than it needs to one with room."""
     for townhall in api.units.own.townhalls.complete:
@@ -268,7 +268,7 @@ class Army:
         self.last_seen: dict[Point, int] = {}
         api.subscribe(self)
 
-    @api.on(TurnEvent, every_steps=4)
+    @api.on(TurnEvent, min_interval=GameTime(steps=4))
     def command(self, event: TurnEvent) -> None:
         """Defend against what comes near the bases, attack once there are enough marines, and fall back once too few
         are left."""

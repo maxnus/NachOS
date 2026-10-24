@@ -16,6 +16,7 @@ from sc2nachos import (
     Api,
     Computer,
     Difficulty,
+    GameTime,
     Race,
     Result,
     UnitTypeId,
@@ -25,7 +26,6 @@ from sc2nachos import (
     run_replay,
 )
 from sc2nachos._command_line_arguments import _CommandLineArguments
-from sc2nachos.constants import steps_to_seconds
 from sc2nachos.events import OwnActionEvent, TurnEvent
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, free_port
@@ -60,7 +60,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return Result.VICTORY
 
     monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
-    monkeypatch.setattr(Api, "time", property(lambda self: 754.3841))
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(754.3841)))
     return calls
 
 
@@ -74,7 +74,7 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return Result.DEFEAT
 
     monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
-    monkeypatch.setattr(Api, "time", property(lambda self: 61.25))
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(61.25)))
     monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
     return calls
 
@@ -235,7 +235,7 @@ def test_the_arguments_are_the_enums_member_names(played: dict[str, Any]) -> Non
     assert result is Result.VICTORY
     assert played["opponent"] == Computer(Race.ZERG, Difficulty.VERY_EASY, AIBuild.RUSH)
     assert played["map_file"].name == "TorchesAIE_v4"
-    assert played["time_limit"] == 0
+    assert played["time_limit"] == GameTime(steps=0)
     assert (played["api"], played["race"], played["name"]) == (api, Race.TERRAN, "MyBot")
 
 
@@ -390,8 +390,10 @@ class TestPlayingARecording:
     @pytest.mark.parametrize("permissive", [False, True], ids=["strict", "permissive"])
     def test_at_the_time_limit_it_is_a_tie(self, permissive: bool) -> None:
         api = Api()
-        assert run_recording(_PYLON_GAME, api, permissive=permissive, time_limit=60) is Result.TIE
-        assert 60 <= api.time < 61
+        assert (
+            run_recording(_PYLON_GAME, api, permissive=permissive, time_limit=GameTime.from_seconds(60)) is Result.TIE
+        )
+        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
 
     def test_by_default_a_recording_that_stops_before_the_games_end_needs_its_time_limit(self, tmp_path: Path) -> None:
         stopped = write_recording(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
@@ -399,7 +401,7 @@ class TestPlayingARecording:
         with pytest.raises(ProtocolError, match="answers leave_game next, and was asked for step"):
             run_recording(stopped, Api())
         api = Api()
-        assert run_recording(stopped, api, time_limit=steps_to_seconds(last_step)) is Result.TIE
+        assert run_recording(stopped, api, time_limit=GameTime(steps=last_step)) is Result.TIE
         assert api.step == last_step
 
     def test_by_default_a_bot_that_left_after_saving_its_replay_needs_where_to_save_it(self, tmp_path: Path) -> None:
@@ -466,8 +468,8 @@ class TestPlayingARecordedReplay:
     def test_at_the_time_limit_it_is_undecided(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
         api = Api()
-        assert run_recording(recording, api, time_limit=60) is Result.UNDECIDED
-        assert 60 <= api.time < 61
+        assert run_recording(recording, api, time_limit=GameTime.from_seconds(60)) is Result.UNDECIDED
+        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
 
     def test_a_bot_that_leaves_it_is_undecided_where_it_left(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(_pylon_game_stopped_after(100)))
@@ -653,7 +655,7 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
 
     @api.on(TurnEvent)
     def give_up(event: TurnEvent) -> None:
-        if event.step >= 16:
+        if event.time.steps >= 16:
             api.leave_game()
 
     port = free_port()
@@ -699,14 +701,14 @@ class _GameWatcher:
 
     def _note_the_units(self, event: TurnEvent) -> None:
         own = self.api.units.own
-        self.own_units[event.step] = sorted(
+        self.own_units[self.api.step] = sorted(
             (unit.type_id, round(unit.position.x, 3), round(unit.position.y, 3), unit.health) for unit in own
         )
-        self.units_shown[event.step] = len(self.api.units)
+        self.units_shown[self.api.step] = len(self.api.units)
 
     def _note_the_order(self, event: OwnActionEvent) -> None:
         if isinstance(event.action, UnitCommand):
-            self.orders_given.append((event.step, event.action.ability))
+            self.orders_given.append((self.api.step, event.action.ability))
 
 
 def _train_an_scv_on_the_first_turn(api: Api) -> None:
@@ -717,10 +719,10 @@ def _train_an_scv_on_the_first_turn(api: Api) -> None:
         api.orders.issue(api.units.own.townhalls[0], AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
-def _send_a_worker_to_the_natural(api: Api, *, at_step: int) -> None:
-    """Have `api` send one of its workers to its natural at `at_step`."""
+def _send_a_worker_to_the_natural(api: Api, *, at_time: GameTime) -> None:
+    """Have `api` send one of its workers to its natural at `at_time`."""
 
-    @api.on(TurnEvent, at_step=at_step)
+    @api.on(TurnEvent, at_time=at_time)
     def send(_: TurnEvent) -> None:
         api.orders.issue(api.units.own.workers[0], AbilityId.MOVE, target=api.expansions[1].center)
 
@@ -738,10 +740,16 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
     record = tmp_path / "played-back.sc2rec"
     played = _GameWatcher()
     _train_an_scv_on_the_first_turn(played.api)
-    _send_a_worker_to_the_natural(played.api, at_step=40)
+    _send_a_worker_to_the_natural(played.api, at_time=GameTime(steps=40))
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
     result = run_local(
-        game_map, played.api, opponent, race=Race.TERRAN, steps_per_turn=8, time_limit=20, save_replay_to=replay
+        game_map,
+        played.api,
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=8,
+        time_limit=GameTime.from_seconds(20),
+        save_replay_to=replay,
     )
     assert result is Result.TIE
     assert {ability for _, ability in played.orders_given} == {AbilityId.COMMAND_CENTER_TRAIN_SCV, AbilityId.MOVE}
@@ -757,7 +765,7 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
     assert as_the_bot.orders_given == played.orders_given
 
     as_the_computer = _GameWatcher()
-    _send_a_worker_to_the_natural(as_the_computer.api, at_step=80)
+    _send_a_worker_to_the_natural(as_the_computer.api, at_time=GameTime(steps=80))
     with pytest.raises(ProtocolError, match="Can't issue actions in a replay"):
         run_replay(replay, as_the_computer.api, player_id=2, steps_per_turn=8)
     assert (as_the_computer.api.player.id, as_the_computer.api.player.race) == (2, Race.ZERG)

@@ -9,7 +9,7 @@ import pytest
 from loguru import logger
 from s2clientprotocol import error_pb2, sc2api_pb2
 
-from sc2nachos import Api, NotPlayingError, run_ladder, run_local
+from sc2nachos import Api, GameTime, NotPlayingError, run_ladder, run_local
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     Event,
@@ -189,18 +189,25 @@ class TestPlaying:
         Api().play(client, steps_per_turn=8)
         assert [request.step.count for request in transport.requests if request.HasField("step")] == [8, 8]
 
-    def test_the_time_played_is_the_step_in_seconds(self) -> None:
+    def test_the_time_played_is_the_step_as_a_game_time(self) -> None:
         client, _ = _joined(*_game(0, 224))
         api = Api()
         api.play(client)
-        assert api.time == pytest.approx(10.0)
+        assert api.time == GameTime(steps=224)
+        assert api.time.seconds == pytest.approx(10.0)
 
     def test_a_time_limit_ends_the_game_in_a_tie(self) -> None:
         client, transport = _joined(*_game(0, 112, ending=None))
         api = Api()
-        assert api.play(client, steps_per_turn=112, time_limit=5) is Result.TIE
+        assert api.play(client, steps_per_turn=112, time_limit=GameTime.from_seconds(5)) is Result.TIE
         assert api.step == 112
         assert [request.step.count for request in transport.requests if request.HasField("step")] == [112]
+
+    def test_a_time_limit_in_plain_seconds_is_refused_before_the_game_starts(self) -> None:
+        client, transport = _joined(*_game(0, 112, ending=None))
+        with pytest.raises(TypeError, match="time_limit is a GameTime"):
+            Api().play(client, time_limit=5)  # pyright: ignore[reportArgumentType]
+        assert not any(request.HasField("observation") for request in transport.requests)
 
     def test_a_realtime_game_asks_for_the_step_it_wants_instead_of_stepping(self) -> None:
         """A realtime game runs on its own, so there is nothing to step."""
@@ -325,13 +332,13 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(4, (1, Result.VICTORY), units=[marine])),
         )
         api = Api()
-        listed: list[list[tuple[int, int | None, AbilityId | None, ActionResult]]] = []
+        listed: list[list[tuple[float, int | None, AbilityId | None, ActionResult]]] = []
 
         @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
             failures = api.action_failures
-            listed.append([(f.step, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
-            if event.step == 0:
+            listed.append([(f.time.steps, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
+            if event.time.steps == 0:
                 api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
 
         api.play(client, steps_per_turn=2)
@@ -417,13 +424,13 @@ def _production_is_asked_by_types_or_by_ids(api: Api) -> None:
     api.in_production(UnitTypeId.ZEALOT, UnitType.Stalker)  # pyright: ignore[reportArgumentType]
 
 
-def _record(api: Api, seen: list[tuple[str, int]]) -> None:
+def _record(api: Api, seen: list[tuple[str, float]]) -> None:
     """Record every lifecycle event `api` hands out into `seen`, as the type name and the step."""
     for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
 
         @api.on(kind)
         def note(event: Event) -> None:
-            seen.append((type(event).__name__, event.step))
+            seen.append((type(event).__name__, event.time.steps))
 
 
 class TestEvents:
@@ -447,7 +454,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api, steps = Api(), []
         for kind in (GameStartEvent, TurnStartEvent, TurnEvent, GameEndEvent):
-            api.on(kind)(lambda event: steps.append((event.step, api.step)))
+            api.on(kind)(lambda event: steps.append((event.time.steps, api.step)))
         api.play(client, steps_per_turn=2)
         assert len(steps) == 6
         assert all(event_step == api_step for event_step, api_step in steps)
@@ -455,19 +462,19 @@ class TestEvents:
     def test_a_game_called_at_its_time_limit_ends_in_a_tie_all_the_same(self) -> None:
         client, _ = _joined(*_game(0, 112, ending=None))
         api, results = Api(), []
-        api.on(GameEndEvent)(lambda event: results.append((event.step, event.result)))
-        api.play(client, steps_per_turn=112, time_limit=5)
+        api.on(GameEndEvent)(lambda event: results.append((event.time.steps, event.result)))
+        api.play(client, steps_per_turn=112, time_limit=GameTime.from_seconds(5))
         assert results == [(112, Result.TIE)]
 
     def test_what_subscribes_before_or_during_a_game_handles_the_next_one_too(self) -> None:
         """A handler subscribed at import works in every game its process plays, and a `once` handler fires once per
         game."""
         api = Api()
-        fired: list[tuple[str, int]] = []
+        fired: list[tuple[str, float]] = []
 
-        @api.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_time=GameTime(steps=2))
         def function(event: TurnEvent) -> None:
-            fired.append(("function", event.step))
+            fired.append(("function", event.time.steps))
 
         class Handlers:
             def __init__(self, name: str) -> None:
@@ -476,7 +483,7 @@ class TestEvents:
 
             @api.on(TurnEvent, once=True)
             def on_turn(self, event: TurnEvent) -> None:
-                fired.append((self.name, event.step))
+                fired.append((self.name, event.time.steps))
 
         Handlers("before")
 
@@ -503,10 +510,10 @@ class TestEvents:
 
     def test_what_happened_comes_within_each_turn_and_the_last_observations_never_does(self) -> None:
         api = Api()
-        seen: list[tuple[str, int]] = []
+        seen: list[tuple[str, float]] = []
         _record(api, seen)
         for kind in (OwnUnitCreatedEvent, AnyUnitDiedEvent):
-            api.on(kind)(lambda event: seen.append((type(event).__name__, event.step)))
+            api.on(kind)(lambda event: seen.append((type(event).__name__, event.time.steps)))
 
         def game() -> list[sc2api_pb2.Response]:
             marine, scv = make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0)
@@ -539,7 +546,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api = Api()
 
-        @api.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_time=GameTime(steps=2))
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 
@@ -552,7 +559,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 2, 4))
         api = Api()
 
-        @api.on(TurnEvent, at_step=2)
+        @api.on(TurnEvent, at_time=GameTime(steps=2))
         def failing(event: TurnEvent) -> None:
             raise RuntimeError("the handler failed")
 
@@ -605,7 +612,7 @@ class TestSavingAReplay:
     def test_a_game_called_a_tie_at_its_time_limit_is_saved(self, tmp_path: Path) -> None:
         client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
         path = tmp_path / "game.SC2Replay"
-        assert Api().play(client, time_limit=0, save_replay_to=path) is Result.TIE
+        assert Api().play(client, time_limit=GameTime.from_seconds(0), save_replay_to=path) is Result.TIE
         assert path.read_bytes() == _REPLAY
 
     def test_a_game_a_handler_ends_by_raising_is_saved_and_the_error_raised(self, tmp_path: Path) -> None:
@@ -908,7 +915,7 @@ class TestAgainstTheRealGame:
             window=(640, 480),
         )
         assert result in (Result.VICTORY, Result.DEFEAT)
-        assert api.time > 60
+        assert api.time > GameTime.from_seconds(60)
 
         # A recording holds the setup too, so playing it back repeats the setup.
         replayed = Api()
@@ -935,7 +942,7 @@ class TestAgainstTheRealGame:
             api = Api()
             result = run_ladder(api, race=Race.TERRAN, name="NachOS", host="127.0.0.1", port=port, steps_per_turn=16)
             assert result in (Result.VICTORY, Result.DEFEAT)
-            assert api.time > 60
+            assert api.time > GameTime.from_seconds(60)
 
             with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
                 ladder.ping()
@@ -952,7 +959,13 @@ def test_in_a_real_game_called_a_tie_at_its_time_limit_the_replay_is_saved(tmp_p
     replay = tmp_path / "game.SC2Replay"
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
     result = run_local(
-        _LADDER_MAP, Api(), opponent, race=Race.TERRAN, steps_per_turn=16, time_limit=10, save_replay_to=replay
+        _LADDER_MAP,
+        Api(),
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=16,
+        time_limit=GameTime.from_seconds(10),
+        save_replay_to=replay,
     )
     assert result is Result.TIE
     assert replay.read_bytes()[:4] == b"MPQ\x1b"
@@ -970,7 +983,7 @@ def test_in_a_real_game_against_the_computer_a_bot_that_leaves_loses() -> None:
 
     @api.on(TurnEvent)
     def give_up(event: TurnEvent) -> None:
-        if event.step >= 16:
+        if event.time.steps >= 16:
             api.leave_game()
 
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
@@ -989,10 +1002,17 @@ def test_in_a_real_realtime_game_each_turn_comes_at_or_after_the_step_asked_for(
         pytest.skip(str(missing))
 
     api, steps = Api(), []
-    api.on(TurnEvent)(lambda event: steps.append(event.step))
+    api.on(TurnEvent)(lambda event: steps.append(event.time.steps))
     opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
     result = run_local(
-        _LADDER_MAP, api, opponent, race=Race.TERRAN, steps_per_turn=8, realtime=True, time_limit=10, window=(640, 480)
+        _LADDER_MAP,
+        api,
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=8,
+        realtime=True,
+        time_limit=GameTime.from_seconds(10),
+        window=(640, 480),
     )
 
     assert result is Result.TIE

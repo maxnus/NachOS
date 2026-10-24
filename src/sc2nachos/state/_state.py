@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Grid
@@ -135,5 +136,5 @@ class _State:
         Raises `UncuratedIdError` if one names an ability the curated ids leave out.
         """
         unit_by_tag = self._tracker.unit_tracker.by_tag
-        step = self._observation.game_loop
-        return tuple(ActionFailure._from_proto(error, unit_by_tag, step) for error in self._response.action_errors)
+        time = GameTime(steps=self._observation.game_loop)
+        return tuple(ActionFailure._from_proto(error, unit_by_tag, time) for error in self._response.action_errors)

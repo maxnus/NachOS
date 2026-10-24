@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, debug_pb2
 
-from sc2nachos._checks import is_whole_number
+from sc2nachos._checks import is_whole_number, whole_steps_of
 from sc2nachos.debug._cheat import Cheat
 from sc2nachos.debug._color import Color, _Rgb, _rgb_of
 from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
 from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _check_text, _ScreenText
+from sc2nachos.game_time import GameTime
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
 
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
 
 _VITALS = debug_pb2.DebugSetUnitValue.UnitValue
+_ONE_STEP = GameTime(steps=1)
 
 
 @final
@@ -32,11 +34,11 @@ class DebugCommands:
     """Drawing on the game's screen, cheats and debug commands for one game, all sent after the turn's orders in one
     debug request. The game takes them from a client that joined the game as from the one that created it (in game).
 
-    Each draw method returns the `Drawing`, which lasts the `steps` it is given from the turn it is made in, at least
-    that turn, or until removed if `steps` is `None`. A drawing at a unit follows the unit, read where it stands at each
-    refresh, at where it was last seen while out of sight, and ends once the unit is dead.
+    Each draw method returns the `Drawing`, which is shown for the `shown_for` it is given from the turn it is made in,
+    at least that turn, or until removed if `shown_for` is `None`. A drawing at a unit follows the unit, read where it
+    stands at each refresh, at where it was last seen while out of sight, and ends once the unit is dead.
 
-    The drawing is refreshed at most once every `refresh_steps` steps, and the screen keeps the last drawing sent
+    The drawing is refreshed at most once every `refresh_interval`, and the screen keeps the last drawing sent
     meanwhile, so one made between two refreshes waits for the next, and one that ends between them still shows until
     then. A refresh whose drawing is what was last sent sends nothing; a turn with a cheat or a command goes out at
     once, with the drawing as it stands then.
@@ -55,6 +57,7 @@ class DebugCommands:
         "_game_map",
         "_last_refresh",
         "_opponent_id",
+        "_refresh_interval",
         "_refresh_steps",
         "_shown",
         "_step",
@@ -68,6 +71,7 @@ class DebugCommands:
         self._game_map = game_map
         self._opponent_id = opponent_id
         self._step = step
+        self._refresh_interval = _ONE_STEP
         self._refresh_steps = 1
         self._default_color: Color | tuple[int, int, int] = Color.WHITE
         self._default_rgb = _rgb_of(Color.WHITE)
@@ -83,15 +87,17 @@ class DebugCommands:
         self._toggled_cheats: set[Cheat] = set()
 
     @property
-    def refresh_steps(self) -> int:
-        """The fewest steps between two refreshes of the drawing, 1 unless set; a `GameStartEvent` handler sets it for
-        every game. Set to anything but a whole number of steps, at least 1, it raises `ValueError`."""
-        return self._refresh_steps
+    def refresh_interval(self) -> GameTime:
+        """The least time between two refreshes of the drawing, one step unless set; a `GameStartEvent` handler sets it
+        for every game. Set to anything but a `GameTime` it raises `TypeError`, and to one that is not a whole number
+        of steps, at least 1, `ValueError`."""
+        return self._refresh_interval
 
-    @refresh_steps.setter
-    def refresh_steps(self, steps: int) -> None:
-        if not is_whole_number(steps) or steps < 1:
-            raise ValueError(f"drawings are refreshed every whole number of steps, at least 1, not {steps!r}")
+    @refresh_interval.setter
+    def refresh_interval(self, interval: GameTime) -> None:
+        if (steps := whole_steps_of(interval)) is None or steps < 1:
+            raise ValueError(f"drawings are refreshed every whole number of steps, at least 1, not {interval!r}")
+        self._refresh_interval = interval
         self._refresh_steps = steps
 
     @property
@@ -124,7 +130,7 @@ class DebugCommands:
         at: PointLike | Unit[Any],
         *shapes: DebugShape,
         color: Color | tuple[int, int, int] | None = None,
-        steps: int | None = 1,
+        shown_for: GameTime | None = _ONE_STEP,
     ) -> Drawing:
         """Draw `shapes` at `at`, each offset from it as it says, as one drawing.
 
@@ -132,13 +138,14 @@ class DebugCommands:
         outside the playable area, and one of three at its own height; so is a line's end. A unit is drawn where it
         stands. A shape with no color of its own, nor its group's, is drawn in `color`, or `default_color` if `None`.
         Raises `ValueError` for no shapes, for a color that is not a `Color` or red, green and blue, each from 0 to
-        255, and for a `steps` under 1.
+        255, and for a `shown_for` that is not a whole number of steps, at least 1, and `TypeError` for one that is not
+        a `GameTime`.
         """
         if not shapes:
             raise ValueError("draw at least one shape")
         rgb = self._default_rgb if color is None else _rgb_of(color)
         parts = tuple(self._placed(shapes, (0.0, 0.0, 0.0), rgb))
-        return self._add(Drawing(self._anchor(at), parts, until=self._until(steps)))
+        return self._add(Drawing(self._anchor(at), parts, until=self._until(shown_for)))
 
     def draw_text_on_screen(
         self,
@@ -147,7 +154,7 @@ class DebugCommands:
         at: tuple[float, float],
         color: Color | tuple[int, int, int] | None = None,
         size: int | None = None,
-        steps: int | None = 1,
+        shown_for: GameTime | None = _ONE_STEP,
     ) -> Drawing:
         """Write `text` on the screen at `at`, from 0 to 1 across and down whatever the window's size, `size` pixels
         high, or `default_text_size` if `None`. Raises `ValueError` for anything but two coordinates from 0 to 1, and
@@ -157,7 +164,7 @@ class DebugCommands:
         _check_text(text, size)
         rgb = self._default_rgb if color is None else _rgb_of(color)
         part = _PlacedShape(_ScreenText(text, at), (0.0, 0.0, 0.0), rgb, size or self._default_text_size)
-        return self._add(Drawing((0.0, 0.0, 0.0), (part,), until=self._until(steps)))
+        return self._add(Drawing((0.0, 0.0, 0.0), (part,), until=self._until(shown_for)))
 
     def _placed(self, shapes: Sequence[DebugShape], offset: _Vector, rgb: _Rgb) -> Iterator[_PlacedShape]:
         """`shapes` as drawn `offset` from the drawing's place, those of no color of their own in `rgb`, each group's
@@ -185,12 +192,14 @@ class DebugCommands:
             return (float(at[0]), float(at[1]), float(at[2]))
         return (float(at[0]), float(at[1]), self._game_map.height_at(at))
 
-    def _until(self, steps: int | None) -> int | None:
-        """The step a drawing made now that lasts `steps` ends at, or `None` if it lasts until removed."""
-        if steps is None:
+    def _until(self, shown_for: GameTime | None) -> int | None:
+        """The step a drawing made now that is shown for `shown_for` ends at, or `None` if it lasts until removed."""
+        if shown_for is None:
             return None
-        if not is_whole_number(steps) or steps < 1:
-            raise ValueError(f"a drawing lasts a whole number of steps, at least 1, or until removed, not {steps!r}")
+        if (steps := whole_steps_of(shown_for)) is None or steps < 1:
+            raise ValueError(
+                f"a drawing is shown for a whole number of steps, at least 1, or until removed, not {shown_for!r}"
+            )
         return self._step + steps
 
     def _add(self, drawing: Drawing) -> Drawing:

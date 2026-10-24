@@ -13,7 +13,7 @@ api = Api()
 
 @api.on(EnemyUnitFirstSeenEvent)
 def note(event: EnemyUnitFirstSeenEvent) -> None:
-    print(f"{api.time:.0f} s: {event.unit.type_id.name}")
+    print(f"{api.time.time_string}: {event.unit.type_id.name}")
 
 
 run_replay("games/ladder.SC2Replay", api, player_id=1)
@@ -48,7 +48,7 @@ so an api that only reads plays any replay through.
 
 A replay played to its end returns what its last observation gives the player: `VICTORY` or `DEFEAT`, or `UNDECIDED`
 for a replay saved before its game ended, as `save_replay_to` saves one at a time limit. `api.leave_game()` stops it,
-and so does reaching `time_limit`, in game seconds; either returns `UNDECIDED`, since nothing was conceded or drawn.
+and so does reaching `time_limit`, a `GameTime`; either returns `UNDECIDED`, since nothing was conceded or drawn.
 
 ## The replay's build
 

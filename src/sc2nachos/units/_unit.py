@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.constants import STEPS_PER_SECOND
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
@@ -32,6 +33,7 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 # facing their target to within a degree (in game), though a zealot, a reaper and a marauder were seen to fire some 10
 # degrees off.
 _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
+_NO_TURN = GameTime(steps=0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
@@ -329,11 +331,11 @@ class Unit[K: UnitType.AnyType]:
         return self._dead
 
     @property
-    def last_seen(self) -> int | None:
-        """The step of the last observation that showed the unit visible, or `None` if none has."""
+    def last_seen(self) -> GameTime | None:
+        """The time of the last observation that showed the unit visible, or `None` if none has."""
         if self._latest_report.display_type == _VISIBLE:
-            return self._step
-        return self._last_seen
+            return GameTime(steps=self._step)
+        return None if self._last_seen is None else GameTime(steps=self._last_seen)
 
     # Where it is.
 
@@ -703,39 +705,39 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def required_repair_cost(self) -> Cost | None:
-        """What one SCV's repair of the unit from its health now to whole takes: the steps and resources of
-        `total_repair_cost` for the share of its health missing, each rounded up to a whole one (in game), and nothing
-        for a unit whole. `None` wherever `total_repair_cost` is."""
+        """What one SCV's repair of the unit from its health now to whole takes: the time and resources of
+        `total_repair_cost` for the share of its health missing, each rounded up to a whole one, steps for the time (in
+        game), and nothing for a unit whole. `None` wherever `total_repair_cost` is."""
         return self._repair_cost_of(self.health_max - self.health)
 
     @property
     def total_repair_cost(self) -> Cost | None:
-        """What one SCV's repair of a unit of this type from no health to whole takes: the steps its type costs, but for
-        a MULE, an auto-turret, a widow mine and an add-on standing on its own, and a quarter of the resources its type
-        costs, each rounded up, with no supply (in game). `None` for a structure under construction, which an SCV is
-        refused, and for any type but a Terran mechanical one. `docs/reference/game-behavior/damage-and-buffs.md` has
-        what was measured."""
+        """What one SCV's repair of a unit of this type from no health to whole takes: the time its type costs, but
+        for a MULE, an auto-turret, a widow mine and an add-on standing on its own, and a quarter of the resources its
+        type costs, each rounded up, with no supply (in game). `None` for a structure under construction, which an SCV
+        is refused, and for any type but a Terran mechanical one. `docs/reference/game-behavior/damage-and-buffs.md`
+        has what was measured."""
         return self._repair_cost_of(self.health_max)
 
     def time_to_face(
         self, target: PointLike | Unit[Any], *, facing_tolerance: float = _DEFAULT_FACING_TOLERANCE
-    ) -> int | None:
-        """The steps the unit takes to turn to face `target`, a point or another unit: the angle to turn over its type's
-        `turn_rate`, rounded up (in game); 0 if it faces it already, to within `facing_tolerance` radians, a degree
-        unless given. Counted from the step its turn begins, which an order sets off a step after it in a game stepped
-        by the bot, and may set off later in a realtime one, as on the ladder. `None` wherever `turn_rate` is: for a
-        type whose facing the game never changes and for one that does not move.
+    ) -> GameTime | None:
+        """The time the unit takes to turn to face `target`, a point or another unit: the angle to turn over its type's
+        `turn_rate`, rounded up to a whole step (in game); zero if it faces it already, to within `facing_tolerance`
+        radians, a degree unless given. Counted from the step its turn begins, which an order sets off a step after it
+        in a game stepped by the bot, and may set off later in a realtime one, as on the ladder. `None` wherever
+        `turn_rate` is: for a type whose facing the game never changes and for one that does not move.
         `docs/reference/game-behavior/units.md` has what was measured."""
         if (turn_rate := self.type_data.turn_rate) is None:
             return None
         target_position = target._position if isinstance(target, Unit) else target
         if self._position.distance_to(target_position) == 0:
-            return 0
+            return _NO_TURN
         bearing = self._position.angle_to(target_position)
         angle_to_turn = abs((bearing - self.facing + math.pi) % math.tau - math.pi)
         if angle_to_turn <= facing_tolerance:
-            return 0
-        return math.ceil(angle_to_turn / turn_rate)
+            return _NO_TURN
+        return GameTime(steps=math.ceil(angle_to_turn / turn_rate))
 
     def _repair_cost_of(self, missing_health: float) -> Cost | None:
         """What one SCV's repair of `missing_health` of the unit takes; `None` wherever `total_repair_cost` is."""
@@ -744,12 +746,12 @@ class Unit[K: UnitType.AnyType]:
         if not is_terran_and_mechanical or not self.is_complete:
             return None
         type_cost, health_max = type_data.cost, self.health_max
-        whole_repair_steps = REPAIR_STEPS_EXCEPTIONS.get(self.type_id, type_cost.steps)
+        whole_repair_steps = REPAIR_STEPS_EXCEPTIONS.get(self.type_id, type_cost.time.steps)
         # Multiplied out before the one division, so that a whole number of resources comes out whole.
         return Cost(
             math.ceil(missing_health * type_cost.minerals * REPAIR_COST_FRACTION / health_max),
             math.ceil(missing_health * type_cost.vespene * REPAIR_COST_FRACTION / health_max),
-            steps=math.ceil(whole_repair_steps * missing_health / health_max),
+            time=GameTime(steps=math.ceil(whole_repair_steps * missing_health / health_max)),
         )
 
     # Combat.
@@ -811,8 +813,8 @@ class Unit[K: UnitType.AnyType]:
             raise self._never_seen_error("buffs")
         # What speeds an attack divides the base cooldown, and leaves the random delay as it is (in game).
         attack_speed_multiplier = math.prod(_ATTACK_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in report.buff_ids)
-        cooldown_steps = weapon.base_cooldown_steps / attack_speed_multiplier + weapon.mean_delay_steps
-        return damage * STEPS_PER_SECOND / cooldown_steps
+        cooldown = weapon.base_cooldown / attack_speed_multiplier + weapon.mean_delay
+        return damage / cooldown.seconds
 
 
 def _damage_of_one_attack(weapon: Weapon, target: Unit[Any]) -> float:

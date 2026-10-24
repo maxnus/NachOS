@@ -4,7 +4,7 @@
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos import Api, Computer, Difficulty, NoEnemyError, Race, Result, UnitTypeId, run_local
+from sc2nachos import Api, Computer, Difficulty, GameTime, NoEnemyError, Race, Result, UnitTypeId, run_local
 from sc2nachos.debug import Cheat
 from sc2nachos.events import EnemyRaceKnownEvent, TurnEvent
 from sc2nachos.launch import MapFile, MapNotFoundError
@@ -127,14 +127,14 @@ class TestTheEnemy:
             api, [_ME_AS_TERRAN, _computer(_OTHER, Race.RANDOM)], *_short_game(make_observation(16, units=[zergling]))
         )
         assert races == [None, Race.ZERG]
-        assert known == [EnemyRaceKnownEvent(Race.ZERG, step=16)]
+        assert known == [EnemyRaceKnownEvent(Race.ZERG, time=GameTime(steps=16))]
 
     def test_a_race_known_from_the_start_comes_once_on_the_first_turn(self) -> None:
         api = Api()
         known: list[EnemyRaceKnownEvent] = []
         api.on(EnemyRaceKnownEvent)(lambda event: known.append(event))
         _play(api, [_ME_AS_TERRAN, _computer(_OTHER, Race.PROTOSS)], *_short_game(make_observation(16)))
-        assert known == [EnemyRaceKnownEvent(Race.PROTOSS, step=0)]
+        assert known == [EnemyRaceKnownEvent(Race.PROTOSS, time=GameTime(steps=0))]
 
     def test_a_ladder_game_gives_the_ladders_id_for_it(self) -> None:
         api = Api()
@@ -188,12 +188,20 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
         api.leave_game()
 
     # The whole map in sight, so that the enemy's first units are seen at once.
-    @api.on(TurnEvent, at_step=8)
+    @api.on(TurnEvent, at_time=GameTime(steps=8))
     def reveal(event: TurnEvent) -> None:
         api.debug.turn_on(Cheat.SHOW_MAP)
 
     opponent = Computer(Race.RANDOM, Difficulty.VERY_EASY)
-    run_local(_LADDER_MAP, api, opponent, race=Race.RANDOM, steps_per_turn=8, time_limit=60, window=(640, 480))
+    run_local(
+        _LADDER_MAP,
+        api,
+        opponent,
+        race=Race.RANDOM,
+        steps_per_turn=8,
+        time_limit=GameTime.from_seconds(60),
+        window=(640, 480),
+    )
 
     assert api.player.requested_race is Race.RANDOM
     assert api.player.race in (Race.TERRAN, Race.ZERG, Race.PROTOSS)

@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final
 
+from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -218,17 +219,17 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
         AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),
         # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
         # should read 350. It reads 325, and taking off the drone leaves 275 where the game charges 300.
-        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1, steps=1600),
+        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1, time=GameTime(steps=1600)),
         # A nuke is not a unit, so nothing is derived for it, nor its steps.
         AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
         # One order makes two zerglings; the row prices one, with its half supply.
-        AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, steps=384),
+        AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, time=GameTime(steps=384)),
         # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, steps
         # too. These are its row's 336.016 rounded up, as every row's are, though the morph took 336 (in game).
-        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, steps=337),
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, time=GameTime(steps=337)),
         # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges, and the
         # turret's build steps.
-        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0, steps=16),
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0, time=GameTime(steps=16)),
     }
 )
 """The cost of ordering an ability, where the tables get it wrong. Every other cost is derived as the product's cost

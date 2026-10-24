@@ -3786,7 +3786,7 @@ def _build_steps(game: _Game, ability: Ability, performer: int) -> float | None:
     """The build time in the game's table of what `ability` makes of a `performer`, or `None` where it names none."""
     row = None if (curated := AbilityId.get(ability)) is None else game.data.abilities.get(curated)
     product = None if row is None or (maker := UnitTypeId.get(performer)) is None else row.products.get(maker)
-    return game.data.units[product].build_steps if isinstance(product, UnitTypeId) else None
+    return game.data.units[product].build_time.steps if isinstance(product, UnitTypeId) else None
 
 
 def _progress_summary(reads: Sequence[_ProgressRead], ordered_at: int, build_steps: float | None) -> dict[str, object]:
@@ -4844,7 +4844,7 @@ def _research_ends(game: _Game) -> list[Trial]:
     def finished(trial: Trial, ability: AbilityId, upgrade: UpgradeId) -> None:
         if (structure := bay(trial, ability)) is None:
             return
-        research_steps = round(game.data.upgrades[upgrade].cost.steps)
+        research_steps = round(game.data.upgrades[upgrade].cost.time.steps)
         trial.notes["research steps in the tables"] = research_steps
         last_shown = arrived = None
         shown: list[tuple[int, float]] = []
