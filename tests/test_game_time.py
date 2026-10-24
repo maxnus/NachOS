@@ -45,29 +45,57 @@ class TestConversions:
             time.steps = 1  # type: ignore[misc]
 
 
-class TestTimeString:
+class TestIsInteger:
+    @pytest.mark.parametrize("steps", [0, 96, 96.0, -4, 1e15])
+    def test_a_whole_number_of_steps_is(self, steps):
+        assert GameTime(steps=steps).is_integer()
+
+    @pytest.mark.parametrize("steps", [0.5, 1007.9999999999999, -0.25])
+    def test_a_fraction_of_a_step_is_not(self, steps):
+        assert not GameTime(steps=steps).is_integer()
+
+    def test_whole_seconds_from_seconds_are_whole_steps_every_5_seconds(self):
+        assert GameTime.from_seconds(45).is_integer()
+        assert not GameTime.from_seconds(1).is_integer()
+
+
+class TestToString:
     def test_reads_minutes_seconds_and_milliseconds(self):
-        assert GameTime(steps=4480).time_string == "3:20.000"
+        assert GameTime(steps=4480).to_string() == "3:20.000"
 
     def test_rounds_the_milliseconds_down(self):
         # 96 steps are 4285.714 milliseconds.
-        assert GameTime(steps=96).time_string == "0:04.285"
+        assert GameTime(steps=96).to_string() == "0:04.285"
+
+    @pytest.mark.parametrize(("decimals", "expected"), [(0, "0:04"), (1, "0:04.2"), (2, "0:04.28"), (3, "0:04.285")])
+    def test_rounds_the_seconds_down_to_the_decimals_asked(self, decimals, expected):
+        assert GameTime(steps=96).to_string(decimals) == expected
 
     def test_negative(self):
-        assert GameTime(steps=-96).time_string == "-0:04.285"
+        assert GameTime(steps=-96).to_string() == "-0:04.285"
+        assert GameTime(steps=-96).to_string(0) == "-0:04"
 
     def test_past_an_hour_counts_on_in_minutes(self):
-        assert GameTime.from_seconds(3725).time_string == "62:05.000"
+        assert GameTime.from_seconds(3725).to_string() == "62:05.000"
 
-    def test_is_the_true_milliseconds_rounded_down_and_tells_every_step_from_the_next(self):
-        strings = set()
+    @pytest.mark.parametrize("decimals", [-1, 4, 1.0, True, "3"])
+    def test_any_decimals_but_0_to_3_raise(self, decimals):
+        with pytest.raises(ValueError, match="decimals"):
+            GameTime(steps=96).to_string(decimals)
+
+    @pytest.mark.parametrize("decimals", [0, 1, 2, 3])
+    def test_is_the_true_seconds_rounded_down(self, decimals):
+        parts_per_second = 10**decimals
         for steps in range(0, 100_000, 7):
-            milliseconds = Fraction(steps * 1000) / Fraction(224, 10)
-            minutes, rest = divmod(int(milliseconds), 60_000)
-            assert GameTime(steps=steps).time_string == f"{minutes}:{rest // 1000:02d}.{rest % 1000:03d}"
-        for steps in range(100_000):
-            strings.add(GameTime(steps=steps).time_string)
-        assert len(strings) == 100_000
+            parts = int(Fraction(steps * parts_per_second) / Fraction(224, 10))
+            minutes, parts_in_minute = divmod(parts, 60 * parts_per_second)
+            seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
+            fraction = f".{parts_in_second:0{decimals}d}" if decimals else ""
+            assert GameTime(steps=steps).to_string(decimals) == f"{minutes}:{seconds:02d}{fraction}"
+
+    @pytest.mark.parametrize("decimals", [2, 3])
+    def test_tells_every_step_from_the_next_from_2_decimals(self, decimals):
+        assert len({GameTime(steps=steps).to_string(decimals) for steps in range(100_000)}) == 100_000
 
 
 class TestArithmetic:

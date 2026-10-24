@@ -9,12 +9,11 @@ from typing import overload
 
 from sc2nachos.constants import SECONDS_PER_STEP
 
-_MILLISECONDS_PER_MINUTE = 60_000
 # 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
 # exact up to the division, which rounds once, so a whole number of steps comes out whole; multiplying by the stored
 # 22.4, a little under it, takes 45 seconds to 1007.9999999999999 steps.
 _STEPS_PER_FIVE_SECONDS = 112
-_MILLISECONDS_PER_FIVE_SECONDS = 5000
+_MOST_DECIMALS = 3
 
 
 @dataclass(frozen=True, slots=True, kw_only=True, eq=False)
@@ -45,16 +44,28 @@ class GameTime:
         """The seconds it counts at the Faster speed, unrounded."""
         return self.steps * SECONDS_PER_STEP
 
-    @property
-    def time_string(self) -> str:
-        """Minutes, seconds and milliseconds, `"3:20.000"` at step 4480: the milliseconds rounded down, which tells
-        every step from the next, since a step is 44.6 milliseconds. A negative length reads `"-0:04.285"`."""
-        # One division, so a whole millisecond comes out whole and nothing is rounded up past one.
-        milliseconds = math.floor(abs(self.steps) * _MILLISECONDS_PER_FIVE_SECONDS / _STEPS_PER_FIVE_SECONDS)
-        minutes, milliseconds_in_minute = divmod(milliseconds, _MILLISECONDS_PER_MINUTE)
-        seconds, milliseconds_in_second = divmod(milliseconds_in_minute, 1000)
+    def is_integer(self) -> bool:
+        """Whether it is a whole number of steps."""
+        return float(self.steps).is_integer()
+
+    def to_string(self, decimals: int = 3) -> str:
+        """Minutes and seconds, the seconds to `decimals` places from 0 to 3, rounded down: `"3:20.000"` at step
+        4480, and `"3:20"` to 0 places. From 2 places up every step reads apart from the next, since a step is 44.6
+        milliseconds. A negative length reads `"-0:04.285"`. Raises `ValueError` for `decimals` outside 0 to 3."""
+        if (
+            not isinstance(decimals, numbers.Integral)
+            or isinstance(decimals, bool)
+            or not 0 <= decimals <= _MOST_DECIMALS
+        ):
+            raise ValueError(f"decimals is a whole number from 0 to {_MOST_DECIMALS}, not {decimals!r}")
+        parts_per_second = 10**decimals
+        # One division, so a whole part of a second comes out whole and nothing is rounded up past one.
+        parts = math.floor(abs(self.steps) * 5 * parts_per_second / _STEPS_PER_FIVE_SECONDS)
+        minutes, parts_in_minute = divmod(parts, 60 * parts_per_second)
+        seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
         sign = "-" if self.steps < 0 else ""
-        return f"{sign}{minutes}:{seconds:02d}.{milliseconds_in_second:03d}"
+        fraction = f".{parts_in_second:0{decimals}d}" if decimals else ""
+        return f"{sign}{minutes}:{seconds:02d}{fraction}"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, GameTime):

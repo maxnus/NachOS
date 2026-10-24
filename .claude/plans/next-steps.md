@@ -483,7 +483,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
       one int counter (over dropping it, and over changing `api.time` alone; the series over keeping it wholly by the
       step counter, and over indexing it by `GameTime`);
     - a frozen, slotted dataclass of one keyword-only field, `steps: float`, with `seconds` worked out and
-      `from_seconds` (over a `float` subclass, and over holding seconds), made once an observation for its events;
+      `from_seconds` (over a `float` subclass, and over holding seconds, and in the owner's review over `GameSteps`
+      with its field positional), made once an observation for its events; `is_integer()` says whether it is a whole
+      number of steps (the owner's review, over a private helper);
     - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
       to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
       false (over the least needed, and over a plain number read as steps);
@@ -491,13 +493,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
       `mean_delay`, `average_cooldown`, `weapon_cooldown`, what `time_to_face` returns, `Research.total_time` and
       `time_left`, the score's `idle_production_time` and `idle_worker_time`, and `PlacementReservation.max_time`
       (over a unit's cooldown kept a float, some 150 ns a read cheaper); rates stay as they are;
-    - the inputs too: `api.on(min_interval=, at_time=)`, a drawing's `shown_for`, `debug.refresh_interval`,
+    - the inputs too: `api.on(min_interval=, at_time=)` (`min_interval` kept over `interval` in the owner's review: a
+      floor counted from the handler's last run, not a schedule), a drawing's `shown_for`, `debug.refresh_interval`,
       `reserve(max_time=)`, `time_limit`, and a series' `window`, `sigma` and `size`, a drawing's, the refresh's and a
       moving average's a whole number of steps or `ValueError`; `steps_per_turn` stays an int and `--TimeLimit`
       seconds (over plain step counts, and over taking either);
-    - no `str` of its own but `time_string`, minutes, seconds and milliseconds rounded down, which tells every step
-      from the next (the owner's, over `str` as the game's clock); `steps_to_seconds` and `seconds_to_steps` go for
-      it (this branch);
+    - no `str` of its own but `to_string(decimals=3)`, minutes and seconds to 0 to 3 places, rounded down, which
+      from 2 places tells every step from the next (the owner's, over `str` as the game's clock, and in the owner's
+      review over the property `time_string` and over a format language); `steps_to_seconds` and
+      `seconds_to_steps` go for it (this branch);
 - **Replay playback** (the owner, 2026-10-24, one question at a time), so that an api can learn from a replay, as a bot
   of either player saw the game, in a branch of its own beside M5:
   - `run_replay(replay, api, *, player_id, steps_per_turn=1, time_limit=None, record_to=None, installation=None,

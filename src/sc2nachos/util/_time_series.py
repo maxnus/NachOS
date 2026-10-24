@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Self, final, overload
 import numpy
 import scipy.ndimage
 
-from sc2nachos._checks import check_game_time, whole_steps_of
+from sc2nachos._checks import check_game_time
 from sc2nachos.game_time import GameTime
 from sc2nachos.util._math import _rounded_half_up
 
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 
 INITIAL_BUFFER = 128
-_DEFAULT_DERIVATIVE_WINDOW = GameTime(steps=100)
 
 
 @final
@@ -224,7 +223,7 @@ class TimeSeries[T: float]:
         """The standard deviation of the recorded values. A float even for an integer series."""
         return self.values.std().item()
 
-    def derivative_at(self, step: int, *, window: GameTime = _DEFAULT_DERIVATIVE_WINDOW) -> float | None:
+    def derivative_at(self, step: int, *, window: GameTime = GameTime(steps=100)) -> float | None:
         """The rate of change per second over the `window` ending at `step`, the window rounded to the nearest whole
         step, a tie up.
 
@@ -254,14 +253,14 @@ class TimeSeries[T: float]:
         return TimeSeries(filtered, self._start, self._size)
 
     def uniform_filter(self, *, size: GameTime, mode: str = "nearest") -> TimeSeries[float]:
-        """A copy with a moving average over `size` applied along the series. Raises `ValueError` for a `size` that is
-        not a whole number of steps, at least 1."""
-        size_steps = whole_steps_of(size)
-        if size_steps is None or size_steps < 1:
+        """A copy with a moving average over `size` applied along the series. Raises `TypeError` for a `size` that is
+        not a `GameTime`, and `ValueError` for one that is not a whole number of steps, at least 1."""
+        check_game_time(size, "size")
+        if not size.is_integer() or size.steps < 1:
             raise ValueError(f"a moving average is over a whole number of steps, at least 1, not {size!r}")
         if not self._size:
             return TimeSeries.empty(float)
-        filtered = scipy.ndimage.uniform_filter(self.values.astype(float), size=size_steps, mode=mode)
+        filtered = scipy.ndimage.uniform_filter(self.values.astype(float), size=int(size.steps), mode=mode)
         return TimeSeries(filtered, self._start, self._size)
 
     def copy(self) -> Self:

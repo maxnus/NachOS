@@ -35,7 +35,6 @@ from support import make_game_info, make_observation, make_response, make_unit
 # The ground height of `make_game_info`'s flat map: a height byte of 128 is an eighth above 0.
 _GROUND = 0.125
 _VITALS = debug_pb2.DebugSetUnitValue.UnitValue
-_ONE_STEP = GameTime(steps=1)
 
 
 class _ScriptedGame:
@@ -85,7 +84,7 @@ def _play(
     turn: Callable[[int], object],
     *,
     turns: int,
-    refresh_interval: GameTime = _ONE_STEP,
+    refresh_interval: GameTime = GameTime(steps=1),
     units: Callable[[int], Sequence[raw_pb2.Unit]] = lambda _: (),
     dead: Callable[[int], Sequence[int]] = lambda _: (),
     players: int = 2,

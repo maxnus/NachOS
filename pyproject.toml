@@ -75,6 +75,10 @@ exclude = ["src/sc2nachos/gamedata/_techtree/_build_*.py"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Frozen, so one made as a default argument is safe to share between calls.
+extend-immutable-calls = ["sc2nachos.GameTime", "sc2nachos.game_time.GameTime"]
+
 [tool.ruff.lint.per-file-ignores]
 # What the tech tree holds for one ability goes on one line, however long.
 "src/sc2nachos/gamedata/_techtree/_build_*.py" = ["E501"]

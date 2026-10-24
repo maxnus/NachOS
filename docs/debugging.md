@@ -25,7 +25,7 @@ def set_up(event: GameStartEvent) -> None:
 def label(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         api.debug.draw(marine, DebugBox(1, 1), DebugText(f"{marine.health:.0f}", offset=(0, 0, 1.5)))
-    api.debug.draw_text_on_screen(event.time.time_string, at=(0.01, 0.01))
+    api.debug.draw_text_on_screen(event.time.to_string(), at=(0.01, 0.01))
 ```
 
 `api.debug` belongs to the game being played, and raises `NotPlayingError` before the first. `api.debug.draw(at,

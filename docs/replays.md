@@ -13,7 +13,7 @@ api = Api()
 
 @api.on(EnemyUnitFirstSeenEvent)
 def note(event: EnemyUnitFirstSeenEvent) -> None:
-    print(f"{api.time.time_string}: {event.unit.type_id.name}")
+    print(f"{api.time.to_string()}: {event.unit.type_id.name}")
 
 
 run_replay("games/ladder.SC2Replay", api, player_id=1)

@@ -17,13 +17,6 @@ def check_game_time(value: object, argument_name: str) -> None:
         raise TypeError(f"{argument_name} is a GameTime, not {value!r}")
 
 
-def whole_steps_of(game_time: GameTime) -> int | None:
-    """The steps of `game_time` as an `int`, or `None` if they are not a whole number. Raises `TypeError` for anything
-    but a `GameTime`."""
-    check_game_time(game_time, "a game time")
-    return int(game_time.steps) if float(game_time.steps).is_integer() else None
-
-
 def check_file_to_write(path: Path, purpose: str) -> None:
     """Raise `FileNotFoundError` if `path` is in no folder that exists, and `IsADirectoryError` if it is a folder. Each
     message ends with `purpose`, what the file is for: "record into"."""

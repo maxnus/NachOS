@@ -206,8 +206,8 @@ it.
   another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime.from_seconds(120)` says which unit.
   Where python-sc2 gives a length in seconds or in steps, as a float or an int, NachOS gives a `GameTime`: a cost's
   time, a cooldown, a score's idle time.
-- **`api.time.time_string` is python-sc2's `time_formatted` to the millisecond**, `"3:20.000"` where python-sc2 reads
-  `"03:20"`, which tells every step from the next.
+- **`api.time.to_string()` is python-sc2's `time_formatted` to the millisecond**, `"3:20.000"` where python-sc2 reads
+  `"03:20"`, which tells every step from the next. `to_string(0)` reads whole seconds, `"3:20"`.
 - **`api.time.seconds` differs from python-sc2's `time` in the last bit on about a quarter of steps.** Neither 22.4 nor
   1 / 22.4 is exact in binary. python-sc2 divides by 22.4 and NachOS multiplies by 1 / 22.4, and the two round
   differently. NachOS lands exactly on every whole second. python-sc2 overshoots the whole seconds in the top

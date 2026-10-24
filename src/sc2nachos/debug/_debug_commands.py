@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, debug_pb2
 
-from sc2nachos._checks import is_whole_number, whole_steps_of
+from sc2nachos._checks import check_game_time, is_whole_number
 from sc2nachos.debug._cheat import Cheat
 from sc2nachos.debug._color import Color, _Rgb, _rgb_of
 from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
 
 _VITALS = debug_pb2.DebugSetUnitValue.UnitValue
-_ONE_STEP = GameTime(steps=1)
 
 
 @final
@@ -70,7 +69,7 @@ class DebugCommands:
         self._game_map = game_map
         self._opponent_id = opponent_id
         self._step = step
-        self._refresh_interval = _ONE_STEP
+        self._refresh_interval = GameTime(steps=1)
         self._default_color: Color | tuple[int, int, int] = Color.WHITE
         self._default_rgb = _rgb_of(Color.WHITE)
         self._default_text_size = 8
@@ -93,7 +92,8 @@ class DebugCommands:
 
     @refresh_interval.setter
     def refresh_interval(self, refresh_interval: GameTime) -> None:
-        if (interval_steps := whole_steps_of(refresh_interval)) is None or interval_steps < 1:
+        check_game_time(refresh_interval, "refresh_interval")
+        if not refresh_interval.is_integer() or refresh_interval.steps < 1:
             raise ValueError(
                 f"drawings are refreshed every whole number of steps, at least 1, not {refresh_interval!r}"
             )
@@ -129,7 +129,7 @@ class DebugCommands:
         at: PointLike | Unit[Any],
         *shapes: DebugShape,
         color: Color | tuple[int, int, int] | None = None,
-        shown_for: GameTime | None = _ONE_STEP,
+        shown_for: GameTime | None = GameTime(steps=1),
     ) -> Drawing:
         """Draw `shapes` at `at`, each offset from it as it says, as one drawing.
 
@@ -153,7 +153,7 @@ class DebugCommands:
         at: tuple[float, float],
         color: Color | tuple[int, int, int] | None = None,
         size: int | None = None,
-        shown_for: GameTime | None = _ONE_STEP,
+        shown_for: GameTime | None = GameTime(steps=1),
     ) -> Drawing:
         """Write `text` on the screen at `at`, from 0 to 1 across and down whatever the window's size, `size` pixels
         high, or `default_text_size` if `None`. Raises `ValueError` for anything but two coordinates from 0 to 1, and
@@ -195,11 +195,12 @@ class DebugCommands:
         """The step a drawing made now that is shown for `shown_for` ends at, or `None` if it lasts until removed."""
         if shown_for is None:
             return None
-        if (shown_steps := whole_steps_of(shown_for)) is None or shown_steps < 1:
+        check_game_time(shown_for, "shown_for")
+        if not shown_for.is_integer() or shown_for.steps < 1:
             raise ValueError(
                 f"a drawing is shown for a whole number of steps, at least 1, or until removed, not {shown_for!r}"
             )
-        return self._step + shown_steps
+        return self._step + int(shown_for.steps)
 
     def _add(self, drawing: Drawing) -> Drawing:
         self._drawings.append(drawing)
