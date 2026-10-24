@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING, Self, Union, final
 
 import numpy
 
+from sc2nachos._rounding import rounded_half_up
+
 # Imported for the check in `not_a_point_error`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
-from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -151,7 +152,7 @@ class _PointND(tuple[float, ...]):
         """
         if step <= 0:
             raise ValueError(f"a lattice step must be positive, got {step}")
-        snapped = (_rounded_half_up(self[0] / step) * step, _rounded_half_up(self[1] / step) * step)
+        snapped = (rounded_half_up(self[0] / step) * step, rounded_half_up(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
     def rounded_down(self, *, step: float) -> Self:

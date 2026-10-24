@@ -7,6 +7,7 @@ import numbers
 from dataclasses import dataclass
 from typing import ClassVar, overload
 
+from sc2nachos._rounding import rounded_half_up
 from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
 
 # 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
@@ -57,6 +58,11 @@ class GameTime:
     def normal_seconds(self) -> float:
         """The seconds it counts at the Normal speed, 16 steps a second. Exact, 16 being a power of two."""
         return self.steps / STEPS_PER_NORMAL_SECOND
+
+    @property
+    def nearest_step(self) -> int:
+        """The step nearest it, a tie the later, where Python's `round` takes the even one."""
+        return rounded_half_up(self.steps)
 
     def is_integer(self) -> bool:
         """Whether it is a whole number of steps."""

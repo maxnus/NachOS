@@ -10,7 +10,6 @@ import scipy.ndimage
 
 from sc2nachos._checks import check_game_time
 from sc2nachos.game_time import GameTime
-from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -252,7 +251,7 @@ class TimeSeries[T: float]:
         """
         step = _nearest_step_of(time, "time")
         check_game_time(window, "window")
-        window_steps = _rounded_half_up(window.steps)
+        window_steps = window.nearest_step
         if window_steps <= 0:
             raise ValueError(f"a window is at least one step, not {window!r}")
         if self._start is None:
@@ -348,7 +347,7 @@ def _nearest_step_of(time: GameTime, argument_name: str) -> int:
     """The step nearest `time`, given as `argument_name`, a tie the later: raises `TypeError` for anything but a
     `GameTime`."""
     check_game_time(time, argument_name)
-    return _rounded_half_up(time.steps)
+    return time.nearest_step
 
 
 # The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They

@@ -4844,7 +4844,7 @@ def _research_ends(game: _Game) -> list[Trial]:
     def finished(trial: Trial, ability: AbilityId, upgrade: UpgradeId) -> None:
         if (structure := bay(trial, ability)) is None:
             return
-        research_steps = round(game.data.upgrades[upgrade].cost.time.steps)
+        research_steps = game.data.upgrades[upgrade].cost.time.nearest_step
         trial.notes["research steps in the tables"] = research_steps
         last_shown = arrived = None
         shown: list[tuple[int, float]] = []

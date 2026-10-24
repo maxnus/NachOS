@@ -59,6 +59,21 @@ class TestConversions:
             time.steps = 1  # type: ignore[misc]
 
 
+class TestNearestStep:
+    @pytest.mark.parametrize(
+        ("steps", "nearest"), [(96, 96), (22.4, 22), (22.6, 23), (-3.4, -3), (-3.6, -4), (0.49999999999999994, 0)]
+    )
+    def test_is_the_nearest_whole_step(self, steps, nearest):
+        assert GameTime(steps=steps).nearest_step == nearest
+
+    @pytest.mark.parametrize(("steps", "nearest"), [(0.5, 1), (2.5, 3), (-2.5, -2)])
+    def test_a_tie_takes_the_later_step_where_round_takes_the_even(self, steps, nearest):
+        assert GameTime(steps=steps).nearest_step == nearest
+
+    def test_is_an_int(self):
+        assert type(GameTime.from_seconds(1).nearest_step) is int
+
+
 class TestIsInteger:
     @pytest.mark.parametrize("steps", [0, 96, 96.0, -4, 1e15])
     def test_a_whole_number_of_steps_is(self, steps):

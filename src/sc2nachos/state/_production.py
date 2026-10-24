@@ -60,7 +60,7 @@ class _Production:
             product = _ability_product(row, unit.type_id)
             if isinstance(product, UpgradeId):
                 if product not in self._researches:
-                    total_steps = round(game_data.upgrades[product].cost.time.steps)
+                    total_steps = game_data.upgrades[product].cost.time.nearest_step
                     # The game's progress is the steps done over the total, as a 32-bit float (in game).
                     steps_left = round((1 - order.progress) * total_steps)
                     self._researches[product] = Research(
