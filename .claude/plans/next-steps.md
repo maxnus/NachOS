@@ -494,6 +494,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     replay played back as it, as documented, a niche case; a recording that asks something before starting its replay
     is not played back, as a recorded game with a request before its setup is not; and `run_recording` reads the start
     of a recording up to three times, a few kilobytes each.
+- **A structure remembered afresh between two turns** (the owner, 2026-10-24, over leaving it found dead and first
+  seen, documented): a fog copy that comes under a new tag at the bit-identical spot of the same alliance is the same
+  unit, with no event. `tools/sweep_fog.py` measured it (`retag`): a structure seen and lost again between two
+  observations comes so, and NachOS read it as one found dead and another first seen. The game shows one killed out
+  of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
+  in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
+  display changes, and a unit reported dead under either of its tags is matched to no copy.
 
 ## Next
 
@@ -536,8 +543,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.
-- The next sweep of the fog checks that a structure lifted off or uprooted, and a viking in either form, is never left
-  as a remembered copy, which the tracker assumes (the owner, review of #71).
+- The next trial of `tools/sweep_fog.py` (begun with `retag` and `rebuilt`, 2026-10-24) checks that a structure lifted
+  off or uprooted, and a viking in either form, is never left as a remembered copy, which the tracker assumes (the
+  owner, review of #71).
 - The next sweep of the tech tree gets a carrier offered Build Interceptors, which the sweep never saw (#75), so that
   the tech tree records what makes an interceptor and `COST_OVERRIDES` can lose its entry. It also turns a warp gate
   back into a gateway after Warp Gate is researched, reads what that gateway is offered and orders its morph, so that
