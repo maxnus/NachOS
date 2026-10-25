@@ -1,10 +1,11 @@
 """Buff identifiers.
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
-catalog member, never a literal id. Unknown ids raise.
+catalog member, never a literal id, or is a custom id, assigned `auto()`, which the game's ids read as. Unknown ids
+raise.
 """
 
-from enum import nonmember
+from enum import auto, nonmember
 from types import MappingProxyType
 
 from sc2nachos.ids._id_enum import IdEnum
@@ -17,7 +18,8 @@ class BuffId(IdEnum):
     ACCELERATION_ZONE = RawBuffId.AccelerationZoneTemporalField
     ACCELERATION_ZONE_FLYING = RawBuffId.AccelerationZoneFlyingTemporalField
     BANSHEE_CLOAK = RawBuffId.BansheeCloak
-    CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGas  # from a plain geyser; none comes from a rich one
+    # From a plain geyser, under a game id for each race's worker; none comes from a rich one.
+    CARRYING_GAS = auto()
     CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
     CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
     CYCLONE_LOCKED_ON = RawBuffId.LockOn
@@ -59,10 +61,11 @@ class BuffId(IdEnum):
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot
 
-    # Each race's worker carries gas under a game id of its own, the SCV's `CARRYING_GAS`'s own (in game).
+    # Each race's worker carries gas under a game id of its own (in game).
     _REMAPPED_IDS = nonmember(
         MappingProxyType(
             {
+                RawBuffId.CarryHarvestableVespeneGeyserGas: CARRYING_GAS,
                 RawBuffId.CarryHarvestableVespeneGeyserGasProtoss: CARRYING_GAS,
                 RawBuffId.CarryHarvestableVespeneGeyserGasZerg: CARRYING_GAS,
             }

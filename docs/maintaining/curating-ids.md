@@ -48,8 +48,9 @@ in-game test found it.
 ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,
 `HIGH_TEMPLAR_STORM`. Where no single type is the source, as with a map's zones or the minerals every worker
 carries, the name has no unit in it. Each race's worker carries gas under a game id of its own, one thing for
-different performers, so NachOS curates the SCV's as `CARRYING_GAS` and reads the other two as it, from
-`BuffId._REMAPPED_IDS`, as an action several types perform has one id (below).
+different performers that the game has no one id for, so NachOS curates a custom id, `CARRYING_GAS`, and reads all
+three as it, from `BuffId._REMAPPED_IDS`, as it reads a tank's siege mode and an observer's surveillance mode as
+`SIEGE` (below).
 
 **A table can name an ability the game no longer honors**, as the upgrade table does for the vehicle-and-ship plating
 levels ([game behavior](../reference/game-behavior/upgrades-and-tables.md)). Curate what the game offers, and let the

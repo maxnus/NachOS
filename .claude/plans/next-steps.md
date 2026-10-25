@@ -615,7 +615,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `complete` does; every race's gas buff folded into `BuffId.CARRYING_GAS`, read as one as `GATHER` is, rich minerals
     kept apart (over keeping the three, and over folding rich minerals too); and a worker carrying gas from a rich
     geyser, which the game gives no buff (in game), documented as carrying nothing (over an own unit's return order
-    counting too, and over renaming to `has_carrying_buff`) (#173).
+    counting too, and over renaming to `has_carrying_buff`);
+  - in the owner's second review: `CARRYING_GAS` a custom id, `auto()`, with all three game ids read as it, as `SIEGE`
+    is (over the SCV's id standing for all three); `has_buff` and `is_carrying_resource` read through `buffs` (over
+    checking the report's game ids, some 0.4 us a call faster for one buff and slower for several) (#173).
 
 ## Next
 
