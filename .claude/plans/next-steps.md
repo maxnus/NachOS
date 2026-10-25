@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #173. `uv run pytest` passes 2958 tests with #174; `uv run pytest -m integration`
+- nachOS `main` has every PR to #173. `uv run pytest` passes 2958 tests with #175; `uv run pytest -m integration`
   passed 41 against a real game with #173 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -651,7 +651,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `OwnUnit.production_capacity`: 2 for a structure with a reactor, 1 for another the tables give as a maker of a
     unit, 0 otherwise, a warp gate reading 1 (over `has_reactor` and `has_tech_lab` alone, and over leaving it to the
     bot); and `OwnUnit.has_reactor` and `has_tech_lab` (the owner, after noting that a unit is no member of a type, over
-    `includes` alone and over `in` taking a type id) (#174).
+    `includes` alone and over `in` taking a type id) (#175).
 
 ## Next
 
@@ -667,7 +667,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - **What AvocaDOS's units piece needs of NachOS** (2026-10-25, above): the nearest-unit methods taking a unit,
   `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
-  `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#174),
+  `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#175),
   before that piece merges.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
