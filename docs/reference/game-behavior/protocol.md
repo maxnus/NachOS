@@ -86,6 +86,12 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
 - The game plays a replay back from its bytes, and from its path though it lies outside the installation's `Replays`.
   Starting one takes some 3 seconds. Leaving one returns the client to `launched`, and the next can start on the same
   client (`requests`).
+- A replay's info gives its map by the path it was played from, `local_map_path`. Three AI Arena replays of
+  2026-10-07, all build 75689, gave a bare file name, `PylonAIE_v4.SC2Map` and the like, and the game refused to play
+  one back, "LaunchError: Unable to open map", with the map in a folder of the installation's maps (`maps/AIE`) and
+  not at the top of `Maps`. Sent the map's bytes as `map_data`, it played each back, as either player, the fog on or
+  off. A replay saved here names the map's absolute path, and once that file is gone the game refuses it alike (seen
+  2026-10-25, with probes; tested).
 - Played back as one of its players, a replay shows what that player saw when the game was played. At each of the 841
   steps the bot observed, every unit in both had the same type, owner, display, position, health, shields, energy and
   number of orders, and the actions reported were the same 465. Only mineral fields and vespene geysers remembered in

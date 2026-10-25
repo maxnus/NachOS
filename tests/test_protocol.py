@@ -150,9 +150,15 @@ class TestReplays:
         request = transport.requests[0].start_replay
         assert (request.replay_data, request.observed_player_id) == (b"MPQ\x1b replay", 2)
         assert not request.disable_fog and not request.realtime
+        assert not request.HasField("map_data")
         assert request.options.raw and not request.options.HasField("render")
         assert client.player_id == 2
         assert client.in_replay and client.in_game
+
+    def test_a_replays_map_goes_with_it_when_given(self) -> None:
+        client, transport = make_client(make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()))
+        client.start_replay(b"replay", player_id=1, map_data=b"the map")
+        assert transport.requests[0].start_replay.map_data == b"the map"
 
     def test_a_replay_played_back_with_the_fog_off_says_so_until_the_next_game(self) -> None:
         client, transport = make_client(
