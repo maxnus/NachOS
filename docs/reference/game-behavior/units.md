@@ -56,7 +56,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   reaper's grenade, to both players, whose health stays full until their last listing: nothing reported tells how long
   either has left. In four games of two each, a force field ordered at step 24 was first listed 2 to 4 steps later and
   last at step 269, and a grenade first listed 8 to 10 steps after the order and last 26 steps after that (tool
-  `sweep_timed_life`, build 75689).
+  `sweep_timed_life`, build 75689). In the seven corpus games, the bot's broodlings were the only units of any side to
+  report either field, the bot's workers and townhalls none (corpus).
 - `life` is health alone; shields are separate (stated). A marine has 45 health, 55 with Combat Shield, and the
   tables hold no health (#34; tested).
 - `build_progress` counts up while a structure is built or a unit warps in (a zealot read 0.01, 0.32, 0.64, 0.95,
