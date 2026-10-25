@@ -582,6 +582,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `weapon_cooldown` stays a `GameTime`, zero without a weapon, with `weapons` saying whether a unit can attack at
     all (over `None` from the unit's weapons, which the game's single field cannot tell, would cost a read some
     130 ns, and leaves `not unit.weapon_cooldown` reading a weaponless unit as ready all the same).
+- **Writing a replay's whole game for salsa** (the owner, 2026-10-25, one question at a time), so that a model or an
+  LLM learns from a game without playing it back:
+  - The split (the owner): NachOS writes the files, `.salsa`; their format's spec, the reader (`sc2salsa`) and the
+    analysis are the repo `maxnus/salsa`, which needs pyarrow and never NachOS, and whose plan holds the format's
+    decisions. NachOS's writer writes one version of the spec, and the reader reads every version it knows.
+  - The writer: `sc2nachos.dataset.write_salsa(replay, to=...)`, behind an optional extra, `sc2nachos[dataset]`, for
+    its pyarrow (168 MB installed). On one game client, it plays the replay as each player with the fog off, observing
+    every step, and merges the two views by the game's tag, which names a unit alike in both, writing each field as
+    NachOS reads it. NachOS's ids cannot name a unit in the file: an id starts with the alliance as its player sees it,
+    so it differs between the two views. A bot's own game is saved with `save_replay_to` and written after.
+  - One replay first (over a folder too, and over writing through `run_replay`), a folder across several game clients
+    after.
+  - A replay plays only on its own build: 4.10 (75689) is installed here, and AI Arena's games are on it (three of
+    2026-10-07); a human ladder replay needs a client of its build, on Windows or macOS.
+  - The measurements these rest on are in #168.
 
 ## Next
 
@@ -599,6 +614,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   findings: the game times neither, both last a fixed time from their first listing, and only a unit is followed from
   one observation to the next; a grenade is its thrower's, and a structure in the tables.
 - M5, in AvocaDOS (section 3).
+- Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
+  salsa's spec, whose order salsa's plan holds:
+  1. Two bugs AI Arena's replays hit (the owner, 2026-10-25): `run_replay` could not play back a replay whose map is
+     not where the replay names it (#169, merged), and `OwnUnit.engaged_target` raised for a target the game never
+     listed (#170).
+  2. `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per salsa's spec, and an in-game
+     test writing a real replay. Once salsa's reader exists, NachOS's `dev` extra installs sc2salsa, from its repo
+     until the owner publishes it, for a round trip.
+  3. A folder of replays written across several game clients.
 
 ## 1. Waiting until something needs them
 
