@@ -161,9 +161,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def is_weapon_ready(self) -> bool:
         """Whether the unit has a weapon and its `weapon_cooldown` is zero: it can attack now, or is under way with an
-        attack, whose cooldown reads zero until it fires (in game). False for an oracle whose beam is off, as
-        `weapon_against` has it."""
-        return bool(self._weapons_firing_now()) and not self.weapon_cooldown
+        attack, whose cooldown reads zero until it fires (in game). Its weapons are its `active_weapons`, which an
+        oracle whose beam is off has none of."""
+        return bool(self.active_weapons) and not self.weapon_cooldown
 
     @property
     def has_reactor(self) -> bool:

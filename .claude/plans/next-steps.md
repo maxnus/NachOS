@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #174. `uv run pytest` passes 2959 tests with #175; `uv run pytest -m integration`
+- nachOS `main` has every PR to #174. `uv run pytest` passes 2961 tests with #175; `uv run pytest -m integration`
   passed 41 against a real game with #175 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -652,6 +652,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     unit, 0 otherwise, a warp gate reading 1 (over `has_reactor` and `has_tech_lab` alone, and over leaving it to the
     bot); and `OwnUnit.has_reactor` and `has_tech_lab` (the owner, after noting that a unit is no member of a type, over
     `includes` alone and over `in` taking a type id) (#175).
+  - In the owner's review of #175: `Unit.active_weapons`, public, the weapons it can fire now, which leaves out an
+    oracle's beam while it is off, read by `weapon_against`, the per-domain reads and `is_weapon_ready` (over a
+    private method, and over `weapon_against` keeping its own check to spare some 20 ns, of which the owner said "I
+    don't think we need to chase 20 ns"); `Weapon.total_damage`, damage times attacks;
+    `Weapon.bonus_per_hit_against(attributes)`, which `Weapon.damage_against` and `Unit.bonus_damage_against` share;
+    "first" dropped from the per-domain reads, no type having two weapons for one domain (corpus); `_OWN_ALLIANCE`
+    beside `_ENEMY_ALLIANCE` (#175).
 
 ## Next
 

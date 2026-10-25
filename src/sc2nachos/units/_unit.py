@@ -38,7 +38,7 @@ _IN_FOG = raw_pb2.DisplayType.Snapshot
 # from a plain geyser under one, each race's game id read as it. Gas from a rich geyser comes under none (in game).
 _CARRYING_MINERALS_BUFFS = frozenset({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH})
 _CARRYING_RESOURCE_BUFFS = _CARRYING_MINERALS_BUFFS | {BuffId.CARRYING_GAS}
-_OWN = raw_pb2.Alliance.Self
+_OWN_ALLIANCE = raw_pb2.Alliance.Self
 _ENEMY_ALLIANCE = raw_pb2.Alliance.Enemy
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
 # read into a unit.
@@ -155,7 +155,7 @@ class Unit[K: UnitType.AnyType]:
         self._last_seen = None
         self._position = Point((report.pos.x, report.pos.y))
         self._raw_alliance = report.alliance
-        self._own = self._raw_alliance == _OWN
+        self._own = self._raw_alliance == _OWN_ALLIANCE
         self._step = step
         self._previous_position = None
         self._previous_report = None
@@ -203,7 +203,7 @@ class Unit[K: UnitType.AnyType]:
             self._last_seen = last_step
         previous_alliance = None
         if (alliance := report.alliance) != self._raw_alliance:
-            if (alliance == _OWN) is not self._own:
+            if (alliance == _OWN_ALLIANCE) is not self._own:
                 previous_alliance = _ALLIANCES[self._raw_alliance]
                 self._update_alliance()
             self._raw_alliance = alliance
@@ -312,7 +312,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def is_own(self) -> bool:
         """Whether the unit is this player's."""
-        return self._raw_alliance == _OWN
+        return self._raw_alliance == _OWN_ALLIANCE
 
     @property
     def is_enemy(self) -> bool:
@@ -693,7 +693,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def weapons(self) -> tuple[Weapon, ...]:
         """The unit type's weapons with its owner's upgrades applied: this player's upgrades for its own units,
-        `Api.enemy.upgrades` for the enemy's, and none for anyone else's."""
+        `Api.enemy.upgrades` for the enemy's, and none for anyone else's. `active_weapons` are those it can fire now."""
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
@@ -812,16 +812,25 @@ class Unit[K: UnitType.AnyType]:
     # Combat.
 
     @property
+    def active_weapons(self) -> tuple[Weapon, ...]:
+        """The weapons of `weapons` the unit can fire now: all of them, but none for an oracle whose beam is off, which
+        wears `BuffId.ORACLE_PULSAR_BEAM` exactly while it is on (in game). Raises `NotReportedError` for an oracle
+        never shown visible."""
+        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
+            return ()
+        return self.weapons
+
+    @property
     def ground_weapon(self) -> Weapon | None:
-        """The first of `weapons` that fires at the ground, or `None`: none for an oracle whose beam is off, as
-        `weapon_against` has it. Raises `NotReportedError` for an oracle never shown visible."""
-        return self._first_weapon_firing_at(TargetDomain.GROUND)
+        """The weapon of `active_weapons` that fires at the ground, alone or with the air, or `None`. No type has two
+        that do (corpus). Raises as `active_weapons` does."""
+        return self._weapon_firing_at(TargetDomain.GROUND)
 
     @property
     def air_weapon(self) -> Weapon | None:
-        """The first of `weapons` that fires at the air, or `None`: none for an oracle, whose beam fires at the
-        ground. Raises as `ground_weapon` does."""
-        return self._first_weapon_firing_at(TargetDomain.AIR)
+        """The weapon of `active_weapons` that fires at the air, alone or with the ground, or `None`, as
+        `ground_weapon` is for the ground."""
+        return self._weapon_firing_at(TargetDomain.AIR)
 
     @property
     def ground_range(self) -> float:
@@ -837,16 +846,16 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def ground_damage(self) -> float:
-        """What one attack of `ground_weapon` does before bonuses and armor, its damage times its attacks, or 0
-        without one. A hallucination's counts; `damage_against` is what an attack takes off a target."""
+        """What one attack of `ground_weapon` does before bonuses and armor, its `total_damage`, or 0 without
+        one. A hallucination's counts; `damage_against` is what an attack takes off a target."""
         weapon = self.ground_weapon
-        return 0.0 if weapon is None else weapon.damage * weapon.attacks
+        return 0.0 if weapon is None else weapon.total_damage
 
     @property
     def air_damage(self) -> float:
         """What one attack of `air_weapon` does before bonuses and armor, as `ground_damage` is for the ground."""
         weapon = self.air_weapon
-        return 0.0 if weapon is None else weapon.damage * weapon.attacks
+        return 0.0 if weapon is None else weapon.total_damage
 
     @property
     def ground_dps(self) -> float:
@@ -867,34 +876,21 @@ class Unit[K: UnitType.AnyType]:
         zealot's and a zergling's are."""
         return 0.0 < self.ground_range <= 1.0
 
-    def _first_weapon_firing_at(self, domain: TargetDomain) -> Weapon | None:
-        """The first of `_weapons_firing_now()` that fires at `domain`, the ground or the air, alone or with the
-        other."""
+    def _weapon_firing_at(self, domain: TargetDomain) -> Weapon | None:
+        """The weapon of `active_weapons` that fires at `domain`, the ground or the air, alone or with the other."""
         return next(
-            (weapon for weapon in self._weapons_firing_now() if weapon.target_domain in (domain, TargetDomain.ANY)),
-            None,
+            (weapon for weapon in self.active_weapons if weapon.target_domain in (domain, TargetDomain.ANY)), None
         )
 
-    def _weapons_firing_now(self) -> tuple[Weapon, ...]:
-        """`weapons`, or none for an oracle whose beam is off, which wears `BuffId.ORACLE_PULSAR_BEAM` exactly while it
-        is on (in game). Raises `NotReportedError` for an oracle never shown visible."""
-        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
-            return ()
-        return self.weapons
-
     def weapon_against(self, target: Unit[Any]) -> Weapon | None:
-        """The weapon of `weapons` this unit fires at `target`: one that hits the air for a target that flies, and one
-        that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as a viking's
-        did (in game). `None` if it has none that hits `target`, and for an oracle whose beam is off, which wears
-        `BuffId.ORACLE_PULSAR_BEAM` exactly while it is on (in game).
+        """The weapon of `active_weapons` this unit fires at `target`: one that hits the air for a target that flies,
+        and one that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as a
+        viking's did (in game). `None` if it has none that hits `target`, an oracle whose beam is off among them.
 
         Raises `NotReportedError` for a target remembered in the fog and never seen visible, as `is_flying` does, and
         for an oracle never shown visible.
         """
-        # `_weapons_firing_now()` written out: the call costs some 20 ns here, which a targeting loop pays per pair.
-        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
-            return None
-        weapons = self.weapons
+        weapons = self.active_weapons
         if target.is_flying:
             return next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.GROUND), None)
         on_the_ground = next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.AIR), None)
@@ -914,8 +910,9 @@ class Unit[K: UnitType.AnyType]:
         return weapon is not None and self.distance_to(target) <= weapon.range + self.radius + target.radius + margin
 
     def damage_against(self, target: Unit[Any]) -> float:
-        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, as
-        `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor` and `shield`. 0 if
+        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, every hit
+        of it counted, as `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor`
+        and `shield`. 0 if
         this unit has no weapon against it or is a hallucination, which does no damage (stated). An enemy's reads as
         one only once revealed, as `is_hallucination` has it. No buff on either unit counts.
 
@@ -926,17 +923,13 @@ class Unit[K: UnitType.AnyType]:
         return 0.0 if weapon is None or self.is_hallucination else _damage_of_one_attack(weapon, target)
 
     def bonus_damage_against(self, target: Unit[Any]) -> float:
-        """The bonus damage one attack of `weapon_against(target)` does for `target`'s attributes, before armor: each
-        bonus whose attribute the target has, summed, times the weapon's attacks. 0 if this unit has no weapon against
-        it. A hallucination's counts, as for `ground_damage`. Raises `NotReportedError` as `weapon_against` does."""
+        """The bonus damage one attack of `weapon_against(target)` does for `target`'s attributes, before armor: its
+        `Weapon.bonus_per_hit_against` them, times its attacks. 0 if this unit has no weapon against it. A
+        hallucination's counts, as for `ground_damage`. Raises `NotReportedError` as `weapon_against` does."""
         weapon = self.weapon_against(target)
         if weapon is None:
             return 0.0
-        attributes = target.type_data.attributes
-        bonus_per_hit = sum(
-            (bonus for attribute, bonus in weapon.damage_bonuses.items() if attribute in attributes), start=0.0
-        )
-        return bonus_per_hit * weapon.attacks
+        return weapon.bonus_per_hit_against(target.type_data.attributes) * weapon.attacks
 
     def dps_against(self, target: Unit[Any]) -> float:
         """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`

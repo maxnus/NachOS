@@ -239,7 +239,8 @@ class TestTheWeaponForEachDomain:
         weapon = marine.weapons[0]
         assert marine.ground_weapon is marine.air_weapon is weapon
         assert marine.ground_range == marine.air_range == weapon.range
-        assert marine.ground_damage == marine.air_damage == weapon.damage * weapon.attacks
+        assert marine.active_weapons == marine.weapons
+        assert marine.ground_damage == marine.air_damage == weapon.total_damage
         assert marine.ground_dps == marine.air_dps == weapon.dps
 
     def test_a_queen_has_one_weapon_for_each_domain(self, first_corpus_tables: GameData) -> None:
@@ -263,6 +264,7 @@ class TestTheWeaponForEachDomain:
             make_unit(1, UnitTypeId.ORACLE, is_flying=True, buff_ids=_BEAM_ON),
             make_unit(2, UnitTypeId.ORACLE, is_flying=True),
         )
+        assert beaming.active_weapons == beaming.weapons and idle.active_weapons == ()
         assert beaming.ground_weapon is beaming.weapons[0] and beaming.air_weapon is None
         assert idle.ground_weapon is None and idle.ground_range == 0.0
 
