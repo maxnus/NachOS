@@ -13,8 +13,9 @@ The second player watches from an observer above the site, which nothing of the 
 observe every step from the set-off until every unit first listed near the site after it has been gone from both views
 for a while, and the sweep records, for each such unit as each player saw it: its type, alliance, owner and display;
 the steps it was first and last listed at; the `buff_duration_remain` and `buff_duration_max` it reported first and
-last, and whether the first counted down a step at a time; its health and build progress; and the step it was reported
-dead at, if it was. It also records any effect listed near the site. Run it as::
+last, and whether the remaining duration, from the first listing that reported a maximum, counted down a step at a
+time; its health and build progress; and the step it was reported dead at, if it was. It also records any effect
+listed near the site. Run it as::
 
     uv run python tools/sweep_timed_life.py
     uv run python tools/sweep_timed_life.py force-field grenade --out timed-life.json
@@ -32,7 +33,7 @@ from typing import Any
 
 from _sandbox import OpenGround, Rivals, Sandbox, playing_rivals
 from loguru import logger
-from s2clientprotocol import debug_pb2, error_pb2, raw_pb2
+from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
@@ -46,7 +47,7 @@ _OPEN_GROUND_HALF_WIDTH = 6
 _TRIAL_REACH = 12.0
 # The steps let pass after units are made or their energy set, before anything else is done.
 _SETTLE_STEPS = 8
-# The most steps a trial is watched: a MULE lasts some 1430.
+# The most steps a trial is watched: a MULE is listed for 1442.
 _MOST_TRIAL_STEPS = 2400
 # The steps waited for the set-off to list a unit, and those watched after the last of its units is gone, for a death
 # reported late.
@@ -100,7 +101,7 @@ class _UnitReadings:
             "buff_duration_remain and _max, first": self.durations[0],
             "buff_duration_remain and _max, last": self.durations[-1],
             "the remaining duration counts down a step at a time": self._remaining_duration_counts_down(),
-            "last listing minus the first's step and remaining duration": self._last_listing_after_duration_ran_out(),
+            "last listing minus the end the first reported duration gave": self._last_listing_after_duration_ran_out(),
             "health and maximum, first": self.health_readings[0],
             "health and maximum, last": self.health_readings[-1],
             "step and health, every 16th listing and the last": self._health_samples(),
@@ -116,20 +117,28 @@ class _UnitReadings:
             samples.append(listings[-1])
         return samples
 
+    def _remaining_durations_reported(self) -> list[tuple[int, int]]:
+        """The step and remaining duration at each listing, from the first that reported a maximum duration on."""
+        for first_reported, (_, maximum) in enumerate(self.durations):
+            if maximum:
+                listings = zip(self.steps_listed[first_reported:], self.durations[first_reported:], strict=True)
+                return [(step, remaining) for step, (remaining, _) in listings]
+        return []
+
     def _remaining_duration_counts_down(self) -> bool | None:
-        """Whether the remaining duration fell by one a step at every listing, or None if it was never reported."""
-        if not any(remaining for remaining, _ in self.durations):
+        """Whether the remaining duration fell by one a step at every listing from the first that reported one, or None
+        if none did."""
+        if not (reported := self._remaining_durations_reported()):
             return None
-        ends = {step + remaining for step, (remaining, _) in zip(self.steps_listed, self.durations, strict=True)}
-        return len(ends) == 1
+        return len({step + remaining for step, remaining in reported}) == 1
 
     def _last_listing_after_duration_ran_out(self) -> int | None:
-        """How many steps after the end the first remaining duration gave the unit was last listed, or None if it was
-        never reported."""
-        first_remaining, _ = self.durations[0]
-        if not first_remaining:
+        """How many steps after the end the first reported duration gave the unit was last listed, or None if none was
+        reported."""
+        if not (reported := self._remaining_durations_reported()):
             return None
-        return self.steps_listed[-1] - (self.steps_listed[0] + first_remaining)
+        first_step, first_remaining = reported[0]
+        return self.steps_listed[-1] - (first_step + first_remaining)
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +157,7 @@ def _make_for_me(rivals: Rivals, unit_type: UnitTypeId, at: Point) -> raw_pb2.Un
     made = [unit for unit in me.units() if unit.unit_type == unit_type and unit.owner == me.player]
     if not made:
         raise RuntimeError(f"the game did not make a {unit_type.name}")
-    return min(made, key=lambda unit: Point((unit.pos.x, unit.pos.y)).distance_to(at))
+    return min(made, key=lambda unit: _point_of(unit.pos).distance_to(at))
 
 
 def _make_at_the_site_with_full_energy(unit_type: UnitTypeId) -> Callable[[Rivals, Point], raw_pb2.Unit]:
@@ -207,18 +216,27 @@ def _trial_site(rivals: Rivals) -> Point:
     return site
 
 
-def _distance_from(site: Point, unit: raw_pb2.Unit) -> float:
-    return site.distance_to(Point((unit.pos.x, unit.pos.y)))
+def _watcher_tag(rivals: Rivals) -> int:
+    """The tag of the second player's observer above the site."""
+    return next(unit.tag for unit in rivals.enemy.units() if unit.unit_type == UnitTypeId.OBSERVER)
+
+
+def _point_of(position: common_pb2.Point | common_pb2.Point2D) -> Point:
+    """The point on the ground a unit's or an effect's reported position stands for."""
+    return Point((position.x, position.y))
 
 
 class _TrialWatch:
     """Both players' observations of a trial, every step from its set-off."""
 
-    def __init__(self, rivals: Rivals, site: Point) -> None:
+    def __init__(self, rivals: Rivals, site: Point, *, watcher_tag: int) -> None:
         self.rivals = rivals
         self.site = site
         self.views: dict[str, Sandbox] = {"maker's view": rivals.me, "enemy's view": rivals.enemy}
-        self.tags_listed_before = {name: {unit.tag for unit in view.units()} for name, view in self.views.items()}
+        # The second player's observer is never the trial's, though the first may list it only later.
+        self.tags_not_followed = {
+            name: {unit.tag for unit in view.units()} | {watcher_tag} for name, view in self.views.items()
+        }
         self.readings: dict[str, dict[int, _UnitReadings]] = {name: {} for name in self.views}
         self.effects_near_the_site: dict[str, set[str]] = {name: set() for name in self.views}
 
@@ -246,10 +264,10 @@ class _TrialWatch:
         readings = self.readings[name]
         anything_listed = False
         for unit in observation.raw_data.units:
-            if unit.tag in self.tags_listed_before[name]:
+            if unit.tag in self.tags_not_followed[name]:
                 continue
             if unit.tag not in readings:
-                if _distance_from(self.site, unit) > _TRIAL_REACH:
+                if self.site.distance_to(_point_of(unit.pos)) > _TRIAL_REACH:
                     continue
                 readings[unit.tag] = _UnitReadings(RawUnitTypeId(unit.unit_type).name)
             readings[unit.tag].add(unit, step)
@@ -258,7 +276,7 @@ class _TrialWatch:
             if tag in readings:
                 readings[tag].reported_dead_at = step
         for effect in observation.raw_data.effects:
-            if any(self.site.distance_to(Point((point.x, point.y))) <= _TRIAL_REACH for point in effect.pos):
+            if any(self.site.distance_to(_point_of(point)) <= _TRIAL_REACH for point in effect.pos):
                 self.effects_near_the_site[name].add(RawEffectId(effect.effect_id).name)
         return anything_listed
 
@@ -269,7 +287,7 @@ def run_trial(trial: _Trial, installation: Installation) -> dict[str, Any]:
         site = _trial_site(rivals)
         actor = trial.make_actor(rivals, site)
         enemy_sees_the_actor = any(unit.tag == actor.tag for unit in rivals.enemy.units())
-        trial_watch = _TrialWatch(rivals, site)
+        trial_watch = _TrialWatch(rivals, site, watcher_tag=_watcher_tag(rivals))
         set_off_step = rivals.me.client.observation().observation.game_loop
         verdict = trial.set_off(rivals, actor, site)
         trial_watch.watch()

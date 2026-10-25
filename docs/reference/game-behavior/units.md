@@ -37,9 +37,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
   listed at all (#37; tested), but an enemy's burrowed widow mine can be (below).
 - Force fields and reaper grenades are listed as units, not effects; a parasitic bomb adds no unit. Lurker spines are
-  one effect with several positions along a line (#12, #25). A force field is neutral, owner 16, to both players, its
-  sentry's owner too; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to the other (tool
-  `sweep_timed_life`, build 75689).
+  one effect with several positions along a line (#12, #25). A force field is neutral, owner 16, in both players'
+  views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to the other (tool `sweep_timed_life`,
+  build 75689).
 - Map-owned units are owner 16 (stated). An enemy structure built out of sight is not listed (tested).
 
 ## What is reported of a unit
@@ -50,12 +50,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
   player's own units (#25; corpus).
 - `buff_duration_remain` and `buff_duration_max` give a unit with a timed life the steps it has left only for this
-  player's own: a MULE's counted down from 1441, against a maximum of 1440, and each broodling's from 128 to 132,
-  against 128, a step at a time to 0 at its last listing, its death reported the step after. The enemy's MULE and
-  broodlings read 0 and 0. So do a force field and a reaper's grenade, to both players, whose health also stays full
-  until their last listing: nothing reported tells how long either has left. In three games of two each, a force
-  field ordered at step 24 was first listed 2 to 4 steps later and last at step 269, and a grenade first listed 8 to
-  10 steps after the order and last 26 steps after that (tool `sweep_timed_life`, build 75689).
+  player's own: a MULE's counted down from 1441 and from 1443 in two games, against a maximum of 1440, and six
+  broodlings' in each of two games from between 128 and 132, against 128, each a step at a time to 0 at its last
+  listing, its death reported the step after. The enemy's MULE and broodlings read 0 and 0. So do a force field and a
+  reaper's grenade, to both players, whose health stays full until their last listing: nothing reported tells how long
+  either has left. In four games of two each, a force field ordered at step 24 was first listed 2 to 4 steps later and
+  last at step 269, and a grenade first listed 8 to 10 steps after the order and last 26 steps after that (tool
+  `sweep_timed_life`, build 75689).
 - `life` is health alone; shields are separate (stated). A marine has 45 health, 55 with Combat Shield, and the
   tables hold no health (#34; tested).
 - `build_progress` counts up while a structure is built or a unit warps in (a zealot read 0.01, 0.32, 0.64, 0.95,
