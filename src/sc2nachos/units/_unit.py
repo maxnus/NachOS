@@ -360,7 +360,8 @@ class Unit[K: UnitType.AnyType]:
     @property
     def first_seen(self) -> GameTime | None:
         """The time of the first observation that showed the unit visible, or `None` if none has, as for `last_seen`.
-        A structure remembered under a new tag keeps it, as it keeps its `id`."""
+        A structure remembered under a new tag keeps it, as it keeps its `id`. Later than `EnemyUnitFirstSeenEvent` for
+        an enemy's unit first listed in the fog or undetected, which that event counts as first seen."""
         return None if self._first_seen is None else GameTime(steps=self._first_seen)
 
     @property

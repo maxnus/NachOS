@@ -290,10 +290,11 @@ class TestTheFog:
     def test_a_unit_is_first_seen_at_the_first_observation_that_shows_it_visible(self) -> None:
         """Not while it is in sight but undetected, and for good once seen, cloaked again or gone."""
         game = _Game()
-        (banshee,) = game.observe(0, make_unit(2, alliance=_ENEMY, visibility=_INVISIBLE))
+        banshee_fields = {"unit_type": UnitTypeId.BANSHEE, "alliance": _ENEMY, "is_flying": True}
+        (banshee,) = game.observe(0, make_unit(2, **banshee_fields, visibility=_INVISIBLE))
         assert banshee.first_seen is None
-        game.observe(16, make_unit(2, alliance=_ENEMY))
-        game.observe(32, make_unit(2, alliance=_ENEMY, visibility=_INVISIBLE))
+        game.observe(16, make_unit(2, **banshee_fields))
+        game.observe(32, make_unit(2, **banshee_fields, visibility=_INVISIBLE))
         game.observe(48)
         assert (banshee.first_seen, banshee.last_seen) == (GameTime(steps=16), GameTime(steps=16))
 
