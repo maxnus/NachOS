@@ -50,7 +50,8 @@ class IdEnum(ReadableIntEnum):
 
     @property
     def is_custom(self) -> bool:
-        """Whether this is a custom id: the game has none of it, and NachOS sends it as one of the game's."""
+        """Whether this is a custom id: the game has none of it. NachOS sends a custom ability as one of the game's, and
+        never sends a buff."""
         return self >= self.CUSTOM_IDS_FROM
 
     @classmethod
