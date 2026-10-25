@@ -581,7 +581,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
     The remaining duration hangs on the maximum, so a timed life run out reads zero, not `None`;
   - `weapon_cooldown` stays a `GameTime`, zero without a weapon, with `weapons` saying whether a unit can attack at
     all (over `None` from the unit's weapons, which the game's single field cannot tell, would cost a read some
-    130 ns, and leaves `not unit.weapon_cooldown` reading a weaponless unit as ready all the same).
+    130 ns, and leaves `not unit.weapon_cooldown` reading a weaponless unit as ready all the same);
+  - force fields and reaper grenades stay units, over effects as python-sc2 makes them: the game times neither, to
+    anyone, and their time left, worked out from a lifetime and the first listing, needs each followed from one
+    observation to the next, as a unit is and an effect is not. The same would serve the enemy's MULEs and broodlings,
+    whose time left the game reports to their owner alone. How NachOS gives that time waits until after the migration
+    (section 1).
 - **Writing a replay's whole game for salsa** (the owner, 2026-10-25, one question at a time), so that a model or an
   LLM learns from a game without playing it back:
   - The split (the owner): NachOS writes the files, `.salsa`; their format's spec, the reader (`sc2salsa`) and the
@@ -610,9 +615,6 @@ Keep this file current: when a step is done, say so here in the same pull reques
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
-- **Force fields and reaper grenades as effects or units**, to plan with the owner from `tools/sweep_timed_life.py`'s
-  findings: the game times neither, both last a fixed time from their first listing, and only a unit is followed from
-  one observation to the next; a grenade is its thrower's, and a structure in the tables.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
   salsa's spec, whose order salsa's plan holds:
@@ -628,6 +630,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 - A launch passes no data version, only the base build: a replay whose data version is not its base build's default
   may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).
+
+- A timed unit's time left where the game reports none: a force field's, a reaper's grenade's, and the enemy's MULEs'
+  and broodlings', from a lifetime a sweep measures and the unit's first listing. The owner put it after the migration
+  (2026-10-25). `tools/sweep_timed_life.py` measured those four; the other timed units, how to give the time, and what
+  it reads for a unit first seen already standing, are to plan then.
 
 - Keeping the selections a turn's units hand out, rather than building them at every read, about 15 ns a unit: the
   owner chose to decide it once the swap runs and AvocaDOS's exit gate measures what its reads cost (review of
