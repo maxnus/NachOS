@@ -21,7 +21,7 @@ from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable
 
     from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.geometry import PointLike
@@ -34,6 +34,9 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 # degrees off.
 _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
+# The buffs a worker carries resources under: minerals under one for every race and another for rich minerals, and gas
+# from a plain geyser under one, each race's game id read as it. Gas from a rich geyser comes under none (in game).
+_CARRYING_RESOURCE_BUFFS = frozenset({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH, BuffId.CARRYING_GAS})
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
 # read into a unit.
@@ -634,6 +637,21 @@ class Unit[K: UnitType.AnyType]:
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
         return frozenset(BuffId.read(buff) for buff in report.buff_ids)
+
+    def has_buff(self, buff_ids: BuffId | Collection[BuffId]) -> bool:
+        """Whether `buff_ids`, one buff or any of several, is among the unit's `buffs`. Raises `NotReportedError` for a
+        unit never shown visible, as `buffs` does."""
+        unit_buffs = self.buffs
+        if isinstance(buff_ids, BuffId):
+            return buff_ids in unit_buffs
+        return not unit_buffs.isdisjoint(buff_ids)
+
+    @property
+    def is_carrying_resource(self) -> bool:
+        """Whether the unit carries minerals or gas, as its buffs show: false for a worker carrying gas from a rich
+        geyser, which the game gives no buff (in game). Raises `NotReportedError` for a unit never shown visible, as
+        `buffs` does."""
+        return self.has_buff(_CARRYING_RESOURCE_BUFFS)
 
     # From the game's tables.
 

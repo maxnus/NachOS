@@ -5,12 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from sc2nachos.game_time import GameTime
+from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from s2clientprotocol import raw_pb2
 
 
@@ -46,6 +49,17 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def is_idle(self) -> bool:
         """Whether the unit has no orders."""
         return not self._latest_report.orders
+
+    def is_doing(self, abilities: AbilityId | Collection[AbilityId]) -> bool:
+        """Whether the unit's current order, the first of `orders`, carries out `abilities`, one ability or any of
+        several. False for an idle unit."""
+        # Read off the report: building `orders` to read the first would read every order and look up its target.
+        if not (reported_orders := self._latest_report.orders):
+            return False
+        ability_id = AbilityId.read(reported_orders[0].ability_id)
+        if isinstance(abilities, AbilityId):
+            return ability_id == abilities
+        return ability_id in abilities
 
     @property
     def weapon_cooldown(self) -> GameTime:

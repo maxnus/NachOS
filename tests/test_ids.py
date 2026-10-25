@@ -64,7 +64,7 @@ def test_curated_bridges_to_raw_by_value(curated: type[IdEnum], raw: type[Readab
 @pytest.mark.parametrize(("curated", "raw"), PAIRS)
 def test_curated_is_a_subset_of_the_catalog(curated: type[IdEnum], raw: type[ReadableIntEnum]) -> None:
     """Every curated id the game has exists in the generated catalog — curation filters, and invents only custom
-    abilities."""
+    ids."""
     catalog = {int(member) for member in raw}
     assert {int(member) for member in _game_ids(curated)} <= catalog
 
@@ -123,6 +123,22 @@ def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: Raw
     assert AbilityId.get(reported) is ordered
     with pytest.raises(ValueError):
         AbilityId(reported)
+
+
+@pytest.mark.parametrize(
+    "game_id",
+    [
+        RawBuffId.CarryHarvestableVespeneGeyserGas,
+        RawBuffId.CarryHarvestableVespeneGeyserGasProtoss,
+        RawBuffId.CarryHarvestableVespeneGeyserGasZerg,
+    ],
+)
+def test_every_races_gas_reads_as_one_buff(game_id: RawBuffId) -> None:
+    """Each race's worker carries gas under a game id of its own, and the game has none for all three, so NachOS
+    reads each as a custom id, as it reads a tank's siege mode and an observer's surveillance mode as `SIEGE`."""
+    assert BuffId.CARRYING_GAS.is_custom
+    assert BuffId.read(game_id) is BuffId.CARRYING_GAS
+    assert BuffId.get(game_id) is BuffId.CARRYING_GAS
 
 
 @pytest.mark.parametrize("enum", CURATED)

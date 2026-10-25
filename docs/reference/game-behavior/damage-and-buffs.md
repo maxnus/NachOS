@@ -142,6 +142,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `sweep_buffs`, #24).
 - Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
+- A worker carries gas from a rich geyser under no buff at all. On PylonAIE a worker of each race, mining its race's
+  gas building on the rich geyser, left it ordered to return and delivered the gas, wearing no buff the whole way; on a
+  plain geyser each wore its race's gas buff, 273, 274 or 275, from leaving the building to delivering. An SCV on a rich
+  mineral field wears `CarryHighYieldMineralFieldMinerals`, and on a plain one `CarryMineralFieldMinerals` (in game,
+  build 75689, on PylonAIE and TorchesAIE, scratch checks in #173). The corpus never shows a worker carrying from a rich
+  field or geyser.
 - Buff names mislead: concussive shells put `Slow` on what they hit, never `DutchMarauderSlow`; an immortal's
   Barrier is `TakenDamage`, never `ImmortalOverload`, starting on the first hit, lasting 48 steps, with the shields
   held at 100; a ghost holding fire wears `GhostHoldFireB`, not `GhostHoldFire` (tool `sweep_buffs`, #24).

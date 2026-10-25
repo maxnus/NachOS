@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import data_pb2, raw_pb2
 
 from sc2nachos.geometry import Circle, Point, Rectangle, Tile
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import make_enemy, make_observation, make_tables, make_unit
@@ -241,10 +241,31 @@ class TestFilters:
         assert _tags(units.gas_buildings) == [6]
         assert _tags(units.own.workers) == [1]
 
+    def test_by_what_each_is_doing(self) -> None:
+        units = _mine(40)
+        moving = [unit.tag for unit in units if unit.orders and unit.orders[0].ability is AbilityId.MOVE]
+        assert _tags(units.doing(AbilityId.MOVE)) == moving
+        assert _tags(units.doing({AbilityId.MOVE, AbilityId.GATHER})) == moving
+        assert _tags(units.doing(AbilityId.GATHER)) == []
+        assert _tags(units.doing(())) == []
+
+    def test_by_buff(self) -> None:
+        units = _units(
+            make_unit(1, buff_ids=[BuffId.MARINE_STIMMED]),
+            make_unit(2, UnitTypeId.SCV, buff_ids=[BuffId.CARRYING_MINERALS]),
+            make_unit(3, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST], alliance=Alliance.ENEMY),
+            make_unit(4),
+        )
+        assert _tags(units.with_buff(BuffId.MARINE_STIMMED)) == [1, 3]
+        assert _tags(units.with_buff({BuffId.MEDIVAC_BOOST, BuffId.CARRYING_MINERALS})) == [2, 3]
+        assert _tags(units.with_buff(())) == []
+
     def test_a_filter_over_what_was_never_shown_visible_raises(self) -> None:
-        """The hidden enemy was never visible, so its build progress was never reported."""
+        """The hidden enemy was never visible, so neither its build progress nor its buffs were reported."""
         with pytest.raises(NotReportedError):
             _ = _mixed().complete
+        with pytest.raises(NotReportedError):
+            _mixed().with_buff(BuffId.MARINE_STIMMED)
         assert _tags(_mixed().own.idle) == [1]
 
     def test_by_predicate(self) -> None:
@@ -268,6 +289,29 @@ class TestWhereTheyAre:
         assert _tags(units.closest_n_to(5, point)) == [unit.tag for unit in by_distance[:5]]
         assert units.closest_to(point) is by_distance[0]
         assert units.closest_distance_to(point) == pytest.approx(by_distance[0].position.distance_to(point))
+
+    @pytest.mark.parametrize("in_the_collection", [False, True], ids=["outside the collection", "in the collection"])
+    def test_by_distance_to_a_unit_is_by_distance_to_its_position(self, in_the_collection: bool) -> None:
+        units = _mine(60, seed=3)
+        enemy_outside = _units(make_unit(99, at=(12.5, 30.0), alliance=Alliance.ENEMY))[0]
+        reference_unit = units[7] if in_the_collection else enemy_outside
+        by_distance = sorted(units, key=lambda other: other.position.distance_to(reference_unit.position))
+        assert _tags(units.sorted_by_distance_to(reference_unit)) == [other.tag for other in by_distance]
+        assert _tags(units.closest_n_to(5, reference_unit)) == [other.tag for other in by_distance[:5]]
+        assert units.closest_to(reference_unit) is by_distance[0]
+        nearest_distance = by_distance[0].position.distance_to(reference_unit.position)
+        assert units.closest_distance_to(reference_unit) == pytest.approx(nearest_distance)
+
+    def test_a_unit_in_the_collection_is_at_no_distance_from_itself(self) -> None:
+        units = _mine(60, seed=3)
+        assert units.closest_to(units[7]) is units[7]
+        assert units.closest_distance_to(units[7]) == 0.0
+        assert units.sorted_by_distance_to(units[7])[0] is units[7]
+
+    def test_of_two_units_on_one_spot_the_first_is_the_nearest_to_either(self) -> None:
+        units = _units(make_unit(1, at=(4.0, 4.0)), make_unit(2, at=(4.0, 4.0)), make_unit(3, at=(9.0, 4.0)))
+        assert units.closest_to(units[1]) is units[0]
+        assert _tags(units.sorted_by_distance_to(units[1])) == [1, 2, 3]
 
     def test_in_any_of_several_areas(self) -> None:
         units = _mine(60)
