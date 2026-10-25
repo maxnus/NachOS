@@ -572,44 +572,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
   of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
   in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
   display changes, and a unit reported dead under either of its tags is matched to no copy.
-- **A replay's whole game in a file** (the owner, 2026-10-25, one question at a time), so that a model or an LLM learns
-  from a game without playing it back:
-  - The split (the owner): the writer is NachOS's; the format's spec, the reader and the analysis are a repo of their
-    own, `salsa`, package `sc2salsa`, files `.salsa` (over `sc2replaydata` and `sc2frames`), which needs pyarrow and
-    never NachOS. The spec lives in salsa, with a version in every file: NachOS's writer writes one version, and the
-    reader reads every version it knows.
-  - A file holds the truth and each side's sight (over the truth alone, and over one player's view): every unit as it
-    is, both players' actions, economy, upgrades and their own units' orders, which units each player saw, and the
-    map once. The writer plays the replay as each player with the fog off and merges the two views by the game's tag,
-    which names a unit alike in both. A player's memory of a unit is the truth at the last step it saw it.
-  - Every step, exactly (the owner's idea of checkpoints, over a sample every N steps): a snapshot of every unit every
-    28 steps, 1.25 s of game time, as a table of its own, and between, only the rows that changed. The game cannot
-    resume a replay from a state, so the checkpoints are in the file: reaching a step takes 3 s to load the replay
-    and some 1,400 steps a second. The owner chose 28 over 224, 128 and 32: denser snapshots cost little and make the
-    snapshots alone a sample to read, and a power of two looked up no faster. Events
-    and actions come at the step the game reports them, in the observation after, and the `.SC2Replay`, 24 KB, is
-    kept in the file for anything its tables lack.
-  - Every field (over the core and the order queue): 27 a row, each owner's view's included (weapon cooldown,
-    harvesters, cargo, add-on, engaged target), and tables of changes for the order queue, buffs, passengers and
-    rallies. A whole row is kept where any field changed, over a column at a time, as a moving unit's x, y and facing
-    change together.
-  - Parquet with zstd (over compressed numpy, within 10% of it in size), which pandas, polars, DuckDB and Arrow read.
-    The writer's pyarrow, 168 MB installed, comes with an optional extra, `sc2nachos[dataset]`.
-  - One file per game (over a folder per game, and over a table per kind across games): an uncompressed zip of its
-    replay, `game.json` (map, players, races, result, build, steps, format version) and a Parquet file a table.
-    DuckDB and polars do not read inside a zip, so the reader extracts one.
-  - A unit is a dense index from 0 in the order units first appear (over the game's tag), and a roster table gives
-    each its tag, owner, first type and first and last steps. NachOS's ids cannot serve: an id starts with the alliance
-    as its player sees it, so it differs between the two views.
-  - The writer, for one replay first (over a folder too, and over writing through `run_replay`):
-    `sc2nachos.dataset.write_salsa(replay, to=...)`, on one game client, writing each field as NachOS reads it. A
-    bot's own game is saved with `save_replay_to` and written after. A replay plays only on its own build: 4.10
-    (75689) is installed here, and AI Arena's games are on it (three of 2026-10-07); a human ladder replay needs a
-    client of its build, on Windows or macOS.
-  - The first reader (over its tables and extracting alone): `sc2salsa.open(path)`, the facts, the replay, any table as
-    a pyarrow Table, every unit `at(step)` from the nearest snapshot and the changes since, `frames(every=N)` forward
-    through the game, and `extract(folder)`.
-  - The measurements these rest on, a 7-minute game measured several ways, are in #168.
+- **Writing a replay's whole game for salsa** (the owner, 2026-10-25, one question at a time), so that a model or an
+  LLM learns from a game without playing it back:
+  - The split (the owner): NachOS writes the files, `.salsa`; their format's spec, the reader (`sc2salsa`) and the
+    analysis are the repo `maxnus/salsa`, which needs pyarrow and never NachOS, and whose plan holds the format's
+    decisions. NachOS's writer writes one version of the spec, and the reader reads every version it knows.
+  - The writer: `sc2nachos.dataset.write_salsa(replay, to=...)`, behind an optional extra, `sc2nachos[dataset]`, for
+    its pyarrow (168 MB installed). On one game client, it plays the replay as each player with the fog off, observing
+    every step, and merges the two views by the game's tag, which names a unit alike in both, writing each field as
+    NachOS reads it. NachOS's ids cannot name a unit in the file: an id starts with the alliance as its player sees it,
+    so it differs between the two views. A bot's own game is saved with `save_replay_to` and written after.
+  - One replay first (over a folder too, and over writing through `run_replay`), a folder across several game clients
+    after.
+  - A replay plays only on its own build: 4.10 (75689) is installed here, and AI Arena's games are on it (three of
+    2026-10-07); a human ladder replay needs a client of its build, on Windows or macOS.
+  - The measurements these rest on are in #168.
 
 ## Next
 
@@ -624,20 +601,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - M5, in AvocaDOS (section 3).
-- Beside M5, **a replay's whole game in a file** (2026-10-25, above), a pull request at a time, in this order (the
-  owner, over the spec and reader first, and over the writer first), once two NachOS bugs that AI Arena's replays hit
-  are fixed (the owner, 2026-10-25): `run_replay` cannot play back a replay whose map is not in the game's own Maps
-  folder, as AI Arena's are not ("LaunchError: Unable to open map"; the map's bytes as `map_data` mend it), and
-  `OwnUnit.engaged_target` raises `UnknownTagError` for a target the game never listed.
-  1. salsa: the format's spec, every table, column, type and encoding, as version 1, measuring what makes a file
-     smaller first: a 30-minute AI Arena game came to 77 to 97 MB, and the changes sorted by unit, or positions and
-     facing stored coarser, may shrink it. The repo does not exist yet: the owner creates it, or says to.
-  2. NachOS: `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per the spec, and an
-     in-game test writing a real replay.
-  3. salsa: the reader, with fixtures written by NachOS's writer. NachOS's `dev` extra then installs sc2salsa, which
-     needs no NachOS, for a round trip: from its repo, until the owner publishes it.
-  4. NachOS: a folder of replays written across several game clients.
-  5. salsa: a digest of a game for an LLM.
+- Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
+  salsa's spec, whose order salsa's plan holds:
+  1. Two bugs AI Arena's replays hit (the owner, 2026-10-25): `run_replay` could not play back a replay whose map is
+     not where the replay names it (#169), and `OwnUnit.engaged_target` raised for a target the game never listed
+     (#170).
+  2. `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per salsa's spec, and an in-game
+     test writing a real replay. Once salsa's reader exists, NachOS's `dev` extra installs sc2salsa, from its repo
+     until the owner publishes it, for a round trip.
+  3. A folder of replays written across several game clients.
 
 ## 1. Waiting until something needs them
 
