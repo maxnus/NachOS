@@ -2,9 +2,11 @@
 
 import json
 import random
-from collections.abc import Sequence
-from contextlib import ExitStack, closing
+from collections.abc import Iterator, Sequence
+from contextlib import ExitStack, closing, contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
+from typing import final
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
@@ -143,17 +145,65 @@ def run_replay(
     orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run (in game). Leaving the
     replay, or reaching `time_limit`, stops it `Result.UNDECIDED`.
 
+    The replay is played back as `open_replay` plays it, on its own build and with its map, and refused where that
+    says. `record_to` is a file to record the whole conversation into, as for `run_local`, which `run_recording` plays
+    back. However the replay ends, the client is stopped and its temporary directory removed.
+    """
+    _check_time_limit(time_limit)
+    with open_replay(
+        replay,
+        player_id=player_id,
+        disable_fog=disable_fog,
+        record_to=record_to,
+        installation=installation,
+        window=window,
+    ) as playback:
+        _check_tech_tree_build(playback.info.base_build)
+        return api.play(playback.client, steps_per_turn=steps_per_turn, time_limit=time_limit)
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ReplayPlayback:
+    """A replay being played back, on a game client or from a recording, for its observations to be read straight from
+    the protocol."""
+
+    client: Client
+    """The connection, in the replay at its start, before its first observation. It answers what the game answers in a
+    game, observations, steps, the game's info and data among them, as the player played for saw the game, and refuses
+    every action and debug command (in game)."""
+    info: sc2api_pb2.ResponseReplayInfo
+    """What the game read from the replay: its map, its length, the build it was played on and its players."""
+
+
+@contextmanager
+def open_replay(
+    replay: Path | str,
+    *,
+    player_id: int,
+    disable_fog: bool = False,
+    record_to: Path | str | None = None,
+    installation: Installation | None = None,
+    window: tuple[int, int] = (1024, 768),
+) -> Iterator[ReplayPlayback]:
+    """Start a game client, play back the replay in the file `replay` on it as the player `player_id` saw it, and give
+    the playback, for its observations to be read straight from the protocol. `run_replay` plays one for an api.
+
     Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
     on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
     it is, and a second client is started when that is not the one. The game opens the replay's map by the path the
     replay names, which an AI Arena replay gives as a bare file name the game does not find (in game); so unless the
     path is an absolute path to a file here, the map it names under the installation's maps goes with the replay, or
-    else the map of its name there. `record_to` is a file to
-    record the whole conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends,
-    the client is stopped and its temporary directory removed.
+    else the map of its name there. The game reports the raw interface, with cloaked units, burrowed units' shadows
+    and the placeholders of structures ordered shown, on the whole map. `disable_fog` lists every unit, as
+    `Client.start_replay` says.
+
+    `record_to` is a file to record the whole conversation into, the replay's info included, which
+    `open_replay_recording` and `run_recording` play back; it is complete once the playback ends. However the
+    playback ends, the client leaves the replay and is stopped, and its temporary directory removed. Each playback
+    starts a client of its own, so two can run at once, one for each player.
     """
     _check_output_files(record_to, None)
-    _check_time_limit(time_limit)
     replay_data = Path(replay).read_bytes()
     installation = installation or Installation.find()
     newest_build = installation.build_to_launch()
@@ -166,15 +216,42 @@ def run_replay(
             replay_build = installation.build_to_launch(base_build=info.base_build)
             game.terminate()
             game = running.enter_context(GameProcess.launch(installation, base_build=replay_build, window=window))
-        _check_tech_tree_build(info.base_build)
         map_data = _map_bytes_the_game_needs(info.local_map_path, installation)
         with closing(_connect(game.url, record_to)) as client:
             try:
+                # Asked again on the connection recorded, so that a recording holds it.
+                info = client.replay_info(replay_data)
                 client.start_replay(replay_data, player_id=player_id, disable_fog=disable_fog, map_data=map_data)
-                return api.play(client, steps_per_turn=steps_per_turn, time_limit=time_limit)
+                yield ReplayPlayback(client, info)
             finally:
                 client.leave_game()
                 client.quit()
+
+
+@contextmanager
+def open_replay_recording(recording: Recording | Path | str) -> Iterator[ReplayPlayback]:
+    """Play back `recording`, a recording of a replay played back that `open_replay` or `run_replay` made, with no game
+    client, and give the playback, as `open_replay` gives it. It answers what was asked when it was recorded, in the
+    same order, and raises `ProtocolError` when asked for a request of another kind, as `PlaybackTransport` does.
+
+    Raises `ValueError` for a recording of a game played rather than a replay played back.
+    """
+    if not isinstance(recording, Recording):
+        recording = Recording(Path(recording))
+    start_replay_request = recording.start_replay_request
+    if start_replay_request is None:
+        raise ValueError(f"{recording.path} is a game played, not a replay played back")
+    with closing(Client(PlaybackTransport(recording))) as client:
+        # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
+        # details.
+        info = client.replay_info(start_replay_request.replay_data)
+        client.start_replay(
+            start_replay_request.replay_data,
+            player_id=start_replay_request.observed_player_id,
+            disable_fog=start_replay_request.disable_fog,
+            map_data=start_replay_request.map_data if start_replay_request.HasField("map_data") else None,
+        )
+        yield ReplayPlayback(client, info)
 
 
 def _map_bytes_the_game_needs(replay_map_path: str, installation: Installation) -> bytes | None:
@@ -239,33 +316,30 @@ def run_recording(
     and saves no replay, logging a save asked for as failed. A request the recording cannot answer raises
     `ProtocolError`.
 
-    A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for and
-    with the fog as it was, by default only: `permissive` raises `ValueError` for one.
+    A replay played back by `run_replay` or `open_replay` is played back again as `open_replay_recording` plays it, as
+    the player it was played for and with the fog as it was, by default only: `permissive` raises `ValueError` for
+    one.
     """
     _check_time_limit(time_limit)
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    start_replay_request = recording.start_replay_request
-    if start_replay_request is not None and permissive:
-        raise ValueError(f"{recording.path} is a replay played back, which plays back only as it was recorded")
+    if recording.start_replay_request is not None:
+        if permissive:
+            raise ValueError(f"{recording.path} is a replay played back, which plays back only as it was recorded")
+        with open_replay_recording(recording) as playback:
+            return api.play(
+                playback.client, time_limit=time_limit, enemy_ladder_id=enemy_ladder_id, save_replay_to=save_replay_to
+            )
     transport: Transport = PermissivePlaybackTransport(recording) if permissive else PlaybackTransport(recording)
     with closing(Client(transport)) as client:
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
         # details. A permissive one makes up a create and every step.
-        if start_replay_request is not None:
-            client.start_replay(
-                start_replay_request.replay_data,
-                player_id=start_replay_request.observed_player_id,
-                disable_fog=start_replay_request.disable_fog,
-                map_data=start_replay_request.map_data if start_replay_request.HasField("map_data") else None,
-            )
-        else:
-            if permissive or recording.created_its_game:
-                client.create_game("recorded", [Participant(), Computer()])
-            client.join_game(Race.RANDOM)
+        if permissive or recording.created_its_game:
+            client.create_game("recorded", [Participant(), Computer()])
+        client.join_game(Race.RANDOM)
         return api.play(
             client,
-            realtime=not permissive and start_replay_request is None and recording.played_in_real_time,
+            realtime=not permissive and recording.played_in_real_time,
             time_limit=time_limit,
             enemy_ladder_id=enemy_ladder_id,
             save_replay_to=save_replay_to,

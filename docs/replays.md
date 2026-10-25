@@ -122,3 +122,30 @@ run_recording("games/ladder-1.sc2rec", api)
 
 It plays back exactly, as [testing](testing.md#playing-a-bots-own-game-back-exactly) describes, with the fog as it
 was: the api must ask what the one recorded asked. `permissive=True` raises `ValueError` for a replay played back.
+
+## Reading the observations yourself
+
+`open_replay` plays a replay back with no api, for a tool that reads the game's own messages, as a dataset's writer
+does. It starts the client on the replay's build, with its map, as `run_replay` does, and gives a `ReplayPlayback`:
+`client`, the connection, in the replay before its first observation, and `info`, what the game read from the
+replay. The client is stopped when the `with` block ends, however it ends:
+
+```python
+from sc2nachos import open_replay
+
+with open_replay("games/ladder.SC2Replay", player_id=1) as playback:
+    print(playback.info.map_name, playback.info.game_duration_loops)
+    names = playback.client.data()
+    while True:
+        observation = playback.client.observation()
+        ...  # the game's ResponseObservation, as the player saw it
+        if not playback.client.in_game:
+            break
+        playback.client.step(1)
+```
+
+`open_replay(replay, *, player_id, disable_fog=False, record_to=None, installation=None, window=(1024, 768))` takes
+`run_replay`'s arguments for the replay and the client, and none for an api. Each playback starts a client of its
+own, so one for each player can run at once. The game reports the raw interface, with cloaked units, burrowed units' shadows and the placeholders of
+structures ordered shown, on the whole map, as it does for an api. `open_replay_recording(recording)` gives the same
+from a recording `record_to` made, with no game client, answering what was asked in the order it was asked.

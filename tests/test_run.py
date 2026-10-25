@@ -1,6 +1,6 @@
 import json
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import closing
+from contextlib import AbstractContextManager, closing
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Self
@@ -19,8 +19,11 @@ from sc2nachos import (
     FogOnError,
     GameTime,
     Race,
+    ReplayPlayback,
     Result,
     UnitTypeId,
+    open_replay,
+    open_replay_recording,
     run_from_command_line,
     run_local,
     run_recording,
@@ -343,17 +346,33 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
+# The replay's info a recording `_played_back` makes holds: the corpus game's build and its two players.
+_REPLAY_INFO = sc2api_pb2.ResponseReplayInfo(
+    base_build=TECH_TREE.base_build,
+    map_name="Pylon AIE",
+    player_info=[
+        sc2api_pb2.PlayerInfoExtra(
+            player_info=sc2api_pb2.PlayerInfo(player_id=1, type=sc2api_pb2.PlayerType.Participant)
+        ),
+        sc2api_pb2.PlayerInfoExtra(player_info=sc2api_pb2.PlayerInfo(player_id=2, type=sc2api_pb2.PlayerType.Computer)),
+    ],
+)
+
+
 def _played_back(
     exchanges: Iterable[Exchange], *, disable_fog: bool = False, map_data: bytes | None = None
 ) -> Iterator[Exchange]:
     """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as,
-    with the fog off if `disable_fog` and the map's bytes sent if `map_data`, holds them: the replay started where the
-    game was joined, never created, and played back rather than played."""
+    with the fog off if `disable_fog` and the map's bytes sent if `map_data`, holds them: the replay's info read and
+    the replay started where the game was joined, never created, and played back rather than played."""
     for exchange in exchanges:
         asked_kind = exchange.request.WhichOneof("request")
         if asked_kind == "create_game":
             continue
         if asked_kind == "join_game":
+            asked_info = sc2api_pb2.RequestReplayInfo(replay_data=b"the replay")
+            read = make_response(Status.LAUNCHED, replay_info=_REPLAY_INFO)
+            yield Exchange(sc2api_pb2.Request(replay_info=asked_info), read)
             start = sc2api_pb2.RequestStartReplay(
                 replay_data=b"the replay",
                 observed_player_id=exchange.response.join_game.player_id,
@@ -677,7 +696,7 @@ def test_a_local_game_on_a_build_the_tech_tree_was_not_swept_on_is_warned_of(
 
 
 class _ClientLaunched:
-    """A game client `run_replay` launched, which records whether it was stopped."""
+    """A game client `open_replay` launched, which records whether it was stopped."""
 
     def __init__(self) -> None:
         self.url = "ws://127.0.0.1:1/sc2api"
@@ -694,7 +713,7 @@ class _ClientLaunched:
 
 
 class TestTheReplaysBuild:
-    """Which client `run_replay` starts for a replay, stopped where it would start playing."""
+    """Which client `open_replay` starts for a replay, stopped where it would start playing."""
 
     _NEWEST = TECH_TREE.base_build + 1
     _OLDER = TECH_TREE.base_build
@@ -708,9 +727,9 @@ class TestTheReplaysBuild:
         replay_build: int,
         raising: type[Exception] = _ClientStarted,
     ) -> tuple[list[int | None], list[_ClientLaunched]]:
-        """Run `run_replay` on an installation of the `installed` builds for a replay of `replay_build`, where it would
-        connect to play raising `_ClientStarted`, expecting it to raise `raising`, and return the builds it launched and
-        the clients."""
+        """Open the replay with `open_replay` on an installation of the `installed` builds for a replay of
+        `replay_build`, where it would connect to play raising `_ClientStarted`, expecting it to raise `raising`, and
+        return the builds it launched and the clients."""
         for build in installed:
             (tmp_path / "Versions" / f"Base{build}").mkdir(parents=True)
         replay = tmp_path / "game.SC2Replay"
@@ -738,8 +757,8 @@ class TestTheReplaysBuild:
         monkeypatch.setattr(GameProcess, "launch", launch)
         monkeypatch.setattr(WebSocketTransport, "connect", connect)
         monkeypatch.setattr(sc2nachos.run, "_connect", connect_to_play)
-        with pytest.raises(raising):
-            run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
+        with pytest.raises(raising), open_replay(replay, player_id=1, installation=Installation(tmp_path, "Linux")):
+            pass
         return launched_builds, launched_clients
 
     def test_a_replay_of_the_newest_build_installed_plays_on_the_client_that_read_it(
@@ -769,10 +788,15 @@ class TestTheReplaysBuild:
 
 
 class _ReplayStartCaught:
-    """A client `run_replay` would play on, which records the map sent with the replay and stops there."""
+    """A client `open_replay` would play on, which reads the replay's info as `info`, records the map sent with the
+    replay and stops there."""
 
-    def __init__(self) -> None:
+    def __init__(self, info: sc2api_pb2.ResponseReplayInfo) -> None:
         self.map_data_sent: list[bytes | None] = []
+        self._info = info
+
+    def replay_info(self, replay: bytes) -> sc2api_pb2.ResponseReplayInfo:
+        return self._info
 
     def start_replay(self, replay: bytes, *, player_id: int, disable_fog: bool, map_data: bytes | None) -> None:
         self.map_data_sent.append(map_data)
@@ -789,12 +813,12 @@ class _ReplayStartCaught:
 
 
 class TestTheReplaysMap:
-    """Which map `run_replay` sends the game with a replay, stopped where it would start playing."""
+    """Which map `open_replay` sends the game with a replay, stopped where it would start playing."""
 
     _INSTALLED_MAP = b"the installed map"
 
     def _map_data_sent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replay_map_path: str) -> bytes | None:
-        """What `run_replay` sends as the map of a replay whose info names its map at `replay_map_path`, on an
+        """What `open_replay` sends as the map of a replay whose info names its map at `replay_map_path`, on an
         installation with Pylon in a folder of its maps."""
         (tmp_path / "Versions" / f"Base{TECH_TREE.base_build}").mkdir(parents=True)
         installed_map = tmp_path / "Maps" / "AIE" / "PylonAIE_v4.SC2Map"
@@ -802,18 +826,19 @@ class TestTheReplaysMap:
         installed_map.write_bytes(self._INSTALLED_MAP)
         replay = tmp_path / "game.SC2Replay"
         replay.write_bytes(b"the replay")
-        client = _ReplayStartCaught()
-
-        def connect(url: str) -> FakeTransport:
-            info = sc2api_pb2.ResponseReplayInfo(base_build=TECH_TREE.base_build, local_map_path=replay_map_path)
-            info.player_info.add().player_info.CopyFrom(sc2api_pb2.PlayerInfo(player_id=1))
-            return FakeTransport(make_response(Status.LAUNCHED, replay_info=info))
-
+        info = sc2api_pb2.ResponseReplayInfo(base_build=TECH_TREE.base_build, local_map_path=replay_map_path)
+        info.player_info.add().player_info.CopyFrom(sc2api_pb2.PlayerInfo(player_id=1))
+        client = _ReplayStartCaught(info)
         monkeypatch.setattr(GameProcess, "launch", lambda installation, **kwargs: _ClientLaunched())
-        monkeypatch.setattr(WebSocketTransport, "connect", connect)
+        monkeypatch.setattr(
+            WebSocketTransport, "connect", lambda url: FakeTransport(make_response(Status.LAUNCHED, replay_info=info))
+        )
         monkeypatch.setattr(sc2nachos.run, "_connect", lambda url, record_to: client)
-        with pytest.raises(_ClientStarted):
-            run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
+        with (
+            pytest.raises(_ClientStarted),
+            open_replay(replay, player_id=1, installation=Installation(tmp_path, "Linux")),
+        ):
+            pass
         (map_data,) = client.map_data_sent
         return map_data
 
@@ -861,6 +886,95 @@ class TestTheReplaysMap:
 
     def test_a_replay_naming_no_map_sends_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         assert self._map_data_sent(tmp_path, monkeypatch, "") is None
+
+
+class TestOpeningAReplay:
+    """What `open_replay` asks of the game, over prepared answers, with no game client."""
+
+    _OBSERVED = sc2api_pb2.ResponseObservation(observation=sc2api_pb2.Observation(game_loop=0))
+
+    def _open(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, record_to: Path | None = None
+    ) -> tuple[FakeTransport, _ClientLaunched]:
+        """Prepare `open_replay` to open a replay of the corpus game's build on an installation of that build: the
+        connection that reads the replay's info, then the connection it plays on, which answers its info again, the
+        start, one observation, the leave and the quit. Return the connection it plays on and the client launched."""
+        (tmp_path / "Versions" / f"Base{TECH_TREE.base_build}").mkdir(parents=True)
+        (tmp_path / "game.SC2Replay").write_bytes(b"the replay")
+        launched = _ClientLaunched()
+        playing = FakeTransport(
+            make_response(Status.LAUNCHED, replay_info=_REPLAY_INFO),
+            make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()),
+            make_response(Status.IN_REPLAY, observation=self._OBSERVED),
+            make_response(Status.LAUNCHED, leave_game=sc2api_pb2.ResponseLeaveGame()),
+            make_response(Status.QUIT, quit=sc2api_pb2.ResponseQuit()),
+        )
+        connections = iter([FakeTransport(make_response(Status.LAUNCHED, replay_info=_REPLAY_INFO)), playing])
+        monkeypatch.setattr(GameProcess, "launch", lambda installation, **kwargs: launched)
+        monkeypatch.setattr(WebSocketTransport, "connect", lambda url: next(connections))
+        return playing, launched
+
+    def _opened(self, tmp_path: Path, **kwargs: Any) -> AbstractContextManager[ReplayPlayback]:
+        """`open_replay` of the replay `_open` prepared, as player 2, with `kwargs`."""
+        return open_replay(
+            tmp_path / "game.SC2Replay", player_id=2, installation=Installation(tmp_path, "Linux"), **kwargs
+        )
+
+    def test_it_reads_the_info_and_starts_the_replay_on_the_connection_it_plays_on_then_leaves_and_quits(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        playing, launched = self._open(tmp_path, monkeypatch)
+        with self._opened(tmp_path, disable_fog=True) as playback:
+            assert isinstance(playback, ReplayPlayback)
+            assert playback.info == _REPLAY_INFO
+            assert playback.client.in_replay
+            assert playback.client.observation() == self._OBSERVED
+        asked = [request.WhichOneof("request") for request in playing.requests]
+        assert asked == ["replay_info", "start_replay", "observation", "leave_game", "quit"]
+        started = playing.requests[1].start_replay
+        assert (started.observed_player_id, started.disable_fog) == (2, True)
+        assert playing.closed
+        assert launched.terminated
+
+    def test_it_leaves_and_quits_when_reading_it_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        playing, launched = self._open(tmp_path, monkeypatch)
+        with pytest.raises(RuntimeError, match="a reader's error"), self._opened(tmp_path):
+            raise RuntimeError("a reader's error")
+        assert [request.WhichOneof("request") for request in playing.requests][-2:] == ["leave_game", "quit"]
+        assert launched.terminated
+
+    def test_its_recording_plays_back_with_no_game_as_it_was_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._open(tmp_path, monkeypatch)
+        record = tmp_path / "played-back.sc2rec"
+        with self._opened(tmp_path, record_to=record) as playback:
+            observed = playback.client.observation()
+        with open_replay_recording(record) as again:
+            assert again.info == _REPLAY_INFO
+            assert again.client.in_replay
+            assert again.client.observation() == observed
+        start_replay_request = Recording(record).start_replay_request
+        assert start_replay_request is not None
+        assert (start_replay_request.replay_data, start_replay_request.observed_player_id) == (b"the replay", 2)
+
+
+class TestOpeningARecordedReplay:
+    """A recording of a replay played back, opened with `open_replay_recording`, with no game client."""
+
+    def test_it_starts_the_replay_as_it_was_recorded(self, tmp_path: Path) -> None:
+        exchanges = _played_back(_pylon_game_stopped_after(10), disable_fog=True, map_data=b"the map")
+        recording = write_recording(tmp_path / "replay.sc2rec", exchanges)
+        with open_replay_recording(recording) as playback:
+            assert playback.info == _REPLAY_INFO
+            assert (playback.client.in_replay, playback.client.fog_disabled) == (True, True)
+
+    def test_a_recording_of_a_game_played_is_refused(self) -> None:
+        with (
+            pytest.raises(ValueError, match="is a game played, not a replay played back"),
+            open_replay_recording(_PYLON_GAME),
+        ):
+            pass
 
 
 @pytest.mark.integration
@@ -1087,6 +1201,65 @@ def test_in_a_real_game_its_replay_plays_back_once_its_map_is_gone_from_where_it
     api = Api()
     assert run_replay(replay, api, player_id=1, steps_per_turn=8) is Result.UNDECIDED
     assert api.step > 0
+
+
+def _observed_to_the_end(client: Client) -> list[sc2api_pb2.ResponseObservation]:
+    """Every observation of the replay `client` plays back, 8 steps apart, to its end."""
+    observations: list[sc2api_pb2.ResponseObservation] = []
+    while True:
+        observations.append(client.observation())
+        if not client.in_game:
+            return observations
+        client.step(8)
+
+
+def _own_unit_owners(observations: list[sc2api_pb2.ResponseObservation]) -> set[int]:
+    """The owners of the units `observations` list as the player's own."""
+    return {
+        unit.owner
+        for observation in observations
+        for unit in observation.observation.raw_data.units
+        if unit.alliance == raw_pb2.Alliance.Self
+    }
+
+
+@pytest.mark.integration
+def test_in_a_real_game_its_replay_opens_as_each_player_at_once_and_reads_to_one_end(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays 10 seconds of a game, saving its replay, opens the replay as each player
+    at once, recording the first, reads both straight from the protocol to the end, and reads the recording again with
+    no game."""
+    try:
+        game_map = MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    replay = tmp_path / "game.SC2Replay"
+    record = tmp_path / "played-back.sc2rec"
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    played = run_local(
+        game_map,
+        Api(),
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=8,
+        time_limit=GameTime.from_seconds(10),
+        save_replay_to=replay,
+    )
+    assert played is Result.TIE
+
+    with (
+        open_replay(replay, player_id=1, record_to=record) as first,
+        open_replay(replay, player_id=2) as second,
+    ):
+        assert first.info == second.info
+        assert first.info.base_build == TECH_TREE.base_build
+        as_the_first = _observed_to_the_end(first.client)
+        as_the_second = _observed_to_the_end(second.client)
+    assert as_the_first[-1].observation.game_loop == as_the_second[-1].observation.game_loop > 0
+    assert (_own_unit_owners(as_the_first), _own_unit_owners(as_the_second)) == ({1}, {2})
+
+    with open_replay_recording(record) as again:
+        assert again.info == first.info
+        assert _observed_to_the_end(again.client) == as_the_first
 
 
 @pytest.mark.integration
