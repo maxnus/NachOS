@@ -201,7 +201,7 @@ def open_replay(
     `record_to` is a file to record the whole conversation into, the replay's info included, which
     `open_replay_recording` and `run_recording` play back; it is complete once the playback ends. However the
     playback ends, the client leaves the replay and is stopped, and its temporary directory removed. Each playback
-    starts a client of its own, so two can run at once, one for each player.
+    starts a client of its own, so two can be open at once, one for each player.
     """
     _check_output_files(record_to, None)
     replay_data = Path(replay).read_bytes()
@@ -210,13 +210,13 @@ def open_replay(
     with ExitStack() as running:
         game = running.enter_context(GameProcess.launch(installation, base_build=newest_build, window=window))
         with closing(Client(WebSocketTransport.connect(game.url))) as info_client:
-            info = info_client.replay_info(replay_data)
-        _check_replay_player(info, player_id)
-        if info.base_build != newest_build:
-            replay_build = installation.build_to_launch(base_build=info.base_build)
+            info_on_the_newest_build = info_client.replay_info(replay_data)
+        _check_replay_player(info_on_the_newest_build, player_id)
+        if info_on_the_newest_build.base_build != newest_build:
+            replay_build = installation.build_to_launch(base_build=info_on_the_newest_build.base_build)
             game.terminate()
             game = running.enter_context(GameProcess.launch(installation, base_build=replay_build, window=window))
-        map_data = _map_bytes_the_game_needs(info.local_map_path, installation)
+        map_data = _map_bytes_the_game_needs(info_on_the_newest_build.local_map_path, installation)
         with closing(_connect(game.url, record_to)) as client:
             try:
                 # Asked again on the connection recorded, so that a recording holds it.
@@ -234,13 +234,12 @@ def open_replay_recording(recording: Recording | Path | str) -> Iterator[ReplayP
     client, and give the playback, as `open_replay` gives it. It answers what was asked when it was recorded, in the
     same order, and raises `ProtocolError` when asked for a request of another kind, as `PlaybackTransport` does.
 
-    Raises `ValueError` for a recording of a game played rather than a replay played back.
+    Raises `ValueError` for a recording of a game played rather than a replay played back, and for one of a replay
+    made before NachOS recorded a replay's info, which plays back once recorded again.
     """
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    start_replay_request = recording.start_replay_request
-    if start_replay_request is None:
-        raise ValueError(f"{recording.path} is a game played, not a replay played back")
+    start_replay_request = _start_of_recorded_replay(recording)
     with closing(Client(PlaybackTransport(recording))) as client:
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
         # details.
@@ -252,6 +251,22 @@ def open_replay_recording(recording: Recording | Path | str) -> Iterator[ReplayP
             map_data=start_replay_request.map_data if start_replay_request.HasField("map_data") else None,
         )
         yield ReplayPlayback(client, info)
+
+
+def _start_of_recorded_replay(recording: Recording) -> sc2api_pb2.RequestStartReplay:
+    """The request that started the replay played back in `recording`, which must first read the replay's info.
+    Raises `ValueError` for a recording of a game played, or of a replay made before the info was recorded."""
+    start_replay_request = recording.start_replay_request
+    if start_replay_request is None:
+        raise ValueError(f"{recording.path} is a game played, not a replay played back")
+    with closing(iter(recording)) as exchanges:
+        first = next(exchanges)
+    if not first.request.HasField("replay_info"):
+        raise ValueError(
+            f"{recording.path} holds no replay info, as a recording made before NachOS recorded one does: record it "
+            "again"
+        )
+    return start_replay_request
 
 
 def _map_bytes_the_game_needs(replay_map_path: str, installation: Installation) -> bytes | None:

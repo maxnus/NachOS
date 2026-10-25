@@ -47,7 +47,8 @@ the game was played with:
 
 A game cut short by its connection closing, as a ladder closes it when either bot crashes, plays back up to the close
 and then raises `ProtocolError`: the recording holds no answer to the request the close cut off. A replay played back
-by `run_replay` and recorded plays back exactly too, as the player it was played for
+by `run_replay` or `open_replay` and recorded plays back exactly too, as the player it was played for, through
+`run_recording` for an api, or `open_replay_recording` for a tool that reads the observations itself
 ([playing back a replay](replays.md#playing-it-back-again-with-no-game)).
 
 Underneath, `run_recording` plays the file through a `PlaybackTransport`.

@@ -718,7 +718,7 @@ class TestTheReplaysBuild:
     _NEWEST = TECH_TREE.base_build + 1
     _OLDER = TECH_TREE.base_build
 
-    def _run(
+    def _open_on_an_installation(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -765,7 +765,9 @@ class TestTheReplaysBuild:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         installed = (self._OLDER, self._NEWEST)
-        launched, clients = self._run(tmp_path, monkeypatch, installed=installed, replay_build=self._NEWEST)
+        launched, clients = self._open_on_an_installation(
+            tmp_path, monkeypatch, installed=installed, replay_build=self._NEWEST
+        )
         assert launched == [self._NEWEST]
         assert clients[0].terminated
 
@@ -773,14 +775,16 @@ class TestTheReplaysBuild:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         installed = (self._OLDER, self._NEWEST)
-        launched, clients = self._run(tmp_path, monkeypatch, installed=installed, replay_build=self._OLDER)
+        launched, clients = self._open_on_an_installation(
+            tmp_path, monkeypatch, installed=installed, replay_build=self._OLDER
+        )
         assert launched == [self._NEWEST, self._OLDER]
         assert clients[0].terminated
 
     def test_a_replay_of_a_build_not_installed_is_refused_once_read(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        launched, clients = self._run(
+        launched, clients = self._open_on_an_installation(
             tmp_path, monkeypatch, installed=(self._NEWEST,), replay_build=self._OLDER, raising=GameVersionError
         )
         assert launched == [self._NEWEST]
@@ -893,19 +897,27 @@ class TestOpeningAReplay:
 
     _OBSERVED = sc2api_pb2.ResponseObservation(observation=sc2api_pb2.Observation(game_loop=0))
 
-    def _open(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, record_to: Path | None = None
+    def _prepare_the_replay(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, refused: bool = False
     ) -> tuple[FakeTransport, _ClientLaunched]:
         """Prepare `open_replay` to open a replay of the corpus game's build on an installation of that build: the
         connection that reads the replay's info, then the connection it plays on, which answers its info again, the
-        start, one observation, the leave and the quit. Return the connection it plays on and the client launched."""
+        start, one observation, the leave and the quit, or if `refused`, refuses the start and answers the leave and the
+        quit. Return the connection it plays on and the client launched."""
         (tmp_path / "Versions" / f"Base{TECH_TREE.base_build}").mkdir(parents=True)
         (tmp_path / "game.SC2Replay").write_bytes(b"the replay")
         launched = _ClientLaunched()
+        if refused:
+            refusal = sc2api_pb2.ResponseStartReplay(error=sc2api_pb2.ResponseStartReplay.LaunchError)
+            started = [make_response(Status.LAUNCHED, start_replay=refusal)]
+        else:
+            started = [
+                make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()),
+                make_response(Status.IN_REPLAY, observation=self._OBSERVED),
+            ]
         playing = FakeTransport(
             make_response(Status.LAUNCHED, replay_info=_REPLAY_INFO),
-            make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay()),
-            make_response(Status.IN_REPLAY, observation=self._OBSERVED),
+            *started,
             make_response(Status.LAUNCHED, leave_game=sc2api_pb2.ResponseLeaveGame()),
             make_response(Status.QUIT, quit=sc2api_pb2.ResponseQuit()),
         )
@@ -914,8 +926,8 @@ class TestOpeningAReplay:
         monkeypatch.setattr(WebSocketTransport, "connect", lambda url: next(connections))
         return playing, launched
 
-    def _opened(self, tmp_path: Path, **kwargs: Any) -> AbstractContextManager[ReplayPlayback]:
-        """`open_replay` of the replay `_open` prepared, as player 2, with `kwargs`."""
+    def _open_the_replay_prepared(self, tmp_path: Path, **kwargs: Any) -> AbstractContextManager[ReplayPlayback]:
+        """`open_replay` of the replay `_prepare_the_replay` prepared, as player 2, with `kwargs`."""
         return open_replay(
             tmp_path / "game.SC2Replay", player_id=2, installation=Installation(tmp_path, "Linux"), **kwargs
         )
@@ -923,8 +935,8 @@ class TestOpeningAReplay:
     def test_it_reads_the_info_and_starts_the_replay_on_the_connection_it_plays_on_then_leaves_and_quits(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        playing, launched = self._open(tmp_path, monkeypatch)
-        with self._opened(tmp_path, disable_fog=True) as playback:
+        playing, launched = self._prepare_the_replay(tmp_path, monkeypatch)
+        with self._open_the_replay_prepared(tmp_path, disable_fog=True) as playback:
             assert isinstance(playback, ReplayPlayback)
             assert playback.info == _REPLAY_INFO
             assert playback.client.in_replay
@@ -937,18 +949,30 @@ class TestOpeningAReplay:
         assert launched.terminated
 
     def test_it_leaves_and_quits_when_reading_it_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        playing, launched = self._open(tmp_path, monkeypatch)
-        with pytest.raises(RuntimeError, match="a reader's error"), self._opened(tmp_path):
+        playing, launched = self._prepare_the_replay(tmp_path, monkeypatch)
+        with pytest.raises(RuntimeError, match="a reader's error"), self._open_the_replay_prepared(tmp_path):
             raise RuntimeError("a reader's error")
+        assert [request.WhichOneof("request") for request in playing.requests][-2:] == ["leave_game", "quit"]
+        assert launched.terminated
+
+    def test_a_replay_the_game_refuses_to_start_is_raised_and_its_client_stopped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        playing, launched = self._prepare_the_replay(tmp_path, monkeypatch, refused=True)
+        with (
+            pytest.raises(ProtocolError, match="the game refused to play the replay back, as LaunchError"),
+            self._open_the_replay_prepared(tmp_path),
+        ):
+            pass
         assert [request.WhichOneof("request") for request in playing.requests][-2:] == ["leave_game", "quit"]
         assert launched.terminated
 
     def test_its_recording_plays_back_with_no_game_as_it_was_read(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        self._open(tmp_path, monkeypatch)
+        self._prepare_the_replay(tmp_path, monkeypatch)
         record = tmp_path / "played-back.sc2rec"
-        with self._opened(tmp_path, record_to=record) as playback:
+        with self._open_the_replay_prepared(tmp_path, record_to=record) as playback:
             observed = playback.client.observation()
         with open_replay_recording(record) as again:
             assert again.info == _REPLAY_INFO
@@ -975,6 +999,16 @@ class TestOpeningARecordedReplay:
             open_replay_recording(_PYLON_GAME),
         ):
             pass
+
+    def test_a_recording_made_before_a_replays_info_was_recorded_is_refused_by_name(self, tmp_path: Path) -> None:
+        exchanges = [
+            exchange
+            for exchange in _played_back(_pylon_game_stopped_after(10))
+            if not exchange.request.HasField("replay_info")
+        ]
+        recording = write_recording(tmp_path / "replay.sc2rec", exchanges)
+        with pytest.raises(ValueError, match="holds no replay info, as a recording made before NachOS recorded one"):
+            run_recording(recording, Api())
 
 
 @pytest.mark.integration
