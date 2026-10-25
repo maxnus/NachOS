@@ -343,10 +343,12 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
-def _played_back(exchanges: Iterable[Exchange], *, disable_fog: bool = False) -> Iterator[Exchange]:
+def _played_back(
+    exchanges: Iterable[Exchange], *, disable_fog: bool = False, map_data: bytes | None = None
+) -> Iterator[Exchange]:
     """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as,
-    with the fog off if `disable_fog`, holds them: the replay started where the game was joined, never created, and
-    played back rather than played."""
+    with the fog off if `disable_fog` and the map's bytes sent if `map_data`, holds them: the replay started where the
+    game was joined, never created, and played back rather than played."""
     for exchange in exchanges:
         asked_kind = exchange.request.WhichOneof("request")
         if asked_kind == "create_game":
@@ -357,6 +359,8 @@ def _played_back(exchanges: Iterable[Exchange], *, disable_fog: bool = False) ->
                 observed_player_id=exchange.response.join_game.player_id,
                 disable_fog=disable_fog,
             )
+            if map_data is not None:
+                start.map_data = map_data
             started = make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay())
             yield Exchange(sc2api_pb2.Request(start_replay=start), started)
             continue
@@ -538,6 +542,23 @@ class TestPlayingARecordedReplay:
 
         assert run_recording(recording, api) is Result.UNDECIDED
         assert api.step == last_step
+
+    @pytest.mark.parametrize("map_data", [b"the map", None], ids=["the map sent", "no map sent"])
+    def test_it_sends_the_map_sent_when_it_was_recorded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, map_data: bytes | None
+    ) -> None:
+        exchanges = _played_back(Recording(_PYLON_GAME), map_data=map_data)
+        recording = write_recording(tmp_path / "replay.sc2rec", exchanges)
+        start_replay = Client.start_replay
+        maps_sent: list[bytes | None] = []
+
+        def recording_the_map(client: Client, replay: bytes, **kwargs: Any) -> None:
+            maps_sent.append(kwargs.get("map_data"))
+            start_replay(client, replay, **kwargs)
+
+        monkeypatch.setattr(Client, "start_replay", recording_the_map)
+        run_recording(recording, Api())
+        assert maps_sent == [map_data]
 
     def test_it_is_refused_permissive(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
@@ -777,7 +798,7 @@ class TestTheReplaysMap:
         installation with Pylon in a folder of its maps."""
         (tmp_path / "Versions" / f"Base{TECH_TREE.base_build}").mkdir(parents=True)
         installed_map = tmp_path / "Maps" / "AIE" / "PylonAIE_v4.SC2Map"
-        installed_map.parent.mkdir(parents=True)
+        installed_map.parent.mkdir(parents=True, exist_ok=True)
         installed_map.write_bytes(self._INSTALLED_MAP)
         replay = tmp_path / "game.SC2Replay"
         replay.write_bytes(b"the replay")
@@ -814,6 +835,15 @@ class TestTheReplaysMap:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replay_map_path: str
     ) -> None:
         assert self._map_data_sent(tmp_path, monkeypatch, replay_map_path) == self._INSTALLED_MAP
+
+    def test_a_relative_path_sends_the_map_it_names_under_the_maps_over_one_of_its_name_elsewhere(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The shallowest map of a name is the one found by name.
+        shallower = tmp_path / "Maps" / "PylonAIE_v4.SC2Map"
+        shallower.parent.mkdir(parents=True)
+        shallower.write_bytes(b"another map of its name")
+        assert self._map_data_sent(tmp_path, monkeypatch, "AIE/PylonAIE_v4.SC2Map") == self._INSTALLED_MAP
 
     def test_a_path_to_a_file_here_sends_no_map_for_the_game_to_open_it(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

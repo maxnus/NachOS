@@ -146,8 +146,9 @@ def run_replay(
     Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
     on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
     it is, and a second client is started when that is not the one. The game opens the replay's map by the path the
-    replay names, which an AI Arena replay gives as a bare file name the game does not find (in game); where that path
-    is no file here, the map of its name under the installation's maps goes with the replay. `record_to` is a file to
+    replay names, which an AI Arena replay gives as a bare file name the game does not find (in game); so unless the
+    path is an absolute path to a file here, the map it names under the installation's maps goes with the replay, or
+    else the map of its name there. `record_to` is a file to
     record the whole conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends,
     the client is stopped and its temporary directory removed.
     """
@@ -177,12 +178,19 @@ def run_replay(
 
 
 def _map_bytes_the_game_needs(replay_map_path: str, installation: Installation) -> bytes | None:
-    """The bytes of the map of a replay whose map is at `replay_map_path`, as its info gives it, where that is not a
-    file here: the map of its name under `installation`'s maps. `None` where it is an absolute path to a file, which
-    the game opens, and where no map of its name is installed, for the game to try the path itself."""
-    map_path = Path(replay_map_path)
-    if not replay_map_path or (map_path.is_absolute() and map_path.is_file()):
+    """The bytes of the map of a replay whose map is at `replay_map_path`, as its info gives it, for the game to play
+    it on: the file a relative path names under `installation`'s maps, and otherwise the map of its name there. `None`
+    where it is an absolute path to a file, which the game opens, and where no map of its name is installed, for the
+    game to try the path itself."""
+    if not replay_map_path:
         return None
+    map_path = Path(replay_map_path)
+    if map_path.is_absolute():
+        if map_path.is_file():
+            return None
+    elif (under_the_maps := installation.maps / map_path).is_file():
+        # That very file, rather than one of its name elsewhere, as a map pack installs beside the maps it replaces.
+        return under_the_maps.read_bytes()
     # A replay played on Windows names its map with backslashes, which a Windows path reads on every platform.
     map_name = PureWindowsPath(replay_map_path).stem
     try:
