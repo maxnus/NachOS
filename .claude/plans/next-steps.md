@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #172. `uv run pytest` passes 2909 tests with #173; `uv run pytest -m integration`
+- nachOS `main` has every PR to #172. `uv run pytest` passes 2912 tests with #173; `uv run pytest -m integration`
   passed 40 against a real game (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -605,8 +605,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **What AvocaDOS's units piece settled for NachOS** (the owner, 2026-10-25, one question at a time), after a survey of
   python-sc2's `Unit` and `Units` members that AvocaDOS reads:
   - `closest_to`, `closest_n_to`, `sorted_by_distance_to` and `closest_distance_to` take a unit as well as a point,
-    measured from its position as `within` and `distance_to` measure, a unit in the collection the nearest to itself
-    (over AvocaDOS passing `unit.position`);
+    measured from its position as `within` and `distance_to` measure, a unit in the collection at distance 0 from
+    itself (over AvocaDOS passing `unit.position`);
   - `OwnUnit.is_doing(abilities)`, whether the current order carries out one of them, and `Unit.is_carrying_resource`,
     from the carrying buffs (over python-sc2's `is_gathering`, `is_returning`, `is_moving`, `is_attacking` and
     `is_repairing`, and over the bot's own functions for all); whether an SCV is constructing stays the bot's (#173).

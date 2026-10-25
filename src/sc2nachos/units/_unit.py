@@ -34,22 +34,18 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 # degrees off.
 _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
-# A worker carries minerals under one buff for every race and another for rich minerals, and gas under a buff for each
-# race's worker (in game).
-_CARRYING_RESOURCE_BUFFS = frozenset(
-    {
+# The game's numbers for the buffs a worker carries resources under: minerals under one buff for every race and another
+# for rich minerals, and gas under a buff for each race's worker (in game). A report's buffs are checked against them
+# without reading each into a `BuffId`, which holds since `BuffId` reads no other number as one of these.
+_CARRYING_RESOURCE_GAME_IDS = frozenset(
+    int(buff_id)
+    for buff_id in (
         BuffId.CARRYING_MINERALS,
         BuffId.CARRYING_MINERALS_RICH,
         BuffId.SCV_CARRYING_GAS,
         BuffId.PROBE_CARRYING_GAS,
         BuffId.DRONE_CARRYING_GAS,
-    }
-)
-# The game's numbers that read as one of them, so that a report is checked without reading each of its buffs.
-_CARRYING_RESOURCE_GAME_IDS = frozenset(
-    game_id
-    for game_id in (*map(int, _CARRYING_RESOURCE_BUFFS), *BuffId._REMAPPED_IDS)
-    if BuffId.get(game_id) in _CARRYING_RESOURCE_BUFFS
+    )
 )
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never

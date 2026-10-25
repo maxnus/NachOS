@@ -53,12 +53,13 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def is_doing(self, abilities: AbilityId | Collection[AbilityId]) -> bool:
         """Whether the unit's current order, the first of `orders`, carries out `abilities`, one ability or any of
         several. False for an idle unit."""
-        if not (orders := self.orders):
+        # Read off the report: building `orders` to read the first would read every order and look up its target.
+        if not (reported_orders := self._latest_report.orders):
             return False
-        ability = orders[0].ability
+        ability_id = AbilityId.read(reported_orders[0].ability_id)
         if isinstance(abilities, AbilityId):
-            return ability == abilities
-        return ability in abilities
+            return ability_id == abilities
+        return ability_id in abilities
 
     @property
     def weapon_cooldown(self) -> GameTime:

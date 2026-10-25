@@ -121,7 +121,7 @@ it.
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| `unit.is_using_ability(a)`, `is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_collecting`, `is_repairing` | `unit.is_doing(a)`, with `AbilityId.MOVE`, `ATTACK`, `GATHER`, `RETURN`, `{GATHER, RETURN}` and `REPAIR`, each one id whatever the unit's type |
+| `unit.is_using_ability(a)`, `is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_collecting`, `is_repairing` | `unit.is_doing(a)`, with `AbilityId.MOVE`, `ATTACK`, `GATHER`, `RETURN`, `{GATHER, RETURN}` and `REPAIR`, each one id whatever the unit's type; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
 | nothing | `order.data`, `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
@@ -296,7 +296,7 @@ it.
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
 | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`; minerals alone are `BuffId.CARRYING_MINERALS` or `CARRYING_MINERALS_RICH` among `unit.buffs` |
-| `unit.can_be_attacked` | `unit.is_visible`, which a remembered structure and an undetected unit are not |
+| `unit.can_be_attacked`, of an enemy | `unit.is_visible`, which a remembered structure and an undetected unit are not; it is true of a cloaked unit of your own or an ally's, which python-sc2 calls not attackable |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
 | `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == GameTime(steps=0)`, which is false for a type `time_to_face` gives `None`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the time the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
 | nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |

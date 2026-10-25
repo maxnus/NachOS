@@ -296,7 +296,8 @@ class Units[U: Unit[Any]](Sequence[U]):
 
     def closest_to(self, point_or_unit: PointLike | Unit[Any]) -> U:
         """The unit nearest to `point_or_unit`, a point or a unit's position. At equal distance, the first in the
-        collection. A unit in the collection is the nearest to itself."""
+        collection: a unit in it is at distance 0 from itself, and is picked unless another on the same spot comes
+        first."""
         if not self._units:
             raise ValueError("no units to choose from")
         x, y = _ground_position_of(point_or_unit)
@@ -409,5 +410,6 @@ def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> l
 
 def _ground_position_of(point_or_unit: PointLike | Unit[Any]) -> tuple[float, float]:
     """The ground-plane coordinates of `point_or_unit`: a point, or a unit's position."""
-    point = point_or_unit._position if isinstance(point_or_unit, Unit) else point_or_unit
-    return point[0], point[1]
+    if isinstance(point_or_unit, Unit):
+        return point_or_unit._position[0], point_or_unit._position[1]
+    return point_or_unit[0], point_or_unit[1]

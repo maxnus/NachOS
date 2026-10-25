@@ -588,7 +588,7 @@ class TestWhatAUnitReads:
         assert unit.buffs == {BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST}
 
     @pytest.mark.parametrize(
-        "buff",
+        "buff_id",
         [
             BuffId.CARRYING_MINERALS,
             BuffId.CARRYING_MINERALS_RICH,
@@ -596,22 +596,26 @@ class TestWhatAUnitReads:
             BuffId.PROBE_CARRYING_GAS,
             BuffId.DRONE_CARRYING_GAS,
         ],
-        ids=lambda buff: buff.name,
+        ids=lambda buff_id: buff_id.name,
     )
-    def test_a_worker_carries_a_resource_under_each_carrying_buff(self, buff: BuffId) -> None:
-        """An enemy's as much as this player's: the game reports the buffs of every unit in sight."""
-        assert _one(make_unit(1, UnitTypeId.SCV, buff_ids=[buff])).is_carrying_resource
-        assert _one(make_unit(1, UnitTypeId.PROBE, alliance=_ENEMY, buff_ids=[buff])).is_carrying_resource
+    def test_a_worker_carries_a_resource_under_each_carrying_buff(self, buff_id: BuffId) -> None:
+        """This player's SCV, and an enemy probe in sight."""
+        assert _one(make_unit(1, UnitTypeId.SCV, buff_ids=[buff_id])).is_carrying_resource
+        assert _one(make_unit(1, UnitTypeId.PROBE, alliance=_ENEMY, buff_ids=[buff_id])).is_carrying_resource
 
     def test_a_unit_without_a_carrying_buff_carries_nothing(self) -> None:
         assert not _one(make_unit(1, UnitTypeId.SCV)).is_carrying_resource
         assert not _one(make_unit(1, buff_ids=[BuffId.MARINE_STIMMED])).is_carrying_resource
 
+    def test_no_game_id_reads_as_a_buff_but_its_own(self) -> None:
+        """`is_carrying_resource` checks a report's game ids against the carrying buffs' own numbers alone."""
+        assert not BuffId._REMAPPED_IDS
+
     def test_a_unit_is_doing_its_current_orders_ability_alone(self) -> None:
         """The game's own id for an SCV's gather reads as `GATHER`, and a queued order does not count."""
-        gather = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
-        queued_return = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Return_SCV)
-        scv = _one(make_unit(1, UnitTypeId.SCV, orders=[gather, queued_return]))
+        gather_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
+        queued_return_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Return_SCV)
+        scv = _one(make_unit(1, UnitTypeId.SCV, orders=[gather_order, queued_return_order]))
         assert isinstance(scv, OwnUnit)
         assert scv.is_doing(AbilityId.GATHER)
         assert not scv.is_doing(AbilityId.RETURN)
@@ -625,6 +629,19 @@ class TestWhatAUnitReads:
         assert isinstance(marine, OwnUnit)
         assert not marine.is_doing(AbilityId.MOVE)
         assert not marine.is_doing(set(AbilityId))
+
+    def test_what_a_unit_is_doing_follows_its_latest_report(self) -> None:
+        """Whether or not its orders were read under the report before."""
+        game = _Game()
+        gather_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
+        return_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Return_SCV)
+        (scv,) = game.observe(0, make_unit(1, UnitTypeId.SCV, orders=[gather_order]))
+        assert isinstance(scv, OwnUnit)
+        assert scv.orders[0].ability is AbilityId.GATHER and scv.is_doing(AbilityId.GATHER)
+        game.observe(16, make_unit(1, UnitTypeId.SCV, orders=[return_order]))
+        assert scv.is_doing(AbilityId.RETURN) and not scv.is_doing(AbilityId.GATHER)
+        game.observe(32, make_unit(1, UnitTypeId.SCV))
+        assert not scv.is_doing({AbilityId.GATHER, AbilityId.RETURN})
 
     def test_an_uncurated_type_raises_as_the_observation_is_taken_in_and_names_the_id(self) -> None:
         """A type the game reports belongs among the curated ids, so a missing one is a mistake to fix."""
