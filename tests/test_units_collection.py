@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import data_pb2, raw_pb2
 
 from sc2nachos.geometry import Circle, Point, Rectangle, Tile
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import make_enemy, make_observation, make_tables, make_unit
@@ -241,10 +241,31 @@ class TestFilters:
         assert _tags(units.gas_buildings) == [6]
         assert _tags(units.own.workers) == [1]
 
+    def test_by_what_each_is_doing(self) -> None:
+        units = _mine(40)
+        moving = [unit.tag for unit in units if unit.orders and unit.orders[0].ability is AbilityId.MOVE]
+        assert _tags(units.doing(AbilityId.MOVE)) == moving
+        assert _tags(units.doing({AbilityId.MOVE, AbilityId.GATHER})) == moving
+        assert _tags(units.doing(AbilityId.GATHER)) == []
+        assert _tags(units.doing(())) == []
+
+    def test_by_buff(self) -> None:
+        units = _units(
+            make_unit(1, buff_ids=[BuffId.MARINE_STIMMED]),
+            make_unit(2, UnitTypeId.SCV, buff_ids=[BuffId.CARRYING_MINERALS]),
+            make_unit(3, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST], alliance=Alliance.ENEMY),
+            make_unit(4),
+        )
+        assert _tags(units.with_buff(BuffId.MARINE_STIMMED)) == [1, 3]
+        assert _tags(units.with_buff({BuffId.MEDIVAC_BOOST, BuffId.CARRYING_MINERALS})) == [2, 3]
+        assert _tags(units.with_buff(())) == []
+
     def test_a_filter_over_what_was_never_shown_visible_raises(self) -> None:
-        """The hidden enemy was never visible, so its build progress was never reported."""
+        """The hidden enemy was never visible, so neither its build progress nor its buffs were reported."""
         with pytest.raises(NotReportedError):
             _ = _mixed().complete
+        with pytest.raises(NotReportedError):
+            _mixed().with_buff(BuffId.MARINE_STIMMED)
         assert _tags(_mixed().own.idle) == [1]
 
     def test_by_predicate(self) -> None:

@@ -4,6 +4,9 @@ Hand-maintained: filtered to what multiplayer needs, named for readability. Each
 catalog member, never a literal id. Unknown ids raise.
 """
 
+from enum import nonmember
+from types import MappingProxyType
+
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawBuffId
 
@@ -14,10 +17,10 @@ class BuffId(IdEnum):
     ACCELERATION_ZONE = RawBuffId.AccelerationZoneTemporalField
     ACCELERATION_ZONE_FLYING = RawBuffId.AccelerationZoneFlyingTemporalField
     BANSHEE_CLOAK = RawBuffId.BansheeCloak
+    CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGas  # from a plain geyser; none comes from a rich one
     CARRYING_MINERALS = RawBuffId.CarryMineralFieldMinerals
     CARRYING_MINERALS_RICH = RawBuffId.CarryHighYieldMineralFieldMinerals
     CYCLONE_LOCKED_ON = RawBuffId.LockOn
-    DRONE_CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGasZerg
     GHOST_CLOAK = RawBuffId.GhostCloak
     GHOST_EMP_DECLOAK = RawBuffId.EMPDecloak
     GHOST_HOLD_FIRE = RawBuffId.GhostHoldFireB
@@ -44,16 +47,24 @@ class BuffId(IdEnum):
     ORBITAL_COMMAND_SUPPLY_DROP = RawBuffId.SupplyDrop
     OVERSEER_CONTAMINATED = RawBuffId.Contaminated
     PHOENIX_GRAVITON_BEAM = RawBuffId.GravitonBeam
-    PROBE_CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGasProtoss
     QUEEN_INJECTED = RawBuffId.QueenSpawnLarvaTimer  # counts down to the larvae, then again for a queued inject
     QUEEN_TRANSFUSED = RawBuffId.Transfusion
     RAVEN_ANTI_ARMOR_MISSILE = RawBuffId.RavenShredderMissileArmorReductionUISubtruct
     RAVEN_ANTI_ARMOR_MISSILE_INCOMING = RawBuffId.RavenShredderMissileTint  # on its target, until the missile lands
     RAVEN_INTERFERENCE_MATRIX = RawBuffId.RavenScramblerMissile
-    SCV_CARRYING_GAS = RawBuffId.CarryHarvestableVespeneGeyserGas
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot
+
+    # Each race's worker carries gas under a game id of its own, the SCV's `CARRYING_GAS`'s own (in game).
+    _REMAPPED_IDS = nonmember(
+        MappingProxyType(
+            {
+                RawBuffId.CarryHarvestableVespeneGeyserGasProtoss: CARRYING_GAS,
+                RawBuffId.CarryHarvestableVespeneGeyserGasZerg: CARRYING_GAS,
+            }
+        )
+    )

@@ -125,6 +125,20 @@ def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: Raw
         AbilityId(reported)
 
 
+@pytest.mark.parametrize(
+    "game_id",
+    [
+        RawBuffId.CarryHarvestableVespeneGeyserGas,
+        RawBuffId.CarryHarvestableVespeneGeyserGasProtoss,
+        RawBuffId.CarryHarvestableVespeneGeyserGasZerg,
+    ],
+)
+def test_every_races_gas_reads_as_one_buff(game_id: RawBuffId) -> None:
+    """Each race's worker carries gas under a game id of its own, as each performs an action under its own."""
+    assert BuffId.read(game_id) is BuffId.CARRYING_GAS
+    assert BuffId.get(game_id) is BuffId.CARRYING_GAS
+
+
 @pytest.mark.parametrize("enum", CURATED)
 def test_a_remapped_id_is_no_members_own_and_reads_as_a_member(enum: type[IdEnum]) -> None:
     """Calling the enum must not answer a remapped id, since the game's tables hold a row of its own under it."""

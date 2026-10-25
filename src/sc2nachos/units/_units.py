@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, cast, final, overload
 
 from sc2nachos.geometry import Area, Point, Tile
-from sc2nachos.ids import UnitTypeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
@@ -243,6 +243,15 @@ class Units[U: Unit[Any]](Sequence[U]):
     def idle[O: OwnUnit[Any]](self: Units[O]) -> Units[O]:
         """This player's units without orders."""
         return Units(unit for unit in self._units if unit.is_idle)
+
+    def doing[O: OwnUnit[Any]](self: Units[O], abilities: AbilityId | Collection[AbilityId]) -> Units[O]:
+        """This player's units whose current order carries out `abilities`, one ability or any of several."""
+        return Units(unit for unit in self._units if unit.is_doing(abilities))
+
+    def with_buff(self, buff_ids: BuffId | Collection[BuffId]) -> Units[U]:
+        """The units with `buff_ids`, one buff or any of several, among their buffs. Raises `NotReportedError` for a
+        unit never shown visible."""
+        return Units(unit for unit in self._units if unit.has_buff(buff_ids))
 
     # By where they are. Written as plain loops over each unit's position: measured three times faster than `min`
     # with a key, and faster than building an array of positions, which would have to be rebuilt on every query

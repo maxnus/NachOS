@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #172. `uv run pytest` passes 2912 tests with #173; `uv run pytest -m integration`
-  passed 40 against a real game (run 2026-10-25).
+- nachOS `main` has every PR to #172. `uv run pytest` passes 2919 tests with #173; `uv run pytest -m integration`
+  passed 41 against a real game with #173 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -609,7 +609,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     itself (over AvocaDOS passing `unit.position`);
   - `OwnUnit.is_doing(abilities)`, whether the current order carries out one of them, and `Unit.is_carrying_resource`,
     from the carrying buffs (over python-sc2's `is_gathering`, `is_returning`, `is_moving`, `is_attacking` and
-    `is_repairing`, and over the bot's own functions for all); whether an SCV is constructing stays the bot's (#173).
+    `is_repairing`, and over the bot's own functions for all); whether an SCV is constructing stays the bot's;
+  - in the owner's review of #173: `Unit.has_buff(buff_ids)`, one buff or any of several, and the filters
+    `Units.doing(abilities)` and `Units.with_buff(buff_ids)`, the latter raising for a unit never shown visible as
+    `complete` does; every race's gas buff folded into `BuffId.CARRYING_GAS`, read as one as `GATHER` is, rich minerals
+    kept apart (over keeping the three, and over folding rich minerals too); and a worker carrying gas from a rich
+    geyser, which the game gives no buff (in game), documented as carrying nothing (over an own unit's return order
+    counting too, and over renaming to `has_carrying_buff`) (#173).
 
 ## Next
 
@@ -624,7 +630,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - **What AvocaDOS's units piece needs of NachOS** (2026-10-25, above): the nearest-unit methods taking a unit,
-  `OwnUnit.is_doing` and `Unit.is_carrying_resource` (#173), before the piece.
+  `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
+  `BuffId.CARRYING_GAS` (#173), before the piece.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
   salsa's spec, whose order salsa's plan holds:

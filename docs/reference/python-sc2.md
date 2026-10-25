@@ -295,7 +295,8 @@ it.
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
-| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`; minerals alone are `BuffId.CARRYING_MINERALS` or `CARRYING_MINERALS_RICH` among `unit.buffs` |
+| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `has_buff({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH})` and `has_buff(BuffId.CARRYING_GAS)`, every race's gas one buff; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
+| `unit.has_buff(b)` | `unit.has_buff(b)`, or any of several |
 | `unit.can_be_attacked`, of an enemy | `unit.is_visible`, which a remembered structure and an undetected unit are not; it is true of a cloaked unit of your own or an ally's, which python-sc2 calls not attackable |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
 | `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == GameTime(steps=0)`, which is false for a type `time_to_face` gives `None`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the time the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
@@ -318,6 +319,7 @@ it.
 | `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
 | `units.closer_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d` |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
+| nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
 | `units.random` | `random.choice(units)` |
 

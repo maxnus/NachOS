@@ -588,28 +588,44 @@ class TestWhatAUnitReads:
         assert unit.buffs == {BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST}
 
     @pytest.mark.parametrize(
-        "buff_id",
+        "game_id",
         [
-            BuffId.CARRYING_MINERALS,
-            BuffId.CARRYING_MINERALS_RICH,
-            BuffId.SCV_CARRYING_GAS,
-            BuffId.PROBE_CARRYING_GAS,
-            BuffId.DRONE_CARRYING_GAS,
+            RawBuffId.CarryMineralFieldMinerals,
+            RawBuffId.CarryHighYieldMineralFieldMinerals,
+            RawBuffId.CarryHarvestableVespeneGeyserGas,
+            RawBuffId.CarryHarvestableVespeneGeyserGasProtoss,
+            RawBuffId.CarryHarvestableVespeneGeyserGasZerg,
         ],
-        ids=lambda buff_id: buff_id.name,
+        ids=lambda game_id: game_id.name,
     )
-    def test_a_worker_carries_a_resource_under_each_carrying_buff(self, buff_id: BuffId) -> None:
-        """This player's SCV, and an enemy probe in sight."""
-        assert _one(make_unit(1, UnitTypeId.SCV, buff_ids=[buff_id])).is_carrying_resource
-        assert _one(make_unit(1, UnitTypeId.PROBE, alliance=_ENEMY, buff_ids=[buff_id])).is_carrying_resource
+    def test_a_worker_carries_a_resource_under_each_carrying_buff(self, game_id: RawBuffId) -> None:
+        """This player's SCV, and an enemy probe in sight, under each of the game's five ids."""
+        assert _one(make_unit(1, UnitTypeId.SCV, buff_ids=[game_id])).is_carrying_resource
+        assert _one(make_unit(1, UnitTypeId.PROBE, alliance=_ENEMY, buff_ids=[game_id])).is_carrying_resource
 
     def test_a_unit_without_a_carrying_buff_carries_nothing(self) -> None:
         assert not _one(make_unit(1, UnitTypeId.SCV)).is_carrying_resource
         assert not _one(make_unit(1, buff_ids=[BuffId.MARINE_STIMMED])).is_carrying_resource
 
-    def test_no_game_id_reads_as_a_buff_but_its_own(self) -> None:
-        """`is_carrying_resource` checks a report's game ids against the carrying buffs' own numbers alone."""
-        assert not BuffId._REMAPPED_IDS
+    def test_a_unit_has_a_buff_or_any_of_several(self) -> None:
+        marine = _one(make_unit(1, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST]))
+        assert marine.has_buff(BuffId.MARINE_STIMMED)
+        assert not marine.has_buff(BuffId.QUEEN_TRANSFUSED)
+        assert marine.has_buff({BuffId.QUEEN_TRANSFUSED, BuffId.MEDIVAC_BOOST})
+        assert not marine.has_buff([BuffId.QUEEN_TRANSFUSED])
+        assert not marine.has_buff(())
+        assert not _one(make_unit(1)).has_buff(set(BuffId))
+
+    def test_a_buff_has_its_every_game_id(self) -> None:
+        """A drone's gas comes under the Zerg's own id, which reads as `CARRYING_GAS`."""
+        drone = _one(make_unit(1, UnitTypeId.DRONE, buff_ids=[RawBuffId.CarryHarvestableVespeneGeyserGasZerg]))
+        assert drone.has_buff(BuffId.CARRYING_GAS)
+        assert drone.buffs == {BuffId.CARRYING_GAS}
+
+    def test_whether_a_unit_never_shown_visible_has_a_buff_raises(self) -> None:
+        mine = _one(make_unit(1, alliance=_ENEMY, visibility=_INVISIBLE, is_burrowed=True))
+        with pytest.raises(NotReportedError):
+            mine.has_buff(BuffId.MARINE_STIMMED)
 
     def test_a_unit_is_doing_its_current_orders_ability_alone(self) -> None:
         """The game's own id for an SCV's gather reads as `GATHER`, and a queued order does not count."""
