@@ -60,6 +60,25 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return GameTime(steps=self._latest_report.weapon_cooldown)
 
     @property
+    def buff_duration_max(self) -> GameTime | None:
+        """The whole length of the unit's timed life, as a MULE's or a broodling's, or of a timed buff on it, as a
+        hatchery's inject timer, as the game reports it; `None` where it reports none, as for a worker or a townhall
+        (in game; corpus)."""
+        maximum = self._latest_report.buff_duration_max
+        return GameTime(steps=maximum) if maximum else None
+
+    @property
+    def buff_duration_remaining(self) -> GameTime | None:
+        """What is left of `buff_duration_max`, counting down a step at a time; `None` where `buff_duration_max` is.
+
+        It can start above the maximum: a MULE read 1441 and 1443 steps against 1440, and a broodling up to 132 against
+        128. A MULE or a broodling is listed last at zero and reported dead the step after (in game).
+        `docs/reference/game-behavior/units.md` has the readings.
+        """
+        report = self._latest_report
+        return GameTime(steps=report.buff_duration_remain) if report.buff_duration_max else None
+
+    @property
     def assigned_harvesters(self) -> int:
         """The workers mining a town hall's minerals or a gas building's vespene. 0 for anything else."""
         return self._latest_report.assigned_harvesters

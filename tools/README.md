@@ -13,6 +13,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Find what the game does when it plays a replay back: a player's view against the game as it was played, the fog off and player 0, what the fog off shows of units unseen, what it answers in a replay, how a replay ends, and how fast one plays back and records | `uv run python tools/sweep_replays.py`, or with `views`, `requests`, `ending`, `unseen`, `scouting` or `speed` | yes |
 | Find the buffs a game puts on units | `uv run python tools/sweep_buffs.py` | yes |
 | Find what the game lists of a structure in the fog seen again between two observations, and of one killed out of sight and made again at its point | `uv run python tools/sweep_fog.py`, or with `retag` or `rebuilt` | yes |
+| Find what the game reports of how long a force field, a reaper's grenade, a MULE and broodlings have left, to the player who made them and to its enemy | `uv run python tools/sweep_timed_life.py`, or with `force-field`, `grenade`, `mule` or `broodlings` | yes |
 | Sweep the tech tree again | `uv run python tools/sweep_tech_tree.py`, a game as each race, then `uv run python tools/generate_tech_tree.py` | yes |
 | Find what each upgrade adds to each unit type | `uv run python tools/sweep_upgrades.py`, then `uv run python tools/generate_tech_tree.py` | yes |
 | Measure every structure's footprint, and what lies under the map's rocks | `uv run python tools/sweep_placement.py footprints` or `ground-under-rocks`, then `uv run python tools/generate_footprints.py` | yes |

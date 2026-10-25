@@ -1063,6 +1063,23 @@ class TestOwnUnits:
         assert isinstance(marine, OwnUnit)
         assert marine.weapon_cooldown.steps == 11.0
 
+    def test_a_timed_life_is_read_as_the_game_reports_it_above_its_maximum_too(self) -> None:
+        """A MULE's first listing read 1441 steps left against a maximum of 1440 (tool `sweep_timed_life`)."""
+        mule = _one(make_unit(1, UnitTypeId.MULE, buff_duration_remain=1441, buff_duration_max=1440))
+        assert isinstance(mule, OwnUnit)
+        assert mule.buff_duration_remaining == GameTime(steps=1441)
+        assert mule.buff_duration_max == GameTime(steps=1440)
+
+    def test_a_timed_life_run_out_is_zero_left(self) -> None:
+        mule = _one(make_unit(1, UnitTypeId.MULE, buff_duration_remain=0, buff_duration_max=1440))
+        assert isinstance(mule, OwnUnit)
+        assert mule.buff_duration_remaining == GameTime.ZERO
+
+    def test_a_unit_with_nothing_timed_has_no_buff_duration(self) -> None:
+        scv = _one(make_unit(1, UnitTypeId.SCV))
+        assert isinstance(scv, OwnUnit)
+        assert (scv.buff_duration_remaining, scv.buff_duration_max) == (None, None)
+
     def test_a_bot_can_key_its_own_data_by_unit(self) -> None:
         marine = _one(make_unit(1))
         notes = weakref.WeakKeyDictionary({marine: "stimmed at 120"})
