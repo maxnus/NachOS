@@ -139,7 +139,8 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
 - The tables give weapon speed as the cooldown in Normal seconds (a marine that had just fired read 13.56 steps
   against the table's 13.77), movement speed per Normal second (a zergling 2.95, which is 4.13 per Faster second),
   and build and research times in steps (stimpack 2240) (#25, #30).
-- A unit's `weapon_cooldown` and a buff's `buff_duration_remain` and `buff_duration_max` count steps (#24, #25).
+- A unit's `weapon_cooldown` and a buff's `buff_duration_remain` and `buff_duration_max` count steps (#24, #25), as do
+  the two fields on a unit with a timed life, this player's own alone ([units](units.md#what-is-reported-of-a-unit)).
 - Chat, commands and deaths from 45 unobserved realtime steps all arrived in the next observation, and never again:
   each is reported once, in the first observation after it, however many steps that spans (#28).
 - On the ladder or in realtime, an order's effect can show up an observation later than in a stepped game, and

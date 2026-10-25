@@ -401,8 +401,9 @@ it.
 - **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
   ([game behavior](game-behavior/units.md#what-is-reported-of-a-unit)).
 - **Reaper grenades and force fields stay units**, and are not in `api.effects`. python-sc2 moves them into
-  `state.effects`; in NachOS they are in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army
-  count.
+  `state.effects`; in NachOS a force field is among the map's units as `FORCE_FIELD`, and a grenade among its
+  thrower's as `REAPER_GRENADE`, a structure as the tables have it, so leave them out of an army count and a count of
+  structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
   `all_units`; NachOS has neither yet.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.
