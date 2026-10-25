@@ -585,11 +585,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Every step, exactly (the owner's idea of checkpoints, over a sample every N steps): a snapshot of every unit every
     224 steps and, between, only the rows that changed. The game cannot resume a replay from a state, so the
     checkpoints are in the file: reaching a step takes 3 s to load the replay and some 1,400 steps a second. Events
-    and actions come at their exact step, and the `.SC2Replay`, 24 KB, is kept in the file for anything it lacks.
-  - Every field (over the core and the order queue): 31 a row, each owner's view's included (weapon cooldown,
-    harvesters, cargo, add-on, engaged target, first order), and tables of changes for the order queue, buffs,
-    passengers and rallies. A whole row is kept where any field changed, over a column at a time, as a moving unit's
-    x, y and facing change together.
+    and actions come at the step the game reports them, in the observation after, and the `.SC2Replay`, 24 KB, is
+    kept in the file for anything its tables lack.
+  - Every field (over the core and the order queue): 27 a row, each owner's view's included (weapon cooldown,
+    harvesters, cargo, add-on, engaged target), and tables of changes for the order queue, buffs, passengers and
+    rallies. A whole row is kept where any field changed, over a column at a time, as a moving unit's x, y and facing
+    change together.
   - Parquet with zstd (over compressed numpy, within 10% of it in size), which pandas, polars, DuckDB and Arrow read.
     The writer's pyarrow, 168 MB installed, comes with an optional extra, `sc2nachos[dataset]`.
   - One file per game (over a folder per game, and over a table per kind across games): an uncompressed zip of its
@@ -600,17 +601,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     as its player sees it, so it differs between the two views.
   - The writer, for one replay first (over a folder too, and over writing through `run_replay`):
     `sc2nachos.dataset.write_salsa(replay, to=...)`, on one game client, writing each field as NachOS reads it. A
-    bot's own game is saved with `save_replay_to` and written after. A replay plays only on its own build, which Linux
-    has for 4.10 alone (75689), as AI Arena's games are; a human ladder replay needs a Windows or macOS client.
+    bot's own game is saved with `save_replay_to` and written after. A replay plays only on its own build: 4.10
+    (75689) is installed here, and AI Arena's games are said to be on it (unverified); a human ladder replay needs a
+    client of its build, on Windows or macOS.
   - The first reader (over its tables and extracting alone): `sc2salsa.open(path)`, the facts, the replay, any table as
     a pyarrow Table, every unit `at(step)` from the nearest snapshot and the changes since, `frames(every=N)` forward
     through the game, and `extract(folder)`.
-  - What it rests on, a 7-minute game of the demo bot against a Medium Zerg computer (9,301 steps, some 240 units at a
-    time, build 75689): the unit table of 9 fields, as Parquet, was 15.6 MB at every step by step, 6.1 MB by unit then
-    step, 3.2 MB as snapshots and changes, whether every 64, 224 or 1,344 steps, and 2.2 MB sampled every 8 steps; 19%
-    of rows changed from one step to the next. All 31 fields cost 3.73 MB, both players' sight 0.01 MB. A playback as
-    one player observing every step and reading every unit took 28 s; every 8 steps, 18 s, and 1 of 130 deaths was
-    missed; every 22, 13 s, and 10 were.
+  - The measurements these rest on, a 7-minute game measured several ways, are in #168.
 
 ## Next
 
@@ -632,7 +629,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   2. NachOS: `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per the spec, and an
      in-game test writing a real replay.
   3. salsa: the reader, with fixtures written by NachOS's writer. NachOS's `dev` extra then installs sc2salsa, which
-     needs no NachOS, for a round trip.
+     needs no NachOS, for a round trip: from its repo, until the owner publishes it.
   4. NachOS: a folder of replays written across several game clients.
   5. salsa: a digest of a game for an LLM.
 
