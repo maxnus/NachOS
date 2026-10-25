@@ -572,6 +572,45 @@ Keep this file current: when a step is done, say so here in the same pull reques
   of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
   in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
   display changes, and a unit reported dead under either of its tags is matched to no copy.
+- **A replay's whole game in a file** (the owner, 2026-10-25, one question at a time), so that a model or an LLM learns
+  from a game without playing it back:
+  - The split (the owner): the writer is NachOS's; the format's spec, the reader and the analysis are a repo of their
+    own, `salsa`, package `sc2salsa`, files `.salsa` (over `sc2replaydata` and `sc2frames`), which needs pyarrow and
+    never NachOS. The spec lives in salsa, with a version in every file: NachOS's writer writes one version, and the
+    reader reads every version it knows.
+  - A file holds the truth and each side's sight (over the truth alone, and over one player's view): every unit as it
+    is, both players' actions, economy, upgrades and their own units' orders, which units each player saw, and the
+    map once. The writer plays the replay as each player with the fog off and merges the two views by the game's tag,
+    which names a unit alike in both. A player's memory of a unit is the truth at the last step it saw it.
+  - Every step, exactly (the owner's idea of checkpoints, over a sample every N steps): a snapshot of every unit every
+    224 steps and, between, only the rows that changed. The game cannot resume a replay from a state, so the
+    checkpoints are in the file: reaching a step takes 3 s to load the replay and some 1,400 steps a second. Events
+    and actions come at their exact step, and the `.SC2Replay`, 24 KB, is kept in the file for anything it lacks.
+  - Every field (over the core and the order queue): 31 a row, each owner's view's included (weapon cooldown,
+    harvesters, cargo, add-on, engaged target, first order), and tables of changes for the order queue, buffs,
+    passengers and rallies. A whole row is kept where any field changed, over a column at a time, as a moving unit's
+    x, y and facing change together.
+  - Parquet with zstd (over compressed numpy, within 10% of it in size), which pandas, polars, DuckDB and Arrow read.
+    The writer's pyarrow, 168 MB installed, comes with an optional extra, `sc2nachos[dataset]`.
+  - One file per game (over a folder per game, and over a table per kind across games): an uncompressed zip of its
+    replay, `game.json` (map, players, races, result, build, steps, format version) and a Parquet file a table.
+    DuckDB and polars do not read inside a zip, so the reader extracts one.
+  - A unit is a dense index from 0 in the order units first appear (over the game's tag), and a roster table gives
+    each its tag, owner, first type and first and last steps. NachOS's ids cannot serve: an id starts with the alliance
+    as its player sees it, so it differs between the two views.
+  - The writer, for one replay first (over a folder too, and over writing through `run_replay`):
+    `sc2nachos.dataset.write_salsa(replay, to=...)`, on one game client, writing each field as NachOS reads it. A
+    bot's own game is saved with `save_replay_to` and written after. A replay plays only on its own build, which Linux
+    has for 4.10 alone (75689), as AI Arena's games are; a human ladder replay needs a Windows or macOS client.
+  - The first reader (over its tables and extracting alone): `sc2salsa.open(path)`, the facts, the replay, any table as
+    a pyarrow Table, every unit `at(step)` from the nearest snapshot and the changes since, `frames(every=N)` forward
+    through the game, and `extract(folder)`.
+  - What it rests on, a 7-minute game of the demo bot against a Medium Zerg computer (9,301 steps, some 240 units at a
+    time, build 75689): the unit table of 9 fields, as Parquet, was 15.6 MB at every step by step, 6.1 MB by unit then
+    step, 3.2 MB as snapshots and changes, whether every 64, 224 or 1,344 steps, and 2.2 MB sampled every 8 steps; 19%
+    of rows changed from one step to the next. All 31 fields cost 3.73 MB, both players' sight 0.01 MB. A playback as
+    one player observing every step and reading every unit took 28 s; every 8 steps, 18 s, and 1 of 130 deaths was
+    missed; every 22, 13 s, and 10 were.
 
 ## Next
 
@@ -586,6 +625,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - M5, in AvocaDOS (section 3).
+- Beside M5, **a replay's whole game in a file** (2026-10-25, above), a pull request at a time, in this order (the
+  owner, over the spec and reader first, and over the writer first):
+  1. salsa: the format's spec, every table, column, type and encoding, as version 1. The repo does not exist yet: the
+     owner creates it, or says to.
+  2. NachOS: `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per the spec, and an
+     in-game test writing a real replay.
+  3. salsa: the reader, with fixtures written by NachOS's writer. NachOS's `dev` extra then installs sc2salsa, which
+     needs no NachOS, for a round trip.
+  4. NachOS: a folder of replays written across several game clients.
+  5. salsa: a digest of a game for an LLM.
 
 ## 1. Waiting until something needs them
 
