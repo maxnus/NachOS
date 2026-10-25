@@ -11,7 +11,7 @@ from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
-from sc2nachos.units._values import Alliance
+from sc2nachos.units._values import Alliance, Visibility
 
 if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
@@ -108,6 +108,11 @@ class Units[U: Unit[Any]](Sequence[U]):
         """The units whose id is not `unit_ids`, one id, or not in it, a collection of them."""
         unwanted = {unit_ids} if isinstance(unit_ids, int) else set(unit_ids)
         return Units(unit for unit in self._units if unit.id not in unwanted)
+
+    def without(self, units: Iterable[Unit[Any]]) -> Units[U]:
+        """These units but those of `units`, matched by NachOS id, so a structure remembered under a new tag still
+        matches."""
+        return self.without_ids(unit.id for unit in units)
 
     # By what they are.
 
@@ -240,6 +245,23 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if unit.is_complete)
 
     @property
+    def not_complete(self) -> Units[U]:
+        """The units still building or warping in: those `complete` leaves out. Raises `NotReportedError` as it
+        does."""
+        return Units(unit for unit in self._units if not unit.is_complete)
+
+    @property
+    def ground(self) -> Units[U]:
+        """The units on the ground: those not flying, and the structures remembered in the fog, whose flying the game
+        does not report, as `Unit.is_ground_structure` takes them."""
+        return Units(unit for unit in self._units if _is_on_the_ground(unit))
+
+    @property
+    def air(self) -> Units[U]:
+        """The units in the air: those `ground` leaves out."""
+        return Units(unit for unit in self._units if not _is_on_the_ground(unit))
+
+    @property
     def idle[O: OwnUnit[Any]](self: Units[O]) -> Units[O]:
         """This player's units without orders."""
         return Units(unit for unit in self._units if unit.is_idle)
@@ -253,16 +275,35 @@ class Units[U: Unit[Any]](Sequence[U]):
         unit never shown visible."""
         return Units(unit for unit in self._units if unit.has_buff(buff_ids))
 
+    # By what they can hit.
+
+    def having_in_range(self, target: Unit[Any], *, margin: float = 0.0) -> Units[U]:
+        """The units that have `target` in range of a weapon, as `Unit.has_in_range` has it. Raises
+        `NotReportedError` as it does."""
+        return Units(unit for unit in self._units if unit.has_in_range(target, margin=margin))
+
+    def in_range_of(self, attacker: Unit[Any], *, margin: float = 0.0) -> Units[U]:
+        """The units `attacker` has in range of a weapon, as `Unit.has_in_range` has it. Raises `NotReportedError` as
+        it does."""
+        return Units(unit for unit in self._units if attacker.has_in_range(unit, margin=margin))
+
     # By where they are. Written as plain loops over each unit's position: measured three times faster than `min`
     # with a key, and faster than building an array of positions, which would have to be rebuilt on every query
     # since the units move.
 
-    def in_area(self, areas: Area | Iterable[Area]) -> Units[U]:
+    def inside(self, areas: Area | Iterable[Area]) -> Units[U]:
         """The units standing in `areas`: in one area, or in any of several."""
         if isinstance(areas, Area):
             return Units(unit for unit in self._units if unit._position in areas)
         regions = tuple(areas)
         return Units(unit for unit in self._units if any(unit._position in region for region in regions))
+
+    def outside(self, areas: Area | Iterable[Area]) -> Units[U]:
+        """The units standing in none of `areas`: those `inside` leaves out."""
+        if isinstance(areas, Area):
+            return Units(unit for unit in self._units if unit._position not in areas)
+        regions = tuple(areas)
+        return Units(unit for unit in self._units if not any(unit._position in region for region in regions))
 
     def within(self, distance: float, *, of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> Units[U]:
         """The units at most `distance` from `of`, a point or a unit, or from any of several, measured between
@@ -282,6 +323,15 @@ class Units[U: Unit[Any]](Sequence[U]):
                     kept.append(unit)
                     break
         return Units(kept)
+
+    def beyond(self, distance: float, *, of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> Units[U]:
+        """The units farther than `distance` from `of`, a point or a unit, and from every one of several: those
+        `within` leaves out. Raises `ValueError` as `within` does."""
+        return self.without(self.within(distance, of=of))
+
+    def sorted(self, key: Callable[[U], Any], *, reverse: bool = False) -> Units[U]:
+        """The units in the order of `key`, ascending unless `reverse`. Units of equal key keep their order."""
+        return Units(sorted(self._units, key=key, reverse=reverse))
 
     def sorted_by_distance_to(self, point_or_unit: PointLike | Unit[Any]) -> Units[U]:
         """The units from nearest to `point_or_unit`, a point or a unit's position, to furthest. Units at equal
@@ -406,6 +456,12 @@ def _unit_type_ids_in(unit_types: Iterable[object]) -> frozenset[UnitTypeId]:
         else:
             raise TypeError(f"a unit type is a UnitTypeId, a UnitType or a group of them, not {unit_type!r}")
     return frozenset(ids)
+
+
+def _is_on_the_ground(unit: Unit[Any]) -> bool:
+    """Whether `unit` stands on the ground: one not flying, and a structure remembered in the fog, whose flying the game
+    does not report."""
+    return unit.visibility is Visibility.IN_FOG or not unit.is_flying
 
 
 def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> list[tuple[float, float]]:

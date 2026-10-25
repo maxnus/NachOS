@@ -131,6 +131,13 @@ class UnitOrder:
             raise NotReportedError(f"the game names the unit this {self.ability.name} is aimed at by no tag it reports")
         return self._target
 
+    @property
+    def known_target(self) -> Target | None:
+        """`target`, or `None` where `target` raises: for an order aimed at a unit the game names by a tag it never
+        reports, with no earlier order of the same ability to read it from. `None` also for an order aimed at nothing;
+        `target` tells the two apart."""
+        return None if self._target is _NotReported.TARGET else self._target
+
     @classmethod
     def _from_proto(
         cls, order: raw_pb2.UnitOrder, unit_target_of_order: Callable[[raw_pb2.UnitOrder], Unit[Any] | None]

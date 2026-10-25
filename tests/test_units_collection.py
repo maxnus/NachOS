@@ -268,6 +268,26 @@ class TestFilters:
             _mixed().with_buff(BuffId.MARINE_STIMMED)
         assert _tags(_mixed().own.idle) == [1]
 
+    def test_without_some_of_them(self) -> None:
+        units = _mine(10)
+        assert _tags(units.without(units[2:5])) == [unit.tag for unit in units if unit not in units[2:5]]
+        assert _tags(units.without([])) == _tags(units)
+
+    def test_those_not_complete_are_those_complete_leaves_out(self) -> None:
+        units = _mine(40)
+        assert _tags(units.not_complete) == [unit.tag for unit in units if unit.build_progress < 1.0]
+        assert set(_tags(units.not_complete)) | set(_tags(units.complete)) == set(_tags(units))
+
+    def test_on_the_ground_and_in_the_air(self) -> None:
+        """A remembered structure never seen flying counts as on the ground, as `is_ground_structure` takes it."""
+        units = _units(
+            make_unit(1),
+            make_unit(2, UnitTypeId.BARRACKS_FLYING, is_flying=True),
+            make_unit(3, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
+        )
+        assert _tags(units.ground) == [1, 3]
+        assert _tags(units.air) == [2]
+
     def test_by_predicate(self) -> None:
         units = _mine(40)
         assert _tags(units.filter(lambda unit: unit.position.x > 20)) == [
@@ -279,7 +299,7 @@ class TestWhereTheyAre:
     @pytest.mark.parametrize("area", [Circle((20, 20), 8), Rectangle(5, 5, 10, 20)], ids=repr)
     def test_in_an_area(self, area: Circle | Rectangle) -> None:
         units = _mine(60)
-        assert _tags(units.in_area(area)) == [unit.tag for unit in units if unit.position in area]
+        assert _tags(units.inside(area)) == [unit.tag for unit in units if unit.position in area]
 
     @pytest.mark.parametrize("point", [Point((20.0, 20.0)), (3.0, 37.5), Point((0.0, 0.0)).with_height(9.0)])
     def test_by_distance_to_a_point(self, point: Point | tuple[float, float]) -> None:
@@ -313,11 +333,20 @@ class TestWhereTheyAre:
         assert units.closest_to(units[1]) is units[0]
         assert _tags(units.sorted_by_distance_to(units[1])) == [1, 2, 3]
 
+    @pytest.mark.parametrize("area", [Circle((20, 20), 8), Rectangle(5, 5, 10, 20)], ids=repr)
+    def test_outside_an_area_are_those_inside_leaves_out(self, area: Circle | Rectangle) -> None:
+        units = _mine(60)
+        assert _tags(units.outside(area)) == [unit.tag for unit in units if unit.position not in area]
+        areas = [area, Circle((35, 35), 4)]
+        assert _tags(units.outside(areas)) == [
+            unit.tag for unit in units if not any(unit.position in region for region in areas)
+        ]
+
     def test_in_any_of_several_areas(self) -> None:
         units = _mine(60)
         areas = [Circle((10, 10), 5), Rectangle(25, 25, 10, 10)]
-        assert _tags(units.in_area(areas)) == [unit.tag for unit in units if any(unit.position in a for a in areas)]
-        assert _tags(units.in_area([])) == []
+        assert _tags(units.inside(areas)) == [unit.tag for unit in units if any(unit.position in a for a in areas)]
+        assert _tags(units.inside([])) == []
 
     @pytest.mark.parametrize("distance", [0.0, 6.5, 30.0])
     def test_within_a_distance_of_a_point_a_unit_or_several(self, distance: float) -> None:
@@ -334,6 +363,21 @@ class TestWhereTheyAre:
         assert _tags(units.within(distance, of=points)) == near(*points)
         assert _tags(units.within(distance, of=[anchor, points[1]])) == near(anchor.position, points[1])
         assert _tags(units.within(distance, of=units[:3])) == near(*(unit.position for unit in units[:3]))
+
+    @pytest.mark.parametrize("distance", [0.0, 6.5, 30.0])
+    def test_beyond_a_distance_are_those_within_leaves_out(self, distance: float) -> None:
+        units = _mine(60, seed=5)
+        centers = [Point((5.0, 5.0)), units[0]]
+        near = set(_tags(units.within(distance, of=centers)))
+        assert _tags(units.beyond(distance, of=centers)) == [unit.tag for unit in units if unit.tag not in near]
+        with pytest.raises(ValueError, match="a distance is at least 0"):
+            units.beyond(-1.0, of=(0.0, 0.0))
+
+    def test_sorted_by_a_key_keeps_ties_in_their_order(self) -> None:
+        units = _units(make_unit(3, at=(1.0, 0.0)), make_unit(1, at=(5.0, 0.0)), make_unit(2, at=(1.0, 9.0)))
+        assert _tags(units.sorted(key=lambda unit: unit.position.x)) == [3, 2, 1]
+        assert _tags(units.sorted(key=lambda unit: unit.position.x, reverse=True)) == [1, 3, 2]
+        assert isinstance(units.sorted(key=lambda unit: unit.tag), Units)
 
     def test_within_a_distance_of_a_tile_raises(self) -> None:
         with pytest.raises(TypeError):

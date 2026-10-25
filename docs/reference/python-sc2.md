@@ -121,7 +121,9 @@ it.
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| `unit.is_using_ability(a)`, `is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_collecting`, `is_repairing` | `unit.is_doing(a)`, with `AbilityId.MOVE`, `ATTACK`, `GATHER`, `RETURN`, `{GATHER, RETURN}` and `REPAIR`, each one id whatever the unit's type; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
+| `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
+| `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
+| `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
 | nothing | `order.data`, `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
@@ -285,17 +287,18 @@ it.
 | `bot.mineral_field`, `vespene_geyser` | `api.units.mineral_fields`, `geysers` |
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.non_structures`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
-| `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
+| `unit.is_mine`, `is_enemy` | `unit.is_own`, `unit.is_enemy`; `isinstance(unit, OwnUnit)` narrows to your own unit's reads |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_not_stale` while the observation lists it, cloaked or remembered in the fog included |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
-| `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
+| `unit.repairable` | `unit.is_repairable`, with `unit.total_repair_cost` and `unit.required_repair_cost` from its health now, each a `Cost` with its steps; not for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
-| `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
-| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `has_buff({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH})` and `has_buff(BuffId.CARRYING_GAS)`, every race's gas one buff; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
+| `unit.is_constructing_scv` | `unit.is_constructing`, from the order on, as python-sc2's is, or once the structure is placed `unit.construction is not None`, with `structure.builder` |
+| `unit.has_add_on`, `has_reactor`, `has_techlab` | `unit.add_on is not None`, `unit.has_reactor`, `unit.has_tech_lab`, and `unit.production_capacity`, how many it trains at once |
+| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_gas`, every race's gas one buff, `BuffId.CARRYING_GAS`; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
 | `unit.has_buff(b)` | `unit.has_buff(b)`, or any of several |
 | `unit.can_be_attacked`, of an enemy | `unit.is_visible`, which a remembered structure and an undetected unit are not; it is true of a cloaked unit of your own or an ally's, which python-sc2 calls not attackable |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
@@ -303,21 +306,26 @@ it.
 | nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
-| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them, and `unit.weapon_against(target)` |
-| `unit.can_attack_ground`, `can_attack_air` | `unit.weapon_against(target) is not None` |
+| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | the same, which count them, a dps per second of Faster speed; with `unit.ground_weapon`, `air_weapon`, `ground_damage`, `air_damage`, and `unit.weapon_against(target)` |
+| `unit.can_attack_ground`, `can_attack_air` | `unit.ground_weapon is not None`, `air_weapon`; `unit.weapon_against(target) is not None` against one target |
+| `unit.is_melee` | `unit.is_melee`, a ground range above 0 and at most 1 |
 | `unit.target_in_range(t, bonus_distance)` | `unit.has_in_range(t, margin=...)` |
-| `units.in_attack_range_of(u)` | `units.filter(lambda enemy: enemy.has_in_range(u))` |
+| `units.in_attack_range_of(u)` | `units.having_in_range(u)`, the units that have `u` in range; and `units.in_range_of(attacker)`, those it has in range |
 | `unit.calculate_damage_vs_target(t)[0]` | `unit.damage_against(t)`, one attack as the target stands |
+| `unit.bonus_damage_against_target(t)` | `unit.bonus_damage_against(t)`, the bonus summed over the target's attributes, 0 without |
 | `unit.calculate_dps_vs_target(t)` | `unit.dps_against(t)`, per second of Faster speed |
-| `unit.weapon_ready` | `not unit.weapon_cooldown` |
+| `unit.weapon_ready` | `unit.is_weapon_ready`, on your own units, which is true too while an attack is under way, its cooldown reading zero |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
-| `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
-| `units.closer_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d` |
+| `units.owned`, `structure`, `ready`, `not_ready` | `units.own`, `units.structures`, `units.complete`, `units.not_complete` |
+| `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
+| `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
+| `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
+| `units - other`, `sorted(units, key=...)` | `units.without(other)`, by NachOS id, and `units.sorted(key)`, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
