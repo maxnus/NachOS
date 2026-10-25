@@ -589,19 +589,23 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (section 1).
 - **Writing a replay's whole game for salsa** (the owner, 2026-10-25, one question at a time), so that a model or an
   LLM learns from a game without playing it back:
-  - The split (the owner): NachOS writes the files, `.salsa`; their format's spec, the reader (`sc2salsa`) and the
-    analysis are the repo `maxnus/salsa`, which needs pyarrow and never NachOS, and whose plan holds the format's
-    decisions. NachOS's writer writes one version of the spec, and the reader reads every version it knows.
-  - The writer: `sc2nachos.dataset.write_salsa(replay, to=...)`, behind an optional extra, `sc2nachos[dataset]`, for
-    its pyarrow (168 MB installed). On one game client, it plays the replay as each player with the fog off, observing
-    every step, and merges the two views by the game's tag, which names a unit alike in both, writing each field as
-    NachOS reads it. NachOS's ids cannot name a unit in the file: an id starts with the alliance as its player sees it,
-    so it differs between the two views. A bot's own game is saved with `save_replay_to` and written after.
-  - One replay first (over a folder too, and over writing through `run_replay`), a folder across several game clients
-    after.
+  - salsa, `maxnus/salsa`, holds the `.salsa` format whole: its spec, the writer, the reader (`sc2salsa`) and the
+    analysis, and its plan holds the format's decisions. sc2salsa depends on sc2nachos, a plain dependency, to launch
+    the game and play a replay back. This reverses the first split, in which NachOS wrote the files behind a
+    `sc2nachos[dataset]` extra: read straight from the protocol, the writer uses NachOS's launch and protocol layers
+    alone (maxnus/salsa#3).
+  - NachOS's part: a public way to start a replay on its own build with its map and read its observations, the first
+    half of `run_replay`, which any bot maker wanting a replay's raw observations can use too.
+  - salsa's writer plays the replay as each player with the fog on, every unit from its owner's view: compared side by
+    side, the fog off adds nothing the owner's view lacks, and its sight is NachOS's reconstruction (maxnus/salsa#3).
   - A replay plays only on its own build: 4.10 (75689) is installed here, and AI Arena's games are on it (three of
     2026-10-07); a human ladder replay needs a client of its build, on Windows or macOS.
-  - The measurements these rest on are in #168.
+  - The measurements these rest on are in #168 and maxnus/salsa#3.
+- **An action on a copy the fog-off view never lists** (the owner, 2026-10-25, over `None`): its target reads as not
+  reported, as an order's does. With the fog off, a player's order on a structure or mineral field it remembers in the
+  fog names the copy's tag, which the game never lists then and NachOS's fog-off view gives its own copies tags in
+  place of; so an `OwnActionEvent` handler stops `run_replay(..., disable_fog=True)` with `UnknownTagError`
+  (`read_action`), in all six views of three AI Arena games, 3 to 1,290 actions a view.
 - **What AvocaDOS's units piece settled for NachOS** (the owner, 2026-10-25, one question at a time), after a survey of
   python-sc2's `Unit` and `Units` members that AvocaDOS reads:
   - `closest_to`, `closest_n_to`, `sorted_by_distance_to` and `closest_distance_to` take a unit as well as a point,
@@ -636,15 +640,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
   `BuffId.CARRYING_GAS` (#173), before the piece.
 - M5, in AvocaDOS (section 3).
-- Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, the writer after
-  salsa's spec, whose order salsa's plan holds:
+- Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
+  salsa's plan holds:
   1. Two bugs AI Arena's replays hit (the owner, 2026-10-25): `run_replay` could not play back a replay whose map is
      not where the replay names it (#169, merged), and `OwnUnit.engaged_target` raised for a target the game never
      listed (#170, merged).
-  2. `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per salsa's spec, and an in-game
-     test writing a real replay. Once salsa's reader exists, NachOS's `dev` extra installs sc2salsa, from its repo
-     until the owner publishes it, for a round trip.
-  3. A folder of replays written across several game clients.
+  2. Starting a replay on its own build with its map, public, for salsa's writer.
+  3. Apart from salsa, an action's target on a copy the fog-off view never lists reads as not reported (above).
 
 ## 1. Waiting until something needs them
 
