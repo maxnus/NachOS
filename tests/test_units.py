@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, GameTime, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Cost
+from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamedata._repair_steps import REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -660,11 +660,9 @@ class TestWhatAUnitReads:
         assert not scv.is_doing({AbilityId.GATHER, AbilityId.RETURN})
 
     def test_a_unit_is_this_players_or_the_enemys(self) -> None:
-        own, enemy, field = (
-            _one(make_unit(1)),
-            _one(make_unit(2, alliance=_ENEMY)),
-            _one(make_unit(3, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL)),
-        )
+        own = _one(make_unit(1))
+        enemy = _one(make_unit(2, alliance=_ENEMY))
+        field = _one(make_unit(3, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL))
         assert [(unit.is_own, unit.is_enemy) for unit in (own, enemy, field)] == [
             (True, False),
             (False, True),
@@ -983,14 +981,25 @@ class TestConstruction:
         assert isinstance(queen, OwnUnit) and isinstance(tumor, OwnUnit)
         assert (queen.construction, tumor.builder) == (tumor, queen)
 
-    def test_an_scv_is_constructing_a_placed_structure_or_on_its_way_to_place_one(self, first_corpus_tables) -> None:
-        """Whether an ability places a structure is the game's tables' to say; a gather places none."""
+    def test_a_unit_whose_order_places_a_structure_is_constructing(self, first_corpus_tables: GameData) -> None:
+        """Whether an ability places a structure is the game's tables' to say: an SCV's build on its way to the site, a
+        barracks building its add-on and a queen planting a tumor, each by its own id, and not a gather."""
         tracker = _Tracker(first_corpus_tables, make_enemy())
         gather = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
-        reports = [_scv(1, self._BUILD), _scv(2, gather), _scv(3)]
+        reactor = raw_pb2.UnitOrder(ability_id=RawAbilityId.Build_Reactor_Barracks)
+        plant = raw_pb2.UnitOrder(
+            ability_id=RawAbilityId.Build_CreepTumor_Queen, target_world_space_pos=common_pb2.Point(x=30.0, y=30.0)
+        )
+        reports = [
+            _scv(1, self._BUILD),
+            make_unit(2, UnitTypeId.BARRACKS, at=(40.0, 40.0), build_progress=1.0, orders=[reactor]),
+            make_unit(3, UnitTypeId.QUEEN, at=(28.0, 30.0), orders=[plant]),
+            _scv(4, gather),
+            _scv(5),
+        ]
         tracker.update(make_observation(0, units=reports).observation.raw_data, 0)
-        walking, gathering, idle = sorted(tracker.unit_tracker.present.own, key=lambda unit: unit.tag)
-        assert [unit.is_constructing for unit in (walking, gathering, idle)] == [True, False, False]
+        units = tracker.unit_tracker.present.own.sorted(key=lambda unit: unit.tag)
+        assert [unit.is_constructing for unit in units] == [True, True, True, False, False]
 
     def test_an_scv_with_a_construction_is_constructing(self) -> None:
         scv, depot = _Game().observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))

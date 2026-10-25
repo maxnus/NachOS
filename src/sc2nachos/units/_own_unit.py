@@ -161,8 +161,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def is_weapon_ready(self) -> bool:
         """Whether the unit has a weapon and its `weapon_cooldown` is zero: it can attack now, or is under way with an
-        attack, whose cooldown reads zero until it fires (in game)."""
-        return bool(self.weapons) and not self.weapon_cooldown
+        attack, whose cooldown reads zero until it fires (in game). False for an oracle whose beam is off, as
+        `weapon_against` has it."""
+        return bool(self._weapons_firing_now()) and not self.weapon_cooldown
 
     @property
     def has_reactor(self) -> bool:
@@ -181,7 +182,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """How many units the unit trains at once: 2 for a structure with a reactor, 1 for another structure the
         game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
         unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
-        left out."""
+        left out, and so is whether its add-on is: a barracks building its reactor reads 2, though it trains nothing
+        until the reactor finishes."""
         if self.type_id not in self._tracker.game_data._unit_trainers:
             return 0
         return 2 if self.has_reactor else 1

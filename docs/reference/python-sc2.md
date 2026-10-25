@@ -296,7 +296,7 @@ it.
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
-| `unit.is_constructing_scv` | `unit.is_constructing`, from the order on, as python-sc2's is, or once the structure is placed `unit.construction is not None`, with `structure.builder` |
+| `unit.is_constructing_scv` | `unit.is_constructing`, from the order on, as python-sc2's is, and for any unit ordered to place a structure, a probe or a drone on its way, a queen placing a tumor and a barracks building its add-on among them; or once the structure is placed `unit.construction is not None`, with `structure.builder` |
 | `unit.has_add_on`, `has_reactor`, `has_techlab` | `unit.add_on is not None`, `unit.has_reactor`, `unit.has_tech_lab`, and `unit.production_capacity`, how many it trains at once |
 | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_gas`, every race's gas one buff, `BuffId.CARRYING_GAS`; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
 | `unit.has_buff(b)` | `unit.has_buff(b)`, or any of several |
@@ -310,7 +310,7 @@ it.
 | `unit.can_attack_ground`, `can_attack_air` | `unit.ground_weapon is not None`, `air_weapon`; `unit.weapon_against(target) is not None` against one target |
 | `unit.is_melee` | `unit.is_melee`, a ground range above 0 and at most 1 |
 | `unit.target_in_range(t, bonus_distance)` | `unit.has_in_range(t, margin=...)` |
-| `units.in_attack_range_of(u)` | `units.having_in_range(u)`, the units that have `u` in range; and `units.in_range_of(attacker)`, those it has in range |
+| `units.in_attack_range_of(u)`, the units `u` can hit | `units.in_range_of(u)`, the units `u` has in range; and `units.having_in_range(target)`, the units that have `target` in range |
 | `unit.calculate_damage_vs_target(t)[0]` | `unit.damage_against(t)`, one attack as the target stands |
 | `unit.bonus_damage_against_target(t)` | `unit.bonus_damage_against(t)`, the bonus summed over the target's attributes, 0 without |
 | `unit.calculate_dps_vs_target(t)` | `unit.dps_against(t)`, per second of Faster speed |
@@ -325,7 +325,7 @@ it.
 | `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
 | `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
 | `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
-| `units - other`, `sorted(units, key=...)` | `units.without(other)`, by NachOS id, and `units.sorted(key)`, each a collection |
+| `units - other`, `units.sorted(key, reverse)` | `units.without(other)`, by NachOS id, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
@@ -353,8 +353,8 @@ it.
 - **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
   or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while
   it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link; it is true from the
-  order on, while the SCV walks to the site, whereas `construction` is `None` until the structure is placed, so an
-  SCV on its way is one whose first order is the build ability.
+  order on, while the SCV walks to the site, whereas `construction` is `None` until the structure is placed, and
+  `is_constructing` is true from the order on, as python-sc2's is.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**: the health of a cloaked enemy never detected, or the

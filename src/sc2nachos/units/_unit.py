@@ -769,7 +769,9 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_repairable(self) -> bool:
-        """Whether an SCV can repair the unit: whether `total_repair_cost` gives a cost."""
+        """Whether `total_repair_cost` gives a cost: whether the unit is a complete Terran mechanical one, whoever's it
+        is, an enemy's included. Raises `NotReportedError` for a Terran mechanical unit never
+        shown visible, whose build progress the game never reported."""
         return self.total_repair_cost is not None
 
     def time_to_face(
@@ -866,11 +868,19 @@ class Unit[K: UnitType.AnyType]:
         return 0.0 < self.ground_range <= 1.0
 
     def _first_weapon_firing_at(self, domain: TargetDomain) -> Weapon | None:
-        """The first of `weapons` that fires at `domain`, the ground or the air, alone or with the other. None for an
-        oracle whose beam is off, as `weapon_against` has it."""
+        """The first of `_weapons_firing_now()` that fires at `domain`, the ground or the air, alone or with the
+        other."""
+        return next(
+            (weapon for weapon in self._weapons_firing_now() if weapon.target_domain in (domain, TargetDomain.ANY)),
+            None,
+        )
+
+    def _weapons_firing_now(self) -> tuple[Weapon, ...]:
+        """`weapons`, or none for an oracle whose beam is off, which wears `BuffId.ORACLE_PULSAR_BEAM` exactly while it
+        is on (in game). Raises `NotReportedError` for an oracle never shown visible."""
         if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
-            return None
-        return next((weapon for weapon in self.weapons if weapon.target_domain in (domain, TargetDomain.ANY)), None)
+            return ()
+        return self.weapons
 
     def weapon_against(self, target: Unit[Any]) -> Weapon | None:
         """The weapon of `weapons` this unit fires at `target`: one that hits the air for a target that flies, and one
@@ -881,6 +891,7 @@ class Unit[K: UnitType.AnyType]:
         Raises `NotReportedError` for a target remembered in the fog and never seen visible, as `is_flying` does, and
         for an oracle never shown visible.
         """
+        # `_weapons_firing_now()` written out: the call costs some 20 ns here, which a targeting loop pays per pair.
         if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
             return None
         weapons = self.weapons
@@ -922,8 +933,10 @@ class Unit[K: UnitType.AnyType]:
         if weapon is None:
             return 0.0
         attributes = target.type_data.attributes
-        bonus = sum(bonus for attribute, bonus in weapon.damage_bonuses.items() if attribute in attributes)
-        return bonus * weapon.attacks
+        bonus_per_hit = sum(
+            (bonus for attribute, bonus in weapon.damage_bonuses.items() if attribute in attributes), start=0.0
+        )
+        return bonus_per_hit * weapon.attacks
 
     def dps_against(self, target: Unit[Any]) -> float:
         """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`
