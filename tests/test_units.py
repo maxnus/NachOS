@@ -285,6 +285,17 @@ class TestTheFog:
         (again,) = game.observe(48, _depot(901, visibility=_IN_FOG))
         assert again is depot
         assert [unit.id for unit in game.tracker.unit_tracker.known] == [400001]
+        assert depot.first_seen == GameTime(steps=0)
+
+    def test_a_unit_is_first_seen_at_the_first_observation_that_shows_it_visible(self) -> None:
+        """Not while it is in sight but undetected, and for good once seen, cloaked again or gone."""
+        game = _Game()
+        (banshee,) = game.observe(0, make_unit(2, alliance=_ENEMY, visibility=_INVISIBLE))
+        assert banshee.first_seen is None
+        game.observe(16, make_unit(2, alliance=_ENEMY))
+        game.observe(32, make_unit(2, alliance=_ENEMY, visibility=_INVISIBLE))
+        game.observe(48)
+        assert (banshee.first_seen, banshee.last_seen) == (GameTime(steps=16), GameTime(steps=16))
 
     def test_a_mineral_field_never_seen_keeps_the_id_it_had_when_it_is_first_seen(self) -> None:
         field = {"at": (60.0, 20.5), "alliance": Alliance.NEUTRAL}
