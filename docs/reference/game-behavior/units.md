@@ -71,6 +71,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `is_hallucination` is true for an enemy's hallucination only while a detector is near; this player's own are
   always flagged. `is_active` is true for any unit carrying out an order, the enemy's included. `engaged_target_tag`
   names the unit a marine attacks (#25).
+- A unit goes on naming its engaged target after the observation stops listing it: 2,439 times in a 30-minute game.
+  Each of the 12 such targets looked at had been reported dead that step or the step before, and 108 of them were
+  last listed burrowed, a roach or a drone gone out of sight. Once in that game, a stalker named a target that neither
+  player's view listed at any step, fog off, and that the game reported dead in the same observation, so it lived
+  less than a step. Seen in AI Arena match 5030771
+  (PylonPils, Protoss, against Titus, Zerg, on IncorporealAIE_v4, 2026-10-07), played back as player 1, every step
+  observed (2026-10-25, with a probe, build 75689).
 - A unit lifted by a graviton beam wears `PHOENIX_GRAVITON_BEAM` and reports `is_flying` false (#26; tested).
 - Visible enemy units report their armor and shield levels, and armed ones their attack level too; an undetected
   enemy listed `INVISIBLE` reports none (#12; corpus).
