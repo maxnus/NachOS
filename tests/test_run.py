@@ -343,10 +343,12 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
-def _played_back(exchanges: Iterable[Exchange], *, disable_fog: bool = False) -> Iterator[Exchange]:
+def _played_back(
+    exchanges: Iterable[Exchange], *, disable_fog: bool = False, map_data: bytes | None = None
+) -> Iterator[Exchange]:
     """`exchanges`, the corpus game on Pylon's, as a recording of its replay played back as the player it joined as,
-    with the fog off if `disable_fog`, holds them: the replay started where the game was joined, never created, and
-    played back rather than played."""
+    with the fog off if `disable_fog` and the map's bytes sent if `map_data`, holds them: the replay started where the
+    game was joined, never created, and played back rather than played."""
     for exchange in exchanges:
         asked_kind = exchange.request.WhichOneof("request")
         if asked_kind == "create_game":
@@ -357,6 +359,8 @@ def _played_back(exchanges: Iterable[Exchange], *, disable_fog: bool = False) ->
                 observed_player_id=exchange.response.join_game.player_id,
                 disable_fog=disable_fog,
             )
+            if map_data is not None:
+                start.map_data = map_data
             started = make_response(Status.IN_REPLAY, start_replay=sc2api_pb2.ResponseStartReplay())
             yield Exchange(sc2api_pb2.Request(start_replay=start), started)
             continue
@@ -538,6 +542,23 @@ class TestPlayingARecordedReplay:
 
         assert run_recording(recording, api) is Result.UNDECIDED
         assert api.step == last_step
+
+    @pytest.mark.parametrize("map_data", [b"the map", None], ids=["the map sent", "no map sent"])
+    def test_it_sends_the_map_sent_when_it_was_recorded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, map_data: bytes | None
+    ) -> None:
+        exchanges = _played_back(Recording(_PYLON_GAME), map_data=map_data)
+        recording = write_recording(tmp_path / "replay.sc2rec", exchanges)
+        start_replay = Client.start_replay
+        maps_sent: list[bytes | None] = []
+
+        def recording_the_map(client: Client, replay: bytes, **kwargs: Any) -> None:
+            maps_sent.append(kwargs.get("map_data"))
+            start_replay(client, replay, **kwargs)
+
+        monkeypatch.setattr(Client, "start_replay", recording_the_map)
+        run_recording(recording, Api())
+        assert maps_sent == [map_data]
 
     def test_it_is_refused_permissive(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
@@ -747,6 +768,101 @@ class TestTheReplaysBuild:
         assert clients[0].terminated
 
 
+class _ReplayStartCaught:
+    """A client `run_replay` would play on, which records the map sent with the replay and stops there."""
+
+    def __init__(self) -> None:
+        self.map_data_sent: list[bytes | None] = []
+
+    def start_replay(self, replay: bytes, *, player_id: int, disable_fog: bool, map_data: bytes | None) -> None:
+        self.map_data_sent.append(map_data)
+        raise _ClientStarted
+
+    def leave_game(self) -> None:
+        pass
+
+    def quit(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class TestTheReplaysMap:
+    """Which map `run_replay` sends the game with a replay, stopped where it would start playing."""
+
+    _INSTALLED_MAP = b"the installed map"
+
+    def _map_data_sent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replay_map_path: str) -> bytes | None:
+        """What `run_replay` sends as the map of a replay whose info names its map at `replay_map_path`, on an
+        installation with Pylon in a folder of its maps."""
+        (tmp_path / "Versions" / f"Base{TECH_TREE.base_build}").mkdir(parents=True)
+        installed_map = tmp_path / "Maps" / "AIE" / "PylonAIE_v4.SC2Map"
+        installed_map.parent.mkdir(parents=True, exist_ok=True)
+        installed_map.write_bytes(self._INSTALLED_MAP)
+        replay = tmp_path / "game.SC2Replay"
+        replay.write_bytes(b"the replay")
+        client = _ReplayStartCaught()
+
+        def connect(url: str) -> FakeTransport:
+            info = sc2api_pb2.ResponseReplayInfo(base_build=TECH_TREE.base_build, local_map_path=replay_map_path)
+            info.player_info.add().player_info.CopyFrom(sc2api_pb2.PlayerInfo(player_id=1))
+            return FakeTransport(make_response(Status.LAUNCHED, replay_info=info))
+
+        monkeypatch.setattr(GameProcess, "launch", lambda installation, **kwargs: _ClientLaunched())
+        monkeypatch.setattr(WebSocketTransport, "connect", connect)
+        monkeypatch.setattr(sc2nachos.run, "_connect", lambda url, record_to: client)
+        with pytest.raises(_ClientStarted):
+            run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
+        (map_data,) = client.map_data_sent
+        return map_data
+
+    def test_a_bare_map_name_sends_the_installed_map_of_that_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """As an AI Arena replay names its map, which the game then does not open (in game)."""
+        assert self._map_data_sent(tmp_path, monkeypatch, "PylonAIE_v4.SC2Map") == self._INSTALLED_MAP
+
+    @pytest.mark.parametrize(
+        "replay_map_path",
+        [
+            "/home/someone/StarCraftII/Maps/PylonAIE_v4.SC2Map",
+            r"C:\Program Files (x86)\StarCraft II\Maps\PylonAIE_v4.SC2Map",
+        ],
+        ids=["gone from where it was played", "played on Windows"],
+    )
+    def test_a_path_to_no_file_here_sends_the_installed_map_of_its_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replay_map_path: str
+    ) -> None:
+        assert self._map_data_sent(tmp_path, monkeypatch, replay_map_path) == self._INSTALLED_MAP
+
+    def test_a_relative_path_sends_the_map_it_names_under_the_maps_over_one_of_its_name_elsewhere(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The shallowest map of a name is the one found by name.
+        shallower = tmp_path / "Maps" / "PylonAIE_v4.SC2Map"
+        shallower.parent.mkdir(parents=True)
+        shallower.write_bytes(b"another map of its name")
+        assert self._map_data_sent(tmp_path, monkeypatch, "AIE/PylonAIE_v4.SC2Map") == self._INSTALLED_MAP
+
+    def test_a_path_to_a_file_here_sends_no_map_for_the_game_to_open_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        played_on = tmp_path / "played-on" / "PylonAIE_v4.SC2Map"
+        played_on.parent.mkdir()
+        played_on.write_bytes(b"the map it was played on")
+        assert self._map_data_sent(tmp_path, monkeypatch, str(played_on)) is None
+
+    def test_a_map_not_installed_sends_no_map_and_is_warned_of(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, logged: list[str]
+    ) -> None:
+        assert self._map_data_sent(tmp_path, monkeypatch, "UnknownAIE.SC2Map") is None
+        assert any("The replay's map, UnknownAIE, is not under" in message for message in logged)
+
+    def test_a_replay_naming_no_map_sends_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert self._map_data_sent(tmp_path, monkeypatch, "") is None
+
+
 @pytest.mark.integration
 def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay_and_recording_are_read(
     tmp_path: Path,
@@ -940,6 +1056,37 @@ def _scout_the_enemys_main_and_come_back(api: Api, *, back_at_step: int) -> None
     def come_back(_: TurnEvent) -> None:
         if (scout := api.units.own.get(scout_ids[0])) is not None:
             api.orders.issue(scout, AbilityId.MOVE, target=api.map.start_location)
+
+
+@pytest.mark.integration
+def test_in_a_real_game_its_replay_plays_back_once_its_map_is_gone_from_where_it_was_played(tmp_path: Path) -> None:
+    """Run with `pytest -m integration`. Plays 5 seconds of a game on a copy of the map, saving its replay, deletes the
+    copy, and plays the replay back: the game cannot open the map the replay names, as with an AI Arena replay, so
+    `run_replay` sends the installed map of its name."""
+    try:
+        installed_map = MapFile.find(_LADDER_MAP)
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    played_on = tmp_path / "played-on" / installed_map.path.name
+    played_on.parent.mkdir()
+    played_on.write_bytes(installed_map.path.read_bytes())
+    replay = tmp_path / "game.SC2Replay"
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    played = run_local(
+        MapFile(played_on),
+        Api(),
+        opponent,
+        race=Race.TERRAN,
+        steps_per_turn=8,
+        time_limit=GameTime.from_seconds(5),
+        save_replay_to=replay,
+    )
+    assert played is Result.TIE
+    played_on.unlink()
+
+    api = Api()
+    assert run_replay(replay, api, player_id=1, steps_per_turn=8) is Result.UNDECIDED
+    assert api.step > 0
 
 
 @pytest.mark.integration
