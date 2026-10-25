@@ -86,6 +86,12 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
 - The game plays a replay back from its bytes, and from its path though it lies outside the installation's `Replays`.
   Starting one takes some 3 seconds. Leaving one returns the client to `launched`, and the next can start on the same
   client (`requests`).
+- A replay's info gives its map by the path it was played from, `local_map_path`. Three AI Arena replays of
+  2026-10-07, all build 75689, gave a bare file name, `PylonAIE_v4.SC2Map` and the like, and the game refused to play
+  one back, "LaunchError: Unable to open map", with the map in a folder of the installation's maps (`maps/AIE`) and
+  not at the top of `Maps`. Sent the map's bytes as `map_data`, it played each back as player 1 with the fog on and
+  off, and as player 2 with it off. A replay saved here names the map's absolute path, and once that file is gone the
+  game refuses it alike (seen 2026-10-25, with probes; tested).
 - Played back as one of its players, a replay shows what that player saw when the game was played. At each of the 841
   steps the bot observed, every unit in both had the same type, owner, display, position, health, shields, energy and
   number of orders, and the actions reported were the same 465. Only mineral fields and vespene geysers remembered in
@@ -139,7 +145,8 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
 - The tables give weapon speed as the cooldown in Normal seconds (a marine that had just fired read 13.56 steps
   against the table's 13.77), movement speed per Normal second (a zergling 2.95, which is 4.13 per Faster second),
   and build and research times in steps (stimpack 2240) (#25, #30).
-- A unit's `weapon_cooldown` and a buff's `buff_duration_remain` and `buff_duration_max` count steps (#24, #25).
+- A unit's `weapon_cooldown` and a buff's `buff_duration_remain` and `buff_duration_max` count steps (#24, #25), as do
+  the two fields on a unit with a timed life, this player's own alone ([units](units.md#what-is-reported-of-a-unit)).
 - Chat, commands and deaths from 45 unobserved realtime steps all arrived in the next observation, and never again:
   each is reported once, in the first observation after it, however many steps that spans (#28).
 - On the ladder or in realtime, an order's effect can show up an observation later than in a stepped game, and

@@ -50,7 +50,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def weapon_cooldown(self) -> GameTime:
         """The time until the unit can attack again, as the game reports it: the cooldown of its last attack, with the
-        random delay drawn for it, counting down one step each step. Zero for a unit without a weapon.
+        random delay drawn for it, counting down one step each step. Zero for a unit without a weapon; `weapons` says
+        whether it can attack at all.
 
         It reads 0 too while an attack is under way, for 0 to 6 steps before it by type and up to 8 for an ultralisk,
         and a move ordered 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a unit
@@ -58,6 +59,26 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         `docs/reference/game-behavior/damage-and-buffs.md` has the steps each type reads 0.
         """
         return GameTime(steps=self._latest_report.weapon_cooldown)
+
+    @property
+    def buff_duration_max(self) -> GameTime | None:
+        """The whole length of the unit's timed life, as a MULE's or a broodling's, or of a timed buff on it, as a
+        hatchery's inject timer, as the game reports it; `None` where it reports none, as for a worker or a townhall
+        (in game; corpus)."""
+        maximum = self._latest_report.buff_duration_max
+        return GameTime(steps=maximum) if maximum else None
+
+    @property
+    def buff_duration_remaining(self) -> GameTime | None:
+        """What is left of `buff_duration_max`, counting down a step at a time; `None` where `buff_duration_max` is.
+
+        It reads zero, not `None`, once run out. It can start above the maximum: a MULE read 1441 and 1443 steps against
+        1440, and a broodling up to 132 against 128. A MULE or a broodling is listed last at zero, against its maximum,
+        and reported dead the step after (in game).
+        `docs/reference/game-behavior/units.md` has the readings.
+        """
+        report = self._latest_report
+        return GameTime(steps=report.buff_duration_remain) if report.buff_duration_max else None
 
     @property
     def assigned_harvesters(self) -> int:

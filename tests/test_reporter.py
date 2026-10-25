@@ -444,6 +444,20 @@ class TestDamage:
         game.observe(48, _marine(25.0))
         assert [(event.time.steps, event.damage) for event in seen] == [(48, 5.0)]
 
+    def test_a_unit_listed_at_no_health_in_the_observation_reporting_it_dead_only_dies(self) -> None:
+        """A reaper's grenade and a force field are listed one last time, at 0 health, in the observation that reports
+        them dead (tool `sweep_timed_life`)."""
+        game = _Game()
+        damaged = record(game.events, OwnUnitDamagedEvent)
+        died = record(game.events, OwnUnitDiedEvent)
+        grenade_type = UnitTypeId.REAPER_GRENADE
+        grenade = game.observe(0, make_unit(7, grenade_type, health=1.0, health_max=1.0))[7]
+        present = game.observe(16, make_unit(7, grenade_type, health=0.0, health_max=1.0), dead=(7,))
+        assert not present
+        assert not game.tracker.unit_tracker.known
+        assert not damaged
+        assert [event.unit for event in died] == [grenade]
+
 
 class TestDamageTaken:
     def test_a_unit_reads_what_it_lost_since_the_observation_before_with_no_handler(self) -> None:

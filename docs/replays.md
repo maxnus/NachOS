@@ -98,6 +98,16 @@ A replay plays back on the build it was played on, which must be installed, or `
 naming it and the builds there are. The newest build installed reads which one the replay needs, and a second client
 starts when that is not the one. A replay of a game played on an installation plays back on it.
 
+## The replay's map
+
+A replay names the map it was played on by the path the map had, and the game opens the map there. An AI Arena replay
+names only the map's file name, `PylonAIE_v4.SC2Map`, which the game does not find
+([game behavior](reference/game-behavior/protocol.md#playing-a-replay-back)), and a replay played elsewhere names a
+path on that machine. Unless that path is an absolute path to a file here, `run_replay` sends the map with the replay:
+the file a relative path names under the installation's maps, or else the map of its name there, as `run_local` finds
+one by name. A map it does not find there is warned of, and left for the game to open by the replay's path, which it
+may refuse.
+
 ## Playing it back again, with no game
 
 `record_to` records the whole conversation with the game, as for `run_local`, and `run_recording` plays the recording

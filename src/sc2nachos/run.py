@@ -4,7 +4,7 @@ import json
 import random
 from collections.abc import Sequence
 from contextlib import ExitStack, closing
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
@@ -145,9 +145,12 @@ def run_replay(
 
     Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
     on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
-    it is, and a second client is started when that is not the one. `record_to` is a file to record the whole
-    conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends, the client is
-    stopped and its temporary directory removed.
+    it is, and a second client is started when that is not the one. The game opens the replay's map by the path the
+    replay names, which an AI Arena replay gives as a bare file name the game does not find (in game); so unless the
+    path is an absolute path to a file here, the map it names under the installation's maps goes with the replay, or
+    else the map of its name there. `record_to` is a file to
+    record the whole conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends,
+    the client is stopped and its temporary directory removed.
     """
     _check_output_files(record_to, None)
     _check_time_limit(time_limit)
@@ -164,13 +167,38 @@ def run_replay(
             game.terminate()
             game = running.enter_context(GameProcess.launch(installation, base_build=replay_build, window=window))
         _check_tech_tree_build(info.base_build)
+        map_data = _map_bytes_the_game_needs(info.local_map_path, installation)
         with closing(_connect(game.url, record_to)) as client:
             try:
-                client.start_replay(replay_data, player_id=player_id, disable_fog=disable_fog)
+                client.start_replay(replay_data, player_id=player_id, disable_fog=disable_fog, map_data=map_data)
                 return api.play(client, steps_per_turn=steps_per_turn, time_limit=time_limit)
             finally:
                 client.leave_game()
                 client.quit()
+
+
+def _map_bytes_the_game_needs(replay_map_path: str, installation: Installation) -> bytes | None:
+    """The bytes of the map of a replay whose map is at `replay_map_path`, as its info gives it, for the game to play
+    it on: the file a relative path names under `installation`'s maps, and otherwise the map of its name there. `None`
+    where it is an absolute path to a file, which the game opens, and where no map of its name is installed, for the
+    game to try the path itself."""
+    if not replay_map_path:
+        return None
+    map_path = Path(replay_map_path)
+    if map_path.is_absolute():
+        if map_path.is_file():
+            return None
+    elif (under_the_maps := installation.maps / map_path).is_file():
+        # That very file, rather than one of its name elsewhere, as a map pack installs beside the maps it replaces.
+        return under_the_maps.read_bytes()
+    # A replay played on Windows names its map with backslashes, which a Windows path reads on every platform.
+    map_name = PureWindowsPath(replay_map_path).stem
+    try:
+        map_file = MapFile.find(map_name, installation=installation)
+    except MapNotFoundError:
+        logger.warning("The replay's map, {}, is not under {}; the game may not open it", map_name, installation.maps)
+        return None
+    return map_file.path.read_bytes()
 
 
 def _check_replay_player(info: sc2api_pb2.ResponseReplayInfo, player_id: int) -> None:
@@ -229,6 +257,7 @@ def run_recording(
                 start_replay_request.replay_data,
                 player_id=start_replay_request.observed_player_id,
                 disable_fog=start_replay_request.disable_fog,
+                map_data=start_replay_request.map_data if start_replay_request.HasField("map_data") else None,
             )
         else:
             if permissive or recording.created_its_game:

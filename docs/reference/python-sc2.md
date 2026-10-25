@@ -287,6 +287,7 @@ it.
 | `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
+| `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
@@ -401,8 +402,9 @@ it.
 - **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
   ([game behavior](game-behavior/units.md#what-is-reported-of-a-unit)).
 - **Reaper grenades and force fields stay units**, and are not in `api.effects`. python-sc2 moves them into
-  `state.effects`; in NachOS they are in `api.units` as `REAPER_GRENADE` and `FORCE_FIELD`, so leave them out of an army
-  count.
+  `state.effects`; in NachOS a force field is among the map's units as `FORCE_FIELD`, and a grenade among its
+  thrower's as `REAPER_GRENADE`, a structure as the tables have it, so leave them out of an army count and a count of
+  structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
   `all_units`; NachOS has neither yet.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.

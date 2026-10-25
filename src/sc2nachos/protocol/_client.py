@@ -209,11 +209,13 @@ class Client:
             raise ProtocolError(f"the game could not read the replay, as {reason}: {detail}")
         return info
 
-    def start_replay(self, replay: bytes, *, player_id: int, disable_fog: bool = False) -> None:
+    def start_replay(
+        self, replay: bytes, *, player_id: int, disable_fog: bool = False, map_data: bytes | None = None
+    ) -> None:
         """Play back `replay`, the bytes of a `.SC2Replay` file, as the player `player_id` saw it, which then stands
         for the player id a join assigns. With `disable_fog`, the game also lists every unit that player did not see,
         out of its sight in full but for orders, and one undetected in its sight with its health and the like at 0 (in
-        game).
+        game). `map_data` is the bytes of the replay's map, for one the game cannot open by the path the replay names.
 
         The game then answers observations, steps, queries and the rest as in a game, and as that player saw the game
         when it was played, but refuses every action and debug command (in game). It is played stepped, never in real
@@ -227,6 +229,8 @@ class Client:
             disable_fog=disable_fog,
             realtime=False,
         )
+        if map_data is not None:
+            request.map_data = map_data
         started = self._send(sc2api_pb2.Request(start_replay=request), "start_replay").start_replay
         # An unset error field reads as the first error the proto declares, so check that it is set first.
         if started.HasField("error"):
