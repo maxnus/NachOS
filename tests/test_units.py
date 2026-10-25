@@ -1053,6 +1053,15 @@ class TestOwnUnits:
         assert marine.engaged_target is enemy
         assert enemy.is_dead
 
+    def test_a_target_gone_out_of_the_observation_is_the_stale_unit(self) -> None:
+        """As a roach that burrowed out of sight was, still named by the zealot attacking it (in game)."""
+        game = _Game()
+        _, roach = game.observe(0, make_unit(1, UnitTypeId.ZEALOT), make_unit(9, UnitTypeId.ROACH, alliance=_ENEMY))
+        (zealot,) = game.observe(16, make_unit(1, UnitTypeId.ZEALOT, engaged_target_tag=9))
+        assert isinstance(zealot, OwnUnit)
+        assert zealot.engaged_target is roach
+        assert roach.is_stale and not roach.is_dead
+
     def test_a_target_no_observation_listed_names_no_unit(self) -> None:
         """As a stalker's target created and killed within a step was (in game)."""
         game = _Game()
