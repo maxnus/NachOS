@@ -583,8 +583,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     map once. The writer plays the replay as each player with the fog off and merges the two views by the game's tag,
     which names a unit alike in both. A player's memory of a unit is the truth at the last step it saw it.
   - Every step, exactly (the owner's idea of checkpoints, over a sample every N steps): a snapshot of every unit every
-    224 steps and, between, only the rows that changed. The game cannot resume a replay from a state, so the
-    checkpoints are in the file: reaching a step takes 3 s to load the replay and some 1,400 steps a second. Events
+    28 steps, 1.25 s of game time, as a table of its own, and between, only the rows that changed. The game cannot
+    resume a replay from a state, so the checkpoints are in the file: reaching a step takes 3 s to load the replay
+    and some 1,400 steps a second. The owner chose 28 over 224, 128 and 32: denser snapshots cost little and make the
+    snapshots alone a sample to read, and a power of two looked up no faster. Events
     and actions come at the step the game reports them, in the observation after, and the `.SC2Replay`, 24 KB, is
     kept in the file for anything its tables lack.
   - Every field (over the core and the order queue): 27 a row, each owner's view's included (weapon cooldown,
@@ -602,7 +604,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - The writer, for one replay first (over a folder too, and over writing through `run_replay`):
     `sc2nachos.dataset.write_salsa(replay, to=...)`, on one game client, writing each field as NachOS reads it. A
     bot's own game is saved with `save_replay_to` and written after. A replay plays only on its own build: 4.10
-    (75689) is installed here, and AI Arena's games are said to be on it (unverified); a human ladder replay needs a
+    (75689) is installed here, and AI Arena's games are on it (three of 2026-10-07); a human ladder replay needs a
     client of its build, on Windows or macOS.
   - The first reader (over its tables and extracting alone): `sc2salsa.open(path)`, the facts, the replay, any table as
     a pyarrow Table, every unit `at(step)` from the nearest snapshot and the changes since, `frames(every=N)` forward
@@ -623,9 +625,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - M5, in AvocaDOS (section 3).
 - Beside M5, **a replay's whole game in a file** (2026-10-25, above), a pull request at a time, in this order (the
-  owner, over the spec and reader first, and over the writer first):
-  1. salsa: the format's spec, every table, column, type and encoding, as version 1. The repo does not exist yet: the
-     owner creates it, or says to.
+  owner, over the spec and reader first, and over the writer first), once two NachOS bugs that AI Arena's replays hit
+  are fixed (the owner, 2026-10-25): `run_replay` cannot play back a replay whose map is not in the game's own Maps
+  folder, as AI Arena's are not ("LaunchError: Unable to open map"; the map's bytes as `map_data` mend it), and
+  `OwnUnit.engaged_target` raises `UnknownTagError` for a target the game never listed.
+  1. salsa: the format's spec, every table, column, type and encoding, as version 1, measuring what makes a file
+     smaller first: a 30-minute AI Arena game came to 77 to 97 MB, and the changes sorted by unit, or positions and
+     facing stored coarser, may shrink it. The repo does not exist yet: the owner creates it, or says to.
   2. NachOS: `write_salsa` and the `dataset` extra, its tests reading files back with pyarrow per the spec, and an
      in-game test writing a real replay.
   3. salsa: the reader, with fixtures written by NachOS's writer. NachOS's `dev` extra then installs sc2salsa, which
