@@ -595,17 +595,19 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `sc2nachos[dataset]` extra: read straight from the protocol, the writer uses NachOS's launch and protocol layers
     alone (maxnus/salsa#3).
   - NachOS's part: a public way to start a replay on its own build with its map and read its observations, the first
-    half of `run_replay`, which any bot maker wanting a replay's raw observations can use too.
+    half of `run_replay`, which any bot maker wanting a replay's raw observations can use too. A bot's own game is saved
+    with `save_replay_to`, and its file written from that replay.
   - salsa's writer plays the replay as each player with the fog on, every unit from its owner's view: compared side by
-    side, the fog off adds nothing the owner's view lacks, and its sight is NachOS's reconstruction (maxnus/salsa#3).
+    side, the fog off adds only the map's units while no player sees them, and its sight is NachOS's reconstruction
+    (maxnus/salsa#3).
   - A replay plays only on its own build: 4.10 (75689) is installed here, and AI Arena's games are on it (three of
     2026-10-07); a human ladder replay needs a client of its build, on Windows or macOS.
   - The measurements these rest on are in #168 and maxnus/salsa#3.
 - **An action on a copy the fog-off view never lists** (the owner, 2026-10-25, over `None`): its target reads as not
-  reported, as an order's does. With the fog off, a player's order on a structure or mineral field it remembers in the
-  fog names the copy's tag, which the game never lists then and NachOS's fog-off view gives its own copies tags in
-  place of; so an `OwnActionEvent` handler stops `run_replay(..., disable_fog=True)` with `UnknownTagError`
-  (`read_action`), in all six views of three AI Arena games, 3 to 1,290 actions a view.
+  reported, as an order's does. A player's order on a structure or mineral field it remembers in the fog names the tag
+  of the game's copy of it, which the game lists only with the fog on; NachOS's fog-off view makes copies of its own,
+  under tags from 1 << 62. So an `OwnActionEvent` handler stops `run_replay(..., disable_fog=True)` with
+  `UnknownTagError` (`read_action`), in all six views of three AI Arena games, 3 to 1,290 actions a view.
 - **What AvocaDOS's units piece settled for NachOS** (the owner, 2026-10-25, one question at a time), after a survey of
   python-sc2's `Unit` and `Units` members that AvocaDOS reads:
   - `closest_to`, `closest_n_to`, `sorted_by_distance_to` and `closest_distance_to` take a unit as well as a point,
@@ -646,7 +648,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
      not where the replay names it (#169, merged), and `OwnUnit.engaged_target` raised for a target the game never
      listed (#170, merged).
   2. Starting a replay on its own build with its map, public, for salsa's writer.
-  3. Apart from salsa, an action's target on a copy the fog-off view never lists reads as not reported (above).
+- Apart from salsa, and not waited on by it: an action's target on a copy the fog-off view never lists reads as not
+  reported (2026-10-25, above).
 
 ## 1. Waiting until something needs them
 
