@@ -86,6 +86,7 @@ class Unit[K: UnitType.AnyType]:
         "__weakref__",
         "_damage_taken",
         "_dead",
+        "_first_seen",
         "_hallucination_confirmed",
         "_id",
         "_latest_report",
@@ -114,6 +115,8 @@ class Unit[K: UnitType.AnyType]:
     _latest_report: raw_pb2.Unit
     _latest_visible_report: raw_pb2.Unit | None
     _last_seen: int | None
+    # The step of the first observation that showed the unit visible, or `None` before one has.
+    _first_seen: int | None
     # The alliance of the latest report, as the protocol numbers it, read once per report.
     _raw_alliance: int
     _raw_type: int
@@ -153,6 +156,7 @@ class Unit[K: UnitType.AnyType]:
         self._latest_visible_report = report if report.display_type == _VISIBLE else None
         # Set only for a unit not visible; a visible unit was last seen at its last observation.
         self._last_seen = None
+        self._first_seen = step if report.display_type == _VISIBLE else None
         self._position = Point((report.pos.x, report.pos.y))
         self._raw_alliance = report.alliance
         self._own = self._raw_alliance == _OWN_ALLIANCE
@@ -194,6 +198,8 @@ class Unit[K: UnitType.AnyType]:
         if x != position[0] or y != position[1]:
             self._position = Point((x, y))
         if report.display_type == _VISIBLE:
+            if self._first_seen is None:
+                self._first_seen = step
             self._latest_visible_report = report
             if not self._own and not self._hallucination_confirmed:
                 self._hallucination_confirmed = report.is_hallucination
@@ -350,6 +356,13 @@ class Unit[K: UnitType.AnyType]:
         stale for good.
         """
         return self._dead
+
+    @property
+    def first_seen(self) -> GameTime | None:
+        """The time of the first observation that showed the unit visible, or `None` if none has, as for `last_seen`.
+        A structure remembered under a new tag keeps it, as it keeps its `id`. Later than `EnemyUnitFirstSeenEvent` for
+        an enemy's unit first listed in the fog or undetected, which that event counts as first seen."""
+        return None if self._first_seen is None else GameTime(steps=self._first_seen)
 
     @property
     def last_seen(self) -> GameTime | None:

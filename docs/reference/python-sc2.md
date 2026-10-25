@@ -289,6 +289,7 @@ it.
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.is_own`, `unit.is_enemy`; `isinstance(unit, OwnUnit)` narrows to your own unit's reads |
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_not_stale` while the observation lists it, cloaked or remembered in the fog included |
+| `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_stale` once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
