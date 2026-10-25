@@ -10,7 +10,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb
 
 from sc2nachos import Api, GameTime, NachOSError
 from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.gamedata import Cost
+from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamedata._repair_steps import REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -659,6 +659,43 @@ class TestWhatAUnitReads:
         game.observe(32, make_unit(1, UnitTypeId.SCV))
         assert not scv.is_doing({AbilityId.GATHER, AbilityId.RETURN})
 
+    def test_a_unit_is_this_players_or_the_enemys(self) -> None:
+        own = _one(make_unit(1))
+        enemy = _one(make_unit(2, alliance=_ENEMY))
+        field = _one(make_unit(3, UnitTypeId.MINERAL_FIELD, alliance=Alliance.NEUTRAL))
+        assert [(unit.is_own, unit.is_enemy) for unit in (own, enemy, field)] == [
+            (True, False),
+            (False, True),
+            (False, False),
+        ]
+
+    def test_a_unit_the_last_observation_left_out_is_stale_and_one_it_listed_is_not(self) -> None:
+        """Listed includes in sight but cloaked, which `is_visible` is not."""
+        game = _Game()
+        cloaked, gone = game.observe(0, make_unit(1, alliance=_ENEMY, visibility=_INVISIBLE), make_unit(2))
+        assert cloaked.is_not_stale and not cloaked.is_visible
+        game.observe(16, make_unit(1, alliance=_ENEMY, visibility=_INVISIBLE))
+        assert not gone.is_not_stale and gone.is_stale
+
+    @pytest.mark.parametrize(
+        ("game_id", "carrying"),
+        [
+            (RawBuffId.CarryMineralFieldMinerals, "minerals"),
+            (RawBuffId.CarryHighYieldMineralFieldMinerals, "minerals"),
+            (RawBuffId.CarryHarvestableVespeneGeyserGas, "gas"),
+            (RawBuffId.CarryHarvestableVespeneGeyserGasProtoss, "gas"),
+            (RawBuffId.CarryHarvestableVespeneGeyserGasZerg, "gas"),
+        ],
+        ids=lambda value: value.name if isinstance(value, RawBuffId) else value,
+    )
+    def test_a_worker_carries_minerals_or_gas_by_its_buff(self, game_id: RawBuffId, carrying: str) -> None:
+        worker = _one(make_unit(1, UnitTypeId.SCV, buff_ids=[game_id]))
+        assert (worker.is_carrying_minerals, worker.is_carrying_gas) == (carrying == "minerals", carrying == "gas")
+
+    def test_a_worker_without_a_carrying_buff_carries_neither(self) -> None:
+        worker = _one(make_unit(1, UnitTypeId.SCV))
+        assert not worker.is_carrying_minerals and not worker.is_carrying_gas
+
     def test_an_uncurated_type_raises_as_the_observation_is_taken_in_and_names_the_id(self) -> None:
         """A type the game reports belongs among the curated ids, so a missing one is a mistake to fix."""
         with pytest.raises(UncuratedIdError, match=r"UnitTypeId has no member for id \d+ \(RawUnitTypeId.Viking\)"):
@@ -765,6 +802,12 @@ class TestRepair:
         stalker = _one(make_unit(2, UnitTypeId.STALKER, health=20.0, health_max=80.0, build_progress=1.0))
         repair_costs = [(unit.required_repair_cost, unit.total_repair_cost) for unit in (marine, stalker)]
         assert repair_costs == [(None, None), (None, None)]
+
+    def test_a_unit_is_repairable_where_it_has_a_repair(self) -> None:
+        tank = self._tank(87.5)
+        marine = _one(make_unit(2, UnitTypeId.MARINE, health=20.0, health_max=45.0, build_progress=1.0))
+        bunker = _one(make_unit(3, UnitTypeId.BUNKER, health=100.0, health_max=400.0, build_progress=0.5))
+        assert [unit.is_repairable for unit in (tank, marine, bunker)] == [True, False, False]
 
     def test_a_structure_under_construction_has_no_repair(self) -> None:
         """An SCV ordered to repair one is refused `CantTargetUnderConstructionUnits` (in game)."""
@@ -938,6 +981,31 @@ class TestConstruction:
         assert isinstance(queen, OwnUnit) and isinstance(tumor, OwnUnit)
         assert (queen.construction, tumor.builder) == (tumor, queen)
 
+    def test_a_unit_whose_order_places_a_structure_is_constructing(self, first_corpus_tables: GameData) -> None:
+        """Whether an ability places a structure is the game's tables' to say: an SCV's build on its way to the site, a
+        barracks building its add-on and a queen planting a tumor, each by its own id, and not a gather."""
+        tracker = _Tracker(first_corpus_tables, make_enemy())
+        gather = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
+        reactor = raw_pb2.UnitOrder(ability_id=RawAbilityId.Build_Reactor_Barracks)
+        plant = raw_pb2.UnitOrder(
+            ability_id=RawAbilityId.Build_CreepTumor_Queen, target_world_space_pos=common_pb2.Point(x=30.0, y=30.0)
+        )
+        reports = [
+            _scv(1, self._BUILD),
+            make_unit(2, UnitTypeId.BARRACKS, at=(40.0, 40.0), build_progress=1.0, orders=[reactor]),
+            make_unit(3, UnitTypeId.QUEEN, at=(28.0, 30.0), orders=[plant]),
+            _scv(4, gather),
+            _scv(5),
+        ]
+        tracker.update(make_observation(0, units=reports).observation.raw_data, 0)
+        units = tracker.unit_tracker.present.own.sorted(key=lambda unit: unit.tag)
+        assert [unit.is_constructing for unit in units] == [True, True, True, False, False]
+
+    def test_an_scv_with_a_construction_is_constructing(self) -> None:
+        scv, depot = _Game().observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
+        assert isinstance(scv, OwnUnit) and scv.construction is depot
+        assert scv.is_constructing
+
     def test_an_scv_building_a_structure_is_its_builder_until_it_finishes(self) -> None:
         game = _Game()
         scv, depot = game.observe(0, _scv(1, self._BUILD), _building_depot(2, 0.3))
@@ -986,6 +1054,46 @@ class TestConstruction:
 
 
 class TestOwnUnits:
+    @pytest.mark.parametrize(
+        ("game_id", "check"),
+        [
+            (RawAbilityId.Move, "is_moving"),
+            (RawAbilityId.Attack, "is_attacking"),
+            (RawAbilityId.Scan_Move, "is_attacking"),
+            (RawAbilityId.Harvest_Gather_SCV, "is_gathering"),
+            (RawAbilityId.Harvest_Return_SCV, "is_returning"),
+            (RawAbilityId.Effect_Repair_SCV, "is_repairing"),
+        ],
+        ids=lambda value: value.name if isinstance(value, RawAbilityId) else value,
+    )
+    def test_each_order_check_reads_its_current_order_alone(self, game_id: RawAbilityId, check: str) -> None:
+        """The game's own id of each reads as the action's; an attack-move as an attack."""
+        checks = ("is_moving", "is_attacking", "is_gathering", "is_returning", "is_repairing")
+        scv = _one(make_unit(1, UnitTypeId.SCV, orders=[raw_pb2.UnitOrder(ability_id=game_id)]))
+        assert isinstance(scv, OwnUnit)
+        assert [getattr(scv, name) for name in checks] == [name == check for name in checks]
+
+    def test_an_idle_unit_is_doing_none_of_the_order_checks(self) -> None:
+        scv = _one(make_unit(1, UnitTypeId.SCV))
+        assert isinstance(scv, OwnUnit)
+        assert not (scv.is_moving or scv.is_attacking or scv.is_gathering or scv.is_returning or scv.is_repairing)
+
+    def test_an_orders_known_target_is_none_where_the_game_reports_no_unit_under_its_tag(self) -> None:
+        """`target` raises there, and reads None too for an order aimed at nothing."""
+        aimed_at_a_tag = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV, target_unit_tag=987)
+        aimed_at_a_point = raw_pb2.UnitOrder(
+            ability_id=AbilityId.MOVE, target_world_space_pos=common_pb2.Point(x=9.0, y=9.0)
+        )
+        aimed_at_nothing = raw_pb2.UnitOrder(ability_id=AbilityId.STOP)
+        scv = _one(make_unit(1, UnitTypeId.SCV, orders=[aimed_at_a_tag, aimed_at_a_point, aimed_at_nothing]))
+        assert isinstance(scv, OwnUnit)
+        unreported, point, nothing = scv.orders
+        with pytest.raises(NotReportedError):
+            _ = unreported.target
+        assert unreported.known_target is None
+        assert point.known_target == point.target == Point((9.0, 9.0))
+        assert nothing.known_target is nothing.target is None
+
     def test_a_players_own_unit_is_an_own_unit_and_anyone_elses_is_not(self) -> None:
         mine, theirs, neutral = _Game().observe(
             0, make_unit(1), make_unit(2, alliance=_ENEMY), make_unit(3, alliance=Alliance.NEUTRAL)

@@ -5,9 +5,9 @@ from typing import Any
 import pytest
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.gamedata import GameData, TargetDomain
+from sc2nachos.gamedata import Attribute, GameData, TargetDomain
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
-from sc2nachos.units import Alliance, Unit
+from sc2nachos.units import Alliance, OwnUnit, Unit, Units
 from sc2nachos.units._tracking import _Tracker
 from support import make_enemy, make_observation, make_unit
 
@@ -231,3 +231,157 @@ class TestDps:
         )
         tables_cooldown = first_corpus_tables.units[UnitTypeId.MARAUDER].weapons[0].base_cooldown.steps
         assert marauder.dps_against(scv) == pytest.approx(10.0 * 22.4 / (tables_cooldown / 1.5 + _MEAN_DELAY), abs=1e-3)
+
+
+class TestTheWeaponForEachDomain:
+    def test_a_weapon_that_hits_both_is_each_domains(self, first_corpus_tables: GameData) -> None:
+        (marine,) = _units_observed(first_corpus_tables, make_unit(1))
+        weapon = marine.weapons[0]
+        assert marine.ground_weapon is marine.air_weapon is weapon
+        assert marine.ground_range == marine.air_range == weapon.range
+        assert marine.active_weapons == marine.weapons
+        assert marine.ground_damage == marine.air_damage == weapon.total_damage
+        assert marine.ground_dps == marine.air_dps == weapon.dps
+
+    def test_a_queen_has_one_weapon_for_each_domain(self, first_corpus_tables: GameData) -> None:
+        (queen,) = _units_observed(first_corpus_tables, make_unit(1, UnitTypeId.QUEEN))
+        assert _target_domain_of(queen.ground_weapon) is TargetDomain.GROUND
+        assert _target_domain_of(queen.air_weapon) is TargetDomain.AIR
+        assert queen.ground_range != queen.air_range
+
+    def test_a_domain_without_a_weapon_reads_none_and_zero(self, first_corpus_tables: GameData) -> None:
+        zergling, medivac = _units_observed(
+            first_corpus_tables, make_unit(1, UnitTypeId.ZERGLING), make_unit(2, UnitTypeId.MEDIVAC, is_flying=True)
+        )
+        assert zergling.ground_weapon is not None and zergling.air_weapon is None
+        assert (zergling.air_range, zergling.air_damage, zergling.air_dps) == (0.0, 0.0, 0.0)
+        assert medivac.ground_weapon is medivac.air_weapon is None
+        assert (medivac.ground_range, medivac.ground_damage, medivac.ground_dps) == (0.0, 0.0, 0.0)
+
+    def test_an_oracle_has_a_ground_weapon_only_while_its_beam_is_on(self, first_corpus_tables: GameData) -> None:
+        beaming, idle = _units_observed(
+            first_corpus_tables,
+            make_unit(1, UnitTypeId.ORACLE, is_flying=True, buff_ids=_BEAM_ON),
+            make_unit(2, UnitTypeId.ORACLE, is_flying=True),
+        )
+        assert beaming.active_weapons == beaming.weapons and idle.active_weapons == ()
+        assert beaming.ground_weapon is beaming.weapons[0] and beaming.air_weapon is None
+        assert idle.ground_weapon is None and idle.ground_range == 0.0
+
+    def test_melee_fires_at_the_ground_from_no_farther_than_one(self, first_corpus_tables: GameData) -> None:
+        zealot, zergling, marine, medivac = _units_observed(
+            first_corpus_tables,
+            make_unit(1, UnitTypeId.ZEALOT),
+            make_unit(2, UnitTypeId.ZERGLING),
+            make_unit(3),
+            make_unit(4, UnitTypeId.MEDIVAC, is_flying=True),
+        )
+        assert [unit.is_melee for unit in (zealot, zergling, marine, medivac)] == [True, True, False, False]
+
+
+class TestBonusDamage:
+    def test_it_is_the_bonus_against_the_targets_attributes(self, first_corpus_tables: GameData) -> None:
+        """A marauder does bonus damage against armored, which a stalker is and a zergling is not, and a colossus,
+        which hits twice an attack, against light, which a zergling is."""
+        marauder, colossus, stalker, zergling = _units_observed(
+            first_corpus_tables,
+            make_unit(1, UnitTypeId.MARAUDER),
+            make_unit(2, UnitTypeId.COLOSSUS),
+            _enemy_report(3, UnitTypeId.STALKER),
+            _enemy_report(4, UnitTypeId.ZERGLING),
+        )
+        marauder_weapon = marauder.weapon_against(stalker)
+        colossus_weapon = colossus.weapon_against(zergling)
+        assert marauder_weapon is not None and colossus_weapon is not None and colossus_weapon.attacks == 2
+        assert marauder.bonus_damage_against(stalker) == marauder_weapon.damage_bonuses[Attribute.ARMORED] > 0
+        assert colossus.bonus_damage_against(zergling) == 2 * colossus_weapon.damage_bonuses[Attribute.LIGHT] > 0
+        assert marauder.bonus_damage_against(zergling) == 0.0
+        assert isinstance(marauder.bonus_damage_against(zergling), float)
+
+    def test_there_is_none_without_a_weapon_against_the_target(self, first_corpus_tables: GameData) -> None:
+        medivac, stalker = _units_observed(
+            first_corpus_tables, make_unit(1, UnitTypeId.MEDIVAC, is_flying=True), _enemy_report(2, UnitTypeId.STALKER)
+        )
+        assert medivac.bonus_damage_against(stalker) == 0.0
+
+
+class TestAWeaponReady:
+    def test_it_is_ready_with_a_weapon_and_no_cooldown(self, first_corpus_tables: GameData) -> None:
+        ready, cooling, unarmed = _units_observed(
+            first_corpus_tables,
+            make_unit(1, weapon_cooldown=0.0),
+            make_unit(2, weapon_cooldown=6.0),
+            make_unit(3, UnitTypeId.MEDIVAC, is_flying=True),
+        )
+        assert isinstance(ready, OwnUnit) and isinstance(cooling, OwnUnit) and isinstance(unarmed, OwnUnit)
+        assert [unit.is_weapon_ready for unit in (ready, cooling, unarmed)] == [True, False, False]
+
+    def test_an_oracle_is_ready_only_while_its_beam_is_on(self, first_corpus_tables: GameData) -> None:
+        beaming, idle = _units_observed(
+            first_corpus_tables,
+            make_unit(1, UnitTypeId.ORACLE, is_flying=True, buff_ids=_BEAM_ON),
+            make_unit(2, UnitTypeId.ORACLE, is_flying=True),
+        )
+        assert isinstance(beaming, OwnUnit) and isinstance(idle, OwnUnit)
+        assert (beaming.is_weapon_ready, idle.is_weapon_ready) == (True, False)
+
+
+class TestAddOnsAndCapacity:
+    def test_a_structure_trains_two_at_once_with_a_reactor_one_without_and_others_none(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        """The game's tables give the barracks, the starport, the command center and the warp gate as makers of units;
+        an SCV makes structures, and an engineering bay none."""
+        units = _units_observed(
+            first_corpus_tables,
+            make_unit(1, UnitTypeId.BARRACKS, add_on_tag=11, build_progress=1.0),
+            make_unit(11, UnitTypeId.REACTOR_BARRACKS, build_progress=1.0),
+            make_unit(2, UnitTypeId.STARPORT, add_on_tag=12, build_progress=1.0),
+            make_unit(12, UnitTypeId.TECH_LAB_STARPORT, build_progress=1.0),
+            make_unit(3, UnitTypeId.COMMAND_CENTER, build_progress=1.0),
+            make_unit(7, UnitTypeId.WARP_GATE, build_progress=1.0),
+            make_unit(4, UnitTypeId.ENGINEERING_BAY, build_progress=1.0),
+            make_unit(5, UnitTypeId.SCV),
+            make_unit(6),
+        )
+        barracks, _, starport, _, command_center, warp_gate, engineering_bay, scv, marine = units
+        own = [
+            unit
+            for unit in (barracks, starport, command_center, warp_gate, engineering_bay, scv, marine)
+            if isinstance(unit, OwnUnit)
+        ]
+        assert len(own) == 7
+        assert [unit.production_capacity for unit in own] == [2, 1, 1, 1, 0, 0, 0]
+        assert [(unit.has_reactor, unit.has_tech_lab) for unit in own[:3]] == [
+            (True, False),
+            (False, True),
+            (False, False),
+        ]
+
+
+class TestTheUnitsInRange:
+    """A marine of range 5 at (10, 10), against an enemy stalker of range 6 five away, a zergling of range 0.1 four
+    away, and a marine thirty away; every radius zero."""
+
+    @staticmethod
+    def _marine_and_enemies(tables: GameData) -> tuple[Unit[Any], list[Unit[Any]]]:
+        marine, stalker, zergling, far_marine = _units_observed(
+            tables,
+            make_unit(1, at=(10.0, 10.0)),
+            make_unit(2, UnitTypeId.STALKER, alliance=Alliance.ENEMY, at=(15.0, 10.0)),
+            make_unit(3, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, at=(14.0, 10.0)),
+            make_unit(4, alliance=Alliance.ENEMY, at=(40.0, 10.0)),
+        )
+        return marine, [stalker, zergling, far_marine]
+
+    def test_the_units_having_a_target_in_range_are_those_that_can_hit_it(self, first_corpus_tables: GameData) -> None:
+        marine, enemies = self._marine_and_enemies(first_corpus_tables)
+        stalker = enemies[0]
+        assert list(Units(enemies).having_in_range(marine)) == [stalker]
+        assert list(Units(enemies).having_in_range(marine, margin=-1.5)) == []
+
+    def test_the_units_in_range_of_an_attacker_are_those_it_can_hit(self, first_corpus_tables: GameData) -> None:
+        marine, enemies = self._marine_and_enemies(first_corpus_tables)
+        stalker, zergling, _ = enemies
+        assert list(Units(enemies).in_range_of(marine)) == [stalker, zergling]
+        assert list(Units(enemies).in_range_of(marine, margin=-0.5)) == [zergling]

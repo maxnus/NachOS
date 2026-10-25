@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #172. `uv run pytest` passes 2919 tests with #173; `uv run pytest -m integration`
-  passed 41 against a real game with #173 (run 2026-10-25).
+- nachOS `main` has every PR to #174. `uv run pytest` passes 2961 tests with #175; `uv run pytest -m integration`
+  passed 41 against a real game with #175 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -349,7 +349,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `unit.weapon_against(target) -> Weapon | None`, the weapon that can hit `target` by whether it flies, air weapons
     hitting a colossus too; `unit.has_in_range(target, *, margin=0.0)`; `unit.damage_against(target)`, one attack's
     damage after the bonus, armor and shields, hits on shields first; `unit.dps_against(target)`; and `Weapon.dps`,
-    damage x attacks per real second. Weapon ready stays `weapon_cooldown_steps == 0`. Chosen over python-sc2's
+    damage x attacks per real second. Weapon ready stays `weapon_cooldown_steps == 0` (reversed in the review of
+    AvocaDOS #52: `OwnUnit.is_weapon_ready`, below). Chosen over python-sc2's
     per-domain set and over leaving damage out; named over `reaches`/`_on` and over asking the target.
   - The attackers the tables give no weapon, the battlecruiser, oracle, void ray and sentry, get the weapons
     `tools/sweep_combat.py` measured, written into NachOS's generated data and marked as measured, over leaving them
@@ -615,7 +616,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     itself (over AvocaDOS passing `unit.position`);
   - `OwnUnit.is_doing(abilities)`, whether the current order carries out one of them, and `Unit.is_carrying_resource`,
     from the carrying buffs (over python-sc2's `is_gathering`, `is_returning`, `is_moving`, `is_attacking` and
-    `is_repairing`, and over the bot's own functions for all); whether an SCV is constructing stays the bot's;
+    `is_repairing`, and over the bot's own functions for all; reversed in the review of AvocaDOS #52, below); whether an
+    SCV is constructing stays the bot's;
   - in the owner's review of #173: `Unit.has_buff(buff_ids)`, one buff or any of several, and the filters
     `Units.doing(abilities)` and `Units.with_buff(buff_ids)`, the latter raising for a unit never shown visible as
     `complete` does; every race's gas buff folded into `BuffId.CARRYING_GAS`, read as one as `GATHER` is, rich minerals
@@ -625,6 +627,44 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - in the owner's second review: `CARRYING_GAS` a custom id, `auto()`, with all three game ids read as it, as `SIEGE`
     is (over the SCV's id standing for all three); `has_buff` and `is_carrying_resource` read through `buffs` (over
     checking the report's game ids, some 0.4 us a call faster for one buff and slower for several) (#173).
+- **What the owner's review of AvocaDOS #52 moved into NachOS** (the owner, 2026-10-25, one question at a time): the
+  owner's view that more of python-sc2's conveniences belong in NachOS, since they are generally useful and a bot
+  moving over will expect them.
+  - Stated by the owner: `Unit.is_own` and `is_enemy`; `is_not_stale`, the opposite of `is_stale`, the owner's name
+    (over `is_listed`, `is_in_observation` and `is_present`); `is_repairable`; `is_melee`; `is_carrying_minerals`, with
+    `is_carrying_gas`; `Units.not_complete`, `ground` and `air`.
+  - `OwnUnit.is_moving`, `is_attacking`, `is_gathering`, `is_returning` and `is_repairing`, each its `is_doing`, and
+    `is_constructing` moved from AvocaDOS: its `construction`, or a current order whose ability places a structure
+    (reversing #173's choice of `is_doing` alone; over the five without `is_constructing`).
+  - `OwnUnit.is_weapon_ready`: a weapon and a zero cooldown, true too while an attack is under way (reversing "weapon
+    ready stays a zero cooldown"; over python-sc2's `weapon_ready`, and over no read). AvocaDOS's check of a cooldown
+    of at most 4 steps becomes `weapon_nearly_ready`.
+  - `Unit.ground_weapon` and `air_weapon`, with `ground_range`, `air_range`, `ground_dps`, `air_dps`, `ground_damage`
+    and `air_damage`, each 0 without a weapon, a hallucination's counted, as python-sc2's are (widening the combat
+    conveniences' choice of `weapon_against` over python-sc2's per-domain set; over weapons and ranges alone, and over
+    weapons alone). The oracle's beam counts only while it is on, as for `weapon_against`.
+  - `Units.having_in_range(target, *, margin)` and `Units.in_range_of(attacker, *, margin)`, filters over
+    `has_in_range` (over `attackers_of`/`targets_of`, and over one of them on `Unit`).
+  - `Unit.bonus_damage_against(target)`, a float: the bonuses for the target's attributes, summed, times the attacks
+    (over a bool, and over leaving it to the bot).
+  - `UnitOrder.known_target`, `None` where `target` raises; `target` keeps raising, since `None` also means an order
+    aimed at nothing (over `target` answering `None`, and over leaving it to the bot).
+  - `Units.without(units)`, by NachOS id, and no operators, as #35 chose (over `|` and `-`, and over `+` and `-`).
+  - `Units.sorted(key, *, reverse)`, a collection, stable (over `sorted_by`, and over lists).
+  - `Units.beyond(distance, *, of)`, the complement of `within`, and `Units.outside(areas)`, of `in_area`, which
+    becomes `inside` (the owner, over `within` taking areas, and over python-sc2's `further_than`). `beyond` is
+    `within`'s complement rather than a loop shared with it, which made `within` some 10% slower.
+  - `OwnUnit.production_capacity`: 2 for a structure with a reactor, 1 for another the tables give as a maker of a
+    unit, 0 otherwise, a warp gate reading 1 (over `has_reactor` and `has_tech_lab` alone, and over leaving it to the
+    bot); and `OwnUnit.has_reactor` and `has_tech_lab` (the owner, after noting that a unit is no member of a type, over
+    `includes` alone and over `in` taking a type id) (#175).
+  - In the owner's review of #175: `Unit.active_weapons`, public, the weapons it can fire now, which leaves out an
+    oracle's beam while it is off, read by `weapon_against`, the per-domain reads and `is_weapon_ready` (over a
+    private method, and over `weapon_against` keeping its own check to spare some 20 ns, of which the owner said "I
+    don't think we need to chase 20 ns"); `Weapon.total_damage`, damage times attacks;
+    `Weapon.bonus_per_hit_against(attributes)`, which `Weapon.damage_against` and `Unit.bonus_damage_against` share;
+    "first" dropped from the per-domain reads, no type having two weapons for one domain (corpus); `_OWN_ALLIANCE`
+    beside `_ENEMY_ALLIANCE` (#175).
 
 ## Next
 
@@ -640,7 +680,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
 - **What AvocaDOS's units piece needs of NachOS** (2026-10-25, above): the nearest-unit methods taking a unit,
   `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
-  `BuffId.CARRYING_GAS` (#173), before the piece.
+  `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#175),
+  before that piece merges.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
   salsa's plan holds:

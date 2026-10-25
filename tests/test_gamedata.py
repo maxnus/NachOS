@@ -369,6 +369,22 @@ class TestReadingTheTables:
         (weapon,) = data.units[UnitTypeId.MARAUDER].weapons
         assert weapon.damage_bonuses == {Attribute.ARMORED: 10.0}
 
+    def test_a_weapons_total_damage_is_every_hit_of_an_attack(self) -> None:
+        zealot = data_pb2.UnitTypeData(unit_id=UnitTypeId.ZEALOT, weapons=[data_pb2.Weapon(damage=11.0, attacks=2)])
+        (blades,) = GameData(sc2api_pb2.ResponseData(units=[zealot])).units[UnitTypeId.ZEALOT].weapons
+        assert blades.total_damage == 22.0
+
+    def test_a_weapons_bonus_per_hit_is_the_sum_of_its_bonuses_for_the_targets_attributes(self) -> None:
+        """No weapon the tables give has two bonuses (corpus); a made one does."""
+        light_bonus = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Light, bonus=4.0)
+        weapon_proto = data_pb2.Weapon(damage=10.0, damage_bonus=[_BONUS_AGAINST_ARMORED, light_bonus])
+        marauder = data_pb2.UnitTypeData(unit_id=UnitTypeId.MARAUDER, weapons=[weapon_proto])
+        (weapon,) = GameData(sc2api_pb2.ResponseData(units=[marauder])).units[UnitTypeId.MARAUDER].weapons
+        assert weapon.bonus_per_hit_against({Attribute.ARMORED, Attribute.LIGHT}) == 14.0
+        assert weapon.bonus_per_hit_against({Attribute.ARMORED, Attribute.BIOLOGICAL}) == 10.0
+        unearned = weapon.bonus_per_hit_against({Attribute.BIOLOGICAL})
+        assert unearned == 0.0 and isinstance(unearned, float)
+
     @pytest.mark.parametrize(
         ("ability", "is_research", "places_at_target"),
         [

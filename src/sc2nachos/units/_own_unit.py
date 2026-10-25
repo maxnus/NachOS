@@ -62,6 +62,38 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return ability_id in abilities
 
     @property
+    def is_moving(self) -> bool:
+        """Whether the unit's current order is a move."""
+        return self.is_doing(AbilityId.MOVE)
+
+    @property
+    def is_attacking(self) -> bool:
+        """Whether the unit's current order is an attack, on a unit or a point, an attack-move reading as one."""
+        return self.is_doing(AbilityId.ATTACK)
+
+    @property
+    def is_gathering(self) -> bool:
+        """Whether the unit's current order is a gather."""
+        return self.is_doing(AbilityId.GATHER)
+
+    @property
+    def is_returning(self) -> bool:
+        """Whether the unit's current order is a return of what it carries."""
+        return self.is_doing(AbilityId.RETURN)
+
+    @property
+    def is_repairing(self) -> bool:
+        """Whether the unit's current order is a repair."""
+        return self.is_doing(AbilityId.REPAIR)
+
+    @property
+    def is_constructing(self) -> bool:
+        """Whether the unit builds a structure, or walks to the site of one it was ordered to build: it has a
+        `construction`, or its current order's ability places a structure, a barracks building its add-on and a queen
+        placing a creep tumor among them."""
+        return self.construction is not None or self.is_doing(self._tracker.game_data._placing_abilities)
+
+    @property
     def weapon_cooldown(self) -> GameTime:
         """The time until the unit can attack again, as the game reports it: the cooldown of its last attack, with the
         random delay drawn for it, counting down one step each step. Zero for a unit without a weapon; `weapons` says
@@ -125,6 +157,36 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """Where the structure sends what it makes."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
+
+    @property
+    def is_weapon_ready(self) -> bool:
+        """Whether the unit has a weapon and its `weapon_cooldown` is zero: it can attack now, or is under way with an
+        attack, whose cooldown reads zero until it fires (in game). Its weapons are its `active_weapons`, which an
+        oracle whose beam is off has none of."""
+        return bool(self.active_weapons) and not self.weapon_cooldown
+
+    @property
+    def has_reactor(self) -> bool:
+        """Whether a reactor is attached to the unit."""
+        add_on = self.add_on
+        return add_on is not None and UnitType.AnyReactor.includes(add_on)
+
+    @property
+    def has_tech_lab(self) -> bool:
+        """Whether a tech lab is attached to the unit."""
+        add_on = self.add_on
+        return add_on is not None and UnitType.AnyTechLab.includes(add_on)
+
+    @property
+    def production_capacity(self) -> int:
+        """How many units the unit trains at once: 2 for a structure with a reactor, 1 for another structure the
+        game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
+        unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
+        left out, and so is whether its add-on is: a barracks building its reactor reads 2, though it trains nothing
+        until the reactor finishes."""
+        if self.type_id not in self._tracker.game_data._unit_trainers:
+            return 0
+        return 2 if self.has_reactor else 1
 
     @property
     def add_on(self) -> OwnUnit[Any] | None:

@@ -33,7 +33,7 @@ class GameData:
     A table holds only the rows the curated ids name, which leaves out most of what the game describes.
     """
 
-    __slots__ = ("_abilities", "_effects", "_units", "_upgrades")
+    __slots__ = ("_abilities", "_effects", "_placing_abilities", "_unit_trainers", "_units", "_upgrades")
 
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
@@ -64,6 +64,15 @@ class GameData:
         }
         self._abilities = MappingProxyType({**rows, **custom})
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
+        # Read by `OwnUnit.is_constructing` and `production_capacity`, worked out once a game.
+        self._placing_abilities = frozenset(ability for ability, row in self._abilities.items() if row.needs_placement)
+        self._unit_trainers = frozenset(
+            producer
+            for row in self._units.values()
+            if row.id not in structures
+            for producer in row.producers
+            if producer in structures
+        )
 
     @property
     def units(self) -> Mapping[UnitTypeId, UnitTypeData]:

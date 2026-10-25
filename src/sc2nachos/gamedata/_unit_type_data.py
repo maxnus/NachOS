@@ -101,10 +101,21 @@ class Weapon:
         return self.base_cooldown + self.mean_delay
 
     @property
+    def total_damage(self) -> float:
+        """The damage of one attack, every hit of it, before bonuses and the target's armor: `damage` times
+        `attacks`."""
+        return self.damage * self.attacks
+
+    @property
     def dps(self) -> float:
-        """Damage per second of real time at the game's Faster speed: every hit of an attack, each
-        `average_cooldown`, against a target with no armor and no attribute it has a bonus against."""
-        return self.damage * self.attacks / self.average_cooldown.seconds
+        """Damage per second of real time at the game's Faster speed: `total_damage` each `average_cooldown`,
+        against a target with no armor and no attribute it has a bonus against."""
+        return self.total_damage / self.average_cooldown.seconds
+
+    def bonus_per_hit_against(self, attributes: Collection[Attribute]) -> float:
+        """The extra damage of one hit against a target with `attributes`: the `damage_bonuses` for them, summed. 0 for
+        none."""
+        return sum((bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes), start=0.0)
 
     def damage_against(
         self, *, attributes: Collection[Attribute], armor: float, shield_armor: float = 0.0, shield: float = 0.0
@@ -117,8 +128,7 @@ class Weapon:
         hit. Each hit of an attack of several finds the shield the one before left. The damage may come to more than
         the target has left.
         """
-        bonus_damage = sum(bonus for attribute, bonus in self.damage_bonuses.items() if attribute in attributes)
-        hit_damage = self.damage + bonus_damage
+        hit_damage = self.damage + self.bonus_per_hit_against(attributes)
         if self.ignores_armor:
             armor = shield_armor = 0.0
         damage_taken = 0.0
