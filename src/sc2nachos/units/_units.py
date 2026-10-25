@@ -274,9 +274,10 @@ class Units[U: Unit[Any]](Sequence[U]):
                     break
         return Units(kept)
 
-    def sorted_by_distance_to(self, point: PointLike) -> Units[U]:
-        """The units from nearest to `point` to furthest. Units at equal distance keep their order."""
-        x, y = _ground(point)
+    def sorted_by_distance_to(self, point_or_unit: PointLike | Unit[Any]) -> Units[U]:
+        """The units from nearest to `point_or_unit`, a point or a unit's position, to furthest. Units at equal
+        distance keep their order."""
+        x, y = _ground_position_of(point_or_unit)
         distances = []
         for unit in self._units:
             position = unit._position
@@ -286,17 +287,19 @@ class Units[U: Unit[Any]](Sequence[U]):
         order = sorted(range(len(distances)), key=distances.__getitem__)
         return Units(self._units[index] for index in order)
 
-    def closest_n_to(self, count: int, point: PointLike) -> Units[U]:
-        """The `count` units nearest to `point`, nearest first, or all of them if there are fewer."""
+    def closest_n_to(self, count: int, point_or_unit: PointLike | Unit[Any]) -> Units[U]:
+        """The `count` units nearest to `point_or_unit`, a point or a unit's position, nearest first, or all of them if
+        there are fewer."""
         if count < 0:
             raise ValueError(f"cannot pick {count} units")
-        return self.sorted_by_distance_to(point)[:count]
+        return self.sorted_by_distance_to(point_or_unit)[:count]
 
-    def closest_to(self, point: PointLike) -> U:
-        """The unit nearest to `point`. At equal distance, the first in the collection."""
+    def closest_to(self, point_or_unit: PointLike | Unit[Any]) -> U:
+        """The unit nearest to `point_or_unit`, a point or a unit's position. At equal distance, the first in the
+        collection. A unit in the collection is the nearest to itself."""
         if not self._units:
             raise ValueError("no units to choose from")
-        x, y = _ground(point)
+        x, y = _ground_position_of(point_or_unit)
         closest = self._units[0]
         nearest = math.inf
         for unit in self._units:
@@ -309,11 +312,11 @@ class Units[U: Unit[Any]](Sequence[U]):
                 closest = unit
         return closest
 
-    def closest_distance_to(self, point: PointLike) -> float:
-        """The distance from `point` to the nearest unit's position."""
+    def closest_distance_to(self, point_or_unit: PointLike | Unit[Any]) -> float:
+        """The distance from `point_or_unit`, a point or a unit's position, to the nearest unit's position."""
         if not self._units:
             raise ValueError("no units to measure to")
-        x, y = _ground(point)
+        x, y = _ground_position_of(point_or_unit)
         nearest = math.inf
         for unit in self._units:
             position = unit._position
@@ -329,7 +332,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         these does. Of one in sight and a snapshot over the same ground, the one in sight; a lifted structure covers no
         ground."""
         tile = Tile.at(point)
-        x, y = _ground(tile.center if isinstance(point, Tile) else point)
+        x, y = _ground_position_of(tile.center if isinstance(point, Tile) else point)
         remembered = None
         for unit in self._units:
             position = unit._position
@@ -397,15 +400,14 @@ def _unit_type_ids_in(unit_types: Iterable[object]) -> frozenset[UnitTypeId]:
 
 def _positions(of: PointLike | Unit[Any] | Iterable[PointLike | Unit[Any]]) -> list[tuple[float, float]]:
     """The ground positions of `of`: a point, a unit, or several of either."""
-    if isinstance(of, Unit):
-        return [(of._position[0], of._position[1])]
     # A point is a tuple of numbers; several are anything else that iterates.
-    if isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit)):
-        return [_ground(cast("PointLike", of))]
+    if isinstance(of, Unit) or (isinstance(of, tuple) and of and not isinstance(of[0], (tuple, Unit))):
+        return [_ground_position_of(cast("PointLike | Unit[Any]", of))]
     several = cast("Iterable[PointLike | Unit[Any]]", of)
-    return [_ground(item._position if isinstance(item, Unit) else item) for item in several]
+    return [_ground_position_of(item) for item in several]
 
 
-def _ground(point: PointLike) -> tuple[float, float]:
-    """The ground-plane coordinates of `point`."""
+def _ground_position_of(point_or_unit: PointLike | Unit[Any]) -> tuple[float, float]:
+    """The ground-plane coordinates of `point_or_unit`: a point, or a unit's position."""
+    point = point_or_unit._position if isinstance(point_or_unit, Unit) else point_or_unit
     return point[0], point[1]

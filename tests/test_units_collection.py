@@ -269,6 +269,23 @@ class TestWhereTheyAre:
         assert units.closest_to(point) is by_distance[0]
         assert units.closest_distance_to(point) == pytest.approx(by_distance[0].position.distance_to(point))
 
+    @pytest.mark.parametrize("reference", ["outside the collection", "in the collection"])
+    def test_by_distance_to_a_unit_is_by_distance_to_its_position(self, reference: str) -> None:
+        units = _mine(60, seed=3)
+        outsider = _units(make_unit(99, at=(12.5, 30.0), alliance=Alliance.ENEMY))[0]
+        unit = outsider if reference == "outside the collection" else units[7]
+        by_distance = sorted(units, key=lambda other: other.position.distance_to(unit.position))
+        assert _tags(units.sorted_by_distance_to(unit)) == [other.tag for other in by_distance]
+        assert _tags(units.closest_n_to(5, unit)) == [other.tag for other in by_distance[:5]]
+        assert units.closest_to(unit) is by_distance[0]
+        assert units.closest_distance_to(unit) == pytest.approx(by_distance[0].position.distance_to(unit.position))
+
+    def test_a_unit_in_the_collection_is_the_nearest_to_itself(self) -> None:
+        units = _mine(60, seed=3)
+        assert units.closest_to(units[7]) is units[7]
+        assert units.closest_distance_to(units[7]) == 0.0
+        assert units.sorted_by_distance_to(units[7])[0] is units[7]
+
     def test_in_any_of_several_areas(self) -> None:
         units = _mine(60)
         areas = [Circle((10, 10), 5), Rectangle(25, 25, 10, 10)]

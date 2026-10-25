@@ -34,6 +34,23 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 # degrees off.
 _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
+# A worker carries minerals under one buff for every race and another for rich minerals, and gas under a buff for each
+# race's worker (in game).
+_CARRYING_RESOURCE_BUFFS = frozenset(
+    {
+        BuffId.CARRYING_MINERALS,
+        BuffId.CARRYING_MINERALS_RICH,
+        BuffId.SCV_CARRYING_GAS,
+        BuffId.PROBE_CARRYING_GAS,
+        BuffId.DRONE_CARRYING_GAS,
+    }
+)
+# The game's numbers that read as one of them, so that a report is checked without reading each of its buffs.
+_CARRYING_RESOURCE_GAME_IDS = frozenset(
+    game_id
+    for game_id in (*map(int, _CARRYING_RESOURCE_BUFFS), *BuffId._REMAPPED_IDS)
+    if BuffId.get(game_id) in _CARRYING_RESOURCE_BUFFS
+)
 _OWN = raw_pb2.Alliance.Self
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
 # read into a unit.
@@ -634,6 +651,14 @@ class Unit[K: UnitType.AnyType]:
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
         return frozenset(BuffId.read(buff) for buff in report.buff_ids)
+
+    @property
+    def is_carrying_resource(self) -> bool:
+        """Whether the unit carries minerals or gas, as its buffs show. Raises `NotReportedError` for a unit never shown
+        visible, as `buffs` does."""
+        if (report := self._latest_visible_report) is None:
+            raise self._never_seen_error("buffs")
+        return not _CARRYING_RESOURCE_GAME_IDS.isdisjoint(report.buff_ids)
 
     # From the game's tables.
 
