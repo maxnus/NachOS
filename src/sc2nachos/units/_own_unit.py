@@ -100,9 +100,10 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
-        """The unit this unit is attacking, or `None`."""
+        """The unit this unit is attacking, which may have died in the last step or two, or `None`. Also `None` for a
+        target no observation listed, such as a unit created and killed within a step (in game)."""
         tag = self._latest_report.engaged_target_tag
-        return self._tracker.unit_tracker.by_tag(tag) if tag else None
+        return self._tracker.unit_tracker.get_by_tag(tag) if tag else None
 
     @property
     def construction(self) -> OwnUnit[Any] | None:

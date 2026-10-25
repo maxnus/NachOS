@@ -1053,6 +1053,15 @@ class TestOwnUnits:
         assert marine.engaged_target is enemy
         assert enemy.is_dead
 
+    def test_a_target_no_observation_listed_names_no_unit(self) -> None:
+        """As a stalker's target created and killed within a step was (in game)."""
+        game = _Game()
+        (stalker,) = game.observe(
+            0, make_unit(1, UnitTypeId.STALKER, engaged_target_tag=4485021725), dead=(4485021725,)
+        )
+        assert isinstance(stalker, OwnUnit)
+        assert stalker.engaged_target is None
+
     def test_a_tag_the_game_leaves_at_zero_names_no_unit(self) -> None:
         marine = _one(make_unit(1))
         assert isinstance(marine, OwnUnit)
