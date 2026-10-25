@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #165. `uv run pytest` passes 2882 tests; `uv run pytest -m integration` passed 40
-  against a real game (run 2026-10-24).
+- nachOS `main` has every PR to #167. `uv run pytest` passes 2886 tests; `uv run pytest -m integration` passed 40
+  against a real game (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -572,6 +572,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   of sight and built again on its spot, seen so, alike (`rebuilt`), so that one is taken for the old until its spot is
   in sight at a turn, when the old is found dead and the new first seen. A sight change is recorded only where the
   display changes, and a unit reported dead under either of its tags is matched to no copy.
+- **Timed lives and buffs** (the owner, 2026-10-25, one question at a time), after `tools/sweep_timed_life.py` found
+  the game reporting `buff_duration_remain` and `buff_duration_max` to a unit's owner alone, and nothing that times a
+  force field or a reaper's grenade to anyone:
+  - `OwnUnit.buff_duration_max` and `buff_duration_remaining`, the owner's names, on `OwnUnit` beside `orders` and
+    `weapon_cooldown` (over `Unit` raising `NotReportedError` for every unit not this player's), each a
+    `GameTime | None`, `None` where the game reports no maximum (over `GameTime.ZERO`, and over plain step counts).
+    The remaining duration hangs on the maximum, so a timed life run out reads zero, not `None`;
+  - `weapon_cooldown` stays a `GameTime`, zero without a weapon, with `weapons` saying whether a unit can attack at
+    all (over `None` from the unit's weapons, which the game's single field cannot tell, would cost a read some
+    130 ns, and leaves `not unit.weapon_cooldown` reading a weaponless unit as ready all the same).
 
 ## Next
 
@@ -585,6 +595,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
   measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
   `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
+- **Force fields and reaper grenades as effects or units**, to plan with the owner from `tools/sweep_timed_life.py`'s
+  findings: the game times neither, both last a fixed time from their first listing, and only a unit is followed from
+  one observation to the next; a grenade is its thrower's, and a structure in the tables.
 - M5, in AvocaDOS (section 3).
 
 ## 1. Waiting until something needs them
