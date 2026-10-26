@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #177. `uv run pytest` passes 2963 tests with #178; `uv run pytest -m integration`
+- nachOS `main` has every PR to #178. `uv run pytest` passes 2973 tests with #179; `uv run pytest -m integration`
   passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -669,9 +669,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
     observation that showed the unit visible, `None` before one has, beside `last_seen` (the owner, over
     `Unit.last_listed`, the last observation that listed it, which would have replaced AvocaDOS's `_last_listed_time`;
     over both; and over neither). AvocaDOS keeps its `_last_listed_time` and `_listed_since` (#177).
-  - In the owner's review of AvocaDOS #54, which holds units where it held tags: `Unit.is_alive`, the opposite of
-    `is_dead`, true for an enemy's unit that died out of sight, whose death the game never reports (the owner, over
-    `is_not_dead`, spelled like `is_not_stale`, and over no new read) (#178).
+- **What the owner's review of AvocaDOS #54 settled for NachOS** (the owner, 2026-10-26), the piece that holds units
+  where AvocaDOS held tags:
+  - `Unit.is_alive`, the opposite of `is_dead`, true for an enemy's unit that died out of sight, whose death the game
+    never reports (the owner, over `is_not_dead`, spelled like `is_not_stale`, and over no new read) (#178);
+  - `Unit.is_orderable`, the last observation listed the unit as this player's, and `Units.orderable`, typed as own
+    units: false inside a gas building or a transport, under a neural parasite, which makes the unit an enemy `Unit`,
+    and once dead (the owner, moving AvocaDOS's `is_listed_as_own` into NachOS, over `is_mine`, close to `is_own`,
+    `is_at_hand` and `is_listed_own`; and over the property alone, and over a `Units.not_stale` filter alone) (#179);
+  - `Units.alive`, `dead`, `stale` and `not_stale`, for a collection kept from an earlier observation (the owner), and
+    `Units.visible`, one of python-sc2's two filters NachOS had no name for (the owner, over `selected` as well, and
+    over neither) (#179).
 
 ## Next
 

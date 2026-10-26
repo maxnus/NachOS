@@ -360,8 +360,16 @@ class Unit[K: UnitType.AnyType]:
     @property
     def is_alive(self) -> bool:
         """Whether the unit is not known to be dead: the opposite of `is_dead`. True for an enemy's unit that died out
-        of sight, whose death the game never reports."""
+        of sight, whose death the game never reports, until NachOS finds it dead, as `is_dead` says for a structure."""
         return not self._dead
+
+    @property
+    def is_orderable(self) -> bool:
+        """Whether this player can order the unit now: the last observation listed it as this player's. Not while it
+        is inside a gas building or a transport, nor under a neural parasite, which makes it an enemy `Unit`, nor once
+        it is dead. Read it before ordering a unit kept from an earlier observation, or reading what only `OwnUnit`
+        has. It goes by the listing alone, so a reaper's grenade, listed as its thrower's, reads orderable."""
+        return not self._stale and self._own
 
     @property
     def first_seen(self) -> GameTime | None:
