@@ -358,6 +358,12 @@ class Unit[K: UnitType.AnyType]:
         return self._dead
 
     @property
+    def is_alive(self) -> bool:
+        """Whether the unit is not known to be dead: the opposite of `is_dead`. True for an enemy's unit that died out
+        of sight, whose death the game never reports."""
+        return not self._dead
+
+    @property
     def first_seen(self) -> GameTime | None:
         """The time of the first observation that showed the unit visible, or `None` if none has, as for `last_seen`.
         A structure remembered under a new tag keeps it, as it keeps its `id`. Later than `EnemyUnitFirstSeenEvent` for
