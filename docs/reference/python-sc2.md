@@ -366,7 +366,7 @@ it.
 - **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
   `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
-  neural parasite changes class, and changes back, so a unit of yours you kept may be an enemy `Unit` now:
+  neural parasite changes class, and changes back, so a unit you kept may be an enemy `Unit` now:
   `unit.is_orderable` says whether it is yours and in the observation.
 - **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
   is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
