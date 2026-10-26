@@ -63,6 +63,22 @@ def _mixed() -> Units[Unit[Any]]:
     )
 
 
+def _held() -> Units[Unit[Any]]:
+    """Units kept from one observation to the next. In the next, 1 and the enemy's 5 stay in sight, 2 is left out, as
+    in a transport, 3 is reported dead, a neural parasite hands 4 to the enemy, 6 stays a hidden enemy and 7 an enemy
+    depot remembered in the fog, and the enemy's 8 leaves sight."""
+    tracker = _Tracker(_TABLES, make_enemy())
+    hidden = make_unit(6, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+    remembered = make_unit(7, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
+    first = [make_unit(tag) for tag in (1, 2, 3, 4)]
+    first += [make_unit(5, alliance=Alliance.ENEMY), hidden, remembered, make_unit(8, alliance=Alliance.ENEMY)]
+    tracker.update(make_observation(0, units=first).observation.raw_data, 0)
+    held = Units(tracker.unit_tracker.present)
+    second = [make_unit(1), make_unit(4, alliance=Alliance.ENEMY), make_unit(5, alliance=Alliance.ENEMY), hidden]
+    tracker.update(make_observation(16, units=[*second, remembered], dead=[3]).observation.raw_data, 16)
+    return held
+
+
 def _tags(units: Units[Any]) -> list[int]:
     return [unit.tag for unit in units]
 
@@ -293,6 +309,44 @@ class TestFilters:
         assert _tags(units.filter(lambda unit: unit.position.x > 20)) == [
             unit.tag for unit in units if unit.position.x > 20
         ]
+
+
+class TestWhatBecameOfThem:
+    """A collection kept from an earlier observation, filtered by what became of each unit since."""
+
+    @pytest.mark.parametrize(
+        ("units_filter", "unit_read"),
+        [
+            ("alive", "is_alive"),
+            ("dead", "is_dead"),
+            ("stale", "is_stale"),
+            ("not_stale", "is_not_stale"),
+            ("visible", "is_visible"),
+            ("orderable", "is_orderable"),
+        ],
+    )
+    def test_each_filter_keeps_the_units_its_read_is_true_of(self, units_filter: str, unit_read: str) -> None:
+        held = _held()
+        assert list(getattr(held, units_filter)) == [unit for unit in held if getattr(unit, unit_read)]
+
+    def test_what_became_of_each(self) -> None:
+        held = _held()
+        assert _tags(held.dead) == [3]
+        assert _tags(held.stale) == [2, 3, 8]
+        assert _tags(held.visible) == [1, 4, 5]
+        assert _tags(held.orderable) == [1]
+
+    def test_alive_and_dead_split_the_units_and_so_do_stale_and_not_stale(self) -> None:
+        held = _held()
+        assert sorted(_tags(held.alive) + _tags(held.dead)) == sorted(_tags(held))
+        assert sorted(_tags(held.stale) + _tags(held.not_stale)) == sorted(_tags(held))
+
+    def test_a_unit_a_neural_parasite_holds_is_not_this_players_to_order(self) -> None:
+        """It is the enemy's, of the enemy's class, though it was this player's when the collection was kept."""
+        held = _held()
+        (parasited,) = (unit for unit in held if unit.tag == 4)
+        assert not isinstance(parasited, OwnUnit) and parasited not in held.orderable
+        assert all(isinstance(unit, OwnUnit) for unit in held.orderable)
 
 
 class TestWhereTheyAre:

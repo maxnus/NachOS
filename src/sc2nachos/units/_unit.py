@@ -364,6 +364,14 @@ class Unit[K: UnitType.AnyType]:
         return not self._dead
 
     @property
+    def is_orderable(self) -> bool:
+        """Whether this player can order the unit now: the last observation listed it as this player's. Not while it
+        is inside a gas building or a transport, nor under a neural parasite, which makes it an enemy `Unit`, nor once
+        it is dead. Read it before ordering a unit kept from an earlier observation, or reading what only `OwnUnit`
+        has."""
+        return not self._stale and self._own
+
+    @property
     def first_seen(self) -> GameTime | None:
         """The time of the first observation that showed the unit visible, or `None` if none has, as for `last_seen`.
         A structure remembered under a new tag keeps it, as it keeps its `id`. Later than `EnemyUnitFirstSeenEvent` for

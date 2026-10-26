@@ -228,6 +228,19 @@ class TestLifecycle:
         game.observe(32, dead=(1,))
         assert not marine.is_alive and zergling.is_alive
 
+    def test_a_unit_is_orderable_while_listed_as_this_players(self) -> None:
+        """Not once left out, as into a transport, nor while a neural parasite hands it to the enemy, nor once dead. An
+        enemy's unit never is."""
+        game = _Game()
+        marine, loaded, zergling = game.observe(0, make_unit(1), make_unit(2), make_unit(3, alliance=_ENEMY))
+        assert (marine.is_orderable, loaded.is_orderable, zergling.is_orderable) == (True, True, False)
+        game.observe(16, make_unit(1, alliance=_ENEMY), make_unit(3, alliance=_ENEMY))
+        assert not marine.is_orderable and not loaded.is_orderable
+        game.observe(32, make_unit(1), make_unit(2), make_unit(3, alliance=_ENEMY))
+        assert marine.is_orderable and loaded.is_orderable
+        game.observe(48, dead=(1,))
+        assert not marine.is_orderable
+
     def test_the_dead_units_are_those_the_last_observation_reported_dead(self) -> None:
         """The game also reports deaths under tags it never reported a unit under (corpus); those name no unit."""
         game = _Game()
@@ -1662,10 +1675,12 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         game.order(RawAbilityId.NeuralParasite_NeuralParasite, infestor, target=victim)
         game.turn(24)
         assert type(victim) is OwnUnit
+        assert victim.is_orderable
         assert victim.id // 100_000 == Alliance.ENEMY
         game.debug(game.kill(infestor))
         game.turn(8)
         assert type(victim) is Unit
+        assert not victim.is_orderable
 
         # A unit lifted by a phoenix flies, though the game reports it as not flying.
         game.debug(

@@ -670,9 +670,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `Unit.last_listed`, the last observation that listed it, which would have replaced AvocaDOS's `_last_listed_time`;
     over both; and over neither). AvocaDOS keeps its `_last_listed_time` and `_listed_since` (#177).
 - **What the owner's review of AvocaDOS #54 settled for NachOS** (the owner, 2026-10-26), the piece that holds units
-  where AvocaDOS held tags: `Unit.is_alive`, the opposite of `is_dead`, true for an enemy's unit that died out of
-  sight, whose death the game never reports (the owner, over `is_not_dead`, spelled like `is_not_stale`, and over no
-  new read) (#178).
+  where AvocaDOS held tags:
+  - `Unit.is_alive`, the opposite of `is_dead`, true for an enemy's unit that died out of sight, whose death the game
+    never reports (the owner, over `is_not_dead`, spelled like `is_not_stale`, and over no new read) (#178);
+  - `Unit.is_orderable`, the last observation listed the unit as this player's, and `Units.orderable`, typed as own
+    units: false inside a gas building or a transport, under a neural parasite, which makes the unit an enemy `Unit`,
+    and once dead (the owner, moving AvocaDOS's `is_listed_as_own` into NachOS, over `is_mine`, close to `is_own`,
+    `is_at_hand` and `is_listed_own`; and over the property alone, and over a `Units.not_stale` filter alone) (#179);
+  - `Units.alive`, `dead`, `stale` and `not_stale`, for a collection kept from an earlier observation (the owner), and
+    `Units.visible`, one of python-sc2's two filters NachOS had no name for (the owner, over `selected` as well, and
+    over neither) (#179).
 
 ## Next
 

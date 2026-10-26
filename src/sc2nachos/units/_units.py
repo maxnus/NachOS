@@ -251,6 +251,37 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Units(unit for unit in self._units if not unit.is_complete)
 
     @property
+    def alive(self) -> Units[U]:
+        """The units not known to be dead, as `Unit.is_alive` has it."""
+        return Units(unit for unit in self._units if unit.is_alive)
+
+    @property
+    def dead(self) -> Units[U]:
+        """The units known to be dead: those `alive` leaves out."""
+        return Units(unit for unit in self._units if unit.is_dead)
+
+    @property
+    def stale(self) -> Units[U]:
+        """The units the last observation left out, as `Unit.is_stale` has it."""
+        return Units(unit for unit in self._units if unit.is_stale)
+
+    @property
+    def not_stale(self) -> Units[U]:
+        """The units the last observation listed: those `stale` leaves out."""
+        return Units(unit for unit in self._units if unit.is_not_stale)
+
+    @property
+    def visible(self) -> Units[U]:
+        """The units the last observation showed visible, as `Unit.is_visible` has it: in it, and seen, not cloaked or
+        detected."""
+        return Units(unit for unit in self._units if unit.is_visible)
+
+    @property
+    def orderable[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
+        """The units this player can order now, as `Unit.is_orderable` has it."""
+        return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_not_stale)
+
+    @property
     def ground(self) -> Units[U]:
         """The units on the ground: those not flying, and the structures remembered in the fog, whose flying the game
         does not report, as `Unit.is_ground_structure` takes them."""

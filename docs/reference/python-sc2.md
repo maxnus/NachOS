@@ -318,12 +318,15 @@ it.
 | `unit.weapon_ready` | `unit.is_weapon_ready`, on your own units, which is true too while an attack is under way, its cooldown reading zero |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
+| `self.units.find_by_tag(t)` is `None`, for a unit of yours that left the observation | `unit.is_orderable` is false, on the unit kept: inside a transport or a gas building, under a neural parasite, or dead; and `units.orderable` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
 | `units.owned`, `structure`, `ready`, `not_ready` | `units.own`, `units.structures`, `units.complete`, `units.not_complete` |
 | `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
+| `units.visible` | `units.visible` |
+| nothing, a collection being new every step | `units.alive`, `units.dead`, `units.stale` and `units.not_stale`, for a collection kept from an earlier observation |
 | `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
 | `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
 | `units - other`, `units.sorted(key, reverse)` | `units.without(other)`, by NachOS id, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
@@ -363,7 +366,8 @@ it.
 - **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
   `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
-  neural parasite changes class, and changes back.
+  neural parasite changes class, and changes back, so a unit of yours you kept may be an enemy `Unit` now:
+  `unit.is_orderable` says whether it is yours and in the observation.
 - **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
   is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
   `UnitType.ProtossStructure`. `Unit[UnitType.Marine]` is a marine, and a read only some types have is an error on
