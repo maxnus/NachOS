@@ -360,7 +360,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def is_alive(self) -> bool:
         """Whether the unit is not known to be dead: the opposite of `is_dead`. True for an enemy's unit that died out
-        of sight, whose death the game never reports."""
+        of sight, whose death the game never reports, until NachOS finds it dead, as `is_dead` says for a structure."""
         return not self._dead
 
     @property
