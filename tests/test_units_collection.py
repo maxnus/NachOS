@@ -102,6 +102,15 @@ class TestSequence:
         assert _mine(1)
 
 
+class TestTyping:
+    def test_a_collection_of_own_units_is_a_collection_of_units(self) -> None:
+        """For the type checker, which reads this test: `Units` is covariant, so a collection of own units is passed
+        where one of units is asked for, and `orderable` and `own` read it."""
+        own: Units[OwnUnit[Any]] = _mine(3)
+        units: Units[Unit[Any]] = own
+        assert list(own.orderable) == list(own.own) == list(units)
+
+
 class TestCombining:
     def test_collections_come_one_after_another(self) -> None:
         units = _mine(5)

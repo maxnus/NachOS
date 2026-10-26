@@ -5,6 +5,10 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **Annotate as tightly as the value allows.** `Self` for type-preserving operations, exact tuple arity
   (`tuple[float, float]`, not `tuple[float, ...]`), fixed-length returns where the count is in the name, real
   protobuf types under `TYPE_CHECKING`.
+- **A self type can make a generic class invariant.** `Units[U]` inferred its variance, and `own`'s
+  `self: Units[Unit[K]]` made it invariant, so a `Units[OwnUnit]` had no `orderable`, and every test passed, each
+  over a `Units[Unit]`. Declare the variance of a class that must be covariant, and type-check a read through the
+  subtype.
 - **No false IS-A.** Types of different shape must not inherit from each other — `Point3` is not a `Point2`, a
   `Rect` is not a point. Share behavior through a non-public base instead. A subtype claim that is not
   substitutable makes every downstream bug typecheck cleanly.
