@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #178. `uv run pytest` passes 2973 tests with #179; `uv run pytest -m integration`
+- nachOS `main` has every PR to #179. `uv run pytest` passes 2974 tests with #180; `uv run pytest -m integration`
   passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -679,7 +679,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `is_at_hand` and `is_listed_own`; and over the property alone, and over a `Units.not_stale` filter alone) (#179);
   - `Units.alive`, `dead`, `stale` and `not_stale`, for a collection kept from an earlier observation (the owner), and
     `Units.visible`, one of python-sc2's two filters NachOS had no name for (the owner, over `selected` as well, and
-    over neither) (#179).
+    over neither) (#179);
+  - and a fix, not the owner's call: `Units` covariant in its units, declared by a `TypeVar`, since the type
+    parameter syntax inferred it invariant through the self types of `own` and `orderable`, so a `Units[OwnUnit]` had
+    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180).
 
 ## Next
 

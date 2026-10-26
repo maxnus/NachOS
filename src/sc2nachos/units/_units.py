@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, cast, final, overload
+from typing import TYPE_CHECKING, Any, TypeVar, cast, final, overload
 
 from sc2nachos.geometry import Area, Point, Tile
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
@@ -21,9 +21,14 @@ if TYPE_CHECKING:
 # huge rock's 12 tiles, and the tile it centers on.
 _FOOTPRINT_REACH = 7.0
 
+# A collection is covariant in its units, as an immutable sequence is: a collection of own units is a collection of
+# units, and `own` and `orderable` read one. The type parameter syntax would infer the variance, and infers it
+# invariant through those two self types, so the variable declares it.
+U = TypeVar("U", bound=Unit[Any], covariant=True)
+
 
 @final
-class Units[U: Unit[Any]](Sequence[U]):
+class Units(Sequence[U]):
     """An immutable, ordered collection of units. Filters keep the order.
 
     Every filter returns a new collection. A query that picks the nearest unit, such as `closest_to`, raises
@@ -453,7 +458,7 @@ class Units[U: Unit[Any]](Sequence[U]):
         return Point((x / count, y / count))
 
 
-def _unit_tuple[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:
+def _unit_tuple[T: Unit[Any]](units: T | Iterable[T]) -> tuple[T, ...]:
     """The units given, one unit or any number of them, as a tuple."""
     return (units,) if isinstance(units, Unit) else tuple(units)
 
