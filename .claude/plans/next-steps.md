@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #175. `uv run pytest` passes 2962 tests with #177; `uv run pytest -m integration`
+- nachOS `main` has every PR to #177. `uv run pytest` passes 2963 tests with #178; `uv run pytest -m integration`
   passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -665,10 +665,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `Weapon.bonus_per_hit_against(attributes)`, which `Weapon.damage_against` and `Unit.bonus_damage_against` share;
     "first" dropped from the per-domain reads, no type having two weapons for one domain (corpus); `_OWN_ALLIANCE`
     beside `_ENEMY_ALLIANCE` (#175).
-  - In the owner's review of AvocaDOS #52's switch to these reads: `Unit.first_seen`, the time of the first observation that
-    showed the unit visible, `None` before one has, beside `last_seen` (the owner, over `Unit.last_listed`, the last
-    observation that listed it, which would have replaced AvocaDOS's `_last_listed_time`; over both; and over
-    neither). AvocaDOS keeps its `_last_listed_time` and `_listed_since` (#177).
+  - In the owner's review of AvocaDOS #52's switch to these reads: `Unit.first_seen`, the time of the first
+    observation that showed the unit visible, `None` before one has, beside `last_seen` (the owner, over
+    `Unit.last_listed`, the last observation that listed it, which would have replaced AvocaDOS's `_last_listed_time`;
+    over both; and over neither). AvocaDOS keeps its `_last_listed_time` and `_listed_since` (#177).
+  - In the owner's review of AvocaDOS #54, which holds units where it held tags: `Unit.is_alive`, the opposite of
+    `is_dead`, true for an enemy's unit that died out of sight, whose death the game never reports (the owner, over
+    `is_not_dead`, spelled like `is_not_stale`, and over no new read) (#178).
 
 ## Next
 

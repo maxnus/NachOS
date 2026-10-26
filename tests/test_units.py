@@ -212,11 +212,20 @@ class TestLifecycle:
         game = _Game()
         (marine,) = game.observe(0, make_unit(1, health=45.0))
         game.observe(16, dead=(1,))
-        assert marine.is_dead
+        assert marine.is_dead and not marine.is_alive
         assert marine.is_stale
         assert marine.health == 45.0
         assert not game.tracker.unit_tracker.known
         assert repr(marine) == "OwnUnit(MARINE, id=100001, at (10.00, 10.00), dead)"
+
+    def test_a_unit_is_alive_until_reported_dead_one_out_of_sight_included(self) -> None:
+        """An enemy's unit that dies out of sight is never reported dead, so it stays alive."""
+        game = _Game()
+        marine, zergling = game.observe(0, make_unit(1), make_unit(2, alliance=_ENEMY))
+        game.observe(16, make_unit(1))
+        assert marine.is_alive and zergling.is_alive and zergling.is_stale
+        game.observe(32, dead=(1,))
+        assert not marine.is_alive and zergling.is_alive
 
     def test_the_dead_units_are_those_the_last_observation_reported_dead(self) -> None:
         """The game also reports deaths under tags it never reported a unit under (corpus); those name no unit."""
