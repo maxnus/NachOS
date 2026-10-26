@@ -458,7 +458,7 @@ class Units(Sequence[U]):
         return Point((x / count, y / count))
 
 
-def _unit_tuple[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:
+def _unit_tuple[T: Unit[Any]](units: T | Iterable[T]) -> tuple[T, ...]:
     """The units given, one unit or any number of them, as a tuple."""
     return (units,) if isinstance(units, Unit) else tuple(units)
 

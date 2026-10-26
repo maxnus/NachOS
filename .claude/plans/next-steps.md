@@ -680,9 +680,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `Units.alive`, `dead`, `stale` and `not_stale`, for a collection kept from an earlier observation (the owner), and
     `Units.visible`, one of python-sc2's two filters NachOS had no name for (the owner, over `selected` as well, and
     over neither) (#179);
-  - `Units` covariant in its units, declared by a `TypeVar`: the type parameter syntax inferred it invariant through
-    the self types of `own` and `orderable`, so a `Units[OwnUnit]` had neither, found switching AvocaDOS #54 to
-    `orderable` (#180).
+  - and a fix, not the owner's call: `Units` covariant in its units, declared by a `TypeVar`, since the type
+    parameter syntax inferred it invariant through the self types of `own` and `orderable`, so a `Units[OwnUnit]` had
+    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180).
 
 ## Next
 
