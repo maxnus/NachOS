@@ -219,7 +219,8 @@ class TestLifecycle:
         assert repr(marine) == "OwnUnit(MARINE, id=100001, at (10.00, 10.00), dead)"
 
     def test_a_unit_is_alive_until_reported_dead_one_out_of_sight_included(self) -> None:
-        """An enemy's unit that dies out of sight is never reported dead, so it stays alive."""
+        """An enemy's unit out of sight stays alive, as one that died there would: the game reports no death it cannot
+        see."""
         game = _Game()
         marine, zergling = game.observe(0, make_unit(1), make_unit(2, alliance=_ENEMY))
         game.observe(16, make_unit(1))
