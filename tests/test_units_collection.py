@@ -128,6 +128,20 @@ class TestCombining:
         assert not Units.combined()
         assert not Units.combined(Units(), [])
 
+    def test_a_collection_combined_with_a_unit_or_units_adds_those_not_in_it(self) -> None:
+        units = _mine(5)
+        assert _tags(units[:2].combined_with(units[3])) == [1, 2, 4]
+        assert _tags(units[:2].combined_with(units[1])) == [1, 2]
+        assert _tags(units[:2].combined_with(units[1:4])) == [1, 2, 3, 4]
+        assert _tags(Units().combined_with(iter(units[:2]))) == [1, 2]
+
+    def test_a_collection_of_own_units_combined_with_a_unit_is_a_collection_of_units(self) -> None:
+        """For the type checker too: `Units` stays covariant, so the result holds both kinds."""
+        own: Units[OwnUnit[Any]] = _mine(2)
+        (enemy,) = _units(make_unit(3, alliance=Alliance.ENEMY))
+        combined: Units[Unit[Any]] = own.combined_with(enemy)
+        assert _tags(combined) == [1, 2, 3]
+
     def test_the_units_are_found_by_id_afterwards(self) -> None:
         units = _mine(5)
         combined = Units.combined(units[:3], units)
@@ -297,6 +311,10 @@ class TestFilters:
         units = _mine(10)
         assert _tags(units.without(units[2:5])) == [unit.tag for unit in units if unit not in units[2:5]]
         assert _tags(units.without([])) == _tags(units)
+
+    def test_without_one_of_them(self) -> None:
+        units = _mine(3)
+        assert _tags(units.without(units[1])) == [1, 3]
 
     def test_those_not_complete_are_those_complete_leaves_out(self) -> None:
         units = _mine(40)

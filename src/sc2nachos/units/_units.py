@@ -60,6 +60,11 @@ class Units(Sequence[U]):
         combined._by_id = index
         return combined
 
+    def combined_with[V: Unit[Any]](self, units: V | Iterable[V]) -> Units[U | V]:
+        """These units and then `units`, one unit or many, each unit at its first appearance, matched by id as
+        `combined` matches them."""
+        return Units.combined(self._units, _unit_tuple(units))
+
     def __len__(self) -> int:
         return len(self._units)
 
@@ -114,10 +119,10 @@ class Units(Sequence[U]):
         unwanted = {unit_ids} if isinstance(unit_ids, int) else set(unit_ids)
         return Units(unit for unit in self._units if unit.id not in unwanted)
 
-    def without(self, units: Iterable[Unit[Any]]) -> Units[U]:
-        """These units but those of `units`, matched by NachOS id, so a structure remembered under a new tag still
-        matches."""
-        return self.without_ids(unit.id for unit in units)
+    def without(self, units: Unit[Any] | Iterable[Unit[Any]]) -> Units[U]:
+        """These units but `units`, one unit or many, matched by NachOS id, so a structure remembered under a new tag
+        still matches."""
+        return self.without_ids(unit.id for unit in _unit_tuple(units))
 
     # By what they are.
 

@@ -329,7 +329,7 @@ it.
 | nothing, a collection being new every step | `units.alive`, `units.dead`, `units.listed` and `units.not_listed`, for a collection kept from an earlier observation |
 | `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
 | `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
-| `units - other`, `units.sorted(key, reverse)` | `units.without(other)`, by NachOS id, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
+| `units \| other`, `units - other`, `units.sorted(key, reverse)` | `units.combined_with(other)` and `units.without(other)`, by NachOS id, `other` one unit or several, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
@@ -428,8 +428,8 @@ it.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.
 - **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
   and every filter returns a new one.
-- **Collections are combined with `Units.combined(a, b, ...)`**, which keeps each unit where it first appears and
-  knows a unit by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
+- **Collections are combined with `Units.combined(a, b, ...)`**, or `a.combined_with(b)` for `b` one unit or several.
+  Each keeps a unit where it first appears and knows it by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
 - **Your own data about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its class
   is not yours to subclass. A `weakref.WeakKeyDictionary` keyed by unit lets go of an entry once the unit is dead
   and dropped.
