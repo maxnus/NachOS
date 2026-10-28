@@ -25,6 +25,8 @@ class UnitType:
     or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
     a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
     `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+
+    `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
 
     class AnyType:
@@ -36,8 +38,8 @@ class UnitType:
         """
 
         type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
-        """The ids this class stands for: a type's own `id`, or those of every type in a group. It tests a type id
-        where there is no unit, as for a structure about to be built: `type_id in UnitType.GasBuilding.type_ids`. A
+        """The ids this class stands for: a type's own `id`, or those of every type in a group. A type id with no unit
+        is tested against them, as for a structure about to be built: `type_id in UnitType.GasBuilding.type_ids`. A
         unit is tested by `includes`, which narrows it."""
 
         def __init_subclass__(cls) -> None:

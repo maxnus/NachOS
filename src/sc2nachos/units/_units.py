@@ -160,7 +160,7 @@ class Units(Sequence[U]):
         """
         if isinstance(types, UnitTypeId) and not unit_types:
             return Units(unit for unit in self._units if unit.type_id is types)
-        wanted = _type_ids(types, unit_types)
+        wanted = _type_ids_of(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id in wanted)
 
     @overload
@@ -180,7 +180,7 @@ class Units(Sequence[U]):
         """The units not of any of the given types, taken as `of_type` takes them."""
         if isinstance(types, UnitTypeId) and not unit_types:
             return Units(unit for unit in self._units if unit.type_id is not types)
-        unwanted = _type_ids(types, unit_types)
+        unwanted = _type_ids_of(types, unit_types)
         return Units(unit for unit in self._units if unit.type_id not in unwanted)
 
     def _of_alliance(self, alliance: Alliance) -> Units[U]:
@@ -468,7 +468,7 @@ def _unit_tuple[T: Unit[Any]](units: T | Iterable[T]) -> tuple[T, ...]:
     return (units,) if isinstance(units, Unit) else tuple(units)
 
 
-def _type_ids(
+def _type_ids_of(
     types: type[UnitType.AnyType] | UnitTypeId | Iterable[UnitTypeId],
     unit_types: tuple[type[UnitType.AnyType] | UnitTypeId, ...],
 ) -> frozenset[UnitTypeId]:
