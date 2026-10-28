@@ -691,7 +691,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     it (the owner, 2026-10-28, over keeping `_stale` to hold the PR to the public names) (#182);
   - `Units.combined_with`, one unit or many added, matched by id, and `Units.without` taking a single unit too.
     `Units` stays immutable: #180's covariance needs it, every handler shares `api.units`, and its id index must not
-    go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`) (#182).
+    go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`). The name
+    stays `combined_with`, the one-collection form of `Units.combined` (the owner, in the review of #182, over
+    `with_`, since `with` is a keyword, and over `plus`) (#182).
 
 ## Next
 
