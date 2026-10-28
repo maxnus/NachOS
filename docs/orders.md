@@ -243,8 +243,8 @@ next observation.
 ## Reading a unit's orders
 
 An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
-current order and one for each queued. The two need not agree: the game snaps a build to its site, and drops what it
-cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
+current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
+site, and drops what it cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
 reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
 reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
 `LIBERATOR_SIEGE_AT`, and each templar of a merge `MORPH_ARCHON` aimed at the other.

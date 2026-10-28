@@ -669,6 +669,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     observation that showed the unit visible, `None` before one has, beside `last_seen` (the owner, over
     `Unit.last_listed`, the last observation that listed it, which would have replaced AvocaDOS's `_last_listed_time`;
     over both; and over neither). AvocaDOS keeps its `_last_listed_time` and `_listed_since` (#177).
+- **The owner's issue #181** (2026-10-27, the names settled 2026-10-28): `OwnUnit.current_order`, the first of
+  `orders` or `None` for an idle unit, read from `orders`' cache (the owner, over `order`, which reads as the bot's
+  `Order` and as a verb, one letter from `orders`). `orders` keeps its name (over `order_queue`, which reads as the
+  orders behind the current one, while production reads the whole list against its capacity) (#183).
 - **What the owner's review of AvocaDOS #54 settled for NachOS** (the owner, 2026-10-26), the piece that holds units
   where AvocaDOS held tags:
   - `Unit.is_alive`, the opposite of `is_dead`, true for an enemy's unit that died out of sight, whose death the game

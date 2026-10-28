@@ -159,6 +159,19 @@ class TestIds:
         game.observe(16, make_unit(1))
         assert marine.orders == ()
 
+    def test_a_units_current_order_is_the_first_of_its_orders_and_none_once_it_is_idle(self) -> None:
+        """A queued order is not current."""
+        game = _Game()
+        gather_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
+        queued_return_order = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Return_SCV)
+        (scv,) = game.observe(0, make_unit(1, UnitTypeId.SCV, orders=[gather_order, queued_return_order]))
+        assert isinstance(scv, OwnUnit)
+        current_order = scv.current_order
+        assert current_order is scv.orders[0]
+        assert current_order is not None and current_order.ability is AbilityId.GATHER
+        game.observe(16, make_unit(1, UnitTypeId.SCV))
+        assert scv.current_order is None
+
     def test_a_unit_holds_no_report_but_its_latest_and_its_latest_visible(self) -> None:
         """Any other would keep the observation it came in alive, as a cache of the report its orders were last read
         from would once the unit is stale."""

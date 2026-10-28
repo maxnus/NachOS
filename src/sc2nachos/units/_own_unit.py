@@ -37,6 +37,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         self._orders = _Snapshot(orders, update)
         return orders
 
+    @property
+    def current_order(self) -> UnitOrder | None:
+        """The order the unit is carrying out, the first of `orders`, or `None` for an idle unit."""
+        orders = self.orders
+        return orders[0] if orders else None
+
     def _unit_target_of_order(self, order: raw_pb2.UnitOrder) -> Unit[Any] | None:
         """The unit `order` names: the one the game reported under its tag, or, for a tag the game never reports, the
         one this unit's last order of the same ability named under a tag it did; `None` if there is none."""
@@ -51,8 +57,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return not self._latest_report.orders
 
     def is_doing(self, abilities: AbilityId | Collection[AbilityId]) -> bool:
-        """Whether the unit's current order, the first of `orders`, carries out `abilities`, one ability or any of
-        several. False for an idle unit."""
+        """Whether the unit's `current_order` carries out `abilities`, one ability or any of several. False for an idle
+        unit."""
         # Read off the report: building `orders` to read the first would read every order and look up its target.
         if not (reported_orders := self._latest_report.orders):
             return False

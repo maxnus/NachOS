@@ -121,6 +121,7 @@ it.
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
+| `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target` |
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
 | `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
 | `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
