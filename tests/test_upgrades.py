@@ -453,7 +453,7 @@ class TestWhatAUnitReads:
         base = first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].damage
         assert marine.weapons[0].damage == base
         _units_observed(tracker, make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1), step=1)
-        assert marine.is_stale
+        assert not marine.is_listed
         assert marine.weapons[0].damage == base + 1
 
     def test_a_level_a_unit_showed_stays_known_once_it_is_gone(self, first_corpus_tables: GameData) -> None:
@@ -514,7 +514,7 @@ class TestWhatAUnitReads:
             tracker, make_unit(1, UnitTypeId.MARINE, alliance=Alliance.ENEMY, armor_upgrade_level=0)
         )
         tracker.update(make_observation(16, units=[]).observation.raw_data, 16)
-        assert marine.is_stale
+        assert not marine.is_listed
         assert marine.armor == first_corpus_tables.units[UnitTypeId.MARINE].armor + 1
 
     def test_a_unit_never_shown_visible_reads_the_armor_the_enemy_is_known_to_have(

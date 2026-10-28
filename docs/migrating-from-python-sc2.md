@@ -79,8 +79,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   says otherwise ([in detail](reference/python-sc2.md#running-a-game)). Every moment and length of game time is a
   `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime.from_seconds(300)`, and
   `self.time` alone `api.time.seconds` ([in detail](reference/python-sc2.md#time)).
-- **A unit is one object under one id for the whole game.** Out of sight it is stale, not gone, and only death ends it.
-  A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).
+- **A unit is one object under one id for the whole game.** Out of sight it is unlisted, not gone, and only death
+  ends it. A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).
 - **Your own units are `OwnUnit`s**, the only ones with orders, cargo and weapon cooldown. A unit's type can be a type
   parameter: `units.own.of_type(UnitType.Marine)` is typed as your marines ([in detail](reference/python-sc2.md#units)).
 - **Ids use the names players use**, `CONCUSSIVE_SHELLS` for `PUNISHERGRENADES`, cover only what a melee game needs,
@@ -109,8 +109,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   parasite ([in detail](reference/python-sc2.md#units)).
 - **`api.units` is every unit**, of every side; python-sc2's `bot.units` is this player's non-structures, which is
   `api.units.own.non_structures` ([in detail](reference/python-sc2.md#units)).
-- **Out of sight is stale, not gone.** `api.units` is what the observation lists, and `api.known_units` adds what is
-  remembered ([in detail](reference/python-sc2.md#units)).
+- **Out of sight is unlisted, not gone.** `api.units` is what the observation lists, and `api.known_units` adds what
+  is remembered ([in detail](reference/python-sc2.md#units)).
 - **Only your own units have orders**, cargo, rallies and weapon cooldown; the game reports them for nobody else's
   ([in detail](reference/python-sc2.md#units)).
 - **Speeds are per second of Faster speed already, and include upgrades**: drop python-sc2's `1.4 *`

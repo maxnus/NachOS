@@ -288,8 +288,8 @@ it.
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.non_structures`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
 | `unit.is_mine`, `is_enemy` | `unit.is_own`, `unit.is_enemy`; `isinstance(unit, OwnUnit)` narrows to your own unit's reads |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_not_stale` while the observation lists it, cloaked or remembered in the fog included |
-| `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_stale` once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_listed` while the observation lists it, cloaked or remembered in the fog included |
+| `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_listed` false once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
@@ -326,7 +326,7 @@ it.
 | `units.owned`, `structure`, `ready`, `not_ready` | `units.own`, `units.structures`, `units.complete`, `units.not_complete` |
 | `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
 | `units.visible` | `units.visible` |
-| nothing, a collection being new every step | `units.alive`, `units.dead`, `units.stale` and `units.not_stale`, for a collection kept from an earlier observation |
+| nothing, a collection being new every step | `units.alive`, `units.dead`, `units.listed` and `units.not_listed`, for a collection kept from an earlier observation |
 | `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
 | `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
 | `units - other`, `units.sorted(key, reverse)` | `units.without(other)`, by NachOS id, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
@@ -340,19 +340,19 @@ it.
   game as one. NachOS follows a structure through those swaps, so it keeps its object and id, and `unit.tag` is
   only the game's current handle. An id's first digit is the unit's alliance when first seen, 1 for yours and 4 for
   the enemy's; the rest counts that alliance's units. python-sc2 builds new objects every step, keyed by tag.
-- **A unit out of the observation is stale, not gone.** It keeps what it last read, `is_stale` is true, and it is
-  in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
+- **A unit out of the observation is unlisted, not gone.** It keeps what it last read, `is_listed` is false, and it
+  is in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
   into sight does, it is the same object. Only death ends it: `is_dead` becomes true.
 - **The game reports only the deaths you can see.** A structure that burns down or is killed out of sight stays
   remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
-  lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
+  lift off or uproot may have moved instead, so it stays unlisted until it turns up. python-sc2 drops the remembered
   copy and says nothing.
-- **A drone that becomes a structure is stale until the structure finishes or dies, then dead**, up to an observation
+- **A drone that becomes a structure is not listed until the structure finishes or dies, then dead**, up to an observation
   after the structure's `OwnConstructionFinishedEvent`. If the structure is cancelled, the drone comes back as the same
   object ([game behavior](game-behavior/units.md#units-coming-changing-and-going)). `builder` links the two
   for your own drones only, since only your own units' orders are reported.
 - **A unit refers to other units by object.** An order's target, a rally target, a passenger, an add-on and an
-  engaged target are units, stale or dead ones included; python-sc2 gives tags to look up. An order aimed at
+  engaged target are units, unlisted or dead ones included; python-sc2 gives tags to look up. An order aimed at
   nothing has `None` for its target; python-sc2's is `0`.
 - **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
   or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while

@@ -353,7 +353,7 @@ class OrderBook:
         """Whether `unit`'s first order runs `ability` at `target`. A unit the last observation left out, in a
         transport for one, is at nothing."""
         orders = unit._latest_report.orders
-        if unit.is_stale or not orders:
+        if not unit.is_listed or not orders:
             return False
         first = orders[0]
         if _ability_of_unit_order(first) is not ability:

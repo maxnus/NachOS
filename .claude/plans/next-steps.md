@@ -682,7 +682,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
     over neither) (#179);
   - and a fix, not the owner's call: `Units` covariant in its units, declared by a `TypeVar`, since the type
     parameter syntax inferred it invariant through the self types of `own` and `orderable`, so a `Units[OwnUnit]` had
-    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180).
+    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180);
+  - `Unit.is_listed`, with `Units.listed` and `not_listed`, for `is_stale`, `is_not_stale`, `Units.stale` and
+    `not_stale`: a positive name, which needs no opposite (the owner, 2026-10-28, over `is_present`, which reads as
+    alive, `is_in_observation` and keeping `is_stale`; the owner had asked about `is_observed`, `is_current`,
+    `is_updated` and `is_latest`, each wrong for a unit listed but not seen, or vague) (#182);
+  - `Units.combined_with`, one unit or many added, matched by id, and `Units.without` taking a single unit too.
+    `Units` stays immutable: #180's covariance needs it, every handler shares `api.units`, and its id index must not
+    go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`) (#182).
 
 ## Next
 

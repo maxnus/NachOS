@@ -328,8 +328,7 @@ class TestWhatBecameOfThem:
         [
             ("alive", "is_alive"),
             ("dead", "is_dead"),
-            ("stale", "is_stale"),
-            ("not_stale", "is_not_stale"),
+            ("listed", "is_listed"),
             ("visible", "is_visible"),
             ("orderable", "is_orderable"),
         ],
@@ -341,14 +340,14 @@ class TestWhatBecameOfThem:
     def test_what_became_of_each(self) -> None:
         held = _held()
         assert _tags(held.dead) == [3]
-        assert _tags(held.stale) == [2, 3, 8]
+        assert _tags(held.not_listed) == [2, 3, 8]
         assert _tags(held.visible) == [1, 4, 5]
         assert _tags(held.orderable) == [1]
 
-    def test_alive_and_dead_split_the_units_and_so_do_stale_and_not_stale(self) -> None:
+    def test_alive_and_dead_split_the_units_and_so_do_listed_and_not_listed(self) -> None:
         held = _held()
         assert sorted(_tags(held.alive) + _tags(held.dead)) == sorted(_tags(held))
-        assert sorted(_tags(held.stale) + _tags(held.not_stale)) == sorted(_tags(held))
+        assert sorted(_tags(held.listed) + _tags(held.not_listed)) == sorted(_tags(held))
 
     def test_a_unit_a_neural_parasite_holds_is_not_this_players_to_order(self) -> None:
         """It is the enemy's, of the enemy's class, though it was this player's when the collection was kept."""

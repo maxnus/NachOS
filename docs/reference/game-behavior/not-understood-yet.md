@@ -31,7 +31,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   played back 8 steps a turn its last observation, which says it ended, with the victory and the defeat, reads step 8
   (tool `sweep_replays`, `ending`, build 75689).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
-  reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
+  reported dead nor listed as a copy, so NachOS keeps it, not listed, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
 - **Whether `ResponseGameInfo.player_info` lists a game's observers, and whether their chat reaches the players**: no
   game with an observer has been played. NachOS hands out no event for a message whose sender that list names as an

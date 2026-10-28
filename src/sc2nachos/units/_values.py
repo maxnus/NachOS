@@ -178,7 +178,7 @@ class Passenger:
     """A unit inside a transport, bunker or other unit that holds units, as the unit holding it reports it."""
 
     unit: Unit[Any]
-    """The unit itself. It is stale while inside, and reads as it was when it went in."""
+    """The unit itself. It is not listed while inside, and reads as it was when it went in."""
     type_id: UnitTypeId
     health: float
     health_max: float

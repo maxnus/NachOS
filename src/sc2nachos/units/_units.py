@@ -266,14 +266,14 @@ class Units(Sequence[U]):
         return Units(unit for unit in self._units if unit.is_dead)
 
     @property
-    def stale(self) -> Units[U]:
-        """The units the last observation left out, as `Unit.is_stale` has it."""
-        return Units(unit for unit in self._units if unit.is_stale)
+    def listed(self) -> Units[U]:
+        """The units the last observation listed, as `Unit.is_listed` has it."""
+        return Units(unit for unit in self._units if unit.is_listed)
 
     @property
-    def not_stale(self) -> Units[U]:
-        """The units the last observation listed: those `stale` leaves out."""
-        return Units(unit for unit in self._units if unit.is_not_stale)
+    def not_listed(self) -> Units[U]:
+        """The units the last observation did not list: those `listed` leaves out."""
+        return Units(unit for unit in self._units if not unit.is_listed)
 
     @property
     def visible(self) -> Units[U]:
@@ -284,7 +284,7 @@ class Units(Sequence[U]):
     @property
     def orderable[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
         """The units this player can order now, as `Unit.is_orderable` has it."""
-        return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_not_stale)
+        return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_listed)
 
     @property
     def ground(self) -> Units[U]:
@@ -438,7 +438,7 @@ class Units(Sequence[U]):
                 continue
             if tile not in footprint.tiles(at=position):
                 continue
-            if not unit.is_stale and unit.visibility.in_sight:
+            if unit.is_listed and unit.visibility.in_sight:
                 return unit
             if remembered is None:
                 remembered = unit

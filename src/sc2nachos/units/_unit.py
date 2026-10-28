@@ -77,7 +77,8 @@ class Unit[K: UnitType.AnyType]:
     Position, type and visibility read as of the last observation that listed the unit. Everything else reads as
     of the last observation that showed it visible, `last_seen`, and raises `NotReportedError` for a unit never
     shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit that leaves the
-    observation is stale: it keeps its last values, and is observed under the same id again if it comes back.
+    observation is no longer `is_listed`: it keeps its last values, and is observed under the same id again if it
+    comes back.
     """
 
     # `OwnUnit` declares no slots, so a unit can change between the two classes in place. `__weakref__` lets a bot
@@ -278,7 +279,7 @@ class Unit[K: UnitType.AnyType]:
         return NotReportedError(f"the game never showed {self!r} visible, so it never reported its {what}")
 
     def __repr__(self) -> str:
-        state = ", dead" if self._dead else ", stale" if self._stale else ""
+        state = ", dead" if self._dead else ", not listed" if self._stale else ""
         return f"{type(self).__name__}({self._type_id.name}, id={self._id}, at {self._position}{state})"
 
     # Identity.
@@ -335,15 +336,11 @@ class Unit[K: UnitType.AnyType]:
     # Whether the game still reports it.
 
     @property
-    def is_stale(self) -> bool:
-        """Whether the last observation left the unit out: it went out of sight, into a transport or a gas building,
-        or into a structure it is becoming, as a drone does, or it died."""
-        return self._stale
-
-    @property
-    def is_not_stale(self) -> bool:
-        """Whether the last observation listed the unit: in sight, in sight but cloaked or burrowed and undetected, or
-        a structure remembered in the fog. The opposite of `is_stale`; `is_visible` is the first of these alone."""
+    def is_listed(self) -> bool:
+        """Whether the last observation listed the unit: in sight, cloaked and undetected included, or a structure
+        remembered in the fog. Not once it went out of sight, or burrowed undetected, as a zergling does, or went into a
+        transport, a gas building or a structure it is becoming, as a drone does, nor once it died. `is_visible` is the
+        first of these alone."""
         return not self._stale
 
     @property
@@ -353,7 +350,7 @@ class Unit[K: UnitType.AnyType]:
         The game reports only the deaths a player can see. A structure that dies out of sight is found dead when its
         spot comes back into sight without it. A unit of this player's that became a structure, as a drone does, is
         dead once that structure finishes, or once it dies without the unit coming back from a cancel. A dead unit is
-        stale for good.
+        never listed again.
         """
         return self._dead
 
@@ -460,7 +457,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def is_visible(self) -> bool:
         """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for a
-        stale unit, whose `visibility` reads as it was last listed."""
+        unit not listed, whose `visibility` reads as it was last listed."""
         return not self._stale and self._latest_report.display_type == _VISIBLE
 
     @property
