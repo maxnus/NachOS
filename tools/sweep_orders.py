@@ -341,7 +341,7 @@ class _Game:
         return self.units.get(tag)
 
     def read(self, label: str, units: Iterable[raw_pb2.Unit | int]) -> list[dict[str, object]]:
-        """Record each unit's current orders under `label`, and return the entries."""
+        """Record each unit's orders under `label`, and return the entries."""
         found: list[dict[str, object]] = []
         for tag in (unit if isinstance(unit, int) else unit.tag for unit in units):
             if (unit := self.units.get(tag)) is None:
