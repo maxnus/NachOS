@@ -54,7 +54,7 @@ _STEPS_SINCE_THE_LIFE_WAS_SET = 8
 _STEPS_INTO_THE_CONSTRUCTION = 120
 # The gas buildings, made on a geyser of the map of the kind each stands on.
 _GAS_BUILDINGS = {
-    UnitTypeId.REFINERY: frozenset(UnitType.AnyVespeneGeyser._type_ids) - {UnitTypeId.VESPENE_GEYSER_RICH},
+    UnitTypeId.REFINERY: frozenset(UnitType.AnyVespeneGeyser.type_ids) - {UnitTypeId.VESPENE_GEYSER_RICH},
     UnitTypeId.REFINERY_RICH: frozenset({UnitTypeId.VESPENE_GEYSER_RICH}),
 }
 # The add-ons the game creates only by building them on their structure, with the structure and the ability that
@@ -140,7 +140,7 @@ class RepairSweep:
         units_left = list(observation.observation.raw_data.units)
         self._map = GameMap._from_game(client.game_info(), observation)
         self._ground = OpenGround(self._map, units_left)
-        self._geysers = [unit for unit in units_left if unit.unit_type in UnitType.AnyVespeneGeyser._type_ids]
+        self._geysers = [unit for unit in units_left if unit.unit_type in UnitType.AnyVespeneGeyser.type_ids]
 
     def mechanical_types(self) -> list[UnitTypeId]:
         """Every Terran type the tables call mechanical, by name."""
@@ -158,7 +158,7 @@ class RepairSweep:
         if target_type in _GAS_BUILDINGS:
             ground_middle, half_size, ground_claimed = self._free_geyser(target_type), _WIDEST_GROUND_HALF_SIZE, False
         else:
-            needs_wide_ground = target_type in UnitType.Townhall._type_ids or target_type in _ATTACHED_ADD_ONS
+            needs_wide_ground = target_type in UnitType.Townhall.type_ids or target_type in _ATTACHED_ADD_ONS
             half_size = _WIDEST_GROUND_HALF_SIZE if needs_wide_ground else _DEFAULT_GROUND_HALF_SIZE
             ground_middle, ground_claimed = self._ground.claim(self._map.start_location, half_size), True
         made_tags: list[int] = []

@@ -245,7 +245,7 @@ class Units(Sequence[U]):
 
     def _in_group(self, group: type[UnitType.AnyType]) -> Units[U]:
         """The units of a type in `group`."""
-        wanted = group._type_ids
+        wanted = group.type_ids
         return Units(unit for unit in self._units if unit.type_id in wanted)
 
     @property
@@ -476,7 +476,7 @@ def _type_ids(
     its types, or a `UnitTypeId`; or a collection of `UnitTypeId`s as `types` alone. Raises `TypeError` for anything
     else."""
     if isinstance(types, type) and issubclass(types, UnitType.AnyType) and not unit_types:
-        return types._type_ids
+        return types.type_ids
     if unit_types or isinstance(types, UnitTypeId | type | str) or not isinstance(types, Iterable):
         return _unit_type_ids_in((types, *unit_types))
     ids = frozenset(types)
@@ -493,7 +493,7 @@ def _unit_type_ids_in(unit_types: Iterable[object]) -> frozenset[UnitTypeId]:
         if isinstance(unit_type, UnitTypeId):
             ids.add(unit_type)
         elif isinstance(unit_type, type) and issubclass(unit_type, UnitType.AnyType):
-            ids.update(unit_type._type_ids)
+            ids.update(unit_type.type_ids)
         else:
             raise TypeError(f"a unit type is a UnitTypeId, a UnitType or a group of them, not {unit_type!r}")
     return frozenset(ids)

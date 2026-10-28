@@ -79,7 +79,7 @@ class TestUnitType:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
         call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
         performs the morph to the other."""
-        first, second = sorted(getattr(UnitType, group)._type_ids, key=lambda type_id: type_id.name)
+        first, second = sorted(getattr(UnitType, group).type_ids, key=lambda type_id: type_id.name)
         if group == "AnyHellion":
             assert UnitTypeId.HELLION in first_corpus_tables.abilities[AbilityId.HELLION_MORPH_HELLBAT].performers
             assert UnitTypeId.HELLBAT in first_corpus_tables.abilities[AbilityId.HELLBAT_MORPH_HELLION].performers
@@ -101,7 +101,7 @@ class TestUnitType:
 
     def test_every_curated_type_has_one_class_named_after_it(self) -> None:
         assert sorted(unit_type.id for unit_type in _classes_of_one_type()) == sorted(UnitTypeId)
-        assert all(unit_type._type_ids == {unit_type.id} for unit_type in _classes_of_one_type())
+        assert all(unit_type.type_ids == {unit_type.id} for unit_type in _classes_of_one_type())
         assert UnitType.Marine.id is UnitTypeId.MARINE
         assert UnitType.SiegeTankSieged.id is UnitTypeId.SIEGE_TANK_SIEGED
 
@@ -121,15 +121,15 @@ class TestUnitType:
         structures: type[UnitType.AnyType],
     ) -> None:
         rows = [first_corpus_tables.units[unit_type] for unit_type in UnitTypeId]
-        assert group._type_ids == {row.id for row in rows if row.race is race}
-        assert structures._type_ids == group._type_ids & UnitType.Structure._type_ids
-        assert UnitType.Structure._type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
+        assert group.type_ids == {row.id for row in rows if row.race is race}
+        assert structures.type_ids == group.type_ids & UnitType.Structure.type_ids
+        assert UnitType.Structure.type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
 
     @pytest.mark.parametrize("group", _curated_groups(), ids=lambda group: group.__name__)
     def test_a_group_is_in_another_when_all_its_types_are(self, group: Any) -> None:
         for other in [*_TABLE_GROUPS, *_curated_groups()]:
             if other is not group:
-                assert issubclass(group, other) == (group._type_ids <= other._type_ids), other
+                assert issubclass(group, other) == (group.type_ids <= other.type_ids), other
 
     def test_the_curated_groups_hold_every_type_named_for_them(self) -> None:
         towers = (
@@ -137,24 +137,24 @@ class TestUnitType:
             - _types_named_with("COLLAPSIBLE_TOWER_DEBRIS")
             - _types_named_with("COLLAPSIBLE_TOWER_PUSH")
         )
-        assert UnitType.CollapsibleTower._type_ids == towers
-        assert UnitType.CollapsibleTowerDebris._type_ids == _types_named_with("COLLAPSIBLE_TOWER_DEBRIS")
-        assert len(UnitType.CollapsibleTowerDebris._type_ids) == 7
-        assert UnitType.Critter._type_ids == _types_named_with("CRITTER_")
-        assert UnitType.AnyChangeling._type_ids == _types_named_with("CHANGELING")
-        assert len(UnitType.AnyChangeling._type_ids) == 6
-        assert UnitType.AnyCreepTumor._type_ids == _types_named_with("CREEP_TUMOR")
-        assert len(UnitType.AnyCreepTumor._type_ids) == 3
+        assert UnitType.CollapsibleTower.type_ids == towers
+        assert UnitType.CollapsibleTowerDebris.type_ids == _types_named_with("COLLAPSIBLE_TOWER_DEBRIS")
+        assert len(UnitType.CollapsibleTowerDebris.type_ids) == 7
+        assert UnitType.Critter.type_ids == _types_named_with("CRITTER_")
+        assert UnitType.AnyChangeling.type_ids == _types_named_with("CHANGELING")
+        assert len(UnitType.AnyChangeling.type_ids) == 6
+        assert UnitType.AnyCreepTumor.type_ids == _types_named_with("CREEP_TUMOR")
+        assert len(UnitType.AnyCreepTumor.type_ids) == 3
         counts = [
-            len(group._type_ids) for group in (UnitType.Destructible, UnitType.InhibitorZone, UnitType.AccelerationZone)
+            len(group.type_ids) for group in (UnitType.Destructible, UnitType.InhibitorZone, UnitType.AccelerationZone)
         ]
         assert counts == [68, 6, 6]
-        towers_and_debris = UnitType.CollapsibleTower._type_ids | UnitType.CollapsibleTowerDebris._type_ids
-        assert UnitType.Destructible._type_ids == _types_named_with("DESTRUCTIBLE_") | towers_and_debris
+        towers_and_debris = UnitType.CollapsibleTower.type_ids | UnitType.CollapsibleTowerDebris.type_ids
+        assert UnitType.Destructible.type_ids == _types_named_with("DESTRUCTIBLE_") | towers_and_debris
 
     def test_a_spire_and_an_overlord_are_a_plain_one_or_what_the_tables_count_as_one(self) -> None:
-        assert UnitType.AnySpire._type_ids == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
-        assert UnitType.AnyOverlord._type_ids == {
+        assert UnitType.AnySpire.type_ids == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
+        assert UnitType.AnyOverlord.type_ids == {
             UnitTypeId.OVERLORD,
             UnitTypeId.OVERLORD_TRANSPORT,
             UnitTypeId.OVERSEER,
@@ -169,20 +169,20 @@ class TestUnitType:
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
             row = first_corpus_tables.units[unit_type]
             for linked in {*row.tech_aliases, *filter(None, [form_of.get(unit_type)])}:
-                shared = [group for group in _curated_groups() if {unit_type, linked} <= group._type_ids]
+                shared = [group for group in _curated_groups() if {unit_type, linked} <= group.type_ids]
                 assert shared, (unit_type, linked)
 
     def test_any_type_is_every_type(self) -> None:
-        assert UnitType.AnyType._type_ids == set(UnitTypeId)
+        assert UnitType.AnyType.type_ids == set(UnitTypeId)
 
     def test_the_workers_and_townhalls_are_those_curated(self) -> None:
-        assert UnitType.Worker._type_ids == {
+        assert UnitType.Worker.type_ids == {
             UnitTypeId.SCV,
             UnitTypeId.PROBE,
             UnitTypeId.DRONE,
             UnitTypeId.DRONE_BURROWED,
         }
-        assert UnitType.Townhall._type_ids == {
+        assert UnitType.Townhall.type_ids == {
             UnitTypeId.COMMAND_CENTER,
             UnitTypeId.COMMAND_CENTER_FLYING,
             UnitTypeId.ORBITAL_COMMAND,
@@ -193,37 +193,37 @@ class TestUnitType:
             UnitTypeId.LAIR,
             UnitTypeId.HIVE,
         }
-        assert UnitType.AnyTerranTownhall._type_ids == UnitType.Townhall._type_ids & UnitType.Terran._type_ids
-        assert UnitType.AnyZergTownhall._type_ids == {UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE}
+        assert UnitType.AnyTerranTownhall.type_ids == UnitType.Townhall.type_ids & UnitType.Terran.type_ids
+        assert UnitType.AnyZergTownhall.type_ids == {UnitTypeId.HATCHERY, UnitTypeId.LAIR, UnitTypeId.HIVE}
 
     def test_mineral_fields_geysers_and_gas_buildings_are_what_the_tables_say_holds_minerals_or_vespene(
         self, first_corpus_tables: GameData
     ) -> None:
         rows = [first_corpus_tables.units[unit_type] for unit_type in UnitTypeId]
         vespene = {row.id for row in rows if row.has_vespene}
-        assert UnitType.AnyMineralField._type_ids == {row.id for row in rows if row.has_minerals}
-        assert UnitType.AnyVespeneGeyser._type_ids == vespene - UnitType.GasBuilding._type_ids
-        assert UnitType.GasBuilding._type_ids == vespene & UnitType.Structure._type_ids - {
+        assert UnitType.AnyMineralField.type_ids == {row.id for row in rows if row.has_minerals}
+        assert UnitType.AnyVespeneGeyser.type_ids == vespene - UnitType.GasBuilding.type_ids
+        assert UnitType.GasBuilding.type_ids == vespene & UnitType.Structure.type_ids - {
             row.id for row in rows if row.race is Race.NONE
         }
-        counts = [len(group._type_ids) for group in (UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)]
+        counts = [len(group.type_ids) for group in (UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)]
         assert counts == [15, 6]
-        assert UnitTypeId.REFINERY_RICH in UnitType.GasBuilding._type_ids
+        assert UnitTypeId.REFINERY_RICH in UnitType.GasBuilding.type_ids
 
     def test_an_add_on_is_a_tech_lab_or_a_reactor_plain_or_of_any_host(self) -> None:
-        assert UnitType.AnyTechLab._type_ids == {
+        assert UnitType.AnyTechLab.type_ids == {
             UnitTypeId.TECH_LAB,
             UnitTypeId.TECH_LAB_BARRACKS,
             UnitTypeId.TECH_LAB_FACTORY,
             UnitTypeId.TECH_LAB_STARPORT,
         }
-        assert UnitType.AnyReactor._type_ids == {
+        assert UnitType.AnyReactor.type_ids == {
             UnitTypeId.REACTOR,
             UnitTypeId.REACTOR_BARRACKS,
             UnitTypeId.REACTOR_FACTORY,
             UnitTypeId.REACTOR_STARPORT,
         }
-        assert UnitType.AnyAddOn._type_ids == UnitType.AnyTechLab._type_ids | UnitType.AnyReactor._type_ids
+        assert UnitType.AnyAddOn.type_ids == UnitType.AnyTechLab.type_ids | UnitType.AnyReactor.type_ids
 
 
 _MARINE_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))

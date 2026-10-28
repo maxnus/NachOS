@@ -81,7 +81,7 @@ _SPOTS_TO_TRY_ON_CREEP = ((0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1,
 _CREEP_COVERING_STEPS = 3200
 _OFF_CREEP_PROBE = AbilityId.SCV_BUILD_SENSOR_TOWER
 _ON_CREEP_PROBE = RawAbilityId.Build_CreepTumor_Queen
-_RESOURCES = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
+_RESOURCES = UnitType.AnyMineralField.type_ids | UnitType.AnyVespeneGeyser.type_ids
 # The game creates these only on creep, so they are measured last, on a hatchery's creep.
 _MADE_ONLY_ON_CREEP = (UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_QUEEN)
 # A build the placement query refuses under the ability's own id, by the id of the unit that places it.

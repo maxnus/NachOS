@@ -73,7 +73,7 @@ class GameMap:
         townhalls = (
             unit
             for unit in observation.observation.raw_data.units
-            if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type in UnitType.Townhall._type_ids
+            if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type in UnitType.Townhall.type_ids
         )
         townhall = next(townhalls, None)
         if townhall is None:

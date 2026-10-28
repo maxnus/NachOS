@@ -324,6 +324,7 @@ it.
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
+| `mineral_ids`, `geyser_ids`, `ALL_GAS`, sets of type ids | `UnitType.AnyMineralField.type_ids`, `AnyVespeneGeyser.type_ids` and `GasBuilding.type_ids`, the same types; every type and group has its `type_ids`, for a type with no unit |
 | `units.owned`, `structure`, `ready`, `not_ready` | `units.own`, `units.structures`, `units.complete`, `units.not_complete` |
 | `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
 | `units.visible` | `units.visible` |

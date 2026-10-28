@@ -181,16 +181,16 @@ def _measure_refusals(
 def measure_resource_refusals(installation: Installation) -> list[ResourceRefusals]:
     """Measure what every kind of mineral field and geyser refuses a townhall."""
     resource_kinds = [
-        (UnitTypeId(type_id), _MINERAL_FIELD_SIZE) for type_id in sorted(UnitType.AnyMineralField._type_ids)
+        (UnitTypeId(type_id), _MINERAL_FIELD_SIZE) for type_id in sorted(UnitType.AnyMineralField.type_ids)
     ]
-    resource_kinds += [(UnitTypeId(type_id), _GEYSER_SIZE) for type_id in sorted(UnitType.AnyVespeneGeyser._type_ids)]
+    resource_kinds += [(UnitTypeId(type_id), _GEYSER_SIZE) for type_id in sorted(UnitType.AnyVespeneGeyser.type_ids)]
     all_refusals = []
     with playing(Race.TERRAN, installation) as game:
         game.cheat(Cheat.SHOW_MAP)
         # The map's resources come into sight under new tags.
         game.client.step(4)
         # Workers wander onto the ground asked about, and the only open ground wide enough is beside resources.
-        resources = UnitType.AnyMineralField._type_ids | UnitType.AnyVespeneGeyser._type_ids
+        resources = UnitType.AnyMineralField.type_ids | UnitType.AnyVespeneGeyser.type_ids
         game.remove(unit.tag for unit in game.units() if unit.unit_type in resources | {UnitTypeId.SCV})
         game_map = GameMap._from_game(game.client.game_info(), game.client.observation())
         at = _clear_open_ground(game, game_map, game.units())

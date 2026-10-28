@@ -194,7 +194,7 @@ class TestFilters:
     )
     def test_by_unit_type_one_or_several_groups_included(self, wanted: tuple[type[UnitType.AnyType], ...]) -> None:
         units = _mine(40)
-        types = frozenset[UnitTypeId]().union(*(unit_type._type_ids for unit_type in wanted))
+        types = frozenset[UnitTypeId]().union(*(unit_type.type_ids for unit_type in wanted))
         first, *rest = wanted
         assert _tags(units.of_type(first, *rest)) == [unit.tag for unit in units if unit.type_id in types]
         assert _tags(units.excluding_type(first, *rest)) == [unit.tag for unit in units if unit.type_id not in types]
@@ -213,7 +213,7 @@ class TestFilters:
     ) -> None:
         """As `only` takes them."""
         units = _mine(40)
-        types = set[UnitTypeId]().union(*({w} if isinstance(w, UnitTypeId) else w._type_ids for w in wanted))
+        types = set[UnitTypeId]().union(*({w} if isinstance(w, UnitTypeId) else w.type_ids for w in wanted))
         first, *rest = wanted
         assert _tags(units.of_type(first, *rest)) == [unit.tag for unit in units if unit.type_id in types]
         assert _tags(units.excluding_type(first, *rest)) == [unit.tag for unit in units if unit.type_id not in types]
