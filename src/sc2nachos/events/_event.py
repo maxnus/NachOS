@@ -524,4 +524,4 @@ class AlertEvent(Event):
 
 
 # Every unit type: what a vital is watched for when `of` is given no types.
-_EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType._type_ids
+_EVERY_TYPE: frozenset[UnitTypeId] = UnitType.AnyType.type_ids

@@ -268,7 +268,7 @@ class PlacementGrids:
         row = self._game_data.units.get(unit_type)
         requirement = None if row is None else row.creep_requirement
         keeps_to = requirement if requirement in (CreepRequirement.ON_CREEP, CreepRequirement.OFF_CREEP) else None
-        needs = (unit_type in UnitType.Townhall._type_ids, keeps_to)
+        needs = (unit_type in UnitType.Townhall.type_ids, keeps_to)
         if (ground := self._ground_by_needs.get(needs)) is None:
             ground = self._static & self.dynamic
             if needs[0]:
@@ -283,7 +283,7 @@ class PlacementGrids:
     def _footprint_of(self, unit_type: UnitTypeId) -> Footprint:
         """The footprint a structure of `unit_type` covers; raises `ValueError` for a type with none, and for a gas
         building, since `static` closes the geysers it stands on."""
-        if unit_type in UnitType.GasBuilding._type_ids:
+        if unit_type in UnitType.GasBuilding.type_ids:
             raise ValueError(f"{unit_type.name} stands on a geyser, which no placement grid leaves free")
         row = self._game_data.units.get(unit_type)
         if row is None or row.footprint is None:

@@ -221,7 +221,7 @@ class TurningSweep:
         rivals.step(_SETTLING_STEPS)
         self.base_build = self._me.client.ping().base_build
         self.data = GameData(self._me.client.game_data())
-        townhall_types = UnitType.Townhall._type_ids
+        townhall_types = UnitType.Townhall.type_ids
         self._remove(
             unit.tag
             for unit in self._me.units()

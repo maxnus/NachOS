@@ -38,7 +38,7 @@ from sc2nachos.player import Player
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
-from sc2nachos.units._units import _type_ids
+from sc2nachos.units._units import _type_ids_of
 
 # The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
 _MOST_CHAT_BYTES = 1039
@@ -293,7 +293,7 @@ class Api:
         make, until the structure stands. A reactor's two marines are two. The turn's orders are not among them; they
         are in `api.orders.issued_to`. Takes the types as `Units.of_type` does.
         """
-        wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids(types, unit_types)
+        wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids_of(types, unit_types)
         return self._current_game().state.production.of_types(wanted)
 
     @property

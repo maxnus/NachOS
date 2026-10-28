@@ -81,7 +81,7 @@ from sc2nachos.units._unit_type import UnitType
 _FIRING_STEPS = 64
 _SETTLING_STEPS = 4
 _REMOVAL_STEPS = 8
-_TOWNHALL_TYPES = UnitType.Townhall._type_ids
+_TOWNHALL_TYPES = UnitType.Townhall.type_ids
 # Half the width of the open ground trials stand on: room for the longest reach searched, a sieged tank's 13 and more.
 _OPEN_GROUND_HALF_WIDTH = 10
 # How far from where it was asked for a unit may stand before its sample is set aside as displaced.

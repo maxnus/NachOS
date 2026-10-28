@@ -49,6 +49,8 @@ class UnitType:
     or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
     a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
     `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+
+    `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
 
     class AnyType:
@@ -59,17 +61,20 @@ class UnitType:
         error on it until `includes` narrows it.
         """
 
-        _type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        """The ids this class stands for: a type's own `id`, or those of every type in a group. A type id with no unit
+        is tested against them, as for a structure about to be built: `type_id in UnitType.GasBuilding.type_ids`. A
+        unit is tested by `includes`, which narrows it."""
 
         def __init_subclass__(cls) -> None:
             """Add the type a class names by its `id` to every group it is in. A class without an `id` is a group."""
             super().__init_subclass__()
             type_id: UnitTypeId | None = cls.__dict__.get("id")
-            cls._type_ids = frozenset() if type_id is None else frozenset((type_id,))
+            cls.type_ids = frozenset() if type_id is None else frozenset((type_id,))
             if type_id is not None:
                 # Everything between the class and `object` is a group it is in, `AnyType` included.
                 for group in cast("tuple[type[UnitType.AnyType], ...]", cls.__mro__[1:-1]):
-                    group._type_ids |= cls._type_ids
+                    group.type_ids |= cls.type_ids
 
         @overload
         @classmethod
@@ -85,7 +90,7 @@ class UnitType:
 
             Raises `UncuratedIdError` for a unit of a type the curated ids leave out.
             """
-            return unit.type_id in cls._type_ids
+            return unit.type_id in cls.type_ids
 '''
 
 # The races with a group of their own. A map's own units, such as mineral fields and rocks, have no race.

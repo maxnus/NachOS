@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #180, and #183. `uv run pytest` passes 2977 tests with #182; `uv run pytest -m
+- nachOS `main` has every PR to #183. `uv run pytest` passes 2977 tests with #184; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -698,6 +698,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`). The name
     stays `combined_with`, the one-collection form of `Units.combined` (the owner, in the review of #182, over
     `with_`, since `with` is a keyword, and over `plus`) (#182).
+- **A group's type ids are public** (the owner, 2026-10-28, after a survey of what AvocaDOS can retire): `type_ids`,
+  every type's and group's frozenset of `UnitTypeId`s, for a type with no unit to test, as a structure about to be
+  built, over `includes` taking a bare type id too. It was `_type_ids`; nine of AvocaDOS's sets of ids hold exactly a
+  group's types (#184).
 
 ## Next
 
