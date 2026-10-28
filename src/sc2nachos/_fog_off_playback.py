@@ -76,7 +76,7 @@ class _FogOffPlayback:
         return self._whole_game_tracker.unit_tracker.by_tag(real_tag).id
 
     def end(self) -> None:
-        """Mark every unit of the whole game stale: the game is over."""
+        """Mark every unit of the whole game unlisted: the game is over."""
         self._whole_game_tracker.end()
 
     def player_view(self, fog_off_observation: sc2api_pb2.ResponseObservation) -> sc2api_pb2.ResponseObservation:

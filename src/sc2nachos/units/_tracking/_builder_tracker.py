@@ -114,7 +114,7 @@ class _BuilderTracker:
         if not self._builders and not self._used_up_builders:
             return
         for builder in self._used_up_builders:
-            if builder._stale and not builder._dead:
+            if not builder._listed and not builder._dead:
                 self._tracker.unit_tracker._mark_unit_dead(builder, present, reported=False)
         self._used_up_builders = []
         for structure, builder in list(self._builders.items()):

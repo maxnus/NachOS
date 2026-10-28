@@ -686,7 +686,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `Unit.is_listed`, with `Units.listed` and `not_listed`, for `is_stale`, `is_not_stale`, `Units.stale` and
     `not_stale`: a positive name, which needs no opposite (the owner, 2026-10-28, over `is_present`, which reads as
     alive, `is_in_observation` and keeping `is_stale`; the owner had asked about `is_observed`, `is_current`,
-    `is_updated` and `is_latest`, each wrong for a unit listed but not seen, or vague) (#182);
+    `is_updated` and `is_latest`, each wrong for a unit listed but not seen, or vague) (#182). The internal flag
+    follows, inverted: `_listed`, `_mark_unlisted` and the tracker's `_unlisted_units`, so the code has one word for
+    it (the owner, 2026-10-28, over keeping `_stale` to hold the PR to the public names) (#182);
   - `Units.combined_with`, one unit or many added, matched by id, and `Units.without` taking a single unit too.
     `Units` stays immutable: #180's covariance needs it, every handler shares `api.units`, and its id index must not
     go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`) (#182).

@@ -93,6 +93,7 @@ class Unit[K: UnitType.AnyType]:
         "_latest_report",
         "_last_seen",
         "_latest_visible_report",
+        "_listed",
         "_order_targets",
         "_orders",
         "_own",
@@ -103,7 +104,6 @@ class Unit[K: UnitType.AnyType]:
         "_raw_alliance",
         "_raw_type",
         "_radius_footprint",
-        "_stale",
         "_step",
         "_tag",
         "_tracker",
@@ -134,7 +134,7 @@ class Unit[K: UnitType.AnyType]:
     _previous_report: raw_pb2.Unit | None
     # `damage_taken` as last worked out, with the tracker update it was worked out at.
     _damage_taken: _Snapshot[float | None]
-    _stale: bool
+    _listed: bool
     _dead: bool
     # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
     # (in game).
@@ -166,7 +166,7 @@ class Unit[K: UnitType.AnyType]:
         self._previous_report = None
         self._previous_step = step
         self._damage_taken = _Snapshot(None)
-        self._stale = False
+        self._listed = True
         self._dead = False
         self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
         self._radius_footprint = None
@@ -182,9 +182,9 @@ class Unit[K: UnitType.AnyType]:
         """
         position = self._position
         last_step = self._step
-        if self._stale:
+        if not self._listed:
             # Back in the observation. How it moved while away is not known.
-            self._stale = False
+            self._listed = True
             self._previous_position = None
         else:
             # A unit is updated once an observation, so this is the report of the observation before.
@@ -239,10 +239,10 @@ class Unit[K: UnitType.AnyType]:
                     targets = self._order_targets = {}
                 targets[order.ability_id] = unit
 
-    def _mark_stale(self) -> None:
-        """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
+    def _mark_unlisted(self) -> None:
+        """Mark the unit unlisted: out of the observation, keeping its last values without keeping that observation
         alive."""
-        self._stale = True
+        self._listed = False
         self._previous_report = None
         report = self._latest_report
         copy = _copy(report)
@@ -252,8 +252,8 @@ class Unit[K: UnitType.AnyType]:
 
     def _mark_dead(self) -> None:
         """Mark the unit dead: out of the observation for good."""
-        if not self._stale:
-            self._mark_stale()
+        if self._listed:
+            self._mark_unlisted()
         self._dead = True
 
     def _update_unit_type(self, raw_type: int) -> None:
@@ -279,7 +279,7 @@ class Unit[K: UnitType.AnyType]:
         return NotReportedError(f"the game never showed {self!r} visible, so it never reported its {what}")
 
     def __repr__(self) -> str:
-        state = ", dead" if self._dead else ", unlisted" if self._stale else ""
+        state = ", dead" if self._dead else "" if self._listed else ", unlisted"
         return f"{type(self).__name__}({self._type_id.name}, id={self._id}, at {self._position}{state})"
 
     # Identity.
@@ -341,7 +341,7 @@ class Unit[K: UnitType.AnyType]:
         structure remembered in the fog. Not once it went out of sight, or burrowed undetected, as a zergling does, or
         went into a transport, a gas building or a structure it is becoming, as a drone does, nor once it died.
         `is_visible` is the first of these alone."""
-        return not self._stale
+        return self._listed
 
     @property
     def is_dead(self) -> bool:
@@ -366,7 +366,7 @@ class Unit[K: UnitType.AnyType]:
         is inside a gas building or a transport, nor under a neural parasite, which makes it an enemy `Unit`, nor once
         it is dead. Read it before ordering a unit kept from an earlier observation, or reading what only `OwnUnit`
         has. It goes by the listing alone, so a reaper's grenade, listed as its thrower's, reads orderable."""
-        return not self._stale and self._own
+        return self._listed and self._own
 
     @property
     def first_seen(self) -> GameTime | None:
@@ -458,7 +458,7 @@ class Unit[K: UnitType.AnyType]:
     def is_visible(self) -> bool:
         """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for an
         unlisted unit, whose `visibility` reads as it was last listed."""
-        return not self._stale and self._latest_report.display_type == _VISIBLE
+        return self._listed and self._latest_report.display_type == _VISIBLE
 
     @property
     def cloak_state(self) -> CloakState:

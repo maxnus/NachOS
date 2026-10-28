@@ -202,7 +202,7 @@ class _Game:
         self._take_in(observation, step_observed)
 
     def end(self) -> None:
-        """Mark every unit stale, in every tracker: the game is over, and another is starting."""
+        """Mark every unit unlisted, in every tracker: the game is over, and another is starting."""
         self.tracker.end()
         if self._fog_off_playback is not None:
             self._fog_off_playback.end()
