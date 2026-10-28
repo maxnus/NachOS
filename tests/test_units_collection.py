@@ -128,6 +128,20 @@ class TestCombining:
         assert not Units.combined()
         assert not Units.combined(Units(), [])
 
+    def test_a_collection_combined_with_a_unit_or_units_adds_those_not_in_it(self) -> None:
+        units = _mine(5)
+        assert _tags(units[:2].combined_with(units[3])) == [1, 2, 4]
+        assert _tags(units[:2].combined_with(units[1])) == [1, 2]
+        assert _tags(units[:2].combined_with(units[1:4])) == [1, 2, 3, 4]
+        assert _tags(Units().combined_with(iter(units[:2]))) == [1, 2]
+
+    def test_a_collection_of_own_units_combined_with_a_unit_is_a_collection_of_units(self) -> None:
+        """For the type checker too: `Units` stays covariant, so the result holds both kinds."""
+        own: Units[OwnUnit[Any]] = _mine(2)
+        (enemy,) = _units(make_unit(3, alliance=Alliance.ENEMY))
+        combined: Units[Unit[Any]] = own.combined_with(enemy)
+        assert _tags(combined) == [1, 2, 3]
+
     def test_the_units_are_found_by_id_afterwards(self) -> None:
         units = _mine(5)
         combined = Units.combined(units[:3], units)
@@ -298,6 +312,10 @@ class TestFilters:
         assert _tags(units.without(units[2:5])) == [unit.tag for unit in units if unit not in units[2:5]]
         assert _tags(units.without([])) == _tags(units)
 
+    def test_without_one_of_them(self) -> None:
+        units = _mine(3)
+        assert _tags(units.without(units[1])) == [1, 3]
+
     def test_those_not_complete_are_those_complete_leaves_out(self) -> None:
         units = _mine(40)
         assert _tags(units.not_complete) == [unit.tag for unit in units if unit.build_progress < 1.0]
@@ -328,8 +346,7 @@ class TestWhatBecameOfThem:
         [
             ("alive", "is_alive"),
             ("dead", "is_dead"),
-            ("stale", "is_stale"),
-            ("not_stale", "is_not_stale"),
+            ("listed", "is_listed"),
             ("visible", "is_visible"),
             ("orderable", "is_orderable"),
         ],
@@ -341,14 +358,14 @@ class TestWhatBecameOfThem:
     def test_what_became_of_each(self) -> None:
         held = _held()
         assert _tags(held.dead) == [3]
-        assert _tags(held.stale) == [2, 3, 8]
+        assert _tags(held.not_listed) == [2, 3, 8]
         assert _tags(held.visible) == [1, 4, 5]
         assert _tags(held.orderable) == [1]
 
-    def test_alive_and_dead_split_the_units_and_so_do_stale_and_not_stale(self) -> None:
+    def test_alive_and_dead_split_the_units_and_so_do_listed_and_not_listed(self) -> None:
         held = _held()
         assert sorted(_tags(held.alive) + _tags(held.dead)) == sorted(_tags(held))
-        assert sorted(_tags(held.stale) + _tags(held.not_stale)) == sorted(_tags(held))
+        assert sorted(_tags(held.listed) + _tags(held.not_listed)) == sorted(_tags(held))
 
     def test_a_unit_a_neural_parasite_holds_is_not_this_players_to_order(self) -> None:
         """It is the enemy's, of the enemy's class, though it was this player's when the collection was kept."""

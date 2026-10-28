@@ -108,7 +108,7 @@ class _Tracker:
         self._unit_tracker.update(observation, step)
 
     def end(self) -> None:
-        """Mark every unit stale and forget what was kept for the next update. The game is over."""
+        """Mark every unit unlisted and forget what was kept for the next update. The game is over."""
         self._unit_tracker.end()
         self._builder_tracker.end()
         self._unit_comparer.stop()

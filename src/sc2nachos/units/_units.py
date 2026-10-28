@@ -60,6 +60,11 @@ class Units(Sequence[U]):
         combined._by_id = index
         return combined
 
+    def combined_with[V: Unit[Any]](self, units: V | Iterable[V]) -> Units[U | V]:
+        """These units and then `units`, one unit or many, each unit at its first appearance, matched by id as
+        `combined` matches them."""
+        return Units.combined(self._units, _unit_tuple(units))
+
     def __len__(self) -> int:
         return len(self._units)
 
@@ -114,10 +119,10 @@ class Units(Sequence[U]):
         unwanted = {unit_ids} if isinstance(unit_ids, int) else set(unit_ids)
         return Units(unit for unit in self._units if unit.id not in unwanted)
 
-    def without(self, units: Iterable[Unit[Any]]) -> Units[U]:
-        """These units but those of `units`, matched by NachOS id, so a structure remembered under a new tag still
-        matches."""
-        return self.without_ids(unit.id for unit in units)
+    def without(self, units: Unit[Any] | Iterable[Unit[Any]]) -> Units[U]:
+        """These units, leaving out `units`, one unit or many, matched by NachOS id, so a structure remembered under a
+        new tag still matches."""
+        return self.without_ids(unit.id for unit in _unit_tuple(units))
 
     # By what they are.
 
@@ -266,14 +271,14 @@ class Units(Sequence[U]):
         return Units(unit for unit in self._units if unit.is_dead)
 
     @property
-    def stale(self) -> Units[U]:
-        """The units the last observation left out, as `Unit.is_stale` has it."""
-        return Units(unit for unit in self._units if unit.is_stale)
+    def listed(self) -> Units[U]:
+        """The units the last observation listed, as `Unit.is_listed` has it."""
+        return Units(unit for unit in self._units if unit.is_listed)
 
     @property
-    def not_stale(self) -> Units[U]:
-        """The units the last observation listed: those `stale` leaves out."""
-        return Units(unit for unit in self._units if unit.is_not_stale)
+    def not_listed(self) -> Units[U]:
+        """The units the last observation did not list: those `listed` leaves out."""
+        return Units(unit for unit in self._units if not unit.is_listed)
 
     @property
     def visible(self) -> Units[U]:
@@ -284,7 +289,7 @@ class Units(Sequence[U]):
     @property
     def orderable[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
         """The units this player can order now, as `Unit.is_orderable` has it."""
-        return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_not_stale)
+        return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_listed)
 
     @property
     def ground(self) -> Units[U]:
@@ -438,7 +443,7 @@ class Units(Sequence[U]):
                 continue
             if tile not in footprint.tiles(at=position):
                 continue
-            if not unit.is_stale and unit.visibility.in_sight:
+            if unit.is_listed and unit.visibility.in_sight:
                 return unit
             if remembered is None:
                 remembered = unit

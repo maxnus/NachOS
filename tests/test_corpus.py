@@ -156,7 +156,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
         assert len({id(unit) for unit in units}) == len(units), "two tags of one observation are one unit"
         for unit in units:
             assert objects.setdefault(unit.id, unit) is unit
-            assert not unit.is_stale
+            assert unit.is_listed
         for unit in units.own:
             for name in _NAMING:
                 getattr(unit, name)

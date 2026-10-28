@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #179. `uv run pytest` passes 2974 tests with #180; `uv run pytest -m integration`
-  passed 41 against a real game with #177 (run 2026-10-25).
+- nachOS `main` has every PR to #180, and #183. `uv run pytest` passes 2977 tests with #182; `uv run pytest -m
+  integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -686,7 +686,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
     over neither) (#179);
   - and a fix, not the owner's call: `Units` covariant in its units, declared by a `TypeVar`, since the type
     parameter syntax inferred it invariant through the self types of `own` and `orderable`, so a `Units[OwnUnit]` had
-    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180).
+    neither; found switching AvocaDOS #54 to `orderable`, and guarded by a test pyright reads (#180);
+  - `Unit.is_listed`, with `Units.listed` and `not_listed`, for `is_stale`, `is_not_stale`, `Units.stale` and
+    `not_stale`: a positive name, which needs no opposite (the owner, 2026-10-28, over `is_present`, which reads as
+    alive, `is_in_observation` and keeping `is_stale`; the owner had asked about `is_observed`, `is_current`,
+    `is_updated` and `is_latest`, each wrong for a unit listed but not seen, or vague) (#182). The internal flag
+    follows, inverted: `_listed`, `_mark_unlisted` and the tracker's `_unlisted_units`, so the code has one word for
+    it (the owner, 2026-10-28, over keeping `_stale` to hold the PR to the public names) (#182);
+  - `Units.combined_with`, one unit or many added, matched by id, and `Units.without` taking a single unit too.
+    `Units` stays immutable: #180's covariance needs it, every handler shares `api.units`, and its id index must not
+    go out of date (the owner, 2026-10-28, over the operators `|` and `-`, and over a mutable `Units`). The name
+    stays `combined_with`, the one-collection form of `Units.combined` (the owner, in the review of #182, over
+    `with_`, since `with` is a keyword, and over `plus`) (#182).
 
 ## Next
 
