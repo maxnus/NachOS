@@ -39,7 +39,7 @@ class UnitCommand(Action):
     target: Target | None
     """The point or unit the order was aimed at, or `None` for an order that takes neither."""
     queued: bool
-    """Whether the order was queued behind the units' current orders instead of replacing them."""
+    """Whether the order was queued behind the units' orders instead of replacing them."""
 
     @classmethod
     def _from_proto(

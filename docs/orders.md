@@ -37,7 +37,7 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
   a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
   is the point the game was given, not quite the one passed in.
-- **`queued`** puts the order behind each unit's current orders instead of replacing them.
+- **`queued`** puts the order behind each unit's orders instead of replacing them.
 - **`force`** sends the order even to units already carrying it out, which are otherwise left out
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
   queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
@@ -243,10 +243,10 @@ next observation.
 ## Reading a unit's orders
 
 An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
-current order and one for each queued. The two need not agree: the game snaps a build to its site, and drops what it
-cannot carry out. The ids do agree: a unit reports its type's own id of an action several types perform, and NachOS
-reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the game
-reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
+current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
+site, and drops what it cannot carry out. The ids do agree: a unit reports its type's own id of an action several types
+perform, and NachOS reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the
+game reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
 `LIBERATOR_SIEGE_AT`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
 
 The targets need not agree either. An SCV walking back to a mineral field out of sight shows its `GATHER` aimed at a

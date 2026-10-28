@@ -67,7 +67,7 @@ class Order[T]:
 
     @property
     def queued(self) -> bool:
-        """Whether the order goes behind each unit's current orders instead of replacing them."""
+        """Whether the order goes behind each unit's orders instead of replacing them."""
         return self._queued
 
     @property

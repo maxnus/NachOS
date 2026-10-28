@@ -42,10 +42,10 @@ class TargetType(ReadableIntEnum):
 
 
 class OrderBehavior(Enum):
-    """What ordering an ability does to the unit's current orders (tool `sweep_orders`)."""
+    """What ordering an ability does to the unit's orders (tool `sweep_orders`)."""
 
     REPLACES = "replaces"
-    """Drops the unit's current orders and runs instead: a move, an attack, a worker's build."""
+    """Drops the unit's orders and runs instead: a move, an attack, a worker's build."""
     QUEUES = "queues"
     """Goes behind whatever the structure is making, queued or not: a train or a research."""
     NEEDS_IDLE = "needs idle"
@@ -65,8 +65,7 @@ _NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
 
 @dataclass(frozen=True, slots=True)
 class OrderBehaviors:
-    """What ordering one ability does to a unit's current orders: its own behavior, and each unit type's where that
-    differs."""
+    """What ordering one ability does to a unit's orders: its own behavior, and each unit type's where that differs."""
 
     own: OrderBehavior = OrderBehavior.REPLACES
     by_type: Mapping[UnitTypeId, OrderBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
@@ -270,7 +269,7 @@ class AbilityData:
     with `ERROR` (tool `sweep_tech_tree`). `None` for everything else, a warp-in and a build among them: a warp gate
     keeps no queue, and a structure under construction is cancelled on itself with `CANCEL`."""
     order_behavior: OrderBehavior
-    """What ordering it does to the unit's current orders: the behavior the types carrying it out share, or `REPLACES`
+    """What ordering it does to the unit's orders: the behavior the types carrying it out share, or `REPLACES`
     where they differ; `order_behavior_for` gives each unit type's."""
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
@@ -291,7 +290,7 @@ class AbilityData:
         return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
-        """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a
+        """What ordering it does to the orders of a unit of `unit_type`: what that type's own does, as a
         ghost's hold fire keeps its orders and a burrowed lurker's takes it off its attack, and keeping the orders of
         the types `KEEPS_ORDERS_BY_TYPE` names for it, such as a barracks given a smart (in game)."""
         return self._behaviors_by_performer.get(unit_type, self.order_behavior)

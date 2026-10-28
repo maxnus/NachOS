@@ -127,7 +127,7 @@ class OrderBook:
         Every unit given carries it out, and a unit given twice counts once. An ability every unit of one command
         carries out (`AbilityData.multi_unit`) goes out as one command naming them all, so units ordered together keep
         their spacing where the game spreads them; any other goes out as a command to each. `queued` puts the order
-        behind each unit's current orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
+        behind each unit's orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
         sent until the turn's handlers have all run.
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
@@ -257,7 +257,7 @@ class OrderBook:
     ) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
         """Each order of `issued` that goes out, with the units it goes out to.
 
-        An order that acts at once, or that is queued behind a unit's current orders, competes with nothing. Of the
+        An order that acts at once, or that is queued behind a unit's orders, competes with nothing. Of the
         rest, a unit keeps only the last it was given. An order is then left out for the units already carrying it
         out, unless it is in `forced`. A withdrawn order, or one left with no unit, is not sent.
         """
@@ -369,7 +369,7 @@ class OrderBook:
 
 
 def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:
-    """What an ability does to the current orders of `unit`, a unit of its type. An ability with no row replaces
+    """What an ability does to the orders of `unit`, a unit of its type. An ability with no row replaces
     them."""
     return OrderBehavior.REPLACES if row is None else row.order_behavior_for(unit.type_id)
 
