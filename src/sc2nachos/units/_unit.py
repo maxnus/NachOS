@@ -76,8 +76,8 @@ class Unit[K: UnitType.AnyType]:
 
     Position, type and visibility read as of the last observation that listed the unit. Everything else reads as
     of the last observation that showed it visible, `last_seen`, and raises `NotReportedError` for a unit never
-    shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit that leaves the
-    observation is no longer `is_listed`: it keeps its last values, and is observed under the same id again if it
+    shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit the observation
+    leaves out is unlisted, `is_listed` false: it keeps its last values, and is observed under the same id again if it
     comes back.
     """
 
@@ -279,7 +279,7 @@ class Unit[K: UnitType.AnyType]:
         return NotReportedError(f"the game never showed {self!r} visible, so it never reported its {what}")
 
     def __repr__(self) -> str:
-        state = ", dead" if self._dead else ", not listed" if self._stale else ""
+        state = ", dead" if self._dead else ", unlisted" if self._stale else ""
         return f"{type(self).__name__}({self._type_id.name}, id={self._id}, at {self._position}{state})"
 
     # Identity.
@@ -337,10 +337,10 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_listed(self) -> bool:
-        """Whether the last observation listed the unit: in sight, cloaked and undetected included, or a structure
-        remembered in the fog. Not once it went out of sight, or burrowed undetected, as a zergling does, or went into a
-        transport, a gas building or a structure it is becoming, as a drone does, nor once it died. `is_visible` is the
-        first of these alone."""
+        """Whether the last observation listed the unit: in sight and seen, in sight but cloaked and undetected, or a
+        structure remembered in the fog. Not once it went out of sight, or burrowed undetected, as a zergling does, or
+        went into a transport, a gas building or a structure it is becoming, as a drone does, nor once it died.
+        `is_visible` is the first of these alone."""
         return not self._stale
 
     @property
@@ -456,8 +456,8 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_visible(self) -> bool:
-        """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for a
-        unit not listed, whose `visibility` reads as it was last listed."""
+        """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for an
+        unlisted unit, whose `visibility` reads as it was last listed."""
         return not self._stale and self._latest_report.display_type == _VISIBLE
 
     @property

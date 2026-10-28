@@ -120,8 +120,8 @@ class Units(Sequence[U]):
         return Units(unit for unit in self._units if unit.id not in unwanted)
 
     def without(self, units: Unit[Any] | Iterable[Unit[Any]]) -> Units[U]:
-        """These units but `units`, one unit or many, matched by NachOS id, so a structure remembered under a new tag
-        still matches."""
+        """These units, leaving out `units`, one unit or many, matched by NachOS id, so a structure remembered under a
+        new tag still matches."""
         return self.without_ids(unit.id for unit in _unit_tuple(units))
 
     # By what they are.

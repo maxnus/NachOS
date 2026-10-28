@@ -347,7 +347,7 @@ it.
   remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
   lift off or uproot may have moved instead, so it stays unlisted until it turns up. python-sc2 drops the remembered
   copy and says nothing.
-- **A drone that becomes a structure is not listed until the structure finishes or dies, then dead**, up to an observation
+- **A drone that becomes a structure is unlisted until the structure finishes or dies, then dead**, up to an observation
   after the structure's `OwnConstructionFinishedEvent`. If the structure is cancelled, the drone comes back as the same
   object ([game behavior](game-behavior/units.md#units-coming-changing-and-going)). `builder` links the two
   for your own drones only, since only your own units' orders are reported.

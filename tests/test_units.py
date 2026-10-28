@@ -1594,7 +1594,7 @@ def test_in_a_real_game_a_unit_keeps_its_object_and_id_through_everything_but_de
         assert tank.type_id is UnitTypeId.SIEGE_TANK_SIEGED
         assert game.tracker.unit_tracker.present.get(tank.id) is tank
 
-        # A unit loaded into a transport is not listed, and is the same object once unloaded.
+        # A unit loaded into a transport is unlisted, and is the same object once unloaded.
         game.debug(
             game.create(UnitTypeId.MARINE, out_there + (3, 0)), game.create(UnitTypeId.MEDIVAC, out_there + (3, 1))
         )
