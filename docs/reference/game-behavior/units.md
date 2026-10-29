@@ -70,9 +70,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   #39).
 - A barracks names its add-on in `add_on_tag` only once the add-on is finished: 0 for the whole build, then the
   add-on's tag from the first observation where the add-on reads finished. To the enemy it is 0 throughout, though
-  the add-on itself is listed to the enemy, at the barracks's position plus (2.5, -0.5). Seen in a game of two
-  clients both played from here, where one player's barracks built a reactor beside the other's marine, both views
-  read every 2 steps (2026-10-29, with a probe, fast build on, build 75689).
+  the add-on itself is listed to the enemy, at the barracks's position plus (2.5, -0.5). The barracks's order for it,
+  `Build_Reactor_Barracks`, is aimed at the barracks's own center and reads progress 0 for the whole build, and the
+  barracks has no order once the add-on is finished. Seen in a game of two clients both played from here, where one
+  player's barracks built a reactor beside the other's marine, both views read every 2 steps (2026-10-29, with a
+  probe, fast build on, build 75689).
 - `is_hallucination` is true for an enemy's hallucination only while a detector is near; this player's own are
   always flagged. `is_active` is true for any unit carrying out an order, the enemy's included. `engaged_target_tag`
   names the unit a marine attacks (#25).

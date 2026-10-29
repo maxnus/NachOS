@@ -194,7 +194,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def add_on(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> OwnUnit[Any] | None:
-        """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built (in game)."""
+        """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built, when it is
+        the host's `construction` (in game)."""
         return self._attached_add_on
 
     @property
@@ -218,12 +219,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def construction(self) -> OwnUnit[Any] | None:
-        """The unfinished structure the unit is building, or the one a drone became until it finishes, or `None`, as
-        for a dead unit."""
+        """The unfinished structure the unit is building, a barracks's, factory's or starport's add-on among them, or
+        the one a drone became until it finishes, or `None`, as for a dead unit."""
         return self._tracker.builder_tracker.structure_built_by(self)
 
     @property
     def builder(self: OwnUnit[UnitType.Structure]) -> OwnUnit[Any] | None:
-        """The unit building this structure, an SCV or a queen planting a creep tumor, or the drone that became it;
-        `None` for a structure nobody is building: one halted, one warped in, or one finished."""
+        """The unit building this structure, an SCV, a queen planting a creep tumor or an add-on's host, or the drone
+        that became it; `None` for a structure nobody is building: one halted, one warped in, or one finished."""
         return self._tracker.builder_tracker.builder_of(self)

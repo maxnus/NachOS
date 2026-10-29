@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #184. `uv run pytest` passes 2977 tests with #185; `uv run pytest -m
+- nachOS `main` has every PR to #185. `uv run pytest` passes 2978 tests with #186; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -712,6 +712,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   shield should not be a type error, and so do `construction`, which a queen planting a tumor has too, and
   `rally_targets`, which an egg and a cocoon have too (the owner, review of #185). Energy, cargo and detection wait
   (below).
+- **A host is its add-on's builder while it goes up** (the owner, 2026-10-29, over `in_production` looking for the
+  add-on itself). The game aims the host's add-on order at the host's own center and names the add-on only once
+  finished, so `in_production` listed one being built twice, under the host's order and as itself. The builder tracker
+  looks for an add-on at the order's target plus `ADD_ON_OFFSET`, so the host's `construction` and the add-on's
+  `builder` link the two until it finishes, and `in_production` drops the order by its rule for a build begun (#186).
+  Found moving AvocaDOS's production counters onto `in_production` (AvocaDOS #57).
 
 ## Next
 

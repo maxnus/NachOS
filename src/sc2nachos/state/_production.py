@@ -81,7 +81,8 @@ def _ability_product(row: AbilityData, unit_type: UnitTypeId) -> UnitTypeId | Up
 
 
 def _construction_has_started(unit: OwnUnit[Any]) -> bool:
-    """Whether the structure `unit` was ordered to build, or its add-on, has begun."""
+    """Whether the structure `unit` was ordered to build, or its add-on, has begun: whether it has a construction, or
+    an add-on finished as its order still shows."""
     return unit.construction is not None or unit.add_on is not None
 
 
