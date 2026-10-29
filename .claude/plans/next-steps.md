@@ -761,6 +761,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
 - Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
+- An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
+  at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
+  `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).
 - Self types for energy, cargo and detection, as #185 gave the reads whose types the tables or a definition settle
   (the owner, 2026-10-29, over doing them in #185, and over never). No group holds their types, and the corpus shows
   too few: they need new groups, such as `WithEnergy`, `Transport` and `Detector`, from a sweep that creates every

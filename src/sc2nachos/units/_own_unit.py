@@ -173,12 +173,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def has_reactor(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> bool:
-        """Whether a reactor is attached to a barracks, factory or starport."""
+        """Whether a finished reactor is attached to a barracks, factory or starport."""
         return self._has_add_on_of(UnitType.AnyReactor)
 
     @property
     def has_tech_lab(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> bool:
-        """Whether a tech lab is attached to a barracks, factory or starport."""
+        """Whether a finished tech lab is attached to a barracks, factory or starport."""
         return self._has_add_on_of(UnitType.AnyTechLab)
 
     @property
@@ -186,15 +186,15 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """How many units the unit trains at once: 2 for a structure with a reactor, 1 for another structure the
         game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
         unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
-        left out, and so is whether its add-on is: a barracks building its reactor reads 2, though it trains nothing
-        until the reactor finishes."""
+        left out. A reactor counts once finished, since the game names a structure's add-on only then (in game): a
+        barracks building its reactor reads 1."""
         if self.type_id not in self._tracker.game_data._unit_trainers:
             return 0
         return 2 if self._has_add_on_of(UnitType.AnyReactor) else 1
 
     @property
     def add_on(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> OwnUnit[Any] | None:
-        """The add-on of a barracks, factory or starport, or `None`."""
+        """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built (in game)."""
         return self._attached_add_on
 
     @property
