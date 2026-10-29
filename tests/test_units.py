@@ -83,6 +83,7 @@ _TABLES = make_tables(
         attributes=[data_pb2.Attribute.Mechanical],
     ),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.CREEP_TUMOR_QUEEN, attributes=[data_pb2.Attribute.Structure]),
+    data_pb2.UnitTypeData(unit_id=UnitTypeId.REACTOR_BARRACKS, attributes=[data_pb2.Attribute.Structure]),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ACCELERATION_ZONE_LARGE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.FORCE_FIELD, race=Race.PROTOSS.value),
@@ -1028,6 +1029,26 @@ class TestConstruction:
         queen, tumor = _Game().observe(0, make_unit(1, UnitTypeId.QUEEN, at=(22.0, 20.0), orders=(plant,)), tumor_at)
         assert isinstance(queen, OwnUnit) and isinstance(tumor, OwnUnit)
         assert (queen.construction, tumor.builder) == (tumor, queen)
+
+    def test_a_host_building_its_add_on_is_its_builder_by_the_order_aimed_at_the_host(self) -> None:
+        """The host's add-on order is aimed at the host's own center, the add-on standing beside it, and the host names
+        the add-on only once it is finished (in game)."""
+        build = raw_pb2.UnitOrder(
+            ability_id=RawAbilityId.Build_Reactor_Barracks, target_world_space_pos=common_pb2.Point(x=20.5, y=20.5)
+        )
+        reactor_at = make_unit(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0), build_progress=0.125)
+        game = _Game()
+        barracks, reactor = game.observe(
+            0, make_unit(1, UnitTypeId.BARRACKS, at=(20.5, 20.5), orders=(build,)), reactor_at
+        )
+        assert isinstance(barracks, OwnUnit) and isinstance(reactor, OwnUnit)
+        assert (barracks.construction, reactor.builder, barracks.add_on) == (reactor, barracks, None)
+        game.observe(
+            16,
+            make_unit(1, UnitTypeId.BARRACKS, at=(20.5, 20.5), add_on_tag=2),
+            make_unit(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0)),
+        )
+        assert (barracks.construction, reactor.builder, barracks.add_on) == (None, None, reactor)
 
     def test_a_unit_whose_order_places_a_structure_is_constructing(self, first_corpus_tables: GameData) -> None:
         """Whether an ability places a structure is the game's tables' to say: an SCV's build on its way to the site, a

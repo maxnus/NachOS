@@ -357,8 +357,9 @@ it.
   engaged target are units, unlisted or dead ones included; python-sc2 gives tags to look up. An order aimed at
   nothing has `None` for its target; python-sc2's is `0`.
 - **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it,
-  the queen planting a creep tumor or the drone that became it, and `scv.construction` the structure. Both read
-  `None` once it is finished, while it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv`
+  the queen planting a creep tumor, the barracks, factory or starport building its add-on, or the drone that became
+  it, and `scv.construction` the structure. Both read `None` once it is finished, while it is halted, and for a
+  Protoss structure. python-sc2 has `is_constructing_scv`
   and no link; it is true from the order on, while the SCV walks to the site, whereas `construction` is `None` until
   the structure is placed, and `is_constructing` is true from the order on, as python-sc2's is.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents

@@ -164,17 +164,28 @@ class TestProduction:
         assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(2, 0.25)]
 
     def test_an_add_on_is_one_by_its_order_until_it_stands_which_then_is(self) -> None:
+        """As the game shows it: the host's order is aimed at the host's own center, and the host names its add-on
+        only once the add-on is finished (in game)."""
         game = _Game(tables=_MAKING_TABLES)
-        ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR))])
+        build = _making(AbilityId.BUILD_REACTOR, at=(20.5, 20.5))
+        ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, build, at=(20.5, 20.5))])
         assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, 0.0)]
         going_up = game.observe(
             16,
             units=[
-                _done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR), add_on_tag=2),
-                make_unit(2, UnitTypeId.REACTOR_BARRACKS, build_progress=0.125),
+                _done(1, UnitTypeId.BARRACKS, build, at=(20.5, 20.5)),
+                make_unit(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0), build_progress=0.125),
             ],
         )
         assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(2, 0.125)]
+        standing = game.observe(
+            32,
+            units=[
+                _done(1, UnitTypeId.BARRACKS, at=(20.5, 20.5), add_on_tag=2),
+                _done(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0)),
+            ],
+        )
+        assert _made(standing, UnitTypeId.REACTOR_BARRACKS) == []
 
     def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(

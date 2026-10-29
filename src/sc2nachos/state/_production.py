@@ -81,8 +81,8 @@ def _ability_product(row: AbilityData, unit_type: UnitTypeId) -> UnitTypeId | Up
 
 
 def _construction_has_started(unit: OwnUnit[Any]) -> bool:
-    """Whether the structure `unit` was ordered to build, or its add-on, has begun."""
-    return unit.construction is not None or unit.add_on is not None
+    """Whether the structure `unit` was ordered to build, or its add-on, has begun: whether it has a construction."""
+    return unit.construction is not None
 
 
 def _order_progress(row: AbilityData, unit_type: UnitTypeId, progress: float) -> float | None:
