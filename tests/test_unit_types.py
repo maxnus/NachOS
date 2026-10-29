@@ -14,7 +14,7 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
-from sc2nachos.units import OwnUnit, Unit, Units, UnitType
+from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
 from sc2nachos.units._tracking import _Tracker
 from support import load_tool, make_enemy, make_observation, make_tables, make_unit
@@ -306,3 +306,57 @@ def _a_read_is_limited_by_unit_type(
         assert_type(unknown.is_powered, bool)
     any_type: type[UnitType.AnyType] = UnitType.Marine
     del any_type
+
+
+def _each_read_only_some_types_have_is_limited_to_them(
+    field: Unit[UnitType.MineralField750],
+    geyser: Unit[UnitType.VespeneGeyser],
+    extractor: OwnUnit[UnitType.Extractor],
+    nexus: OwnUnit[UnitType.Nexus],
+    barracks: OwnUnit[UnitType.BarracksFlying],
+    factories: Units[OwnUnit[UnitType.Factory]],
+    depot: OwnUnit[UnitType.AnySupplyDepot],
+    marine: OwnUnit[UnitType.Marine],
+    structure: OwnUnit[UnitType.TerranStructure],
+    unit: OwnUnit[Any],
+) -> None:
+    """What the type checker makes of each read only some types have: on them, through `OwnUnit` and `Units`, on a
+    unit typed `Any`, and on a type or a group they leave out. Never run."""
+    assert_type(field.mineral_contents, int)
+    assert_type(geyser.vespene_contents, int)
+    assert_type(extractor.vespene_contents, int)
+    assert_type(extractor.assigned_harvesters, int)
+    assert_type(nexus.ideal_harvesters, int)
+    assert_type(barracks.add_on, OwnUnit[Any] | None)
+    for factory in factories:
+        assert_type(factory.has_reactor, bool)
+        assert_type(factory.has_tech_lab, bool)
+    assert_type(depot.builder, OwnUnit[Any] | None)
+    assert_type(unit.mineral_contents, int)
+    assert_type(unit.vespene_contents, int)
+    assert_type(unit.assigned_harvesters, int)
+    assert_type(unit.ideal_harvesters, int)
+    assert_type(unit.has_reactor, bool)
+    assert_type(unit.has_tech_lab, bool)
+    _ = marine.mineral_contents  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.vespene_contents  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.assigned_harvesters  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.ideal_harvesters  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.has_reactor  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.has_tech_lab  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.builder  # pyright: ignore[reportAttributeAccessIssue]
+    _ = structure.add_on  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def _the_reads_every_unit_has_stay_on_every_unit(marine: OwnUnit[UnitType.Marine]) -> None:
+    """What the type checker makes of the reads about shields, building and rallying on a unit that has none. Never
+    run."""
+    assert_type(marine.shield, float)
+    assert_type(marine.shield_max, float)
+    assert_type(marine.shield_fraction, float)
+    assert_type(marine.shield_upgrade_level, int)
+    assert_type(marine.shield_armor, float)
+    assert_type(marine.construction, OwnUnit[Any] | None)
+    assert_type(marine.rally_targets, tuple[RallyTarget, ...])
+    assert_type(marine.production_capacity, int)
+    assert_type(marine.is_constructing, bool)

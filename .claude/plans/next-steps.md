@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #183. `uv run pytest` passes 2977 tests with #184; `uv run pytest -m
+- nachOS `main` has every PR to #184. `uv run pytest` passes 2977 tests with #185; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -702,6 +702,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   every type's and group's frozenset of `UnitTypeId`s, for a type with no unit to test, as a structure about to be
   built, over `includes` taking a bare type id too. It was `_type_ids`; nine of AvocaDOS's sets of ids hold exactly a
   group's types (#184).
+- **A unit's type stays a type parameter, and a read only some types have is typed for them** (the owner, 2026-10-29,
+  after weighing a class per type, `isinstance(unit, GasBuilding)`, against slice 4's `Unit[UnitType.Refinery]`). A
+  class per type would bring `isinstance` and `match`, and members missing where they do not apply. It would also
+  need an own and an enemy class of each of the 342 types and groups, could not type `of_type` generically, and made
+  four reads over units of 80 classes 145 ns against 90 with two (Python 3.14.4). The reads take a self type, as
+  `is_powered` did: `mineral_contents`, `vespene_contents`, the two harvester counts, `add_on`, `has_reactor`,
+  `has_tech_lab` and `builder` (#185). The shield reads stay on every unit, since asking a Terran or Zerg unit's
+  shield should not be a type error, and so do `construction`, which a queen planting a tumor has too, and
+  `rally_targets`, which an egg and a cocoon have too (the owner, review of #185). Energy, cargo and detection wait
+  (below).
 
 ## Next
 
@@ -751,6 +761,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
 - Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
+- An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
+  at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
+  `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).
+- Self types for energy, cargo and detection, as #185 gave the reads whose types the tables or a definition settle
+  (the owner, 2026-10-29, over doing them in #185, and over never). No group holds their types, and the corpus shows
+  too few: they need new groups, such as `WithEnergy`, `Transport` and `Detector`, from a sweep that creates every
+  type and records its energy, cargo and detection.
 - Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
   stays a bool until then.
 - An up-to-date pathing grid.

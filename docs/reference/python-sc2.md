@@ -356,11 +356,11 @@ it.
 - **A unit refers to other units by object.** An order's target, a rally target, a passenger, an add-on and an
   engaged target are units, unlisted or dead ones included; python-sc2 gives tags to look up. An order aimed at
   nothing has `None` for its target; python-sc2's is `0`.
-- **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
-  or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while
-  it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link; it is true from the
-  order on, while the SCV walks to the site, whereas `construction` is `None` until the structure is placed, and
-  `is_constructing` is true from the order on, as python-sc2's is.
+- **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it,
+  the queen planting a creep tumor or the drone that became it, and `scv.construction` the structure. Both read
+  `None` once it is finished, while it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv`
+  and no link; it is true from the order on, while the SCV walks to the site, whereas `construction` is `None` until
+  the structure is placed, and `is_constructing` is true from the order on, as python-sc2's is.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**: the health of a cloaked enemy never detected, or the
@@ -373,9 +373,15 @@ it.
 - **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
   is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
   `UnitType.ProtossStructure`. `Unit[UnitType.Marine]` is a marine, and a read only some types have is an error on
-  the others, as `is_powered` is on anything but a Protoss structure. A unit typed `Unit[Any]` reads as any type;
-  on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
-  it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
+  the others, and on a group wider than them:
+  - `is_powered`, for a Protoss structure, and `builder`, for any structure;
+  - `mineral_contents`, for a mineral field, and `vespene_contents`, for a geyser or a gas building;
+  - `assigned_harvesters` and `ideal_harvesters`, for a townhall or a gas building;
+  - `add_on`, `has_reactor` and `has_tech_lab`, for a barracks, a factory or a starport.
+
+  A unit typed `Unit[Any]` reads as any type, as python-sc2's does; on a `Unit[UnitType.AnyType]` such a read is an
+  error until `UnitType.ProtossStructure.includes(unit)` narrows it. The type checker cannot follow a morph: a
+  `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
 - **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, `UnitType.Worker`,
   `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, which `Units` also reads as `workers`,
   `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`. A MULE is not a worker, and a lifted command center

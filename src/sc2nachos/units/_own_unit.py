@@ -133,12 +133,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return GameTime(steps=report.buff_duration_remain) if report.buff_duration_max else None
 
     @property
-    def assigned_harvesters(self) -> int:
+    def assigned_harvesters(self: OwnUnit[UnitType.Townhall | UnitType.GasBuilding]) -> int:
         """The workers mining a town hall's minerals or a gas building's vespene. 0 for anything else."""
         return self._latest_report.assigned_harvesters
 
     @property
-    def ideal_harvesters(self) -> int:
+    def ideal_harvesters(self: OwnUnit[UnitType.Townhall | UnitType.GasBuilding]) -> int:
         """The workers a town hall or gas building can use before another adds nothing: 2 per field, 3 per geyser."""
         return self._latest_report.ideal_harvesters
 
@@ -160,7 +160,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def rally_targets(self) -> tuple[RallyTarget, ...]:
-        """Where the structure sends what it makes."""
+        """Where a structure, an egg or a cocoon sends what it makes. Empty for anything else."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
 
@@ -172,34 +172,42 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return bool(self.active_weapons) and not self.weapon_cooldown
 
     @property
-    def has_reactor(self) -> bool:
-        """Whether a reactor is attached to the unit."""
-        add_on = self.add_on
-        return add_on is not None and UnitType.AnyReactor.includes(add_on)
+    def has_reactor(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> bool:
+        """Whether a finished reactor is attached to a barracks, factory or starport."""
+        return self._has_add_on_of(UnitType.AnyReactor)
 
     @property
-    def has_tech_lab(self) -> bool:
-        """Whether a tech lab is attached to the unit."""
-        add_on = self.add_on
-        return add_on is not None and UnitType.AnyTechLab.includes(add_on)
+    def has_tech_lab(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> bool:
+        """Whether a finished tech lab is attached to a barracks, factory or starport."""
+        return self._has_add_on_of(UnitType.AnyTechLab)
 
     @property
     def production_capacity(self) -> int:
         """How many units the unit trains at once: 2 for a structure with a reactor, 1 for another structure the
         game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
         unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
-        left out, and so is whether its add-on is: a barracks building its reactor reads 2, though it trains nothing
-        until the reactor finishes."""
+        left out. A reactor counts once finished, since the game names a structure's add-on only then (in game): a
+        barracks building its reactor reads 1."""
         if self.type_id not in self._tracker.game_data._unit_trainers:
             return 0
-        return 2 if self.has_reactor else 1
+        return 2 if self._has_add_on_of(UnitType.AnyReactor) else 1
 
     @property
-    def add_on(self) -> OwnUnit[Any] | None:
-        """The structure's add-on, or `None`."""
+    def add_on(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> OwnUnit[Any] | None:
+        """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built (in game)."""
+        return self._attached_add_on
+
+    @property
+    def _attached_add_on(self) -> OwnUnit[Any] | None:
+        """The unit's add-on, or `None`, whatever its type."""
         tag = self._latest_report.add_on_tag
         # An add-on is its structure's owner's.
         return cast("OwnUnit[Any]", self._tracker.unit_tracker.by_tag(tag)) if tag else None
+
+    def _has_add_on_of(self, add_on_type: type[UnitType.AnyAddOn]) -> bool:
+        """Whether an add-on of `add_on_type`, a type or a group, is attached to the unit, whatever its type."""
+        add_on = self._attached_add_on
+        return add_on is not None and add_on_type.includes(add_on)
 
     @property
     def engaged_target(self) -> Unit[Any] | None:
@@ -215,7 +223,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._tracker.builder_tracker.structure_built_by(self)
 
     @property
-    def builder(self) -> OwnUnit[Any] | None:
-        """The SCV building this structure, or the drone that became it, or `None` for a structure nobody is building:
-        one halted, one warped in, or one finished."""
+    def builder(self: OwnUnit[UnitType.Structure]) -> OwnUnit[Any] | None:
+        """The unit building this structure, an SCV or a queen planting a creep tumor, or the drone that became it;
+        `None` for a structure nobody is building: one halted, one warped in, or one finished."""
         return self._tracker.builder_tracker.builder_of(self)

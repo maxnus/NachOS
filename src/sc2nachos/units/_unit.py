@@ -79,6 +79,10 @@ class Unit[K: UnitType.AnyType]:
     shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit the observation
     leaves out is unlisted, `is_listed` false: it keeps its last values, and is observed under the same id again if it
     comes back.
+
+    `K` is the unit's `UnitType` for the type checker. A read only some types have is typed for them alone, as
+    `mineral_contents` is for a mineral field, and is an error on a unit typed as another type or as a group wider than
+    them. A unit typed `Unit[Any]` reads as any type.
     """
 
     # `OwnUnit` declares no slots, so a unit can change between the two classes in place. `__weakref__` lets a bot
@@ -660,14 +664,14 @@ class Unit[K: UnitType.AnyType]:
         return report.shield_upgrade_level
 
     @property
-    def mineral_contents(self) -> int:
+    def mineral_contents(self: Unit[UnitType.AnyMineralField]) -> int:
         """The minerals left in a mineral field. 0 for anything else."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("minerals")
         return report.mineral_contents
 
     @property
-    def vespene_contents(self) -> int:
+    def vespene_contents(self: Unit[UnitType.AnyVespeneGeyser | UnitType.GasBuilding]) -> int:
         """The vespene left in a geyser, or in the gas building on it. 0 for anything else."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("vespene")

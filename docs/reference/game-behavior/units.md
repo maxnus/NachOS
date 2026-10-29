@@ -68,6 +68,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a nexus, an assimilator,
   a barracks, a command center and a pylon, which always stands in its own field, alone or beside another (#25, #27,
   #39).
+- A barracks names its add-on in `add_on_tag` only once the add-on is finished: 0 for the whole build, then the
+  add-on's tag from the first observation where the add-on reads finished. To the enemy it is 0 throughout, though
+  the add-on itself is listed to the enemy, at the barracks's position plus (2.5, -0.5). Seen in a game of two
+  clients both played from here, where one player's barracks built a reactor beside the other's marine, both views
+  read every 2 steps (2026-10-29, with a probe, fast build on, build 75689).
 - `is_hallucination` is true for an enemy's hallucination only while a detector is near; this player's own are
   always flagged. `is_active` is true for any unit carrying out an order, the enemy's included. `engaged_target_tag`
   names the unit a marine attacks (#25).
