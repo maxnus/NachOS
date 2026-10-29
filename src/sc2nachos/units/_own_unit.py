@@ -97,9 +97,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """Whether the unit builds a structure, or walks to the site of one it was ordered to build: it has a
         `construction`, or its current order's ability places a structure, a barracks building its add-on and a queen
         placing a creep tumor among them."""
-        if self._tracker.builder_tracker.structure_built_by(self) is not None:
-            return True
-        return self.is_doing(self._tracker.game_data._placing_abilities)
+        return self.construction is not None or self.is_doing(self._tracker.game_data._placing_abilities)
 
     @property
     def weapon_cooldown(self) -> GameTime:
@@ -161,8 +159,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._latest_report.cargo_space_max
 
     @property
-    def rally_targets(self: OwnUnit[UnitType.Structure]) -> tuple[RallyTarget, ...]:
-        """Where the structure sends what it makes."""
+    def rally_targets(self) -> tuple[RallyTarget, ...]:
+        """Where a structure, an egg or a cocoon sends what it makes. Empty for anything else."""
         unit_by_tag = self._tracker.unit_tracker.by_tag
         return tuple(RallyTarget._from_proto(rally, unit_by_tag) for rally in self._latest_report.rally_targets)
 
@@ -219,13 +217,13 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._tracker.unit_tracker.get_by_tag(tag) if tag else None
 
     @property
-    def construction(self: OwnUnit[UnitType.Worker]) -> OwnUnit[Any] | None:
-        """The unfinished structure the worker is building, or the one a drone became until it finishes, or `None`, as
-        for a dead worker."""
+    def construction(self) -> OwnUnit[Any] | None:
+        """The unfinished structure the unit is building, or the one a drone became until it finishes, or `None`, as
+        for a dead unit."""
         return self._tracker.builder_tracker.structure_built_by(self)
 
     @property
     def builder(self: OwnUnit[UnitType.Structure]) -> OwnUnit[Any] | None:
-        """The SCV building this structure, or the drone that became it, or `None` for a structure nobody is building:
-        one halted, one warped in, or one finished."""
+        """The unit building this structure, an SCV or a queen planting a creep tumor, or the drone that became it;
+        `None` for a structure nobody is building: one halted, one warped in, or one finished."""
         return self._tracker.builder_tracker.builder_of(self)

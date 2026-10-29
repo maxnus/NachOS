@@ -542,22 +542,22 @@ class Unit[K: UnitType.AnyType]:
         return report.health / report.health_max if report.health_max else 0.0
 
     @property
-    def shield(self: Unit[UnitType.Protoss]) -> float:
-        """A Protoss unit's current shield. 0 for a unit without one."""
+    def shield(self) -> float:
+        """The unit's current shield."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("shield")
         return report.shield
 
     @property
-    def shield_max(self: Unit[UnitType.Protoss]) -> float:
-        """A Protoss unit's maximum shield. 0 for a unit without one."""
+    def shield_max(self) -> float:
+        """The unit's maximum shield. 0 for a unit without one."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("shield")
         return report.shield_max
 
     @property
-    def shield_fraction(self: Unit[UnitType.Protoss]) -> float:
-        """A Protoss unit's shield as a fraction of its maximum. 0 for a unit without one."""
+    def shield_fraction(self) -> float:
+        """The unit's shield as a fraction of its maximum. 0 for a unit without one."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("shield")
         return report.shield / report.shield_max if report.shield_max else 0.0
@@ -657,8 +657,8 @@ class Unit[K: UnitType.AnyType]:
         return report.armor_upgrade_level
 
     @property
-    def shield_upgrade_level(self: Unit[UnitType.Protoss]) -> int:
-        """A Protoss unit's shield upgrade level. 0 for a unit without shields."""
+    def shield_upgrade_level(self) -> int:
+        """The unit's shield upgrade level."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("shield upgrades")
         return report.shield_upgrade_level
@@ -737,10 +737,10 @@ class Unit[K: UnitType.AnyType]:
         return self._tracker.upgrade_tracker.armor_of(self)
 
     @property
-    def shield_armor(self: Unit[UnitType.Protoss]) -> float:
-        """The armor of a Protoss unit's shields: its shield upgrade level as it reports it when `is_visible`, and
-        otherwise the more of what it last reported visible and the levels its owner is known to have; 0 for a unit
-        without shields.
+    def shield_armor(self) -> float:
+        """The armor of the unit's shields: its shield upgrade level as it reports it when `is_visible`, and otherwise
+        the more of what it last reported visible and the levels its owner is known to have; 0 for a unit without
+        shields.
 
         The game's tables do not hold this. `docs/reference/game-behavior/damage-and-buffs.md` has what a level was
         measured to take off a hit.

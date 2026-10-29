@@ -707,9 +707,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   class per type would bring `isinstance` and `match`, and members missing where they do not apply. It would also
   need an own and an enemy class of each of the 342 types and groups, could not type `of_type` generically, and made
   four reads over units of 80 classes 145 ns against 90 with two (Python 3.14.4). The reads take a self type, as
-  `is_powered` did: the five shield reads `Protoss`, `mineral_contents`, `vespene_contents`, the two harvester counts,
-  `add_on`, `has_reactor`, `has_tech_lab`, `builder`, `rally_targets` and `construction` (#185). Energy, cargo and
-  detection wait (below).
+  `is_powered` did: `mineral_contents`, `vespene_contents`, the two harvester counts, `add_on`, `has_reactor`,
+  `has_tech_lab` and `builder` (#185). The shield reads stay on every unit, since asking a Terran or Zerg unit's
+  shield should not be a type error, and so do `construction`, which a queen planting a tumor has too, and
+  `rally_targets`, which an egg and a cocoon have too (the owner, review of #185). Energy, cargo and detection wait
+  (below).
 
 ## Next
 
