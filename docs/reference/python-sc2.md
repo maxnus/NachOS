@@ -359,9 +359,9 @@ it.
 - **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it,
   the queen planting a creep tumor, the barracks, factory or starport building its add-on, or the drone that became
   it, and `scv.construction` the structure. Both read `None` once it is finished, while it is halted, and for a
-  Protoss structure. python-sc2 has `is_constructing_scv`
-  and no link; it is true from the order on, while the SCV walks to the site, whereas `construction` is `None` until
-  the structure is placed, and `is_constructing` is true from the order on, as python-sc2's is.
+  Protoss structure. python-sc2 has `is_constructing_scv` and no link; it is true from the order on, while the SCV
+  walks to the site, whereas `construction` is `None` until the structure is placed, and `is_constructing` is true
+  from the order on, as python-sc2's is.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**: the health of a cloaked enemy never detected, or the

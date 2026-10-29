@@ -169,8 +169,8 @@ class _BuilderTracker:
 
 
 def _site_for(structure: Unit[Any], order_target: tuple[float, float]) -> tuple[float, float]:
-    """Where an order aimed at `order_target` puts a structure of `structure`'s type: there, or for an add-on, whose
-    order is aimed at its host's center, beside it."""
+    """Where an order aimed at `order_target` puts a structure of `structure`'s type: there, or beside it for an
+    add-on."""
     if structure._type_id in UnitType.AnyAddOn.type_ids:
         return order_target[0] + ADD_ON_OFFSET[0], order_target[1] + ADD_ON_OFFSET[1]
     return order_target
