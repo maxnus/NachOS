@@ -476,7 +476,9 @@ class TestWhatTheTablesSay:
                     and ability_row.products.get(producer) is unit_type
                 )
             }
-            assert len(needs) <= 1, unit_type.name
+            assert needs <= {row.creation_requirements}, unit_type.name
+            if not needs:
+                assert row.creation_requirements == TechRequirements(), unit_type.name
 
     def test_an_upgrade_names_what_researches_it_and_what_that_needs(self, first_corpus_tables: GameData) -> None:
         upgrades = first_corpus_tables.upgrades
@@ -488,11 +490,12 @@ class TestWhatTheTablesSay:
         assert upgrades[UpgradeId.ZERG_AIR_WEAPONS_1].researchers == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
         assert upgrades[UpgradeId.STIMPACK].research_requirements == TechRequirements()
 
-    def test_every_upgrade_is_researched_by_what_is_offered_its_research(self, first_corpus_tables: GameData) -> None:
+    def test_every_upgrade_names_the_types_its_research_makes_it_for(self, first_corpus_tables: GameData) -> None:
         for upgrade, row in first_corpus_tables.upgrades.items():
             assert row.research_ability is not None, upgrade.name
-            assert row.researchers == first_corpus_tables.abilities[row.research_ability].performers, upgrade.name
+            products = first_corpus_tables.abilities[row.research_ability].products
             assert row.researchers, upgrade.name
+            assert all(products.get(researcher) is upgrade for researcher in row.researchers), upgrade.name
 
     def test_every_researcher_of_an_upgrade_needs_the_same_for_it(self, first_corpus_tables: GameData) -> None:
         units = first_corpus_tables.units

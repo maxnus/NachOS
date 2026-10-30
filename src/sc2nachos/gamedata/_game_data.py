@@ -12,7 +12,6 @@ from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
-from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import sc2api_pb2
 
+    from sc2nachos.gamedata._cost import Cost
     from sc2nachos.gamedata._techtree import TechTreeAbilities
     from sc2nachos.ids import AbilityId, EffectId, UpgradeId
 
@@ -73,8 +73,7 @@ class GameData:
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }
         self._abilities = MappingProxyType({**rows, **custom})
-        self._units = _with_what_making_each_takes(self._units, self._abilities)
-        self._upgrades = _with_what_researching_each_takes(self._upgrades, self._units, self._abilities)
+        self._units = _with_creation_costs(self._units, self._abilities)
         self._types_counting_as = _types_counting_as_each(self._units)
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
         # Read by `OwnUnit.is_constructing` and `production_capacity`, worked out once a game.
@@ -182,77 +181,23 @@ def _build_time_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[U
     return counted_time + stage_row.build_time
 
 
-def _with_what_making_each_takes(
+def _with_creation_costs(
     unit_rows: Mapping[UnitTypeId, UnitTypeData], abilities: Mapping[AbilityId, AbilityData]
 ) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given what the order to make one charges and what its producers need first."""
+    """`unit_rows`, each given its creation ability's cost: what the order to make one charges."""
     return MappingProxyType(
         {
-            unit_type: _with_what_making_it_takes(type_row, unit_rows, abilities)
+            unit_type: replace(type_row, creation_cost=_creation_cost(type_row, abilities))
             for unit_type, type_row in unit_rows.items()
         }
     )
 
 
-def _with_what_making_it_takes(
-    type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData], abilities: Mapping[AbilityId, AbilityData]
-) -> UnitTypeData:
-    """`type_row` given its creation ability's cost, and every requirement of each producer's for an ability it makes
-    one by: its creation ability, or one of its own, as a warp gate warps in what a gateway trains."""
-    creation_ability = type_row.creation_ability
-    creation_row = None if creation_ability is None else abilities.get(creation_ability)
-    needs = [
-        requirements
-        for producer in type_row.producers
-        if (producer_row := unit_rows.get(producer)) is not None
-        for ability, requirements in producer_row.ability_requirements.items()
-        if ability is creation_ability or _makes(abilities.get(ability), producer, type_row.id)
-    ]
-    return replace(
-        type_row,
-        creation_cost=None if creation_row is None else creation_row.cost,
-        creation_requirements=_all_of(needs),
-    )
-
-
-def _makes(ability_row: AbilityData | None, performer: UnitTypeId, product: UnitTypeId) -> bool:
-    """Whether `ability_row`'s ability makes a unit of `product` when a unit of `performer` carries it out."""
-    return ability_row is not None and ability_row.products.get(performer) is product
-
-
-def _with_what_researching_each_takes(
-    upgrade_rows: Mapping[UpgradeId, UpgradeData],
-    unit_rows: Mapping[UnitTypeId, UnitTypeData],
-    abilities: Mapping[AbilityId, AbilityData],
-) -> Mapping[UpgradeId, UpgradeData]:
-    """`upgrade_rows`, each given the types offered its research and every requirement of theirs for it."""
-    researched_rows: dict[UpgradeId, UpgradeData] = {}
-    for upgrade, upgrade_row in upgrade_rows.items():
-        ability = upgrade_row.research_ability
-        ability_row = None if ability is None else abilities.get(ability)
-        if ability is None or ability_row is None:
-            researched_rows[upgrade] = upgrade_row
-            continue
-        needs = [
-            requirements
-            for researcher in ability_row.performers
-            if (researcher_row := unit_rows.get(researcher)) is not None
-            and (requirements := researcher_row.ability_requirements.get(ability)) is not None
-        ]
-        researched_rows[upgrade] = replace(
-            upgrade_row, researchers=ability_row.performers, research_requirements=_all_of(needs)
-        )
-    return MappingProxyType(researched_rows)
-
-
-def _all_of(requirements: Iterable[TechRequirements]) -> TechRequirements:
-    """Every structure and upgrade any of `requirements` names, together."""
-    structures: set[UnitTypeId] = set()
-    upgrades: set[UpgradeId] = set()
-    for requirement in requirements:
-        structures |= requirement.structures
-        upgrades |= requirement.upgrades
-    return TechRequirements(structures=frozenset(structures), upgrades=frozenset(upgrades))
+def _creation_cost(type_row: UnitTypeData, abilities: Mapping[AbilityId, AbilityData]) -> Cost | None:
+    """What `type_row`'s creation ability costs, or `None` for a type nothing makes."""
+    if type_row.creation_ability is None or (creation_row := abilities.get(type_row.creation_ability)) is None:
+        return None
+    return creation_row.cost
 
 
 def _types_counting_as_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, frozenset[UnitTypeId]]:

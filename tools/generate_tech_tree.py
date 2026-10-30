@@ -119,12 +119,17 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     }
     # A pylon stands in its own field and needs no power, though the sweep once recorded one read as powered.
     power_consumers = frozenset(filter(None, map(_unit_type, _strings(findings["powered"])))) - {UnitTypeId.PYLON}
+    unit_type_requirements, upgrade_requirements = _requirements_by_product(
+        ability_requirements, ability_products, creation_abilities
+    )
+    research_abilities = _research_abilities(ability_products)
     return TechTree(
         base_build=int(str(findings["base_build"])),
         unit_types=TechTreeUnitTypes(
             ability_requirements=MappingProxyType(ability_requirements),
             creation_abilities=MappingProxyType(creation_abilities),
             producers=MappingProxyType(_producers_by_unit_type(ability_products, creation_abilities)),
+            creation_requirements=MappingProxyType(unit_type_requirements),
             morph_sources=MappingProxyType(_morph_sources(trials, creation_abilities)),
             power_consumers=power_consumers,
             upgrades=MappingProxyType(
@@ -137,7 +142,9 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
             cancels=MappingProxyType(_cancels(findings)),
         ),
         upgrades=TechTreeUpgrades(
-            research_abilities=MappingProxyType(_research_abilities(ability_products)),
+            research_abilities=MappingProxyType(research_abilities),
+            researchers=MappingProxyType(_researchers(research_abilities, ability_products)),
+            requirements=MappingProxyType(upgrade_requirements),
             types=MappingProxyType(found.types),
             levels=MappingProxyType(found.levels),
         ),
@@ -374,6 +381,63 @@ def _research_abilities(
             if isinstance(product, UpgradeId) and research_abilities.setdefault(product, ability) is not ability:
                 raise ValueError(f"{product.name} is researched by two abilities")
     return research_abilities
+
+
+def _researchers(
+    research_abilities: Mapping[UpgradeId, AbilityId],
+    ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]],
+) -> dict[UpgradeId, frozenset[UnitTypeId]]:
+    """The unit types that research each upgrade: those its research ability researches it for."""
+    return {
+        upgrade: frozenset(
+            researcher for researcher, product in ability_products.get(ability, {}).items() if product is upgrade
+        )
+        for upgrade, ability in research_abilities.items()
+    }
+
+
+def _requirements_by_product(
+    ability_requirements: Mapping[UnitTypeId, Mapping[AbilityId, TechRequirements]],
+    ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]],
+    creation_abilities: Mapping[UnitTypeId, AbilityId],
+) -> tuple[dict[UnitTypeId, TechRequirements], dict[UpgradeId, TechRequirements]]:
+    """What each unit type and each upgrade needs first: every structure and upgrade each type making it needs for the
+    ability it makes it by, together, a warp gate's for its warp-ins with a gateway's for its trains. A type whose
+    creation ability names another product takes what that ability's performers need for it, as a rich refinery takes
+    a refinery's. One that needs nothing is left out.
+
+    The two are kept apart, as a unit type and an upgrade of one number are equal keys.
+    """
+    unit_type_needs: defaultdict[UnitTypeId, list[TechRequirements]] = defaultdict(list)
+    upgrade_needs: defaultdict[UpgradeId, list[TechRequirements]] = defaultdict(list)
+    for performer, needs_by_ability in ability_requirements.items():
+        for ability, needs in needs_by_ability.items():
+            product = ability_products.get(ability, {}).get(performer)
+            if isinstance(product, UpgradeId):
+                upgrade_needs[product].append(needs)
+            elif product is not None:
+                unit_type_needs[product].append(needs)
+    for unit_type, ability in creation_abilities.items():
+        products_by_maker = ability_products.get(ability, {})
+        if products_by_maker and not any(product is unit_type for product in products_by_maker.values()):
+            for performer in products_by_maker:
+                if (needs := ability_requirements.get(performer, {}).get(ability)) is not None:
+                    unit_type_needs[unit_type].append(needs)
+    return _all_needed(unit_type_needs), _all_needed(upgrade_needs)
+
+
+def _all_needed[ProductT](
+    needs_by_product: Mapping[ProductT, list[TechRequirements]],
+) -> dict[ProductT, TechRequirements]:
+    """Every structure and upgrade any of each product's needs names, together, leaving out a product that needs
+    nothing."""
+    all_needed: dict[ProductT, TechRequirements] = {}
+    for product, needs in needs_by_product.items():
+        structures = frozenset[UnitTypeId]().union(*(each.structures for each in needs))
+        upgrades = frozenset[UpgradeId]().union(*(each.upgrades for each in needs))
+        if structures or upgrades:
+            all_needed[product] = TechRequirements(structures, upgrades)
+    return all_needed
 
 
 def _producers_by_unit_type(

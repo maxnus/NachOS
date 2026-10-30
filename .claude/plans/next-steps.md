@@ -727,8 +727,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `GameData.types_counting_as(t)`, `tech_aliases` read the other way;
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
 
-  They are read off the abilities by passes in `GameData`, as the abilities' costs are, since a cost comes from the
-  game's tables. Then a second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
+  `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
+  above); `GameData` gives each row its creation ability's cost, since a price comes from the game's tables. Then a
+  second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
   itself while it goes up or warps in (over renaming `unit` alone), with `time_left` and `total_time` as `Research`
   has them (over `time_left` alone), measured in a game first. Not in NachOS: `can_afford` (#46, above), an upgrade's
   progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a

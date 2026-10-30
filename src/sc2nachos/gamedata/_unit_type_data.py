@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTreeUnitTypes
     from sc2nachos.geometry import Footprint
 
+# What a type nothing is recorded needing anything for needs.
+_NEEDS_NOTHING = TechRequirements()
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
@@ -306,10 +308,10 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
-            # This and `creation_requirements` are read off the abilities, which `GameData` reads after the unit types.
+            # Its creation ability's cost, which `GameData` gives it once the abilities are read.
             creation_cost=None,
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
-            creation_requirements=TechRequirements(),
+            creation_requirements=tech_tree_unit_types.creation_requirements.get(unit_type, _NEEDS_NOTHING),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
             ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree_unit_types.power_consumers,

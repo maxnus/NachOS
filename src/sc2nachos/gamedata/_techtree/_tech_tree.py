@@ -27,6 +27,9 @@ class TechTreeUnitTypes:
     producers: Mapping[UnitTypeId, frozenset[UnitTypeId]]
     """The unit types that make each unit type, and for a type whose creation ability names another product, the types
     that carry that ability out: an SCV makes a rich refinery, which a refinery's build puts up on a rich geyser."""
+    creation_requirements: Mapping[UnitTypeId, TechRequirements]
+    """What each unit type needs first: every structure and upgrade each type making it needs for the ability it makes
+    it by, together. A type that needs nothing is left out."""
     morph_sources: Mapping[UnitTypeId, UnitTypeId]
     """The source type of each unit type morphed from another."""
     power_consumers: frozenset[UnitTypeId]
@@ -60,6 +63,11 @@ class TechTreeUpgrades:
 
     research_abilities: Mapping[UpgradeId, AbilityId]
     """The ability that researches each upgrade."""
+    researchers: Mapping[UpgradeId, frozenset[UnitTypeId]]
+    """The unit types whose research ability researches each upgrade."""
+    requirements: Mapping[UpgradeId, TechRequirements]
+    """What each upgrade needs first: every structure and upgrade each of its researchers needs for its research,
+    together. An upgrade that needs nothing is left out."""
     types: Mapping[UpgradeId, UpgradeType]
     """The upgrade level each upgrade adds to, for the upgrades a unit reports. The rest are `OTHER` and left out."""
     levels: Mapping[UpgradeId, int]
