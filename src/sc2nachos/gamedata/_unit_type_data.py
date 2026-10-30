@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Self, final
 
@@ -189,10 +189,12 @@ class UnitTypeData:
     race: Race
     """The race it belongs to."""
     cost: Cost
-    """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
-    400 included. Its time is the build time of each stage that costs something: an orbital command's 2160 steps are
-    the command center's 1600 and its own 560, and a sieged tank's or a warp gate's are the tank's 720 or the gateway's
-    1040, since the switch costs nothing."""
+    """What the order that made one charged: its last step that charged anything, so every form of a unit costs the
+    same. An orbital command is 150, a baneling 25/25, a sieged tank the tank's 150/125 and 3 supply, a warp gate the
+    gateway's 150, and an archon nothing (tool `sweep_orders`). A zergling's is half its order of two, 25 minerals and
+    half a supply; a structure a drone becomes gives the drone's supply back, -1; a cocoon's is that of what it
+    becomes; and a MULE and an auto-turret, which energy pays for, cost nothing (tool `sweep_orders`). Its time is that
+    step's build time. What ordering an ability charges is the ability's `cost`, nothing for a siege."""
     build_time: GameTime
     """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
     steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
@@ -200,6 +202,8 @@ class UnitTypeData:
     build time of the one other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
+    supply_used: float
+    """The supply one takes, as the tables give it: half for a zergling, 3 for a sieged tank, 4 for an archon."""
     cargo_size: int
     """Slots it fills in a transport."""
     sight_range: float
@@ -218,10 +222,6 @@ class UnitTypeData:
     own; for a larva, an egg, a cocoon, a broodling, a force field, an adept's shade, a KD8 charge, a burrowed creep
     tumor, a flying locust and a bare tech lab or reactor; and for a MULE, an interceptor, a changeling and an archon,
     though something makes each."""
-    creation_cost: Cost | None
-    """What the order to make one charges: its creation ability's `cost`, 150 minerals for an orbital command over its
-    command center, nothing for a sieged tank, and 50 minerals and 1 supply for a zergling, as a larva's order makes
-    two. `None` where `creation_ability` is. `cost` is everything spent to reach the type."""
     producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
@@ -257,6 +257,10 @@ class UnitTypeData:
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
     An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
+    _whole_cost: Cost = field(repr=False, compare=False)
+    """Everything the tables say was spent to reach this type, what it morphed from included, an orbital command's 550
+    and a MULE's 50, with the build time of each stage that costs something: what a repair is priced from (tool
+    `sweep_repair`)."""
     turn_rate: float | None = None
     """The most it turns in a step, in radians: a whole number of 1/4096 of a full turn, 711 for a marine (62.49
     degrees) and 512 for a thor (45) (in game). A turn takes its angle over this, rounded up, in steps, give or take
@@ -302,9 +306,11 @@ class UnitTypeData:
         return cls(
             id=unit_type,
             race=Race(unit.race),
+            # The tables' whole cost, until `GameData` works out what the last step charged.
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             build_time=GameTime(steps=math.ceil(unit.build_time)),
             supply_provided=unit.food_provided,
+            supply_used=unit.food_required,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,
             # The game gives it in distance per second at Normal speed, 16 steps a second.
@@ -313,8 +319,6 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
-            # Its creation ability's cost, which `GameData` gives it once the abilities are read.
-            creation_cost=None,
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
             creation_requirements=tech_tree_unit_types.creation_requirements.get(unit_type, TechRequirements()),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
@@ -328,4 +332,6 @@ class UnitTypeData:
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
             upgrades=tech_tree_unit_types.upgrades.get(unit_type, MappingProxyType({})),
+            # `GameData` gives it the build time of each stage that costs something.
+            _whole_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
         )

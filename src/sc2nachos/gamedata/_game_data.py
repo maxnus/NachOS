@@ -12,7 +12,12 @@ from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
 from sc2nachos.gamedata._tech import Tech
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
+from sc2nachos.gamedata._techtree import (
+    ABILITIES_SENT_AS_ANOTHER,
+    COCOON_PRODUCTS,
+    TECH_TREE,
+    UNIT_TYPE_COST_OVERRIDES,
+)
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
@@ -50,16 +55,18 @@ class GameData:
         unit_rows = _read_table(
             data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
         )
-        self._units = _with_build_times_in_costs(
+        unit_rows = _with_build_times_in_whole_costs(
             _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE.abilities)))
         )
+        charges = _charges_of_last_steps(unit_rows)
+        self._units = _with_costs_of_last_steps(unit_rows, charges)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE.upgrades), lambda row: row.id
         )
         # An ability's cost is derived from its product, so the other tables come first.
-        costs = ability_costs(self._units, self._upgrades, TECH_TREE.abilities)
+        costs = ability_costs(charges, self._upgrades, TECH_TREE.abilities)
         cancels = cancel_abilities(TECH_TREE.abilities, behaviors)
         rows = _read_table(
             data.abilities,
@@ -73,7 +80,6 @@ class GameData:
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }
         self._abilities = MappingProxyType({**rows, **custom})
-        self._units = _with_creation_costs(self._units, self._abilities)
         self._types_granting = _types_granting_each(self._units)
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
         # Read by `OwnUnit.is_constructing` and `production_capacity`, worked out once a game.
@@ -154,13 +160,17 @@ def _row_with_turning(type_row: UnitTypeData) -> UnitTypeData:
     )
 
 
-def _with_build_times_in_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each cost given the build time of each stage of its type that costs something. A switch that costs
-    nothing, such as a tank's siege or a depot's lowering, adds none, so every form of a unit costs the same time."""
+def _with_build_times_in_whole_costs(
+    unit_rows: Mapping[UnitTypeId, UnitTypeData],
+) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`unit_rows`, each whole cost given the build time of each stage of its type that costs something. A switch that
+    costs nothing, such as a tank's siege or a depot's lowering, adds none, so every form of a unit costs the same
+    time."""
     return MappingProxyType(
         {
             unit_type: replace(
-                type_row, cost=replace(type_row.cost, time=_build_time_of_stages_that_cost(type_row, unit_rows))
+                type_row,
+                _whole_cost=replace(type_row._whole_cost, time=_build_time_of_stages_that_cost(type_row, unit_rows)),
             )
             for unit_type, type_row in unit_rows.items()
         }
@@ -174,30 +184,69 @@ def _build_time_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[U
     while (source_type := stage_row.morphed_from) is not None and source_type not in stages_passed:
         if (row_before := unit_rows.get(source_type)) is None:
             break
-        if stage_row.cost.resources != row_before.cost.resources:
+        if stage_row._whole_cost.resources != row_before._whole_cost.resources:
             counted_time += stage_row.build_time
         stage_row = row_before
         stages_passed.add(source_type)
     return counted_time + stage_row.build_time
 
 
-def _with_creation_costs(
-    unit_rows: Mapping[UnitTypeId, UnitTypeData], abilities: Mapping[AbilityId, AbilityData]
+def _charges_of_last_steps(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, Cost]:
+    """What the order making each unit type charges: its whole cost less its source type's, an orbital command 150 of
+    550, a siege nothing, or the whole cost of a type made from nothing, but where `UNIT_TYPE_COST_OVERRIDES` corrects
+    it. Its time is the type's build time, or none for a switch, which charges nothing."""
+    return MappingProxyType(
+        {unit_type: _charge_of_last_step(type_row, unit_rows) for unit_type, type_row in unit_rows.items()}
+    )
+
+
+def _charge_of_last_step(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Cost:
+    """What the order making `type_row`'s type from its source charges, as `_charges_of_last_steps` says."""
+    source_row = None if type_row.morphed_from is None else unit_rows.get(type_row.morphed_from)
+    if (corrected := UNIT_TYPE_COST_OVERRIDES.get(type_row.id)) is not None:
+        charged = corrected
+    elif source_row is not None:
+        charged = type_row._whole_cost - source_row._whole_cost
+    else:
+        charged = type_row._whole_cost
+    if source_row is not None and not _charges_anything(charged):
+        return replace(charged, time=GameTime.ZERO)
+    return replace(charged, time=type_row.build_time)
+
+
+def _charges_anything(charged: Cost) -> bool:
+    """Whether `charged` takes any minerals, vespene or supply."""
+    return bool(charged.minerals or charged.vespene or charged.supply)
+
+
+def _with_costs_of_last_steps(
+    unit_rows: Mapping[UnitTypeId, UnitTypeData], charges: Mapping[UnitTypeId, Cost]
 ) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given its creation ability's cost: what the order to make one charges."""
+    """`unit_rows`, each given what the order that made one charged, of `charges`: its own last step's, its source's
+    cost for a form switched into for nothing, and for a cocoon, what it becomes."""
     return MappingProxyType(
         {
-            unit_type: replace(type_row, creation_cost=_creation_cost(type_row, abilities))
+            unit_type: replace(type_row, cost=_cost_of_last_charging_step(unit_type, unit_rows, charges))
             for unit_type, type_row in unit_rows.items()
         }
     )
 
 
-def _creation_cost(type_row: UnitTypeData, abilities: Mapping[AbilityId, AbilityData]) -> Cost | None:
-    """What `type_row`'s creation ability costs, or `None` for a type nothing makes."""
-    if type_row.creation_ability is None or (creation_row := abilities.get(type_row.creation_ability)) is None:
-        return None
-    return creation_row.cost
+def _cost_of_last_charging_step(
+    unit_type: UnitTypeId, unit_rows: Mapping[UnitTypeId, UnitTypeData], charges: Mapping[UnitTypeId, Cost]
+) -> Cost:
+    """What the last step to `unit_type` that charged anything charged, back along `morphed_from` through every switch
+    that charged nothing, from what a cocoon becomes. A type `UNIT_TYPE_COST_OVERRIDES` names costs what it says."""
+    if (becoming := COCOON_PRODUCTS.get(unit_type)) is not None and becoming in unit_rows:
+        unit_type = becoming
+    stages_passed = {unit_type}
+    while unit_type not in UNIT_TYPE_COST_OVERRIDES and not _charges_anything(charges[unit_type]):
+        source_type = unit_rows[unit_type].morphed_from
+        if source_type is None or source_type not in unit_rows or source_type in stages_passed:
+            break
+        unit_type = source_type
+        stages_passed.add(source_type)
+    return charges[unit_type]
 
 
 def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:

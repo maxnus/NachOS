@@ -828,7 +828,8 @@ class Unit[K: UnitType.AnyType]:
         is_terran_and_mechanical = type_data.race is Race.TERRAN and Attribute.MECHANICAL in type_data.attributes
         if not is_terran_and_mechanical or not self.is_complete:
             return None
-        type_cost, health_max = type_data.cost, self.health_max
+        # Priced from everything spent to reach the type, an orbital command's 550 (tool `sweep_repair`).
+        type_cost, health_max = type_data._whole_cost, self.health_max
         whole_repair_steps = REPAIR_STEPS_EXCEPTIONS.get(self.type_id, type_cost.time.steps)
         # Multiplied out before the one division, so that a whole number of resources comes out whole.
         return Cost(

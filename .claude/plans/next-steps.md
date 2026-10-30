@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #186. `uv run pytest` passes 2992 tests with #187; `uv run pytest -m
+- nachOS `main` has every PR to #186. `uv run pytest` passes 3027 tests with #187; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -720,8 +720,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   Found moving AvocaDOS's production counters onto `in_production` (AvocaDOS #57).
 - **What AvocaDOS's data helpers move into NachOS** (the owner, review of AvocaDOS #57, 2026-10-30, one question at a
   time). The static reads first (#187):
-  - `UnitTypeData.creation_cost`, its creation ability's cost, beside `cost`, which is what a type is worth: 150 for
-    an orbital command against 550 (over renaming `cost`, and over leaving the price on the ability alone);
+  - `UnitTypeData.cost` is what the order that made one charged, its last step that charged anything, so every form
+    of a unit costs the same: an orbital command 150, a sieged tank the tank's 150/125, an archon nothing (the owner's
+    review of #187, reversing a `creation_cost` beside a `cost` that was everything spent to reach the type, as an
+    order's price belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. What a unit
+    is worth stays out, kept privately for the repair it prices. A MULE and an auto-turret cost nothing, the game's
+    rows notwithstanding, and a cocoon what it becomes;
   - `UnitTypeData.creation_requirements` and `UpgradeData.research_requirements`, every maker's requirements
     together, which agree (tool `sweep_tech_tree`), and `UpgradeData.researchers` (over naming them `producers`);
   - `Tech`, what a requirement names (the owner's review of #187, over a pair of names for `tech_aliases` and its
@@ -732,7 +736,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
-  above); `GameData` gives each row its creation ability's cost, since a price comes from the game's tables. Then a
+  above); `GameData` works out each type's last step from the tables' whole costs, since a price comes from them. Then a
   second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
   itself while it goes up or warps in (over renaming `unit` alone), with `time_left` and `total_time` as `Research`
   has them (over `time_left` alone), measured in a game first. Not in NachOS: `can_afford` (#46, above), an upgrade's
