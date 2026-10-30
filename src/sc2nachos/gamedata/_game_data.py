@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
@@ -12,6 +11,7 @@ from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
+from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, TECH_TREE
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
@@ -39,7 +39,7 @@ class GameData:
         "_abilities",
         "_effects",
         "_placing_abilities",
-        "_types_counting_as",
+        "_types_granting",
         "_unit_trainers",
         "_units",
         "_upgrades",
@@ -74,7 +74,7 @@ class GameData:
         }
         self._abilities = MappingProxyType({**rows, **custom})
         self._units = _with_creation_costs(self._units, self._abilities)
-        self._types_counting_as = _types_counting_as_each(self._units)
+        self._types_granting = _types_granting_each(self._units)
         self._effects = _read_table(data.effects, EffectData._from_proto, lambda row: row.id)
         # Read by `OwnUnit.is_constructing` and `production_capacity`, worked out once a game.
         self._placing_abilities = frozenset(ability for ability, row in self._abilities.items() if row.needs_placement)
@@ -106,10 +106,10 @@ class GameData:
         """The effects, by id."""
         return self._effects
 
-    def types_counting_as(self, unit_type: UnitTypeId) -> frozenset[UnitTypeId]:
-        """`unit_type` and every type whose `tech_aliases` name it, which counts as it where a tech requirement names
-        it: a lair and a hive for a lair; a supply depot and a lowered one for a supply depot."""
-        return self._types_counting_as.get(unit_type) or frozenset((unit_type,))
+    def types_granting(self, tech: Tech) -> frozenset[UnitTypeId]:
+        """Every unit type whose `techs_granted` hold `tech`: a spire and a greater spire for `Tech.SPIRE`, a supply
+        depot and a lowered one for `Tech.SUPPLY_DEPOT`."""
+        return self._types_granting[tech]
 
 
 def _with_build_times_borrowed(
@@ -200,13 +200,13 @@ def _creation_cost(type_row: UnitTypeData, abilities: Mapping[AbilityId, Ability
     return creation_row.cost
 
 
-def _types_counting_as_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, frozenset[UnitTypeId]]:
-    """Each unit type some other type's `tech_aliases` name, with every type that counts as it, itself included."""
-    counting_as: defaultdict[UnitTypeId, set[UnitTypeId]] = defaultdict(set)
+def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:
+    """Each tech, with every unit type that grants it."""
+    granting: dict[Tech, set[UnitTypeId]] = {tech: set() for tech in Tech}
     for unit_type, type_row in unit_rows.items():
-        for alias in type_row.tech_aliases:
-            counting_as[alias].update((alias, unit_type))
-    return MappingProxyType({unit_type: frozenset(types) for unit_type, types in counting_as.items()})
+        for tech in type_row.techs_granted:
+            granting[tech].add(unit_type)
+    return MappingProxyType({tech: frozenset(types) for tech, types in granting.items()})
 
 
 def _read_table[MessageT, IdT, RowT](

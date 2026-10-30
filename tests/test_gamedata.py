@@ -115,9 +115,6 @@ _NO_MAKER = {
     UnitTypeId.TECH_LAB: RawAbilityId.TechLabMorph,
 }
 _DEAD_LURKER_MORPH = _DEAD_MAKERS[UnitTypeId.LURKER]
-# The tech alias both forms of a viking carry: a row with no cost, speed, sight or weapon, which nothing requires
-# and no unit ever is. It is not curated either.
-_PHANTOM_VIKING = RawUnitTypeId.Viking
 
 # The game's row for a marine, cut down to the fields the tests read.
 _BONUS_AGAINST_ARMORED = data_pb2.DamageBonus(attribute=data_pb2.Attribute.Armored, bonus=10.0)
@@ -251,7 +248,7 @@ class TestReadingTheTables:
     def test_an_id_of_zero_names_nothing(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
         marine = data.units[UnitTypeId.MARINE]
-        assert marine.tech_aliases == ()
+        assert marine.techs_granted == frozenset()
 
     def test_a_build_time_is_in_the_steps_the_game_counts(self) -> None:
         data = GameData(sc2api_pb2.ResponseData(units=[_MARINE]))
@@ -767,19 +764,6 @@ class TestARecordedGamesTables:
         data = _tables(path)
         for ability in (AbilityId.RALLY_UNITS, AbilityId.RALLY_WORKERS, AbilityId.CANCEL_LAST):
             assert data.abilities[ability].order_behavior is OrderBehavior.KEEPS_ORDERS, ability.name
-
-    def test_a_viking_is_the_one_row_that_loses_a_tech_alias(self, path: Path) -> None:
-        """Its alias is an empty row no unit ever is; every other alias names a unit a player can own."""
-        answer = _answer(path)
-        data = GameData(answer)
-        aliased = {row.unit_id: list(row.tech_alias) for row in answer.units if row.tech_alias}
-        lost = {
-            unit: aliased[unit]
-            for unit in UnitTypeId
-            if unit in aliased and len(data.units[unit].tech_aliases) != len(aliased[unit])
-        }
-        assert set(lost) == {UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED}
-        assert all(aliases == [_PHANTOM_VIKING] for aliases in lost.values())
 
     def test_a_row_is_keyed_by_its_own_id(self, path: Path) -> None:
         data = _tables(path)

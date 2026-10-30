@@ -46,8 +46,8 @@ class UpgradeData:
     """The structure types whose `research_ability` researches it: an engineering bay for infantry weapons, a spire and
     a greater spire for flyer attacks. Empty for an upgrade nothing researches."""
     research_requirements: TechRequirements
-    """Every structure and upgrade a researcher needs before it is offered `research_ability`: an armory and level 1
-    for infantry weapons level 2. Every researcher of an upgrade needs the same (tool `sweep_tech_tree`)."""
+    """What a researcher needs before it is offered `research_ability`: `Tech.ARMORY` and level 1 for infantry weapons
+    level 2. Every researcher of an upgrade needs the same (tool `sweep_tech_tree`)."""
     upgrade_type: UpgradeType
     """The upgrade level the units it affects report it adding to, or `OTHER` if they report nothing of it."""
     level: int

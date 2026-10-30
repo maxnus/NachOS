@@ -285,8 +285,9 @@ def class_name(unit_type: UnitTypeId) -> str:
     return "".join(part.capitalize() for part in unit_type.name.split("_"))
 
 
-def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
-    """The groups of what `unit_type`, whose row is `row`, is for."""
+def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTypeId]) -> list[str]:
+    """The groups of what `unit_type`, whose row is `row` and which the tables count as each of `counted_as`, is
+    for."""
     curated = (
         ("Worker", WORKERS),
         ("Townhall", TOWNHALLS),
@@ -304,7 +305,7 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
         found.append("AnyMineralField")
     if row.has_vespene:
         found.append("GasBuilding" if row.race in RACES else "AnyVespeneGeyser")
-    found += [group for group, plain in COUNTED_AS.items() if unit_type is plain or plain in row.tech_aliases]
+    found += [group for group, plain in COUNTED_AS.items() if unit_type is plain or plain in counted_as]
     found += [group for group, prefix in MAP_OBJECTS.items() if unit_type.name.startswith(prefix)]
     return found + [HOLDING_GROUPS[role] for role in found if role in HOLDING_GROUPS]
 
@@ -328,10 +329,15 @@ def narrowest(groups: list[str], bases: dict[str, tuple[str, ...]]) -> tuple[str
     return tuple(dict.fromkeys(group for group in groups if group not in inner))
 
 
-def render(tables: GameData) -> str:
-    """The module source for the types in `tables`."""
+def render(answer: sc2api_pb2.ResponseData) -> str:
+    """The module source for the types in the game's tables, `answer`."""
+    tables = GameData(answer)
+    counted_as = tech_aliases(answer)
     table_groups = {unit_type: table_group(tables.units[unit_type]) for unit_type in UnitTypeId}
-    found = {unit_type: roles(unit_type, tables.units[unit_type]) for unit_type in UnitTypeId}
+    found = {
+        unit_type: roles(unit_type, tables.units[unit_type], counted_as.get(unit_type, frozenset()))
+        for unit_type in UnitTypeId
+    }
     bases: dict[str, tuple[str, ...]] = {
         "Structure": ("AnyType",),
         **{name: ("AnyType",) for name in RACES.values()},
@@ -374,11 +380,17 @@ def corpus_answer() -> sc2api_pb2.ResponseData:
     return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
 
 
-def corpus_tables() -> GameData:
-    """The tables of the first corpus game."""
-    return GameData(corpus_answer())
+def tech_aliases(answer: sc2api_pb2.ResponseData) -> dict[UnitTypeId, frozenset[UnitTypeId]]:
+    """The types the game's tables, `answer`, count each type as, their `tech_alias`, where both are curated: a command
+    center, for an orbital command. A type they count as nothing else is left out."""
+    return {
+        unit_type: aliases
+        for row in answer.units
+        if (unit_type := UnitTypeId.get(row.unit_id)) is not None
+        and (aliases := frozenset(filter(None, map(UnitTypeId.get, row.tech_alias))))
+    }
 
 
 if __name__ == "__main__":
-    OUTPUT.write_text(render(corpus_tables()), encoding="utf-8")
+    OUTPUT.write_text(render(corpus_answer()), encoding="utf-8")
     print(f"{OUTPUT.name}: {len(UnitTypeId)} types")

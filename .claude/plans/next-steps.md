@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #186. `uv run pytest` passes 2994 tests with #187; `uv run pytest -m
+- nachOS `main` has every PR to #186. `uv run pytest` passes 2992 tests with #187; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -724,7 +724,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     an orbital command against 550 (over renaming `cost`, and over leaving the price on the ability alone);
   - `UnitTypeData.creation_requirements` and `UpgradeData.research_requirements`, every maker's requirements
     together, which agree (tool `sweep_tech_tree`), and `UpgradeData.researchers` (over naming them `producers`);
-  - `GameData.types_counting_as(t)`, `tech_aliases` read the other way;
+  - `Tech`, what a requirement names (the owner's review of #187, over a pair of names for `tech_aliases` and its
+    reverse, which read alike in opposite directions). A type grants techs, `UnitTypeData.techs_granted`, which
+    replaces `tech_aliases`, and `GameData.types_granting(tech)` lists the types granting one. Each tech is valued by
+    the type it is named after, `base_type`, but never equals it. `TechRequirements` holds `techs`, `add_on`, which
+    must be the unit's own, and `upgrades`;
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision

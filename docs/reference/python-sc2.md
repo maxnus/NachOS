@@ -582,7 +582,7 @@ it.
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
 | `unit_data.unit_alias` | nothing: `unit_data.morphed_from` gives the type a form is made from, a siege tank for a sieged tank |
-| `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
+| `unit_data.tech_alias` | `unit_data.techs_granted`, the `Tech`s it grants rather than the types it counts as; the `UnitType.Any…` groups for a unit's forms |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
 | `upgrade_data.cost.time`, in steps | `upgrade_data.cost.time`, a `GameTime` |
@@ -598,8 +598,8 @@ it.
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
 | `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]`, or every maker's together, `data.units[t].creation_requirements` and `data.upgrades[u].research_requirements` |
-| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].creation_requirements.structures` |
-| `EQUIVALENTS_FOR_TECH_PROGRESS` | `data.types_counting_as(t)`, `t` and the types whose `tech_aliases` name it |
+| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].creation_requirements.techs`, `Tech`s rather than unit types |
+| `EQUIVALENTS_FOR_TECH_PROGRESS` | `data.types_granting(tech)`, every type whose `techs_granted` hold it |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
 | `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
 | a requirement's `requires_power` | `unit_data.needs_power` |
@@ -627,15 +627,13 @@ it.
 - **A table holds only the rows a bot can name.** It keeps the rows of the game's catalog that the curated ids
   name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters on the
   `available` flag instead, which filters nothing ([game behavior](game-behavior/upgrades-and-tables.md)).
-- **A field naming something uncurated reads `None`, and `tech_aliases` drops it, except where an override names what
-  works.** Eight rows name a creation ability that does nothing, or none
+- **A field naming something uncurated reads `None`, except where an override names what works.** Eight rows name a creation ability that does nothing, or none
   ([game behavior](game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)); for these,
   `creation_ability` is the ability that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas
   builds and so on, from `gamedata/_techtree/_overrides.py`, which the tech tree sweep checks in game each time it runs
   (`docs/maintaining/curating-ids.md`). python-sc2 papers over only the lurker, by writing `MORPH_LURKER` into the
   message it was handed, and keeps the rest, because the game marks them available. The rest name an ability nothing can
-  order, such as a changeling's disguise, and read `None`; the viking's alias is a row no unit is ever one of, so
-  `tech_aliases` drops it.
+  order, such as a changeling's disguise, and read `None`.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
   no path for yet ([game behavior](game-behavior/abilities-and-orders.md#loading-and-unloading)), so `UNLOAD`,
   and `UNLOAD_AT` put everyone down at once.
@@ -670,8 +668,10 @@ it.
 - **Requirements belong to a unit type and an ability together**, since one ability can need different things of
   different types: a burrowed roach moves only once Tunneling Claws is researched, and nothing else needs anything
   to move. `units[t].ability_requirements` holds an entry for every ability `units[t]` is offered, even one that
-  needs nothing. A required structure counts as standing where a type whose `tech_aliases` name it stands, which
-  `api.data.types_counting_as(t)` lists, and an add-on among them has to be the unit's own, which is what python-sc2's
+  needs nothing. A required structure is a `Tech`, which a player has while a structure of a type granting it
+  stands, where python-sc2 names a unit type and lists what counts as it apart: `units[t].techs_granted` says what a
+  type grants, a greater spire `Tech.SPIRE` and `Tech.GREATER_SPIRE`, and `api.data.types_granting(tech)` lists the
+  types granting one. A required add-on is apart, `add_on`, and has to be the unit's own, which is what python-sc2's
   `requires_techlab` says. Every type that makes a unit type or researches an upgrade needs the same for it, so
   `unit_data.creation_requirements` and `upgrade_data.research_requirements` hold what each maker needs
   ([game behavior](game-behavior/upgrades-and-tables.md)).

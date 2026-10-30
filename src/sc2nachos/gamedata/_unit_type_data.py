@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, Final, Self, final
 
 from s2clientprotocol import data_pb2
 
@@ -14,6 +14,7 @@ from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
+from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
@@ -27,13 +28,13 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata._techtree import TechTreeUnitTypes
     from sc2nachos.geometry import Footprint
 
-# What a type nothing is recorded needing anything for needs.
-_NEEDS_NOTHING = TechRequirements()
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
 # type's units report.
 _NO_CHANGE = UnitTypeUpgrade()
 # What adds nothing to a weapon, from which the changes to one are summed.
 _NO_WEAPON_CHANGE = WeaponUpgrade()
+# Each tech, by the type it is named after, which the tables name by number.
+_TECH_BY_BASE_TYPE: Final[Mapping[int, Tech]] = MappingProxyType({tech.base_type: tech for tech in Tech})
 
 # Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
 _MEAN_ATTACK_DELAY = GameTime(steps=-1 + 3 * (4095 / 2) / 4096)
@@ -213,7 +214,10 @@ class UnitTypeData:
     """Its attacks: the tables', or for the battlecruiser, the oracle, the void ray and the sentry, which the tables
     give none, the attacks `tools/sweep_combat.py` measured. An oracle's fires only while its beam is on."""
     creation_ability: AbilityId | None
-    """The ability that makes one, or `None` if nothing does."""
+    """The ability that makes one, or `None` where the tables tie it to no curated ability: for every type of the map's
+    own; for a larva, an egg, a cocoon, a broodling, a force field, an adept's shade, a KD8 charge, a burrowed creep
+    tumor, a flying locust and a bare tech lab or reactor; and for a MULE, an interceptor, a changeling and an archon,
+    though something makes each."""
     creation_cost: Cost | None
     """What the order to make one charges: its creation ability's `cost`, 150 minerals for an orbital command over its
     command center, nothing for a sieged tank, and 50 minerals and 1 supply for a zergling, as a larva's order makes
@@ -222,11 +226,11 @@ class UnitTypeData:
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
     creation_requirements: TechRequirements
-    """Every structure and upgrade a producer needs before it is offered what makes one, each producer's
-    `ability_requirements` for the ability it makes one by: a barracks for a factory, a ghost academy and the barracks's
-    own tech lab for a ghost, and a cybernetics core for an adept, to a gateway and a warp gate alike. Every producer
-    of a type needs the same (tool `sweep_tech_tree`). Empty for a type nothing is recorded making, and for a warp
-    gate, which no gateway is offered: the game turns each gateway once Warp Gate is researched."""
+    """What a producer needs before it is offered what makes one, each producer's `ability_requirements` for the
+    ability it makes one by: `Tech.BARRACKS` for a factory, `Tech.GHOST_ACADEMY` and the barracks's own tech lab for a
+    ghost, and `Tech.CYBERNETICS_CORE` for an adept, to a gateway and a warp gate alike. Every producer of a type needs
+    the same (tool `sweep_tech_tree`). Empty for a type nothing is recorded making, and for a warp gate, which no
+    gateway is offered: the game turns each gateway once Warp Gate is researched."""
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
@@ -238,9 +242,10 @@ class UnitTypeData:
     """Whether a structure of this type may stand on creep, as the game answered its placement on creep and off it,
     for every type a unit places at a point; `None` for any other type, such as a gas building, which goes on a
     geyser, an add-on, or a form a structure morphs into."""
-    tech_aliases: tuple[UnitTypeId, ...]
-    """Other types that satisfy the same tech requirement: an orbital command counts as a command center.
-    `GameData.types_counting_as` reads them the other way."""
+    techs_granted: frozenset[Tech]
+    """The techs it grants: the one named after it, if any, and the one named after each type the game's tables count
+    it as. A greater spire grants `Tech.SPIRE` and `Tech.GREATER_SPIRE`, a hive `HATCHERY`, `LAIR` and `HIVE`, and a
+    lowered supply depot `SUPPLY_DEPOT`; a marine grants none."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
@@ -311,13 +316,14 @@ class UnitTypeData:
             # Its creation ability's cost, which `GameData` gives it once the abilities are read.
             creation_cost=None,
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
-            creation_requirements=tech_tree_unit_types.creation_requirements.get(unit_type, _NEEDS_NOTHING),
+            creation_requirements=tech_tree_unit_types.creation_requirements.get(unit_type, TechRequirements()),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
             ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree_unit_types.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
-            # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
-            tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
+            techs_granted=frozenset(
+                tech for granting in (unit_type, *unit.tech_alias) if (tech := _TECH_BY_BASE_TYPE.get(granting))
+            ),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
