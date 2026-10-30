@@ -70,3 +70,5 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **A moment or a length of game time is a `GameTime`, named for what it times**: `api.time`, `event.time`,
   `build_time`, `weapon_cooldown`, `min_interval`, never a name ending in `_steps`. A name ending in `_steps` holds a
   plain count of steps, as `steps_per_turn` does, and `api.step` is the one counter of them.
+- **The races go Terran, Zerg, Protoss**, wherever they are listed: the members of an enum, a table's rows, a
+  docstring's examples, a tool's modes. `Tech` lists the Terran structures, then the Zerg, then the Protoss.

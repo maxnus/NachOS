@@ -31,6 +31,7 @@ from sc2nachos.gamedata._techtree import (
 )
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
+from sc2nachos.units import UnitType
 
 REPO = Path(__file__).parents[1]
 INPUT = REPO / "data" / "tech_tree.json"
@@ -66,8 +67,8 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     is researched, a zergling is offered every zerg unit's burrow, and burrows as a zergling whichever it is ordered.
 
     Raises `ValueError` where a requirement is something no curated id names, or a structure no `Tech` is named after;
-    where a required add-on was not seen to count only on the unit's own structure, or more than one is required, or
-    a type's makers need different ones; where a unit type is offered an ability whose requirements were never read,
+    where a required add-on was not seen to count only on the unit's own structure, or is a reactor, or more than one
+    is required; where a unit type is offered an ability whose requirements were never read,
     which would otherwise read as needing nothing; where the sweep did not see an ability in
     `gamedata/_techtree/_overrides.py` make its unit type; where that file lists more than one ability for a type the
     table names no working ability for; or where two abilities research one upgrade. Also raises for whatever
@@ -108,7 +109,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
             raise ValueError(f"{performer.name} is offered {ability.name} with another structure's add-on")
         needs[performer, ability] = TechRequirements(
             techs=frozenset(_tech_named_after(structure) for structure in structures if not _is_add_on(structure)),
-            add_on=_only_add_on(performer, ability, add_ons),
+            needs_tech_lab=_needs_own_tech_lab(performer, ability, add_ons),
             upgrades=frozenset(_required(_upgrade, record["upgrades"])),
         )
     pairs = [(unit, ability) for unit, abilities in offered.items() for ability in abilities]
@@ -136,7 +137,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
             ability_requirements=MappingProxyType(ability_requirements),
             creation_abilities=MappingProxyType(creation_abilities),
             producers=MappingProxyType(_producers_by_unit_type(ability_products, creation_abilities)),
-            creation_requirements=MappingProxyType(unit_type_requirements),
+            tech_requirements=MappingProxyType(unit_type_requirements),
             morph_sources=MappingProxyType(_morph_sources(trials, creation_abilities)),
             power_consumers=power_consumers,
             upgrades=MappingProxyType(
@@ -151,7 +152,7 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
         upgrades=TechTreeUpgrades(
             research_abilities=MappingProxyType(research_abilities),
             researchers=MappingProxyType(_researchers(research_abilities, ability_products)),
-            requirements=MappingProxyType(upgrade_requirements),
+            tech_requirements=MappingProxyType(upgrade_requirements),
             types=MappingProxyType(found.types),
             levels=MappingProxyType(found.levels),
         ),
@@ -408,7 +409,7 @@ def _requirements_by_product(
     ability_products: Mapping[AbilityId, Mapping[UnitTypeId, UnitTypeId | UpgradeId]],
     creation_abilities: Mapping[UnitTypeId, AbilityId],
 ) -> tuple[dict[UnitTypeId, TechRequirements], dict[UpgradeId, TechRequirements]]:
-    """What each unit type and each upgrade needs first: every tech, add-on and upgrade each type making it needs for
+    """What each unit type and each upgrade needs first: every tech, tech lab and upgrade each type making it needs for
     the ability it makes it by, together, a warp gate's for its warp-ins with a gateway's for its trains. A type whose
     creation ability names another product takes what that ability's performers need for it, as a rich refinery takes
     a refinery's. One that needs nothing is left out.
@@ -436,16 +437,13 @@ def _requirements_by_product(
 def _all_needed[ProductT: UnitTypeId | UpgradeId](
     needs_by_product: Mapping[ProductT, list[TechRequirements]],
 ) -> dict[ProductT, TechRequirements]:
-    """Every tech, add-on and upgrade any of each product's needs names, together, leaving out a product that needs
-    nothing. Raises `ValueError` where its makers need different add-ons."""
+    """Every tech, tech lab and upgrade any of each product's needs names, together, leaving out a product that needs
+    nothing."""
     all_needed: dict[ProductT, TechRequirements] = {}
     for product, needs in needs_by_product.items():
-        add_ons = {each.add_on for each in needs} - {None}
-        if len(add_ons) > 1:
-            raise ValueError(f"the makers of {product.name} need different add-ons")
         together = TechRequirements(
             techs=frozenset[Tech]().union(*(each.techs for each in needs)),
-            add_on=next(iter(add_ons), None),
+            needs_tech_lab=any(each.needs_tech_lab for each in needs),
             upgrades=frozenset[UpgradeId]().union(*(each.upgrades for each in needs)),
         )
         if together != TechRequirements():
@@ -622,17 +620,19 @@ def _ability(name: str) -> AbilityId | None:
 
 def _tech_named_after(structure: UnitTypeId) -> Tech:
     """The tech whose base type is `structure`. Raises `ValueError` where there is none."""
-    if (tech := next((tech for tech in Tech if tech.base_type is structure), None)) is None:
+    if structure not in Tech:
         raise ValueError(f"{structure.name} is required, and no Tech is named after it")
-    return tech
+    return Tech(structure)
 
 
-def _only_add_on(performer: UnitTypeId, ability: RawAbilityId, add_ons: list[UnitTypeId]) -> UnitTypeId | None:
-    """The one add-on of `add_ons`, which `performer` needs for `ability`, or `None` for none. Raises `ValueError`
-    for more than one."""
+def _needs_own_tech_lab(performer: UnitTypeId, ability: RawAbilityId, add_ons: list[UnitTypeId]) -> bool:
+    """Whether `performer` needs a tech lab of its own for `ability`, of `add_ons`, the add-ons it needs. Raises
+    `ValueError` for a reactor or for more than one."""
     if len(add_ons) > 1:
         raise ValueError(f"{performer.name} needs more than one add-on for {ability.name}")
-    return add_ons[0] if add_ons else None
+    if reactors := [add_on for add_on in add_ons if add_on not in UnitType.AnyTechLab.type_ids]:
+        raise ValueError(f"{performer.name} needs a {reactors[0].name} for {ability.name}, which is no tech lab")
+    return bool(add_ons)
 
 
 def _upgrade(name: str) -> UpgradeId | None:

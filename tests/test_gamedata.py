@@ -19,8 +19,8 @@ from sc2nachos.gamedata import (
     TargetType,
     UnitTypeUpgrade,
 )
-from sc2nachos.gamedata._ability_data import _price_of
-from sc2nachos.gamedata._game_data import _build_time_of_stages_that_cost, _charges_of_last_steps
+from sc2nachos.gamedata._ability_data import _cost_of_making
+from sc2nachos.gamedata._game_data import _build_time_of_stages_that_cost, _step_costs
 from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree import (
@@ -773,8 +773,8 @@ class TestARecordedGamesTables:
         assert all(key == row.id for key, row in data.abilities.items())
 
     def test_a_morph_costs_its_own_step_and_a_form_what_it_switched_from(self, path: Path) -> None:
-        """What the order that made one charged, not the whole the tables hold for a morph; a switch charges nothing,
-        so a form costs what the unit cost before it switched."""
+        """What the order that made one cost, not the whole the tables hold for a morph; a switch costs nothing, so a
+        form costs what the unit cost before it switched."""
         units = _tables(path).units
         assert units[UnitTypeId.ORBITAL_COMMAND].cost == Cost(150, 0, time=GameTime(steps=560))
         assert units[UnitTypeId.BANELING].cost == Cost(25, 25, time=GameTime(steps=320))
@@ -812,7 +812,7 @@ class TestARecordedGamesTables:
             assert units[cocoon].cost == units[becoming].cost, cocoon.name
         assert units[UnitTypeId.BANELING_COCOON].cost.resources == Resources(25, 25)
 
-    def test_the_supply_one_takes_is_the_tables_whatever_its_order_charged(self, path: Path) -> None:
+    def test_the_supply_one_takes_is_the_tables_whatever_its_order_cost(self, path: Path) -> None:
         units = _tables(path).units
         assert units[UnitTypeId.ZERGLING].supply_used == 0.5
         assert units[UnitTypeId.BANELING].supply_used == 0.5
@@ -820,8 +820,8 @@ class TestARecordedGamesTables:
         assert units[UnitTypeId.ARCHON].supply_used == 4
         assert units[UnitTypeId.BANELING].cost.supply == 0
 
-    def test_a_type_costs_what_its_creation_ability_charges_but_for_a_form_and_a_pair(self, path: Path) -> None:
-        """A form costs what it switched from, while its switch charges nothing; a larva's order makes two zerglings."""
+    def test_a_type_costs_what_its_creation_ability_costs_but_for_a_form_and_a_pair(self, path: Path) -> None:
+        """A form costs what it switched from, while its switch costs nothing; a larva's order makes two zerglings."""
         data = _tables(path)
         for unit_type, row in data.units.items():
             if row.creation_ability is None or unit_type is UnitTypeId.ZERGLING:
@@ -963,10 +963,10 @@ class TestARecordedGamesTables:
     def test_what_an_action_makes_costs_the_same_whichever_type_carries_it_out(self, path: Path) -> None:
         """One id has one price, so none is left at zero because what it makes differs by type."""
         data = _tables(path)
+        step_costs = _step_costs(data.units)
         for ability, row in data.abilities.items():
-            charges = _charges_of_last_steps(data.units)
-            prices = {_price_of(product, charges, data.upgrades) for product in row.products.values()}
-            assert len(prices) <= 1, f"{ability.name} costs {prices}"
+            product_costs = {_cost_of_making(product, step_costs, data.upgrades) for product in row.products.values()}
+            assert len(product_costs) <= 1, f"{ability.name} costs {product_costs}"
 
     def test_an_ability_that_makes_nothing_is_charged_nothing(self, path: Path) -> None:
         """Energy is not a budget to count here, so a cast, a move and a cancel all cost nothing."""
@@ -1076,6 +1076,6 @@ def _answer_row(path: Path, ability: int) -> data_pb2.AbilityData:
 def _derived(data: GameData, ability: AbilityId) -> Cost:
     """What the game's own rows say the ability costs, before the overrides correct them."""
     products = data.abilities[ability].products.values()
-    charges = _charges_of_last_steps(data.units)
-    derived = {_price_of(product, charges, data.upgrades) for product in products}
+    step_costs = _step_costs(data.units)
+    derived = {_cost_of_making(product, step_costs, data.upgrades) for product in products}
     return derived.pop() or Cost(0, 0) if len(derived) == 1 else Cost(0, 0)

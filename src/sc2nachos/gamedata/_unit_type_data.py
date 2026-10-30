@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Final, Self, final
+from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
 
@@ -33,8 +33,6 @@ if TYPE_CHECKING:
 _NO_CHANGE = UnitTypeUpgrade()
 # What adds nothing to a weapon, from which the changes to one are summed.
 _NO_WEAPON_CHANGE = WeaponUpgrade()
-# Each tech, by the type it is named after, which the tables name by number.
-_TECH_BY_BASE_TYPE: Final[Mapping[int, Tech]] = MappingProxyType({tech.base_type: tech for tech in Tech})
 
 # Each attack adds to the tables' cooldown a delay of -1 + 3r/4096 steps, r drawn evenly from 0 to 4095 (in game).
 _MEAN_ATTACK_DELAY = GameTime(steps=-1 + 3 * (4095 / 2) / 4096)
@@ -189,12 +187,12 @@ class UnitTypeData:
     race: Race
     """The race it belongs to."""
     cost: Cost
-    """What the order that made one charged: its last step that charged anything, so every form of a unit costs the
-    same. An orbital command is 150, a baneling 25/25, a sieged tank the tank's 150/125 and 3 supply, a warp gate the
-    gateway's 150, and an archon nothing (tool `sweep_orders`). A zergling's is half its order of two, 25 minerals and
-    half a supply; a structure a drone becomes gives the drone's supply back, -1; a cocoon's is that of what it
+    """What the order that made one cost: the cost of its last step that cost anything, so every form of a unit costs
+    the same. An orbital command is 150, a baneling 25/25, a sieged tank the tank's 150/125 and 3 supply, a warp gate
+    the gateway's 150, and an archon nothing (tool `sweep_orders`). A zergling's is half its order of two, 25 minerals
+    and half a supply; a structure a drone becomes gives the drone's supply back, -1; a cocoon's is that of what it
     becomes; and a MULE and an auto-turret, which energy pays for, cost nothing (tool `sweep_orders`). Its time is that
-    step's build time. What ordering an ability charges is the ability's `cost`, nothing for a siege."""
+    step's build time. What ordering an ability costs is the ability's `cost`, nothing for a siege."""
     build_time: GameTime
     """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
     steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
@@ -225,7 +223,7 @@ class UnitTypeData:
     producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
-    creation_requirements: TechRequirements
+    tech_requirements: TechRequirements
     """What a producer needs before it is offered what makes one, each producer's `ability_requirements` for the
     ability it makes one by: `Tech.BARRACKS` for a factory, `Tech.GHOST_ACADEMY` and the barracks's own tech lab for a
     ghost, and `Tech.CYBERNETICS_CORE` for an adept, to a gateway and a warp gate alike. Every producer of a type needs
@@ -306,7 +304,7 @@ class UnitTypeData:
         return cls(
             id=unit_type,
             race=Race(unit.race),
-            # The tables' whole cost, until `GameData` works out what the last step charged.
+            # The tables' whole cost, until `GameData` works out the cost of the last step.
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             build_time=GameTime(steps=math.ceil(unit.build_time)),
             supply_provided=unit.food_provided,
@@ -320,14 +318,12 @@ class UnitTypeData:
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
-            creation_requirements=tech_tree_unit_types.creation_requirements.get(unit_type, TechRequirements()),
+            tech_requirements=tech_tree_unit_types.tech_requirements.get(unit_type, TechRequirements()),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
             ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree_unit_types.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
-            techs_granted=frozenset(
-                tech for granting in (unit_type, *unit.tech_alias) if (tech := _TECH_BY_BASE_TYPE.get(granting))
-            ),
+            techs_granted=frozenset(Tech(granting) for granting in (unit_type, *unit.tech_alias) if granting in Tech),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),

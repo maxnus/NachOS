@@ -148,20 +148,20 @@ _FREE = Cost(0, 0)
 
 
 def ability_costs(
-    charges: Mapping[UnitTypeId, Cost],
+    step_costs: Mapping[UnitTypeId, Cost],
     upgrades: Mapping[UpgradeId, UpgradeData],
     tech_tree_abilities: TechTreeAbilities,
 ) -> Mapping[AbilityId, Cost]:
-    """The cost of ordering each ability, supply included: what the last step to its product charges, of `charges`, or
-    the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An action several types
-    perform costs what each makes costs, which is one price for every action there is: a lift nothing, a tech lab 50/25
-    and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
+    """The cost of ordering each ability, supply included: the cost of the step that makes its product, of
+    `step_costs`, or the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An
+    action several types perform costs what each makes costs, which is one cost for every action there is: a lift
+    nothing, a tech lab 50/25 and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
     """
     costs: dict[AbilityId, Cost] = {}
     for ability, products_by_maker in tech_tree_abilities.products.items():
-        prices = {_price_of(product, charges, upgrades) for product in products_by_maker.values()}
-        if len(prices) == 1 and (price := prices.pop()) is not None:
-            costs[ability] = price
+        product_costs = {_cost_of_making(product, step_costs, upgrades) for product in products_by_maker.values()}
+        if len(product_costs) == 1 and (product_cost := product_costs.pop()) is not None:
+            costs[ability] = product_cost
     costs.update(COST_OVERRIDES)
     return costs
 
@@ -184,15 +184,15 @@ def cancel_abilities(
     return cancels_by_ability
 
 
-def _price_of(
-    product: UnitTypeId | UpgradeId, charges: Mapping[UnitTypeId, Cost], upgrades: Mapping[UpgradeId, UpgradeData]
+def _cost_of_making(
+    product: UnitTypeId | UpgradeId, step_costs: Mapping[UnitTypeId, Cost], upgrades: Mapping[UpgradeId, UpgradeData]
 ) -> Cost | None:
-    """What making `product` charges: an upgrade's cost, or what the last step to a unit type charges. `None` where it
+    """The cost of making `product`: an upgrade's cost, or the cost of the step that makes a unit type. `None` where it
     has no row."""
     if isinstance(product, UpgradeId):
         upgrade = upgrades.get(product)
         return None if upgrade is None else upgrade.cost
-    return charges.get(product)
+    return step_costs.get(product)
 
 
 def _unit_types_holding_orders(

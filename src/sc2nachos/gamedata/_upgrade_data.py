@@ -45,7 +45,7 @@ class UpgradeData:
     researchers: frozenset[UnitTypeId]
     """The structure types whose `research_ability` researches it: an engineering bay for infantry weapons, a spire and
     a greater spire for flyer attacks. Empty for an upgrade nothing researches."""
-    research_requirements: TechRequirements
+    tech_requirements: TechRequirements
     """What a researcher needs before it is offered `research_ability`: `Tech.ARMORY` and level 1 for infantry weapons
     level 2. Every researcher of an upgrade needs the same (tool `sweep_tech_tree`)."""
     upgrade_type: UpgradeType
@@ -62,7 +62,7 @@ class UpgradeData:
             cost=Cost(data.mineral_cost, data.vespene_cost, time=GameTime(steps=round(data.research_time))),
             research_ability=AbilityId.get(data.ability_id) or tech_tree_upgrades.research_abilities.get(upgrade),
             researchers=tech_tree_upgrades.researchers.get(upgrade, frozenset()),
-            research_requirements=tech_tree_upgrades.requirements.get(upgrade, TechRequirements()),
+            tech_requirements=tech_tree_upgrades.tech_requirements.get(upgrade, TechRequirements()),
             upgrade_type=tech_tree_upgrades.types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree_upgrades.levels.get(upgrade, 0),
         )

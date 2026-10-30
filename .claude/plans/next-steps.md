@@ -720,19 +720,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
   Found moving AvocaDOS's production counters onto `in_production` (AvocaDOS #57).
 - **What AvocaDOS's data helpers move into NachOS** (the owner, review of AvocaDOS #57, 2026-10-30, one question at a
   time). The static reads first (#187):
-  - `UnitTypeData.cost` is what the order that made one charged, its last step that charged anything, so every form
-    of a unit costs the same: an orbital command 150, a sieged tank the tank's 150/125, an archon nothing (the owner's
-    review of #187, reversing a `creation_cost` beside a `cost` that was everything spent to reach the type, as an
-    order's price belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. What a unit
+  - `UnitTypeData.cost` is what the order that made one cost, the cost of its last step that cost anything, so every
+    form of a unit costs the same: an orbital command 150, a sieged tank the tank's 150/125, an archon nothing (the
+    owner's review of #187, reversing a `creation_cost` beside a `cost` that was everything spent to reach the type, as
+    an order's cost belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. What a unit
     is worth stays out, kept privately for the repair it prices. A MULE and an auto-turret cost nothing, the game's
     rows notwithstanding, and a cocoon what it becomes;
-  - `UnitTypeData.creation_requirements` and `UpgradeData.research_requirements`, every maker's requirements
-    together, which agree (tool `sweep_tech_tree`), and `UpgradeData.researchers` (over naming them `producers`);
+  - `UnitTypeData.tech_requirements` and `UpgradeData.tech_requirements`, every maker's requirements together, which
+    agree (tool `sweep_tech_tree`) (the owner's review of #187, over `creation_requirements` and
+    `research_requirements`), and `UpgradeData.researchers` (over naming them `producers`);
   - `Tech`, what a requirement names (the owner's review of #187, over a pair of names for `tech_aliases` and its
     reverse, which read alike in opposite directions). A type grants techs, `UnitTypeData.techs_granted`, which
     replaces `tech_aliases`, and `GameData.types_granting(tech)` lists the types granting one. Each tech is valued by
-    the type it is named after, `base_type`, but never equals it. `TechRequirements` holds `techs`, `add_on`, which
-    must be the unit's own, and `upgrades`;
+    the type it is named after, `base_type`, but never equals it. `TechRequirements` holds `techs`, `needs_tech_lab`,
+    the unit's own, and `upgrades` (the owner's review of #187, over the add-on's type, since every one is the unit's
+    own tech lab and nothing requires a reactor);
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision

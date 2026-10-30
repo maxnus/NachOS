@@ -221,9 +221,9 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
         AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, time=GameTime(steps=384)),
     }
 )
-"""The cost of ordering an ability, where its product does not say. Every other cost is what the product's last step
-charges, `UNIT_TYPE_COST_OVERRIDES` included, or an upgrade's cost. A nuke has no row to derive from, an interceptor no
-ability that makes it, and a larva's order makes two zerglings. These are the prices the game has always charged
+"""The cost of ordering an ability, where its product does not say. Every other cost is that of the step that makes
+the product, `UNIT_TYPE_COST_OVERRIDES` included, or an upgrade's cost. A nuke has no row to derive from, an interceptor
+no ability that makes it, and a larva's order makes two zerglings. These are the costs the game has always had
 (stated), with the steps the tables give what each makes: a zergling's 384. `tests/test_gamedata.py` checks that every
 entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
 
@@ -236,20 +236,20 @@ UNIT_TYPE_COST_OVERRIDES: Final[Mapping[UnitTypeId, Cost]] = MappingProxyType(
         # (tool `sweep_repair`).
         UnitTypeId.AUTO_TURRET: Cost(0, 0),
         # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
-        # should read 350. It reads 325, and taking off the drone leaves 275 where the game charges 300.
+        # should read 350. It reads 325, and taking off the drone leaves 275 where the morph costs 300.
         UnitTypeId.HATCHERY: Cost(300, 0, -1),
         # Called down for 50 energy and not a mineral (tool `sweep_orders`); the row's 50 is what the game prices a
         # repair from (tool `sweep_repair`).
         UnitTypeId.MULE: Cost(0, 0),
         # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, though the
-        # morph charges 25/25.
+        # morph costs 25/25.
         UnitTypeId.OVERLORD_TRANSPORT: Cost(25, 25),
         # The nova's row carries the disruptor's 3 supply; a nova takes none.
         UnitTypeId.PURIFICATION_NOVA: Cost(0, 0),
     }
 )
-"""What the order making each of these unit types charges, its minerals, vespene and supply, where the tables get it
-wrong. Every other charge is the type's row less its source type's, which is right for every other morph: an orbital
+"""The cost of the step that makes each of these unit types, its minerals, vespene and supply, where the tables get it
+wrong. Every other step costs the type's row less its source type's, which is right for every other morph: an orbital
 command 150 of its row's 550, with its cancel giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling
 25/25. The time is the type's build time. `tests/test_gamedata.py` checks that every entry differs from what the tables
 derive."""

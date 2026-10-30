@@ -124,7 +124,7 @@ Moving to a new build means changing that import; the generator says so when it 
 **Every structure a requirement names, but an add-on, is a member of `Tech`** in `sc2nachos/gamedata/_tech.py`, written
 by hand and valued by that structure's type. The generator refuses a requirement on a structure no member is named
 after, and a test in `tests/test_tech_tree.py` fails on a member nothing requires, so a patch that moves a requirement
-shows up as one or the other.
+shows up as one or the other. A required add-on is read as `needs_tech_lab`, and the generator refuses a reactor.
 
 **Creation abilities the game's own table does not name are in `sc2nachos/gamedata/_techtree/_overrides.py`**,
 written by hand, each entry with its evidence beside it. Where the table names an ability that does nothing, as for

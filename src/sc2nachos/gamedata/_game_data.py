@@ -58,15 +58,15 @@ class GameData:
         unit_rows = _with_build_times_in_whole_costs(
             _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE.abilities)))
         )
-        charges = _charges_of_last_steps(unit_rows)
-        self._units = _with_costs_of_last_steps(unit_rows, charges)
+        step_costs = _step_costs(unit_rows)
+        self._units = _with_costs_from_steps(unit_rows, step_costs)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE.upgrades), lambda row: row.id
         )
         # An ability's cost is derived from its product, so the other tables come first.
-        costs = ability_costs(charges, self._upgrades, TECH_TREE.abilities)
+        costs = ability_costs(step_costs, self._upgrades, TECH_TREE.abilities)
         cancels = cancel_abilities(TECH_TREE.abilities, behaviors)
         rows = _read_table(
             data.abilities,
@@ -191,62 +191,60 @@ def _build_time_of_stages_that_cost(type_row: UnitTypeData, unit_rows: Mapping[U
     return counted_time + stage_row.build_time
 
 
-def _charges_of_last_steps(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, Cost]:
-    """What the order making each unit type charges: its whole cost less its source type's, an orbital command 150 of
+def _step_costs(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, Cost]:
+    """The cost of the step that makes each unit type: its whole cost less its source type's, an orbital command 150 of
     550, a siege nothing, or the whole cost of a type made from nothing, but where `UNIT_TYPE_COST_OVERRIDES` corrects
-    it. Its time is the type's build time, or none for a switch, which charges nothing."""
-    return MappingProxyType(
-        {unit_type: _charge_of_last_step(type_row, unit_rows) for unit_type, type_row in unit_rows.items()}
-    )
+    it. Its time is the type's build time, or none for a switch, which costs nothing."""
+    return MappingProxyType({unit_type: _step_cost(type_row, unit_rows) for unit_type, type_row in unit_rows.items()})
 
 
-def _charge_of_last_step(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Cost:
-    """What the order making `type_row`'s type from its source charges, as `_charges_of_last_steps` says."""
+def _step_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Cost:
+    """The cost of the step that makes `type_row`'s type from its source, as `_step_costs` says."""
     source_row = None if type_row.morphed_from is None else unit_rows.get(type_row.morphed_from)
     if (corrected := UNIT_TYPE_COST_OVERRIDES.get(type_row.id)) is not None:
-        charged = corrected
+        step_cost = corrected
     elif source_row is not None:
-        charged = type_row._whole_cost - source_row._whole_cost
+        step_cost = type_row._whole_cost - source_row._whole_cost
     else:
-        charged = type_row._whole_cost
-    if source_row is not None and not _charges_anything(charged):
-        return replace(charged, time=GameTime.ZERO)
-    return replace(charged, time=type_row.build_time)
+        step_cost = type_row._whole_cost
+    if source_row is not None and not _costs_anything(step_cost):
+        return replace(step_cost, time=GameTime.ZERO)
+    return replace(step_cost, time=type_row.build_time)
 
 
-def _charges_anything(charged: Cost) -> bool:
-    """Whether `charged` takes any minerals, vespene or supply."""
-    return bool(charged.minerals or charged.vespene or charged.supply)
+def _costs_anything(cost: Cost) -> bool:
+    """Whether `cost` takes any minerals, vespene or supply."""
+    return bool(cost.minerals or cost.vespene or cost.supply)
 
 
-def _with_costs_of_last_steps(
-    unit_rows: Mapping[UnitTypeId, UnitTypeData], charges: Mapping[UnitTypeId, Cost]
+def _with_costs_from_steps(
+    unit_rows: Mapping[UnitTypeId, UnitTypeData], step_costs: Mapping[UnitTypeId, Cost]
 ) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given what the order that made one charged, of `charges`: its own last step's, its source's
-    cost for a form switched into for nothing, and for a cocoon, what it becomes."""
+    """`unit_rows`, each given the cost of the order that made one, of `step_costs`: its own step's, its source's cost
+    for a form switched into for nothing, and for a cocoon, what it becomes."""
     return MappingProxyType(
         {
-            unit_type: replace(type_row, cost=_cost_of_last_charging_step(unit_type, unit_rows, charges))
+            unit_type: replace(type_row, cost=_cost_of_last_step_with_a_cost(unit_type, unit_rows, step_costs))
             for unit_type, type_row in unit_rows.items()
         }
     )
 
 
-def _cost_of_last_charging_step(
-    unit_type: UnitTypeId, unit_rows: Mapping[UnitTypeId, UnitTypeData], charges: Mapping[UnitTypeId, Cost]
+def _cost_of_last_step_with_a_cost(
+    unit_type: UnitTypeId, unit_rows: Mapping[UnitTypeId, UnitTypeData], step_costs: Mapping[UnitTypeId, Cost]
 ) -> Cost:
-    """What the last step to `unit_type` that charged anything charged, back along `morphed_from` through every switch
-    that charged nothing, from what a cocoon becomes. A type `UNIT_TYPE_COST_OVERRIDES` names costs what it says."""
+    """The cost of the last step to `unit_type` that costs anything, back along `morphed_from` through every switch
+    that costs nothing, from what a cocoon becomes. A type `UNIT_TYPE_COST_OVERRIDES` names costs what it says."""
     if (becoming := COCOON_PRODUCTS.get(unit_type)) is not None and becoming in unit_rows:
         unit_type = becoming
     stages_passed = {unit_type}
-    while unit_type not in UNIT_TYPE_COST_OVERRIDES and not _charges_anything(charges[unit_type]):
+    while unit_type not in UNIT_TYPE_COST_OVERRIDES and not _costs_anything(step_costs[unit_type]):
         source_type = unit_rows[unit_type].morphed_from
         if source_type is None or source_type not in unit_rows or source_type in stages_passed:
             break
         unit_type = source_type
         stages_passed.add(source_type)
-    return charges[unit_type]
+    return step_costs[unit_type]
 
 
 def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:

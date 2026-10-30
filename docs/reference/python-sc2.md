@@ -576,8 +576,8 @@ it.
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one charged, an orbital command's own 150 where python-sc2's is 550; see below |
-| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` is that of the step that charged, a sieged tank's the tank's |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
@@ -591,15 +591,15 @@ it.
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
-| `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2 charges a sieged tank a tank's whole price |
-| `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is what the order that made one charged, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
+| `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
+| `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the order that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
 | `bot.calculate_unit_value(t)` | nothing: the sum of `unit_data.cost` back along `morphed_from`, past each form, which costs what it switched from |
 | `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: an order that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
-| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]`, or every maker's together, `data.units[t].creation_requirements` and `data.upgrades[u].research_requirements` |
-| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].creation_requirements.techs`, `Tech`s rather than unit types |
+| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]`, or every maker's together, `data.units[t].tech_requirements` and `data.upgrades[u].tech_requirements` |
+| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].tech_requirements.techs`, `Tech`s rather than unit types |
 | `EQUIVALENTS_FOR_TECH_PROGRESS` | `data.types_granting(tech)`, every type whose `techs_granted` hold it |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
 | `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
@@ -640,19 +640,19 @@ it.
   and `UNLOAD_AT` put everyone down at once.
 - **A cost is minerals, vespene, supply and time.** python-sc2's `Cost` carries a `time` in steps too, which its
   `__add__` adds and its `__eq__` ignores, and for a morph it is the morph's alone, an orbital command's 560. So is
-  NachOS's `unit_data.cost.time`, a `GameTime`, the time of the step whose order charged: an orbital command's 560, and
-  a sieged tank's the tank's 720, since a switch charges nothing. NachOS's `Cost` adds, subtracts, scales and compares
+  NachOS's `unit_data.cost.time`, a `GameTime`, the time of its last step that cost anything: an orbital command's 560,
+  and a sieged tank's the tank's 720, since a switch costs nothing. NachOS's `Cost` adds, subtracts, scales and compares
   every field; costs added up add their times, which is production time one after another, not how long they take
   side by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
   answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against
   it. Its amounts are fractional, since half a cost and an average
   cost are ordinary things to want; what the game gave stays whole until something divides it.
-- **A unit type's cost is what the order that made one charged, and an ability's what ordering it charges.**
+- **A unit type's cost is what the order that made one cost, and an ability's what ordering it costs.**
   python-sc2's `unit_data.cost` hands the game's number back as it is, an orbital command's 550 with the command
-  center's 400 in it. NachOS's is the last step that charged, an orbital command's 150, as
-  `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` charges, an extractor's 25 and a baneling's 25/25
+  center's 400 in it. NachOS's is that of the last step that cost anything, an orbital command's 150, as
+  `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` costs, an extractor's 25 and a baneling's 25/25
   ([game behavior](game-behavior/upgrades-and-tables.md)). Every form of a unit costs the same: a sieged tank the
-  tank's 150/125, though the siege charges nothing. An archon, a MULE and an auto-turret cost nothing, whatever their
+  tank's 150/125, though the siege costs nothing. An archon, a MULE and an auto-turret cost nothing, whatever their
   rows hold. python-sc2 subtracts in `morph_cost` and `calculate_ability_cost` off a hand-written
   `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, since the game's rows now price a reactor 50/50
   and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325 rather than the
@@ -673,10 +673,10 @@ it.
   needs nothing. A required structure is a `Tech`, which a player has while a structure of a type granting it
   stands, where python-sc2 names a unit type and lists what counts as it apart: `units[t].techs_granted` says what a
   type grants, a greater spire `Tech.SPIRE` and `Tech.GREATER_SPIRE`, and `api.data.types_granting(tech)` lists the
-  types granting one. A required add-on is apart, `add_on`, and has to be the unit's own, which is what python-sc2's
-  `requires_techlab` says. Every type that makes a unit type or researches an upgrade needs the same for it, so
-  `unit_data.creation_requirements` and `upgrade_data.research_requirements` hold what each maker needs
-  ([game behavior](game-behavior/upgrades-and-tables.md)).
+  types granting one. A required tech lab is apart, `needs_tech_lab`, and has to be the unit's own, as python-sc2's
+  `requires_techlab` says; nothing requires a reactor. Every type that makes a unit type or researches an upgrade
+  needs the same for it, so `unit_data.tech_requirements` and `upgrade_data.tech_requirements` hold what each maker
+  needs ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **Power is the structure's, not the ability's.** An unpowered gateway is offered nothing it trains, which
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
@@ -689,8 +689,8 @@ it.
   `GATEWAY_TRAIN_ZEALOT`, whose `performers` hold no warp gate.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
-  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. A morph's `cost` is its own step's
-  price, what its `ability_data.cost` charges.
+  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. A morph's `cost` is that of its own
+  step, its `ability_data.cost`.
 - **What an upgrade changes was swept in game too, and is added, not multiplied.** python-sc2 writes
   `DAMAGE_BONUS_PER_UPGRADE` and its speed dicts by hand, the speeds as factors. `unit_data.upgrades` holds what
   `tools/sweep_upgrades.py` read off the game's rows after each upgrade, plus every upgrade that raises a level the
