@@ -174,6 +174,13 @@ class TestResources:
         assert not Resources(100, 0).covers(Resources(0, 100))
         assert not Resources(0, 100).covers(Resources(100, 0))
 
+    def test_the_minimum_and_the_maximum_take_each_resource_on_its_own(self) -> None:
+        assert Resources(100, 50).minimum(Resources(75, 80)) == Resources(75, 50)
+        assert Resources(100, 50).maximum(Resources(75, 80)) == Resources(100, 80)
+
+    def test_the_maximum_with_nothing_drops_what_is_owed(self) -> None:
+        assert Resources(-25, 40).maximum(Resources(0, 0)) == Resources(0, 40)
+
     def test_amounts_can_be_summed_from_nothing(self) -> None:
         costs = [Resources(50, 0), Resources(100, 25), Resources(0, 75)]
         assert sum(costs, start=Resources(0, 0)) == Resources(150, 100)
@@ -880,6 +887,20 @@ class TestARecordedGamesTables:
         data = _tables(path)
         charged = {ability: replace(data.abilities[ability].cost, time=GameTime(steps=0)) for ability in _CHARGED}
         assert charged == _CHARGED
+
+    def test_the_order_to_make_a_type_charges_what_its_creation_ability_costs(self, path: Path) -> None:
+        data = _tables(path)
+        for unit_type, row in data.units.items():
+            expected = None if row.creation_ability is None else data.abilities[row.creation_ability].cost
+            assert row.creation_cost == expected, unit_type.name
+        orbital = data.units[UnitTypeId.ORBITAL_COMMAND]
+        assert orbital.creation_cost is not None
+        assert (orbital.creation_cost.resources, orbital.cost.resources) == (Resources(150, 0), Resources(550, 0))
+        # A larva's order makes two zerglings.
+        zergling = data.units[UnitTypeId.ZERGLING].creation_cost
+        assert zergling is not None
+        assert (zergling.resources, zergling.supply) == (Resources(50, 0), 1)
+        assert data.units[UnitTypeId.ARCHON].creation_cost is None
 
     def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
         """A refund does not depend on how far the work got, so a refund measured in game shows what the order was

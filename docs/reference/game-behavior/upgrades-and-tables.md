@@ -40,6 +40,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   requirement, has room for only one requirement, and holds no upgrade requirement (tool `sweep_tech_tree`, #29).
   Requirements belong to a type and an ability together: a burrowed roach moves only once Tunneling Claws is
   researched (#29).
+- Every type that makes a unit type needs the same structures and upgrades for it, each for the ability it makes it
+  by: a gateway's train of an adept and a warp gate's warp-in of one both need a cybernetics core. So does every type
+  that researches an upgrade: flyer attacks level 2 needs a lair and level 1, of a spire and of a greater spire alike.
+  No gateway is offered the warp gate, so nothing records what it needs (tool `sweep_tech_tree`; corpus).
 - The catalog holds 2005 unit types, 940 of them unnamed skipped ids, 4134 abilities, 306 upgrades, 303 buffs and
   13 effects; 894 ability names repeat, and 23 buff ids share their number with a unit type (#23).
 - The `available` flag filters nothing: `MorphZerglingToBaneling` is marked unavailable though zerglings morph, and

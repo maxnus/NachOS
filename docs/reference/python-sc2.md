@@ -591,14 +591,15 @@ it.
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
+| `bot.calculate_cost(x)` | `unit_data.creation_cost` for a unit type, `upgrade_data.cost` for an upgrade, `ability_data.cost` for an ability |
 | `bot.calculate_supply_cost(t)` | `unit_data.cost.supply`, the type's own; `ability_data.cost.supply` of what makes it counts what the order frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
-| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
+| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` as for `calculate_cost` |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
-| `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
-| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]` |
-| `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |
-| `EQUIVALENTS_FOR_TECH_PROGRESS` | `unit_data.tech_aliases` of the type that stands |
+| `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
+| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]`, or every maker's together, `data.units[t].creation_requirements` and `data.upgrades[u].research_requirements` |
+| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].creation_requirements.structures` |
+| `EQUIVALENTS_FOR_TECH_PROGRESS` | `data.types_counting_as(t)`, `t` and the types whose `tech_aliases` name it |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
 | `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
 | a requirement's `requires_power` | `unit_data.needs_power` |
@@ -643,11 +644,11 @@ it.
   morph's alone, an orbital command's 560. NachOS's `unit_data.cost.time`, a `GameTime`, adds the time of each stage
   that costs something, as the minerals do: an orbital command's 2160 steps, the command center's 1600 included, and a
   sieged tank's the tank's 720, since a switch that costs nothing adds none. `build_time` is the last stage alone.
-  NachOS's `Cost` adds, subtracts, scales and compares every field; costs added up add their times, which is production time one after
-  another, not how long they take side by side. What a player holds is `Resources`, minerals and vespene alone, which
-  adds, subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
-  fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole until
-  something divides it.
+  NachOS's `Cost` adds, subtracts, scales and compares every field; costs added up add their times, which is production
+  time one after another, not how long they take side by side. What a player holds is `Resources`, minerals and vespene
+  alone, which adds, subtracts, scales, divides, answers `covers` and takes the `minimum` and `maximum` of each
+  resource; `cost.resources` is what to hold against it. Its amounts are fractional, since half a cost and an average
+  cost are ordinary things to want; what the game gave stays whole until something divides it.
 - **A unit type's cost is everything spent to reach it; an ability's is what the game charges.** `unit_data.cost` hands
   the game's number back as it is, an orbital command's 550 with the command center's 400 in it, and `morphed_from` says
   what to subtract; `ability_data.cost` has it subtracted already: `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` charges 150,
@@ -655,7 +656,8 @@ it.
   in `morph_cost` and `calculate_ability_cost` off a hand-written `UNIT_TRAINED_FROM`; two of its hard-coded corrections
   are stale, since the game's rows now price a reactor 50/50 and a tech lab 50/25, and its `cost_zerg_corrected` is
   wrong for the hatchery, whose row is 325 rather than the drone's 50 and a hatchery's 300. An action several types
-  perform costs the same whichever does it, every tech lab 50/25.
+  perform costs the same whichever does it, every tech lab 50/25. `unit_data.creation_cost` is its creation ability's
+  `cost`, so an orbital command's is 150.
 - **A rich gas building's build time is its plain one's.** python-sc2's `cost.time` reads the game's row, which can
   give it none; NachOS's `build_time` reads its plain building's ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData` holds
@@ -668,8 +670,11 @@ it.
 - **Requirements belong to a unit type and an ability together**, since one ability can need different things of
   different types: a burrowed roach moves only once Tunneling Claws is researched, and nothing else needs anything
   to move. `units[t].ability_requirements` holds an entry for every ability `units[t]` is offered, even one that
-  needs nothing. A required structure counts as standing where a type whose `tech_aliases` name it stands, and an
-  add-on among them has to be the unit's own, which is what python-sc2's `requires_techlab` says.
+  needs nothing. A required structure counts as standing where a type whose `tech_aliases` name it stands, which
+  `api.data.types_counting_as(t)` lists, and an add-on among them has to be the unit's own, which is what python-sc2's
+  `requires_techlab` says. Every type that makes a unit type or researches an upgrade needs the same for it, so
+  `unit_data.creation_requirements` and `upgrade_data.research_requirements` hold what each maker needs
+  ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **Power is the structure's, not the ability's.** An unpowered gateway is offered nothing it trains, which
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every

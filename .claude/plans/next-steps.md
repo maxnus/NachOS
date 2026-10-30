@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #185. `uv run pytest` passes 2978 tests with #186; `uv run pytest -m
+- nachOS `main` has every PR to #186. `uv run pytest` passes 2994 tests with #187; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -718,6 +718,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
   looks for an add-on at the order's target plus `ADD_ON_OFFSET`, so the host's `construction` and the add-on's
   `builder` link the two until it finishes, and `in_production` drops the order by its rule for a build begun (#186).
   Found moving AvocaDOS's production counters onto `in_production` (AvocaDOS #57).
+- **What AvocaDOS's data helpers move into NachOS** (the owner, review of AvocaDOS #57, 2026-10-30, one question at a
+  time). The static reads first (#187):
+  - `UnitTypeData.creation_cost`, its creation ability's cost, beside `cost`, which is what a type is worth: 150 for
+    an orbital command against 550 (over renaming `cost`, and over leaving the price on the ability alone);
+  - `UnitTypeData.creation_requirements` and `UpgradeData.research_requirements`, every maker's requirements
+    together, which agree (tool `sweep_tech_tree`), and `UpgradeData.researchers` (over naming them `producers`);
+  - `GameData.types_counting_as(t)`, `tech_aliases` read the other way;
+  - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
+
+  They are read off the abilities by passes in `GameData`, as the abilities' costs are, since a cost comes from the
+  game's tables. Then a second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
+  itself while it goes up or warps in (over renaming `unit` alone), with `time_left` and `total_time` as `Research`
+  has them (over `time_left` alone), measured in a game first. Not in NachOS: `can_afford` (#46, above), an upgrade's
+  progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
+  forecast of when tech is there, and a getter beside `api.data.units[t]` (over `api.data[t]` and a getter per field).
 
 ## Next
 
@@ -735,6 +750,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
   `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#175),
   before that piece merges.
+- **What the owner's review of AvocaDOS #57 moves into NachOS** (2026-10-30, above): the static tech reads and
+  `Resources.minimum` and `maximum` (#187), then `InProduction`'s `producer`, `unit`, `time_left` and `total_time`,
+  measured in a game first. AvocaDOS adopts each as it merges.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
   salsa's plan holds:

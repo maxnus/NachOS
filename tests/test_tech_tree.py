@@ -443,6 +443,72 @@ class TestWhatTheTablesSay:
         )
         assert first_corpus_tables.units[UnitTypeId.ZEALOT].creation_ability is AbilityId.GATEWAY_TRAIN_ZEALOT
 
+    def test_a_type_needs_what_its_producers_need_to_make_it(self, first_corpus_tables: GameData) -> None:
+        units = first_corpus_tables.units
+        assert units[UnitTypeId.GHOST].creation_requirements == TechRequirements(
+            structures=frozenset({UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS})
+        )
+        assert units[UnitTypeId.ORBITAL_COMMAND].creation_requirements.structures == {UnitTypeId.BARRACKS}
+        assert units[UnitTypeId.MARINE].creation_requirements == TechRequirements()
+        assert units[UnitTypeId.LARVA].creation_requirements == TechRequirements()
+
+    def test_what_a_warp_gate_warps_in_needs_what_a_gateway_needs_to_train_it(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        units = first_corpus_tables.units
+        core = TechRequirements(structures=frozenset({UnitTypeId.CYBERNETICS_CORE}))
+        assert units[UnitTypeId.WARP_GATE].ability_requirements[AbilityId.WARP_GATE_WARP_IN_ADEPT] == core
+        assert units[UnitTypeId.GATEWAY].ability_requirements[AbilityId.GATEWAY_TRAIN_ADEPT] == core
+        assert units[UnitTypeId.ADEPT].creation_requirements == core
+
+    def test_every_producer_of_a_type_needs_the_same_to_make_it(self, first_corpus_tables: GameData) -> None:
+        """So what a type needs is what each of its producers needs, as `creation_requirements` says."""
+        units, abilities = first_corpus_tables.units, first_corpus_tables.abilities
+        for unit_type, row in units.items():
+            needs = {
+                requirements
+                for producer in row.producers
+                if (producer_row := units.get(producer)) is not None
+                for ability, requirements in producer_row.ability_requirements.items()
+                if ability is row.creation_ability
+                or (
+                    (ability_row := abilities.get(ability)) is not None
+                    and ability_row.products.get(producer) is unit_type
+                )
+            }
+            assert len(needs) <= 1, unit_type.name
+
+    def test_an_upgrade_names_what_researches_it_and_what_that_needs(self, first_corpus_tables: GameData) -> None:
+        upgrades = first_corpus_tables.upgrades
+        weapons = upgrades[UpgradeId.TERRAN_INFANTRY_WEAPONS_2]
+        assert weapons.researchers == {UnitTypeId.ENGINEERING_BAY}
+        assert weapons.research_requirements == TechRequirements(
+            structures=frozenset({UnitTypeId.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})
+        )
+        assert upgrades[UpgradeId.ZERG_AIR_WEAPONS_1].researchers == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
+        assert upgrades[UpgradeId.STIMPACK].research_requirements == TechRequirements()
+
+    def test_every_upgrade_is_researched_by_what_is_offered_its_research(self, first_corpus_tables: GameData) -> None:
+        for upgrade, row in first_corpus_tables.upgrades.items():
+            assert row.research_ability is not None, upgrade.name
+            assert row.researchers == first_corpus_tables.abilities[row.research_ability].performers, upgrade.name
+            assert row.researchers, upgrade.name
+
+    def test_every_researcher_of_an_upgrade_needs_the_same_for_it(self, first_corpus_tables: GameData) -> None:
+        units = first_corpus_tables.units
+        for upgrade, row in first_corpus_tables.upgrades.items():
+            assert row.research_ability is not None, upgrade.name
+            needs = {units[researcher].ability_requirements[row.research_ability] for researcher in row.researchers}
+            assert needs == {row.research_requirements}, upgrade.name
+
+    def test_a_type_counts_as_itself_and_as_every_type_aliased_to_it(self, first_corpus_tables: GameData) -> None:
+        assert first_corpus_tables.types_counting_as(UnitTypeId.LAIR) == {UnitTypeId.LAIR, UnitTypeId.HIVE}
+        assert first_corpus_tables.types_counting_as(UnitTypeId.SUPPLY_DEPOT) == {
+            UnitTypeId.SUPPLY_DEPOT,
+            UnitTypeId.SUPPLY_DEPOT_LOWERED,
+        }
+        assert first_corpus_tables.types_counting_as(UnitTypeId.MARINE) == {UnitTypeId.MARINE}
+
     def test_a_gateway_needs_power_and_a_nexus_and_a_pylon_do_not(self, first_corpus_tables: GameData) -> None:
         assert first_corpus_tables.units[UnitTypeId.GATEWAY].needs_power
         assert not first_corpus_tables.units[UnitTypeId.NEXUS].needs_power

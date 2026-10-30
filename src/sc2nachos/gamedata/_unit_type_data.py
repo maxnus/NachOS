@@ -212,9 +212,19 @@ class UnitTypeData:
     give none, the attacks `tools/sweep_combat.py` measured. An oracle's fires only while its beam is on."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` if nothing does."""
+    creation_cost: Cost | None
+    """What the order to make one charges: its creation ability's `cost`, 150 minerals for an orbital command over its
+    command center, nothing for a sieged tank, and 50 minerals and 1 supply for a zergling, as a larva's order makes
+    two. `None` where `creation_ability` is. `cost` is everything spent to reach the type."""
     producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
+    creation_requirements: TechRequirements
+    """Every structure and upgrade a producer needs before it is offered what makes one, each producer's
+    `ability_requirements` for the ability it makes one by: a barracks for a factory, a ghost academy and the barracks's
+    own tech lab for a ghost, and a cybernetics core for an adept, to a gateway and a warp gate alike. Every producer
+    of a type needs the same (tool `sweep_tech_tree`). Empty for a type nothing is recorded making, and for a warp
+    gate, which no gateway is offered: the game turns each gateway once Warp Gate is researched."""
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
@@ -227,7 +237,8 @@ class UnitTypeData:
     for every type a unit places at a point; `None` for any other type, such as a gas building, which goes on a
     geyser, an add-on, or a form a structure morphs into."""
     tech_aliases: tuple[UnitTypeId, ...]
-    """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
+    """Other types that satisfy the same tech requirement: an orbital command counts as a command center.
+    `GameData.types_counting_as` reads them the other way."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
@@ -295,7 +306,10 @@ class UnitTypeData:
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
+            # This and `creation_requirements` are read off the abilities, which `GameData` reads after the unit types.
+            creation_cost=None,
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            creation_requirements=TechRequirements(),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
             ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree_unit_types.power_consumers,
