@@ -593,7 +593,7 @@ it.
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
 | `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
 | `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the order that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
-| `bot.calculate_unit_value(t)` | nothing: the sum of `unit_data.cost` back along `morphed_from`, past each form, which costs what it switched from |
+| `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every order that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
 | `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: an order that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
@@ -645,15 +645,18 @@ it.
   every field; costs added up add their times, which is production time one after another, not how long they take
   side by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
   answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against
-  it. Its amounts are fractional, since half a cost and an average
-  cost are ordinary things to want; what the game gave stays whole until something divides it.
+  it. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
+  gave stays whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or
+  supply, whatever its time.
 - **A unit type's cost is what the order that made one cost, and an ability's what ordering it costs.**
   python-sc2's `unit_data.cost` hands the game's number back as it is, an orbital command's 550 with the command
   center's 400 in it. NachOS's is that of the last step that cost anything, an orbital command's 150, as
   `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` costs, an extractor's 25 and a baneling's 25/25
   ([game behavior](game-behavior/upgrades-and-tables.md)). Every form of a unit costs the same: a sieged tank the
   tank's 150/125, though the siege costs nothing. An archon, a MULE and an auto-turret cost nothing, whatever their
-  rows hold. python-sc2 subtracts in `morph_cost` and `calculate_ability_cost` off a hand-written
+  rows hold. `unit_data.total_cost` adds up every step back to the first, an orbital command's 550 and a hatchery's
+  350 with its drone, where the game's row reads 325; an archon counts two high templar. python-sc2 subtracts in
+  `morph_cost` and `calculate_ability_cost` off a hand-written
   `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, since the game's rows now price a reactor 50/50
   and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325 rather than the
   drone's 50 and a hatchery's 300. An action several types perform costs the same whichever does it, every tech lab

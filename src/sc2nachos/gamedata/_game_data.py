@@ -15,6 +15,7 @@ from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._techtree import (
     ABILITIES_SENT_AS_ANOTHER,
     COCOON_PRODUCTS,
+    MERGE_SOURCES,
     TECH_TREE,
     UNIT_TYPE_COST_OVERRIDES,
 )
@@ -207,24 +208,22 @@ def _step_cost(type_row: UnitTypeData, unit_rows: Mapping[UnitTypeId, UnitTypeDa
         step_cost = type_row._whole_cost - source_row._whole_cost
     else:
         step_cost = type_row._whole_cost
-    if source_row is not None and not _costs_anything(step_cost):
+    if source_row is not None and step_cost.is_free:
         return replace(step_cost, time=GameTime.ZERO)
     return replace(step_cost, time=type_row.build_time)
-
-
-def _costs_anything(cost: Cost) -> bool:
-    """Whether `cost` takes any minerals, vespene or supply."""
-    return bool(cost.minerals or cost.vespene or cost.supply)
 
 
 def _with_costs_from_steps(
     unit_rows: Mapping[UnitTypeId, UnitTypeData], step_costs: Mapping[UnitTypeId, Cost]
 ) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given the cost of the order that made one, of `step_costs`: its own step's, its source's cost
-    for a form switched into for nothing, and for a cocoon, what it becomes."""
+    """`unit_rows`, each given its `cost` and its `total_cost` from `step_costs`."""
     return MappingProxyType(
         {
-            unit_type: replace(type_row, cost=_cost_of_last_step_with_a_cost(unit_type, unit_rows, step_costs))
+            unit_type: replace(
+                type_row,
+                cost=_cost_of_last_step_with_a_cost(unit_type, unit_rows, step_costs),
+                total_cost=_total_cost_of(unit_type, unit_rows, step_costs),
+            )
             for unit_type, type_row in unit_rows.items()
         }
     )
@@ -238,13 +237,37 @@ def _cost_of_last_step_with_a_cost(
     if (becoming := COCOON_PRODUCTS.get(unit_type)) is not None and becoming in unit_rows:
         unit_type = becoming
     stages_passed = {unit_type}
-    while unit_type not in UNIT_TYPE_COST_OVERRIDES and not _costs_anything(step_costs[unit_type]):
+    while unit_type not in UNIT_TYPE_COST_OVERRIDES and step_costs[unit_type].is_free:
         source_type = unit_rows[unit_type].morphed_from
         if source_type is None or source_type not in unit_rows or source_type in stages_passed:
             break
         unit_type = source_type
         stages_passed.add(source_type)
     return step_costs[unit_type]
+
+
+def _total_cost_of(
+    unit_type: UnitTypeId,
+    unit_rows: Mapping[UnitTypeId, UnitTypeData],
+    step_costs: Mapping[UnitTypeId, Cost],
+    *,
+    stages_passed: frozenset[UnitTypeId] = frozenset(),
+) -> Cost:
+    """The cost of every step that made `unit_type`, back along `morphed_from`, or through each unit `MERGE_SOURCES`
+    names, from what a cocoon becomes. `stages_passed` are the types further along, which are not counted again."""
+    if (becoming := COCOON_PRODUCTS.get(unit_type)) is not None and becoming in unit_rows:
+        unit_type = becoming
+    stages_passed |= {unit_type}
+    morphed_from = unit_rows[unit_type].morphed_from
+    source_types = MERGE_SOURCES.get(unit_type) or (() if morphed_from is None else (morphed_from,))
+    return sum(
+        (
+            _total_cost_of(source_type, unit_rows, step_costs, stages_passed=stages_passed)
+            for source_type in source_types
+            if source_type in unit_rows and source_type not in stages_passed
+        ),
+        start=step_costs[unit_type],
+    )
 
 
 def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:

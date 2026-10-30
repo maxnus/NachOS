@@ -723,9 +723,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `UnitTypeData.cost` is what the order that made one cost, the cost of its last step that cost anything, so every
     form of a unit costs the same: an orbital command 150, a sieged tank the tank's 150/125, an archon nothing (the
     owner's review of #187, reversing a `creation_cost` beside a `cost` that was everything spent to reach the type, as
-    an order's cost belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. What a unit
-    is worth stays out, kept privately for the repair it prices. A MULE and an auto-turret cost nothing, the game's
-    rows notwithstanding, and a cocoon what it becomes;
+    an order's cost belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. A MULE and
+    an auto-turret cost nothing, the game's rows notwithstanding, and a cocoon what it becomes;
+  - `UnitTypeData.total_cost`, what every order that made one cost, step by step back along `morphed_from`: an
+    orbital command 550, a hatchery 350 with its drone, a MULE nothing, and an archon two high templar, 100/300 (the
+    owner's review of #187, reversing a decision to keep what a unit is worth private, and over publishing the game's
+    own whole cost, which prices a MULE 50, an auto-turret 100, an archon 175/275 and a hatchery 325). The game's
+    figure stays private, since a repair is priced from it;
+  - `Cost.is_free`, whether it takes no minerals, vespene or supply, whatever its time (the owner's review of #187,
+    over `Cost.__bool__`, which would read a free cost like a `None` from `required_repair_cost` and ignore time);
   - `UnitTypeData.tech_requirements` and `UpgradeData.tech_requirements`, every maker's requirements together, which
     agree (tool `sweep_tech_tree`) (the owner's review of #187, over `creation_requirements` and
     `research_requirements`), and `UpgradeData.researchers` (over naming them `producers`);
@@ -736,6 +742,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     the unit's own, and `upgrades` (the owner's review of #187, over the add-on's type, since every one is the unit's
     own tech lab and nothing requires a reactor);
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
+
+  Next, in a pull request of its own once #187 merges: the tech tree as one record per id, `TechTreeUnitType`,
+  `TechTreeAbility` and `TechTreeUpgrade`, each mapping of the tree a field of the record (the owner's review of #187,
+  over a mapping per field, which spreads what the tree says of a ghost over four).
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
   above); `GameData` works out each type's last step from the tables' whole costs, since a price comes from them. Then a

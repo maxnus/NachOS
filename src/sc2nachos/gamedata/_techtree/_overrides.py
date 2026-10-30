@@ -267,6 +267,16 @@ COCOON_PRODUCTS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
 """The type each cocoon becomes: a zergling a baneling through a `BANELING_COCOON`, and an overlord an overseer through
 an `OVERLORD_COCOON` (#37, in game); the rest are named for what they become."""
 
+MERGE_SOURCES: Final[Mapping[UnitTypeId, tuple[UnitTypeId, ...]]] = MappingProxyType(
+    {
+        # Two dark templar merge into one too, for 250/250 in all, and a high and a dark templar for 175/275, which is
+        # the archon's row.
+        UnitTypeId.ARCHON: (UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HIGH_TEMPLAR),
+    }
+)
+"""The units used up making each of these unit types, which `morphed_from` cannot name, as its `total_cost` counts
+them: two high templar for an archon (stated)."""
+
 # The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
 # units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool
 # `sweep_orders`, `one-command-each`). The game's tables mark none of them as placing anything.

@@ -207,6 +207,11 @@ class TestCost:
         assert cost.resources == Resources(150, 100)
         assert Resources(200, 100).covers(cost.resources)
 
+    def test_a_cost_is_free_with_no_minerals_vespene_or_supply_whatever_its_time(self) -> None:
+        assert Cost(0, 0, time=GameTime(steps=16)).is_free
+        assert not Cost(0, 25).is_free
+        assert not Cost(0, 0, -1).is_free
+
 
 class TestReadingTheTables:
     def test_a_unit_type_is_read_under_the_curated_id_that_names_it(self) -> None:
@@ -819,6 +824,32 @@ class TestARecordedGamesTables:
         assert units[UnitTypeId.SIEGE_TANK_SIEGED].supply_used == 3
         assert units[UnitTypeId.ARCHON].supply_used == 4
         assert units[UnitTypeId.BANELING].cost.supply == 0
+
+    def test_a_total_cost_counts_every_step_back_to_the_first(self, path: Path) -> None:
+        """A morph counts what it morphed from, and a form what it switched from, for which the switch adds nothing."""
+        units = _tables(path).units
+        orbital_command = units[UnitTypeId.ORBITAL_COMMAND].total_cost
+        assert orbital_command.resources == Resources(550, 0)
+        assert orbital_command.time == units[UnitTypeId.COMMAND_CENTER].build_time + GameTime(steps=560)
+        assert units[UnitTypeId.HATCHERY].total_cost.resources == Resources(350, 0)
+        assert units[UnitTypeId.LAIR].total_cost.resources == Resources(500, 100)
+        baneling = units[UnitTypeId.BANELING].total_cost
+        assert (baneling.resources, baneling.supply) == (Resources(50, 25), 0.5)
+        assert units[UnitTypeId.BANELING_COCOON].total_cost == baneling
+        assert units[UnitTypeId.SIEGE_TANK_SIEGED].total_cost == units[UnitTypeId.SIEGE_TANK].total_cost
+
+    def test_a_total_cost_counts_two_high_templar_for_an_archon_and_nothing_for_energy(self, path: Path) -> None:
+        units = _tables(path).units
+        assert units[UnitTypeId.ARCHON].total_cost == units[UnitTypeId.HIGH_TEMPLAR].total_cost * 2
+        assert units[UnitTypeId.MULE].total_cost.is_free
+        assert units[UnitTypeId.AUTO_TURRET].total_cost.is_free
+
+    def test_the_supply_of_every_step_adds_up_to_the_supply_one_takes(self, path: Path) -> None:
+        """A drone's structure gives the drone's supply back, and a baneling's morph takes none. A cocoon counts what
+        it becomes, and a corrected type what its correction says."""
+        for unit_type, row in _tables(path).units.items():
+            if unit_type not in COCOON_PRODUCTS and unit_type not in UNIT_TYPE_COST_OVERRIDES:
+                assert row.total_cost.supply == row.supply_used, unit_type.name
 
     def test_a_type_costs_what_its_creation_ability_costs_but_for_a_form_and_a_pair(self, path: Path) -> None:
         """A form costs what it switched from, while its switch costs nothing; a larva's order makes two zerglings."""

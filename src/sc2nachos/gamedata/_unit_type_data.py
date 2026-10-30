@@ -193,6 +193,12 @@ class UnitTypeData:
     and half a supply; a structure a drone becomes gives the drone's supply back, -1; a cocoon's is that of what it
     becomes; and a MULE and an auto-turret, which energy pays for, cost nothing (tool `sweep_orders`). Its time is that
     step's build time. What ordering an ability costs is the ability's `cost`, nothing for a siege."""
+    total_cost: Cost
+    """What every order that made one cost, step by step back along `morphed_from` to the first: an orbital command
+    550 with its command center, a hatchery 350 with its drone, a lair 500/100, a baneling 50/25 and half a supply with
+    its zergling, and a sieged tank the tank's 150/125. An archon counts two high templar, 100/300 and 4 supply; a
+    cocoon what it becomes; a MULE and an auto-turret nothing. Its time is the build time of each step that costs
+    something, one after another."""
     build_time: GameTime
     """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
     steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
@@ -256,9 +262,9 @@ class UnitTypeData:
     """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
     An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
     _whole_cost: Cost = field(repr=False, compare=False)
-    """Everything the tables say was spent to reach this type, what it morphed from included, an orbital command's 550
-    and a MULE's 50, with the build time of each stage that costs something: what a repair is priced from (tool
-    `sweep_repair`)."""
+    """Everything the tables say was spent to reach this type, what it morphed from included, an orbital command's 550,
+    with the build time of each stage that costs something: what a repair is priced from (tool `sweep_repair`). Unlike
+    `total_cost`, a MULE's is 50, an auto-turret's 100, an archon's 175/275 and a hatchery's 325."""
     turn_rate: float | None = None
     """The most it turns in a step, in radians: a whole number of 1/4096 of a full turn, 711 for a marine (62.49
     degrees) and 512 for a thor (45) (in game). A turn takes its angle over this, rounded up, in steps, give or take
@@ -304,8 +310,9 @@ class UnitTypeData:
         return cls(
             id=unit_type,
             race=Race(unit.race),
-            # The tables' whole cost, until `GameData` works out the cost of the last step.
+            # The tables' whole cost, until `GameData` works out the cost of each step.
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
+            total_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             build_time=GameTime(steps=math.ceil(unit.build_time)),
             supply_provided=unit.food_provided,
             supply_used=unit.food_required,
