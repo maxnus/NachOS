@@ -133,6 +133,7 @@ from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, OrderBehavior
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Grid, Point
@@ -4925,14 +4926,12 @@ _STRUCTURE_MORPHS_TIMED = (
     (UnitTypeId.LAIR, AbilityId.LAIR_MORPH_HIVE, UnitTypeId.HIVE, 3),
     (UnitTypeId.SPIRE, AbilityId.SPIRE_MORPH_GREATER_SPIRE, UnitTypeId.GREATER_SPIRE, 2),
 )
-# Where a barracks's add-on stands from the barracks (docs/reference/game-behavior/units.md).
-_ADD_ON_OFFSET = (2.5, -0.5)
-# How long a timed trial reads at most: three marines one after another take 1212 steps, and a hive 1590.
-_TIMED_LIMIT = 2000
+# The most steps a trial reads every step for: three marines one after another take 1212, and a hive 1590.
+_MOST_STEPS_READ = 2000
 
 
 @dataclass(slots=True)
-class _Timed:
+class _ProgressReads:
     """What one thing being made showed, read every step: its progress while at work, and the step it was first read
     done at."""
 
@@ -4942,7 +4941,7 @@ class _Timed:
 
 
 @dataclass(slots=True)
-class _Maker:
+class _WatchedMaker:
     """A unit making something, read every step: its type while it makes it, how many it makes at once, what it makes,
     and each step the progress of every order it shows."""
 
@@ -4961,44 +4960,49 @@ def _production_times(game: _Game) -> list[Trial]:
     for needed, half in (*_MORPH_NEEDS, (UnitTypeId.CYBERNETICS_CORE, 3)):
         game.create(needed, game.spot(game.toward(10), half))
     # The build times as the game's table gives them, before NachOS rounds them up to whole steps.
-    rows = {row.unit_id: row.build_time for row in game.client.game_data().units}
+    table_build_times = {row.unit_id: row.build_time for row in game.client.game_data().units}
     return [
-        game.trial("trains and larvae's eggs, read every step", partial(_trains_timed, game, rows)),
-        game.trial("structures and add-ons going up, read every step", partial(_builds_timed, game, rows)),
+        game.trial("trains and larvae's eggs, read every step", partial(_trains_timed, game, table_build_times)),
+        game.trial("structures and add-ons going up, read every step", partial(_builds_timed, game, table_build_times)),
         game.trial("warp-ins, read every step", partial(_warp_ins_timed, game)),
-        game.trial("structure morphs, read every step", partial(_morphs_timed, game, rows)),
+        game.trial("structure morphs, read every step", partial(_morphs_timed, game, table_build_times)),
     ]
 
 
-def _trains_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
+def _trains_timed(game: _Game, table_build_times: dict[int, float], trial: Trial) -> None:
     """Make, in one request, a marine with two queued behind, two marines at once beside a reactor, an SCV, a probe
     chrono boosted and one not, a void ray, and a drone and a pair of zerglings from larvae; read each maker's orders
     every step until all are made."""
     (reactored,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(32), 6))
     trial.notes["reactor"] = game.order(RawAbilityId.Build_Reactor_Barracks, [reactored])
-    game.until(lambda: _add_on_finished(game, reactored.tag), steps=16, limit=1200)
+    if not game.until(lambda: _add_on_finished(game, reactored.tag), steps=16, limit=1200):
+        # Its two marines would be made one after the other, and read as made together.
+        trial.notes["class"] = "no reactor"
+        return
     # A barracks is offered no marine in the step its add-on first reads finished.
     game.until(lambda: _MARINE in game.sandbox.offered([reactored.tag])[reactored.tag], limit=64)
     (barracks,) = game.create(UnitTypeId.BARRACKS, game.spot(game.toward(20), 4))
     (command_center,) = game.create(UnitTypeId.COMMAND_CENTER, game.spot(game.toward(20), 3))
     (boosted,) = game.create(UnitTypeId.NEXUS, game.spot(game.toward(20), 3))
     (plain,) = game.create(UnitTypeId.NEXUS, game.spot(game.toward(20), 3))
-    stargate_area = game.spot(game.toward(20), 4)
-    (stargate,) = game.create(UnitTypeId.STARGATE, stargate_area)
+    stargate_at = game.spot(game.toward(20), 4)
+    (stargate,) = game.create(UnitTypeId.STARGATE, stargate_at)
     # A stargate out of a pylon's field is answered `NotSupported`.
-    game.create(UnitTypeId.PYLON, stargate_area + (0.5, 3.5))
+    game.create(UnitTypeId.PYLON, stargate_at + (0.5, 3.5))
     game.set_energy(50, [boosted])
     larvae = game.own(UnitTypeId.LARVA)[:2]
     makers = {
-        "a marine, two queued behind": _Maker(UnitTypeId.BARRACKS, 1, UnitTypeId.MARINE, barracks.tag),
-        "two marines beside a reactor": _Maker(UnitTypeId.BARRACKS, 2, UnitTypeId.MARINE, reactored.tag),
-        "an SCV": _Maker(UnitTypeId.COMMAND_CENTER, 1, UnitTypeId.SCV, command_center.tag),
-        "a probe, chrono boosted": _Maker(UnitTypeId.NEXUS, 1, UnitTypeId.PROBE, boosted.tag),
-        "a probe": _Maker(UnitTypeId.NEXUS, 1, UnitTypeId.PROBE, plain.tag),
+        "a marine, two queued behind": _WatchedMaker(UnitTypeId.BARRACKS, 1, UnitTypeId.MARINE, barracks.tag),
+        "two marines beside a reactor": _WatchedMaker(UnitTypeId.BARRACKS, 2, UnitTypeId.MARINE, reactored.tag),
+        "an SCV": _WatchedMaker(UnitTypeId.COMMAND_CENTER, 1, UnitTypeId.SCV, command_center.tag),
+        "a probe, chrono boosted": _WatchedMaker(UnitTypeId.NEXUS, 1, UnitTypeId.PROBE, boosted.tag),
+        "a probe": _WatchedMaker(UnitTypeId.NEXUS, 1, UnitTypeId.PROBE, plain.tag),
         # The one train whose row is no whole number of steps: 963.2.
-        "a void ray": _Maker(UnitTypeId.STARGATE, 1, UnitTypeId.VOID_RAY, stargate.tag),
-        "a drone": _Maker(UnitTypeId.EGG, 1, UnitTypeId.DRONE, egg_order=AbilityId.LARVA_MORPH_DRONE),
-        "a pair of zerglings": _Maker(UnitTypeId.EGG, 1, UnitTypeId.ZERGLING, egg_order=AbilityId.LARVA_MORPH_ZERGLING),
+        "a void ray": _WatchedMaker(UnitTypeId.STARGATE, 1, UnitTypeId.VOID_RAY, stargate.tag),
+        "a drone": _WatchedMaker(UnitTypeId.EGG, 1, UnitTypeId.DRONE, egg_order=AbilityId.LARVA_MORPH_DRONE),
+        "a pair of zerglings": _WatchedMaker(
+            UnitTypeId.EGG, 1, UnitTypeId.ZERGLING, egg_order=AbilityId.LARVA_MORPH_ZERGLING
+        ),
     }
     products = {maker.product for maker in makers.values()}
     seen = {product: {unit.tag for unit in game.own(product)} for product in products}
@@ -5017,7 +5021,7 @@ def _trains_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
         game.command(AbilityId.LARVA_MORPH_DRONE, larvae[:1]),
         game.command(AbilityId.LARVA_MORPH_ZERGLING, larvae[1:]),
     )
-    while game.step < ordered_at + _TIMED_LIMIT:
+    while game.step < ordered_at + _MOST_STEPS_READ:
         game.turn(1)
         for product in products:
             for unit in game.own(product):
@@ -5037,11 +5041,13 @@ def _trains_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
             break
     trial.notes["first listed, by type"] = {product.name: steps for product, steps in listed.items()}
     trial.notes["each, read"] = {
-        label: _made_by(maker, rows, ordered_at, listed[maker.product]) for label, maker in makers.items()
+        label: _made_by(maker, table_build_times, ordered_at, listed[maker.product]) for label, maker in makers.items()
     }
 
 
-def _made_by(maker: _Maker, rows: dict[int, float], ordered_at: int, listed: Sequence[int]) -> list[dict[str, object]]:
+def _made_by(
+    maker: _WatchedMaker, table_build_times: dict[int, float], ordered_at: int, listed: Sequence[int]
+) -> list[dict[str, object]]:
     """What each unit `maker` was first read making showed: its progress while it was made, and the step its order
     left, against the build time in its product's row. One queued behind another is at work once those ahead are done,
     or beside them, up to the number `maker` makes at once."""
@@ -5050,30 +5056,30 @@ def _made_by(maker: _Maker, rows: dict[int, float], ordered_at: int, listed: Seq
     first_count = len(maker.reads[0][1])
     made: list[dict[str, object]] = []
     for place in range(first_count):
-        timed = _Timed(ordered_at)
+        progress_reads = _ProgressReads(ordered_at)
         for step, progresses in maker.reads:
             finished = first_count - len(progresses)
             if finished > place:
-                timed.done = step
+                progress_reads.done = step
                 break
             if place - finished < maker.slots:
-                timed.shown.append((step, progresses[place - finished]))
-        summary = _timed_summary(timed, rows.get(maker.product))
-        summary["a unit first listed in the step its order left"] = timed.done in listed
+                progress_reads.shown.append((step, progresses[place - finished]))
+        summary = _progress_reads_summary(progress_reads, table_build_times.get(maker.product))
+        summary["a unit first listed in the step its order left"] = progress_reads.done in listed
         made.append(summary)
     return made
 
 
-def _builds_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
+def _builds_timed(game: _Game, table_build_times: dict[int, float], trial: Trial) -> None:
     """Have an SCV build a supply depot, a probe a pylon and a drone a spawning pool, a barracks build a tech lab and a
     factory a reactor, and read each structure's build progress every step until it is done."""
-    pool_area = game.spot(game.toward(24), 6)
-    pool_site = pool_area - (3, 0)
+    pool_area_center = game.spot(game.toward(24), 6)
+    pool_site = pool_area_center - (3, 0)
     # A spawning pool goes on creep, which a hatchery spreads around itself: a drone beside its site arrives before
     # the creep of a hatchery made 32 steps before it.
-    game.create(UnitTypeId.HATCHERY, pool_area + (3, 0))
+    game.create(UnitTypeId.HATCHERY, pool_area_center + (3, 0))
     trial.notes["creep under the pool's site"] = game.until(
-        lambda: _all_creep(game, pool_site, half=1), steps=8, limit=800
+        lambda: _creep_covers(game, pool_site, half=1), steps=8, limit=800
     )
     # Asked of the game: a depot and a pylon cannot go on creep, and a site 44 from home took a pylon but not a depot.
     depot_site = _placeable_site(game, AbilityId.SCV_BUILD_SUPPLY_DEPOT, game.toward(32))
@@ -5105,12 +5111,13 @@ def _builds_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
         "a supply depot, by an SCV": (UnitTypeId.SUPPLY_DEPOT, depot_site),
         "a pylon, by a probe": (UnitTypeId.PYLON, pylon_site),
         "a spawning pool, by a drone": (UnitTypeId.SPAWNING_POOL, pool_site),
-        "a barracks's tech lab": (UnitTypeId.TECH_LAB_BARRACKS, _at(barracks) + _ADD_ON_OFFSET),
-        "a factory's reactor": (UnitTypeId.REACTOR_FACTORY, _at(factory) + _ADD_ON_OFFSET),
+        "a barracks's tech lab": (UnitTypeId.TECH_LAB_BARRACKS, _at(barracks) + ADD_ON_OFFSET),
+        "a factory's reactor": (UnitTypeId.REACTOR_FACTORY, _at(factory) + ADD_ON_OFFSET),
     }
-    timed = _read_going_up(game, going_up, ordered_at, each_step=read_hosts)
+    progress_reads = _read_going_up(game, going_up, ordered_at, each_step=read_hosts)
     trial.notes["each, read"] = {
-        label: _timed_summary(each, rows.get(going_up[label][0])) for label, each in timed.items()
+        label: _progress_reads_summary(each, table_build_times.get(going_up[label][0]))
+        for label, each in progress_reads.items()
     }
     trial.notes["host's order last shown"] = host_order_last_shown
 
@@ -5119,17 +5126,17 @@ def _warp_ins_timed(game: _Game, trial: Trial) -> None:
     """Warp a zealot and a stalker in at a pylon among warp gates and at a pylon far from any, and a zealot beside a
     phasing warp prism, each from a warp gate of its own, and read each one's build progress every step until it is
     done."""
-    area = game.spot(game.toward(10), 6)
-    pylon = area + (0.5, 0.5)
-    lone_pylon = game.spot(game.toward(32), 3) + (0.5, 0.5)
+    gate_area_center = game.spot(game.toward(10), 6)
+    pylon_at = gate_area_center + (0.5, 0.5)
+    lone_pylon_at = game.spot(game.toward(32), 3) + (0.5, 0.5)
     prism_at = game.spot(game.toward(44), 3)
     # Around the pylon, clear of it and of each other, all in its field.
     gate_offsets = ((-3, -3), (3, -3), (-3, 3), (3, 3), (-3, 0))
     made = game.sandbox.spawn(
         [
-            (UnitTypeId.PYLON, game.player, pylon),
-            *((UnitTypeId.WARP_GATE, game.player, area + offset) for offset in gate_offsets),
-            (UnitTypeId.PYLON, game.player, lone_pylon),
+            (UnitTypeId.PYLON, game.player, pylon_at),
+            *((UnitTypeId.WARP_GATE, game.player, gate_area_center + offset) for offset in gate_offsets),
+            (UnitTypeId.PYLON, game.player, lone_pylon_at),
             (UnitTypeId.WARP_PRISM, game.player, prism_at),
         ]
     )
@@ -5145,10 +5152,10 @@ def _warp_ins_timed(game: _Game, trial: Trial) -> None:
     trial.notes["phasing at"] = game.step if game.until(phasing, limit=64) else None
     zealot, stalker = AbilityId.WARP_GATE_WARP_IN_ZEALOT, AbilityId.WARP_GATE_WARP_IN_STALKER
     warp_ins = {
-        "a zealot at a pylon among warp gates": (zealot, UnitTypeId.ZEALOT, area + (0, 3)),
-        "a stalker at a pylon among warp gates": (stalker, UnitTypeId.STALKER, area + (0, -3)),
-        "a zealot at a pylon far from any warp gate": (zealot, UnitTypeId.ZEALOT, lone_pylon + (-2.5, 0)),
-        "a stalker at a pylon far from any warp gate": (stalker, UnitTypeId.STALKER, lone_pylon + (0, -2.5)),
+        "a zealot at a pylon among warp gates": (zealot, UnitTypeId.ZEALOT, gate_area_center + (0, 3)),
+        "a stalker at a pylon among warp gates": (stalker, UnitTypeId.STALKER, gate_area_center + (0, -3)),
+        "a zealot at a pylon far from any warp gate": (zealot, UnitTypeId.ZEALOT, lone_pylon_at + (-2.5, 0)),
+        "a stalker at a pylon far from any warp gate": (stalker, UnitTypeId.STALKER, lone_pylon_at + (0, -2.5)),
         "a zealot beside a phasing warp prism": (zealot, UnitTypeId.ZEALOT, prism_at + (2, 0)),
     }
     ordered_at = game.step
@@ -5158,11 +5165,11 @@ def _warp_ins_timed(game: _Game, trial: Trial) -> None:
     )
     trial.notes["verdicts"] = dict(zip(warp_ins, verdicts, strict=False))
     wanted = {label: (unit_type, at) for label, (_, unit_type, at) in warp_ins.items()}
-    timed = _read_going_up(game, wanted, ordered_at)
-    trial.notes["each, read"] = {label: _timed_summary(each, None) for label, each in timed.items()}
+    progress_reads = _read_going_up(game, wanted, ordered_at)
+    trial.notes["each, read"] = {label: _progress_reads_summary(each, None) for label, each in progress_reads.items()}
 
 
-def _morphs_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
+def _morphs_timed(game: _Game, table_build_times: dict[int, float], trial: Trial) -> None:
     """Start every structure morph in one request and read each structure every step until it has become what it
     morphs into: the order it shows meanwhile, with its progress, and the step its type changes."""
     morphing: dict[str, tuple[raw_pb2.Unit, AbilityId, UnitTypeId]] = {}
@@ -5173,18 +5180,19 @@ def _morphs_timed(game: _Game, rows: dict[int, float], trial: Trial) -> None:
     trial.notes["ordered at"] = ordered_at
     verdicts = game.act(*(game.command(ability, [unit]) for unit, ability, _ in morphing.values()))
     trial.notes["verdicts"] = dict(zip(morphing, verdicts, strict=False))
-    timed = {label: _Timed(ordered_at) for label in morphing}
-    while game.step < ordered_at + _TIMED_LIMIT and any(each.done is None for each in timed.values()):
+    progress_reads = {label: _ProgressReads(ordered_at) for label in morphing}
+    while game.step < ordered_at + _MOST_STEPS_READ and any(each.done is None for each in progress_reads.values()):
         game.turn(1)
         for label, (unit, _, product) in morphing.items():
-            if timed[label].done is not None or (now := game.unit(unit.tag)) is None:
+            if progress_reads[label].done is not None or (now := game.unit(unit.tag)) is None:
                 continue
             if now.unit_type == product:
-                timed[label].done = game.step
+                progress_reads[label].done = game.step
             elif now.orders:
-                timed[label].shown.append((game.step, now.orders[0].progress))
+                progress_reads[label].shown.append((game.step, now.orders[0].progress))
     trial.notes["each, read"] = {
-        label: _timed_summary(timed[label], rows.get(product), fit=False) for label, (_, _, product) in morphing.items()
+        label: _progress_reads_summary(progress_reads[label], table_build_times.get(product), fit=False)
+        for label, (_, _, product) in morphing.items()
     }
 
 
@@ -5194,14 +5202,14 @@ def _read_going_up(
     ordered_at: int,
     *,
     each_step: Callable[[], None] | None = None,
-) -> dict[str, _Timed]:
+) -> dict[str, _ProgressReads]:
     """Find each unit `wanted` names, of its type within 3 of its point and new since the call, and not the
     placeholder the game lists at a site a worker is on its way to, and read its build progress every step until it
-    reads done, for at most `_TIMED_LIMIT` steps from `ordered_at`. Call `each_step` after every read."""
+    reads done, for at most `_MOST_STEPS_READ` steps from `ordered_at`. Call `each_step` after every read."""
     before = set(game.units)
-    timed = {label: _Timed(ordered_at) for label in wanted}
+    progress_reads = {label: _ProgressReads(ordered_at) for label in wanted}
     tags: dict[str, int] = {}
-    while game.step < ordered_at + _TIMED_LIMIT and any(each.done is None for each in timed.values()):
+    while game.step < ordered_at + _MOST_STEPS_READ and any(each.done is None for each in progress_reads.values()):
         game.turn(1)
         for label, (unit_type, near) in wanted.items():
             if label not in tags:
@@ -5211,51 +5219,57 @@ def _read_going_up(
                 if (found := next((unit for unit in new if _at(unit).distance_to(near) < 3), None)) is None:
                     continue
                 tags[label] = found.tag
-            if timed[label].done is not None or (unit := game.unit(tags[label])) is None:
+            if progress_reads[label].done is not None or (unit := game.unit(tags[label])) is None:
                 continue
             if unit.build_progress < 1:
-                timed[label].shown.append((game.step, unit.build_progress))
+                progress_reads[label].shown.append((game.step, unit.build_progress))
             else:
-                timed[label].done = game.step
+                progress_reads[label].done = game.step
         if each_step is not None:
             each_step()
-    return timed
+    return progress_reads
 
 
-def _all_creep(game: _Game, center: Point, *, half: int) -> bool:
+def _creep_covers(game: _Game, center: Point, *, half: int) -> bool:
     """Whether creep covers the square `2 * half + 1` tiles across centered on `center`."""
     tiles = range(-half, half + 1)
     return game.creep is not None and all(game.creep[center + (x, y)] for x in tiles for y in tiles)
 
 
-def _timed_summary(timed: _Timed, row_steps: float | None, *, fit: bool = True) -> dict[str, object]:
-    """What `timed` shows: when it was first and last read at work and first read done, the total each read implies,
-    and with `fit`, how the steps left fit its progress, against `row_steps`, the build time in the game's table, and
-    that rounded up, or where there is none, against the whole steps the reads imply."""
+def _progress_reads_summary(
+    progress_reads: _ProgressReads, table_build_steps: float | None, *, fit: bool = True
+) -> dict[str, object]:
+    """What `progress_reads` shows: when it was first and last read at work and first read done, the total each read
+    implies, and with `fit`, how the steps left fit its progress, against `table_build_steps`, the build time in the
+    game's table, and that rounded up, or where there is none, against the whole steps the reads imply."""
     summary: dict[str, object] = {
-        "ordered at": timed.ordered_at,
-        "first read at work": timed.shown[0] if timed.shown else None,
-        "last read at work": timed.shown[-1] if timed.shown else None,
-        "first read done": timed.done,
-        "row": row_steps,
+        "ordered at": progress_reads.ordered_at,
+        "first read at work": progress_reads.shown[0] if progress_reads.shown else None,
+        "last read at work": progress_reads.shown[-1] if progress_reads.shown else None,
+        "first read done": progress_reads.done,
+        "row": table_build_steps,
     }
-    if timed.done is None or not timed.shown:
+    if progress_reads.done is None or not progress_reads.shown:
         return summary
-    summary["steps from the order"] = timed.done - timed.ordered_at
-    summary["steps from the first read at work"] = timed.done - timed.shown[0][0]
-    summary["most progress shown"] = max(progress for _, progress in timed.shown)
-    implied = [(timed.done - step) / (1 - progress) for step, progress in timed.shown if progress < 1]
+    summary["steps from the order"] = progress_reads.done - progress_reads.ordered_at
+    summary["steps from the first read at work"] = progress_reads.done - progress_reads.shown[0][0]
+    summary["most progress shown"] = max(progress for _, progress in progress_reads.shown)
+    implied = [(progress_reads.done - step) / (1 - progress) for step, progress in progress_reads.shown if progress < 1]
     if implied:
         summary["total each read implies, least and most"] = [round(min(implied), 3), round(max(implied), 3)]
     if not fit:
         return summary
-    if row_steps:
-        summary["against the row"] = _steps_left_fits(timed.shown, timed.done, row_steps)
-        if not float(row_steps).is_integer():
-            summary["against the row rounded up"] = _steps_left_fits(timed.shown, timed.done, math.ceil(row_steps))
+    if table_build_steps:
+        summary["against the row"] = _steps_left_fits(progress_reads.shown, progress_reads.done, table_build_steps)
+        if not float(table_build_steps).is_integer():
+            summary["against the row rounded up"] = _steps_left_fits(
+                progress_reads.shown, progress_reads.done, math.ceil(table_build_steps)
+            )
     elif implied:
         # A warp-in's time is in no row: fit the whole steps nearest what the reads imply.
-        summary["against the whole steps implied"] = _steps_left_fits(timed.shown, timed.done, round(median(implied)))
+        summary["against the whole steps implied"] = _steps_left_fits(
+            progress_reads.shown, progress_reads.done, round(median(implied))
+        )
     return summary
 
 

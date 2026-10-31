@@ -40,7 +40,7 @@ class _Production:
         self._items: list[InProduction] = []
         self._researches: dict[UpgradeId, Research] = {}
         for unit in units:
-            self._read(unit, game_data)
+            self._read_what_it_makes(unit, game_data)
 
     def of_types(self, unit_types: Collection[UnitTypeId]) -> tuple[InProduction, ...]:
         """What is being made of `unit_types`, in the order the observation lists the units it is read from."""
@@ -52,7 +52,7 @@ class _Production:
         orders."""
         return MappingProxyType(self._researches)
 
-    def _read(self, unit: OwnUnit[Any], game_data: GameData) -> None:
+    def _read_what_it_makes(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
         report = unit._latest_report
         if report.build_progress < 1.0:
@@ -72,31 +72,31 @@ class _Production:
                     )
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 progress = _order_progress(row, unit.type_id, order.progress)
-                self._items.append(_ordered(product, unit, progress, game_data))
+                self._items.append(_made_by_order(product, unit, progress, game_data))
 
 
 def _going_up(unit: OwnUnit[Any], build_progress: float, game_data: GameData) -> InProduction:
-    """`unit` itself while it goes up at `build_progress`, made by its builder; or while it warps in, whose time
-    depends on where, which nothing reported says: 256 steps at a pylon far from a warp gate, 81 near one or beside a
-    phasing warp prism (in game).
-    A type the tables give no row is taken for a unit, as events take it."""
+    """`unit` itself while it goes up at `build_progress`: a structure, made by its builder in its row's time, or a
+    unit warping in or merging into an archon, made by nothing in a time its row does not give (in game). A type the
+    tables give no row is taken for a unit, as events take it."""
     row = game_data.units.get(unit.type_id)
     if row is None or Attribute.STRUCTURE not in row.attributes:
         return InProduction(unit.type_id, None, unit, build_progress, None, None)
-    total_time, time_left = _times(row, build_progress)
+    total_time, time_left = _total_time_and_time_left(row, build_progress)
     return InProduction(unit.type_id, unit.builder, unit, build_progress, total_time, time_left)
 
 
-def _ordered(product: UnitTypeId, producer: OwnUnit[Any], progress: float | None, game_data: GameData) -> InProduction:
-    """A `product` of `producer`'s order at `progress`, or at no known progress, as for a morph other than a larva's,
-    or at no known time, for a product the tables give no row."""
-    if progress is None or (row := game_data.units.get(product)) is None:
-        return InProduction(product, producer, None, progress, None, None)
-    total_time, time_left = _times(row, progress)
+def _made_by_order(
+    product: UnitTypeId, producer: OwnUnit[Any], progress: float | None, game_data: GameData
+) -> InProduction:
+    """A `product` of `producer`'s order at `progress`, or at no known progress, as for a morph other than a larva's."""
+    if progress is None:
+        return InProduction(product, producer, None, None, None, None)
+    total_time, time_left = _total_time_and_time_left(game_data.units[product], progress)
     return InProduction(product, producer, None, progress, total_time, time_left)
 
 
-def _times(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:
+def _total_time_and_time_left(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:
     """The time a unit of `row`'s type takes, and the time it has left at `progress`."""
     steps_done = round(progress * row._unrounded_build_time.steps)
     return row.build_time, GameTime(steps=row.build_time.nearest_step - steps_done)

@@ -69,7 +69,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   after the order. A warp-in's rose 1/256 a step at a pylon far from any warp gate, which gave the steps left exactly,
   and 1/80 a step at a pylon among warp gates or beside a phasing warp prism, which summed to 0.99998 after 80 steps
   and read 1 a step later, so the steps left are one more than `(1 - build_progress)` times 80 (tool `sweep_orders`,
-  `production-times`, build 75689). How long each took is in
+  `production-times`, build 75689). An archon two high templar merge into is first listed at 0 and rises 1/192 a
+  step (probe in #189, under `food`, local game, Linux build 75689). How long each took is in
   [upgrades and the game's tables](upgrades-and-tables.md).
 - Only the command center (12 of 16, then 9 once three SCVs went to gas) and the refinery (3 of 3) reported
   harvesters. `ideal_harvesters` is 2 per mineral field and 3 per geyser (#25).

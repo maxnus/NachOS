@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #188. `uv run pytest` passes 3053 tests with #189; `uv run pytest -m
+- nachOS `main` has every PR to #188. `uv run pytest` passes 3056 tests with #189; `uv run pytest -m
   integration` passed 41 against a real game with #189 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -760,7 +760,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `time_left` and `total_time` read `None` for a morph other than a larva's, whose order reads progress 0
     throughout, and for a warp-in, which takes 256 steps or 81 as where it warps in decides and reports nothing that
     says which (over NachOS remembering the step it first saw each and counting from there). Exact for every train,
-    egg, structure going up and add-on;
+    egg, structure going up and add-on. An archon merging, found in my review of #189, goes with the warp-ins: its
+    row gives no build time, though it takes 192 steps;
   - a structure going up is made by its `builder`, and `None` for a Protoss one (over no producer while it goes up).
 
   Not in NachOS: `can_afford` (#46, above), an upgrade's

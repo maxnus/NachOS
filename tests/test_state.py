@@ -99,6 +99,9 @@ _MAKING_TABLES = make_tables(
     _row(UnitTypeId.PYLON, structure=True, minerals=100, build_time=400.0),
     _row(UnitTypeId.STARGATE, structure=True, minerals=150, build_time=960.0),
     _row(UnitTypeId.VOID_RAY, minerals=250, build_time=963.2),
+    _row(UnitTypeId.SPAWNING_POOL, structure=True, minerals=200, build_time=1040.0),
+    # As the game's row gives it: no build time, though a merge takes 192 steps (in game).
+    _row(UnitTypeId.ARCHON),
     _row(UnitTypeId.SIEGE_TANK, minerals=150),
     _row(UnitTypeId.SIEGE_TANK_SIEGED, minerals=150),
     _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125),
@@ -111,6 +114,9 @@ _MAKING_TABLES = make_tables(
         ),
         data_pb2.AbilityData(ability_id=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND),
         data_pb2.AbilityData(ability_id=AbilityId.LARVA_MORPH_DRONE),
+        data_pb2.AbilityData(
+            ability_id=AbilityId.DRONE_MORPH_SPAWNING_POOL, target=data_pb2.AbilityData.Target.Point, is_building=True
+        ),
         data_pb2.AbilityData(ability_id=AbilityId.ZERGLING_MORPH_BANELING),
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
@@ -217,6 +223,15 @@ class TestProduction:
         assert _made(state, UnitTypeId.PYLON) == [(None, 1, 0.5)]
         assert _timed(state, UnitTypeId.PYLON) == [(400, 200)]
 
+    def test_a_zerg_structure_going_up_is_made_by_the_drone_that_became_it(self) -> None:
+        build = _making(AbilityId.DRONE_MORPH_SPAWNING_POOL, at=(20.5, 20.5))
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(units=[_done(1, UnitTypeId.DRONE, build, at=(19.0, 20.5))])
+        pool = make_unit(2, UnitTypeId.SPAWNING_POOL, at=(20.5, 20.5), build_progress=0.25)
+        state = game.observe(16, units=[pool])
+        assert _made(state, UnitTypeId.SPAWNING_POOL) == [(1, 2, 0.25)]
+        assert _timed(state, UnitTypeId.SPAWNING_POOL) == [(1040, 780)]
+
     def test_an_add_on_is_one_by_its_order_until_it_stands_which_then_is(self) -> None:
         """As the game shows it: the host's order is aimed at the host's own center, and the host names its add-on
         only once the add-on is finished (in game)."""
@@ -261,6 +276,16 @@ class TestProduction:
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
         assert _made(state, UnitTypeId.ZEALOT) == [(None, 1, 0.5)]
         assert _timed(state, UnitTypeId.ZEALOT) == [(None, None)]
+
+    def test_an_archon_merging_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ARCHON, build_progress=0.5)])
+        assert _made(state, UnitTypeId.ARCHON) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ARCHON) == [(None, None)]
+
+    def test_a_type_the_tables_give_no_row_going_up_is_taken_for_a_unit_warping_in(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ADEPT, build_progress=0.5)])
+        assert _made(state, UnitTypeId.ADEPT) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ADEPT) == [(None, None)]
 
     def test_a_free_order_that_makes_a_form_is_none(self) -> None:
         siege = _making(RawAbilityId.SiegeMode_SiegeMode)
