@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
 
     from sc2nachos.gamedata._creep_requirement import CreepRequirement
-    from sc2nachos.gamedata._techtree import TechTreeUnitTypes
+    from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.geometry import Footprint
 
 # The change of an upgrade that changes nothing in the row, such as a shields level, which only raises a level the
@@ -304,9 +304,10 @@ class UnitTypeData:
         )
 
     @classmethod
-    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree_unit_types: TechTreeUnitTypes) -> Self:
-        """Read one unit type from the game's table, with what `tech_tree_unit_types` says about it."""
+    def _from_proto(cls, unit: data_pb2.UnitTypeData, tech_tree: TechTree) -> Self:
+        """Read one unit type from the game's table, with what `tech_tree` says about it."""
         unit_type = UnitTypeId(unit.unit_id)
+        in_tree = tech_tree.unit_type(unit_type)
         return cls(
             id=unit_type,
             race=Race(unit.race),
@@ -323,18 +324,18 @@ class UnitTypeData:
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
-            creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
-            producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
-            tech_requirements=tech_tree_unit_types.tech_requirements.get(unit_type, TechRequirements()),
-            morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
-            ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
-            needs_power=unit_type in tech_tree_unit_types.power_consumers,
+            creation_ability=in_tree.creation_ability,
+            producers=in_tree.producers or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            tech_requirements=in_tree.tech_requirements,
+            morphed_from=in_tree.morphed_from,
+            ability_requirements=in_tree.ability_requirements,
+            needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
             techs_granted=frozenset(Tech(granting) for granting in (unit_type, *unit.tech_alias) if granting in Tech),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
-            upgrades=tech_tree_unit_types.upgrades.get(unit_type, MappingProxyType({})),
+            upgrades=in_tree.upgrades,
             # `GameData` gives it the build time of each stage that costs something.
             _whole_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
         )

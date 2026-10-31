@@ -25,9 +25,9 @@ from sc2nachos.gamedata._techtree import (
     SELF_MORPHS,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
-    TechTreeAbilities,
-    TechTreeUnitTypes,
-    TechTreeUpgrades,
+    TechTreeAbility,
+    TechTreeUnitType,
+    TechTreeUpgrade,
 )
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
@@ -48,7 +48,7 @@ from typing import Final
 
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
-from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbilities, TechTreeUnitTypes, TechTreeUpgrades
+from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbility, TechTreeUnitType, TechTreeUpgrade
 from sc2nachos.gamedata._unit_type_data import Attribute
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gamedata._upgrade_data import UpgradeType
@@ -130,32 +130,61 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     unit_type_requirements, upgrade_requirements = _requirements_by_product(
         ability_requirements, ability_products, creation_abilities
     )
+    producers = _producers_by_unit_type(ability_products, creation_abilities)
+    morph_sources = _morph_sources(trials, creation_abilities)
+    unit_types = {
+        unit_type: TechTreeUnitType(
+            creation_ability=creation_abilities.get(unit_type),
+            producers=producers.get(unit_type, frozenset()),
+            tech_requirements=unit_type_requirements.get(unit_type, TechRequirements()),
+            morphed_from=morph_sources.get(unit_type),
+            ability_requirements=ability_requirements.get(unit_type, MappingProxyType({})),
+            needs_power=unit_type in power_consumers,
+            upgrades=MappingProxyType(found.unit_types.get(unit_type, {})),
+        )
+        for unit_type in (
+            ability_requirements.keys()
+            | creation_abilities.keys()
+            | producers.keys()
+            | unit_type_requirements.keys()
+            | morph_sources.keys()
+            | power_consumers
+            | found.unit_types.keys()
+        )
+    }
+    performers = _performers_by_ability(ability_requirements)
+    cancels = _cancels(findings)
+    abilities = {
+        ability: TechTreeAbility(
+            performers=performers.get(ability, frozenset()),
+            products=ability_products.get(ability, MappingProxyType({})),
+            cancelled_by=cancels.get(ability),
+        )
+        for ability in performers.keys() | ability_products.keys() | cancels.keys()
+    }
     research_abilities = _research_abilities(ability_products)
+    researchers = _researchers(research_abilities, ability_products)
+    upgrades = {
+        upgrade: TechTreeUpgrade(
+            research_ability=research_abilities.get(upgrade),
+            researchers=researchers.get(upgrade, frozenset()),
+            tech_requirements=upgrade_requirements.get(upgrade, TechRequirements()),
+            upgrade_type=found.types.get(upgrade, UpgradeType.OTHER),
+            level=found.levels.get(upgrade, 0),
+        )
+        for upgrade in (
+            research_abilities.keys()
+            | researchers.keys()
+            | upgrade_requirements.keys()
+            | found.types.keys()
+            | found.levels.keys()
+        )
+    }
     return TechTree(
         base_build=int(str(findings["base_build"])),
-        unit_types=TechTreeUnitTypes(
-            ability_requirements=MappingProxyType(ability_requirements),
-            creation_abilities=MappingProxyType(creation_abilities),
-            producers=MappingProxyType(_producers_by_unit_type(ability_products, creation_abilities)),
-            tech_requirements=MappingProxyType(unit_type_requirements),
-            morph_sources=MappingProxyType(_morph_sources(trials, creation_abilities)),
-            power_consumers=power_consumers,
-            upgrades=MappingProxyType(
-                {unit_type: MappingProxyType(upgrades) for unit_type, upgrades in found.unit_types.items()}
-            ),
-        ),
-        abilities=TechTreeAbilities(
-            performers=MappingProxyType(_performers_by_ability(ability_requirements)),
-            products=MappingProxyType(ability_products),
-            cancels=MappingProxyType(_cancels(findings)),
-        ),
-        upgrades=TechTreeUpgrades(
-            research_abilities=MappingProxyType(research_abilities),
-            researchers=MappingProxyType(_researchers(research_abilities, ability_products)),
-            tech_requirements=MappingProxyType(upgrade_requirements),
-            types=MappingProxyType(found.types),
-            levels=MappingProxyType(found.levels),
-        ),
+        unit_types=MappingProxyType(unit_types),
+        abilities=MappingProxyType(abilities),
+        upgrades=MappingProxyType(upgrades),
     )
 
 
@@ -505,8 +534,8 @@ def output(tech_tree: TechTree) -> Path:
 
 def _literal(value: object, indent: int) -> str:
     """`value` as a Python expression starting at column `indent`: one member per line, each bracket beside the
-    parenthesis it opens in, and one line per ability entry and per set inside a mapping. `pyproject.toml` keeps the
-    module out of ruff's formatter and line length, which would undo both."""
+    parenthesis it opens in, one line per ability entry, and a set inside a mapping or a record on one line.
+    `pyproject.toml` keeps the module out of ruff's formatter and line length, which would undo both."""
     pad, inner = " " * indent, " " * (indent + 4)
     if isinstance(value, Enum | bool | int | float | tuple):
         return _inline(value)
@@ -522,19 +551,23 @@ def _literal(value: object, indent: int) -> str:
         lines = "".join(f"{inner}{_literal(k, indent + 4)}: {_mapped_literal(v, indent + 4)},\n" for k, v in entries)
         return f"MappingProxyType({{\n{lines}{pad}}})"
     if is_dataclass(value) and not isinstance(value, type):
-        if not isinstance(value, _RECORDS_WRITTEN_A_FIELD_PER_LINE):
+        if not isinstance(value, _RECORDS_WRITTEN_A_FIELD_PER_LINE) or not _given_fields(value):
             return _inline(value)
-        lines = "".join(f"{inner}{name}={_literal(member, indent + 4)},\n" for name, member in _given_fields(value))
+        lines = "".join(
+            f"{inner}{name}={_mapped_literal(member, indent + 4)},\n" for name, member in _given_fields(value)
+        )
         return f"{type(value).__name__}(\n{lines}{pad})"
     raise TypeError(f"no literal for {value!r}")
 
 
-# The tech tree and its parts. Any other dataclass, a requirement or what an upgrade adds, is written on one line.
-_RECORDS_WRITTEN_A_FIELD_PER_LINE = (TechTree, TechTreeUnitTypes, TechTreeAbilities, TechTreeUpgrades)
+# The tech tree and its records. Any other dataclass, a requirement or what an upgrade adds, is written on one line,
+# and so is a record of nothing.
+_RECORDS_WRITTEN_A_FIELD_PER_LINE = (TechTree, TechTreeUnitType, TechTreeAbility, TechTreeUpgrade)
 
 
 def _mapped_literal(value: object, indent: int) -> str:
-    """`value`, an entry's value in a mapping, as `_literal` writes it, but on one line where it is a set."""
+    """`value`, an entry's value in a mapping or a field of a record, as `_literal` writes it, but on one line where it
+    is a set."""
     return _inline(value) if isinstance(value, frozenset) else _literal(value, indent)
 
 
@@ -668,13 +701,13 @@ if __name__ == "__main__":
     tech_tree = read(findings, upgrade_findings)
     module = output(tech_tree)
     module.write_text(render(tech_tree), encoding="utf-8")
-    tech_tree_unit_types = tech_tree.unit_types
+    unit_types_in_tree = tech_tree.unit_types.values()
     print(
-        f"{module.name}: {len(tech_tree_unit_types.ability_requirements)} unit types,"
-        f" {len(tech_tree_unit_types.morph_sources)} morphs"
+        f"{module.name}: {len(tech_tree.unit_types)} unit types,"
+        f" {sum(in_tree.morphed_from is not None for in_tree in unit_types_in_tree)} morphs"
     )
     print(
-        f"Upgrades affect {len(tech_tree_unit_types.upgrades)} unit types, and change"
+        f"Upgrades affect {sum(bool(in_tree.upgrades) for in_tree in unit_types_in_tree)} unit types, and change"
         f" {len(uncurated_upgraded(upgrade_findings))} more no curated id names"
     )
     if f"from sc2nachos.gamedata._techtree.{module.stem} import" not in (TECHTREE / "__init__.py").read_text(

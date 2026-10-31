@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from s2clientprotocol import sc2api_pb2
 
     from sc2nachos.gamedata._cost import Cost
-    from sc2nachos.gamedata._techtree import TechTreeAbilities
+    from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.ids import AbilityId, EffectId, UpgradeId
 
 
@@ -53,30 +53,28 @@ class GameData:
 
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
-        unit_rows = _read_table(
-            data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE.unit_types), lambda row: row.id
-        )
+        unit_rows = _read_table(data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id)
         unit_rows = _with_build_times_in_whole_costs(
-            _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE.abilities)))
+            _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE)))
         )
         step_costs = _step_costs(unit_rows)
         self._units = _with_costs_from_steps(unit_rows, step_costs)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE.abilities, structures, frozenset(self._units.keys() - structures))
+        behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
-            data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE.upgrades), lambda row: row.id
+            data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )
         # An ability's cost is derived from its product, so the other tables come first.
-        costs = ability_costs(step_costs, self._upgrades, TECH_TREE.abilities)
-        cancels = cancel_abilities(TECH_TREE.abilities, behaviors)
+        costs = ability_costs(step_costs, self._upgrades, TECH_TREE)
+        cancels = cancel_abilities(TECH_TREE, behaviors)
         rows = _read_table(
             data.abilities,
-            lambda ability: AbilityData._from_proto(ability, TECH_TREE.abilities, behaviors, costs, cancels),
+            lambda ability: AbilityData._from_proto(ability, TECH_TREE, behaviors, costs, cancels),
             lambda row: row.id,
         )
         game_rows = {row.ability_id: row for row in data.abilities}
         custom = {
-            ability: AbilityData._custom(ability, TECH_TREE.abilities, behaviors, costs, cancels)
+            ability: AbilityData._custom(ability, TECH_TREE, behaviors, costs, cancels)
             for ability, sent_as in ABILITIES_SENT_AS_ANOTHER.items()
             if ability.is_custom and all(sending.ability in game_rows for sending in sent_as.values())
         }
@@ -120,7 +118,7 @@ class GameData:
 
 
 def _with_build_times_borrowed(
-    units: Mapping[UnitTypeId, UnitTypeData], tech_tree_abilities: TechTreeAbilities
+    units: Mapping[UnitTypeId, UnitTypeData], tech_tree: TechTree
 ) -> Mapping[UnitTypeId, UnitTypeData]:
     """`units`, where a type the table gives no build time takes the build time of the one other type its creation
     ability makes: a rich gas building, which builds in the same time as its plain one, takes its plain one's (tool
@@ -129,7 +127,7 @@ def _with_build_times_borrowed(
     for unit_type, row in units.items():
         if row.build_time or row.creation_ability is None:
             continue
-        products = tech_tree_abilities.products.get(row.creation_ability, {}).values()
+        products = tech_tree.ability(row.creation_ability).products.values()
         types_made = {product for product in products if isinstance(product, UnitTypeId)}
         if len(types_made) != 1 or unit_type in types_made:
             continue

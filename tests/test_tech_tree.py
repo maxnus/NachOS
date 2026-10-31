@@ -105,21 +105,23 @@ class TestGeneratingTheTables:
             offered={"Barracks": ["BarracksTrain_Marine", "Rally_Building"], "Ursadon": ["Smart"]}
         )
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert AbilityId.BARRACKS_TRAIN_MARINE in tree.unit_types.ability_requirements[UnitTypeId.BARRACKS]
-        assert set(tree.unit_types.ability_requirements) == {UnitTypeId.BARRACKS}
+        assert AbilityId.BARRACKS_TRAIN_MARINE in tree.unit_types[UnitTypeId.BARRACKS].ability_requirements
+        assert {unit_type for unit_type, in_tree in tree.unit_types.items() if in_tree.ability_requirements} == {
+            UnitTypeId.BARRACKS
+        }
 
     def test_an_ability_no_curated_id_names_is_left_out_and_named(self) -> None:
         shatter = "Shatter"
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine", shatter], "Factory": [shatter]})
         generator = _tech_tree_generator()
         assert generator.uncurated(findings) == {shatter}
-        assert generator.read(findings, _no_upgrades()).unit_types.ability_requirements[UnitTypeId.FACTORY] == {}
+        assert generator.read(findings, _no_upgrades()).unit_types[UnitTypeId.FACTORY].ability_requirements == {}
 
     def test_a_requirement_is_read_under_the_unit_type_and_the_ability(self) -> None:
         ghost = _requirement_entry("Barracks", "BarracksTrain_Ghost", ["GhostAcademy", "BarracksTechLab"], [])
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Ghost"]}, requirements=[ghost])
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert tree.unit_types.ability_requirements[UnitTypeId.BARRACKS][
+        assert tree.unit_types[UnitTypeId.BARRACKS].ability_requirements[
             AbilityId.BARRACKS_TRAIN_GHOST
         ] == TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True)
 
@@ -157,22 +159,23 @@ class TestGeneratingTheTables:
             research_abilities={"Stimpack": "BarracksTechLabResearch_Stimpack"},
         )
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert tree.abilities.performers[AbilityId.BURROW] == {UnitTypeId.ZERGLING}
-        assert tree.unit_types.creation_abilities[UnitTypeId.MARINE] is AbilityId.BARRACKS_TRAIN_MARINE
+        assert tree.abilities[AbilityId.BURROW].performers == {UnitTypeId.ZERGLING}
+        assert tree.unit_types[UnitTypeId.MARINE].creation_ability is AbilityId.BARRACKS_TRAIN_MARINE
         # The table names a dead ability for a baneling, so the unnamed creation ability stands in.
-        assert tree.unit_types.creation_abilities[UnitTypeId.BANELING] is AbilityId.ZERGLING_MORPH_BANELING
-        assert tree.abilities.products[AbilityId.BARRACKS_TRAIN_MARINE] == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
-        assert tree.unit_types.producers[UnitTypeId.MARINE] == {UnitTypeId.BARRACKS}
-        stimpack = tree.abilities.products[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK]
+        assert tree.unit_types[UnitTypeId.BANELING].creation_ability is AbilityId.ZERGLING_MORPH_BANELING
+        assert tree.abilities[AbilityId.BARRACKS_TRAIN_MARINE].products == {UnitTypeId.BARRACKS: UnitTypeId.MARINE}
+        assert tree.unit_types[UnitTypeId.MARINE].producers == {UnitTypeId.BARRACKS}
+        stimpack = tree.abilities[AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK].products
         assert stimpack == {UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK}
-        assert UpgradeId.STIMPACK not in tree.unit_types.producers
-        assert tree.upgrades.research_abilities == {UpgradeId.STIMPACK: AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK}
+        assert not any(isinstance(made, UpgradeId) for made in tree.unit_types)
+        research_abilities = {upgrade: in_tree.research_ability for upgrade, in_tree in tree.upgrades.items()}
+        assert research_abilities == {UpgradeId.STIMPACK: AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK}
 
     def test_a_unit_type_whose_creation_ability_nothing_carries_out_has_no_producers(self) -> None:
         tree = _tech_tree_generator().read(
             _tech_tree_findings(creation_abilities={"Marine": "BarracksTrain_Marine"}), _no_upgrades()
         )
-        assert UnitTypeId.MARINE not in tree.unit_types.producers
+        assert tree.unit_type(UnitTypeId.MARINE).producers == frozenset()
 
     def test_two_abilities_researching_one_upgrade_are_refused(self) -> None:
         """The plating's misnamed research stands in beside the research the findings name for it."""
@@ -193,18 +196,18 @@ class TestGeneratingTheTables:
             creation_abilities={"BarracksFlying": "Lift_Barracks", "StarportFlying": "Lift_Starport"},
         )
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert tree.unit_types.ability_requirements[UnitTypeId.BARRACKS].keys() == {AbilityId.LIFT}
-        assert tree.abilities.products[AbilityId.LIFT] == {
+        assert tree.unit_types[UnitTypeId.BARRACKS].ability_requirements.keys() == {AbilityId.LIFT}
+        assert tree.abilities[AbilityId.LIFT].products == {
             UnitTypeId.BARRACKS: UnitTypeId.BARRACKS_FLYING,
             UnitTypeId.STARPORT: UnitTypeId.STARPORT_FLYING,
         }
-        assert tree.unit_types.creation_abilities[UnitTypeId.STARPORT_FLYING] is AbilityId.LIFT
+        assert tree.unit_types[UnitTypeId.STARPORT_FLYING].creation_ability is AbilityId.LIFT
 
     def test_an_ability_needing_nothing_reads_as_needing_nothing(self) -> None:
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine"]})
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert tree.unit_types.ability_requirements == {
-            UnitTypeId.BARRACKS: {AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()}
+        assert tree.unit_types[UnitTypeId.BARRACKS].ability_requirements == {
+            AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()
         }
 
     def test_one_ability_can_need_different_things_of_different_unit_types(self) -> None:
@@ -212,9 +215,11 @@ class TestGeneratingTheTables:
         offered = {"RoachBurrowed": ["Move_Move"], "Marine": ["Move_Move"]}
         claws = _requirement_entry("RoachBurrowed", "Move_Move", [], ["TunnelingClaws"])
         tree = _tech_tree_generator().read(_tech_tree_findings(offered=offered, requirements=[claws]), _no_upgrades())
-        needs = tree.unit_types.ability_requirements
-        assert needs[UnitTypeId.ROACH_BURROWED][AbilityId.MOVE].upgrades == {UpgradeId.TUNNELING_CLAWS}
-        assert needs[UnitTypeId.MARINE][AbilityId.MOVE] == TechRequirements()
+        unit_types = tree.unit_types
+        assert unit_types[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.MOVE].upgrades == {
+            UpgradeId.TUNNELING_CLAWS
+        }
+        assert unit_types[UnitTypeId.MARINE].ability_requirements[AbilityId.MOVE] == TechRequirements()
 
     def test_an_ability_whose_requirements_were_never_read_is_refused(self) -> None:
         """It is refused rather than read as needing nothing."""
@@ -261,17 +266,15 @@ class TestGeneratingTheTables:
             _trial_entry("Zergling", "BurrowDown_Drone", "DroneBurrowed", "other"),
         ]
         tree = _tech_tree_generator().read(_tech_tree_findings(offered=offered, made=made), _no_upgrades())
-        assert set(tree.unit_types.ability_requirements[UnitTypeId.ZERGLING]) == {AbilityId.BURROW}
-        assert tree.unit_types.morph_sources[UnitTypeId.DRONE_BURROWED] is UnitTypeId.DRONE
+        assert set(tree.unit_types[UnitTypeId.ZERGLING].ability_requirements) == {AbilityId.BURROW}
+        assert tree.unit_types[UnitTypeId.DRONE_BURROWED].morphed_from is UnitTypeId.DRONE
 
     def test_what_an_ability_uses_up_is_what_its_product_is_made_out_of(self) -> None:
         made = [
             _trial_entry("CommandCenter", "UpgradeToOrbital_OrbitalCommand", "OrbitalCommand", "morph"),
             _trial_entry("Barracks", "BarracksTrain_Marine", "Marine", "build"),
         ]
-        morphed_from = (
-            _tech_tree_generator().read(_tech_tree_findings(made=made), _no_upgrades()).unit_types.morph_sources
-        )
+        morphed_from = _morphed_from(_tech_tree_generator().read(_tech_tree_findings(made=made), _no_upgrades()))
         assert morphed_from == {UnitTypeId.ORBITAL_COMMAND: UnitTypeId.COMMAND_CENTER}
 
     def test_a_type_several_types_are_used_up_for_is_made_out_of_the_one_the_others_come_from(self) -> None:
@@ -281,15 +284,15 @@ class TestGeneratingTheTables:
             _trial_entry("Overlord", "Morph_Overseer", "Overseer", "morph"),
             _trial_entry("OverlordTransport", "Morph_Overseer", "Overseer", "morph"),
         ]
-        morphed_from = (
-            _tech_tree_generator().read(_tech_tree_findings(made=made), _no_upgrades()).unit_types.morph_sources
-        )
+        morphed_from = _morphed_from(_tech_tree_generator().read(_tech_tree_findings(made=made), _no_upgrades()))
         assert morphed_from[UnitTypeId.OVERSEER] is UnitTypeId.OVERLORD
         assert morphed_from[UnitTypeId.OVERLORD_TRANSPORT] is UnitTypeId.OVERLORD
 
     def test_a_pylon_powering_itself_does_not_need_power(self) -> None:
         tree = _tech_tree_generator().read(_tech_tree_findings(powered=["Gateway", "Pylon"]), _no_upgrades())
-        assert tree.unit_types.power_consumers == {UnitTypeId.GATEWAY}
+        assert {unit_type for unit_type, in_tree in tree.unit_types.items() if in_tree.needs_power} == {
+            UnitTypeId.GATEWAY
+        }
 
     def test_the_module_holds_the_tech_tree_read(self) -> None:
         generator = _tech_tree_generator()
@@ -305,7 +308,7 @@ class TestGeneratingTheTables:
             "levels": {"attack": [], "armor": [], "shield": []},
         }
         tree = generator.read(findings, _no_upgrades(igniter))
-        assert tree.unit_types.upgrades
+        assert any(in_tree.upgrades for in_tree in tree.unit_types.values())
         namespace: dict[str, object] = {}
         exec(generator.render(tree), namespace)  # noqa: S102
         assert namespace["TECH_TREE"] == tree
@@ -338,6 +341,26 @@ def _upgrade_findings_file() -> dict[str, object]:
 def _tech_tree_from_the_findings() -> TechTree:
     """The tech tree `tools/generate_tech_tree.py` generates from the committed findings."""
     return _tech_tree_generator().read(_findings_file(), _upgrade_findings_file())
+
+
+def _swept_unit_types() -> set[UnitTypeId]:
+    """The curated unit types the committed findings record what each is offered of, those offered nothing among them.
+    A tech tree reads one never swept like one offered nothing."""
+    offered = cast("dict[str, object]", _findings_file()["offered"])
+    return {
+        unit_type
+        for name in offered
+        if name in RawUnitTypeId.__members__ and (unit_type := UnitTypeId.get(RawUnitTypeId[name])) is not None
+    }
+
+
+def _morphed_from(tree: TechTree) -> dict[UnitTypeId, UnitTypeId]:
+    """The unit type each type `tree` holds is morphed from, for those morphed from another."""
+    return {
+        unit_type: in_tree.morphed_from
+        for unit_type, in_tree in tree.unit_types.items()
+        if in_tree.morphed_from is not None
+    }
 
 
 class TestWhatTheTablesSay:
@@ -447,7 +470,7 @@ class TestWhatTheTablesSay:
         """Once the tech tree records it, the entry can go."""
         sweep = _tech_tree_from_the_findings()
         for unit_type in PRODUCERS_FALLBACK:
-            assert unit_type not in sweep.unit_types.producers, unit_type.name
+            assert not sweep.unit_type(unit_type).producers, unit_type.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, first_corpus_tables: GameData) -> None:
         zealot = first_corpus_tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]
@@ -552,11 +575,10 @@ class TestWhatTheTablesSay:
 
     def test_every_tech_is_what_some_requirement_names(self) -> None:
         """No tech is left that nothing needs; `tools/generate_tech_tree.py` refuses a requirement no tech names."""
-        tree = TECH_TREE.unit_types
         named = {
             tech
-            for needs_by_ability in tree.ability_requirements.values()
-            for needs in needs_by_ability.values()
+            for in_tree in TECH_TREE.unit_types.values()
+            for needs in in_tree.ability_requirements.values()
             for tech in needs.techs
         }
         assert named == set(Tech)
@@ -621,8 +643,7 @@ class TestWhatTheTablesSay:
         unswept = {
             row.id
             for row in first_corpus_tables.units.values()
-            if row.race in (Race.TERRAN, Race.PROTOSS, Race.ZERG)
-            and row.id not in _tech_tree_from_the_findings().unit_types.ability_requirements
+            if row.race in (Race.TERRAN, Race.PROTOSS, Race.ZERG) and row.id not in _swept_unit_types()
         }
         assert unswept == {
             UnitTypeId.CREEP_TUMOR,
