@@ -10,6 +10,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A structure or mineral field that leaves sight is replaced, in the same observation, by a remembered copy under a
   new tag at a bit-identical position; seen again, it is back under its first tag, and each return to the fog makes
   another tag. Mineral fields start the game as such copies (#25; tested).
+- A copy of one of this player's own structures can be listed too, `Snapshot` under a tag of its own at the
+  structure's spot, while the structure itself stands listed in sight at full health: a supply depot, raised in one game
+  and lowered in another, at 2:08 and 2:44 of 2 of AvocaDOS's 21 games against the VERY_HARD computer, both against
+  Terran, an enemy SCV 5 and 9 away. Why is not known (in game, build 75689).
 - A copy can have a different type from the structure it copies: a depot that lowered as it left sight (#25).
 - Seen again between two observations and back in the fog by the second, a structure's copy comes in the second under
   a new tag, at the first copy's bit-identical position. So does the copy of a structure killed out of sight and made

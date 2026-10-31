@@ -184,7 +184,10 @@ class _UnitTracker:
                     continue
                 unit = by_tag.get(tag)
                 if unit is None:
-                    new.append(report)
+                    # The game may list a copy of one of this player's structures in the fog, under a tag of its own,
+                    # where the structure itself stands listed in sight (in game). It tells nothing new.
+                    if report.display_type != _IN_FOG_DISPLAY or report.alliance != _OWN_ALLIANCE:
+                        new.append(report)
                     continue
                 if not unit._listed:
                     del self._unlisted_units[unit._id]
