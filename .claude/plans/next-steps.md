@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #186. `uv run pytest` passes 3027 tests with #187; `uv run pytest -m
-  integration` passed 41 against a real game with #177 (run 2026-10-25).
+- nachOS `main` has every PR to #188. `uv run pytest` passes 3053 tests with #189; `uv run pytest -m
+  integration` passed 41 against a real game with #189 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -200,7 +200,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `api.in_production(types)` gives what the game has started or charged for, one `InProduction` per unit with its
     progress, and not the turn's orders, which are in `issued_to`; a count is its `len`. A morph other than a larva's
     reads progress `None`, since the game reports 0 from start to end. `api.research_progress(upgrade)`, from 0 to
-    1 or `None`, gave way to `api.researches` in #131.
+    1 or `None`, gave way to `api.researches` in #131. Each names its `producer` and, once it stands, its `unit`, with
+    its `total_time` and `time_left` (#189, below).
   - No `api.enemy.units`: the enemy's units stay `api.units.enemy`.
 - **The expansions** (#122, the owner, 2026-10-08 and review of #122):
   - `api.expansions` is found once at the start, on the api and not the map, so that `GameMap` stays a pure reading of
@@ -752,9 +753,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
   above); `GameData` works out each type's last step from the tables' whole costs, since a price comes from them. Then a
-  second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
+  second pull request (#189): `InProduction` split into `producer`, what makes it, and `unit`, the thing
   itself while it goes up or warps in (over renaming `unit` alone), with `time_left` and `total_time` as `Research`
-  has them (over `time_left` alone), measured in a game first. Not in NachOS: `can_afford` (#46, above), an upgrade's
+  has them (over `time_left` alone), measured in a game first (tool `sweep_orders`, `production-times`). Measured,
+  the owner chose (2026-10-31, one question at a time):
+  - `time_left` and `total_time` read `None` for a morph other than a larva's, whose order reads progress 0
+    throughout, and for a warp-in, which takes 256 steps or 81 as where it warps in decides and reports nothing that
+    says which (over NachOS remembering the step it first saw each and counting from there). Exact for every train,
+    egg, structure going up and add-on;
+  - a structure going up is made by its `builder`, and `None` for a Protoss one (over no producer while it goes up).
+
+  Not in NachOS: `can_afford` (#46, above), an upgrade's
   progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
   forecast of when tech is there, and a getter beside `api.data.units[t]` (over `api.data[t]` and a getter per field).
 
@@ -776,7 +785,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
   before that piece merges.
 - **What the owner's review of AvocaDOS #57 moves into NachOS** (2026-10-30, above): the static tech reads and
   `Resources.minimum` and `maximum` (#187), then `InProduction`'s `producer`, `unit`, `time_left` and `total_time`,
-  measured in a game first. AvocaDOS adopts each as it merges.
+  measured in a game first (#189). AvocaDOS adopts each as it merges.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
   salsa's plan holds:

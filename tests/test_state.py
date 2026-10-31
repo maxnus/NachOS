@@ -67,35 +67,44 @@ class _Game:
         return _State(observation, self.tracker, self.map)
 
 
-def _row(unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0) -> data_pb2.UnitTypeData:
-    """A unit type's row, a structure or not, at its price in minerals."""
+def _row(
+    unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0, build_time: float = 0.0
+) -> data_pb2.UnitTypeData:
+    """A unit type's row, a structure or not, at its price in minerals, made in `build_time` steps."""
     attribute = data_pb2.Attribute.Structure if structure else data_pb2.Attribute.Biological
-    return data_pb2.UnitTypeData(unit_id=unit_type, attributes=[attribute], mineral_cost=minerals)
+    return data_pb2.UnitTypeData(
+        unit_id=unit_type, attributes=[attribute], mineral_cost=minerals, build_time=build_time
+    )
 
 
+# At the build times of the game's tables, a void ray's no whole number of steps.
 _MAKING_TABLES = make_tables(
-    _row(UnitTypeId.MARINE, minerals=50),
-    _row(UnitTypeId.BARRACKS, structure=True, minerals=150),
+    _row(UnitTypeId.MARINE, minerals=50, build_time=400.0),
+    _row(UnitTypeId.BARRACKS, structure=True, minerals=150, build_time=1040.0),
     *(
-        _row(reactor, structure=True, minerals=50)
+        _row(reactor, structure=True, minerals=50, build_time=800.0)
         for reactor in (UnitTypeId.REACTOR_BARRACKS, UnitTypeId.REACTOR_FACTORY, UnitTypeId.REACTOR_STARPORT)
     ),
-    _row(UnitTypeId.SCV, minerals=50),
-    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100),
-    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400),
-    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550),
+    _row(UnitTypeId.SCV, minerals=50, build_time=272.0),
+    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, build_time=480.0),
+    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400, build_time=1590.0),
+    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550, build_time=560.0),
     _row(UnitTypeId.LARVA),
     _row(UnitTypeId.EGG),
-    _row(UnitTypeId.DRONE, minerals=50),
-    _row(UnitTypeId.ZERGLING, minerals=25),
+    _row(UnitTypeId.DRONE, minerals=50, build_time=272.0),
+    _row(UnitTypeId.ZERGLING, minerals=25, build_time=384.0),
     _row(UnitTypeId.BANELING_COCOON),
-    _row(UnitTypeId.BANELING, minerals=50),
-    _row(UnitTypeId.ZEALOT, minerals=100),
+    _row(UnitTypeId.BANELING, minerals=50, build_time=320.0),
+    _row(UnitTypeId.ZEALOT, minerals=100, build_time=608.0),
+    _row(UnitTypeId.PYLON, structure=True, minerals=100, build_time=400.0),
+    _row(UnitTypeId.STARGATE, structure=True, minerals=150, build_time=960.0),
+    _row(UnitTypeId.VOID_RAY, minerals=250, build_time=963.2),
     _row(UnitTypeId.SIEGE_TANK, minerals=150),
     _row(UnitTypeId.SIEGE_TANK_SIEGED, minerals=150),
     _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125),
     abilities=[
         data_pb2.AbilityData(ability_id=AbilityId.BARRACKS_TRAIN_MARINE),
+        data_pb2.AbilityData(ability_id=AbilityId.STARGATE_TRAIN_VOID_RAY),
         data_pb2.AbilityData(ability_id=AbilityId.BUILD_REACTOR, is_building=True),
         data_pb2.AbilityData(
             ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=data_pb2.AbilityData.Target.Point, is_building=True
@@ -131,13 +140,31 @@ def _making(ability: int, progress: float = 0.0, at: tuple[float, float] | None 
     return order
 
 
-def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int, float | None]]:
-    """The tag of the unit each `unit_type` in production is read from, and its progress."""
-    return [(item.unit.tag, item.progress) for item in state.production.of_types({unit_type})]
+def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int | None, int | None, float | None]]:
+    """For each `unit_type` in production, the tag of what makes it and of the unit itself, and its progress."""
+    return [
+        (
+            None if item.producer is None else item.producer.tag,
+            None if item.unit is None else item.unit.tag,
+            item.progress,
+        )
+        for item in state.production.of_types({unit_type})
+    ]
+
+
+def _timed(state: _State, unit_type: UnitTypeId) -> list[tuple[float | None, float | None]]:
+    """For each `unit_type` in production, the steps the whole of it takes and the steps it has left."""
+    return [
+        (
+            None if item.total_time is None else item.total_time.steps,
+            None if item.time_left is None else item.time_left.steps,
+        )
+        for item in state.production.of_types({unit_type})
+    ]
 
 
 class TestProduction:
-    def test_each_train_a_structure_shows_is_one_at_its_progress(self) -> None:
+    def test_each_train_a_structure_shows_is_one_made_by_it_with_its_time_left(self) -> None:
         train = AbilityId.BARRACKS_TRAIN_MARINE
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[
@@ -145,23 +172,50 @@ class TestProduction:
                 _done(2, UnitTypeId.REACTOR_BARRACKS),
             ]
         )
-        assert _made(state, UnitTypeId.MARINE) == [(1, 0.5), (1, 0.25)]
+        assert _made(state, UnitTypeId.MARINE) == [(1, None, 0.5), (1, None, 0.25)]
+        assert _timed(state, UnitTypeId.MARINE) == [(400, 200), (400, 300)]
 
-    def test_an_egg_is_what_it_becomes_at_its_progress(self) -> None:
+    def test_a_train_queued_behind_another_has_all_its_time_left(self) -> None:
+        train = AbilityId.BARRACKS_TRAIN_MARINE
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[_done(1, UnitTypeId.BARRACKS, _making(train, 0.5), _making(train))]
+        )
+        assert _timed(state, UnitTypeId.MARINE) == [(400, 200), (400, 400)]
+
+    def test_a_train_whose_build_time_is_no_whole_step_takes_it_rounded_up(self) -> None:
+        """The progress is the steps done over the tables' 963.2, sent as a 32-bit float; the void ray comes out after
+        964 (in game)."""
+        train = AbilityId.STARGATE_TRAIN_VOID_RAY
+        game = _Game(tables=_MAKING_TABLES)
+        begun = game.observe(units=[_done(1, UnitTypeId.STARGATE, _making(train, 1 / 963.2))])
+        assert _timed(begun, UnitTypeId.VOID_RAY) == [(964, 963)]
+        ending = game.observe(962, units=[_done(1, UnitTypeId.STARGATE, _making(train, 963 / 963.2))])
+        assert _timed(ending, UnitTypeId.VOID_RAY) == [(964, 1)]
+
+    def test_an_egg_is_what_it_becomes_made_by_the_egg_with_its_time_left(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.EGG, _making(AbilityId.LARVA_MORPH_DRONE, 0.375))]
         )
-        assert _made(state, UnitTypeId.DRONE) == [(1, 0.375)]
+        assert _made(state, UnitTypeId.DRONE) == [(1, None, 0.375)]
+        assert _timed(state, UnitTypeId.DRONE) == [(272, 170)]
         assert _made(state, UnitTypeId.EGG) == []
 
-    def test_a_worker_on_its_way_to_build_is_one_until_the_structure_stands_which_then_is(self) -> None:
+    def test_a_worker_on_its_way_to_build_is_one_until_the_structure_stands_which_its_builder_makes(self) -> None:
         build = _making(AbilityId.SCV_BUILD_SUPPLY_DEPOT, at=(20.0, 20.0))
         game = _Game(tables=_MAKING_TABLES)
         walking = game.observe(units=[_done(1, UnitTypeId.SCV, build, at=(10.0, 10.0))])
-        assert _made(walking, UnitTypeId.SUPPLY_DEPOT) == [(1, 0.0)]
+        assert _made(walking, UnitTypeId.SUPPLY_DEPOT) == [(1, None, 0.0)]
+        assert _timed(walking, UnitTypeId.SUPPLY_DEPOT) == [(480, 480)]
         depot = make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(20.0, 20.0), build_progress=0.25)
         building = game.observe(16, units=[_done(1, UnitTypeId.SCV, build, at=(19.0, 20.0)), depot])
-        assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(2, 0.25)]
+        assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(1, 2, 0.25)]
+        assert _timed(building, UnitTypeId.SUPPLY_DEPOT) == [(480, 360)]
+
+    def test_a_structure_nobody_builds_goes_up_by_itself(self) -> None:
+        pylon = make_unit(1, UnitTypeId.PYLON, build_progress=0.5)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[pylon])
+        assert _made(state, UnitTypeId.PYLON) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.PYLON) == [(400, 200)]
 
     def test_an_add_on_is_one_by_its_order_until_it_stands_which_then_is(self) -> None:
         """As the game shows it: the host's order is aimed at the host's own center, and the host names its add-on
@@ -169,7 +223,8 @@ class TestProduction:
         game = _Game(tables=_MAKING_TABLES)
         build = _making(AbilityId.BUILD_REACTOR, at=(20.5, 20.5))
         ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, build, at=(20.5, 20.5))])
-        assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, 0.0)]
+        assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, None, 0.0)]
+        assert _timed(ordered, UnitTypeId.REACTOR_BARRACKS) == [(800, 800)]
         going_up = game.observe(
             16,
             units=[
@@ -177,7 +232,8 @@ class TestProduction:
                 make_unit(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0), build_progress=0.125),
             ],
         )
-        assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(2, 0.125)]
+        assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(1, 2, 0.125)]
+        assert _timed(going_up, UnitTypeId.REACTOR_BARRACKS) == [(800, 700)]
         standing = game.observe(
             32,
             units=[
@@ -187,21 +243,24 @@ class TestProduction:
         )
         assert _made(standing, UnitTypeId.REACTOR_BARRACKS) == []
 
-    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress(self) -> None:
+    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND))]
         )
-        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None)]
+        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None, None)]
+        assert _timed(state, UnitTypeId.ORBITAL_COMMAND) == [(None, None)]
 
-    def test_a_cocoon_is_what_it_becomes_at_no_known_progress(self) -> None:
+    def test_a_cocoon_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING))]
         )
-        assert _made(state, UnitTypeId.BANELING) == [(1, None)]
+        assert _made(state, UnitTypeId.BANELING) == [(1, None, None)]
+        assert _timed(state, UnitTypeId.BANELING) == [(None, None)]
 
-    def test_a_unit_warping_in_is_one_at_its_progress(self) -> None:
+    def test_a_unit_warping_in_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
-        assert _made(state, UnitTypeId.ZEALOT) == [(1, 0.5)]
+        assert _made(state, UnitTypeId.ZEALOT) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ZEALOT) == [(None, None)]
 
     def test_a_free_order_that_makes_a_form_is_none(self) -> None:
         siege = _making(RawAbilityId.SiegeMode_SiegeMode)
