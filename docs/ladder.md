@@ -97,7 +97,8 @@ An argument of the other kind of game, such as `--Map` given to a ladder game, i
 `--ReplayFile` saves the game's replay there, however the game ends: at its end, before leaving it when the bot calls
 `api.leave_game()`, and after a handler raises. The ladder keeps its own replays, so this is for your own runs.
 `--ResultFile` writes the result as JSON, as for [the match workflow](github-actions.md#1-a-game-script), with the
-map's display name in a ladder game, where no map file is known.
+map's display name in a ladder game, where no map file is known, and `UNDECIDED` for one whose connection the ladder
+closed before it ended.
 
 `--RecordFile` records the whole conversation with the game there, as `record_to` does, so that `run_recording` can
 play the bot through the game again exactly, with no game client, and reproduce a handler's exception as it was raised

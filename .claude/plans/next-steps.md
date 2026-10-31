@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #189. `uv run pytest` passes 3079 tests with #190; `uv run pytest -m
-  integration` passed 41 against a real game with #190 (run 2026-10-31).
+- nachOS `main` has every PR to #190. `uv run pytest` passes 3081 tests with #191; `uv run pytest -m
+  integration` passed 41 against a real game with #190 (run 2026-10-31), and its ladder game again with #191.
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -306,6 +306,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     of #147). Chosen over an object built from the settings that subscribes its handlers, which makes each a method,
     over handlers defined in the main block, which does not scale to many settings, and over a function that builds
     the api, which keeps it from the modules that register handlers. Subclassing `Api` stays out.
+  - The result file holds `opponent_actual_race`, the race the opponent played as `Enemy.race` reads at the end, `null`
+    if it was never known, as the match workflow's report reads for a `RANDOM` opponent (the owner, 2026-10-31, over
+    AvocaDOS rewriting NachOS's file to add it and over AvocaDOS's report dropping it).
 - **The code style has a doc of its own**, `docs/maintaining/code-style.md` (the owner, review of #143): AGENTS.md's
   "Conventions" moved there but for "Where a finding goes", with the naming rules of the reviews, and AGENTS.md points
   to it, chosen over a line in AGENTS.md and over the review checklist. The docstring contract moved there too, beside
