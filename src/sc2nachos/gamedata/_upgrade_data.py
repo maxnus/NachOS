@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Self, final
 from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.ids import AbilityId, UpgradeId
+from sc2nachos.gamedata._tech_requirements import TechRequirements
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from s2clientprotocol import data_pb2
@@ -41,6 +42,12 @@ class UpgradeData:
     game's tables and above 0 for every curated one (corpus), which a research takes exactly (in game)."""
     research_ability: AbilityId | None
     """The ability that researches it."""
+    researchers: frozenset[UnitTypeId]
+    """The structure types whose `research_ability` researches it: an engineering bay for infantry weapons, a spire and
+    a greater spire for flyer attacks. Empty for an upgrade nothing researches."""
+    tech_requirements: TechRequirements
+    """What a researcher needs before it is offered `research_ability`: `Tech.ARMORY` and level 1 for infantry weapons
+    level 2. Every researcher of an upgrade needs the same (tool `sweep_tech_tree`)."""
     upgrade_type: UpgradeType
     """The upgrade level the units it affects report it adding to, or `OTHER` if they report nothing of it."""
     level: int
@@ -54,6 +61,8 @@ class UpgradeData:
             id=upgrade,
             cost=Cost(data.mineral_cost, data.vespene_cost, time=GameTime(steps=round(data.research_time))),
             research_ability=AbilityId.get(data.ability_id) or tech_tree_upgrades.research_abilities.get(upgrade),
+            researchers=tech_tree_upgrades.researchers.get(upgrade, frozenset()),
+            tech_requirements=tech_tree_upgrades.tech_requirements.get(upgrade, TechRequirements()),
             upgrade_type=tech_tree_upgrades.types.get(upgrade, UpgradeType.OTHER),
             level=tech_tree_upgrades.levels.get(upgrade, 0),
         )

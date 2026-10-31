@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #185. `uv run pytest` passes 2978 tests with #186; `uv run pytest -m
+- nachOS `main` has every PR to #186. `uv run pytest` passes 3027 tests with #187; `uv run pytest -m
   integration` passed 41 against a real game with #177 (run 2026-10-25).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -718,6 +718,42 @@ Keep this file current: when a step is done, say so here in the same pull reques
   looks for an add-on at the order's target plus `ADD_ON_OFFSET`, so the host's `construction` and the add-on's
   `builder` link the two until it finishes, and `in_production` drops the order by its rule for a build begun (#186).
   Found moving AvocaDOS's production counters onto `in_production` (AvocaDOS #57).
+- **What AvocaDOS's data helpers move into NachOS** (the owner, review of AvocaDOS #57, 2026-10-30, one question at a
+  time). The static reads first (#187):
+  - `UnitTypeData.cost` is what the order that made one cost, the cost of its last step that cost anything, so every
+    form of a unit costs the same: an orbital command 150, a sieged tank the tank's 150/125, an archon nothing (the
+    owner's review of #187, reversing a `creation_cost` beside a `cost` that was everything spent to reach the type, as
+    an order's cost belongs on its ability and a hellbat has two). The supply one takes is `supply_used`. A MULE and
+    an auto-turret cost nothing, the game's rows notwithstanding, and a cocoon what it becomes;
+  - `UnitTypeData.total_cost`, what every order that made one cost, step by step back along `morphed_from`: an
+    orbital command 550, a hatchery 350 with its drone, a MULE nothing, and an archon two high templar, 100/300 (the
+    owner's review of #187, reversing a decision to keep what a unit is worth private, and over publishing the game's
+    own whole cost, which prices a MULE 50, an auto-turret 100, an archon 175/275 and a hatchery 325). The game's
+    figure stays private, since a repair is priced from it;
+  - `Cost.is_free`, whether it takes no minerals, vespene or supply, whatever its time (the owner's review of #187,
+    over `Cost.__bool__`, which would read a free cost like a `None` from `required_repair_cost` and ignore time);
+  - `UnitTypeData.tech_requirements` and `UpgradeData.tech_requirements`, every maker's requirements together, which
+    agree (tool `sweep_tech_tree`) (the owner's review of #187, over `creation_requirements` and
+    `research_requirements`), and `UpgradeData.researchers` (over naming them `producers`);
+  - `Tech`, what a requirement names (the owner's review of #187, over a pair of names for `tech_aliases` and its
+    reverse, which read alike in opposite directions). A type grants techs, `UnitTypeData.techs_granted`, which
+    replaces `tech_aliases`, and `GameData.types_granting(tech)` lists the types granting one. Each tech is valued by
+    the type it is named after, `base_type`, but never equals it. `TechRequirements` holds `techs`, `needs_tech_lab`,
+    the unit's own, and `upgrades` (the owner's review of #187, over the add-on's type, since every one is the unit's
+    own tech lab and nothing requires a reactor);
+  - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
+
+  Next, in a pull request of its own once #187 merges: the tech tree as one record per id, `TechTreeUnitType`,
+  `TechTreeAbility` and `TechTreeUpgrade`, each mapping of the tree a field of the record (the owner's review of #187,
+  over a mapping per field, which spreads what the tree says of a ghost over four).
+
+  `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
+  above); `GameData` works out each type's last step from the tables' whole costs, since a price comes from them. Then a
+  second pull request: `InProduction` split into `producer`, what makes it, and `unit`, the thing
+  itself while it goes up or warps in (over renaming `unit` alone), with `time_left` and `total_time` as `Research`
+  has them (over `time_left` alone), measured in a game first. Not in NachOS: `can_afford` (#46, above), an upgrade's
+  progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
+  forecast of when tech is there, and a getter beside `api.data.units[t]` (over `api.data[t]` and a getter per field).
 
 ## Next
 
@@ -735,6 +771,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
   `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#175),
   before that piece merges.
+- **What the owner's review of AvocaDOS #57 moves into NachOS** (2026-10-30, above): the static tech reads and
+  `Resources.minimum` and `maximum` (#187), then `InProduction`'s `producer`, `unit`, `time_left` and `total_time`,
+  measured in a game first. AvocaDOS adopts each as it merges.
 - M5, in AvocaDOS (section 3).
 - Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
   salsa's plan holds:

@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing, unit_aliases
+from generate_unit_types import tech_aliases
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
@@ -195,6 +196,7 @@ class TechSweep:
         raw_data = self._client.game_data()
         self._data = GameData(raw_data)
         self._form_of = unit_aliases(raw_data)
+        self._counted_as = tech_aliases(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
         findings.remaps |= {
             _ability_name(entry.ability_id): _ability_name(entry.remaps_to_ability_id)
@@ -354,7 +356,9 @@ class TechSweep:
         logger.info("Reading what {} newly offered abilities need", len(pairs))
         standing = {UnitTypeId(unit.unit_type) for unit in self._mine() if UnitTypeId.get(unit.unit_type)}
         for structure in sorted(standing & self._structure_types, key=lambda unit_type: unit_type.name):
-            aliases = {row.id for row in self._data.units.values() if structure in row.tech_aliases} & standing
+            aliases = {
+                counting for counting, counted_as in self._counted_as.items() if structure in counted_as
+            } & standing
             gone = self._lost({structure, *aliases}, pairs)
             if aliases:
                 gone -= self._lost(aliases, pairs)

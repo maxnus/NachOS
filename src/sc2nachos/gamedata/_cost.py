@@ -35,6 +35,11 @@ class Cost:
         """The minerals and vespene, to compare against what the player has."""
         return Resources(self.minerals, self.vespene)
 
+    @property
+    def is_free(self) -> bool:
+        """Whether it takes no minerals, vespene or supply, whatever its time: a siege, a MULE's calldown."""
+        return not (self.minerals or self.vespene or self.supply)
+
     def __add__(self, other: Cost) -> Cost:
         """The sum of the two costs."""
         return Cost(

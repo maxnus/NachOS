@@ -9,9 +9,10 @@ from typing import cast
 import pytest
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
-from sc2nachos.gamedata import GameData, TechRequirements
+from sc2nachos.gamedata import GameData, Tech, TechRequirements
 from sc2nachos.gamedata._techtree import (
     PRODUCERS_FALLBACK,
+    TECH_TREE,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
 )
@@ -120,7 +121,13 @@ class TestGeneratingTheTables:
         tree = _tech_tree_generator().read(findings, _no_upgrades())
         assert tree.unit_types.ability_requirements[UnitTypeId.BARRACKS][
             AbilityId.BARRACKS_TRAIN_GHOST
-        ] == TechRequirements(structures=frozenset({UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS}))
+        ] == TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True)
+
+    def test_a_required_structure_no_tech_is_named_after_is_refused(self) -> None:
+        bunker = _requirement_entry("Barracks", "BarracksTrain_Marine", ["Bunker"], [])
+        findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine"]}, requirements=[bunker])
+        with pytest.raises(ValueError, match="no Tech is named after it"):
+            _tech_tree_generator().read(findings, _no_upgrades())
 
     def test_an_add_on_that_counts_on_another_structure_is_refused(self) -> None:
         """An add-on only ever counts on its own structure, which `TechRequirements` takes for granted."""
@@ -129,6 +136,13 @@ class TestGeneratingTheTables:
         }
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marauder"]}, requirements=[marauder])
         with pytest.raises(ValueError, match="another structure's add-on"):
+            _tech_tree_generator().read(findings, _no_upgrades())
+
+    def test_a_required_reactor_is_refused(self) -> None:
+        """`TechRequirements` holds only whether a tech lab is needed, since no requirement has named a reactor."""
+        marine = _requirement_entry("Barracks", "BarracksTrain_Marine", ["BarracksReactor"], [])
+        findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine"]}, requirements=[marine])
+        with pytest.raises(ValueError, match="which is no tech lab"):
             _tech_tree_generator().read(findings, _no_upgrades())
 
     def test_what_performs_and_makes_an_ability_comes_with_the_tables_the_sweep_read(self) -> None:
@@ -329,16 +343,16 @@ def _tech_tree_from_the_findings() -> TechTree:
 class TestWhatTheTablesSay:
     def test_a_ghost_needs_an_academy_and_a_tech_lab_on_its_barracks(self, first_corpus_tables: GameData) -> None:
         ghost = first_corpus_tables.units[UnitTypeId.BARRACKS].ability_requirements[AbilityId.BARRACKS_TRAIN_GHOST]
-        assert ghost == TechRequirements(structures=frozenset({UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS}))
+        assert ghost == TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True)
 
     def test_a_thor_needs_an_armory_and_a_tech_lab_on_its_factory(self, first_corpus_tables: GameData) -> None:
         thor = first_corpus_tables.units[UnitTypeId.FACTORY].ability_requirements[AbilityId.FACTORY_TRAIN_THOR]
-        assert thor == TechRequirements(structures=frozenset({UnitTypeId.ARMORY, UnitTypeId.TECH_LAB_FACTORY}))
+        assert thor == TechRequirements(techs=frozenset({Tech.ARMORY}), needs_tech_lab=True)
 
     def test_a_second_level_needs_the_first_and_what_the_second_needs(self, first_corpus_tables: GameData) -> None:
         bay = first_corpus_tables.units[UnitTypeId.ENGINEERING_BAY]
         assert bay.ability_requirements[AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2] == TechRequirements(
-            structures=frozenset({UnitTypeId.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})
+            techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})
         )
 
     def test_every_ability_a_type_is_offered_says_what_it_needs(self, first_corpus_tables: GameData) -> None:
@@ -351,15 +365,15 @@ class TestWhatTheTablesSay:
         assert first_corpus_tables.units[UnitTypeId.ROACH_BURROWED].ability_requirements[AbilityId.MOVE] == claws
         assert first_corpus_tables.units[UnitTypeId.ROACH].ability_requirements[AbilityId.MOVE] == TechRequirements()
 
-    def test_a_barracks_needs_a_depot_which_a_lowered_one_counts_as(self, first_corpus_tables: GameData) -> None:
+    def test_a_barracks_needs_a_depot_which_a_lowered_one_grants(self, first_corpus_tables: GameData) -> None:
         barracks = first_corpus_tables.units[UnitTypeId.SCV].ability_requirements[AbilityId.SCV_BUILD_BARRACKS]
-        assert barracks.structures == {UnitTypeId.SUPPLY_DEPOT}
-        assert UnitTypeId.SUPPLY_DEPOT in first_corpus_tables.units[UnitTypeId.SUPPLY_DEPOT_LOWERED].tech_aliases
+        assert barracks.techs == {Tech.SUPPLY_DEPOT}
+        assert first_corpus_tables.units[UnitTypeId.SUPPLY_DEPOT_LOWERED].techs_granted == {Tech.SUPPLY_DEPOT}
 
-    def test_a_hive_counts_as_a_lair(self, first_corpus_tables: GameData) -> None:
+    def test_a_hive_grants_a_lair(self, first_corpus_tables: GameData) -> None:
         den = first_corpus_tables.units[UnitTypeId.DRONE].ability_requirements[AbilityId.DRONE_MORPH_HYDRALISK_DEN]
-        assert den.structures == {UnitTypeId.LAIR}
-        assert UnitTypeId.LAIR in first_corpus_tables.units[UnitTypeId.HIVE].tech_aliases
+        assert den.techs == {Tech.LAIR}
+        assert first_corpus_tables.units[UnitTypeId.HIVE].techs_granted == {Tech.HATCHERY, Tech.LAIR, Tech.HIVE}
 
     def test_an_ability_is_performed_by_the_types_offered_it_and_makes_its_product(
         self, first_corpus_tables: GameData
@@ -442,6 +456,117 @@ class TestWhatTheTablesSay:
             {UnitTypeId.WARP_GATE},
         )
         assert first_corpus_tables.units[UnitTypeId.ZEALOT].creation_ability is AbilityId.GATEWAY_TRAIN_ZEALOT
+
+    def test_a_type_needs_what_its_producers_need_to_make_it(self, first_corpus_tables: GameData) -> None:
+        units = first_corpus_tables.units
+        assert units[UnitTypeId.GHOST].tech_requirements == TechRequirements(
+            techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True
+        )
+        assert units[UnitTypeId.ORBITAL_COMMAND].tech_requirements == TechRequirements(techs=frozenset({Tech.BARRACKS}))
+        assert units[UnitTypeId.BROOD_LORD].tech_requirements.techs == {Tech.GREATER_SPIRE}
+        assert units[UnitTypeId.MARINE].tech_requirements == TechRequirements()
+        assert units[UnitTypeId.LARVA].tech_requirements == TechRequirements()
+
+    def test_what_a_warp_gate_warps_in_needs_what_a_gateway_needs_to_train_it(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        units = first_corpus_tables.units
+        core = TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE}))
+        assert units[UnitTypeId.WARP_GATE].ability_requirements[AbilityId.WARP_GATE_WARP_IN_ADEPT] == core
+        assert units[UnitTypeId.GATEWAY].ability_requirements[AbilityId.GATEWAY_TRAIN_ADEPT] == core
+        assert units[UnitTypeId.ADEPT].tech_requirements == core
+
+    def test_every_producer_of_a_type_needs_the_same_to_make_it(self, first_corpus_tables: GameData) -> None:
+        """So what a type needs is what each of its producers needs, as `tech_requirements` says."""
+        units, abilities = first_corpus_tables.units, first_corpus_tables.abilities
+        for unit_type, row in units.items():
+            needs = {
+                requirements
+                for producer in row.producers
+                if (producer_row := units.get(producer)) is not None
+                for ability, requirements in producer_row.ability_requirements.items()
+                if ability is row.creation_ability
+                or (
+                    (ability_row := abilities.get(ability)) is not None
+                    and ability_row.products.get(producer) is unit_type
+                )
+            }
+            assert needs <= {row.tech_requirements}, unit_type.name
+            if not needs:
+                assert row.tech_requirements == TechRequirements(), unit_type.name
+
+    def test_an_upgrade_names_what_researches_it_and_what_that_needs(self, first_corpus_tables: GameData) -> None:
+        upgrades = first_corpus_tables.upgrades
+        weapons = upgrades[UpgradeId.TERRAN_INFANTRY_WEAPONS_2]
+        assert weapons.researchers == {UnitTypeId.ENGINEERING_BAY}
+        assert weapons.tech_requirements == TechRequirements(
+            techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})
+        )
+        assert upgrades[UpgradeId.ZERG_AIR_WEAPONS_1].researchers == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
+        assert upgrades[UpgradeId.STIMPACK].tech_requirements == TechRequirements()
+
+    def test_every_upgrade_names_the_types_its_research_makes_it_for(self, first_corpus_tables: GameData) -> None:
+        for upgrade, row in first_corpus_tables.upgrades.items():
+            assert row.research_ability is not None, upgrade.name
+            products = first_corpus_tables.abilities[row.research_ability].products
+            assert row.researchers, upgrade.name
+            assert all(products.get(researcher) is upgrade for researcher in row.researchers), upgrade.name
+
+    def test_every_researcher_of_an_upgrade_needs_the_same_for_it(self, first_corpus_tables: GameData) -> None:
+        units = first_corpus_tables.units
+        for upgrade, row in first_corpus_tables.upgrades.items():
+            assert row.research_ability is not None, upgrade.name
+            needs = {units[researcher].ability_requirements[row.research_ability] for researcher in row.researchers}
+            assert needs == {row.tech_requirements}, upgrade.name
+
+    def test_a_type_grants_the_tech_named_after_it_and_after_each_type_the_tables_count_it_as(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        units = first_corpus_tables.units
+        assert units[UnitTypeId.SPIRE].techs_granted == {Tech.SPIRE}
+        assert units[UnitTypeId.GREATER_SPIRE].techs_granted == {Tech.SPIRE, Tech.GREATER_SPIRE}
+        assert units[UnitTypeId.BARRACKS_FLYING].techs_granted == {Tech.BARRACKS}
+        assert units[UnitTypeId.WARP_GATE].techs_granted == {Tech.GATEWAY}
+        assert units[UnitTypeId.ORBITAL_COMMAND].techs_granted == {Tech.COMMAND_CENTER}
+        assert units[UnitTypeId.MARINE].techs_granted == frozenset()
+
+    def test_a_type_granting_a_tech_grants_every_tech_its_base_type_grants(self, first_corpus_tables: GameData) -> None:
+        """A hive grants `Tech.HATCHERY` as a lair does, though it counts as one only through a lair."""
+        units = first_corpus_tables.units
+        for unit_type, row in units.items():
+            for tech in row.techs_granted:
+                assert units[tech.base_type].techs_granted <= row.techs_granted, (unit_type.name, tech.name)
+
+    def test_the_types_granting_a_tech_are_its_base_type_and_those_counted_as_it(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        assert first_corpus_tables.types_granting(Tech.SPIRE) == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
+        assert first_corpus_tables.types_granting(Tech.LAIR) == {UnitTypeId.LAIR, UnitTypeId.HIVE}
+        assert first_corpus_tables.types_granting(Tech.SUPPLY_DEPOT) == {
+            UnitTypeId.SUPPLY_DEPOT,
+            UnitTypeId.SUPPLY_DEPOT_LOWERED,
+        }
+        assert first_corpus_tables.types_granting(Tech.GREATER_SPIRE) == {UnitTypeId.GREATER_SPIRE}
+        for tech in Tech:
+            assert tech.base_type in first_corpus_tables.types_granting(tech), tech.name
+
+    def test_every_tech_is_what_some_requirement_names(self) -> None:
+        """No tech is left that nothing needs; `tools/generate_tech_tree.py` refuses a requirement no tech names."""
+        tree = TECH_TREE.unit_types
+        named = {
+            tech
+            for needs_by_ability in tree.ability_requirements.values()
+            for needs in needs_by_ability.values()
+            for tech in needs.techs
+        }
+        assert named == set(Tech)
+
+    def test_a_tech_never_equals_the_type_it_is_named_after(self) -> None:
+        """So a tech and a unit type never stand for each other as keys."""
+        assert Tech.SPIRE.base_type is UnitTypeId.SPIRE
+        assert Tech.SPIRE != UnitTypeId.SPIRE
+        assert Tech.SPIRE not in {UnitTypeId.SPIRE: 1}
+        assert UnitTypeId.SPIRE not in {Tech.SPIRE: 1}
 
     def test_a_gateway_needs_power_and_a_nexus_and_a_pylon_do_not(self, first_corpus_tables: GameData) -> None:
         assert first_corpus_tables.units[UnitTypeId.GATEWAY].needs_power
@@ -605,7 +730,7 @@ def test_in_a_real_game_the_tables_say_what_is_offered_and_made() -> None:
             game.turn(4)
             assert AbilityId.BARRACKS_TRAIN_GHOST in _abilities_offered(transport, barracks)
             ghost = tables.units[UnitTypeId.BARRACKS].ability_requirements[AbilityId.BARRACKS_TRAIN_GHOST]
-            assert ghost.structures == {UnitTypeId.GHOST_ACADEMY, UnitTypeId.TECH_LAB_BARRACKS}
+            assert (ghost.techs, ghost.needs_tech_lab) == ({Tech.GHOST_ACADEMY}, True)
 
             # A second level is offered once the first is done.
             game.debug(game.create(UnitTypeId.ENGINEERING_BAY, game.open_ground(toward.towards(home, 6))))

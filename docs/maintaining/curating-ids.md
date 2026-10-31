@@ -121,6 +121,11 @@ patch, or after curating ids, run the sweep and then the generator, which writes
 A new build's module goes beside the old one, and `gamedata/_techtree/__init__.py` imports the one NachOS plays by.
 Moving to a new build means changing that import; the generator says so when it is missing.
 
+**Every structure a requirement names, but an add-on, is a member of `Tech`** in `sc2nachos/gamedata/_tech.py`, written
+by hand and valued by that structure's type. The generator refuses a requirement on a structure no member is named
+after, and a test in `tests/test_tech_tree.py` fails on a member nothing requires, so a patch that moves a requirement
+shows up as one or the other. A required add-on is read as `needs_tech_lab`, and the generator refuses a reactor.
+
 **Creation abilities the game's own table does not name are in `sc2nachos/gamedata/_techtree/_overrides.py`**,
 written by hand, each entry with its evidence beside it. Where the table names an ability that does nothing, as for
 a baneling, or none, as for a rich assimilator, the entry becomes the type's `creation_ability`; where the table
@@ -146,7 +151,7 @@ The sweep reads everything off `RequestQueryAvailableAbilities`, whose answers a
   pylon.
 - **A requirement drops out of the answer within 4 steps of its structure leaving the observation**, and a lifted
   barracks still counts as a barracks, so the sweep kills one structure type at a time, together with the types whose
-  `tech_aliases` name it. A requirement that either of two unrelated structures would meet is found as neither; none
+  `tech_alias` names it. A requirement that either of two unrelated structures would meet is found as neither; none
   is known.
 - **Every burrowing zerg unit is offered every zerg unit's burrow once Burrow is researched**, and burrows as itself,
   so the sweep orders each ability that makes a unit type on every type offered it, and a type that turns into

@@ -69,7 +69,7 @@ class _State:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # The unit's fractional supply: 0.5 for a zergling, 0 for a roach.
-                taken += row.cost.supply % 1
+                taken += row.supply_used % 1
         # The fraction left after the whole supplies, which the game does count: two zerglings leave nothing.
         return taken % 1
 

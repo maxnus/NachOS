@@ -6,6 +6,7 @@ from sc2nachos.gamedata._creep_requirement import CreepRequirement
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._game_data import GameData
 from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._unit_type_data import Attribute, TargetDomain, UnitTypeData, Weapon
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
@@ -19,8 +20,9 @@ __all__ = [
     "EffectData",
     "GameData",
     "OrderBehavior",
-    "TechRequirements",
     "Resources",
+    "Tech",
+    "TechRequirements",
     "TargetDomain",
     "TargetType",
     "UnitTypeData",

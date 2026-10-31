@@ -26,6 +26,13 @@ def _unit_types_generator() -> Any:
 
 
 @pytest.fixture(scope="module")
+def counted_as() -> dict[UnitTypeId, frozenset[UnitTypeId]]:
+    """The types the corpus's tables count each type as, its tech aliases."""
+    generator = _unit_types_generator()
+    return generator.tech_aliases(generator.corpus_answer())
+
+
+@pytest.fixture(scope="module")
 def form_of() -> dict[UnitTypeId, UnitTypeId]:
     """The type the corpus's tables call each type a form of, as the sweeps read it."""
     return load_tool("_sandbox").unit_aliases(_unit_types_generator().corpus_answer())
@@ -74,7 +81,11 @@ def _types_named_with(prefix: str) -> set[UnitTypeId]:
 class TestUnitType:
     @pytest.mark.parametrize("group", sorted(_unit_types_generator().TWO_FORMS), ids=str)
     def test_a_two_form_group_is_a_type_and_the_one_it_changes_to(
-        self, group: str, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+        self,
+        group: str,
+        first_corpus_tables: GameData,
+        counted_as: dict[UnitTypeId, frozenset[UnitTypeId]],
+        form_of: dict[UnitTypeId, UnitTypeId],
     ) -> None:
         """One of the two morphs from the other in the tech tree, or the tables give it the other as a tech alias or
         call it a form of the other. The factory trains a hellion and a hellbat both, so neither links them; each
@@ -86,16 +97,15 @@ class TestUnitType:
             return
         linked = [
             TECH_TREE.unit_types.morph_sources.get(one) is other
-            or other in first_corpus_tables.units[one].tech_aliases
+            or other in counted_as.get(one, ())
             or form_of.get(one) is other
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
 
-    def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(
-        self, first_corpus_tables: GameData
-    ) -> None:
-        generated = _unit_types_generator().render(first_corpus_tables)
+    def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self) -> None:
+        generator = _unit_types_generator()
+        generated = generator.render(generator.corpus_answer())
         written = Path(unit_type_module.__file__).read_text(encoding="utf-8")
         assert written == generated, "run tools/generate_unit_types.py"
 
@@ -162,13 +172,12 @@ class TestUnitType:
         }
 
     def test_a_type_shares_a_group_with_each_type_the_tables_link_it_to(
-        self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+        self, counted_as: dict[UnitTypeId, frozenset[UnitTypeId]], form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """Its tech aliases, and the type the tables call it a form of. They call an adept's shade a form of the
         adept, but it is a unit of its own beside the adept."""
         for unit_type in set(UnitTypeId) - {UnitTypeId.ADEPT_SHADE}:
-            row = first_corpus_tables.units[unit_type]
-            for linked in {*row.tech_aliases, *filter(None, [form_of.get(unit_type)])}:
+            for linked in {*counted_as.get(unit_type, ()), *filter(None, [form_of.get(unit_type)])}:
                 shared = [group for group in _curated_groups() if {unit_type, linked} <= group.type_ids]
                 assert shared, (unit_type, linked)
 

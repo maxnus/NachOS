@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sc2nachos.gamedata._techtree import TechTreeAbilities
-    from sc2nachos.gamedata._unit_type_data import UnitTypeData
     from sc2nachos.gamedata._upgrade_data import UpgradeData
 
 
@@ -149,22 +148,20 @@ _FREE = Cost(0, 0)
 
 
 def ability_costs(
-    units: Mapping[UnitTypeId, UnitTypeData],
+    step_costs: Mapping[UnitTypeId, Cost],
     upgrades: Mapping[UpgradeId, UpgradeData],
     tech_tree_abilities: TechTreeAbilities,
 ) -> Mapping[AbilityId, Cost]:
-    """The cost of ordering each ability, supply included.
-
-    A unit type's row holds everything spent to reach it, so a morph costs the difference from its source type, time
-    included: an orbital command 150 and 560 steps, a siege nothing. An action several types perform costs what each
-    makes costs, which is one price for every action there is: a lift nothing, a tech lab 50/25 and 400 steps.
-    `COST_OVERRIDES` corrects the few the tables get wrong.
+    """The cost of ordering each ability, supply included: the cost of the step that makes its product, of
+    `step_costs`, or the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An
+    action several types perform costs what each makes costs, which is one cost for every action there is: a lift
+    nothing, a tech lab 50/25 and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
     """
     costs: dict[AbilityId, Cost] = {}
     for ability, products_by_maker in tech_tree_abilities.products.items():
-        prices = {_derived_cost(product, units, upgrades) for product in products_by_maker.values()}
-        if len(prices) == 1 and (price := prices.pop()) is not None:
-            costs[ability] = price
+        product_costs = {_cost_of_making(product, step_costs, upgrades) for product in products_by_maker.values()}
+        if len(product_costs) == 1 and (product_cost := product_costs.pop()) is not None:
+            costs[ability] = product_cost
     costs.update(COST_OVERRIDES)
     return costs
 
@@ -187,20 +184,15 @@ def cancel_abilities(
     return cancels_by_ability
 
 
-def _derived_cost(
-    product: UnitTypeId | UpgradeId, units: Mapping[UnitTypeId, UnitTypeData], upgrades: Mapping[UpgradeId, UpgradeData]
+def _cost_of_making(
+    product: UnitTypeId | UpgradeId, step_costs: Mapping[UnitTypeId, Cost], upgrades: Mapping[UpgradeId, UpgradeData]
 ) -> Cost | None:
-    """The cost of making `product`, derived from the tables: an upgrade's cost, or a unit type's cost less its source
-    type's. `None` where either has no row."""
+    """The cost of making `product`: an upgrade's cost, or the cost of the step that makes a unit type. `None` where it
+    has no row."""
     if isinstance(product, UpgradeId):
         upgrade = upgrades.get(product)
         return None if upgrade is None else upgrade.cost
-    if (made := units.get(product)) is None:
-        return None
-    if (source := made.morphed_from) is None:
-        return made.cost
-    used = units.get(source)
-    return None if used is None else made.cost - used.cost
+    return step_costs.get(product)
 
 
 def _unit_types_holding_orders(

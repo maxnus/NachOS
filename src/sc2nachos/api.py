@@ -291,8 +291,8 @@ class Api:
         There is one for each unit: a train a structure shows, queued ones included; an egg or a cocoon becoming one; a
         structure going up, a structure morphing into one, a unit warping in; and a build a worker has been sent to
         make, or an add-on its host has been ordered to build, until the structure stands. A reactor's two marines are
-        two. The turn's orders are not among them; they
-        are in `api.orders.issued_to`. Takes the types as `Units.of_type` does.
+        two. The turn's orders are not among them; they are in `api.orders.issued_to`. Takes the types as
+        `Units.of_type` does.
         """
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids_of(types, unit_types)
         return self._current_game().state.production.of_types(wanted)

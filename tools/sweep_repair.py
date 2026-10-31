@@ -359,10 +359,10 @@ class RepairSweep:
         return RepairFinding(
             target=target_type.name,
             health_max=target.health_max,
-            minerals_cost=table_row.cost.minerals,
-            vespene_cost=table_row.cost.vespene,
+            minerals_cost=table_row._whole_cost.minerals,
+            vespene_cost=table_row._whole_cost.vespene,
             build_steps=table_row.build_time.steps,
-            cost_steps=table_row.cost.time.steps,
+            cost_steps=table_row._whole_cost.time.steps,
             order_result="",
         )
 

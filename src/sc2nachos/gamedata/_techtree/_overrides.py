@@ -215,30 +215,67 @@ COST_OVERRIDES: Final[Mapping[AbilityId, Cost]] = MappingProxyType(
         # carrier offered Build Interceptors (tool `sweep_tech_tree`). Each costs 15, charged when the carrier is
         # ordered to build it. Its row gives it no build steps.
         AbilityId.CARRIER_BUILD_INTERCEPTORS: Cost(15, 0),
-        # The nova's row carries the disruptor's 3 supply; a nova takes none.
-        AbilityId.DISRUPTOR_PURIFICATION_NOVA: Cost(0, 0),
-        # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
-        # should read 350. It reads 325, and taking off the drone leaves 275 where the game charges 300.
-        AbilityId.DRONE_MORPH_HATCHERY: Cost(300, 0, -1, time=GameTime(steps=1600)),
         # A nuke is not a unit, so nothing is derived for it, nor its steps.
         AbilityId.GHOST_ACADEMY_BUILD_NUKE: Cost(100, 100),
         # One order makes two zerglings; the row prices one, with its half supply.
         AbilityId.LARVA_MORPH_ZERGLING: Cost(50, 0, 1, time=GameTime(steps=384)),
-        # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, steps
-        # too. These are its row's 336.016 rounded up, as every row's are, though the morph took 336 (in game).
-        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: Cost(25, 25, time=GameTime(steps=337)),
-        # A turret is paid for with the raven's energy; the row keeps a price the game no longer charges, and the
-        # turret's build steps.
-        AbilityId.RAVEN_SPAWN_AUTO_TURRET: Cost(0, 0, time=GameTime(steps=16)),
     }
 )
-"""The cost of ordering an ability, where the tables get it wrong. Every other cost is derived as the product's cost
-less its source type's, which is right for every other morph: an orbital command 150 of its row's 550, with its cancel
-giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling 25/25. A nuke has no row to derive from, and an
-interceptor no ability that makes it. These are the prices the game has always charged (stated), with the steps the
-tables give what each makes: a hatchery's 1600 and a zergling's 384.
-`tests/test_gamedata.py` checks that every entry differs from what the tables derive, so an entry goes as soon as a
-patch makes it unnecessary."""
+"""The cost of ordering an ability, where its product does not say. Every other cost is that of the step that makes
+the product, `UNIT_TYPE_COST_OVERRIDES` included, or an upgrade's cost. A nuke has no row to derive from, an interceptor
+no ability that makes it, and a larva's order makes two zerglings. These are the costs the game has always had
+(stated), with the steps the tables give what each makes: a zergling's 384. `tests/test_gamedata.py` checks that every
+entry differs from what the tables derive, so an entry goes as soon as a patch makes it unnecessary."""
+
+UNIT_TYPE_COST_OVERRIDES: Final[Mapping[UnitTypeId, Cost]] = MappingProxyType(
+    {
+        # Two high templar merged into one for nothing (tool `sweep_orders`); the row is one high and one dark
+        # templar's, 175/275.
+        UnitTypeId.ARCHON: Cost(0, 0),
+        # A turret is paid for with the raven's energy (#23); the row keeps 100, which the game prices a repair from
+        # (tool `sweep_repair`).
+        UnitTypeId.AUTO_TURRET: Cost(0, 0),
+        # A drone's 50 is folded into the row of what it becomes (an extractor's row reads 75), so a hatchery's
+        # should read 350. It reads 325, and taking off the drone leaves 275 where the morph costs 300.
+        UnitTypeId.HATCHERY: Cost(300, 0, -1),
+        # Called down for 50 energy and not a mineral (tool `sweep_orders`); the row's 50 is what the game prices a
+        # repair from (tool `sweep_repair`).
+        UnitTypeId.MULE: Cost(0, 0),
+        # The transport's row reads 100, the same as an overlord's, so the derived difference is nothing, though the
+        # morph costs 25/25.
+        UnitTypeId.OVERLORD_TRANSPORT: Cost(25, 25),
+        # The nova's row carries the disruptor's 3 supply; a nova takes none.
+        UnitTypeId.PURIFICATION_NOVA: Cost(0, 0),
+    }
+)
+"""The cost of the step that makes each of these unit types, its minerals, vespene and supply, where the tables get it
+wrong. Every other step costs the type's row less its source type's, which is right for every other morph: an orbital
+command 150 of its row's 550, with its cancel giving back 113 (tool `sweep_orders`), an extractor 25 of 75, a baneling
+25/25. The time is the type's build time. `tests/test_gamedata.py` checks that every entry differs from what the tables
+derive."""
+
+COCOON_PRODUCTS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
+    {
+        UnitTypeId.BANELING_COCOON: UnitTypeId.BANELING,
+        UnitTypeId.BROOD_LORD_COCOON: UnitTypeId.BROOD_LORD,
+        UnitTypeId.LURKER_EGG: UnitTypeId.LURKER,
+        UnitTypeId.OVERLORD_COCOON: UnitTypeId.OVERSEER,
+        UnitTypeId.OVERLORD_TRANSPORT_COCOON: UnitTypeId.OVERLORD_TRANSPORT,
+        UnitTypeId.RAVAGER_COCOON: UnitTypeId.RAVAGER,
+    }
+)
+"""The type each cocoon becomes: a zergling a baneling through a `BANELING_COCOON`, and an overlord an overseer through
+an `OVERLORD_COCOON` (#37, in game); the rest are named for what they become."""
+
+MERGE_SOURCES: Final[Mapping[UnitTypeId, tuple[UnitTypeId, ...]]] = MappingProxyType(
+    {
+        # Two dark templar merge into one too, for 250/250 in all, and a high and a dark templar for 175/275, which is
+        # the archon's row.
+        UnitTypeId.ARCHON: (UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HIGH_TEMPLAR),
+    }
+)
+"""The units used up making each of these unit types, which `morphed_from` cannot name, as its `total_cost` counts
+them: two high templar for an archon (stated)."""
 
 # The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
 # units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool

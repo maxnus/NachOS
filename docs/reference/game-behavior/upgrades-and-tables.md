@@ -40,6 +40,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   requirement, has room for only one requirement, and holds no upgrade requirement (tool `sweep_tech_tree`, #29).
   Requirements belong to a type and an ability together: a burrowed roach moves only once Tunneling Claws is
   researched (#29).
+- Every type that makes a unit type needs the same structures and upgrades for it, each for the ability it makes it
+  by: a gateway's train of an adept and a warp gate's warp-in of one both need a cybernetics core. So does every type
+  that researches an upgrade: flyer attacks level 2 needs a lair and level 1, of a spire and of a greater spire alike.
+  No gateway is offered the warp gate, so nothing records what it needs (tool `sweep_tech_tree`; corpus).
 - The catalog holds 2005 unit types, 940 of them unnamed skipped ids, 4134 abilities, 306 upgrades, 303 buffs and
   13 effects; 894 ability names repeat, and 23 buff ids share their number with a unit type (#23).
 - The `available` flag filters nothing: `MorphZerglingToBaneling` is marked unavailable though zerglings morph, and
@@ -58,6 +62,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
   and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
   longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
+- Two rows price what no order charges. A MULE's reads 50 minerals, but two orbital commands each calling one down
+  spent 50 energy and not a mineral, the purse holding at 4614/4938 for 24 steps (tool `sweep_orders`,
+  `one-command-each`, build 75689). An archon's reads 175/275, one high and one dark templar's, but two high templar
+  merging into one were charged nothing (tool `sweep_orders`, `one-command-many-makers`, build 75689). A repair still
+  prices a MULE and an auto-turret from their rows, 7 minerals for half a MULE's health and 13 for half a turret's
+  (tool `sweep_repair`, build 75689).
 - A train takes its row's build time rounded up to a whole step, counted from the step the order is sent after to the
   step its unit is first listed: a void ray 964 of its 963.2, a zealot 608 and a drone 272 of theirs. A unit's morph
   does not keep to its row: an overseer took 267 of its 266.68, a brood lord 542 of 541.35, an overlord transport 336 of

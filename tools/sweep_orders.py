@@ -36,10 +36,11 @@ and runs its trials in turn::
   prices, so that the refund is recorded too.
 - `producer-dies` kills what is making something, and reads what the observations after say.
 - `one-command-many-makers` plays without `free`, and gives one train, one research and one add-on to several
-  structures at once, to find whether each carries it out or only one. `one-command-each` gives each of several
-  structures the same train, research, add-on, morph or MULE, each of two SCVs a depot at one site and at sites of
-  their own, and two flying barracks a landing, two spine crawlers a rooting and two warp gates a zealot's warp-in,
-  each at one point, one command each in one request, to find what each carries out and what is charged.
+  structures at once, to find whether each carries it out or only one, and one merge to two high templar, to find what
+  an archon is charged. `one-command-each` gives each of several structures the same train, research, add-on, morph
+  or MULE, each of two SCVs a depot at one site and at sites of their own, and two flying barracks a landing, two spine
+  crawlers a rooting and two warp gates a zealot's warp-in, each at one point, one command each in one request, to
+  find what each carries out and what is charged.
 - `research-ends` reads a research every step to its end, to find whether its order leaves the structure in the
   observation the upgrade arrives in, which rounding of its progress gives the steps it has left, and what a cancel and
   the structure's death leave.
@@ -4607,6 +4608,15 @@ def _one_command_many_makers(game: _Game) -> list[Trial]:
         (2, 1, "one reactor naming two barracks, the first one's side blocked"),
     ):
         trials.append(game.trial(name, one_reactor(barracks, blocked)))
+
+    def merged(trial: Trial) -> None:
+        templar = game.create(UnitTypeId.HIGH_TEMPLAR, game.spot(game.toward(24), 1), count=2)
+        before = [game.minerals, game.vespene]
+        trial.notes["verdict"] = game.order(AbilityId.MORPH_ARCHON, templar)
+        trial.notes["archon seen"] = game.until(lambda: bool(game.own(UnitTypeId.ARCHON)), steps=8, limit=640)
+        trial.notes["purse before and once merged"] = [before, [game.minerals, game.vespene]]
+
+    trials.append(game.trial("one archon naming two high templar", merged))
 
     return trials
 

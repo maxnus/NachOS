@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Self, final
 
@@ -14,6 +14,7 @@ from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
+from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
@@ -186,10 +187,18 @@ class UnitTypeData:
     race: Race
     """The race it belongs to."""
     cost: Cost
-    """Everything spent to reach this type, and the supply it takes: an orbital command is 550, the command center's
-    400 included. Its time is the build time of each stage that costs something: an orbital command's 2160 steps are
-    the command center's 1600 and its own 560, and a sieged tank's or a warp gate's are the tank's 720 or the gateway's
-    1040, since the switch costs nothing."""
+    """What the order that made one cost: the cost of its last step that cost anything, so every form of a unit costs
+    the same. An orbital command is 150, a baneling 25/25, a sieged tank the tank's 150/125 and 3 supply, a warp gate
+    the gateway's 150, and an archon nothing (tool `sweep_orders`). A zergling's is half its order of two, 25 minerals
+    and half a supply; a structure a drone becomes gives the drone's supply back, -1; a cocoon's is that of what it
+    becomes; and a MULE and an auto-turret, which energy pays for, cost nothing (tool `sweep_orders`). Its time is that
+    step's build time. What ordering an ability costs is the ability's `cost`, nothing for a siege."""
+    total_cost: Cost
+    """What every order that made one cost, step by step back along `morphed_from` to the first: an orbital command
+    550 with its command center, a hatchery 350 with its drone, a lair 500/100, a baneling 50/25 and half a supply with
+    its zergling, and a sieged tank the tank's 150/125. An archon counts two high templar, 100/300 and 4 supply; a
+    cocoon what it becomes; a MULE and an auto-turret nothing. Its time is the build time of each step that costs
+    something, one after another."""
     build_time: GameTime
     """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
     steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
@@ -197,6 +206,8 @@ class UnitTypeData:
     build time of the one other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
+    supply_used: float
+    """The supply one takes, as the tables give it: half for a zergling, 3 for a sieged tank, 4 for an archon."""
     cargo_size: int
     """Slots it fills in a transport."""
     sight_range: float
@@ -211,10 +222,19 @@ class UnitTypeData:
     """Its attacks: the tables', or for the battlecruiser, the oracle, the void ray and the sentry, which the tables
     give none, the attacks `tools/sweep_combat.py` measured. An oracle's fires only while its beam is on."""
     creation_ability: AbilityId | None
-    """The ability that makes one, or `None` if nothing does."""
+    """The ability that makes one, or `None` where the tables tie it to no curated ability: for every type of the map's
+    own; for a larva, an egg, a cocoon, a broodling, a force field, an adept's shade, a KD8 charge, a burrowed creep
+    tumor, a flying locust and a bare tech lab or reactor; and for a MULE, an interceptor, a changeling and an archon,
+    though something makes each."""
     producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""
+    tech_requirements: TechRequirements
+    """What a producer needs before it is offered what makes one, each producer's `ability_requirements` for the
+    ability it makes one by: `Tech.BARRACKS` for a factory, `Tech.GHOST_ACADEMY` and the barracks's own tech lab for a
+    ghost, and `Tech.CYBERNETICS_CORE` for an adept, to a gateway and a warp gate alike. Every producer of a type needs
+    the same (tool `sweep_tech_tree`). Empty for a type nothing is recorded making, and for a warp gate, which no
+    gateway is offered: the game turns each gateway once Warp Gate is researched."""
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
@@ -226,8 +246,10 @@ class UnitTypeData:
     """Whether a structure of this type may stand on creep, as the game answered its placement on creep and off it,
     for every type a unit places at a point; `None` for any other type, such as a gas building, which goes on a
     geyser, an add-on, or a form a structure morphs into."""
-    tech_aliases: tuple[UnitTypeId, ...]
-    """Other types that satisfy the same tech requirement: an orbital command counts as a command center."""
+    techs_granted: frozenset[Tech]
+    """The techs it grants: the one named after it, if any, and the one named after each type the game's tables count
+    it as. A greater spire grants `Tech.SPIRE` and `Tech.GREATER_SPIRE`, a hive `HATCHERY`, `LAIR` and `HIVE`, and a
+    lowered supply depot `SUPPLY_DEPOT`; a marine grants none."""
     has_minerals: bool
     """Whether minerals can be mined from it."""
     has_vespene: bool
@@ -239,6 +261,10 @@ class UnitTypeData:
     upgrades: Mapping[UpgradeId, UnitTypeUpgrade]
     """Every upgrade that affects it, with what each adds to its weapons, their attack speed, its armor and its speed.
     An upgrade that only raises a level its units report, such as a shields level, adds nothing."""
+    _whole_cost: Cost = field(repr=False, compare=False)
+    """Everything the tables say was spent to reach this type, what it morphed from included, an orbital command's 550,
+    with the build time of each stage that costs something: what a repair is priced from (tool `sweep_repair`). Unlike
+    `total_cost`, a MULE's is 50, an auto-turret's 100, an archon's 175/275 and a hatchery's 325."""
     turn_rate: float | None = None
     """The most it turns in a step, in radians: a whole number of 1/4096 of a full turn, 711 for a marine (62.49
     degrees) and 512 for a thor (45) (in game). A turn takes its angle over this, rounded up, in steps, give or take
@@ -284,9 +310,12 @@ class UnitTypeData:
         return cls(
             id=unit_type,
             race=Race(unit.race),
+            # The tables' whole cost, until `GameData` works out the cost of each step.
             cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
+            total_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             build_time=GameTime(steps=math.ceil(unit.build_time)),
             supply_provided=unit.food_provided,
+            supply_used=unit.food_required,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,
             # The game gives it in distance per second at Normal speed, 16 steps a second.
@@ -296,14 +325,16 @@ class UnitTypeData:
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
             creation_ability=tech_tree_unit_types.creation_abilities.get(unit_type),
             producers=tech_tree_unit_types.producers.get(unit_type) or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
+            tech_requirements=tech_tree_unit_types.tech_requirements.get(unit_type, TechRequirements()),
             morphed_from=tech_tree_unit_types.morph_sources.get(unit_type),
             ability_requirements=tech_tree_unit_types.ability_requirements.get(unit_type, MappingProxyType({})),
             needs_power=unit_type in tech_tree_unit_types.power_consumers,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
-            # An uncurated alias is dropped: a viking's names an empty row that no unit is ever an instance of.
-            tech_aliases=tuple(filter(None, (UnitTypeId.get(alias) for alias in unit.tech_alias))),
+            techs_granted=frozenset(Tech(granting) for granting in (unit_type, *unit.tech_alias) if granting in Tech),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
             upgrades=tech_tree_unit_types.upgrades.get(unit_type, MappingProxyType({})),
+            # `GameData` gives it the build time of each stage that costs something.
+            _whole_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
         )
