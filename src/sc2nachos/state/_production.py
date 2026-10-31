@@ -40,7 +40,7 @@ class _Production:
         self._items: list[InProduction] = []
         self._researches: dict[UpgradeId, Research] = {}
         for unit in units:
-            self._read_what_it_makes(unit, game_data)
+            self._read_production(unit, game_data)
 
     def of_types(self, unit_types: Collection[UnitTypeId]) -> tuple[InProduction, ...]:
         """What is being made of `unit_types`, in the order the observation lists the units it is read from."""
@@ -52,7 +52,7 @@ class _Production:
         orders."""
         return MappingProxyType(self._researches)
 
-    def _read_what_it_makes(self, unit: OwnUnit[Any], game_data: GameData) -> None:
+    def _read_production(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
         report = unit._latest_report
         if report.build_progress < 1.0:

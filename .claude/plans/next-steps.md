@@ -762,7 +762,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     says which (over NachOS remembering the step it first saw each and counting from there). Exact for every train,
     egg, structure going up and add-on. An archon merging, found in my review of #189, goes with the warp-ins: its
     row gives no build time, though it takes 192 steps;
-  - a structure going up is made by its `builder`, and `None` for a Protoss one (over no producer while it goes up).
+  - a structure going up is made by its `builder`, and `None` for a Protoss one (over no producer while it goes up);
+  - `UnitTypeData.build_time` stays a stored field beside the private `_unrounded_build_time` it rounds up, which
+    gives a train's steps done (the owner, review of #189, over a property derived from it, which built a `GameTime`
+    at every read: 135 ns against 12).
 
   Not in NachOS: `can_afford` (#46, above), an upgrade's
   progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
