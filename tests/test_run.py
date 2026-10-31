@@ -3,7 +3,7 @@ from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Self
+from typing import Any, NoReturn, Self
 
 import pytest
 from loguru import logger
@@ -273,7 +273,7 @@ def test_the_result_file_is_what_the_match_workflow_reads(played: dict[str, Any]
     }
 
 
-def _raise_no_enemy(api: Api) -> object:
+def _raise_no_enemy(api: Api) -> NoReturn:
     """`Api.enemy` in a game with no other player."""
     raise NoEnemyError("this game has no other player")
 
