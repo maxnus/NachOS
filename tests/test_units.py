@@ -324,6 +324,17 @@ class TestTheFog:
         assert [unit.id for unit in game.tracker.unit_tracker.known] == [400001]
         assert depot.first_seen == GameTime(steps=0)
 
+    def test_a_copy_of_one_of_this_players_structures_in_the_fog_is_passed_over(self) -> None:
+        """Listed under a tag of its own beside the structure, which stands in sight, as an enemy SCV stood near
+        (in game)."""
+        game = _Game()
+        own_depot = {"unit_type": UnitTypeId.SUPPLY_DEPOT, "at": (30.5, 40.5), "health": 400.0}
+        (depot,) = game.observe(0, make_unit(1, **own_depot))
+        listed = game.observe(16, make_unit(1, **own_depot), make_unit(900, **own_depot, visibility=_IN_FOG))
+        assert listed == [depot]
+        assert [unit.id for unit in game.tracker.unit_tracker.known] == [depot.id]
+        assert game.tracker.last_changes.own_units_created == []
+
     def test_a_unit_is_first_seen_at_the_first_observation_that_shows_it_visible(self) -> None:
         """Not while it is in sight but undetected, and for good once seen, cloaked again or gone."""
         game = _Game()

@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #190. `uv run pytest` passes 3081 tests with #191; `uv run pytest -m
-  integration` passed 41 against a real game with #190 (run 2026-10-31), and its ladder game again with #191.
+- nachOS `main` has every PR to #191. `uv run pytest` passes 3085 tests with #192; `uv run pytest -m
+  integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -667,6 +667,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     (over a bool, and over leaving it to the bot).
   - `UnitOrder.known_target`, `None` where `target` raises; `target` keeps raising, since `None` also means an order
     aimed at nothing (over `target` answering `None`, and over leaving it to the bot).
+  - `UnitCommand` reads a target the game names by a tag it never reports as `UnitOrder` does: `target` raises
+    `NotReportedError` and `known_target` gives `None` (the owner, 2026-10-31, over reading the target NachOS sent and
+    over dropping the action). A gather sent to a mineral field in the fog by its snapshot's tag comes back so, which
+    ended 11 of AvocaDOS's first 21 smoke games (#192).
+  - The tracker passes over a copy in the fog of one of this player's own units, which the game listed beside the
+    structure itself, in sight (the owner, 2026-10-31, over linking it to the structure and over guarding only the
+    construction event that raised on it). It ended 2 of AvocaDOS's second 21 smoke games (#192).
   - `Units.without(units)`, by NachOS id, and no operators, as #35 chose (over `|` and `-`, and over `+` and `-`).
   - `Units.sorted(key, *, reverse)`, a collection, stable (over `sorted_by`, and over lists).
   - `Units.beyond(distance, *, of)`, the complement of `within`, and `Units.outside(areas)`, of `in_area`, which

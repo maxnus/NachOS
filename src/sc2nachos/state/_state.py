@@ -125,7 +125,7 @@ class _State:
 
         Raises `UncuratedIdError` if an action names an ability the curated ids leave out.
         """
-        unit_by_tag = self._tracker.unit_tracker.by_tag
+        unit_by_tag = self._tracker.unit_tracker.get_by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
         return tuple(action for action in actions if action is not None)
 

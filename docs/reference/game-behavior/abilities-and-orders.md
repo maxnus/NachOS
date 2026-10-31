@@ -401,8 +401,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `MOVE`, a
   research ordered by its general id as its level (1186) (#28; tested).
 - The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
-  out at: one action per command, naming the units that took it, the ability as it runs, the target as sent and
-  whether it was queued. A camera move and an autocast toggle are reported too. An order refused, one answered
-  `Success` but not carried out, and one ignored as identical to a unit's first are not (tool `sweep_orders`).
+  out at: one action per command, naming the units that took it, the ability as it runs, the target as sent, but for
+  the one below, and whether it was queued. A camera move and an autocast toggle are reported too. An order refused,
+  one answered `Success` but not carried out, and one ignored as identical to a unit's first are not (tool
+  `sweep_orders`).
+- A gather sent to a mineral field in the fog by its snapshot's tag is reported aimed at a tag no observation of the
+  game lists, while the SCV's own order shows the snapshot's tag ([units](units.md)): `Harvest_Gather_SCV` at tag
+  8614707213 for a gather sent at 8608809115. It ended 11 of AvocaDOS's 21 games against the VERY_HARD computer, on
+  the 7 maps against the 3 races, at 2:44 to 8:05, before NachOS read such a target (in game, build 75689).
 - In a local realtime game, an order shows in the unit's orders and among the reported actions in the same
   observation, the next one (tool `sweep_orders`).
