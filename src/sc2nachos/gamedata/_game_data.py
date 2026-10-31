@@ -132,7 +132,9 @@ def _with_build_times_borrowed(
         if len(types_made) != 1 or unit_type in types_made:
             continue
         if (built_as := units.get(types_made.pop())) is not None:
-            rows_with_build_times[unit_type] = replace(row, build_time=built_as.build_time)
+            rows_with_build_times[unit_type] = replace(
+                row, build_time=built_as.build_time, _unrounded_build_time=built_as._unrounded_build_time
+            )
     return MappingProxyType(rows_with_build_times)
 
 

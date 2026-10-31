@@ -63,6 +63,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `build_progress` counts up while a structure is built or a unit warps in (a zealot read 0.01, 0.32, 0.64, 0.95,
   1.00), and reads 1 throughout a morph: a larva's egg, a cocoon, and a structure becoming another (#25; tool
   `sweep_orders`, build 75689).
+- A structure's or an add-on's `build_progress` is the steps done over its row's build time, so `(1 - build_progress)`
+  times that time, rounded, gave the steps until it read 1 at every step: a supply depot, a pylon and a spawning
+  pool, each from 0 when first listed, and a tech lab and a reactor, each one step in when first listed, the step
+  after the order. A warp-in's rose 1/256 a step at a pylon far from any warp gate, which gave the steps left exactly,
+  and 1/80 a step at a pylon among warp gates or beside a phasing warp prism, which summed to 0.99998 after 80 steps
+  and read 1 a step later, so the steps left are one more than `(1 - build_progress)` times 80 (tool `sweep_orders`,
+  `production-times`, build 75689). An archon two high templar merge into is first listed at 0 and rises 1/192 a
+  step (probe in #189, under `food`, local game, Linux build 75689). How long each took is in
+  [upgrades and the game's tables](upgrades-and-tables.md).
 - Only the command center (12 of 16, then 9 once three SCVs went to gas) and the refinery (3 of 3) reported
   harvesters. `ideal_harvesters` is 2 per mineral field and 3 per geyser (#25).
 - `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a nexus, an assimilator,
@@ -106,6 +115,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   Nothing a unit reports says how far a morph has got. Each was done once the table's build time had passed since
   the order, to within the 16 steps between reads, except the lurker egg, which hatched 402 to 418 steps after the
   order against the table's 553 (tool `sweep_orders`, build 75689).
+- A train's and an egg's order progress is the steps done over the row's build time, sent as a 32-bit float, and
+  shows one step done in the observation after the order. Rounding it times the row's time gave the steps done at
+  every step, and the steps left were the row's time rounded up less those: a marine, an SCV, a probe, a void ray, a
+  drone's egg and a zerglings' egg. Rounding `(1 - progress)` times the row's time gives the same for a row of whole
+  steps, but a step short for the void ray's 963.2. A chrono boost runs it 1.5 steps a step: read at the normal
+  rate, a boosted probe's progress overstated the steps it had left by up to 89.5. A train queued behind another shows
+  progress 0 until the step the one ahead comes out, and one step done in it (tool `sweep_orders`,
+  `production-times`, build 75689).
 - Points come back in single precision (tested). Facing is in radians from the +x axis, in whole 1/4096 radians to
   within 0.02 of one (tool `sweep_turning`, build 75689), and z is on the terrain-height scale (stated).
 - Units on flat ground stand up to 0.03 below the map's height or up to 0.16 above it (corpus).
