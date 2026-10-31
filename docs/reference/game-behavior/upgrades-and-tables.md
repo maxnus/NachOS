@@ -73,6 +73,16 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   does not keep to its row: an overseer took 267 of its 266.68, a brood lord 542 of 541.35, an overlord transport 336 of
   336.02, two banelings 319 of 320, a ravager 271 of 272 and two lurkers 403 of 553.33 (probe in #159, under `free` and
   `food`, local game, Linux build 75689).
+- Read every step, the rest keep to their rows as closely. A structure a worker builds reads done its row's time after
+  it is first listed: a supply depot 480 steps, a pylon 400, a spawning pool 1040. An add-on reads done its row's time
+  after the order: a tech lab 400, a reactor 800. A structure's morph changes its type a step short of its row after
+  the order: an orbital command 559 steps of 560, a planetary fortress 799 of 800, a lair 1279 of 1280, a hive and a
+  greater spire 1599 of 1600. Three marines queued in one request came out 400, 799 and 1198 steps after it, each
+  after the first starting in the step the one ahead came out, and two beside a reactor both after 400. A chrono
+  boost for the whole build brought a probe out after 182 steps of 272. A warp-in has no row and takes the same for a
+  zealot and a stalker: 256 steps at a pylon far from any warp gate, and 81 at a pylon among warp gates or beside a
+  phasing warp prism (tool `sweep_orders`, `production-times`, build 75689). What each reports meanwhile is in
+  [units](units.md).
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
   done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
   give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).
