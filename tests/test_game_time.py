@@ -122,7 +122,6 @@ class TestInfinite:
         ("read", "message"),
         [
             (lambda time: time.nearest_step, "is not finite, so it has no nearest step"),
-            (lambda time: time.to_string(), "is not finite, so it reads as no minutes and seconds"),
             (lambda time: time // GameTime(steps=16), r"// GameTime\(steps=16\) is not a finite whole number"),
         ],
     )
@@ -132,11 +131,11 @@ class TestInfinite:
         with pytest.raises(ValueError, match=message):
             read(-GameTime.INFINITE)
 
-    def test_a_finite_time_too_long_to_read_says_so(self):
-        """Too long at 3 decimal places, 1e305 steps still reads at none."""
-        with pytest.raises(ValueError, match="is too long to count in 3 decimals of a second"):
-            GameTime(steps=1e305).to_string()
-        assert ":" in GameTime(steps=1e305).to_string(0)
+    @pytest.mark.parametrize("decimals", [0, 1, 2, 3])
+    def test_reads_as_python_writes_an_infinite_float(self, decimals):
+        assert GameTime.INFINITE.to_string(decimals) == "inf"
+        assert (-GameTime.INFINITE).to_string(decimals) == "-inf"
+        assert (GameTime.INFINITE - GameTime.INFINITE).to_string(decimals) == "nan"
 
     def test_what_has_no_answer_at_all_is_nan_steps_which_equals_none(self):
         """Subtracting it from itself, multiplying it by zero, and taking its remainder."""
@@ -212,6 +211,16 @@ class TestToString:
             seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
             fraction = f".{parts_in_second:0{decimals}d}" if decimals else ""
             assert GameTime(steps=steps).to_string(decimals) == f"{minutes}:{seconds:02d}{fraction}"
+
+    @pytest.mark.parametrize("decimals", [0, 3])
+    def test_a_time_too_long_for_a_float_product_reads_exactly(self, decimals):
+        """From about 3.6e307 steps, a tenth as many for each decimal place, the product overflows a float."""
+        parts_per_second = 10**decimals
+        parts = math.floor(Fraction(1e308) * 5 * parts_per_second / 112)
+        minutes, parts_in_minute = divmod(parts, 60 * parts_per_second)
+        seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
+        fraction = f".{parts_in_second:0{decimals}d}" if decimals else ""
+        assert GameTime(steps=1e308).to_string(decimals) == f"{minutes}:{seconds:02d}{fraction}"
 
     @pytest.mark.parametrize("decimals", [2, 3])
     def test_tells_every_step_from_the_next_from_2_decimals(self, decimals):

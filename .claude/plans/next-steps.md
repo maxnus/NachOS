@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #189. `uv run pytest` passes 3075 tests with #190; `uv run pytest -m
+- nachOS `main` has every PR to #189. `uv run pytest` passes 3079 tests with #190; `uv run pytest -m
   integration` passed 41 against a real game with #190 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -507,8 +507,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     - `GameTime.INFINITE`, the time of what never comes, such as the time until a structure no one is building
       (the owner, 2026-10-31, over a constant in AvocaDOS, and over `None`, which NachOS keeps for no limit on what
       it takes, where nothing compares it): it orders above every finite time and stays infinite when one is added;
-      `nearest_step`, `to_string` and `//` raise `ValueError` naming it; a NaN from infinity less itself, times
-      zero or a remainder is documented, not checked, since every `GameTime` made would pay for the check;
+      `to_string` reads it `"inf"`, as Python writes the float, and NaN steps `"nan"` (the owner's review, over
+      raising), and counts a finite time too long for a float product exactly; `nearest_step` and `//` raise
+      `ValueError` naming it; a NaN from infinity less itself, times zero or a remainder is documented, not checked,
+      since every `GameTime` made would pay for the check;
     - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
       to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
       false (over the least needed, and over a plain number read as steps);

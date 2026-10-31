@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import numbers
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import ClassVar, overload
 
 from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
@@ -44,8 +45,8 @@ class GameTime:
     INFINITE: ClassVar[GameTime]
     """The time of what never comes, later and longer than any other, as `math.inf` is a number larger than any. It
     orders above every finite time and stays infinite when one is added or subtracted, and `seconds` reads
-    `math.inf`; `nearest_step`, `to_string` and dividing it by `//` raise `ValueError`. Subtracting it from itself,
-    multiplying it by zero or taking its remainder gives a time of NaN steps, which equals none."""
+    `math.inf`, and `to_string` `"inf"`; `nearest_step` and dividing it by `//` raise `ValueError`. Subtracting it
+    from itself, multiplying it by zero or taking its remainder gives a time of NaN steps, which equals none."""
 
     steps: float
     """The steps of the game it counts."""
@@ -112,22 +113,24 @@ class GameTime:
     def to_string(self, decimals: int = 3) -> str:
         """Minutes and seconds, the seconds to `decimals` places from 0 to 3, rounded down: `"3:20.000"` at step
         4480, and `"3:20"` to 0 places. From 2 places up every step reads apart from the next, since a step is 44.6
-        milliseconds. A negative length reads `"-0:04.285"`. Raises `ValueError` for `decimals` outside 0 to 3, for
-        a time not finite, and for one of about 3.6e307 steps or more, a tenth as many for each decimal place."""
+        milliseconds. A negative length reads `"-0:04.285"`, and a time not finite as Python writes its steps:
+        `"inf"` for `INFINITE`, `"-inf"`, or `"nan"`. Raises `ValueError` for `decimals` outside 0 to 3."""
         if (
             not isinstance(decimals, numbers.Integral)
             or isinstance(decimals, bool)
             or not 0 <= decimals <= _MOST_DECIMALS
         ):
             raise ValueError(f"decimals is a whole number from 0 to {_MOST_DECIMALS}, not {decimals!r}")
+        if not math.isfinite(self.steps):
+            return str(float(self.steps))
         parts_per_second = 10**decimals
-        # One division, so a whole part of a second comes out whole and nothing is rounded up past one.
+        # One division, so a whole part of a second comes out whole and nothing is rounded up past one. From about
+        # 3.6e307 steps, a tenth as many for each decimal place, the product overflows a float, and is counted
+        # exactly in integers instead.
         try:
             parts = math.floor(abs(self.steps) * 5 * parts_per_second / _STEPS_PER_FIVE_SECONDS)
-        except (OverflowError, ValueError):
-            if math.isfinite(self.steps):
-                raise ValueError(f"{self!r} is too long to count in {decimals} decimals of a second") from None
-            raise ValueError(f"{self!r} is not finite, so it reads as no minutes and seconds") from None
+        except OverflowError:
+            parts = math.floor(Fraction(float(abs(self.steps))) * 5 * parts_per_second / _STEPS_PER_FIVE_SECONDS)
         minutes, parts_in_minute = divmod(parts, 60 * parts_per_second)
         seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
         sign = "-" if self.steps < 0 else ""
