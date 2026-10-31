@@ -182,10 +182,16 @@ def read(findings: Mapping[str, object], upgrade_findings: Mapping[str, object])
     }
     return TechTree(
         base_build=int(str(findings["base_build"])),
-        unit_types=MappingProxyType(unit_types),
-        abilities=MappingProxyType(abilities),
-        upgrades=MappingProxyType(upgrades),
+        unit_types=_saying_something(unit_types, TechTreeUnitType()),
+        abilities=_saying_something(abilities, TechTreeAbility()),
+        upgrades=_saying_something(upgrades, TechTreeUpgrade()),
     )
+
+
+def _saying_something[IdT, RecordT](records: Mapping[IdT, RecordT], empty: RecordT) -> Mapping[IdT, RecordT]:
+    """`records` but those equal to `empty`, which say nothing: a reaper's grenade, swept and offered nothing, reads the
+    same with a record or without."""
+    return MappingProxyType({key: record for key, record in records.items() if record != empty})
 
 
 def _folded_needs(
@@ -551,7 +557,7 @@ def _literal(value: object, indent: int) -> str:
         lines = "".join(f"{inner}{_literal(k, indent + 4)}: {_mapped_literal(v, indent + 4)},\n" for k, v in entries)
         return f"MappingProxyType({{\n{lines}{pad}}})"
     if is_dataclass(value) and not isinstance(value, type):
-        if not isinstance(value, _RECORDS_WRITTEN_A_FIELD_PER_LINE) or not _given_fields(value):
+        if not isinstance(value, _RECORDS_WRITTEN_A_FIELD_PER_LINE):
             return _inline(value)
         lines = "".join(
             f"{inner}{name}={_mapped_literal(member, indent + 4)},\n" for name, member in _given_fields(value)
@@ -560,8 +566,7 @@ def _literal(value: object, indent: int) -> str:
     raise TypeError(f"no literal for {value!r}")
 
 
-# The tech tree and its records. Any other dataclass, a requirement or what an upgrade adds, is written on one line,
-# and so is a record of nothing.
+# The tech tree and its records. Any other dataclass, a requirement or what an upgrade adds, is written on one line.
 _RECORDS_WRITTEN_A_FIELD_PER_LINE = (TechTree, TechTreeUnitType, TechTreeAbility, TechTreeUpgrade)
 
 
@@ -703,7 +708,7 @@ if __name__ == "__main__":
     module.write_text(render(tech_tree), encoding="utf-8")
     unit_types_in_tree = tech_tree.unit_types.values()
     print(
-        f"{module.name}: {len(tech_tree.unit_types)} unit types,"
+        f"{module.name}: {len(tech_tree.unit_types)} unit types in the tree,"
         f" {sum(in_tree.morphed_from is not None for in_tree in unit_types_in_tree)} morphs"
     )
     print(

@@ -2056,7 +2056,6 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
             }),
         ),
-        UnitTypeId.REAPER_GRENADE: TechTreeUnitType(),
         UnitTypeId.REFINERY: TechTreeUnitType(
             creation_ability=AbilityId.SCV_BUILD_REFINERY,
             producers=frozenset({UnitTypeId.SCV}),

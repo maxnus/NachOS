@@ -115,7 +115,7 @@ class TestGeneratingTheTables:
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine", shatter], "Factory": [shatter]})
         generator = _tech_tree_generator()
         assert generator.uncurated(findings) == {shatter}
-        assert generator.read(findings, _no_upgrades()).unit_types[UnitTypeId.FACTORY].ability_requirements == {}
+        assert UnitTypeId.FACTORY not in generator.read(findings, _no_upgrades()).unit_types
 
     def test_a_requirement_is_read_under_the_unit_type_and_the_ability(self) -> None:
         ghost = _requirement_entry("Barracks", "BarracksTrain_Ghost", ["GhostAcademy", "BarracksTechLab"], [])
@@ -206,9 +206,12 @@ class TestGeneratingTheTables:
     def test_an_ability_needing_nothing_reads_as_needing_nothing(self) -> None:
         findings = _tech_tree_findings(offered={"Barracks": ["BarracksTrain_Marine"]})
         tree = _tech_tree_generator().read(findings, _no_upgrades())
-        assert tree.unit_types[UnitTypeId.BARRACKS].ability_requirements == {
-            AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()
+        offered = {
+            unit_type: in_tree.ability_requirements
+            for unit_type, in_tree in tree.unit_types.items()
+            if in_tree.ability_requirements
         }
+        assert offered == {UnitTypeId.BARRACKS: {AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements()}}
 
     def test_one_ability_can_need_different_things_of_different_unit_types(self) -> None:
         """A burrowed roach moves only once Tunneling Claws is researched; a marine needs nothing to move."""
