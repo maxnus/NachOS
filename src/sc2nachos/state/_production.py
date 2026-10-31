@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.game_time import GameTime
-from sc2nachos.gamedata import OrderBehavior
+from sc2nachos.gamedata import Attribute, OrderBehavior
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
 from sc2nachos.state._research import Research
@@ -14,7 +14,7 @@ from sc2nachos.state._research import Research
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
 
-    from sc2nachos.gamedata import AbilityData, GameData
+    from sc2nachos.gamedata import AbilityData, GameData, UnitTypeData
     from sc2nachos.units import OwnUnit
 
 
@@ -27,6 +27,10 @@ class _Production:
     shows makes, if it costs and makes a unit type: a train, queued ones included, an egg's or a cocoon's morph, a
     structure's morph. A build or an add-on is read from its order only until its construction starts, and then from
     the structure itself. An order not yet sent is nowhere.
+
+    A train's progress, an egg's, and a structure's build progress, are the steps done over the tables' build time,
+    sent as a 32-bit float, and it is done once that time rounded up has passed: so rounding the progress times the
+    unrounded time gives the steps done exactly, and the rounded-up time less those the steps left (in game).
     """
 
     __slots__ = ("_items", "_researches")
@@ -36,7 +40,7 @@ class _Production:
         self._items: list[InProduction] = []
         self._researches: dict[UpgradeId, Research] = {}
         for unit in units:
-            self._read(unit, game_data)
+            self._read_production(unit, game_data)
 
     def of_types(self, unit_types: Collection[UnitTypeId]) -> tuple[InProduction, ...]:
         """What is being made of `unit_types`, in the order the observation lists the units it is read from."""
@@ -48,11 +52,11 @@ class _Production:
         orders."""
         return MappingProxyType(self._researches)
 
-    def _read(self, unit: OwnUnit[Any], game_data: GameData) -> None:
+    def _read_production(self, unit: OwnUnit[Any], game_data: GameData) -> None:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
         report = unit._latest_report
         if report.build_progress < 1.0:
-            self._items.append(InProduction(unit.type_id, unit, report.build_progress))
+            self._items.append(_going_up(unit, report.build_progress, game_data))
         for order in report.orders:
             row = game_data.abilities.get(AbilityId.get(order.ability_id) or AbilityId.NULL)
             if row is None or not (row.cost.minerals or row.cost.vespene):
@@ -67,7 +71,35 @@ class _Production:
                         product, unit, GameTime(steps=total_steps), GameTime(steps=steps_left)
                     )
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
-                self._items.append(InProduction(product, unit, _order_progress(row, unit.type_id, order.progress)))
+                progress = _order_progress(row, unit.type_id, order.progress)
+                self._items.append(_made_by_order(product, unit, progress, game_data))
+
+
+def _going_up(unit: OwnUnit[Any], build_progress: float, game_data: GameData) -> InProduction:
+    """`unit` itself while it goes up at `build_progress`: a structure, made by its builder in its row's time, or a
+    unit warping in or merging into an archon, made by nothing in a time its row does not give (in game). A type the
+    tables give no row is taken for a unit, as events take it."""
+    row = game_data.units.get(unit.type_id)
+    if row is None or Attribute.STRUCTURE not in row.attributes:
+        return InProduction(unit.type_id, None, unit, build_progress, None, None)
+    total_time, time_left = _total_time_and_time_left(row, build_progress)
+    return InProduction(unit.type_id, unit.builder, unit, build_progress, total_time, time_left)
+
+
+def _made_by_order(
+    product: UnitTypeId, producer: OwnUnit[Any], progress: float | None, game_data: GameData
+) -> InProduction:
+    """A `product` of `producer`'s order at `progress`, or at no known progress, as for a morph other than a larva's."""
+    if progress is None:
+        return InProduction(product, producer, None, None, None, None)
+    total_time, time_left = _total_time_and_time_left(game_data.units[product], progress)
+    return InProduction(product, producer, None, progress, total_time, time_left)
+
+
+def _total_time_and_time_left(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:
+    """The time a unit of `row`'s type takes, and the time it has left at `progress`."""
+    steps_done = round(progress * row._unrounded_build_time.steps)
+    return row.build_time, GameTime(steps=row.build_time.nearest_step - steps_done)
 
 
 def _ability_product(row: AbilityData, unit_type: UnitTypeId) -> UnitTypeId | UpgradeId | None:

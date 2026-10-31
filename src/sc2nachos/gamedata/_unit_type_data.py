@@ -265,6 +265,9 @@ class UnitTypeData:
     """Everything the tables say was spent to reach this type, what it morphed from included, an orbital command's 550,
     with the build time of each stage that costs something: what a repair is priced from (tool `sweep_repair`). Unlike
     `total_cost`, a MULE's is 50, an auto-turret's 100, an archon's 175/275 and a hatchery's 325."""
+    _unrounded_build_time: GameTime = field(repr=False, compare=False)
+    """The tables' build time before `build_time` rounds it up, a void ray's 963.2 steps: a train's progress, an egg's,
+    and a structure's build progress, are the steps done over it (in game)."""
     turn_rate: float | None = None
     """The most it turns in a step, in radians: a whole number of 1/4096 of a full turn, 711 for a marine (62.49
     degrees) and 512 for a thor (45) (in game). A turn takes its angle over this, rounded up, in steps, give or take
@@ -338,4 +341,5 @@ class UnitTypeData:
             upgrades=in_tree.upgrades,
             # `GameData` gives it the build time of each stage that costs something.
             _whole_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
+            _unrounded_build_time=GameTime(steps=unit.build_time),
         )

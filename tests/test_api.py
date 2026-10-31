@@ -356,7 +356,7 @@ class TestPlaying:
         client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
         api = Api()
         counted: list[tuple[int, int, int, int]] = []
-        zealots: list[tuple[UnitTypeId, int, float | None]] = []
+        zealots: list[tuple[UnitTypeId, int | None, float | None]] = []
         researches: list[Mapping[UpgradeId, Research]] = []
 
         @api.on(TurnEvent)
@@ -370,7 +370,10 @@ class TestPlaying:
                     len(api.in_production(UnitType.Stalker, UnitType.Adept)),
                 )
             )
-            zealots.extend((item.type_id, item.unit.tag, item.progress) for item in api.in_production(UnitType.Zealot))
+            zealots.extend(
+                (item.type_id, None if item.unit is None else item.unit.tag, item.progress)
+                for item in api.in_production(UnitType.Zealot)
+            )
             researches.append(api.researches)
 
         api.play(client)

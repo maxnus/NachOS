@@ -7,7 +7,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 
 | To | Run | Starts the game |
 |---|---|---|
-| Find what the game does with an order, and how long a gas building takes to build | `uv run python tools/sweep_orders.py`, which writes its trials as JSON | yes |
+| Find what the game does with an order, how long a gas building takes to build, and how long what a unit makes has left against the progress it reports | `uv run python tools/sweep_orders.py`, which writes its trials as JSON, or with `production-times` for the last | yes |
 | Find which alerts a game raises, and when | `uv run python tools/sweep_alerts.py` | yes |
 | Find what the game does with debug commands, chat, leaving, the pathing query and saving a replay, how its tables differ from the corpus's, and what it says of each player | `uv run python tools/sweep_requests.py` | yes |
 | Find what the game does when it plays a replay back: a player's view against the game as it was played, the fog off and player 0, what the fog off shows of units unseen, what it answers in a replay, how a replay ends, and how fast one plays back and records | `uv run python tools/sweep_replays.py`, or with `views`, `requests`, `ending`, `unseen`, `scouting` or `speed` | yes |
