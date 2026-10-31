@@ -8,7 +8,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 
 from sc2nachos import Api, GameTime, NotPlayingError
-from sc2nachos.events import AnyChatEvent, OwnChatEvent
+from sc2nachos.events import AnyChatEvent, OwnActionEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Tile
@@ -564,6 +564,21 @@ class TestThroughTheApi:
         )
         assert api.resources == Resources(75, 0)
         assert api.supply.used == 13
+
+    def test_a_command_aimed_at_a_unit_the_game_never_reported_is_handed_out_and_the_game_plays_on(self) -> None:
+        """The gather that ended AvocaDOS's smoke games (in game), through the turn that hands it out."""
+        api = Api()
+        handed_out: list[UnitCommand] = []
+        api.on(OwnActionEvent)(lambda event: handed_out.append(cast(UnitCommand, event.action)))
+        gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
+        self._play(
+            api,
+            make_observation(0, units=[make_unit(1, UnitTypeId.SCV)]),
+            make_observation(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]),
+            make_observation(32, (1, Result.VICTORY), units=[make_unit(1, UnitTypeId.SCV)]),
+        )
+        assert [(command.ability, command.known_target) for command in handed_out] == [(AbilityId.GATHER, None)]
+        assert api.step == 32
 
     def test_nothing_is_read_out_of_an_observation_until_it_is_asked_for(self) -> None:
         """An observation without map state plays, and the grid it lacks raises only when read."""
