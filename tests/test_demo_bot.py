@@ -38,7 +38,7 @@ def test_the_demo_bot_beats_the_computer_at_medium() -> None:
         demo_bot.api,
         Computer(Race.ZERG, Difficulty.MEDIUM),
         race=Race.TERRAN,
-        time_limit=GameTime.from_seconds(900),
+        time_limit=GameTime(seconds=900),
         window=(640, 480),
     )
     assert result is Result.VICTORY

@@ -199,7 +199,7 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
         opponent,
         race=Race.RANDOM,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(60),
+        time_limit=GameTime(seconds=60),
         window=(640, 480),
     )
 

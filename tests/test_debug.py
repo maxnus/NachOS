@@ -365,7 +365,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             seen.append(api.debug.refresh_interval)
-            for interval in (GameTime(steps=0), GameTime(steps=1.5), GameTime.from_seconds(1)):
+            for interval in (GameTime(steps=0), GameTime(steps=1.5), GameTime(seconds=1)):
                 with pytest.raises(ValueError, match="whole number of steps"):
                     api.debug.refresh_interval = interval
             with pytest.raises(TypeError, match="GameTime"):

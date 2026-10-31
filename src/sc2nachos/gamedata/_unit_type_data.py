@@ -158,7 +158,7 @@ class Weapon:
             range=weapon.range,
             # The game calls this the weapon's speed, though a larger value is a slower weapon, and gives it in
             # seconds at Normal speed.
-            base_cooldown=GameTime.from_normal_seconds(weapon.speed),
+            base_cooldown=GameTime(normal_seconds=weapon.speed),
             damage_bonuses=MappingProxyType(damage_bonuses),
         )
 
