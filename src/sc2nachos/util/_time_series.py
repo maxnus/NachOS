@@ -164,7 +164,8 @@ class TimeSeries[T: float]:
 
     def at(self, time: GameTime) -> T | None:
         """The value at `time`, taken from the nearest step, a tie the later, or `None` if that step was never
-        recorded. Raises `TypeError` for a `time` that is not a `GameTime`."""
+        recorded. Raises `TypeError` for a `time` that is not a `GameTime`, and `ValueError` for one not finite,
+        such as `GameTime.INFINITE`."""
         step = _nearest_step_of(time, "time")
         if self._start is None:
             return None
@@ -205,8 +206,9 @@ class TimeSeries[T: float]:
 
     def __getitem__(self, item: GameTime | slice) -> T | TimeSeries[T]:
         """The value at a time, or a copy of the series over a range of times, each read at the nearest step, a tie
-        the later. Raises `IndexError` for a step not recorded, or a range that begins before the first, and
-        `TypeError` for anything but a `GameTime` or a slice of them."""
+        the later. Raises `IndexError` for a step not recorded, or a range that begins before the first;
+        `TypeError` for anything but a `GameTime` or a slice of them; and `ValueError` for a time not finite, such as
+        `GameTime.INFINITE`."""
         if isinstance(item, slice):
             positions, start_step = self._slice(item)
             values = self.values[positions]
@@ -247,7 +249,7 @@ class TimeSeries[T: float]:
         tie up.
 
         `None` if the series does not cover the whole range. Raises `TypeError` for a `time` or a `window` that is not
-        a `GameTime`, and `ValueError` for a window under one step once rounded.
+        a `GameTime`, and `ValueError` for a window under one step once rounded, or either not finite.
         """
         step = _nearest_step_of(time, "time")
         check_game_time(window, "window")
@@ -345,7 +347,7 @@ def _whole_step_of(time: GameTime, argument_name: str) -> int:
 
 def _nearest_step_of(time: GameTime, argument_name: str) -> int:
     """The step nearest `time`, given as `argument_name`, a tie the later: raises `TypeError` for anything but a
-    `GameTime`."""
+    `GameTime`, and `ValueError` for one not finite."""
     check_game_time(time, argument_name)
     return time.nearest_step
 

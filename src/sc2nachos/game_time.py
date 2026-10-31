@@ -44,8 +44,8 @@ class GameTime:
     INFINITE: ClassVar[GameTime]
     """The time of what never comes, later and longer than any other, as `math.inf` is a number larger than any. It
     orders above every finite time and stays infinite when one is added or subtracted, and `seconds` reads
-    `math.inf`; `nearest_step`, `to_string` and `//` raise `ValueError`. Subtracting it from itself, multiplying it by
-    zero or taking its remainder gives a time of NaN steps, which equals none."""
+    `math.inf`; `nearest_step`, `to_string` and dividing it by `//` raise `ValueError`. Subtracting it from itself,
+    multiplying it by zero or taking its remainder gives a time of NaN steps, which equals none."""
 
     steps: float
     """The steps of the game it counts."""
@@ -79,9 +79,9 @@ class GameTime:
     @classmethod
     def _from_steps(cls, steps: float) -> GameTime:
         """A time of `steps`, made without the constructor's check of its keywords."""
-        made = object.__new__(cls)
-        object.__setattr__(made, "steps", steps)
-        return made
+        new_time = object.__new__(cls)
+        object.__setattr__(new_time, "steps", steps)
+        return new_time
 
     @property
     def seconds(self) -> float:
@@ -112,8 +112,8 @@ class GameTime:
     def to_string(self, decimals: int = 3) -> str:
         """Minutes and seconds, the seconds to `decimals` places from 0 to 3, rounded down: `"3:20.000"` at step
         4480, and `"3:20"` to 0 places. From 2 places up every step reads apart from the next, since a step is 44.6
-        milliseconds. A negative length reads `"-0:04.285"`. Raises `ValueError` for `decimals` outside 0 to 3, and
-        for a time not finite."""
+        milliseconds. A negative length reads `"-0:04.285"`. Raises `ValueError` for `decimals` outside 0 to 3, for
+        a time not finite, and for one of about 3.6e307 steps or more, a tenth as many for each decimal place."""
         if (
             not isinstance(decimals, numbers.Integral)
             or isinstance(decimals, bool)
@@ -125,6 +125,8 @@ class GameTime:
         try:
             parts = math.floor(abs(self.steps) * 5 * parts_per_second / _STEPS_PER_FIVE_SECONDS)
         except (OverflowError, ValueError):
+            if math.isfinite(self.steps):
+                raise ValueError(f"{self!r} is too long to count in {decimals} decimals of a second") from None
             raise ValueError(f"{self!r} is not finite, so it reads as no minutes and seconds") from None
         minutes, parts_in_minute = divmod(parts, 60 * parts_per_second)
         seconds, parts_in_second = divmod(parts_in_minute, parts_per_second)
@@ -199,7 +201,7 @@ class GameTime:
         try:
             return int(self.steps // divisor.steps)
         except (OverflowError, ValueError):
-            raise ValueError(f"{self!r} holds no whole number of {divisor!r}") from None
+            raise ValueError(f"{self!r} // {divisor!r} is not a finite whole number") from None
 
     def __mod__(self, divisor: GameTime) -> GameTime:
         if not isinstance(divisor, GameTime):

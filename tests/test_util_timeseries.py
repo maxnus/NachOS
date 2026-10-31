@@ -261,6 +261,12 @@ class TestValue:
     def test_at_between_two_steps_reads_the_later(self, ramp):
         assert ramp.at(GameTime(steps=3.5)) == 4.0
 
+    def test_at_an_infinite_time_raises(self, ramp):
+        with pytest.raises(ValueError, match="not finite"):
+            ramp.at(GameTime.INFINITE)
+        with pytest.raises(ValueError, match="not finite"):
+            ramp[ramp.start_time : GameTime.INFINITE]
+
     def test_at_in_plain_seconds_raises(self, ramp):
         with pytest.raises(TypeError, match="time is a GameTime"):
             ramp.at(4.0)  # pyright: ignore[reportArgumentType]

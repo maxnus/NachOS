@@ -123,7 +123,7 @@ class TestInfinite:
         [
             (lambda time: time.nearest_step, "is not finite, so it has no nearest step"),
             (lambda time: time.to_string(), "is not finite, so it reads as no minutes and seconds"),
-            (lambda time: time // GameTime(steps=16), "holds no whole number of GameTime"),
+            (lambda time: time // GameTime(steps=16), r"// GameTime\(steps=16\) is not a finite whole number"),
         ],
     )
     def test_what_has_no_finite_answer_raises(self, read, message):
@@ -131,6 +131,12 @@ class TestInfinite:
             read(GameTime.INFINITE)
         with pytest.raises(ValueError, match=message):
             read(-GameTime.INFINITE)
+
+    def test_a_finite_time_too_long_to_read_says_so(self):
+        """Too long at 3 decimal places, 1e305 steps still reads at none."""
+        with pytest.raises(ValueError, match="is too long to count in 3 decimals of a second"):
+            GameTime(steps=1e305).to_string()
+        assert ":" in GameTime(steps=1e305).to_string(0)
 
     def test_what_has_no_answer_at_all_is_nan_steps_which_equals_none(self):
         """Subtracting it from itself, multiplying it by zero, and taking its remainder."""
