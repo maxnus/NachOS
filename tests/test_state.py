@@ -503,6 +503,21 @@ class TestWhatHappened:
         with pytest.raises(NotReportedError, match="this GATHER was aimed at by no tag it reports"):
             _ = command.target
 
+    def test_a_command_and_a_toggle_leave_out_a_unit_the_game_never_reported(self) -> None:
+        game = _Game()
+        game.observe(0, units=[make_unit(1, UnitTypeId.MEDIVAC)])
+        medivac: Unit[Any] = game.tracker.unit_tracker.present[0]
+        toggle = raw_pb2.ActionRawToggleAutocast(ability_id=AbilityId.MEDIVAC_HEAL, unit_tags=[1, 77])
+        actions = [
+            _command(AbilityId.STOP, 77, 1),
+            sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(toggle_autocast=toggle), game_loop=3),
+        ]
+        state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
+        assert [cast(UnitCommand | AutocastToggle, action).units for action in state.actions] == [
+            (medivac,),
+            (medivac,),
+        ]
+
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
         game = _Game()
         game.observe(0, units=[make_unit(1, UnitTypeId.MEDIVAC)])

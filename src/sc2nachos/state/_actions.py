@@ -13,7 +13,7 @@ from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._values import _NotReported
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from s2clientprotocol import raw_pb2, sc2api_pb2
 
@@ -38,6 +38,7 @@ class UnitCommand(Action):
     """The ability ordered, as the game runs it: an action several types perform reads as that action, whichever
     type's own id the game names, and a research names its level (in game)."""
     units: tuple[Unit[Any], ...]
+    """The units that took the order, leaving out any the game names by a tag it never reported."""
     _target: Target | Literal[_NotReported.TARGET] | None
     queued: bool
     """Whether the order was queued behind the units' orders instead of replacing them."""
@@ -64,21 +65,20 @@ class UnitCommand(Action):
         cls,
         time: GameTime,
         command: raw_pb2.ActionRawUnitCommand,
-        unit_by_tag: Callable[[int], Unit[Any]],
-        unit_or_none_by_tag: Callable[[int], Unit[Any] | None],
+        unit_by_tag: Callable[[int], Unit[Any] | None],
     ) -> Self:
-        """Read a command the observation at `time` reports, looking up the units commanded through `unit_by_tag`, and
-        the unit it was aimed at through `unit_or_none_by_tag`, which gives `None` for a tag the game never reported."""
+        """Read a command the observation at `time` reports, looking up the units commanded and the unit it was aimed
+        at through `unit_by_tag`, which gives `None` for a tag the game never reported."""
         match command.WhichOneof("target"):
             case "target_world_space_pos":
                 position = command.target_world_space_pos
                 target: Target | Literal[_NotReported.TARGET] | None = Point((position.x, position.y))
             case "target_unit_tag":
-                target_unit = unit_or_none_by_tag(command.target_unit_tag)
+                target_unit = unit_by_tag(command.target_unit_tag)
                 target = _NotReported.TARGET if target_unit is None else target_unit
             case _:
                 target = None
-        units = tuple(unit_by_tag(tag) for tag in command.unit_tags)
+        units = _units_reported_under(command.unit_tags, unit_by_tag)
         return cls(time, AbilityId.read(command.ability_id), units, target, command.queue_command)
 
 
@@ -89,12 +89,15 @@ class AutocastToggle(Action):
 
     ability: AbilityId
     units: tuple[Unit[Any], ...]
+    """The units whose autocast was toggled, leaving out any the game names by a tag it never reported."""
 
     @classmethod
     def _from_proto(
-        cls, time: GameTime, toggle: raw_pb2.ActionRawToggleAutocast, unit_by_tag: Callable[[int], Unit[Any]]
+        cls, time: GameTime, toggle: raw_pb2.ActionRawToggleAutocast, unit_by_tag: Callable[[int], Unit[Any] | None]
     ) -> Self:
-        return cls(time, AbilityId.read(toggle.ability_id), tuple(unit_by_tag(tag) for tag in toggle.unit_tags))
+        """Read a toggle the observation at `time` reports, looking up its units through `unit_by_tag`, which gives
+        `None` for a tag the game never reported."""
+        return cls(time, AbilityId.read(toggle.ability_id), _units_reported_under(toggle.unit_tags, unit_by_tag))
 
 
 @final
@@ -139,14 +142,10 @@ class ActionFailure:
         return cls(time, unit, ability, ActionResult.read(error.result))
 
 
-def read_action(
-    action: sc2api_pb2.Action,
-    unit_by_tag: Callable[[int], Unit[Any]],
-    unit_or_none_by_tag: Callable[[int], Unit[Any] | None],
-) -> Action | None:
-    """Read an action an observation reports, looking up its units through `unit_by_tag`, and a command's target
-    through `unit_or_none_by_tag`, which gives `None` for a tag the game never reported. Returns `None` for an action
-    through an interface other than the raw one.
+def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any] | None]) -> Action | None:
+    """Read an action an observation reports, looking up its units and a command's target through `unit_by_tag`,
+    which gives `None` for a tag the game never reported. Returns `None` for an action through an interface other than
+    the raw one.
 
     Raises `UncuratedIdError` for an ability the curated ids leave out.
     """
@@ -154,7 +153,7 @@ def read_action(
     time = GameTime(steps=action.game_loop)
     match raw.WhichOneof("action"):
         case "unit_command":
-            return UnitCommand._from_proto(time, raw.unit_command, unit_by_tag, unit_or_none_by_tag)
+            return UnitCommand._from_proto(time, raw.unit_command, unit_by_tag)
         case "toggle_autocast":
             return AutocastToggle._from_proto(time, raw.toggle_autocast, unit_by_tag)
         case "camera_move":
@@ -162,3 +161,8 @@ def read_action(
             return CameraMove(time, Point((center.x, center.y)))
         case _:
             return None
+
+
+def _units_reported_under(tags: Iterable[int], unit_by_tag: Callable[[int], Unit[Any] | None]) -> tuple[Unit[Any], ...]:
+    """The units the game reported under `tags`, in their order, leaving out a tag it never reported."""
+    return tuple(unit for tag in tags if (unit := unit_by_tag(tag)) is not None)
