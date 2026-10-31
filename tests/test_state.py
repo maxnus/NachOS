@@ -30,7 +30,7 @@ from sc2nachos.state import (
     VitalScore,
 )
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, Unit
+from sc2nachos.units import Alliance, NotReportedError, Unit
 from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
@@ -488,6 +488,20 @@ class TestWhatHappened:
             UnitCommand(GameTime(steps=15), AbilityId.STOP, (other,), None, queued=True),
         )
         assert enemy.is_dead
+        assert [cast(UnitCommand, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
+
+    def test_a_command_aimed_at_a_unit_the_game_never_reported_has_its_target_not_reported(self) -> None:
+        """As a gather sent to a mineral field in the fog by its snapshot's tag comes back, aimed at a tag no
+        observation lists (in game)."""
+        game = _Game()
+        game.observe(0, units=[make_unit(1, UnitTypeId.SCV)])
+        scv = game.tracker.unit_tracker.present.by_id(100001)
+        gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
+        (command,) = game.observe(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]).actions
+        assert isinstance(command, UnitCommand)
+        assert (command.ability, command.units, command.known_target) == (AbilityId.GATHER, (scv,), None)
+        with pytest.raises(NotReportedError, match="this GATHER was aimed at by no tag it reports"):
+            _ = command.target
 
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
         game = _Game()
