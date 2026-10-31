@@ -2,7 +2,7 @@
 
 import importlib.util
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -481,3 +481,26 @@ class RealGame:
                     if all(placement[spot + offset] for offset in offsets):
                         return spot
         raise AssertionError(f"no open ground near {near}")
+
+
+PYLON_CORPUS_GAME = Path(__file__).parent / "corpus" / "PylonAIE_v4-TvZ.sc2rec"
+
+
+def pylon_game_stopped_after(observations: int) -> Iterator[Exchange]:
+    """The exchanges of the corpus game on Pylon as a recording of it holds them if it stopped after `observations`,
+    as one made with a time limit does: its last observation, then leaving the game and quitting."""
+    observations_kept = 0
+    for exchange in Recording(PYLON_CORPUS_GAME):
+        asked_kind = exchange.request.WhichOneof("request")
+        if observations_kept < observations or asked_kind in ("leave_game", "quit"):
+            observations_kept += asked_kind == "observation"
+            yield exchange
+
+
+def last_recorded_step(recording: Recording) -> int:
+    """The step of the last observation in `recording`."""
+    return recorded_observations(recording)[-1].observation.game_loop
+
+
+class ClientStarted(Exception):
+    """Raised where a client would have started."""

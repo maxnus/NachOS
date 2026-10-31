@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
 
+from loguru import logger
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -87,3 +89,13 @@ class TechTree:
     """What it says about each ability."""
     upgrades: TechTreeUpgrades
     """What it says about each upgrade."""
+
+    def warn_if_not_swept_on(self, base_build: int) -> None:
+        """Log a warning if `base_build`, the build a game plays on, is not the one swept."""
+        if base_build != self.base_build:
+            logger.warning(
+                "Playing build {}, but the tech tree is build {}'s: what each ability needs, who is offered it, how it "
+                "takes a unit's orders and what each upgrade changes come from that build",
+                base_build,
+                self.base_build,
+            )

@@ -854,7 +854,7 @@ class TestRunningOnALadder:
         def refuse_to_open(*_: object) -> None:
             raise PermissionError("the file cannot be opened")
 
-        monkeypatch.setattr("sc2nachos.run.RecordingTransport", refuse_to_open)
+        monkeypatch.setattr("sc2nachos.protocol._connection.RecordingTransport", refuse_to_open)
         with pytest.raises(PermissionError):
             run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, record_to=tmp_path / "game.sc2rec")
         assert transport.closed

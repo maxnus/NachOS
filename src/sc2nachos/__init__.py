@@ -10,7 +10,8 @@ from sc2nachos.gamemap import Expansion
 from sc2nachos.geometry import Circle, Footprint, Point, Rectangle
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result
-from sc2nachos.run import run_from_command_line, run_ladder, run_local, run_recording, run_replay
+from sc2nachos.replay import ReplayPlayback, open_replay, open_replay_recording, run_replay
+from sc2nachos.run import run_from_command_line, run_ladder, run_local, run_recording
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "Point",
     "Race",
     "Rectangle",
+    "ReplayPlayback",
     "Resources",
     "Result",
     "Unit",
@@ -42,6 +44,8 @@ __all__ = [
     "UpgradeId",
     "UpgradeInference",
     "__version__",
+    "open_replay",
+    "open_replay_recording",
     "run_from_command_line",
     "run_ladder",
     "run_local",

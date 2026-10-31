@@ -780,7 +780,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   1. Two bugs AI Arena's replays hit (the owner, 2026-10-25): `run_replay` could not play back a replay whose map is
      not where the replay names it (#169, merged), and `OwnUnit.engaged_target` raised for a target the game never
      listed (#170, merged).
-  2. Starting a replay on its own build with its map, public, for salsa's writer.
+  2. Starting a replay on its own build with its map, public, for salsa's writer: `open_replay` and
+     `open_replay_recording` (#176).
 - Apart from salsa, and not waited on by it: an action's target on a copy the fog-off view never lists reads as not
   reported (2026-10-25, above).
 

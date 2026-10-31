@@ -3,13 +3,12 @@
 import json
 import random
 from collections.abc import Sequence
-from contextlib import ExitStack, closing
-from pathlib import Path, PureWindowsPath
+from contextlib import closing
+from pathlib import Path
 
 from loguru import logger
-from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._checks import check_file_to_write, check_game_time
+from sc2nachos._checks import check_output_files, check_time_limit
 from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.api import Api, NotPlayingError
 from sc2nachos.game_time import GameTime
@@ -23,10 +22,10 @@ from sc2nachos.protocol import (
     PermissivePlaybackTransport,
     PlaybackTransport,
     Recording,
-    RecordingTransport,
     Transport,
-    WebSocketTransport,
 )
+from sc2nachos.protocol._connection import connect_client
+from sc2nachos.replay import open_replay_recording
 
 
 def run_local(
@@ -55,19 +54,19 @@ def run_local(
     the game ends, the client is stopped and its temporary directory removed. The newest build installed is played, with
     a warning if it is not the one the tech tree was swept on.
     """
-    _check_output_files(record_to, save_replay_to)
-    _check_time_limit(time_limit)
+    check_output_files(record_to, save_replay_to)
+    check_time_limit(time_limit)
     installation = installation or Installation.find()
     if isinstance(map_file, str):
         map_file = MapFile.find(map_file, installation=installation)
     # A participant tells the game a client will fill the slot; who fills it is settled at the join.
     players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
     base_build = installation.build_to_launch()
-    _check_tech_tree_build(base_build)
+    TECH_TREE.warn_if_not_swept_on(base_build)
 
     with (
         GameProcess.launch(installation, base_build=base_build, window=window) as game,
-        closing(_connect(game.url, record_to)) as client,
+        closing(connect_client(game.url, record_to)) as client,
     ):
         try:
             client.create_game(map_file.path, players, realtime=realtime, random_seed=random_seed)
@@ -105,8 +104,8 @@ def run_ladder(
     `realtime` must match the ladder's `--RealTime` flag, as `Api.play` says. There is no time limit: a bot can only
     end a game early by leaving it, which concedes. `record_to` and `save_replay_to` are as for `run_local`.
     """
-    _check_output_files(record_to, save_replay_to)
-    with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
+    check_output_files(record_to, save_replay_to)
+    with closing(connect_client(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
             ports = GamePorts.from_start_port(start_port) if start_port is not None else None
             client.join_game(race, name=name, ports=ports)
@@ -120,97 +119,6 @@ def run_ladder(
         finally:
             # The client is the ladder's, so it is left running.
             client.leave_game()
-
-
-def run_replay(
-    replay: Path | str,
-    api: Api,
-    *,
-    player_id: int,
-    disable_fog: bool = False,
-    steps_per_turn: int = 1,
-    time_limit: GameTime | None = None,
-    record_to: Path | str | None = None,
-    installation: Installation | None = None,
-    window: tuple[int, int] = (1024, 768),
-) -> Result:
-    """Start a game client, play back the replay in the file `replay` for `api` as the player `player_id` saw it, a
-    turn every `steps_per_turn` steps, and return how it ended for that player.
-
-    The api sees what that player saw when the game was played (in game): `api.player` is that player, `api.units.own`
-    its units, and each action it took comes as an `OwnActionEvent`. With `disable_fog`, it sees that too, and
-    `api.all_units` holds every unit besides. The game takes no actions or debug commands in a replay, so a turn that
-    orders, chats, draws or moves the camera raises `ProtocolError` once its handlers have run (in game). Leaving the
-    replay, or reaching `time_limit`, stops it `Result.UNDECIDED`.
-
-    Raises `ValueError` for a `player_id` that is not one of the replay's players, as 0 is not. The replay is played
-    on its own build, which must be installed, or `GameVersionError` is raised: the newest build installed reads which
-    it is, and a second client is started when that is not the one. The game opens the replay's map by the path the
-    replay names, which an AI Arena replay gives as a bare file name the game does not find (in game); so unless the
-    path is an absolute path to a file here, the map it names under the installation's maps goes with the replay, or
-    else the map of its name there. `record_to` is a file to
-    record the whole conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends,
-    the client is stopped and its temporary directory removed.
-    """
-    _check_output_files(record_to, None)
-    _check_time_limit(time_limit)
-    replay_data = Path(replay).read_bytes()
-    installation = installation or Installation.find()
-    newest_build = installation.build_to_launch()
-    with ExitStack() as running:
-        game = running.enter_context(GameProcess.launch(installation, base_build=newest_build, window=window))
-        with closing(Client(WebSocketTransport.connect(game.url))) as info_client:
-            info = info_client.replay_info(replay_data)
-        _check_replay_player(info, player_id)
-        if info.base_build != newest_build:
-            replay_build = installation.build_to_launch(base_build=info.base_build)
-            game.terminate()
-            game = running.enter_context(GameProcess.launch(installation, base_build=replay_build, window=window))
-        _check_tech_tree_build(info.base_build)
-        map_data = _map_bytes_the_game_needs(info.local_map_path, installation)
-        with closing(_connect(game.url, record_to)) as client:
-            try:
-                client.start_replay(replay_data, player_id=player_id, disable_fog=disable_fog, map_data=map_data)
-                return api.play(client, steps_per_turn=steps_per_turn, time_limit=time_limit)
-            finally:
-                client.leave_game()
-                client.quit()
-
-
-def _map_bytes_the_game_needs(replay_map_path: str, installation: Installation) -> bytes | None:
-    """The bytes of the map of a replay whose map is at `replay_map_path`, as its info gives it, for the game to play
-    it on: the file a relative path names under `installation`'s maps, and otherwise the map of its name there. `None`
-    where it is an absolute path to a file, which the game opens, and where no map of its name is installed, for the
-    game to try the path itself."""
-    if not replay_map_path:
-        return None
-    map_path = Path(replay_map_path)
-    if map_path.is_absolute():
-        if map_path.is_file():
-            return None
-    elif (under_the_maps := installation.maps / map_path).is_file():
-        # That very file, rather than one of its name elsewhere, as a map pack installs beside the maps it replaces.
-        return under_the_maps.read_bytes()
-    # A replay played on Windows names its map with backslashes, which a Windows path reads on every platform.
-    map_name = PureWindowsPath(replay_map_path).stem
-    try:
-        map_file = MapFile.find(map_name, installation=installation)
-    except MapNotFoundError:
-        logger.warning("The replay's map, {}, is not under {}; the game may not open it", map_name, installation.maps)
-        return None
-    return map_file.path.read_bytes()
-
-
-def _check_replay_player(info: sc2api_pb2.ResponseReplayInfo, player_id: int) -> None:
-    """Raise `ValueError` unless `player_id` is one of the players, observers aside, of the replay `info` describes."""
-    players = sorted(
-        entry.player_info.player_id
-        for entry in info.player_info
-        if entry.player_info.type != sc2api_pb2.PlayerType.Observer
-    )
-    if player_id not in players:
-        listed = " and ".join(str(player) for player in players) or "none"
-        raise ValueError(f"the replay's players are {listed}, and {player_id} is not one of them")
 
 
 def run_recording(
@@ -239,33 +147,30 @@ def run_recording(
     and saves no replay, logging a save asked for as failed. A request the recording cannot answer raises
     `ProtocolError`.
 
-    A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for and
-    with the fog as it was, by default only: `permissive` raises `ValueError` for one.
+    A replay played back by `run_replay` or `open_replay` is played back again as `open_replay_recording` plays it, as
+    the player it was played for and with the fog as it was, by default only: `permissive` raises `ValueError` for
+    one.
     """
-    _check_time_limit(time_limit)
+    check_time_limit(time_limit)
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
-    start_replay_request = recording.start_replay_request
-    if start_replay_request is not None and permissive:
-        raise ValueError(f"{recording.path} is a replay played back, which plays back only as it was recorded")
+    if recording.start_replay_request is not None:
+        if permissive:
+            raise ValueError(f"{recording.path} is a replay played back, which plays back only as it was recorded")
+        with open_replay_recording(recording) as playback:
+            return api.play(
+                playback.client, time_limit=time_limit, enemy_ladder_id=enemy_ladder_id, save_replay_to=save_replay_to
+            )
     transport: Transport = PermissivePlaybackTransport(recording) if permissive else PlaybackTransport(recording)
     with closing(Client(transport)) as client:
         # A recording answers each kind of request in turn without reading it, so the setup is repeated without its
         # details. A permissive one makes up a create and every step.
-        if start_replay_request is not None:
-            client.start_replay(
-                start_replay_request.replay_data,
-                player_id=start_replay_request.observed_player_id,
-                disable_fog=start_replay_request.disable_fog,
-                map_data=start_replay_request.map_data if start_replay_request.HasField("map_data") else None,
-            )
-        else:
-            if permissive or recording.created_its_game:
-                client.create_game("recorded", [Participant(), Computer()])
-            client.join_game(Race.RANDOM)
+        if permissive or recording.created_its_game:
+            client.create_game("recorded", [Participant(), Computer()])
+        client.join_game(Race.RANDOM)
         return api.play(
             client,
-            realtime=not permissive and start_replay_request is None and recording.played_in_real_time,
+            realtime=not permissive and recording.played_in_real_time,
             time_limit=time_limit,
             enemy_ladder_id=enemy_ladder_id,
             save_replay_to=save_replay_to,
@@ -387,42 +292,3 @@ def _play_local_game(
         installation=installation,
     )
     return result, map_file.name
-
-
-def _check_tech_tree_build(base_build: int) -> None:
-    """Log a warning if `base_build` is not the tech tree's."""
-    if base_build != TECH_TREE.base_build:
-        logger.warning(
-            "Playing build {}, but the tech tree is build {}'s: what each ability needs, who is offered it, how it "
-            "takes a unit's orders and what each upgrade changes come from that build",
-            base_build,
-            TECH_TREE.base_build,
-        )
-
-
-def _check_output_files(record_to: Path | str | None, save_replay_to: Path | str | None) -> None:
-    """Raise `FileNotFoundError` or `IsADirectoryError`, before a game starts, for a file to record into or to save
-    the replay into that cannot be written."""
-    if record_to is not None:
-        check_file_to_write(Path(record_to), "record into")
-    if save_replay_to is not None:
-        check_file_to_write(Path(save_replay_to), "save the replay into")
-
-
-def _check_time_limit(time_limit: GameTime | None) -> None:
-    """Raise `TypeError`, before a game starts, for a `time_limit` that is not a `GameTime`."""
-    if time_limit is not None:
-        check_game_time(time_limit, "time_limit")
-
-
-def _connect(url: str, record_to: Path | str | None) -> Client:
-    """A client connected to the game at `url`, recording the whole conversation to `record_to` if given. A recording
-    that fails to open closes the connection."""
-    transport: Transport = WebSocketTransport.connect(url)
-    if record_to is not None:
-        try:
-            transport = RecordingTransport(transport, record_to)
-        except BaseException:
-            transport.close()
-            raise
-    return Client(transport)
