@@ -14,7 +14,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 if TYPE_CHECKING:
     from s2clientprotocol import data_pb2
 
-    from sc2nachos.gamedata._techtree import TechTreeUpgrades
+    from sc2nachos.gamedata._techtree import TechTree
 
 
 class UpgradeType(ReadableIntEnum):
@@ -54,15 +54,16 @@ class UpgradeData:
     """Its level within its line, from 1; 0 for an upgrade that is no level, such as Chitinous Plating."""
 
     @classmethod
-    def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree_upgrades: TechTreeUpgrades) -> Self:
-        """Read one upgrade from the game's table, with what `tech_tree_upgrades` says about it."""
+    def _from_proto(cls, data: data_pb2.UpgradeData, tech_tree: TechTree) -> Self:
+        """Read one upgrade from the game's table, with what `tech_tree` says about it."""
         upgrade = UpgradeId(data.upgrade_id)
+        in_tree = tech_tree.upgrade(upgrade)
         return cls(
             id=upgrade,
             cost=Cost(data.mineral_cost, data.vespene_cost, time=GameTime(steps=round(data.research_time))),
-            research_ability=AbilityId.get(data.ability_id) or tech_tree_upgrades.research_abilities.get(upgrade),
-            researchers=tech_tree_upgrades.researchers.get(upgrade, frozenset()),
-            tech_requirements=tech_tree_upgrades.tech_requirements.get(upgrade, TechRequirements()),
-            upgrade_type=tech_tree_upgrades.types.get(upgrade, UpgradeType.OTHER),
-            level=tech_tree_upgrades.levels.get(upgrade, 0),
+            research_ability=AbilityId.get(data.ability_id) or in_tree.research_ability,
+            researchers=in_tree.researchers,
+            tech_requirements=in_tree.tech_requirements,
+            upgrade_type=in_tree.upgrade_type,
+            level=in_tree.level,
         )

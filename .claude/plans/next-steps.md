@@ -37,12 +37,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
   hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
   tables alias an adept's shade to the adept. `morphed_from` gives a form's source, and the sweeps and tests read
   `unit_alias` from the game's answer. The off half of a toggle has its on half's performers (review of #138).
-- **The tech tree splits into what each data class reads** (the owner, review of #138, and 2026-10-20, one question
-  at a time): `TechTree(base_build, unit_types, abilities, upgrades)`, of `TechTreeUnitTypes`, `TechTreeAbilities` and
-  `TechTreeUpgrades`, each holding the mappings its data class reads under shorter names
-  (`tech_tree.abilities.products`), and each data class's reader taking only its own. `tools/generate_tech_tree.py`
-  works out the performers, the producers and the research abilities and writes them into the module, so that the
-  records are plain, over the tree working them out at import.
+- **The tech tree holds one record per id** (the owner, review of #138, 2026-10-20, and review of #187):
+  `TechTree(base_build, unit_types, abilities, upgrades)` maps each id it says anything about to a `TechTreeUnitType`,
+  `TechTreeAbility` or `TechTreeUpgrade`, whose fields are named as those of the data class they fill, so what it says
+  of a ghost sits in one entry (review of #187, over a mapping per field, `TechTreeUnitTypes` and the like, which spread
+  it over four). `tech_tree.unit_type(id)`, `ability(id)` and `upgrade(id)` give an empty record for an id it holds
+  none of, as 117 of 285 unit types, the map's own, have none (the owner, review of #188, over `None`, a raise or a
+  fallback argument, and over raising for the seven abilities the readers look up that every tree holds), and each
+  data class's reader takes the tree. `tools/generate_tech_tree.py` works out the performers, the
+  producers and the research abilities and writes them into the module, so that the records are plain, over the tree
+  working them out at import.
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
   refuses is listed in `api.action_failures` on the next turn, once for each unit it named, under the id ordered,
   ahead of what the game gave up on. The `Order` stays as a handle: its `data`, `withdraw()`, and what `issued_to`
@@ -743,9 +747,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     own tech lab and nothing requires a reactor);
   - `Resources.minimum` and `maximum`, as `Grid` spells them (over a static `Resources.min(a, b)`).
 
-  Next, in a pull request of its own once #187 merges: the tech tree as one record per id, `TechTreeUnitType`,
-  `TechTreeAbility` and `TechTreeUpgrade`, each mapping of the tree a field of the record (the owner's review of #187,
-  over a mapping per field, which spreads what the tree says of a ghost over four).
+  The tech tree as one record per id followed in a pull request of its own (the decision above, from the owner's review
+  of #187).
 
   `tools/generate_tech_tree.py` works out the requirements and the researchers, as it does the producers (the decision
   above); `GameData` works out each type's last step from the tables' whole costs, since a price comes from them. Then a

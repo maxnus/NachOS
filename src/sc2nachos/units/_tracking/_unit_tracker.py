@@ -27,9 +27,7 @@ _ENEMY_ALLIANCE = raw_pb2.Alliance.Enemy
 # The structures that can leave the spot they are remembered at: those offered a lift or an uproot, in their grounded
 # forms alone, since one lifted off or uprooted, like a viking in either form, is never remembered in the fog (stated).
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
-    unit_type
-    for ability in (AbilityId.LIFT, AbilityId.UPROOT)
-    for unit_type in TECH_TREE.abilities.performers.get(ability, ())
+    unit_type for ability in (AbilityId.LIFT, AbilityId.UPROOT) for unit_type in TECH_TREE.ability(ability).performers
 )
 
 type _UnitsByTag = dict[int, Unit[Any]]

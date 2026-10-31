@@ -8,7 +8,7 @@ from typing import Final
 
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
-from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbilities, TechTreeUnitTypes, TechTreeUpgrades
+from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbility, TechTreeUnitType, TechTreeUpgrade
 from sc2nachos.gamedata._unit_type_data import Attribute
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gamedata._upgrade_data import UpgradeType
@@ -16,9 +16,12 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 TECH_TREE: Final = TechTree(
     base_build=75689,
-    unit_types=TechTreeUnitTypes(
-        ability_requirements=MappingProxyType({
-            UnitTypeId.ADEPT: MappingProxyType({
+    unit_types=MappingProxyType({
+        UnitTypeId.ADEPT: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_ADEPT,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ADEPT_SHADE: TechRequirements(),
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
@@ -28,7 +31,20 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.ADEPT_SHADE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ADEPT_SHADE: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -37,7 +53,9 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.ARCHON: MappingProxyType({
+        ),
+        UnitTypeId.ARCHON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -45,7 +63,23 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.ARMORY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ARMORY: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_ARMORY,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FACTORY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1: TechRequirements(),
                 AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_1})),
                 AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_2})),
@@ -59,14 +93,41 @@ TECH_TREE: Final = TechTree(
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
             }),
-            UnitTypeId.ASSIMILATOR: MappingProxyType({}),
-            UnitTypeId.ASSIMILATOR_RICH: MappingProxyType({}),
-            UnitTypeId.AUTO_TURRET: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.ASSIMILATOR: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_ASSIMILATOR,
+            producers=frozenset({UnitTypeId.PROBE}),
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ASSIMILATOR_RICH: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_ASSIMILATOR,
+            producers=frozenset({UnitTypeId.PROBE}),
+        ),
+        UnitTypeId.AUTO_TURRET: TechTreeUnitType(
+            creation_ability=AbilityId.RAVEN_SPAWN_AUTO_TURRET,
+            producers=frozenset({UnitTypeId.RAVEN}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BANELING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
+            }),
+        ),
+        UnitTypeId.BANELING: TechTreeUnitType(
+            creation_ability=AbilityId.ZERGLING_MORPH_BANELING,
+            producers=frozenset({UnitTypeId.ZERGLING}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.BANELING_NEST})),
+            morphed_from=UnitTypeId.ZERGLING,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BANELING_ATTACK_STRUCTURES_ON: TechRequirements(),
                 AbilityId.BANELING_EXPLODE: TechRequirements(),
@@ -77,21 +138,56 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BANELING_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BANELING_SPEED: UnitTypeUpgrade(speed=0.634375),
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BANELING_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.BANELING}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.BANELING,
+            ability_requirements=MappingProxyType({
                 AbilityId.BANELING_EXPLODE: TechRequirements(),
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.BANELING_COCOON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BANELING_COCOON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.BANELING_NEST: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BANELING_NEST: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_BANELING_NEST,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: TechRequirements(techs=frozenset({Tech.LAIR})),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
             }),
-            UnitTypeId.BANSHEE: MappingProxyType({
+        ),
+        UnitTypeId.BANSHEE: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_BANSHEE,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            tech_requirements=TechRequirements(needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CLOAK_OFF: TechRequirements(),
                 AbilityId.CLOAK_ON: TechRequirements(upgrades=frozenset({UpgradeId.BANSHEE_CLOAK})),
@@ -101,7 +197,21 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BARRACKS: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BANSHEE_SPEED: UnitTypeUpgrade(speed=1.4),
+                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BARRACKS: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_BARRACKS,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SUPPLY_DEPOT})),
+            ability_requirements=MappingProxyType({
                 AbilityId.BARRACKS_TRAIN_GHOST: TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True),
                 AbilityId.BARRACKS_TRAIN_MARAUDER: TechRequirements(needs_tech_lab=True),
                 AbilityId.BARRACKS_TRAIN_MARINE: TechRequirements(),
@@ -115,7 +225,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.BARRACKS_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.BARRACKS_FLYING: TechTreeUnitType(
+            creation_ability=AbilityId.LIFT,
+            producers=frozenset({UnitTypeId.BARRACKS}),
+            morphed_from=UnitTypeId.BARRACKS,
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_REACTOR: TechRequirements(),
                 AbilityId.BUILD_TECH_LAB: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -125,7 +243,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BATTLECRUISER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.BATTLECRUISER: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_BATTLECRUISER,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FUSION_CORE}), needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BATTLECRUISER_TACTICAL_JUMP: TechRequirements(),
                 AbilityId.BATTLECRUISER_YAMATO: TechRequirements(upgrades=frozenset({UpgradeId.YAMATO_CANNON})),
@@ -135,7 +261,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BROODLING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BROODLING: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -143,7 +276,21 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BROOD_LORD: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.BROOD_LORD: TechTreeUnitType(
+            creation_ability=AbilityId.CORRUPTOR_MORPH_BROOD_LORD,
+            producers=frozenset({UnitTypeId.CORRUPTOR}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.GREATER_SPIRE})),
+            morphed_from=UnitTypeId.CORRUPTOR,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -151,14 +298,34 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.BROOD_LORD_COCOON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+            }),
+        ),
+        UnitTypeId.BROOD_LORD_COCOON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
                 AbilityId.PATROL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.BUNKER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.BUNKER: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_BUNKER,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.BARRACKS})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
@@ -169,7 +336,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNLOAD: TechRequirements(),
             }),
-            UnitTypeId.CARRIER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.CARRIER: TechTreeUnitType(
+            creation_ability=AbilityId.STARGATE_TRAIN_CARRIER,
+            producers=frozenset({UnitTypeId.STARGATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -177,7 +352,20 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.CHANGELING: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -185,7 +373,9 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING_MARINE: MappingProxyType({
+        ),
+        UnitTypeId.CHANGELING_MARINE: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -193,7 +383,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING_MARINE_SHIELD: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.CHANGELING_MARINE_SHIELD: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -201,7 +398,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING_ZEALOT: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.CHANGELING_ZEALOT: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -209,7 +413,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING_ZERGLING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.CHANGELING_ZERGLING: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -217,7 +428,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CHANGELING_ZERGLING_WINGS: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.CHANGELING_ZERGLING_WINGS: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -225,7 +443,17 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.COLOSSUS: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.COLOSSUS: TechTreeUnitType(
+            creation_ability=AbilityId.ROBOTICS_FACILITY_TRAIN_COLOSSUS,
+            producers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ROBOTICS_BAY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -233,7 +461,23 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.COMMAND_CENTER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.COLOSSUS_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.COMMAND_CENTER: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_COMMAND_CENTER,
+            producers=frozenset({UnitTypeId.SCV}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: TechRequirements(techs=frozenset({Tech.BARRACKS})),
@@ -245,7 +489,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_WORKERS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.COMMAND_CENTER_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.COMMAND_CENTER_FLYING: TechTreeUnitType(
+            creation_ability=AbilityId.LIFT,
+            producers=frozenset({UnitTypeId.COMMAND_CENTER}),
+            morphed_from=UnitTypeId.COMMAND_CENTER,
+            ability_requirements=MappingProxyType({
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LAND: TechRequirements(),
                 AbilityId.LOAD_ALL: TechRequirements(),
@@ -254,7 +506,16 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CORRUPTOR: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.CORRUPTOR: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_CORRUPTOR,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPIRE})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CORRUPTOR_CAUSTIC_SPRAY: TechRequirements(),
                 AbilityId.CORRUPTOR_MORPH_BROOD_LORD: TechRequirements(techs=frozenset({Tech.GREATER_SPIRE})),
@@ -264,11 +525,34 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.CREEP_TUMOR_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
+                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
+                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.CREEP_TUMOR: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_CREEP_TUMOR,
+            producers=frozenset({UnitTypeId.CREEP_TUMOR_BURROWED}),
+        ),
+        UnitTypeId.CREEP_TUMOR_BURROWED: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_CREEP_TUMOR: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.CYBERNETICS_CORE: MappingProxyType({
+        ),
+        UnitTypeId.CREEP_TUMOR_QUEEN: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_CREEP_TUMOR,
+            producers=frozenset({UnitTypeId.QUEEN}),
+        ),
+        UnitTypeId.CYBERNETICS_CORE: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_CYBERNETICS_CORE,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.GATEWAY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1: TechRequirements(),
@@ -279,7 +563,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3: TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_2})),
                 AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE: TechRequirements(),
             }),
-            UnitTypeId.CYCLONE: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.CYCLONE: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_CYCLONE,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            tech_requirements=TechRequirements(needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CYCLONE_LOCK_ON: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -288,12 +583,36 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.DARK_SHRINE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.DARK_SHRINE: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_DARK_SHRINE,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: TechRequirements(),
             }),
-            UnitTypeId.DARK_TEMPLAR: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.DARK_TEMPLAR: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_DARK_TEMPLAR,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.DARK_SHRINE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BLINK: TechRequirements(upgrades=frozenset({UpgradeId.DARK_TEMPLAR_BLINK})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -302,7 +621,23 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.DISRUPTOR: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.DISRUPTOR: TechTreeUnitType(
+            creation_ability=AbilityId.ROBOTICS_FACILITY_TRAIN_DISRUPTOR,
+            producers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ROBOTICS_BAY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.DISRUPTOR_PURIFICATION_NOVA: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -311,7 +646,20 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.DRONE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.DRONE: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_DRONE,
+            producers=frozenset({UnitTypeId.LARVA}),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.DRONE_MORPH_BANELING_NEST: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
@@ -337,15 +685,38 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SPRAY: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.DRONE_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.DRONE_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.EGG: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.EGG: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.ENGINEERING_BAY: MappingProxyType({
+        ),
+        UnitTypeId.ENGINEERING_BAY: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_ENGINEERING_BAY,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.COMMAND_CENTER})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR: TechRequirements(),
@@ -358,7 +729,16 @@ TECH_TREE: Final = TechTree(
                 AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3: TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_2})),
                 AbilityId.HALT: TechRequirements(),
             }),
-            UnitTypeId.EVOLUTION_CHAMBER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.EVOLUTION_CHAMBER: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_EVOLUTION_CHAMBER,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HATCHERY})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1: TechRequirements(),
@@ -371,9 +751,22 @@ TECH_TREE: Final = TechTree(
                 AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_1})),
                 AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_2})),
             }),
-            UnitTypeId.EXTRACTOR: MappingProxyType({}),
-            UnitTypeId.EXTRACTOR_RICH: MappingProxyType({}),
-            UnitTypeId.FACTORY: MappingProxyType({
+        ),
+        UnitTypeId.EXTRACTOR: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_EXTRACTOR,
+            producers=frozenset({UnitTypeId.DRONE}),
+            morphed_from=UnitTypeId.DRONE,
+        ),
+        UnitTypeId.EXTRACTOR_RICH: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_EXTRACTOR,
+            producers=frozenset({UnitTypeId.DRONE}),
+            morphed_from=UnitTypeId.DRONE,
+        ),
+        UnitTypeId.FACTORY: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_FACTORY,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.BARRACKS})),
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_REACTOR: TechRequirements(),
                 AbilityId.BUILD_TECH_LAB: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
@@ -389,7 +782,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.FACTORY_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.FACTORY_FLYING: TechTreeUnitType(
+            creation_ability=AbilityId.LIFT,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            morphed_from=UnitTypeId.FACTORY,
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_REACTOR: TechRequirements(),
                 AbilityId.BUILD_TECH_LAB: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -399,17 +800,38 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.FLEET_BEACON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.FLEET_BEACON: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_FLEET_BEACON,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.STARGATE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: TechRequirements(),
                 AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE: TechRequirements(),
                 AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED: TechRequirements(),
             }),
-            UnitTypeId.FORCE_FIELD: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.FORCE_FIELD: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.FORGE: MappingProxyType({
+        ),
+        UnitTypeId.FORGE: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_FORGE,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.NEXUS})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1: TechRequirements(),
@@ -422,7 +844,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.FORGE_RESEARCH_SHIELDS_2: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_1})),
                 AbilityId.FORGE_RESEARCH_SHIELDS_3: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_2})),
             }),
-            UnitTypeId.FUSION_CORE: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.FUSION_CORE: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_FUSION_CORE,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.STARPORT})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE: TechRequirements(),
@@ -430,7 +863,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
             }),
-            UnitTypeId.GATEWAY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.GATEWAY: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_GATEWAY,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.NEXUS})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.GATEWAY_TRAIN_ADEPT: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
@@ -442,7 +883,13 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.GHOST: MappingProxyType({
+            needs_power=True,
+        ),
+        UnitTypeId.GHOST: TechTreeUnitType(
+            creation_ability=AbilityId.BARRACKS_TRAIN_GHOST,
+            producers=frozenset({UnitTypeId.BARRACKS}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CLOAK_OFF: TechRequirements(),
@@ -457,14 +904,36 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.GHOST_ACADEMY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.GHOST_ACADEMY: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_GHOST_ACADEMY,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.BARRACKS})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.GHOST_ACADEMY_BUILD_NUKE: TechRequirements(techs=frozenset({Tech.FACTORY})),
                 AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
             }),
-            UnitTypeId.GREATER_SPIRE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.GREATER_SPIRE: TechTreeUnitType(
+            creation_ability=AbilityId.SPIRE_MORPH_GREATER_SPIRE,
+            producers=frozenset({UnitTypeId.SPIRE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+            morphed_from=UnitTypeId.SPIRE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: TechRequirements(),
                 AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_1})),
@@ -473,7 +942,12 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_1})),
                 AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_2})),
             }),
-            UnitTypeId.HATCHERY: MappingProxyType({
+        ),
+        UnitTypeId.HATCHERY: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_HATCHERY,
+            producers=frozenset({UnitTypeId.DRONE}),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.HATCHERY_MORPH_LAIR: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
@@ -484,7 +958,12 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_WORKERS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.HELLBAT: MappingProxyType({
+        ),
+        UnitTypeId.HELLBAT: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_HELLBAT,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HELLBAT_MORPH_HELLION: TechRequirements(techs=frozenset({Tech.ARMORY})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -493,7 +972,20 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.HELLION: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BLUE_FLAME: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 12.0})),)),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+            }),
+        ),
+        UnitTypeId.HELLION: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_HELLION,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HELLION_MORPH_HELLBAT: TechRequirements(techs=frozenset({Tech.ARMORY})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -502,7 +994,21 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.HIGH_TEMPLAR: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BLUE_FLAME: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 5.0})),)),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.HIGH_TEMPLAR: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_HIGH_TEMPLAR,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TEMPLAR_ARCHIVE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HIGH_TEMPLAR_FEEDBACK: TechRequirements(),
                 AbilityId.HIGH_TEMPLAR_STORM: TechRequirements(upgrades=frozenset({UpgradeId.STORM})),
@@ -512,7 +1018,24 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.HIVE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.HIVE: TechTreeUnitType(
+            creation_ability=AbilityId.LAIR_MORPH_HIVE,
+            producers=frozenset({UnitTypeId.LAIR}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
+            morphed_from=UnitTypeId.LAIR,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.HATCHERY_TRAIN_QUEEN: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
                 AbilityId.LAIR_RESEARCH_BURROW: TechRequirements(),
@@ -521,7 +1044,13 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_WORKERS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.HYDRALISK: MappingProxyType({
+        ),
+        UnitTypeId.HYDRALISK: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_HYDRALISK,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HYDRALISK_DEN})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -532,17 +1061,48 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.HYDRALISK_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.HYDRALISK_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
+                UpgradeId.HYDRALISK_SPEED: UnitTypeUpgrade(speed=0.978906),
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.HYDRALISK_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.HYDRALISK}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.HYDRALISK,
+            ability_requirements=MappingProxyType({
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.HYDRALISK_DEN: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.HYDRALISK_DEN: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_HYDRALISK_DEN,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE: TechRequirements(techs=frozenset({Tech.HIVE})),
                 AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: TechRequirements(),
                 AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED: TechRequirements(),
             }),
-            UnitTypeId.IMMORTAL: MappingProxyType({
+        ),
+        UnitTypeId.IMMORTAL: TechTreeUnitType(
+            creation_ability=AbilityId.ROBOTICS_FACILITY_TRAIN_IMMORTAL,
+            producers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -550,12 +1110,35 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.INFESTATION_PIT: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.INFESTATION_PIT: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_INFESTATION_PIT,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: TechRequirements(),
             }),
-            UnitTypeId.INFESTOR: MappingProxyType({
+        ),
+        UnitTypeId.INFESTOR: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_INFESTOR,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.CANCEL: TechRequirements(),
@@ -568,7 +1151,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.INFESTOR_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.INFESTOR_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.INFESTOR}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.INFESTOR,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -579,7 +1173,14 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.INTERCEPTOR: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.INTERCEPTOR: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -587,7 +1188,24 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.LAIR: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.LAIR: TechTreeUnitType(
+            creation_ability=AbilityId.HATCHERY_MORPH_LAIR,
+            producers=frozenset({UnitTypeId.HATCHERY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.HATCHERY,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.HATCHERY_TRAIN_QUEEN: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
@@ -598,7 +1216,9 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_WORKERS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.LARVA: MappingProxyType({
+        ),
+        UnitTypeId.LARVA: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.LARVA_MORPH_CORRUPTOR: TechRequirements(techs=frozenset({Tech.SPIRE})),
                 AbilityId.LARVA_MORPH_DRONE: TechRequirements(),
                 AbilityId.LARVA_MORPH_HYDRALISK: TechRequirements(techs=frozenset({Tech.HYDRALISK_DEN})),
@@ -611,7 +1231,11 @@ TECH_TREE: Final = TechTree(
                 AbilityId.LARVA_MORPH_VIPER: TechRequirements(techs=frozenset({Tech.HIVE})),
                 AbilityId.LARVA_MORPH_ZERGLING: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
             }),
-            UnitTypeId.LIBERATOR: MappingProxyType({
+        ),
+        UnitTypeId.LIBERATOR: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_LIBERATOR,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LIBERATOR_SIEGE_AT: TechRequirements(),
@@ -620,13 +1244,39 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.LIBERATOR_SIEGED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.LIBERATOR_SIEGED: TechTreeUnitType(
+            creation_ability=AbilityId.LIBERATOR_SIEGE_AT,
+            producers=frozenset({UnitTypeId.LIBERATOR}),
+            morphed_from=UnitTypeId.LIBERATOR,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNSIEGE: TechRequirements(),
             }),
-            UnitTypeId.LOCUST: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.LIBERATOR_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.LOCUST: TechTreeUnitType(
+            creation_ability=AbilityId.SWARM_HOST_SPAWN_LOCUST,
+            producers=frozenset({UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -634,7 +1284,17 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.LOCUST_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.LOCUST_FLYING: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LOCUST_SWOOP: TechRequirements(),
@@ -643,7 +1303,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.LURKER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.LURKER: TechTreeUnitType(
+            creation_ability=AbilityId.HYDRALISK_MORPH_LURKER,
+            producers=frozenset({UnitTypeId.HYDRALISK}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LURKER_DEN})),
+            morphed_from=UnitTypeId.HYDRALISK,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -652,25 +1323,57 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.LURKER_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.LURKER_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.LURKER}),
+            morphed_from=UnitTypeId.LURKER,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_FIRE_ON: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.LURKER_DEN: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.LURKER_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.LURKER_DEN: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_LURKER_DEN,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HYDRALISK_DEN})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: TechRequirements(techs=frozenset({Tech.HIVE})),
                 AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE: TechRequirements(techs=frozenset({Tech.HIVE})),
             }),
-            UnitTypeId.LURKER_EGG: MappingProxyType({
+        ),
+        UnitTypeId.LURKER_EGG: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.MARAUDER: MappingProxyType({
+        ),
+        UnitTypeId.MARAUDER: TechTreeUnitType(
+            creation_ability=AbilityId.BARRACKS_TRAIN_MARAUDER,
+            producers=frozenset({UnitTypeId.BARRACKS}),
+            tech_requirements=TechRequirements(needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -679,7 +1382,19 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STIM: TechRequirements(upgrades=frozenset({UpgradeId.STIMPACK})),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.MARINE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.MARINE: TechTreeUnitType(
+            creation_ability=AbilityId.BARRACKS_TRAIN_MARINE,
+            producers=frozenset({UnitTypeId.BARRACKS}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -688,7 +1403,19 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STIM: TechRequirements(upgrades=frozenset({UpgradeId.STIMPACK})),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.MEDIVAC: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.MEDIVAC: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_MEDIVAC,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LOAD: TechRequirements(),
@@ -700,14 +1427,33 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNLOAD_AT: TechRequirements(),
             }),
-            UnitTypeId.MISSILE_TURRET: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.MISSILE_TURRET: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_MISSILE_TURRET,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.MOTHERSHIP: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
+            }),
+        ),
+        UnitTypeId.MOTHERSHIP: TechTreeUnitType(
+            creation_ability=AbilityId.NEXUS_TRAIN_MOTHERSHIP,
+            producers=frozenset({UnitTypeId.NEXUS}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOTHERSHIP_CLOAK_FIELD: TechRequirements(),
@@ -718,7 +1464,17 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.MULE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.MULE: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.GATHER: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -728,7 +1484,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.MUTALISK: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.MUTALISK: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_MUTALISK,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPIRE})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -736,7 +1503,19 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.NEXUS: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.NEXUS: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_NEXUS,
+            producers=frozenset({UnitTypeId.PROBE}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.NEXUS_CHRONO_BOOST: TechRequirements(),
@@ -747,7 +1526,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RECALL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.NYDUS_NETWORK: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.NYDUS_NETWORK: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_NYDUS_NETWORK,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.LOAD: TechRequirements(),
                 AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM: TechRequirements(),
@@ -756,14 +1546,22 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNLOAD: TechRequirements(),
             }),
-            UnitTypeId.NYDUS_WORM: MappingProxyType({
+        ),
+        UnitTypeId.NYDUS_WORM: TechTreeUnitType(
+            creation_ability=AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM,
+            producers=frozenset({UnitTypeId.NYDUS_NETWORK}),
+            ability_requirements=MappingProxyType({
                 AbilityId.LOAD: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNLOAD: TechRequirements(),
             }),
-            UnitTypeId.OBSERVER: MappingProxyType({
+        ),
+        UnitTypeId.OBSERVER: TechTreeUnitType(
+            creation_ability=AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER,
+            producers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -772,11 +1570,37 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.OBSERVER_SIEGED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.OBSERVER_SPEED: UnitTypeUpgrade(speed=1.410937),
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.OBSERVER_SIEGED: TechTreeUnitType(
+            creation_ability=AbilityId.SIEGE,
+            producers=frozenset({UnitTypeId.OBSERVER}),
+            morphed_from=UnitTypeId.OBSERVER,
+            ability_requirements=MappingProxyType({
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNSIEGE: TechRequirements(),
             }),
-            UnitTypeId.ORACLE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ORACLE: TechTreeUnitType(
+            creation_ability=AbilityId.STARGATE_TRAIN_ORACLE,
+            producers=frozenset({UnitTypeId.STARGATE}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -788,7 +1612,21 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.ORBITAL_COMMAND: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ORBITAL_COMMAND: TechTreeUnitType(
+            creation_ability=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
+            producers=frozenset({UnitTypeId.COMMAND_CENTER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.BARRACKS})),
+            morphed_from=UnitTypeId.COMMAND_CENTER,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.COMMAND_CENTER_TRAIN_SCV: TechRequirements(),
                 AbilityId.LIFT: TechRequirements(),
@@ -798,7 +1636,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.RALLY_WORKERS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.ORBITAL_COMMAND_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.ORBITAL_COMMAND_FLYING: TechTreeUnitType(
+            creation_ability=AbilityId.LIFT,
+            producers=frozenset({UnitTypeId.ORBITAL_COMMAND}),
+            morphed_from=UnitTypeId.ORBITAL_COMMAND,
+            ability_requirements=MappingProxyType({
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LAND: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -806,7 +1652,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.OVERLORD: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.OVERLORD: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_OVERLORD,
+            producers=frozenset({UnitTypeId.LARVA}),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -818,14 +1672,33 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.OVERLORD_COCOON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=1.728125),
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.OVERLORD_COCOON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
                 AbilityId.PATROL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.OVERLORD_TRANSPORT: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.OVERLORD_TRANSPORT: TechTreeUnitType(
+            creation_ability=AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT,
+            producers=frozenset({UnitTypeId.OVERLORD}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.OVERLORD,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.LOAD: TechRequirements(),
@@ -838,14 +1711,33 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNLOAD_AT: TechRequirements(),
             }),
-            UnitTypeId.OVERLORD_TRANSPORT_COCOON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=1.722656),
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.OVERLORD_TRANSPORT_COCOON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
                 AbilityId.PATROL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.OVERSEER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.OVERSEER: TechTreeUnitType(
+            creation_ability=AbilityId.OVERLORD_MORPH_OVERSEER,
+            producers=frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.OVERLORD,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -856,14 +1748,34 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.OVERSEER_SIEGED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=2.1),
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.OVERSEER_SIEGED: TechTreeUnitType(
+            creation_ability=AbilityId.SIEGE,
+            producers=frozenset({UnitTypeId.OVERSEER}),
+            morphed_from=UnitTypeId.OVERSEER,
+            ability_requirements=MappingProxyType({
                 AbilityId.OVERSEER_CONTAMINATE: TechRequirements(),
                 AbilityId.OVERSEER_SPAWN_CHANGELING: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNSIEGE: TechRequirements(),
             }),
-            UnitTypeId.PHOENIX: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.PHOENIX: TechTreeUnitType(
+            creation_ability=AbilityId.STARGATE_TRAIN_PHOENIX,
+            producers=frozenset({UnitTypeId.STARGATE}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -873,13 +1785,42 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.PHOTON_CANNON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PHOENIX_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
+                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.PHOTON_CANNON: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_PHOTON_CANNON,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FORGE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.PLANETARY_FORTRESS: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.PLANETARY_FORTRESS: TechTreeUnitType(
+            creation_ability=AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS,
+            producers=frozenset({UnitTypeId.COMMAND_CENTER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
+            morphed_from=UnitTypeId.COMMAND_CENTER,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.COMMAND_CENTER_TRAIN_SCV: TechRequirements(),
@@ -888,7 +1829,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.PROBE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
+            }),
+        ),
+        UnitTypeId.PROBE: TechTreeUnitType(
+            creation_ability=AbilityId.NEXUS_TRAIN_PROBE,
+            producers=frozenset({UnitTypeId.NEXUS}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.GATHER: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -914,7 +1863,19 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SPRAY: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.PURIFICATION_NOVA: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.PURIFICATION_NOVA: TechTreeUnitType(
+            creation_ability=AbilityId.DISRUPTOR_PURIFICATION_NOVA,
+            producers=frozenset({UnitTypeId.DISRUPTOR}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -922,10 +1883,32 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.PYLON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.PYLON: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_PYLON,
+            producers=frozenset({UnitTypeId.PROBE}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
             }),
-            UnitTypeId.QUEEN: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.QUEEN: TechTreeUnitType(
+            creation_ability=AbilityId.HATCHERY_TRAIN_QUEEN,
+            producers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BUILD_CREEP_TUMOR: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
@@ -937,10 +1920,35 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.QUEEN_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
+            }),
+        ),
+        UnitTypeId.QUEEN_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.QUEEN}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.QUEEN,
+            ability_requirements=MappingProxyType({
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.RAVAGER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.RAVAGER: TechTreeUnitType(
+            creation_ability=AbilityId.ROACH_MORPH_RAVAGER,
+            producers=frozenset({UnitTypeId.ROACH}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ROACH_WARREN})),
+            morphed_from=UnitTypeId.ROACH,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -950,15 +1958,41 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.RAVAGER_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+            }),
+        ),
+        UnitTypeId.RAVAGER_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.RAVAGER}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.RAVAGER,
+            ability_requirements=MappingProxyType({
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.RAVAGER_COCOON: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.RAVAGER_COCOON: TechTreeUnitType(
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.RAVEN: MappingProxyType({
+        ),
+        UnitTypeId.RAVEN: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_RAVEN,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            tech_requirements=TechRequirements(needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -969,10 +2003,42 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.REACTOR_BARRACKS: MappingProxyType({}),
-            UnitTypeId.REACTOR_FACTORY: MappingProxyType({}),
-            UnitTypeId.REACTOR_STARPORT: MappingProxyType({}),
-            UnitTypeId.REAPER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.REACTOR: TechTreeUnitType(
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.REACTOR_BARRACKS: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_REACTOR,
+            producers=frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.REACTOR_FACTORY: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_REACTOR,
+            producers=frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.REACTOR_STARPORT: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_REACTOR,
+            producers=frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.REAPER: TechTreeUnitType(
+            creation_ability=AbilityId.BARRACKS_TRAIN_REAPER,
+            producers=frozenset({UnitTypeId.BARRACKS}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -981,10 +2047,35 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.REAPER_GRENADE: MappingProxyType({}),
-            UnitTypeId.REFINERY: MappingProxyType({}),
-            UnitTypeId.REFINERY_RICH: MappingProxyType({}),
-            UnitTypeId.ROACH: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
+            }),
+        ),
+        UnitTypeId.REFINERY: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_REFINERY,
+            producers=frozenset({UnitTypeId.SCV}),
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.REFINERY_RICH: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_REFINERY,
+            producers=frozenset({UnitTypeId.SCV}),
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.ROACH: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_ROACH,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ROACH_WARREN})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -994,7 +2085,22 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.ROACH_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ROACH_SPEED: UnitTypeUpgrade(speed=1.05),
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
+            }),
+        ),
+        UnitTypeId.ROACH_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.ROACH}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.ROACH,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(upgrades=frozenset({UpgradeId.TUNNELING_CLAWS})),
                 AbilityId.HOLD_POSITION: TechRequirements(upgrades=frozenset({UpgradeId.TUNNELING_CLAWS})),
                 AbilityId.MOVE: TechRequirements(upgrades=frozenset({UpgradeId.TUNNELING_CLAWS})),
@@ -1003,20 +2109,49 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.ROACH_WARREN: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ROACH_SPEED: UnitTypeUpgrade(speed=1.175781),
+                UpgradeId.TUNNELING_CLAWS: UnitTypeUpgrade(speed=1.96875),
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.ROACH_WARREN: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_ROACH_WARREN,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: TechRequirements(techs=frozenset({Tech.LAIR})),
                 AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS: TechRequirements(techs=frozenset({Tech.LAIR})),
             }),
-            UnitTypeId.ROBOTICS_BAY: MappingProxyType({
+        ),
+        UnitTypeId.ROBOTICS_BAY: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_ROBOTICS_BAY,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ROBOTICS_FACILITY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE: TechRequirements(),
                 AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: TechRequirements(),
                 AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED: TechRequirements(),
             }),
-            UnitTypeId.ROBOTICS_FACILITY: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.ROBOTICS_FACILITY: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_ROBOTICS_FACILITY,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
@@ -1027,7 +2162,17 @@ TECH_TREE: Final = TechTree(
                 AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.SCV: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.SCV: TechTreeUnitType(
+            creation_ability=AbilityId.COMMAND_CENTER_TRAIN_SCV,
+            producers=frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.GATHER: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
@@ -1053,12 +2198,30 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SPRAY: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.SENSOR_TOWER: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.SENSOR_TOWER: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_SENSOR_TOWER,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
                 AbilityId.SALVAGE: TechRequirements(),
             }),
-            UnitTypeId.SENTRY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.SENTRY: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_SENTRY,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -1081,12 +2244,39 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.SHIELD_BATTERY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.SHIELD_BATTERY: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_SHIELD_BATTERY,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.SHIELD_BATTERY_RECHARGE: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
             }),
-            UnitTypeId.SIEGE_TANK: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.SIEGE_TANK: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_SIEGE_TANK,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            tech_requirements=TechRequirements(needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -1095,26 +2285,64 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.SIEGE_TANK_SIEGED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.SIEGE_TANK_SIEGED: TechTreeUnitType(
+            creation_ability=AbilityId.SIEGE,
+            producers=frozenset({UnitTypeId.SIEGE_TANK}),
+            morphed_from=UnitTypeId.SIEGE_TANK,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UNSIEGE: TechRequirements(),
             }),
-            UnitTypeId.SPAWNING_POOL: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+            }),
+        ),
+        UnitTypeId.SPAWNING_POOL: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_SPAWNING_POOL,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HATCHERY})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: TechRequirements(techs=frozenset({Tech.HIVE})),
                 AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED: TechRequirements(),
             }),
-            UnitTypeId.SPINE_CRAWLER: MappingProxyType({
+        ),
+        UnitTypeId.SPINE_CRAWLER: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_SPINE_CRAWLER,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UPROOT: TechRequirements(),
             }),
-            UnitTypeId.SPINE_CRAWLER_UPROOTED: MappingProxyType({
+        ),
+        UnitTypeId.SPINE_CRAWLER_UPROOTED: TechTreeUnitType(
+            creation_ability=AbilityId.UPROOT,
+            producers=frozenset({UnitTypeId.SPINE_CRAWLER}),
+            morphed_from=UnitTypeId.SPINE_CRAWLER,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -1123,7 +2351,13 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.SPIRE: MappingProxyType({
+        ),
+        UnitTypeId.SPIRE: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_SPIRE,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.SPIRE_MORPH_GREATER_SPIRE: TechRequirements(techs=frozenset({Tech.HIVE})),
@@ -1134,14 +2368,25 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_1})),
                 AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_2})),
             }),
-            UnitTypeId.SPORE_CRAWLER: MappingProxyType({
+        ),
+        UnitTypeId.SPORE_CRAWLER: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_SPORE_CRAWLER,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.UPROOT: TechRequirements(),
             }),
-            UnitTypeId.SPORE_CRAWLER_UPROOTED: MappingProxyType({
+        ),
+        UnitTypeId.SPORE_CRAWLER_UPROOTED: TechTreeUnitType(
+            creation_ability=AbilityId.UPROOT,
+            producers=frozenset({UnitTypeId.SPORE_CRAWLER}),
+            morphed_from=UnitTypeId.SPORE_CRAWLER,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -1150,7 +2395,12 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.STALKER: MappingProxyType({
+        ),
+        UnitTypeId.STALKER: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_STALKER,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BLINK: TechRequirements(upgrades=frozenset({UpgradeId.BLINK})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -1159,7 +2409,23 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.STARGATE: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.STARGATE: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_STARGATE,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.RALLY_UNITS: TechRequirements(),
@@ -1170,7 +2436,18 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STARGATE_TRAIN_TEMPEST: TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
                 AbilityId.STARGATE_TRAIN_VOID_RAY: TechRequirements(),
             }),
-            UnitTypeId.STARPORT: MappingProxyType({
+            needs_power=True,
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.STARPORT: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_STARPORT,
+            producers=frozenset({UnitTypeId.SCV}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FACTORY})),
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_REACTOR: TechRequirements(),
                 AbilityId.BUILD_TECH_LAB: TechRequirements(),
                 AbilityId.CANCEL: TechRequirements(),
@@ -1186,7 +2463,15 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STARPORT_TRAIN_RAVEN: TechRequirements(needs_tech_lab=True),
                 AbilityId.STARPORT_TRAIN_VIKING: TechRequirements(),
             }),
-            UnitTypeId.STARPORT_FLYING: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.STARPORT_FLYING: TechTreeUnitType(
+            creation_ability=AbilityId.LIFT,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            morphed_from=UnitTypeId.STARPORT,
+            ability_requirements=MappingProxyType({
                 AbilityId.BUILD_REACTOR: TechRequirements(),
                 AbilityId.BUILD_TECH_LAB: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -1196,16 +2481,47 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.STASIS_WARD: MappingProxyType({}),
-            UnitTypeId.SUPPLY_DEPOT: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.STASIS_WARD: TechTreeUnitType(
+            creation_ability=AbilityId.ORACLE_BUILD_STASIS_WARD,
+            producers=frozenset({UnitTypeId.ORACLE}),
+            upgrades=MappingProxyType({
+                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
+                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
+            }),
+        ),
+        UnitTypeId.SUPPLY_DEPOT: TechTreeUnitType(
+            creation_ability=AbilityId.SCV_BUILD_SUPPLY_DEPOT,
+            producers=frozenset({UnitTypeId.SCV}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL: TechRequirements(),
                 AbilityId.HALT: TechRequirements(),
                 AbilityId.SUPPLY_DEPOT_LOWER: TechRequirements(),
             }),
-            UnitTypeId.SUPPLY_DEPOT_LOWERED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.SUPPLY_DEPOT_LOWERED: TechTreeUnitType(
+            creation_ability=AbilityId.SUPPLY_DEPOT_LOWER,
+            producers=frozenset({UnitTypeId.SUPPLY_DEPOT}),
+            morphed_from=UnitTypeId.SUPPLY_DEPOT,
+            ability_requirements=MappingProxyType({
                 AbilityId.SUPPLY_DEPOT_RAISE: TechRequirements(),
             }),
-            UnitTypeId.SWARM_HOST: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.SWARM_HOST: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_SWARM_HOST,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
                 AbilityId.HOLD_POSITION: TechRequirements(),
@@ -1215,31 +2531,78 @@ TECH_TREE: Final = TechTree(
                 AbilityId.STOP: TechRequirements(),
                 AbilityId.SWARM_HOST_SPAWN_LOCUST: TechRequirements(),
             }),
-            UnitTypeId.SWARM_HOST_BURROWED: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.SWARM_HOST_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.SWARM_HOST}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.SWARM_HOST,
+            ability_requirements=MappingProxyType({
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.SWARM_HOST_SPAWN_LOCUST: TechRequirements(),
                 AbilityId.UNBURROW: TechRequirements(),
             }),
-            UnitTypeId.TECH_LAB_BARRACKS: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
+                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
+            }),
+        ),
+        UnitTypeId.TECH_LAB: TechTreeUnitType(
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.TECH_LAB_BARRACKS: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_TECH_LAB,
+            producers=frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
+            ability_requirements=MappingProxyType({
                 AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD: TechRequirements(),
                 AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS: TechRequirements(),
                 AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: TechRequirements(),
                 AbilityId.CANCEL_LAST: TechRequirements(),
             }),
-            UnitTypeId.TECH_LAB_FACTORY: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.TECH_LAB_FACTORY: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_TECH_LAB,
+            producers=frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME: TechRequirements(),
                 AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE: TechRequirements(),
                 AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS: TechRequirements(techs=frozenset({Tech.ARMORY})),
                 AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS: TechRequirements(techs=frozenset({Tech.ARMORY})),
             }),
-            UnitTypeId.TECH_LAB_STARPORT: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.TECH_LAB_STARPORT: TechTreeUnitType(
+            creation_ability=AbilityId.BUILD_TECH_LAB,
+            producers=frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+            ability_requirements=MappingProxyType({
                 AbilityId.CANCEL_LAST: TechRequirements(),
                 AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK: TechRequirements(),
                 AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED: TechRequirements(),
                 AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX: TechRequirements(),
             }),
-            UnitTypeId.TEMPEST: MappingProxyType({
+            upgrades=MappingProxyType({
+                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
+            }),
+        ),
+        UnitTypeId.TEMPEST: TechTreeUnitType(
+            creation_ability=AbilityId.STARGATE_TRAIN_TEMPEST,
+            producers=frozenset({UnitTypeId.STARGATE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
+            ability_requirements=MappingProxyType({
                 AbilityId.ATTACK: TechRequirements(),
                 AbilityId.HOLD_POSITION: TechRequirements(),
                 AbilityId.MOVE: TechRequirements(),
@@ -1247,1310 +2610,7 @@ TECH_TREE: Final = TechTree(
                 AbilityId.SMART: TechRequirements(),
                 AbilityId.STOP: TechRequirements(),
             }),
-            UnitTypeId.TEMPLAR_ARCHIVE: MappingProxyType({
-                AbilityId.CANCEL: TechRequirements(),
-                AbilityId.CANCEL_LAST: TechRequirements(),
-                AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: TechRequirements(),
-            }),
-            UnitTypeId.THOR: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.THOR_HIGH_IMPACT_MODE: TechRequirements(),
-            }),
-            UnitTypeId.THOR_HIGH_IMPACT: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.THOR_EXPLOSIVE_MODE: TechRequirements(),
-            }),
-            UnitTypeId.TWILIGHT_COUNCIL: MappingProxyType({
-                AbilityId.CANCEL: TechRequirements(),
-                AbilityId.CANCEL_LAST: TechRequirements(),
-                AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: TechRequirements(),
-                AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: TechRequirements(),
-                AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: TechRequirements(),
-            }),
-            UnitTypeId.ULTRALISK: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-            }),
-            UnitTypeId.ULTRALISK_BURROWED: MappingProxyType({
-                AbilityId.UNBURROW: TechRequirements(),
-            }),
-            UnitTypeId.ULTRALISK_CAVERN: MappingProxyType({
-                AbilityId.CANCEL: TechRequirements(),
-                AbilityId.CANCEL_LAST: TechRequirements(),
-                AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: TechRequirements(),
-                AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: TechRequirements(),
-            }),
-            UnitTypeId.VIKING: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.VIKING_LAND: TechRequirements(),
-            }),
-            UnitTypeId.VIKING_LANDED: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.VIKING_LIFT: TechRequirements(),
-            }),
-            UnitTypeId.VIPER: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.VIPER_ABDUCT: TechRequirements(),
-                AbilityId.VIPER_BLINDING_CLOUD: TechRequirements(),
-                AbilityId.VIPER_CONSUME: TechRequirements(),
-                AbilityId.VIPER_PARASITIC_BOMB: TechRequirements(),
-            }),
-            UnitTypeId.VOID_RAY: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.CANCEL: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT: TechRequirements(),
-            }),
-            UnitTypeId.WARP_GATE: MappingProxyType({
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.WARP_GATE_MORPH_GATEWAY: TechRequirements(),
-                AbilityId.WARP_GATE_WARP_IN_ADEPT: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-                AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: TechRequirements(techs=frozenset({Tech.DARK_SHRINE})),
-                AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: TechRequirements(techs=frozenset({Tech.TEMPLAR_ARCHIVE})),
-                AbilityId.WARP_GATE_WARP_IN_SENTRY: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-                AbilityId.WARP_GATE_WARP_IN_STALKER: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-                AbilityId.WARP_GATE_WARP_IN_ZEALOT: TechRequirements(),
-            }),
-            UnitTypeId.WARP_PRISM: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.LOAD: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.UNLOAD_AT: TechRequirements(),
-                AbilityId.WARP_PRISM_PHASING_MODE: TechRequirements(),
-            }),
-            UnitTypeId.WARP_PRISM_PHASING: MappingProxyType({
-                AbilityId.LOAD: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.UNLOAD_AT: TechRequirements(),
-                AbilityId.WARP_PRISM_TRANSPORT_MODE: TechRequirements(),
-            }),
-            UnitTypeId.WIDOW_MINE: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.BURROW: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-            }),
-            UnitTypeId.WIDOW_MINE_BURROWED: MappingProxyType({
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.UNBURROW: TechRequirements(),
-                AbilityId.WIDOW_MINE_ATTACK: TechRequirements(),
-            }),
-            UnitTypeId.ZEALOT: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.ZEALOT_CHARGE: TechRequirements(upgrades=frozenset({UpgradeId.CHARGE})),
-            }),
-            UnitTypeId.ZERGLING: MappingProxyType({
-                AbilityId.ATTACK: TechRequirements(),
-                AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-                AbilityId.HOLD_POSITION: TechRequirements(),
-                AbilityId.MOVE: TechRequirements(),
-                AbilityId.PATROL: TechRequirements(),
-                AbilityId.SMART: TechRequirements(),
-                AbilityId.STOP: TechRequirements(),
-                AbilityId.ZERGLING_MORPH_BANELING: TechRequirements(techs=frozenset({Tech.BANELING_NEST})),
-            }),
-            UnitTypeId.ZERGLING_BURROWED: MappingProxyType({
-                AbilityId.UNBURROW: TechRequirements(),
-            }),
-        }),
-        creation_abilities=MappingProxyType({
-            UnitTypeId.ADEPT: AbilityId.GATEWAY_TRAIN_ADEPT,
-            UnitTypeId.ARMORY: AbilityId.SCV_BUILD_ARMORY,
-            UnitTypeId.ASSIMILATOR: AbilityId.PROBE_BUILD_ASSIMILATOR,
-            UnitTypeId.ASSIMILATOR_RICH: AbilityId.PROBE_BUILD_ASSIMILATOR,
-            UnitTypeId.AUTO_TURRET: AbilityId.RAVEN_SPAWN_AUTO_TURRET,
-            UnitTypeId.BANELING: AbilityId.ZERGLING_MORPH_BANELING,
-            UnitTypeId.BANELING_BURROWED: AbilityId.BURROW,
-            UnitTypeId.BANELING_NEST: AbilityId.DRONE_MORPH_BANELING_NEST,
-            UnitTypeId.BANSHEE: AbilityId.STARPORT_TRAIN_BANSHEE,
-            UnitTypeId.BARRACKS: AbilityId.SCV_BUILD_BARRACKS,
-            UnitTypeId.BARRACKS_FLYING: AbilityId.LIFT,
-            UnitTypeId.BATTLECRUISER: AbilityId.STARPORT_TRAIN_BATTLECRUISER,
-            UnitTypeId.BROOD_LORD: AbilityId.CORRUPTOR_MORPH_BROOD_LORD,
-            UnitTypeId.BUNKER: AbilityId.SCV_BUILD_BUNKER,
-            UnitTypeId.CARRIER: AbilityId.STARGATE_TRAIN_CARRIER,
-            UnitTypeId.COLOSSUS: AbilityId.ROBOTICS_FACILITY_TRAIN_COLOSSUS,
-            UnitTypeId.COMMAND_CENTER: AbilityId.SCV_BUILD_COMMAND_CENTER,
-            UnitTypeId.COMMAND_CENTER_FLYING: AbilityId.LIFT,
-            UnitTypeId.CORRUPTOR: AbilityId.LARVA_MORPH_CORRUPTOR,
-            UnitTypeId.CREEP_TUMOR: AbilityId.BUILD_CREEP_TUMOR,
-            UnitTypeId.CREEP_TUMOR_QUEEN: AbilityId.BUILD_CREEP_TUMOR,
-            UnitTypeId.CYBERNETICS_CORE: AbilityId.PROBE_BUILD_CYBERNETICS_CORE,
-            UnitTypeId.CYCLONE: AbilityId.FACTORY_TRAIN_CYCLONE,
-            UnitTypeId.DARK_SHRINE: AbilityId.PROBE_BUILD_DARK_SHRINE,
-            UnitTypeId.DARK_TEMPLAR: AbilityId.GATEWAY_TRAIN_DARK_TEMPLAR,
-            UnitTypeId.DISRUPTOR: AbilityId.ROBOTICS_FACILITY_TRAIN_DISRUPTOR,
-            UnitTypeId.DRONE: AbilityId.LARVA_MORPH_DRONE,
-            UnitTypeId.DRONE_BURROWED: AbilityId.BURROW,
-            UnitTypeId.ENGINEERING_BAY: AbilityId.SCV_BUILD_ENGINEERING_BAY,
-            UnitTypeId.EVOLUTION_CHAMBER: AbilityId.DRONE_MORPH_EVOLUTION_CHAMBER,
-            UnitTypeId.EXTRACTOR: AbilityId.DRONE_MORPH_EXTRACTOR,
-            UnitTypeId.EXTRACTOR_RICH: AbilityId.DRONE_MORPH_EXTRACTOR,
-            UnitTypeId.FACTORY: AbilityId.SCV_BUILD_FACTORY,
-            UnitTypeId.FACTORY_FLYING: AbilityId.LIFT,
-            UnitTypeId.FLEET_BEACON: AbilityId.PROBE_BUILD_FLEET_BEACON,
-            UnitTypeId.FORGE: AbilityId.PROBE_BUILD_FORGE,
-            UnitTypeId.FUSION_CORE: AbilityId.SCV_BUILD_FUSION_CORE,
-            UnitTypeId.GATEWAY: AbilityId.PROBE_BUILD_GATEWAY,
-            UnitTypeId.GHOST: AbilityId.BARRACKS_TRAIN_GHOST,
-            UnitTypeId.GHOST_ACADEMY: AbilityId.SCV_BUILD_GHOST_ACADEMY,
-            UnitTypeId.GREATER_SPIRE: AbilityId.SPIRE_MORPH_GREATER_SPIRE,
-            UnitTypeId.HATCHERY: AbilityId.DRONE_MORPH_HATCHERY,
-            UnitTypeId.HELLBAT: AbilityId.FACTORY_TRAIN_HELLBAT,
-            UnitTypeId.HELLION: AbilityId.FACTORY_TRAIN_HELLION,
-            UnitTypeId.HIGH_TEMPLAR: AbilityId.GATEWAY_TRAIN_HIGH_TEMPLAR,
-            UnitTypeId.HIVE: AbilityId.LAIR_MORPH_HIVE,
-            UnitTypeId.HYDRALISK: AbilityId.LARVA_MORPH_HYDRALISK,
-            UnitTypeId.HYDRALISK_BURROWED: AbilityId.BURROW,
-            UnitTypeId.HYDRALISK_DEN: AbilityId.DRONE_MORPH_HYDRALISK_DEN,
-            UnitTypeId.IMMORTAL: AbilityId.ROBOTICS_FACILITY_TRAIN_IMMORTAL,
-            UnitTypeId.INFESTATION_PIT: AbilityId.DRONE_MORPH_INFESTATION_PIT,
-            UnitTypeId.INFESTOR: AbilityId.LARVA_MORPH_INFESTOR,
-            UnitTypeId.INFESTOR_BURROWED: AbilityId.BURROW,
-            UnitTypeId.LAIR: AbilityId.HATCHERY_MORPH_LAIR,
-            UnitTypeId.LIBERATOR: AbilityId.STARPORT_TRAIN_LIBERATOR,
-            UnitTypeId.LIBERATOR_SIEGED: AbilityId.LIBERATOR_SIEGE_AT,
-            UnitTypeId.LOCUST: AbilityId.SWARM_HOST_SPAWN_LOCUST,
-            UnitTypeId.LURKER: AbilityId.HYDRALISK_MORPH_LURKER,
-            UnitTypeId.LURKER_BURROWED: AbilityId.BURROW,
-            UnitTypeId.LURKER_DEN: AbilityId.DRONE_MORPH_LURKER_DEN,
-            UnitTypeId.MARAUDER: AbilityId.BARRACKS_TRAIN_MARAUDER,
-            UnitTypeId.MARINE: AbilityId.BARRACKS_TRAIN_MARINE,
-            UnitTypeId.MEDIVAC: AbilityId.STARPORT_TRAIN_MEDIVAC,
-            UnitTypeId.MISSILE_TURRET: AbilityId.SCV_BUILD_MISSILE_TURRET,
-            UnitTypeId.MOTHERSHIP: AbilityId.NEXUS_TRAIN_MOTHERSHIP,
-            UnitTypeId.MUTALISK: AbilityId.LARVA_MORPH_MUTALISK,
-            UnitTypeId.NEXUS: AbilityId.PROBE_BUILD_NEXUS,
-            UnitTypeId.NYDUS_NETWORK: AbilityId.DRONE_MORPH_NYDUS_NETWORK,
-            UnitTypeId.NYDUS_WORM: AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM,
-            UnitTypeId.OBSERVER: AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER,
-            UnitTypeId.OBSERVER_SIEGED: AbilityId.SIEGE,
-            UnitTypeId.ORACLE: AbilityId.STARGATE_TRAIN_ORACLE,
-            UnitTypeId.ORBITAL_COMMAND: AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
-            UnitTypeId.ORBITAL_COMMAND_FLYING: AbilityId.LIFT,
-            UnitTypeId.OVERLORD: AbilityId.LARVA_MORPH_OVERLORD,
-            UnitTypeId.OVERLORD_TRANSPORT: AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT,
-            UnitTypeId.OVERSEER: AbilityId.OVERLORD_MORPH_OVERSEER,
-            UnitTypeId.OVERSEER_SIEGED: AbilityId.SIEGE,
-            UnitTypeId.PHOENIX: AbilityId.STARGATE_TRAIN_PHOENIX,
-            UnitTypeId.PHOTON_CANNON: AbilityId.PROBE_BUILD_PHOTON_CANNON,
-            UnitTypeId.PLANETARY_FORTRESS: AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS,
-            UnitTypeId.PROBE: AbilityId.NEXUS_TRAIN_PROBE,
-            UnitTypeId.PURIFICATION_NOVA: AbilityId.DISRUPTOR_PURIFICATION_NOVA,
-            UnitTypeId.PYLON: AbilityId.PROBE_BUILD_PYLON,
-            UnitTypeId.QUEEN: AbilityId.HATCHERY_TRAIN_QUEEN,
-            UnitTypeId.QUEEN_BURROWED: AbilityId.BURROW,
-            UnitTypeId.RAVAGER: AbilityId.ROACH_MORPH_RAVAGER,
-            UnitTypeId.RAVAGER_BURROWED: AbilityId.BURROW,
-            UnitTypeId.RAVEN: AbilityId.STARPORT_TRAIN_RAVEN,
-            UnitTypeId.REACTOR_BARRACKS: AbilityId.BUILD_REACTOR,
-            UnitTypeId.REACTOR_FACTORY: AbilityId.BUILD_REACTOR,
-            UnitTypeId.REACTOR_STARPORT: AbilityId.BUILD_REACTOR,
-            UnitTypeId.REAPER: AbilityId.BARRACKS_TRAIN_REAPER,
-            UnitTypeId.REFINERY: AbilityId.SCV_BUILD_REFINERY,
-            UnitTypeId.REFINERY_RICH: AbilityId.SCV_BUILD_REFINERY,
-            UnitTypeId.ROACH: AbilityId.LARVA_MORPH_ROACH,
-            UnitTypeId.ROACH_BURROWED: AbilityId.BURROW,
-            UnitTypeId.ROACH_WARREN: AbilityId.DRONE_MORPH_ROACH_WARREN,
-            UnitTypeId.ROBOTICS_BAY: AbilityId.PROBE_BUILD_ROBOTICS_BAY,
-            UnitTypeId.ROBOTICS_FACILITY: AbilityId.PROBE_BUILD_ROBOTICS_FACILITY,
-            UnitTypeId.SCV: AbilityId.COMMAND_CENTER_TRAIN_SCV,
-            UnitTypeId.SENSOR_TOWER: AbilityId.SCV_BUILD_SENSOR_TOWER,
-            UnitTypeId.SENTRY: AbilityId.GATEWAY_TRAIN_SENTRY,
-            UnitTypeId.SHIELD_BATTERY: AbilityId.PROBE_BUILD_SHIELD_BATTERY,
-            UnitTypeId.SIEGE_TANK: AbilityId.FACTORY_TRAIN_SIEGE_TANK,
-            UnitTypeId.SIEGE_TANK_SIEGED: AbilityId.SIEGE,
-            UnitTypeId.SPAWNING_POOL: AbilityId.DRONE_MORPH_SPAWNING_POOL,
-            UnitTypeId.SPINE_CRAWLER: AbilityId.DRONE_MORPH_SPINE_CRAWLER,
-            UnitTypeId.SPINE_CRAWLER_UPROOTED: AbilityId.UPROOT,
-            UnitTypeId.SPIRE: AbilityId.DRONE_MORPH_SPIRE,
-            UnitTypeId.SPORE_CRAWLER: AbilityId.DRONE_MORPH_SPORE_CRAWLER,
-            UnitTypeId.SPORE_CRAWLER_UPROOTED: AbilityId.UPROOT,
-            UnitTypeId.STALKER: AbilityId.GATEWAY_TRAIN_STALKER,
-            UnitTypeId.STARGATE: AbilityId.PROBE_BUILD_STARGATE,
-            UnitTypeId.STARPORT: AbilityId.SCV_BUILD_STARPORT,
-            UnitTypeId.STARPORT_FLYING: AbilityId.LIFT,
-            UnitTypeId.STASIS_WARD: AbilityId.ORACLE_BUILD_STASIS_WARD,
-            UnitTypeId.SUPPLY_DEPOT: AbilityId.SCV_BUILD_SUPPLY_DEPOT,
-            UnitTypeId.SUPPLY_DEPOT_LOWERED: AbilityId.SUPPLY_DEPOT_LOWER,
-            UnitTypeId.SWARM_HOST: AbilityId.LARVA_MORPH_SWARM_HOST,
-            UnitTypeId.SWARM_HOST_BURROWED: AbilityId.BURROW,
-            UnitTypeId.TECH_LAB_BARRACKS: AbilityId.BUILD_TECH_LAB,
-            UnitTypeId.TECH_LAB_FACTORY: AbilityId.BUILD_TECH_LAB,
-            UnitTypeId.TECH_LAB_STARPORT: AbilityId.BUILD_TECH_LAB,
-            UnitTypeId.TEMPEST: AbilityId.STARGATE_TRAIN_TEMPEST,
-            UnitTypeId.TEMPLAR_ARCHIVE: AbilityId.PROBE_BUILD_TEMPLAR_ARCHIVE,
-            UnitTypeId.THOR: AbilityId.FACTORY_TRAIN_THOR,
-            UnitTypeId.THOR_HIGH_IMPACT: AbilityId.THOR_HIGH_IMPACT_MODE,
-            UnitTypeId.TWILIGHT_COUNCIL: AbilityId.PROBE_BUILD_TWILIGHT_COUNCIL,
-            UnitTypeId.ULTRALISK: AbilityId.LARVA_MORPH_ULTRALISK,
-            UnitTypeId.ULTRALISK_BURROWED: AbilityId.BURROW,
-            UnitTypeId.ULTRALISK_CAVERN: AbilityId.DRONE_MORPH_ULTRALISK_CAVERN,
-            UnitTypeId.VIKING: AbilityId.STARPORT_TRAIN_VIKING,
-            UnitTypeId.VIKING_LANDED: AbilityId.VIKING_LAND,
-            UnitTypeId.VIPER: AbilityId.LARVA_MORPH_VIPER,
-            UnitTypeId.VOID_RAY: AbilityId.STARGATE_TRAIN_VOID_RAY,
-            UnitTypeId.WARP_GATE: AbilityId.GATEWAY_MORPH_WARP_GATE,
-            UnitTypeId.WARP_PRISM: AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM,
-            UnitTypeId.WARP_PRISM_PHASING: AbilityId.WARP_PRISM_PHASING_MODE,
-            UnitTypeId.WIDOW_MINE: AbilityId.FACTORY_TRAIN_WIDOW_MINE,
-            UnitTypeId.WIDOW_MINE_BURROWED: AbilityId.BURROW,
-            UnitTypeId.ZEALOT: AbilityId.GATEWAY_TRAIN_ZEALOT,
-            UnitTypeId.ZERGLING: AbilityId.LARVA_MORPH_ZERGLING,
-            UnitTypeId.ZERGLING_BURROWED: AbilityId.BURROW,
-        }),
-        producers=MappingProxyType({
-            UnitTypeId.ADEPT: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.ARMORY: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.ASSIMILATOR: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.ASSIMILATOR_RICH: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.AUTO_TURRET: frozenset({UnitTypeId.RAVEN}),
-            UnitTypeId.BANELING: frozenset({UnitTypeId.ZERGLING}),
-            UnitTypeId.BANELING_BURROWED: frozenset({UnitTypeId.BANELING}),
-            UnitTypeId.BANELING_NEST: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.BANSHEE: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.BARRACKS: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.BARRACKS_FLYING: frozenset({UnitTypeId.BARRACKS}),
-            UnitTypeId.BATTLECRUISER: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.BROOD_LORD: frozenset({UnitTypeId.CORRUPTOR}),
-            UnitTypeId.BUNKER: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.CARRIER: frozenset({UnitTypeId.STARGATE}),
-            UnitTypeId.COLOSSUS: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            UnitTypeId.COMMAND_CENTER: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.COMMAND_CENTER_FLYING: frozenset({UnitTypeId.COMMAND_CENTER}),
-            UnitTypeId.CORRUPTOR: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.CREEP_TUMOR: frozenset({UnitTypeId.CREEP_TUMOR_BURROWED}),
-            UnitTypeId.CREEP_TUMOR_QUEEN: frozenset({UnitTypeId.QUEEN}),
-            UnitTypeId.CYBERNETICS_CORE: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.CYCLONE: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.DARK_SHRINE: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.DARK_TEMPLAR: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.DISRUPTOR: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            UnitTypeId.DRONE: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.DRONE_BURROWED: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.ENGINEERING_BAY: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.EVOLUTION_CHAMBER: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.EXTRACTOR: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.EXTRACTOR_RICH: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.FACTORY: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.FACTORY_FLYING: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.FLEET_BEACON: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.FORGE: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.FUSION_CORE: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.GATEWAY: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.GHOST: frozenset({UnitTypeId.BARRACKS}),
-            UnitTypeId.GHOST_ACADEMY: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.GREATER_SPIRE: frozenset({UnitTypeId.SPIRE}),
-            UnitTypeId.HATCHERY: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.HELLBAT: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.HELLION: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.HIGH_TEMPLAR: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.HIVE: frozenset({UnitTypeId.LAIR}),
-            UnitTypeId.HYDRALISK: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.HYDRALISK_BURROWED: frozenset({UnitTypeId.HYDRALISK}),
-            UnitTypeId.HYDRALISK_DEN: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.IMMORTAL: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            UnitTypeId.INFESTATION_PIT: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.INFESTOR: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.INFESTOR_BURROWED: frozenset({UnitTypeId.INFESTOR}),
-            UnitTypeId.LAIR: frozenset({UnitTypeId.HATCHERY}),
-            UnitTypeId.LIBERATOR: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.LIBERATOR_SIEGED: frozenset({UnitTypeId.LIBERATOR}),
-            UnitTypeId.LOCUST: frozenset({UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED}),
-            UnitTypeId.LURKER: frozenset({UnitTypeId.HYDRALISK}),
-            UnitTypeId.LURKER_BURROWED: frozenset({UnitTypeId.LURKER}),
-            UnitTypeId.LURKER_DEN: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.MARAUDER: frozenset({UnitTypeId.BARRACKS}),
-            UnitTypeId.MARINE: frozenset({UnitTypeId.BARRACKS}),
-            UnitTypeId.MEDIVAC: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.MISSILE_TURRET: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.MOTHERSHIP: frozenset({UnitTypeId.NEXUS}),
-            UnitTypeId.MUTALISK: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.NEXUS: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.NYDUS_NETWORK: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.NYDUS_WORM: frozenset({UnitTypeId.NYDUS_NETWORK}),
-            UnitTypeId.OBSERVER: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            UnitTypeId.OBSERVER_SIEGED: frozenset({UnitTypeId.OBSERVER}),
-            UnitTypeId.ORACLE: frozenset({UnitTypeId.STARGATE}),
-            UnitTypeId.ORBITAL_COMMAND: frozenset({UnitTypeId.COMMAND_CENTER}),
-            UnitTypeId.ORBITAL_COMMAND_FLYING: frozenset({UnitTypeId.ORBITAL_COMMAND}),
-            UnitTypeId.OVERLORD: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.OVERLORD_TRANSPORT: frozenset({UnitTypeId.OVERLORD}),
-            UnitTypeId.OVERSEER: frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
-            UnitTypeId.OVERSEER_SIEGED: frozenset({UnitTypeId.OVERSEER}),
-            UnitTypeId.PHOENIX: frozenset({UnitTypeId.STARGATE}),
-            UnitTypeId.PHOTON_CANNON: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.PLANETARY_FORTRESS: frozenset({UnitTypeId.COMMAND_CENTER}),
-            UnitTypeId.PROBE: frozenset({UnitTypeId.NEXUS}),
-            UnitTypeId.PURIFICATION_NOVA: frozenset({UnitTypeId.DISRUPTOR}),
-            UnitTypeId.PYLON: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.QUEEN: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            UnitTypeId.QUEEN_BURROWED: frozenset({UnitTypeId.QUEEN}),
-            UnitTypeId.RAVAGER: frozenset({UnitTypeId.ROACH}),
-            UnitTypeId.RAVAGER_BURROWED: frozenset({UnitTypeId.RAVAGER}),
-            UnitTypeId.RAVEN: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.REACTOR_BARRACKS: frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
-            UnitTypeId.REACTOR_FACTORY: frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
-            UnitTypeId.REACTOR_STARPORT: frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
-            UnitTypeId.REAPER: frozenset({UnitTypeId.BARRACKS}),
-            UnitTypeId.REFINERY: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.REFINERY_RICH: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.ROACH: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.ROACH_BURROWED: frozenset({UnitTypeId.ROACH}),
-            UnitTypeId.ROACH_WARREN: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.ROBOTICS_BAY: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.ROBOTICS_FACILITY: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.SCV: frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
-            UnitTypeId.SENSOR_TOWER: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.SENTRY: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.SHIELD_BATTERY: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.SIEGE_TANK: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.SIEGE_TANK_SIEGED: frozenset({UnitTypeId.SIEGE_TANK}),
-            UnitTypeId.SPAWNING_POOL: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.SPINE_CRAWLER: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.SPINE_CRAWLER_UPROOTED: frozenset({UnitTypeId.SPINE_CRAWLER}),
-            UnitTypeId.SPIRE: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.SPORE_CRAWLER: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.SPORE_CRAWLER_UPROOTED: frozenset({UnitTypeId.SPORE_CRAWLER}),
-            UnitTypeId.STALKER: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.STARGATE: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.STARPORT: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.STARPORT_FLYING: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.STASIS_WARD: frozenset({UnitTypeId.ORACLE}),
-            UnitTypeId.SUPPLY_DEPOT: frozenset({UnitTypeId.SCV}),
-            UnitTypeId.SUPPLY_DEPOT_LOWERED: frozenset({UnitTypeId.SUPPLY_DEPOT}),
-            UnitTypeId.SWARM_HOST: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.SWARM_HOST_BURROWED: frozenset({UnitTypeId.SWARM_HOST}),
-            UnitTypeId.TECH_LAB_BARRACKS: frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
-            UnitTypeId.TECH_LAB_FACTORY: frozenset({UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING}),
-            UnitTypeId.TECH_LAB_STARPORT: frozenset({UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
-            UnitTypeId.TEMPEST: frozenset({UnitTypeId.STARGATE}),
-            UnitTypeId.TEMPLAR_ARCHIVE: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.THOR: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.THOR_HIGH_IMPACT: frozenset({UnitTypeId.THOR}),
-            UnitTypeId.TWILIGHT_COUNCIL: frozenset({UnitTypeId.PROBE}),
-            UnitTypeId.ULTRALISK: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.ULTRALISK_BURROWED: frozenset({UnitTypeId.ULTRALISK}),
-            UnitTypeId.ULTRALISK_CAVERN: frozenset({UnitTypeId.DRONE}),
-            UnitTypeId.VIKING: frozenset({UnitTypeId.STARPORT}),
-            UnitTypeId.VIKING_LANDED: frozenset({UnitTypeId.VIKING}),
-            UnitTypeId.VIPER: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.VOID_RAY: frozenset({UnitTypeId.STARGATE}),
-            UnitTypeId.WARP_GATE: frozenset({UnitTypeId.GATEWAY}),
-            UnitTypeId.WARP_PRISM: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            UnitTypeId.WARP_PRISM_PHASING: frozenset({UnitTypeId.WARP_PRISM}),
-            UnitTypeId.WIDOW_MINE: frozenset({UnitTypeId.FACTORY}),
-            UnitTypeId.WIDOW_MINE_BURROWED: frozenset({UnitTypeId.WIDOW_MINE}),
-            UnitTypeId.ZEALOT: frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            UnitTypeId.ZERGLING: frozenset({UnitTypeId.LARVA}),
-            UnitTypeId.ZERGLING_BURROWED: frozenset({UnitTypeId.ZERGLING}),
-        }),
-        tech_requirements=MappingProxyType({
-            UnitTypeId.ADEPT: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.ARMORY: TechRequirements(techs=frozenset({Tech.FACTORY})),
-            UnitTypeId.BANELING: TechRequirements(techs=frozenset({Tech.BANELING_NEST})),
-            UnitTypeId.BANELING_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.BANELING_NEST: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.BANSHEE: TechRequirements(needs_tech_lab=True),
-            UnitTypeId.BARRACKS: TechRequirements(techs=frozenset({Tech.SUPPLY_DEPOT})),
-            UnitTypeId.BATTLECRUISER: TechRequirements(techs=frozenset({Tech.FUSION_CORE}), needs_tech_lab=True),
-            UnitTypeId.BROOD_LORD: TechRequirements(techs=frozenset({Tech.GREATER_SPIRE})),
-            UnitTypeId.BUNKER: TechRequirements(techs=frozenset({Tech.BARRACKS})),
-            UnitTypeId.CARRIER: TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
-            UnitTypeId.COLOSSUS: TechRequirements(techs=frozenset({Tech.ROBOTICS_BAY})),
-            UnitTypeId.CORRUPTOR: TechRequirements(techs=frozenset({Tech.SPIRE})),
-            UnitTypeId.CYBERNETICS_CORE: TechRequirements(techs=frozenset({Tech.GATEWAY})),
-            UnitTypeId.CYCLONE: TechRequirements(needs_tech_lab=True),
-            UnitTypeId.DARK_SHRINE: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL})),
-            UnitTypeId.DARK_TEMPLAR: TechRequirements(techs=frozenset({Tech.DARK_SHRINE})),
-            UnitTypeId.DISRUPTOR: TechRequirements(techs=frozenset({Tech.ROBOTICS_BAY})),
-            UnitTypeId.DRONE_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.ENGINEERING_BAY: TechRequirements(techs=frozenset({Tech.COMMAND_CENTER})),
-            UnitTypeId.EVOLUTION_CHAMBER: TechRequirements(techs=frozenset({Tech.HATCHERY})),
-            UnitTypeId.FACTORY: TechRequirements(techs=frozenset({Tech.BARRACKS})),
-            UnitTypeId.FLEET_BEACON: TechRequirements(techs=frozenset({Tech.STARGATE})),
-            UnitTypeId.FORGE: TechRequirements(techs=frozenset({Tech.NEXUS})),
-            UnitTypeId.FUSION_CORE: TechRequirements(techs=frozenset({Tech.STARPORT})),
-            UnitTypeId.GATEWAY: TechRequirements(techs=frozenset({Tech.NEXUS})),
-            UnitTypeId.GHOST: TechRequirements(techs=frozenset({Tech.GHOST_ACADEMY}), needs_tech_lab=True),
-            UnitTypeId.GHOST_ACADEMY: TechRequirements(techs=frozenset({Tech.BARRACKS})),
-            UnitTypeId.GREATER_SPIRE: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UnitTypeId.HELLBAT: TechRequirements(techs=frozenset({Tech.ARMORY})),
-            UnitTypeId.HIGH_TEMPLAR: TechRequirements(techs=frozenset({Tech.TEMPLAR_ARCHIVE})),
-            UnitTypeId.HIVE: TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
-            UnitTypeId.HYDRALISK: TechRequirements(techs=frozenset({Tech.HYDRALISK_DEN})),
-            UnitTypeId.HYDRALISK_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.HYDRALISK_DEN: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.INFESTATION_PIT: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.INFESTOR: TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
-            UnitTypeId.INFESTOR_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.LAIR: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.LURKER: TechRequirements(techs=frozenset({Tech.LURKER_DEN})),
-            UnitTypeId.LURKER_DEN: TechRequirements(techs=frozenset({Tech.HYDRALISK_DEN})),
-            UnitTypeId.MARAUDER: TechRequirements(needs_tech_lab=True),
-            UnitTypeId.MISSILE_TURRET: TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
-            UnitTypeId.MOTHERSHIP: TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
-            UnitTypeId.MUTALISK: TechRequirements(techs=frozenset({Tech.SPIRE})),
-            UnitTypeId.NYDUS_NETWORK: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.ORBITAL_COMMAND: TechRequirements(techs=frozenset({Tech.BARRACKS})),
-            UnitTypeId.OVERLORD_TRANSPORT: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.OVERSEER: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.PHOTON_CANNON: TechRequirements(techs=frozenset({Tech.FORGE})),
-            UnitTypeId.PLANETARY_FORTRESS: TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
-            UnitTypeId.QUEEN: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.QUEEN_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.RAVAGER: TechRequirements(techs=frozenset({Tech.ROACH_WARREN})),
-            UnitTypeId.RAVAGER_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.RAVEN: TechRequirements(needs_tech_lab=True),
-            UnitTypeId.ROACH: TechRequirements(techs=frozenset({Tech.ROACH_WARREN})),
-            UnitTypeId.ROACH_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.ROACH_WARREN: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.ROBOTICS_BAY: TechRequirements(techs=frozenset({Tech.ROBOTICS_FACILITY})),
-            UnitTypeId.ROBOTICS_FACILITY: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.SENSOR_TOWER: TechRequirements(techs=frozenset({Tech.ENGINEERING_BAY})),
-            UnitTypeId.SENTRY: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.SHIELD_BATTERY: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.SIEGE_TANK: TechRequirements(needs_tech_lab=True),
-            UnitTypeId.SPAWNING_POOL: TechRequirements(techs=frozenset({Tech.HATCHERY})),
-            UnitTypeId.SPINE_CRAWLER: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.SPIRE: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UnitTypeId.SPORE_CRAWLER: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.STALKER: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.STARGATE: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.STARPORT: TechRequirements(techs=frozenset({Tech.FACTORY})),
-            UnitTypeId.SWARM_HOST: TechRequirements(techs=frozenset({Tech.INFESTATION_PIT})),
-            UnitTypeId.SWARM_HOST_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.TEMPEST: TechRequirements(techs=frozenset({Tech.FLEET_BEACON})),
-            UnitTypeId.TEMPLAR_ARCHIVE: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL})),
-            UnitTypeId.THOR: TechRequirements(techs=frozenset({Tech.ARMORY}), needs_tech_lab=True),
-            UnitTypeId.TWILIGHT_COUNCIL: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
-            UnitTypeId.ULTRALISK: TechRequirements(techs=frozenset({Tech.ULTRALISK_CAVERN})),
-            UnitTypeId.ULTRALISK_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-            UnitTypeId.ULTRALISK_CAVERN: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UnitTypeId.VIPER: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UnitTypeId.ZERGLING: TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
-            UnitTypeId.ZERGLING_BURROWED: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
-        }),
-        morph_sources=MappingProxyType({
-            UnitTypeId.BANELING: UnitTypeId.ZERGLING,
-            UnitTypeId.BANELING_BURROWED: UnitTypeId.BANELING,
-            UnitTypeId.BANELING_NEST: UnitTypeId.DRONE,
-            UnitTypeId.BARRACKS_FLYING: UnitTypeId.BARRACKS,
-            UnitTypeId.BROOD_LORD: UnitTypeId.CORRUPTOR,
-            UnitTypeId.COMMAND_CENTER_FLYING: UnitTypeId.COMMAND_CENTER,
-            UnitTypeId.CORRUPTOR: UnitTypeId.LARVA,
-            UnitTypeId.DRONE: UnitTypeId.LARVA,
-            UnitTypeId.DRONE_BURROWED: UnitTypeId.DRONE,
-            UnitTypeId.EVOLUTION_CHAMBER: UnitTypeId.DRONE,
-            UnitTypeId.EXTRACTOR: UnitTypeId.DRONE,
-            UnitTypeId.EXTRACTOR_RICH: UnitTypeId.DRONE,
-            UnitTypeId.FACTORY_FLYING: UnitTypeId.FACTORY,
-            UnitTypeId.GREATER_SPIRE: UnitTypeId.SPIRE,
-            UnitTypeId.HATCHERY: UnitTypeId.DRONE,
-            UnitTypeId.HIVE: UnitTypeId.LAIR,
-            UnitTypeId.HYDRALISK: UnitTypeId.LARVA,
-            UnitTypeId.HYDRALISK_BURROWED: UnitTypeId.HYDRALISK,
-            UnitTypeId.HYDRALISK_DEN: UnitTypeId.DRONE,
-            UnitTypeId.INFESTATION_PIT: UnitTypeId.DRONE,
-            UnitTypeId.INFESTOR: UnitTypeId.LARVA,
-            UnitTypeId.INFESTOR_BURROWED: UnitTypeId.INFESTOR,
-            UnitTypeId.LAIR: UnitTypeId.HATCHERY,
-            UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
-            UnitTypeId.LURKER: UnitTypeId.HYDRALISK,
-            UnitTypeId.LURKER_BURROWED: UnitTypeId.LURKER,
-            UnitTypeId.LURKER_DEN: UnitTypeId.DRONE,
-            UnitTypeId.MUTALISK: UnitTypeId.LARVA,
-            UnitTypeId.NYDUS_NETWORK: UnitTypeId.DRONE,
-            UnitTypeId.OBSERVER_SIEGED: UnitTypeId.OBSERVER,
-            UnitTypeId.ORBITAL_COMMAND: UnitTypeId.COMMAND_CENTER,
-            UnitTypeId.ORBITAL_COMMAND_FLYING: UnitTypeId.ORBITAL_COMMAND,
-            UnitTypeId.OVERLORD: UnitTypeId.LARVA,
-            UnitTypeId.OVERLORD_TRANSPORT: UnitTypeId.OVERLORD,
-            UnitTypeId.OVERSEER: UnitTypeId.OVERLORD,
-            UnitTypeId.OVERSEER_SIEGED: UnitTypeId.OVERSEER,
-            UnitTypeId.PLANETARY_FORTRESS: UnitTypeId.COMMAND_CENTER,
-            UnitTypeId.QUEEN_BURROWED: UnitTypeId.QUEEN,
-            UnitTypeId.RAVAGER: UnitTypeId.ROACH,
-            UnitTypeId.RAVAGER_BURROWED: UnitTypeId.RAVAGER,
-            UnitTypeId.ROACH: UnitTypeId.LARVA,
-            UnitTypeId.ROACH_BURROWED: UnitTypeId.ROACH,
-            UnitTypeId.ROACH_WARREN: UnitTypeId.DRONE,
-            UnitTypeId.SIEGE_TANK_SIEGED: UnitTypeId.SIEGE_TANK,
-            UnitTypeId.SPAWNING_POOL: UnitTypeId.DRONE,
-            UnitTypeId.SPINE_CRAWLER: UnitTypeId.DRONE,
-            UnitTypeId.SPINE_CRAWLER_UPROOTED: UnitTypeId.SPINE_CRAWLER,
-            UnitTypeId.SPIRE: UnitTypeId.DRONE,
-            UnitTypeId.SPORE_CRAWLER: UnitTypeId.DRONE,
-            UnitTypeId.SPORE_CRAWLER_UPROOTED: UnitTypeId.SPORE_CRAWLER,
-            UnitTypeId.STARPORT_FLYING: UnitTypeId.STARPORT,
-            UnitTypeId.SUPPLY_DEPOT_LOWERED: UnitTypeId.SUPPLY_DEPOT,
-            UnitTypeId.SWARM_HOST: UnitTypeId.LARVA,
-            UnitTypeId.SWARM_HOST_BURROWED: UnitTypeId.SWARM_HOST,
-            UnitTypeId.THOR_HIGH_IMPACT: UnitTypeId.THOR,
-            UnitTypeId.ULTRALISK: UnitTypeId.LARVA,
-            UnitTypeId.ULTRALISK_BURROWED: UnitTypeId.ULTRALISK,
-            UnitTypeId.ULTRALISK_CAVERN: UnitTypeId.DRONE,
-            UnitTypeId.VIKING_LANDED: UnitTypeId.VIKING,
-            UnitTypeId.VIPER: UnitTypeId.LARVA,
-            UnitTypeId.WARP_GATE: UnitTypeId.GATEWAY,
-            UnitTypeId.WARP_PRISM_PHASING: UnitTypeId.WARP_PRISM,
-            UnitTypeId.WIDOW_MINE_BURROWED: UnitTypeId.WIDOW_MINE,
-            UnitTypeId.ZERGLING: UnitTypeId.LARVA,
-            UnitTypeId.ZERGLING_BURROWED: UnitTypeId.ZERGLING,
-        }),
-        power_consumers=frozenset({
-            UnitTypeId.CYBERNETICS_CORE,
-            UnitTypeId.DARK_SHRINE,
-            UnitTypeId.FLEET_BEACON,
-            UnitTypeId.FORGE,
-            UnitTypeId.GATEWAY,
-            UnitTypeId.PHOTON_CANNON,
-            UnitTypeId.ROBOTICS_BAY,
-            UnitTypeId.ROBOTICS_FACILITY,
-            UnitTypeId.SHIELD_BATTERY,
-            UnitTypeId.STARGATE,
-            UnitTypeId.TEMPLAR_ARCHIVE,
-            UnitTypeId.TWILIGHT_COUNCIL,
-            UnitTypeId.WARP_GATE,
-        }),
-        upgrades=MappingProxyType({
-            UnitTypeId.ADEPT: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.ARCHON: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.BIOLOGICAL: 1.0})),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.ARMORY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.ASSIMILATOR: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.AUTO_TURRET: MappingProxyType({
-                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
-            }),
-            UnitTypeId.BANELING: MappingProxyType({
-                UpgradeId.BANELING_SPEED: UnitTypeUpgrade(speed=0.634375),
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BANELING_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BANELING_COCOON: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BANSHEE: MappingProxyType({
-                UpgradeId.BANSHEE_SPEED: UnitTypeUpgrade(speed=1.4),
-                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BARRACKS: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.BARRACKS_FLYING: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.BATTLECRUISER: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BROODLING: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.BROOD_LORD: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-            }),
-            UnitTypeId.BROOD_LORD_COCOON: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.BUNKER: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.CARRIER: MappingProxyType({
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.CHANGELING_MARINE: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.CHANGELING_MARINE_SHIELD: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.CHANGELING_ZEALOT: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.CHANGELING_ZERGLING: MappingProxyType({
-                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.CHANGELING_ZERGLING_WINGS: MappingProxyType({
-                UpgradeId.ZERG_MELEE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.COLOSSUS: MappingProxyType({
-                UpgradeId.COLOSSUS_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.COMMAND_CENTER: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.COMMAND_CENTER_FLYING: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.CORRUPTOR: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
-                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
-                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})),)),
-            }),
-            UnitTypeId.CYBERNETICS_CORE: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.CYCLONE: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.DARK_SHRINE: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.DARK_TEMPLAR: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.DISRUPTOR: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.DRONE: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.DRONE_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.ENGINEERING_BAY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.FACTORY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.FACTORY_FLYING: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.FLEET_BEACON: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.FORGE: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.FUSION_CORE: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.GHOST: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-            }),
-            UnitTypeId.GHOST_ACADEMY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.HELLBAT: MappingProxyType({
-                UpgradeId.BLUE_FLAME: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 12.0})),)),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-            }),
-            UnitTypeId.HELLION: MappingProxyType({
-                UpgradeId.BLUE_FLAME: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.LIGHT: 5.0})),)),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})),)),
-            }),
-            UnitTypeId.HIGH_TEMPLAR: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.HYDRALISK: MappingProxyType({
-                UpgradeId.HYDRALISK_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
-                UpgradeId.HYDRALISK_SPEED: UnitTypeUpgrade(speed=0.978906),
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.HYDRALISK_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.IMMORTAL: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 3.0})),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.INFESTOR: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.INFESTOR_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.INTERCEPTOR: MappingProxyType({
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.LIBERATOR: MappingProxyType({
-                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.LIBERATOR_SIEGED: MappingProxyType({
-                UpgradeId.LIBERATOR_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=5.0),)),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.LOCUST: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.LOCUST_FLYING: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.LURKER: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.LURKER_BURROWED: MappingProxyType({
-                UpgradeId.LURKER_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-            }),
-            UnitTypeId.MARAUDER: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-            }),
-            UnitTypeId.MARINE: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.MEDIVAC: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.MISSILE_TURRET: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
-            }),
-            UnitTypeId.MOTHERSHIP: MappingProxyType({
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.MULE: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.MUTALISK: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.ZERG_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.NEXUS: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.OBSERVER: MappingProxyType({
-                UpgradeId.OBSERVER_SPEED: UnitTypeUpgrade(speed=1.410937),
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.OBSERVER_SIEGED: MappingProxyType({
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.ORACLE: MappingProxyType({
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.ORBITAL_COMMAND: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.ORBITAL_COMMAND_FLYING: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.OVERLORD: MappingProxyType({
-                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=1.728125),
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.OVERLORD_COCOON: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.OVERLORD_TRANSPORT: MappingProxyType({
-                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=1.722656),
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.OVERLORD_TRANSPORT_COCOON: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.OVERSEER: MappingProxyType({
-                UpgradeId.OVERLORD_SPEED: UnitTypeUpgrade(speed=2.1),
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.OVERSEER_SIEGED: MappingProxyType({
-                UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.PHOENIX: MappingProxyType({
-                UpgradeId.PHOENIX_RANGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=2.0),)),
-                UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_AIR_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_AIR_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.PHOTON_CANNON: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.PLANETARY_FORTRESS: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-                UpgradeId.HISEC_AUTO_TRACKING: UnitTypeUpgrade(weapons=(WeaponUpgrade(range=1.0),)),
-            }),
-            UnitTypeId.PROBE: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.PURIFICATION_NOVA: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.PYLON: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.QUEEN: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0), WeaponUpgrade(damage=1.0))),
-            }),
-            UnitTypeId.QUEEN_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.RAVAGER: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-            }),
-            UnitTypeId.RAVAGER_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.RAVEN: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.REACTOR: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.REACTOR_BARRACKS: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.REACTOR_FACTORY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.REACTOR_STARPORT: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.REAPER: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-                UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
-            }),
-            UnitTypeId.REFINERY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.REFINERY_RICH: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.ROACH: MappingProxyType({
-                UpgradeId.ROACH_SPEED: UnitTypeUpgrade(speed=1.05),
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_RANGE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-                UpgradeId.ZERG_RANGE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0),)),
-            }),
-            UnitTypeId.ROACH_BURROWED: MappingProxyType({
-                UpgradeId.ROACH_SPEED: UnitTypeUpgrade(speed=1.175781),
-                UpgradeId.TUNNELING_CLAWS: UnitTypeUpgrade(speed=1.96875),
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.ROBOTICS_BAY: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.ROBOTICS_FACILITY: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.SCV: MappingProxyType({
-                UpgradeId.TERRAN_INFANTRY_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_INFANTRY_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.SENSOR_TOWER: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.SENTRY: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.SHIELD_BATTERY: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.SIEGE_TANK: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=2.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-            }),
-            UnitTypeId.SIEGE_TANK_SIEGED: MappingProxyType({
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=4.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-            }),
-            UnitTypeId.STALKER: MappingProxyType({
-                UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.PROTOSS_GROUND_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.ARMORED: 1.0})),)),
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.STARGATE: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.STARPORT: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.STARPORT_FLYING: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.STASIS_WARD: MappingProxyType({
-                UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
-                UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
-            }),
-            UnitTypeId.SUPPLY_DEPOT: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.SUPPLY_DEPOT_LOWERED: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.SWARM_HOST: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.SWARM_HOST_BURROWED: MappingProxyType({
-                UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
-                UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
-            }),
-            UnitTypeId.TECH_LAB: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.TECH_LAB_BARRACKS: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.TECH_LAB_FACTORY: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.TECH_LAB_STARPORT: MappingProxyType({
-                UpgradeId.BUILDING_ARMOR: UnitTypeUpgrade(armor=2.0),
-            }),
-            UnitTypeId.TEMPEST: MappingProxyType({
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2562,12 +2622,37 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
                 UpgradeId.TEMPEST_BUILDING_DAMAGE: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.STRUCTURE: 40.0})), WeaponUpgrade(damage_bonuses=MappingProxyType({Attribute.STRUCTURE: 40.0})))),
             }),
-            UnitTypeId.TEMPLAR_ARCHIVE: MappingProxyType({
+        ),
+        UnitTypeId.TEMPLAR_ARCHIVE: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_TEMPLAR_ARCHIVE,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL})),
+            ability_requirements=MappingProxyType({
+                AbilityId.CANCEL: TechRequirements(),
+                AbilityId.CANCEL_LAST: TechRequirements(),
+                AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: TechRequirements(),
+            }),
+            needs_power=True,
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
             }),
-            UnitTypeId.THOR: MappingProxyType({
+        ),
+        UnitTypeId.THOR: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_THOR,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY}), needs_tech_lab=True),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.THOR_HIGH_IMPACT_MODE: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2575,7 +2660,21 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})), WeaponUpgrade(damage=3.0))),
                 UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.LIGHT: 1.0})), WeaponUpgrade(damage=3.0))),
             }),
-            UnitTypeId.THOR_HIGH_IMPACT: MappingProxyType({
+        ),
+        UnitTypeId.THOR_HIGH_IMPACT: TechTreeUnitType(
+            creation_ability=AbilityId.THOR_HIGH_IMPACT_MODE,
+            producers=frozenset({UnitTypeId.THOR}),
+            morphed_from=UnitTypeId.THOR,
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.THOR_EXPLOSIVE_MODE: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2583,12 +2682,40 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})), WeaponUpgrade(damage=3.0))),
                 UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0, damage_bonuses=MappingProxyType({Attribute.MASSIVE: 1.0})), WeaponUpgrade(damage=3.0))),
             }),
-            UnitTypeId.TWILIGHT_COUNCIL: MappingProxyType({
+        ),
+        UnitTypeId.TWILIGHT_COUNCIL: TechTreeUnitType(
+            creation_ability=AbilityId.PROBE_BUILD_TWILIGHT_COUNCIL,
+            producers=frozenset({UnitTypeId.PROBE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+            ability_requirements=MappingProxyType({
+                AbilityId.CANCEL: TechRequirements(),
+                AbilityId.CANCEL_LAST: TechRequirements(),
+                AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: TechRequirements(),
+                AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: TechRequirements(),
+                AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: TechRequirements(),
+            }),
+            needs_power=True,
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
             }),
-            UnitTypeId.ULTRALISK: MappingProxyType({
+        ),
+        UnitTypeId.ULTRALISK: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_ULTRALISK,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ULTRALISK_CAVERN})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.ULTRALISK_ARMOR: UnitTypeUpgrade(armor=2.0),
                 UpgradeId.ULTRALISK_SPEED: UnitTypeUpgrade(speed=0.732812),
                 UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
@@ -2598,13 +2725,47 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0),)),
                 UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=3.0),)),
             }),
-            UnitTypeId.ULTRALISK_BURROWED: MappingProxyType({
+        ),
+        UnitTypeId.ULTRALISK_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.ULTRALISK}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.ULTRALISK,
+            ability_requirements=MappingProxyType({
+                AbilityId.UNBURROW: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.ULTRALISK_ARMOR: UnitTypeUpgrade(armor=2.0),
                 UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.VIKING: MappingProxyType({
+        ),
+        UnitTypeId.ULTRALISK_CAVERN: TechTreeUnitType(
+            creation_ability=AbilityId.DRONE_MORPH_ULTRALISK_CAVERN,
+            producers=frozenset({UnitTypeId.DRONE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+            morphed_from=UnitTypeId.DRONE,
+            ability_requirements=MappingProxyType({
+                AbilityId.CANCEL: TechRequirements(),
+                AbilityId.CANCEL_LAST: TechRequirements(),
+                AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: TechRequirements(),
+                AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: TechRequirements(),
+            }),
+        ),
+        UnitTypeId.VIKING: TechTreeUnitType(
+            creation_ability=AbilityId.STARPORT_TRAIN_VIKING,
+            producers=frozenset({UnitTypeId.STARPORT}),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.VIKING_LAND: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
                 UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
                 UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
@@ -2612,7 +2773,21 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.VIKING_LANDED: MappingProxyType({
+        ),
+        UnitTypeId.VIKING_LANDED: TechTreeUnitType(
+            creation_ability=AbilityId.VIKING_LAND,
+            producers=frozenset({UnitTypeId.VIKING}),
+            morphed_from=UnitTypeId.VIKING,
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.VIKING_LIFT: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_SHIP_WEAPONS_1: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MECHANICAL: 1.0})),)),
                 UpgradeId.TERRAN_SHIP_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MECHANICAL: 1.0})),)),
                 UpgradeId.TERRAN_SHIP_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0, damage_bonuses=MappingProxyType({Attribute.MECHANICAL: 1.0})),)),
@@ -2620,12 +2795,44 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.VIPER: MappingProxyType({
+        ),
+        UnitTypeId.VIPER: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_VIPER,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.VIPER_ABDUCT: TechRequirements(),
+                AbilityId.VIPER_BLINDING_CLOUD: TechRequirements(),
+                AbilityId.VIPER_CONSUME: TechRequirements(),
+                AbilityId.VIPER_PARASITIC_BOMB: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.ZERG_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.VOID_RAY: MappingProxyType({
+        ),
+        UnitTypeId.VOID_RAY: TechTreeUnitType(
+            creation_ability=AbilityId.STARGATE_TRAIN_VOID_RAY,
+            producers=frozenset({UnitTypeId.STARGATE}),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.CANCEL: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2637,12 +2844,43 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
                 UpgradeId.VOID_RAY_SPEED: UnitTypeUpgrade(speed=0.798437),
             }),
-            UnitTypeId.WARP_GATE: MappingProxyType({
+        ),
+        UnitTypeId.WARP_GATE: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_MORPH_WARP_GATE,
+            producers=frozenset({UnitTypeId.GATEWAY}),
+            morphed_from=UnitTypeId.GATEWAY,
+            ability_requirements=MappingProxyType({
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.WARP_GATE_MORPH_GATEWAY: TechRequirements(),
+                AbilityId.WARP_GATE_WARP_IN_ADEPT: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+                AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: TechRequirements(techs=frozenset({Tech.DARK_SHRINE})),
+                AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: TechRequirements(techs=frozenset({Tech.TEMPLAR_ARCHIVE})),
+                AbilityId.WARP_GATE_WARP_IN_SENTRY: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+                AbilityId.WARP_GATE_WARP_IN_STALKER: TechRequirements(techs=frozenset({Tech.CYBERNETICS_CORE})),
+                AbilityId.WARP_GATE_WARP_IN_ZEALOT: TechRequirements(),
+            }),
+            needs_power=True,
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_SHIELDS_1: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
             }),
-            UnitTypeId.WARP_PRISM: MappingProxyType({
+        ),
+        UnitTypeId.WARP_PRISM: TechTreeUnitType(
+            creation_ability=AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM,
+            producers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.LOAD: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.UNLOAD_AT: TechRequirements(),
+                AbilityId.WARP_PRISM_PHASING_MODE: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2651,7 +2889,19 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
                 UpgradeId.WARP_PRISM_SPEED: UnitTypeUpgrade(speed=1.225),
             }),
-            UnitTypeId.WARP_PRISM_PHASING: MappingProxyType({
+        ),
+        UnitTypeId.WARP_PRISM_PHASING: TechTreeUnitType(
+            creation_ability=AbilityId.WARP_PRISM_PHASING_MODE,
+            producers=frozenset({UnitTypeId.WARP_PRISM}),
+            morphed_from=UnitTypeId.WARP_PRISM,
+            ability_requirements=MappingProxyType({
+                AbilityId.LOAD: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.UNLOAD_AT: TechRequirements(),
+                AbilityId.WARP_PRISM_TRANSPORT_MODE: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.PROTOSS_AIR_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_AIR_ARMOR_3: UnitTypeUpgrade(armor=1.0),
@@ -2659,17 +2909,53 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
             }),
-            UnitTypeId.WIDOW_MINE: MappingProxyType({
+        ),
+        UnitTypeId.WIDOW_MINE: TechTreeUnitType(
+            creation_ability=AbilityId.FACTORY_TRAIN_WIDOW_MINE,
+            producers=frozenset({UnitTypeId.FACTORY}),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.BURROW: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.WIDOW_MINE_BURROWED: MappingProxyType({
+        ),
+        UnitTypeId.WIDOW_MINE_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.WIDOW_MINE}),
+            morphed_from=UnitTypeId.WIDOW_MINE,
+            ability_requirements=MappingProxyType({
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.UNBURROW: TechRequirements(),
+                AbilityId.WIDOW_MINE_ATTACK: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-            UnitTypeId.ZEALOT: MappingProxyType({
+        ),
+        UnitTypeId.ZEALOT: TechTreeUnitType(
+            creation_ability=AbilityId.GATEWAY_TRAIN_ZEALOT,
+            producers=frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.ZEALOT_CHARGE: TechRequirements(upgrades=frozenset({UpgradeId.CHARGE})),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.CHARGE: UnitTypeUpgrade(speed=1.575),
                 UpgradeId.PROTOSS_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.PROTOSS_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
@@ -2681,7 +2967,23 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.PROTOSS_SHIELDS_2: UnitTypeUpgrade(),
                 UpgradeId.PROTOSS_SHIELDS_3: UnitTypeUpgrade(),
             }),
-            UnitTypeId.ZERGLING: MappingProxyType({
+        ),
+        UnitTypeId.ZERGLING: TechTreeUnitType(
+            creation_ability=AbilityId.LARVA_MORPH_ZERGLING,
+            producers=frozenset({UnitTypeId.LARVA}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.SPAWNING_POOL})),
+            morphed_from=UnitTypeId.LARVA,
+            ability_requirements=MappingProxyType({
+                AbilityId.ATTACK: TechRequirements(),
+                AbilityId.BURROW: TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+                AbilityId.HOLD_POSITION: TechRequirements(),
+                AbilityId.MOVE: TechRequirements(),
+                AbilityId.PATROL: TechRequirements(),
+                AbilityId.SMART: TechRequirements(),
+                AbilityId.STOP: TechRequirements(),
+                AbilityId.ZERGLING_MORPH_BANELING: TechRequirements(techs=frozenset({Tech.BANELING_NEST})),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.ZERGLING_SPEED: UnitTypeUpgrade(speed=2.444531),
                 UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
@@ -2690,385 +2992,156 @@ TECH_TREE: Final = TechTree(
                 UpgradeId.ZERG_MELEE_WEAPONS_2: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
                 UpgradeId.ZERG_MELEE_WEAPONS_3: UnitTypeUpgrade(weapons=(WeaponUpgrade(damage=1.0),)),
             }),
-            UnitTypeId.ZERGLING_BURROWED: MappingProxyType({
+        ),
+        UnitTypeId.ZERGLING_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.BURROW,
+            producers=frozenset({UnitTypeId.ZERGLING}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.BURROW})),
+            morphed_from=UnitTypeId.ZERGLING,
+            ability_requirements=MappingProxyType({
+                AbilityId.UNBURROW: TechRequirements(),
+            }),
+            upgrades=MappingProxyType({
                 UpgradeId.ZERG_GROUND_ARMOR_1: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_GROUND_ARMOR_2: UnitTypeUpgrade(armor=1.0),
                 UpgradeId.ZERG_GROUND_ARMOR_3: UnitTypeUpgrade(armor=1.0),
             }),
-        }),
-    ),
-    abilities=TechTreeAbilities(
-        performers=MappingProxyType({
-            AbilityId.ADEPT_SHADE: frozenset({UnitTypeId.ADEPT}),
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3: frozenset({UnitTypeId.ARMORY}),
-            AbilityId.ATTACK: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.BANELING_ATTACK_STRUCTURES_ON: frozenset({UnitTypeId.BANELING}),
-            AbilityId.BANELING_EXPLODE: frozenset({UnitTypeId.BANELING, UnitTypeId.BANELING_BURROWED}),
-            AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: frozenset({UnitTypeId.BANELING_NEST}),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            AbilityId.BARRACKS_TRAIN_GHOST: frozenset({UnitTypeId.BARRACKS}),
-            AbilityId.BARRACKS_TRAIN_MARAUDER: frozenset({UnitTypeId.BARRACKS}),
-            AbilityId.BARRACKS_TRAIN_MARINE: frozenset({UnitTypeId.BARRACKS}),
-            AbilityId.BARRACKS_TRAIN_REAPER: frozenset({UnitTypeId.BARRACKS}),
-            AbilityId.BATTLECRUISER_TACTICAL_JUMP: frozenset({UnitTypeId.BATTLECRUISER}),
-            AbilityId.BATTLECRUISER_YAMATO: frozenset({UnitTypeId.BATTLECRUISER}),
-            AbilityId.BLINK: frozenset({UnitTypeId.DARK_TEMPLAR, UnitTypeId.STALKER}),
-            AbilityId.BUILD_CREEP_TUMOR: frozenset({UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.QUEEN}),
-            AbilityId.BUILD_REACTOR: frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
-            AbilityId.BUILD_TECH_LAB: frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
-            AbilityId.BURROW: frozenset({UnitTypeId.BANELING, UnitTypeId.DRONE, UnitTypeId.HYDRALISK, UnitTypeId.INFESTOR, UnitTypeId.LURKER, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.ROACH, UnitTypeId.SWARM_HOST, UnitTypeId.ULTRALISK, UnitTypeId.WIDOW_MINE, UnitTypeId.ZERGLING}),
-            AbilityId.CANCEL: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARMORY, UnitTypeId.BANELING_COCOON, UnitTypeId.BANELING_NEST, UnitTypeId.BARRACKS, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.BUNKER, UnitTypeId.COMMAND_CENTER, UnitTypeId.CYBERNETICS_CORE, UnitTypeId.DARK_SHRINE, UnitTypeId.ENGINEERING_BAY, UnitTypeId.EVOLUTION_CHAMBER, UnitTypeId.FACTORY, UnitTypeId.FLEET_BEACON, UnitTypeId.FORGE, UnitTypeId.FUSION_CORE, UnitTypeId.GATEWAY, UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY, UnitTypeId.HATCHERY, UnitTypeId.HYDRALISK_DEN, UnitTypeId.INFESTATION_PIT, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.LAIR, UnitTypeId.LURKER_DEN, UnitTypeId.LURKER_EGG, UnitTypeId.MISSILE_TURRET, UnitTypeId.NEXUS, UnitTypeId.NYDUS_NETWORK, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PYLON, UnitTypeId.RAVAGER_COCOON, UnitTypeId.ROACH_WARREN, UnitTypeId.ROBOTICS_BAY, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SENSOR_TOWER, UnitTypeId.SHIELD_BATTERY, UnitTypeId.SPAWNING_POOL, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPIRE, UnitTypeId.SPORE_CRAWLER, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.SUPPLY_DEPOT, UnitTypeId.TEMPLAR_ARCHIVE, UnitTypeId.TWILIGHT_COUNCIL, UnitTypeId.ULTRALISK_CAVERN, UnitTypeId.VOID_RAY}),
-            AbilityId.CANCEL_LAST: frozenset({UnitTypeId.ARMORY, UnitTypeId.BANELING_NEST, UnitTypeId.BARRACKS, UnitTypeId.COMMAND_CENTER, UnitTypeId.CYBERNETICS_CORE, UnitTypeId.DARK_SHRINE, UnitTypeId.EGG, UnitTypeId.ENGINEERING_BAY, UnitTypeId.EVOLUTION_CHAMBER, UnitTypeId.FACTORY, UnitTypeId.FLEET_BEACON, UnitTypeId.FORGE, UnitTypeId.FUSION_CORE, UnitTypeId.GATEWAY, UnitTypeId.GHOST_ACADEMY, UnitTypeId.GREATER_SPIRE, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.HYDRALISK_DEN, UnitTypeId.INFESTATION_PIT, UnitTypeId.LAIR, UnitTypeId.LURKER_DEN, UnitTypeId.NEXUS, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.ROACH_WARREN, UnitTypeId.ROBOTICS_BAY, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SPAWNING_POOL, UnitTypeId.SPIRE, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.TECH_LAB_FACTORY, UnitTypeId.TECH_LAB_STARPORT, UnitTypeId.TEMPLAR_ARCHIVE, UnitTypeId.TWILIGHT_COUNCIL, UnitTypeId.ULTRALISK_CAVERN}),
-            AbilityId.CLOAK_OFF: frozenset({UnitTypeId.BANSHEE, UnitTypeId.GHOST}),
-            AbilityId.CLOAK_ON: frozenset({UnitTypeId.BANSHEE, UnitTypeId.GHOST}),
-            AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: frozenset({UnitTypeId.COMMAND_CENTER}),
-            AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: frozenset({UnitTypeId.COMMAND_CENTER}),
-            AbilityId.COMMAND_CENTER_TRAIN_SCV: frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
-            AbilityId.CORRUPTOR_CAUSTIC_SPRAY: frozenset({UnitTypeId.CORRUPTOR}),
-            AbilityId.CORRUPTOR_MORPH_BROOD_LORD: frozenset({UnitTypeId.CORRUPTOR}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            AbilityId.CYCLONE_LOCK_ON: frozenset({UnitTypeId.CYCLONE}),
-            AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: frozenset({UnitTypeId.DARK_SHRINE}),
-            AbilityId.DISRUPTOR_PURIFICATION_NOVA: frozenset({UnitTypeId.DISRUPTOR}),
-            AbilityId.DRONE_MORPH_BANELING_NEST: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_EVOLUTION_CHAMBER: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_EXTRACTOR: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_HATCHERY: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_HYDRALISK_DEN: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_INFESTATION_PIT: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_LURKER_DEN: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_NYDUS_NETWORK: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_ROACH_WARREN: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_SPAWNING_POOL: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_SPINE_CRAWLER: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_SPIRE: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_SPORE_CRAWLER: frozenset({UnitTypeId.DRONE}),
-            AbilityId.DRONE_MORPH_ULTRALISK_CAVERN: frozenset({UnitTypeId.DRONE}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_2: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_3: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            AbilityId.FACTORY_TRAIN_CYCLONE: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FACTORY_TRAIN_HELLBAT: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FACTORY_TRAIN_HELLION: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FACTORY_TRAIN_SIEGE_TANK: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FACTORY_TRAIN_THOR: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FACTORY_TRAIN_WIDOW_MINE: frozenset({UnitTypeId.FACTORY}),
-            AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: frozenset({UnitTypeId.FLEET_BEACON}),
-            AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE: frozenset({UnitTypeId.FLEET_BEACON}),
-            AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED: frozenset({UnitTypeId.FLEET_BEACON}),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_2: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_3: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_2: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_3: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_SHIELDS_1: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_SHIELDS_2: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FORGE_RESEARCH_SHIELDS_3: frozenset({UnitTypeId.FORGE}),
-            AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE: frozenset({UnitTypeId.FUSION_CORE}),
-            AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION: frozenset({UnitTypeId.FUSION_CORE}),
-            AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: frozenset({UnitTypeId.FUSION_CORE}),
-            AbilityId.GATEWAY_TRAIN_ADEPT: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATEWAY_TRAIN_DARK_TEMPLAR: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATEWAY_TRAIN_HIGH_TEMPLAR: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATEWAY_TRAIN_SENTRY: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATEWAY_TRAIN_STALKER: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATEWAY_TRAIN_ZEALOT: frozenset({UnitTypeId.GATEWAY}),
-            AbilityId.GATHER: frozenset({UnitTypeId.DRONE, UnitTypeId.MULE, UnitTypeId.PROBE, UnitTypeId.SCV}),
-            AbilityId.GHOST_ACADEMY_BUILD_NUKE: frozenset({UnitTypeId.GHOST_ACADEMY}),
-            AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: frozenset({UnitTypeId.GHOST_ACADEMY}),
-            AbilityId.GHOST_EMP: frozenset({UnitTypeId.GHOST}),
-            AbilityId.GHOST_SNIPE: frozenset({UnitTypeId.GHOST}),
-            AbilityId.GHOST_TACTICAL_NUKE: frozenset({UnitTypeId.GHOST}),
-            AbilityId.HALT: frozenset({UnitTypeId.ARMORY, UnitTypeId.BARRACKS, UnitTypeId.BUNKER, UnitTypeId.COMMAND_CENTER, UnitTypeId.ENGINEERING_BAY, UnitTypeId.FACTORY, UnitTypeId.FUSION_CORE, UnitTypeId.GHOST_ACADEMY, UnitTypeId.MISSILE_TURRET, UnitTypeId.SCV, UnitTypeId.SENSOR_TOWER, UnitTypeId.STARPORT, UnitTypeId.SUPPLY_DEPOT}),
-            AbilityId.HATCHERY_MORPH_LAIR: frozenset({UnitTypeId.HATCHERY}),
-            AbilityId.HATCHERY_TRAIN_QUEEN: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            AbilityId.HELLBAT_MORPH_HELLION: frozenset({UnitTypeId.HELLBAT}),
-            AbilityId.HELLION_MORPH_HELLBAT: frozenset({UnitTypeId.HELLION}),
-            AbilityId.HIGH_TEMPLAR_FEEDBACK: frozenset({UnitTypeId.HIGH_TEMPLAR}),
-            AbilityId.HIGH_TEMPLAR_STORM: frozenset({UnitTypeId.HIGH_TEMPLAR}),
-            AbilityId.HOLD_FIRE_ON: frozenset({UnitTypeId.GHOST, UnitTypeId.LURKER_BURROWED}),
-            AbilityId.HOLD_POSITION: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            AbilityId.HYDRALISK_LUNGE: frozenset({UnitTypeId.HYDRALISK}),
-            AbilityId.HYDRALISK_MORPH_LURKER: frozenset({UnitTypeId.HYDRALISK}),
-            AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: frozenset({UnitTypeId.INFESTATION_PIT}),
-            AbilityId.INFESTOR_FUNGAL_GROWTH: frozenset({UnitTypeId.INFESTOR}),
-            AbilityId.INFESTOR_MICROBIAL_SHROUD: frozenset({UnitTypeId.INFESTOR}),
-            AbilityId.INFESTOR_NEURAL_PARASITE: frozenset({UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED}),
-            AbilityId.LAIR_MORPH_HIVE: frozenset({UnitTypeId.LAIR}),
-            AbilityId.LAIR_RESEARCH_BURROW: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            AbilityId.LAIR_RESEARCH_OVERLORD_SPEED: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            AbilityId.LAND: frozenset({UnitTypeId.BARRACKS_FLYING, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.FACTORY_FLYING, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.STARPORT_FLYING}),
-            AbilityId.LARVA_MORPH_CORRUPTOR: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_DRONE: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_HYDRALISK: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_INFESTOR: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_MUTALISK: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_OVERLORD: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_ROACH: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_SWARM_HOST: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_ULTRALISK: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_VIPER: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LARVA_MORPH_ZERGLING: frozenset({UnitTypeId.LARVA}),
-            AbilityId.LIBERATOR_SIEGE_AT: frozenset({UnitTypeId.LIBERATOR}),
-            AbilityId.LIFT: frozenset({UnitTypeId.BARRACKS, UnitTypeId.COMMAND_CENTER, UnitTypeId.FACTORY, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.STARPORT}),
-            AbilityId.LOAD: frozenset({UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
-            AbilityId.LOAD_ALL: frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.PLANETARY_FORTRESS}),
-            AbilityId.LOCUST_SWOOP: frozenset({UnitTypeId.LOCUST_FLYING}),
-            AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: frozenset({UnitTypeId.LURKER_DEN}),
-            AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE: frozenset({UnitTypeId.LURKER_DEN}),
-            AbilityId.MEDIVAC_BOOST: frozenset({UnitTypeId.MEDIVAC}),
-            AbilityId.MEDIVAC_HEAL: frozenset({UnitTypeId.MEDIVAC}),
-            AbilityId.MOTHERSHIP_CLOAK_FIELD: frozenset({UnitTypeId.MOTHERSHIP}),
-            AbilityId.MOTHERSHIP_TIME_WARP: frozenset({UnitTypeId.MOTHERSHIP}),
-            AbilityId.MOVE: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.NEXUS_CHRONO_BOOST: frozenset({UnitTypeId.NEXUS}),
-            AbilityId.NEXUS_ENERGY_RECHARGE: frozenset({UnitTypeId.NEXUS}),
-            AbilityId.NEXUS_TRAIN_MOTHERSHIP: frozenset({UnitTypeId.NEXUS}),
-            AbilityId.NEXUS_TRAIN_PROBE: frozenset({UnitTypeId.NEXUS}),
-            AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM: frozenset({UnitTypeId.NYDUS_NETWORK}),
-            AbilityId.ORACLE_BUILD_STASIS_WARD: frozenset({UnitTypeId.ORACLE}),
-            AbilityId.ORACLE_PULSAR_BEAM_OFF: frozenset({UnitTypeId.ORACLE}),
-            AbilityId.ORACLE_PULSAR_BEAM_ON: frozenset({UnitTypeId.ORACLE}),
-            AbilityId.ORACLE_REVELATION: frozenset({UnitTypeId.ORACLE}),
-            AbilityId.ORBITAL_COMMAND_CALLDOWN_MULE: frozenset({UnitTypeId.ORBITAL_COMMAND}),
-            AbilityId.ORBITAL_COMMAND_SCAN: frozenset({UnitTypeId.ORBITAL_COMMAND}),
-            AbilityId.ORBITAL_COMMAND_SUPPLY_DROP: frozenset({UnitTypeId.ORBITAL_COMMAND}),
-            AbilityId.OVERLORD_CREEP_OFF: frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
-            AbilityId.OVERLORD_CREEP_ON: frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
-            AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: frozenset({UnitTypeId.OVERLORD}),
-            AbilityId.OVERLORD_MORPH_OVERSEER: frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
-            AbilityId.OVERSEER_CONTAMINATE: frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
-            AbilityId.OVERSEER_SPAWN_CHANGELING: frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
-            AbilityId.PATROL: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.PHOENIX_GRAVITON_BEAM: frozenset({UnitTypeId.PHOENIX}),
-            AbilityId.PROBE_BUILD_ASSIMILATOR: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_CYBERNETICS_CORE: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_DARK_SHRINE: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_FLEET_BEACON: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_FORGE: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_GATEWAY: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_NEXUS: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_PHOTON_CANNON: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_PYLON: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_ROBOTICS_BAY: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_ROBOTICS_FACILITY: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_SHIELD_BATTERY: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_STARGATE: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_TEMPLAR_ARCHIVE: frozenset({UnitTypeId.PROBE}),
-            AbilityId.PROBE_BUILD_TWILIGHT_COUNCIL: frozenset({UnitTypeId.PROBE}),
-            AbilityId.QUEEN_INJECT: frozenset({UnitTypeId.QUEEN}),
-            AbilityId.QUEEN_TRANSFUSE: frozenset({UnitTypeId.QUEEN}),
-            AbilityId.RALLY_UNITS: frozenset({UnitTypeId.BANELING_COCOON, UnitTypeId.BARRACKS, UnitTypeId.BUNKER, UnitTypeId.EGG, UnitTypeId.FACTORY, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR, UnitTypeId.LURKER_EGG, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.RAVAGER_COCOON, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.STARGATE, UnitTypeId.STARPORT}),
-            AbilityId.RALLY_WORKERS: frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR, UnitTypeId.NEXUS, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
-            AbilityId.RAVAGER_CORROSIVE_BILE: frozenset({UnitTypeId.RAVAGER}),
-            AbilityId.RAVEN_ANTI_ARMOR_MISSILE: frozenset({UnitTypeId.RAVEN}),
-            AbilityId.RAVEN_INTERFERENCE_MATRIX: frozenset({UnitTypeId.RAVEN}),
-            AbilityId.RAVEN_SPAWN_AUTO_TURRET: frozenset({UnitTypeId.RAVEN}),
-            AbilityId.REAPER_GRENADE: frozenset({UnitTypeId.REAPER}),
-            AbilityId.RECALL: frozenset({UnitTypeId.MOTHERSHIP, UnitTypeId.NEXUS}),
-            AbilityId.REPAIR: frozenset({UnitTypeId.MULE, UnitTypeId.SCV}),
-            AbilityId.RETURN: frozenset({UnitTypeId.DRONE, UnitTypeId.PROBE, UnitTypeId.SCV}),
-            AbilityId.ROACH_MORPH_RAVAGER: frozenset({UnitTypeId.ROACH}),
-            AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: frozenset({UnitTypeId.ROACH_WARREN}),
-            AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS: frozenset({UnitTypeId.ROACH_WARREN}),
-            AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_COLOSSUS: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_DISRUPTOR: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_IMMORTAL: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM: frozenset({UnitTypeId.ROBOTICS_FACILITY}),
-            AbilityId.ROOT: frozenset({UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED}),
-            AbilityId.SALVAGE: frozenset({UnitTypeId.BUNKER, UnitTypeId.SENSOR_TOWER}),
-            AbilityId.SCV_BUILD_ARMORY: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_BARRACKS: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_BUNKER: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_COMMAND_CENTER: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_ENGINEERING_BAY: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_FACTORY: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_FUSION_CORE: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_GHOST_ACADEMY: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_MISSILE_TURRET: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_REFINERY: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_SENSOR_TOWER: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_STARPORT: frozenset({UnitTypeId.SCV}),
-            AbilityId.SCV_BUILD_SUPPLY_DEPOT: frozenset({UnitTypeId.SCV}),
-            AbilityId.SENTRY_FORCE_FIELD: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_GUARDIAN_SHIELD: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_ADEPT: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_ARCHON: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_COLOSSUS: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_DISRUPTOR: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_HIGH_TEMPLAR: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_IMMORTAL: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_ORACLE: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_PHOENIX: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_PROBE: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_STALKER: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_VOID_RAY: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_WARP_PRISM: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SENTRY_HALLUCINATE_ZEALOT: frozenset({UnitTypeId.SENTRY}),
-            AbilityId.SHIELD_BATTERY_RECHARGE: frozenset({UnitTypeId.SHIELD_BATTERY}),
-            AbilityId.SIEGE: frozenset({UnitTypeId.OBSERVER, UnitTypeId.OVERSEER, UnitTypeId.SIEGE_TANK}),
-            AbilityId.SMART: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANELING_COCOON, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.EGG, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.FORCE_FIELD, UnitTypeId.GATEWAY, UnitTypeId.GHOST, UnitTypeId.HATCHERY, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HIVE, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LAIR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.LURKER_EGG, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.NEXUS, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVAGER_COCOON, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SHIELD_BATTERY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_GATE, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.WIDOW_MINE, UnitTypeId.WIDOW_MINE_BURROWED, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: frozenset({UnitTypeId.SPAWNING_POOL}),
-            AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED: frozenset({UnitTypeId.SPAWNING_POOL}),
-            AbilityId.SPIRE_MORPH_GREATER_SPIRE: frozenset({UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            AbilityId.SPRAY: frozenset({UnitTypeId.DRONE, UnitTypeId.PROBE, UnitTypeId.SCV}),
-            AbilityId.STARGATE_TRAIN_CARRIER: frozenset({UnitTypeId.STARGATE}),
-            AbilityId.STARGATE_TRAIN_ORACLE: frozenset({UnitTypeId.STARGATE}),
-            AbilityId.STARGATE_TRAIN_PHOENIX: frozenset({UnitTypeId.STARGATE}),
-            AbilityId.STARGATE_TRAIN_TEMPEST: frozenset({UnitTypeId.STARGATE}),
-            AbilityId.STARGATE_TRAIN_VOID_RAY: frozenset({UnitTypeId.STARGATE}),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            AbilityId.STARPORT_TRAIN_BANSHEE: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STARPORT_TRAIN_BATTLECRUISER: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STARPORT_TRAIN_LIBERATOR: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STARPORT_TRAIN_MEDIVAC: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STARPORT_TRAIN_RAVEN: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STARPORT_TRAIN_VIKING: frozenset({UnitTypeId.STARPORT}),
-            AbilityId.STIM: frozenset({UnitTypeId.MARAUDER, UnitTypeId.MARINE}),
-            AbilityId.STOP: frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
-            AbilityId.SUPPLY_DEPOT_LOWER: frozenset({UnitTypeId.SUPPLY_DEPOT}),
-            AbilityId.SUPPLY_DEPOT_RAISE: frozenset({UnitTypeId.SUPPLY_DEPOT_LOWERED}),
-            AbilityId.SWARM_HOST_SPAWN_LOCUST: frozenset({UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED}),
-            AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: frozenset({UnitTypeId.TEMPLAR_ARCHIVE}),
-            AbilityId.THOR_EXPLOSIVE_MODE: frozenset({UnitTypeId.THOR_HIGH_IMPACT}),
-            AbilityId.THOR_HIGH_IMPACT_MODE: frozenset({UnitTypeId.THOR}),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: frozenset({UnitTypeId.ULTRALISK_CAVERN}),
-            AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: frozenset({UnitTypeId.ULTRALISK_CAVERN}),
-            AbilityId.UNBURROW: frozenset({UnitTypeId.BANELING_BURROWED, UnitTypeId.DRONE_BURROWED, UnitTypeId.HYDRALISK_BURROWED, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.LURKER_BURROWED, UnitTypeId.QUEEN_BURROWED, UnitTypeId.RAVAGER_BURROWED, UnitTypeId.ROACH_BURROWED, UnitTypeId.SWARM_HOST_BURROWED, UnitTypeId.ULTRALISK_BURROWED, UnitTypeId.WIDOW_MINE_BURROWED, UnitTypeId.ZERGLING_BURROWED}),
-            AbilityId.UNLOAD: frozenset({UnitTypeId.BUNKER, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM}),
-            AbilityId.UNLOAD_AT: frozenset({UnitTypeId.MEDIVAC, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
-            AbilityId.UNSIEGE: frozenset({UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.OBSERVER_SIEGED, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.SIEGE_TANK_SIEGED}),
-            AbilityId.UPROOT: frozenset({UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPORE_CRAWLER}),
-            AbilityId.VIKING_LAND: frozenset({UnitTypeId.VIKING}),
-            AbilityId.VIKING_LIFT: frozenset({UnitTypeId.VIKING_LANDED}),
-            AbilityId.VIPER_ABDUCT: frozenset({UnitTypeId.VIPER}),
-            AbilityId.VIPER_BLINDING_CLOUD: frozenset({UnitTypeId.VIPER}),
-            AbilityId.VIPER_CONSUME: frozenset({UnitTypeId.VIPER}),
-            AbilityId.VIPER_PARASITIC_BOMB: frozenset({UnitTypeId.VIPER}),
-            AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT: frozenset({UnitTypeId.VOID_RAY}),
-            AbilityId.WARP_GATE_MORPH_GATEWAY: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_ADEPT: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_SENTRY: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_STALKER: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_GATE_WARP_IN_ZEALOT: frozenset({UnitTypeId.WARP_GATE}),
-            AbilityId.WARP_PRISM_PHASING_MODE: frozenset({UnitTypeId.WARP_PRISM}),
-            AbilityId.WARP_PRISM_TRANSPORT_MODE: frozenset({UnitTypeId.WARP_PRISM_PHASING}),
-            AbilityId.WIDOW_MINE_ATTACK: frozenset({UnitTypeId.WIDOW_MINE_BURROWED}),
-            AbilityId.ZEALOT_CHARGE: frozenset({UnitTypeId.ZEALOT}),
-            AbilityId.ZERGLING_MORPH_BANELING: frozenset({UnitTypeId.ZERGLING}),
-        }),
-        products=MappingProxyType({
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1: MappingProxyType({
+        ),
+    }),
+    abilities=MappingProxyType({
+        AbilityId.ADEPT_SHADE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT}),
+        ),
+        AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_SHIP_WEAPONS_1,
             }),
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_SHIP_WEAPONS_2,
             }),
-            AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_SHIP_WEAPONS_3,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_WEAPONS_1,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_WEAPONS_2,
             }),
-            AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY}),
+            products=MappingProxyType({
                 UnitTypeId.ARMORY: UpgradeId.TERRAN_VEHICLE_WEAPONS_3,
             }),
-            AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: MappingProxyType({
+        ),
+        AbilityId.ATTACK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.BANELING_ATTACK_STRUCTURES_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING}),
+        ),
+        AbilityId.BANELING_EXPLODE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING, UnitTypeId.BANELING_BURROWED}),
+        ),
+        AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING_NEST}),
+            products=MappingProxyType({
                 UnitTypeId.BANELING_NEST: UpgradeId.BANELING_SPEED,
             }),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.COMBAT_SHIELD,
             }),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.CONCUSSIVE_SHELLS,
             }),
-            AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_BARRACKS: UpgradeId.STIMPACK,
             }),
-            AbilityId.BARRACKS_TRAIN_GHOST: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TRAIN_GHOST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.GHOST,
             }),
-            AbilityId.BARRACKS_TRAIN_MARAUDER: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TRAIN_MARAUDER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.MARAUDER,
             }),
-            AbilityId.BARRACKS_TRAIN_MARINE: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TRAIN_MARINE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.MARINE,
             }),
-            AbilityId.BARRACKS_TRAIN_REAPER: MappingProxyType({
+        ),
+        AbilityId.BARRACKS_TRAIN_REAPER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.REAPER,
             }),
-            AbilityId.BUILD_CREEP_TUMOR: MappingProxyType({
+        ),
+        AbilityId.BATTLECRUISER_TACTICAL_JUMP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BATTLECRUISER}),
+        ),
+        AbilityId.BATTLECRUISER_YAMATO: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BATTLECRUISER}),
+        ),
+        AbilityId.BLINK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DARK_TEMPLAR, UnitTypeId.STALKER}),
+        ),
+        AbilityId.BUILD_CREEP_TUMOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.QUEEN}),
+            products=MappingProxyType({
                 UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
                 UnitTypeId.QUEEN: UnitTypeId.CREEP_TUMOR_QUEEN,
             }),
-            AbilityId.BUILD_REACTOR: MappingProxyType({
+        ),
+        AbilityId.BUILD_REACTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.REACTOR_BARRACKS,
                 UnitTypeId.BARRACKS_FLYING: UnitTypeId.REACTOR_BARRACKS,
                 UnitTypeId.FACTORY: UnitTypeId.REACTOR_FACTORY,
@@ -3076,7 +3149,11 @@ TECH_TREE: Final = TechTree(
                 UnitTypeId.STARPORT: UnitTypeId.REACTOR_STARPORT,
                 UnitTypeId.STARPORT_FLYING: UnitTypeId.REACTOR_STARPORT,
             }),
-            AbilityId.BUILD_TECH_LAB: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.BUILD_TECH_LAB: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.TECH_LAB_BARRACKS,
                 UnitTypeId.BARRACKS_FLYING: UnitTypeId.TECH_LAB_BARRACKS,
                 UnitTypeId.FACTORY: UnitTypeId.TECH_LAB_FACTORY,
@@ -3084,7 +3161,11 @@ TECH_TREE: Final = TechTree(
                 UnitTypeId.STARPORT: UnitTypeId.TECH_LAB_STARPORT,
                 UnitTypeId.STARPORT_FLYING: UnitTypeId.TECH_LAB_STARPORT,
             }),
-            AbilityId.BURROW: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.BURROW: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING, UnitTypeId.DRONE, UnitTypeId.HYDRALISK, UnitTypeId.INFESTOR, UnitTypeId.LURKER, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.ROACH, UnitTypeId.SWARM_HOST, UnitTypeId.ULTRALISK, UnitTypeId.WIDOW_MINE, UnitTypeId.ZERGLING}),
+            products=MappingProxyType({
                 UnitTypeId.BANELING: UnitTypeId.BANELING_BURROWED,
                 UnitTypeId.DRONE: UnitTypeId.DRONE_BURROWED,
                 UnitTypeId.HYDRALISK: UnitTypeId.HYDRALISK_BURROWED,
@@ -3098,931 +3179,1947 @@ TECH_TREE: Final = TechTree(
                 UnitTypeId.WIDOW_MINE: UnitTypeId.WIDOW_MINE_BURROWED,
                 UnitTypeId.ZERGLING: UnitTypeId.ZERGLING_BURROWED,
             }),
-            AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: MappingProxyType({
+        ),
+        AbilityId.CANCEL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARMORY, UnitTypeId.BANELING_COCOON, UnitTypeId.BANELING_NEST, UnitTypeId.BARRACKS, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.BUNKER, UnitTypeId.COMMAND_CENTER, UnitTypeId.CYBERNETICS_CORE, UnitTypeId.DARK_SHRINE, UnitTypeId.ENGINEERING_BAY, UnitTypeId.EVOLUTION_CHAMBER, UnitTypeId.FACTORY, UnitTypeId.FLEET_BEACON, UnitTypeId.FORGE, UnitTypeId.FUSION_CORE, UnitTypeId.GATEWAY, UnitTypeId.GHOST, UnitTypeId.GHOST_ACADEMY, UnitTypeId.HATCHERY, UnitTypeId.HYDRALISK_DEN, UnitTypeId.INFESTATION_PIT, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.LAIR, UnitTypeId.LURKER_DEN, UnitTypeId.LURKER_EGG, UnitTypeId.MISSILE_TURRET, UnitTypeId.NEXUS, UnitTypeId.NYDUS_NETWORK, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PYLON, UnitTypeId.RAVAGER_COCOON, UnitTypeId.ROACH_WARREN, UnitTypeId.ROBOTICS_BAY, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SENSOR_TOWER, UnitTypeId.SHIELD_BATTERY, UnitTypeId.SPAWNING_POOL, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPIRE, UnitTypeId.SPORE_CRAWLER, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.SUPPLY_DEPOT, UnitTypeId.TEMPLAR_ARCHIVE, UnitTypeId.TWILIGHT_COUNCIL, UnitTypeId.ULTRALISK_CAVERN, UnitTypeId.VOID_RAY}),
+        ),
+        AbilityId.CANCEL_LAST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY, UnitTypeId.BANELING_NEST, UnitTypeId.BARRACKS, UnitTypeId.COMMAND_CENTER, UnitTypeId.CYBERNETICS_CORE, UnitTypeId.DARK_SHRINE, UnitTypeId.EGG, UnitTypeId.ENGINEERING_BAY, UnitTypeId.EVOLUTION_CHAMBER, UnitTypeId.FACTORY, UnitTypeId.FLEET_BEACON, UnitTypeId.FORGE, UnitTypeId.FUSION_CORE, UnitTypeId.GATEWAY, UnitTypeId.GHOST_ACADEMY, UnitTypeId.GREATER_SPIRE, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.HYDRALISK_DEN, UnitTypeId.INFESTATION_PIT, UnitTypeId.LAIR, UnitTypeId.LURKER_DEN, UnitTypeId.NEXUS, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.ROACH_WARREN, UnitTypeId.ROBOTICS_BAY, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SPAWNING_POOL, UnitTypeId.SPIRE, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.TECH_LAB_FACTORY, UnitTypeId.TECH_LAB_STARPORT, UnitTypeId.TEMPLAR_ARCHIVE, UnitTypeId.TWILIGHT_COUNCIL, UnitTypeId.ULTRALISK_CAVERN}),
+        ),
+        AbilityId.CLOAK_OFF: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANSHEE, UnitTypeId.GHOST}),
+        ),
+        AbilityId.CLOAK_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANSHEE, UnitTypeId.GHOST}),
+        ),
+        AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: TechTreeAbility(
+            performers=frozenset({UnitTypeId.COMMAND_CENTER}),
+            products=MappingProxyType({
                 UnitTypeId.COMMAND_CENTER: UnitTypeId.ORBITAL_COMMAND,
             }),
-            AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.COMMAND_CENTER}),
+            products=MappingProxyType({
                 UnitTypeId.COMMAND_CENTER: UnitTypeId.PLANETARY_FORTRESS,
             }),
-            AbilityId.COMMAND_CENTER_TRAIN_SCV: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.COMMAND_CENTER_TRAIN_SCV: TechTreeAbility(
+            performers=frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
+            products=MappingProxyType({
                 UnitTypeId.COMMAND_CENTER: UnitTypeId.SCV,
                 UnitTypeId.ORBITAL_COMMAND: UnitTypeId.SCV,
                 UnitTypeId.PLANETARY_FORTRESS: UnitTypeId.SCV,
             }),
-            AbilityId.CORRUPTOR_MORPH_BROOD_LORD: MappingProxyType({
+        ),
+        AbilityId.CORRUPTOR_CAUSTIC_SPRAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CORRUPTOR}),
+        ),
+        AbilityId.CORRUPTOR_MORPH_BROOD_LORD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CORRUPTOR}),
+            products=MappingProxyType({
                 UnitTypeId.CORRUPTOR: UnitTypeId.BROOD_LORD,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_ARMOR_1,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_ARMOR_2,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_ARMOR_3,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_WEAPONS_1,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_WEAPONS_2,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.PROTOSS_AIR_WEAPONS_3,
             }),
-            AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE: MappingProxyType({
+        ),
+        AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.CYBERNETICS_CORE: UpgradeId.WARP_GATE,
             }),
-            AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: MappingProxyType({
+        ),
+        AbilityId.CYCLONE_LOCK_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.CYCLONE}),
+        ),
+        AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DARK_SHRINE}),
+            products=MappingProxyType({
                 UnitTypeId.DARK_SHRINE: UpgradeId.DARK_TEMPLAR_BLINK,
             }),
-            AbilityId.DISRUPTOR_PURIFICATION_NOVA: MappingProxyType({
+        ),
+        AbilityId.DISRUPTOR_PURIFICATION_NOVA: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DISRUPTOR}),
+            products=MappingProxyType({
                 UnitTypeId.DISRUPTOR: UnitTypeId.PURIFICATION_NOVA,
             }),
-            AbilityId.DRONE_MORPH_BANELING_NEST: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_BANELING_NEST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.BANELING_NEST,
             }),
-            AbilityId.DRONE_MORPH_EVOLUTION_CHAMBER: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_EVOLUTION_CHAMBER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.EVOLUTION_CHAMBER,
             }),
-            AbilityId.DRONE_MORPH_EXTRACTOR: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_EXTRACTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.EXTRACTOR,
             }),
-            AbilityId.DRONE_MORPH_HATCHERY: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_HATCHERY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.HATCHERY,
             }),
-            AbilityId.DRONE_MORPH_HYDRALISK_DEN: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_HYDRALISK_DEN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.HYDRALISK_DEN,
             }),
-            AbilityId.DRONE_MORPH_INFESTATION_PIT: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_INFESTATION_PIT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.INFESTATION_PIT,
             }),
-            AbilityId.DRONE_MORPH_LURKER_DEN: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_LURKER_DEN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.LURKER_DEN,
             }),
-            AbilityId.DRONE_MORPH_NYDUS_NETWORK: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_NYDUS_NETWORK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.NYDUS_NETWORK,
             }),
-            AbilityId.DRONE_MORPH_ROACH_WARREN: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_ROACH_WARREN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.ROACH_WARREN,
             }),
-            AbilityId.DRONE_MORPH_SPAWNING_POOL: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_SPAWNING_POOL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.SPAWNING_POOL,
             }),
-            AbilityId.DRONE_MORPH_SPINE_CRAWLER: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_SPINE_CRAWLER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.SPINE_CRAWLER,
             }),
-            AbilityId.DRONE_MORPH_SPIRE: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_SPIRE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.SPIRE,
             }),
-            AbilityId.DRONE_MORPH_SPORE_CRAWLER: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_SPORE_CRAWLER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.SPORE_CRAWLER,
             }),
-            AbilityId.DRONE_MORPH_ULTRALISK_CAVERN: MappingProxyType({
+        ),
+        AbilityId.DRONE_MORPH_ULTRALISK_CAVERN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE}),
+            products=MappingProxyType({
                 UnitTypeId.DRONE: UnitTypeId.ULTRALISK_CAVERN,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.BUILDING_ARMOR,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.HISEC_AUTO_TRACKING,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_ARMOR_1,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_ARMOR_2,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_ARMOR_3,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_WEAPONS_2,
             }),
-            AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ENGINEERING_BAY: UpgradeId.TERRAN_INFANTRY_WEAPONS_3,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_GROUND_ARMOR_1,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_GROUND_ARMOR_2,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_GROUND_ARMOR_3,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_MELEE_WEAPONS_1,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_MELEE_WEAPONS_2,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_MELEE_WEAPONS_3,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_RANGE_WEAPONS_1,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_RANGE_WEAPONS_2,
             }),
-            AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            products=MappingProxyType({
                 UnitTypeId.EVOLUTION_CHAMBER: UpgradeId.ZERG_RANGE_WEAPONS_3,
             }),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_FACTORY: UpgradeId.BLUE_FLAME,
             }),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_FACTORY: UpgradeId.CYCLONE_LOCK_ON_DAMAGE,
             }),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_FACTORY: UpgradeId.DRILLING_CLAWS,
             }),
-            AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_FACTORY: UpgradeId.SMART_SERVOS,
             }),
-            AbilityId.FACTORY_TRAIN_CYCLONE: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_CYCLONE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.CYCLONE,
             }),
-            AbilityId.FACTORY_TRAIN_HELLBAT: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_HELLBAT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.HELLBAT,
             }),
-            AbilityId.FACTORY_TRAIN_HELLION: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_HELLION: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.HELLION,
             }),
-            AbilityId.FACTORY_TRAIN_SIEGE_TANK: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_SIEGE_TANK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.SIEGE_TANK,
             }),
-            AbilityId.FACTORY_TRAIN_THOR: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_THOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.THOR,
             }),
-            AbilityId.FACTORY_TRAIN_WIDOW_MINE: MappingProxyType({
+        ),
+        AbilityId.FACTORY_TRAIN_WIDOW_MINE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FACTORY}),
+            products=MappingProxyType({
                 UnitTypeId.FACTORY: UnitTypeId.WIDOW_MINE,
             }),
-            AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: MappingProxyType({
+        ),
+        AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FLEET_BEACON}),
+            products=MappingProxyType({
                 UnitTypeId.FLEET_BEACON: UpgradeId.PHOENIX_RANGE,
             }),
-            AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE: MappingProxyType({
+        ),
+        AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FLEET_BEACON}),
+            products=MappingProxyType({
                 UnitTypeId.FLEET_BEACON: UpgradeId.TEMPEST_BUILDING_DAMAGE,
             }),
-            AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED: MappingProxyType({
+        ),
+        AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FLEET_BEACON}),
+            products=MappingProxyType({
                 UnitTypeId.FLEET_BEACON: UpgradeId.VOID_RAY_SPEED,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_ARMOR_1,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_ARMOR_2,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_ARMOR_3,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_WEAPONS_1,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_WEAPONS_2,
             }),
-            AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_GROUND_WEAPONS_3,
             }),
-            AbilityId.FORGE_RESEARCH_SHIELDS_1: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_SHIELDS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_SHIELDS_1,
             }),
-            AbilityId.FORGE_RESEARCH_SHIELDS_2: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_SHIELDS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_SHIELDS_2,
             }),
-            AbilityId.FORGE_RESEARCH_SHIELDS_3: MappingProxyType({
+        ),
+        AbilityId.FORGE_RESEARCH_SHIELDS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FORGE}),
+            products=MappingProxyType({
                 UnitTypeId.FORGE: UpgradeId.PROTOSS_SHIELDS_3,
             }),
-            AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE: MappingProxyType({
+        ),
+        AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FUSION_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.FUSION_CORE: UpgradeId.LIBERATOR_RANGE,
             }),
-            AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION: MappingProxyType({
+        ),
+        AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FUSION_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.FUSION_CORE: UpgradeId.MEDIVAC_ENERGY_REGENERATION,
             }),
-            AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: MappingProxyType({
+        ),
+        AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.FUSION_CORE}),
+            products=MappingProxyType({
                 UnitTypeId.FUSION_CORE: UpgradeId.YAMATO_CANNON,
             }),
-            AbilityId.GATEWAY_MORPH_WARP_GATE: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_MORPH_WARP_GATE: TechTreeAbility(
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.WARP_GATE,
             }),
-            AbilityId.GATEWAY_TRAIN_ADEPT: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_ADEPT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.ADEPT,
             }),
-            AbilityId.GATEWAY_TRAIN_DARK_TEMPLAR: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_DARK_TEMPLAR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.DARK_TEMPLAR,
             }),
-            AbilityId.GATEWAY_TRAIN_HIGH_TEMPLAR: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_HIGH_TEMPLAR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.HIGH_TEMPLAR,
             }),
-            AbilityId.GATEWAY_TRAIN_SENTRY: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_SENTRY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.SENTRY,
             }),
-            AbilityId.GATEWAY_TRAIN_STALKER: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_STALKER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.STALKER,
             }),
-            AbilityId.GATEWAY_TRAIN_ZEALOT: MappingProxyType({
+        ),
+        AbilityId.GATEWAY_TRAIN_ZEALOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GATEWAY}),
+            products=MappingProxyType({
                 UnitTypeId.GATEWAY: UnitTypeId.ZEALOT,
             }),
-            AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: MappingProxyType({
+        ),
+        AbilityId.GATHER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE, UnitTypeId.MULE, UnitTypeId.PROBE, UnitTypeId.SCV}),
+        ),
+        AbilityId.GHOST_ACADEMY_BUILD_NUKE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST_ACADEMY}),
+            cancelled_by=AbilityId.CANCEL_LAST,
+        ),
+        AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST_ACADEMY}),
+            products=MappingProxyType({
                 UnitTypeId.GHOST_ACADEMY: UpgradeId.GHOST_CLOAK,
             }),
-            AbilityId.HATCHERY_MORPH_LAIR: MappingProxyType({
+        ),
+        AbilityId.GHOST_EMP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST}),
+        ),
+        AbilityId.GHOST_SNIPE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST}),
+        ),
+        AbilityId.GHOST_TACTICAL_NUKE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST}),
+        ),
+        AbilityId.HALT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ARMORY, UnitTypeId.BARRACKS, UnitTypeId.BUNKER, UnitTypeId.COMMAND_CENTER, UnitTypeId.ENGINEERING_BAY, UnitTypeId.FACTORY, UnitTypeId.FUSION_CORE, UnitTypeId.GHOST_ACADEMY, UnitTypeId.MISSILE_TURRET, UnitTypeId.SCV, UnitTypeId.SENSOR_TOWER, UnitTypeId.STARPORT, UnitTypeId.SUPPLY_DEPOT}),
+        ),
+        AbilityId.HATCHERY_MORPH_LAIR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HATCHERY}),
+            products=MappingProxyType({
                 UnitTypeId.HATCHERY: UnitTypeId.LAIR,
             }),
-            AbilityId.HATCHERY_TRAIN_QUEEN: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.HATCHERY_TRAIN_QUEEN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+            products=MappingProxyType({
                 UnitTypeId.HATCHERY: UnitTypeId.QUEEN,
                 UnitTypeId.HIVE: UnitTypeId.QUEEN,
                 UnitTypeId.LAIR: UnitTypeId.QUEEN,
             }),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE: MappingProxyType({
+        ),
+        AbilityId.HELLBAT_MORPH_HELLION: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HELLBAT}),
+        ),
+        AbilityId.HELLION_MORPH_HELLBAT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HELLION}),
+        ),
+        AbilityId.HIGH_TEMPLAR_FEEDBACK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HIGH_TEMPLAR}),
+        ),
+        AbilityId.HIGH_TEMPLAR_STORM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HIGH_TEMPLAR}),
+        ),
+        AbilityId.HOLD_FIRE_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GHOST, UnitTypeId.LURKER_BURROWED}),
+        ),
+        AbilityId.HOLD_POSITION: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+            products=MappingProxyType({
                 UnitTypeId.HYDRALISK_DEN: UpgradeId.HYDRALISK_LUNGE,
             }),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: MappingProxyType({
+        ),
+        AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+            products=MappingProxyType({
                 UnitTypeId.HYDRALISK_DEN: UpgradeId.HYDRALISK_RANGE,
             }),
-            AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED: MappingProxyType({
+        ),
+        AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+            products=MappingProxyType({
                 UnitTypeId.HYDRALISK_DEN: UpgradeId.HYDRALISK_SPEED,
             }),
-            AbilityId.HYDRALISK_MORPH_LURKER: MappingProxyType({
+        ),
+        AbilityId.HYDRALISK_LUNGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HYDRALISK}),
+        ),
+        AbilityId.HYDRALISK_MORPH_LURKER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HYDRALISK}),
+            products=MappingProxyType({
                 UnitTypeId.HYDRALISK: UnitTypeId.LURKER,
             }),
-            AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: MappingProxyType({
+        ),
+        AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.INFESTATION_PIT}),
+            products=MappingProxyType({
                 UnitTypeId.INFESTATION_PIT: UpgradeId.NEURAL_PARASITE,
             }),
-            AbilityId.LAIR_MORPH_HIVE: MappingProxyType({
+        ),
+        AbilityId.INFESTOR_FUNGAL_GROWTH: TechTreeAbility(
+            performers=frozenset({UnitTypeId.INFESTOR}),
+        ),
+        AbilityId.INFESTOR_MICROBIAL_SHROUD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.INFESTOR}),
+        ),
+        AbilityId.INFESTOR_NEURAL_PARASITE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED}),
+        ),
+        AbilityId.LAIR_MORPH_HIVE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LAIR}),
+            products=MappingProxyType({
                 UnitTypeId.LAIR: UnitTypeId.HIVE,
             }),
-            AbilityId.LAIR_RESEARCH_BURROW: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.LAIR_RESEARCH_BURROW: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+            products=MappingProxyType({
                 UnitTypeId.HATCHERY: UpgradeId.BURROW,
                 UnitTypeId.HIVE: UpgradeId.BURROW,
                 UnitTypeId.LAIR: UpgradeId.BURROW,
             }),
-            AbilityId.LAIR_RESEARCH_OVERLORD_SPEED: MappingProxyType({
+        ),
+        AbilityId.LAIR_RESEARCH_OVERLORD_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+            products=MappingProxyType({
                 UnitTypeId.HATCHERY: UpgradeId.OVERLORD_SPEED,
                 UnitTypeId.HIVE: UpgradeId.OVERLORD_SPEED,
                 UnitTypeId.LAIR: UpgradeId.OVERLORD_SPEED,
             }),
-            AbilityId.LARVA_MORPH_CORRUPTOR: MappingProxyType({
+        ),
+        AbilityId.LAND: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS_FLYING, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.FACTORY_FLYING, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.STARPORT_FLYING}),
+        ),
+        AbilityId.LARVA_MORPH_CORRUPTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.CORRUPTOR,
             }),
-            AbilityId.LARVA_MORPH_DRONE: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_DRONE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.DRONE,
             }),
-            AbilityId.LARVA_MORPH_HYDRALISK: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_HYDRALISK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.HYDRALISK,
             }),
-            AbilityId.LARVA_MORPH_INFESTOR: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_INFESTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.INFESTOR,
             }),
-            AbilityId.LARVA_MORPH_MUTALISK: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_MUTALISK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.MUTALISK,
             }),
-            AbilityId.LARVA_MORPH_OVERLORD: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_OVERLORD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.OVERLORD,
             }),
-            AbilityId.LARVA_MORPH_ROACH: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_ROACH: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.ROACH,
             }),
-            AbilityId.LARVA_MORPH_SWARM_HOST: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_SWARM_HOST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.SWARM_HOST,
             }),
-            AbilityId.LARVA_MORPH_ULTRALISK: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_ULTRALISK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.ULTRALISK,
             }),
-            AbilityId.LARVA_MORPH_VIPER: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_VIPER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.VIPER,
             }),
-            AbilityId.LARVA_MORPH_ZERGLING: MappingProxyType({
+        ),
+        AbilityId.LARVA_MORPH_ZERGLING: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LARVA}),
+            products=MappingProxyType({
                 UnitTypeId.LARVA: UnitTypeId.ZERGLING,
             }),
-            AbilityId.LIBERATOR_SIEGE_AT: MappingProxyType({
+        ),
+        AbilityId.LIBERATOR_SIEGE_AT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LIBERATOR}),
+            products=MappingProxyType({
                 UnitTypeId.LIBERATOR: UnitTypeId.LIBERATOR_SIEGED,
             }),
-            AbilityId.LIFT: MappingProxyType({
+        ),
+        AbilityId.LIFT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BARRACKS, UnitTypeId.COMMAND_CENTER, UnitTypeId.FACTORY, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.BARRACKS: UnitTypeId.BARRACKS_FLYING,
                 UnitTypeId.COMMAND_CENTER: UnitTypeId.COMMAND_CENTER_FLYING,
                 UnitTypeId.FACTORY: UnitTypeId.FACTORY_FLYING,
                 UnitTypeId.ORBITAL_COMMAND: UnitTypeId.ORBITAL_COMMAND_FLYING,
                 UnitTypeId.STARPORT: UnitTypeId.STARPORT_FLYING,
             }),
-            AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: MappingProxyType({
+        ),
+        AbilityId.LOAD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BUNKER, UnitTypeId.MEDIVAC, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
+        ),
+        AbilityId.LOAD_ALL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.PLANETARY_FORTRESS}),
+        ),
+        AbilityId.LOCUST_SWOOP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LOCUST_FLYING}),
+        ),
+        AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LURKER_DEN}),
+            products=MappingProxyType({
                 UnitTypeId.LURKER_DEN: UpgradeId.LURKER_BURROW_SPEED,
             }),
-            AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE: MappingProxyType({
+        ),
+        AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LURKER_DEN}),
+            products=MappingProxyType({
                 UnitTypeId.LURKER_DEN: UpgradeId.LURKER_RANGE,
             }),
-            AbilityId.NEXUS_TRAIN_MOTHERSHIP: MappingProxyType({
+        ),
+        AbilityId.MEDIVAC_BOOST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MEDIVAC}),
+        ),
+        AbilityId.MEDIVAC_HEAL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MEDIVAC}),
+        ),
+        AbilityId.MOTHERSHIP_CLOAK_FIELD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MOTHERSHIP}),
+        ),
+        AbilityId.MOTHERSHIP_TIME_WARP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MOTHERSHIP}),
+        ),
+        AbilityId.MOVE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.NEXUS_CHRONO_BOOST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.NEXUS}),
+        ),
+        AbilityId.NEXUS_ENERGY_RECHARGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.NEXUS}),
+        ),
+        AbilityId.NEXUS_TRAIN_MOTHERSHIP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.NEXUS}),
+            products=MappingProxyType({
                 UnitTypeId.NEXUS: UnitTypeId.MOTHERSHIP,
             }),
-            AbilityId.NEXUS_TRAIN_PROBE: MappingProxyType({
+        ),
+        AbilityId.NEXUS_TRAIN_PROBE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.NEXUS}),
+            products=MappingProxyType({
                 UnitTypeId.NEXUS: UnitTypeId.PROBE,
             }),
-            AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM: MappingProxyType({
+        ),
+        AbilityId.NYDUS_NETWORK_BUILD_NYDUS_WORM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.NYDUS_NETWORK}),
+            products=MappingProxyType({
                 UnitTypeId.NYDUS_NETWORK: UnitTypeId.NYDUS_WORM,
             }),
-            AbilityId.ORACLE_BUILD_STASIS_WARD: MappingProxyType({
+        ),
+        AbilityId.ORACLE_BUILD_STASIS_WARD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORACLE}),
+            products=MappingProxyType({
                 UnitTypeId.ORACLE: UnitTypeId.STASIS_WARD,
             }),
-            AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: MappingProxyType({
+        ),
+        AbilityId.ORACLE_PULSAR_BEAM_OFF: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORACLE}),
+        ),
+        AbilityId.ORACLE_PULSAR_BEAM_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORACLE}),
+        ),
+        AbilityId.ORACLE_REVELATION: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORACLE}),
+        ),
+        AbilityId.ORBITAL_COMMAND_CALLDOWN_MULE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORBITAL_COMMAND}),
+        ),
+        AbilityId.ORBITAL_COMMAND_SCAN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORBITAL_COMMAND}),
+        ),
+        AbilityId.ORBITAL_COMMAND_SUPPLY_DROP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ORBITAL_COMMAND}),
+        ),
+        AbilityId.OVERLORD_CREEP_OFF: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
+        ),
+        AbilityId.OVERLORD_CREEP_ON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
+        ),
+        AbilityId.OVERLORD_MORPH_OVERLORD_TRANSPORT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERLORD}),
+            products=MappingProxyType({
                 UnitTypeId.OVERLORD: UnitTypeId.OVERLORD_TRANSPORT,
             }),
-            AbilityId.OVERLORD_MORPH_OVERSEER: MappingProxyType({
+        ),
+        AbilityId.OVERLORD_MORPH_OVERSEER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}),
+            products=MappingProxyType({
                 UnitTypeId.OVERLORD: UnitTypeId.OVERSEER,
                 UnitTypeId.OVERLORD_TRANSPORT: UnitTypeId.OVERSEER,
             }),
-            AbilityId.PROBE_BUILD_ASSIMILATOR: MappingProxyType({
+        ),
+        AbilityId.OVERSEER_CONTAMINATE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
+        ),
+        AbilityId.OVERSEER_SPAWN_CHANGELING: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
+        ),
+        AbilityId.PATROL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.PHOENIX, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.PHOENIX_GRAVITON_BEAM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PHOENIX}),
+        ),
+        AbilityId.PROBE_BUILD_ASSIMILATOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.ASSIMILATOR,
             }),
-            AbilityId.PROBE_BUILD_CYBERNETICS_CORE: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_CYBERNETICS_CORE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.CYBERNETICS_CORE,
             }),
-            AbilityId.PROBE_BUILD_DARK_SHRINE: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_DARK_SHRINE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.DARK_SHRINE,
             }),
-            AbilityId.PROBE_BUILD_FLEET_BEACON: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_FLEET_BEACON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.FLEET_BEACON,
             }),
-            AbilityId.PROBE_BUILD_FORGE: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_FORGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.FORGE,
             }),
-            AbilityId.PROBE_BUILD_GATEWAY: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_GATEWAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.GATEWAY,
             }),
-            AbilityId.PROBE_BUILD_NEXUS: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_NEXUS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.NEXUS,
             }),
-            AbilityId.PROBE_BUILD_PHOTON_CANNON: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_PHOTON_CANNON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.PHOTON_CANNON,
             }),
-            AbilityId.PROBE_BUILD_PYLON: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_PYLON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.PYLON,
             }),
-            AbilityId.PROBE_BUILD_ROBOTICS_BAY: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_ROBOTICS_BAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.ROBOTICS_BAY,
             }),
-            AbilityId.PROBE_BUILD_ROBOTICS_FACILITY: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_ROBOTICS_FACILITY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.ROBOTICS_FACILITY,
             }),
-            AbilityId.PROBE_BUILD_SHIELD_BATTERY: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_SHIELD_BATTERY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.SHIELD_BATTERY,
             }),
-            AbilityId.PROBE_BUILD_STARGATE: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_STARGATE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.STARGATE,
             }),
-            AbilityId.PROBE_BUILD_TEMPLAR_ARCHIVE: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_TEMPLAR_ARCHIVE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.TEMPLAR_ARCHIVE,
             }),
-            AbilityId.PROBE_BUILD_TWILIGHT_COUNCIL: MappingProxyType({
+        ),
+        AbilityId.PROBE_BUILD_TWILIGHT_COUNCIL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.PROBE}),
+            products=MappingProxyType({
                 UnitTypeId.PROBE: UnitTypeId.TWILIGHT_COUNCIL,
             }),
-            AbilityId.RAVEN_SPAWN_AUTO_TURRET: MappingProxyType({
+        ),
+        AbilityId.QUEEN_INJECT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.QUEEN}),
+        ),
+        AbilityId.QUEEN_TRANSFUSE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.QUEEN}),
+        ),
+        AbilityId.RALLY_UNITS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING_COCOON, UnitTypeId.BARRACKS, UnitTypeId.BUNKER, UnitTypeId.EGG, UnitTypeId.FACTORY, UnitTypeId.GATEWAY, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR, UnitTypeId.LURKER_EGG, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.RAVAGER_COCOON, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.STARGATE, UnitTypeId.STARPORT}),
+        ),
+        AbilityId.RALLY_WORKERS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR, UnitTypeId.NEXUS, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS}),
+        ),
+        AbilityId.RAVAGER_CORROSIVE_BILE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.RAVAGER}),
+        ),
+        AbilityId.RAVEN_ANTI_ARMOR_MISSILE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.RAVEN}),
+        ),
+        AbilityId.RAVEN_INTERFERENCE_MATRIX: TechTreeAbility(
+            performers=frozenset({UnitTypeId.RAVEN}),
+        ),
+        AbilityId.RAVEN_SPAWN_AUTO_TURRET: TechTreeAbility(
+            performers=frozenset({UnitTypeId.RAVEN}),
+            products=MappingProxyType({
                 UnitTypeId.RAVEN: UnitTypeId.AUTO_TURRET,
             }),
-            AbilityId.ROACH_MORPH_RAVAGER: MappingProxyType({
+        ),
+        AbilityId.REAPER_GRENADE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.REAPER}),
+        ),
+        AbilityId.RECALL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MOTHERSHIP, UnitTypeId.NEXUS}),
+        ),
+        AbilityId.REPAIR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MULE, UnitTypeId.SCV}),
+        ),
+        AbilityId.RETURN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE, UnitTypeId.PROBE, UnitTypeId.SCV}),
+        ),
+        AbilityId.ROACH_MORPH_RAVAGER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROACH}),
+            products=MappingProxyType({
                 UnitTypeId.ROACH: UnitTypeId.RAVAGER,
             }),
-            AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: MappingProxyType({
+        ),
+        AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROACH_WARREN}),
+            products=MappingProxyType({
                 UnitTypeId.ROACH_WARREN: UpgradeId.ROACH_SPEED,
             }),
-            AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS: MappingProxyType({
+        ),
+        AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROACH_WARREN}),
+            products=MappingProxyType({
                 UnitTypeId.ROACH_WARREN: UpgradeId.TUNNELING_CLAWS,
             }),
-            AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_BAY: UpgradeId.COLOSSUS_RANGE,
             }),
-            AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_BAY: UpgradeId.OBSERVER_SPEED,
             }),
-            AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_BAY: UpgradeId.WARP_PRISM_SPEED,
             }),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_COLOSSUS: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_FACILITY_TRAIN_COLOSSUS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_FACILITY: UnitTypeId.COLOSSUS,
             }),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_DISRUPTOR: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_FACILITY_TRAIN_DISRUPTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_FACILITY: UnitTypeId.DISRUPTOR,
             }),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_IMMORTAL: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_FACILITY_TRAIN_IMMORTAL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_FACILITY: UnitTypeId.IMMORTAL,
             }),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_FACILITY_TRAIN_OBSERVER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_FACILITY: UnitTypeId.OBSERVER,
             }),
-            AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM: MappingProxyType({
+        ),
+        AbilityId.ROBOTICS_FACILITY_TRAIN_WARP_PRISM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ROBOTICS_FACILITY}),
+            products=MappingProxyType({
                 UnitTypeId.ROBOTICS_FACILITY: UnitTypeId.WARP_PRISM,
             }),
-            AbilityId.SCV_BUILD_ARMORY: MappingProxyType({
+        ),
+        AbilityId.ROOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER_UPROOTED}),
+        ),
+        AbilityId.SALVAGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BUNKER, UnitTypeId.SENSOR_TOWER}),
+        ),
+        AbilityId.SCV_BUILD_ARMORY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.ARMORY,
             }),
-            AbilityId.SCV_BUILD_BARRACKS: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_BARRACKS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.BARRACKS,
             }),
-            AbilityId.SCV_BUILD_BUNKER: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_BUNKER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.BUNKER,
             }),
-            AbilityId.SCV_BUILD_COMMAND_CENTER: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_COMMAND_CENTER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.COMMAND_CENTER,
             }),
-            AbilityId.SCV_BUILD_ENGINEERING_BAY: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_ENGINEERING_BAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.ENGINEERING_BAY,
             }),
-            AbilityId.SCV_BUILD_FACTORY: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_FACTORY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.FACTORY,
             }),
-            AbilityId.SCV_BUILD_FUSION_CORE: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_FUSION_CORE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.FUSION_CORE,
             }),
-            AbilityId.SCV_BUILD_GHOST_ACADEMY: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_GHOST_ACADEMY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.GHOST_ACADEMY,
             }),
-            AbilityId.SCV_BUILD_MISSILE_TURRET: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_MISSILE_TURRET: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.MISSILE_TURRET,
             }),
-            AbilityId.SCV_BUILD_REFINERY: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_REFINERY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.REFINERY,
             }),
-            AbilityId.SCV_BUILD_SENSOR_TOWER: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_SENSOR_TOWER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.SENSOR_TOWER,
             }),
-            AbilityId.SCV_BUILD_STARPORT: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_STARPORT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.STARPORT,
             }),
-            AbilityId.SCV_BUILD_SUPPLY_DEPOT: MappingProxyType({
+        ),
+        AbilityId.SCV_BUILD_SUPPLY_DEPOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SCV}),
+            products=MappingProxyType({
                 UnitTypeId.SCV: UnitTypeId.SUPPLY_DEPOT,
             }),
-            AbilityId.SIEGE: MappingProxyType({
+        ),
+        AbilityId.SENTRY_FORCE_FIELD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_GUARDIAN_SHIELD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_ADEPT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_ARCHON: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_COLOSSUS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_DISRUPTOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_HIGH_TEMPLAR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_IMMORTAL: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_ORACLE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_PHOENIX: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_PROBE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_STALKER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_VOID_RAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_WARP_PRISM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SENTRY_HALLUCINATE_ZEALOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SENTRY}),
+        ),
+        AbilityId.SHIELD_BATTERY_RECHARGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SHIELD_BATTERY}),
+        ),
+        AbilityId.SIEGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.OBSERVER, UnitTypeId.OVERSEER, UnitTypeId.SIEGE_TANK}),
+            products=MappingProxyType({
                 UnitTypeId.OBSERVER: UnitTypeId.OBSERVER_SIEGED,
                 UnitTypeId.OVERSEER: UnitTypeId.OVERSEER_SIEGED,
                 UnitTypeId.SIEGE_TANK: UnitTypeId.SIEGE_TANK_SIEGED,
             }),
-            AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: MappingProxyType({
+        ),
+        AbilityId.SMART: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANELING_COCOON, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BROOD_LORD_COCOON, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.EGG, UnitTypeId.FACTORY, UnitTypeId.FACTORY_FLYING, UnitTypeId.FORCE_FIELD, UnitTypeId.GATEWAY, UnitTypeId.GHOST, UnitTypeId.HATCHERY, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HIVE, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LAIR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.LURKER_EGG, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.NEXUS, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OBSERVER, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_COCOON, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERLORD_TRANSPORT_COCOON, UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVAGER_COCOON, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.ROBOTICS_FACILITY, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SHIELD_BATTERY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARGATE, UnitTypeId.STARPORT, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_GATE, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.WIDOW_MINE, UnitTypeId.WIDOW_MINE_BURROWED, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SPAWNING_POOL}),
+            products=MappingProxyType({
                 UnitTypeId.SPAWNING_POOL: UpgradeId.ADRENAL_GLANDS,
             }),
-            AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED: MappingProxyType({
+        ),
+        AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SPAWNING_POOL}),
+            products=MappingProxyType({
                 UnitTypeId.SPAWNING_POOL: UpgradeId.ZERGLING_SPEED,
             }),
-            AbilityId.SPIRE_MORPH_GREATER_SPIRE: MappingProxyType({
+        ),
+        AbilityId.SPIRE_MORPH_GREATER_SPIRE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.SPIRE: UnitTypeId.GREATER_SPIRE,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: MappingProxyType({
+            cancelled_by=AbilityId.CANCEL,
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_ARMOR_1,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_ARMOR_1,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2: MappingProxyType({
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_ARMOR_2,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_ARMOR_2,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3: MappingProxyType({
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_ARMOR_3,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_ARMOR_3,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1: MappingProxyType({
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_WEAPONS_1,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_WEAPONS_1,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2: MappingProxyType({
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_WEAPONS_2,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_WEAPONS_2,
             }),
-            AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3: MappingProxyType({
+        ),
+        AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3: TechTreeAbility(
+            performers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            products=MappingProxyType({
                 UnitTypeId.GREATER_SPIRE: UpgradeId.ZERG_AIR_WEAPONS_3,
                 UnitTypeId.SPIRE: UpgradeId.ZERG_AIR_WEAPONS_3,
             }),
-            AbilityId.STARGATE_TRAIN_CARRIER: MappingProxyType({
+        ),
+        AbilityId.SPRAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.DRONE, UnitTypeId.PROBE, UnitTypeId.SCV}),
+        ),
+        AbilityId.STARGATE_TRAIN_CARRIER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARGATE}),
+            products=MappingProxyType({
                 UnitTypeId.STARGATE: UnitTypeId.CARRIER,
             }),
-            AbilityId.STARGATE_TRAIN_ORACLE: MappingProxyType({
+        ),
+        AbilityId.STARGATE_TRAIN_ORACLE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARGATE}),
+            products=MappingProxyType({
                 UnitTypeId.STARGATE: UnitTypeId.ORACLE,
             }),
-            AbilityId.STARGATE_TRAIN_PHOENIX: MappingProxyType({
+        ),
+        AbilityId.STARGATE_TRAIN_PHOENIX: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARGATE}),
+            products=MappingProxyType({
                 UnitTypeId.STARGATE: UnitTypeId.PHOENIX,
             }),
-            AbilityId.STARGATE_TRAIN_TEMPEST: MappingProxyType({
+        ),
+        AbilityId.STARGATE_TRAIN_TEMPEST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARGATE}),
+            products=MappingProxyType({
                 UnitTypeId.STARGATE: UnitTypeId.TEMPEST,
             }),
-            AbilityId.STARGATE_TRAIN_VOID_RAY: MappingProxyType({
+        ),
+        AbilityId.STARGATE_TRAIN_VOID_RAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARGATE}),
+            products=MappingProxyType({
                 UnitTypeId.STARGATE: UnitTypeId.VOID_RAY,
             }),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_STARPORT: UpgradeId.BANSHEE_CLOAK,
             }),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_STARPORT: UpgradeId.BANSHEE_SPEED,
             }),
-            AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.TECH_LAB_STARPORT: UpgradeId.INTERFERENCE_MATRIX,
             }),
-            AbilityId.STARPORT_TRAIN_BANSHEE: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_BANSHEE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.BANSHEE,
             }),
-            AbilityId.STARPORT_TRAIN_BATTLECRUISER: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_BATTLECRUISER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.BATTLECRUISER,
             }),
-            AbilityId.STARPORT_TRAIN_LIBERATOR: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_LIBERATOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.LIBERATOR,
             }),
-            AbilityId.STARPORT_TRAIN_MEDIVAC: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_MEDIVAC: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.MEDIVAC,
             }),
-            AbilityId.STARPORT_TRAIN_RAVEN: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_RAVEN: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.RAVEN,
             }),
-            AbilityId.STARPORT_TRAIN_VIKING: MappingProxyType({
+        ),
+        AbilityId.STARPORT_TRAIN_VIKING: TechTreeAbility(
+            performers=frozenset({UnitTypeId.STARPORT}),
+            products=MappingProxyType({
                 UnitTypeId.STARPORT: UnitTypeId.VIKING,
             }),
-            AbilityId.SUPPLY_DEPOT_LOWER: MappingProxyType({
+        ),
+        AbilityId.STIM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MARAUDER, UnitTypeId.MARINE}),
+        ),
+        AbilityId.STOP: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE, UnitTypeId.ARCHON, UnitTypeId.AUTO_TURRET, UnitTypeId.BANELING, UnitTypeId.BANSHEE, UnitTypeId.BARRACKS_FLYING, UnitTypeId.BATTLECRUISER, UnitTypeId.BROODLING, UnitTypeId.BROOD_LORD, UnitTypeId.BUNKER, UnitTypeId.CARRIER, UnitTypeId.CHANGELING, UnitTypeId.CHANGELING_MARINE, UnitTypeId.CHANGELING_MARINE_SHIELD, UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING_ZERGLING, UnitTypeId.CHANGELING_ZERGLING_WINGS, UnitTypeId.COLOSSUS, UnitTypeId.COMMAND_CENTER_FLYING, UnitTypeId.CORRUPTOR, UnitTypeId.CYCLONE, UnitTypeId.DARK_TEMPLAR, UnitTypeId.DISRUPTOR, UnitTypeId.DRONE, UnitTypeId.FACTORY_FLYING, UnitTypeId.GHOST, UnitTypeId.HELLBAT, UnitTypeId.HELLION, UnitTypeId.HIGH_TEMPLAR, UnitTypeId.HYDRALISK, UnitTypeId.IMMORTAL, UnitTypeId.INFESTOR, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.INTERCEPTOR, UnitTypeId.LIBERATOR, UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING, UnitTypeId.LURKER, UnitTypeId.LURKER_BURROWED, UnitTypeId.MARAUDER, UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.MISSILE_TURRET, UnitTypeId.MOTHERSHIP, UnitTypeId.MULE, UnitTypeId.MUTALISK, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM, UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED, UnitTypeId.ORACLE, UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.PHOENIX, UnitTypeId.PHOTON_CANNON, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.PROBE, UnitTypeId.PURIFICATION_NOVA, UnitTypeId.QUEEN, UnitTypeId.RAVAGER, UnitTypeId.RAVEN, UnitTypeId.REAPER, UnitTypeId.ROACH, UnitTypeId.ROACH_BURROWED, UnitTypeId.SCV, UnitTypeId.SENTRY, UnitTypeId.SIEGE_TANK, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPORE_CRAWLER, UnitTypeId.SPORE_CRAWLER_UPROOTED, UnitTypeId.STALKER, UnitTypeId.STARPORT_FLYING, UnitTypeId.SWARM_HOST, UnitTypeId.TEMPEST, UnitTypeId.THOR, UnitTypeId.THOR_HIGH_IMPACT, UnitTypeId.ULTRALISK, UnitTypeId.VIKING, UnitTypeId.VIKING_LANDED, UnitTypeId.VIPER, UnitTypeId.VOID_RAY, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.WIDOW_MINE, UnitTypeId.ZEALOT, UnitTypeId.ZERGLING}),
+        ),
+        AbilityId.SUPPLY_DEPOT_LOWER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SUPPLY_DEPOT}),
+            products=MappingProxyType({
                 UnitTypeId.SUPPLY_DEPOT: UnitTypeId.SUPPLY_DEPOT_LOWERED,
             }),
-            AbilityId.SWARM_HOST_SPAWN_LOCUST: MappingProxyType({
+        ),
+        AbilityId.SUPPLY_DEPOT_RAISE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SUPPLY_DEPOT_LOWERED}),
+        ),
+        AbilityId.SWARM_HOST_SPAWN_LOCUST: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SWARM_HOST, UnitTypeId.SWARM_HOST_BURROWED}),
+            products=MappingProxyType({
                 UnitTypeId.SWARM_HOST: UnitTypeId.LOCUST,
                 UnitTypeId.SWARM_HOST_BURROWED: UnitTypeId.LOCUST,
             }),
-            AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: MappingProxyType({
+        ),
+        AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TEMPLAR_ARCHIVE}),
+            products=MappingProxyType({
                 UnitTypeId.TEMPLAR_ARCHIVE: UpgradeId.STORM,
             }),
-            AbilityId.THOR_HIGH_IMPACT_MODE: MappingProxyType({
+        ),
+        AbilityId.THOR_EXPLOSIVE_MODE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.THOR_HIGH_IMPACT}),
+        ),
+        AbilityId.THOR_HIGH_IMPACT_MODE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.THOR}),
+            products=MappingProxyType({
                 UnitTypeId.THOR: UnitTypeId.THOR_HIGH_IMPACT,
             }),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: MappingProxyType({
+        ),
+        AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+            products=MappingProxyType({
                 UnitTypeId.TWILIGHT_COUNCIL: UpgradeId.BLINK,
             }),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: MappingProxyType({
+        ),
+        AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+            products=MappingProxyType({
                 UnitTypeId.TWILIGHT_COUNCIL: UpgradeId.CHARGE,
             }),
-            AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: MappingProxyType({
+        ),
+        AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES: TechTreeAbility(
+            performers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+            products=MappingProxyType({
                 UnitTypeId.TWILIGHT_COUNCIL: UpgradeId.GLAIVES,
             }),
-            AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: MappingProxyType({
+        ),
+        AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ULTRALISK_CAVERN}),
+            products=MappingProxyType({
                 UnitTypeId.ULTRALISK_CAVERN: UpgradeId.ULTRALISK_ARMOR,
             }),
-            AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: MappingProxyType({
+        ),
+        AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ULTRALISK_CAVERN}),
+            products=MappingProxyType({
                 UnitTypeId.ULTRALISK_CAVERN: UpgradeId.ULTRALISK_SPEED,
             }),
-            AbilityId.UPROOT: MappingProxyType({
+        ),
+        AbilityId.UNBURROW: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BANELING_BURROWED, UnitTypeId.DRONE_BURROWED, UnitTypeId.HYDRALISK_BURROWED, UnitTypeId.INFESTOR_BURROWED, UnitTypeId.LURKER_BURROWED, UnitTypeId.QUEEN_BURROWED, UnitTypeId.RAVAGER_BURROWED, UnitTypeId.ROACH_BURROWED, UnitTypeId.SWARM_HOST_BURROWED, UnitTypeId.ULTRALISK_BURROWED, UnitTypeId.WIDOW_MINE_BURROWED, UnitTypeId.ZERGLING_BURROWED}),
+        ),
+        AbilityId.UNLOAD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.BUNKER, UnitTypeId.NYDUS_NETWORK, UnitTypeId.NYDUS_WORM}),
+        ),
+        AbilityId.UNLOAD_AT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.MEDIVAC, UnitTypeId.OVERLORD_TRANSPORT, UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
+        ),
+        AbilityId.UNSIEGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.LIBERATOR_SIEGED, UnitTypeId.OBSERVER_SIEGED, UnitTypeId.OVERSEER_SIEGED, UnitTypeId.SIEGE_TANK_SIEGED}),
+        ),
+        AbilityId.UPROOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.SPINE_CRAWLER, UnitTypeId.SPORE_CRAWLER}),
+            products=MappingProxyType({
                 UnitTypeId.SPINE_CRAWLER: UnitTypeId.SPINE_CRAWLER_UPROOTED,
                 UnitTypeId.SPORE_CRAWLER: UnitTypeId.SPORE_CRAWLER_UPROOTED,
             }),
-            AbilityId.VIKING_LAND: MappingProxyType({
+        ),
+        AbilityId.VIKING_LAND: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIKING}),
+            products=MappingProxyType({
                 UnitTypeId.VIKING: UnitTypeId.VIKING_LANDED,
             }),
-            AbilityId.WARP_GATE_WARP_IN_ADEPT: MappingProxyType({
+        ),
+        AbilityId.VIKING_LIFT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIKING_LANDED}),
+        ),
+        AbilityId.VIPER_ABDUCT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIPER}),
+        ),
+        AbilityId.VIPER_BLINDING_CLOUD: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIPER}),
+        ),
+        AbilityId.VIPER_CONSUME: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIPER}),
+        ),
+        AbilityId.VIPER_PARASITIC_BOMB: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VIPER}),
+        ),
+        AbilityId.VOID_RAY_PRISMATIC_ALIGNMENT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.VOID_RAY}),
+        ),
+        AbilityId.WARP_GATE_MORPH_GATEWAY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+        ),
+        AbilityId.WARP_GATE_WARP_IN_ADEPT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.ADEPT,
             }),
-            AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: MappingProxyType({
+        ),
+        AbilityId.WARP_GATE_WARP_IN_DARK_TEMPLAR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.DARK_TEMPLAR,
             }),
-            AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: MappingProxyType({
+        ),
+        AbilityId.WARP_GATE_WARP_IN_HIGH_TEMPLAR: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.HIGH_TEMPLAR,
             }),
-            AbilityId.WARP_GATE_WARP_IN_SENTRY: MappingProxyType({
+        ),
+        AbilityId.WARP_GATE_WARP_IN_SENTRY: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.SENTRY,
             }),
-            AbilityId.WARP_GATE_WARP_IN_STALKER: MappingProxyType({
+        ),
+        AbilityId.WARP_GATE_WARP_IN_STALKER: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.STALKER,
             }),
-            AbilityId.WARP_GATE_WARP_IN_ZEALOT: MappingProxyType({
+        ),
+        AbilityId.WARP_GATE_WARP_IN_ZEALOT: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_GATE}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_GATE: UnitTypeId.ZEALOT,
             }),
-            AbilityId.WARP_PRISM_PHASING_MODE: MappingProxyType({
+        ),
+        AbilityId.WARP_PRISM_PHASING_MODE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_PRISM}),
+            products=MappingProxyType({
                 UnitTypeId.WARP_PRISM: UnitTypeId.WARP_PRISM_PHASING,
             }),
-            AbilityId.ZERGLING_MORPH_BANELING: MappingProxyType({
+        ),
+        AbilityId.WARP_PRISM_TRANSPORT_MODE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WARP_PRISM_PHASING}),
+        ),
+        AbilityId.WIDOW_MINE_ATTACK: TechTreeAbility(
+            performers=frozenset({UnitTypeId.WIDOW_MINE_BURROWED}),
+        ),
+        AbilityId.ZEALOT_CHARGE: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ZEALOT}),
+        ),
+        AbilityId.ZERGLING_MORPH_BANELING: TechTreeAbility(
+            performers=frozenset({UnitTypeId.ZERGLING}),
+            products=MappingProxyType({
                 UnitTypeId.ZERGLING: UnitTypeId.BANELING,
             }),
-        }),
-        cancels=MappingProxyType({
-            AbilityId.BUILD_REACTOR: AbilityId.CANCEL,
-            AbilityId.BUILD_TECH_LAB: AbilityId.CANCEL,
-            AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND: AbilityId.CANCEL,
-            AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS: AbilityId.CANCEL,
-            AbilityId.GHOST_ACADEMY_BUILD_NUKE: AbilityId.CANCEL_LAST,
-            AbilityId.HATCHERY_MORPH_LAIR: AbilityId.CANCEL,
-            AbilityId.LAIR_MORPH_HIVE: AbilityId.CANCEL,
-            AbilityId.SPIRE_MORPH_GREATER_SPIRE: AbilityId.CANCEL,
-        }),
-    ),
-    upgrades=TechTreeUpgrades(
-        research_abilities=MappingProxyType({
-            UpgradeId.ADRENAL_GLANDS: AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS,
-            UpgradeId.BANELING_SPEED: AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED,
-            UpgradeId.BANSHEE_CLOAK: AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK,
-            UpgradeId.BANSHEE_SPEED: AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED,
-            UpgradeId.BLINK: AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK,
-            UpgradeId.BLUE_FLAME: AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME,
-            UpgradeId.BUILDING_ARMOR: AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR,
-            UpgradeId.BURROW: AbilityId.LAIR_RESEARCH_BURROW,
-            UpgradeId.CHARGE: AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE,
-            UpgradeId.COLOSSUS_RANGE: AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE,
-            UpgradeId.COMBAT_SHIELD: AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD,
-            UpgradeId.CONCUSSIVE_SHELLS: AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS,
-            UpgradeId.CYCLONE_LOCK_ON_DAMAGE: AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE,
-            UpgradeId.DARK_TEMPLAR_BLINK: AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK,
-            UpgradeId.DRILLING_CLAWS: AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS,
-            UpgradeId.GHOST_CLOAK: AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK,
-            UpgradeId.GLAIVES: AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES,
-            UpgradeId.HISEC_AUTO_TRACKING: AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING,
-            UpgradeId.HYDRALISK_LUNGE: AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE,
-            UpgradeId.HYDRALISK_RANGE: AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE,
-            UpgradeId.HYDRALISK_SPEED: AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED,
-            UpgradeId.INTERFERENCE_MATRIX: AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX,
-            UpgradeId.LIBERATOR_RANGE: AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE,
-            UpgradeId.LURKER_BURROW_SPEED: AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED,
-            UpgradeId.LURKER_RANGE: AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE,
-            UpgradeId.MEDIVAC_ENERGY_REGENERATION: AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION,
-            UpgradeId.NEURAL_PARASITE: AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE,
-            UpgradeId.OBSERVER_SPEED: AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED,
-            UpgradeId.OVERLORD_SPEED: AbilityId.LAIR_RESEARCH_OVERLORD_SPEED,
-            UpgradeId.PHOENIX_RANGE: AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE,
-            UpgradeId.PROTOSS_AIR_ARMOR_1: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1,
-            UpgradeId.PROTOSS_AIR_ARMOR_2: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2,
-            UpgradeId.PROTOSS_AIR_ARMOR_3: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3,
-            UpgradeId.PROTOSS_AIR_WEAPONS_1: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1,
-            UpgradeId.PROTOSS_AIR_WEAPONS_2: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2,
-            UpgradeId.PROTOSS_AIR_WEAPONS_3: AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3,
-            UpgradeId.PROTOSS_GROUND_ARMOR_1: AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1,
-            UpgradeId.PROTOSS_GROUND_ARMOR_2: AbilityId.FORGE_RESEARCH_GROUND_ARMOR_2,
-            UpgradeId.PROTOSS_GROUND_ARMOR_3: AbilityId.FORGE_RESEARCH_GROUND_ARMOR_3,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_1: AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_2: AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_2,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_3: AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_3,
-            UpgradeId.PROTOSS_SHIELDS_1: AbilityId.FORGE_RESEARCH_SHIELDS_1,
-            UpgradeId.PROTOSS_SHIELDS_2: AbilityId.FORGE_RESEARCH_SHIELDS_2,
-            UpgradeId.PROTOSS_SHIELDS_3: AbilityId.FORGE_RESEARCH_SHIELDS_3,
-            UpgradeId.ROACH_SPEED: AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED,
-            UpgradeId.SMART_SERVOS: AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS,
-            UpgradeId.STIMPACK: AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
-            UpgradeId.STORM: AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM,
-            UpgradeId.TEMPEST_BUILDING_DAMAGE: AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_1: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_2: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_2,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_3: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_3,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_1: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_2: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_3: AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3,
-            UpgradeId.TERRAN_SHIP_WEAPONS_1: AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1,
-            UpgradeId.TERRAN_SHIP_WEAPONS_2: AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2,
-            UpgradeId.TERRAN_SHIP_WEAPONS_3: AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_1: AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_2: AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_3: AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3,
-            UpgradeId.TUNNELING_CLAWS: AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS,
-            UpgradeId.ULTRALISK_ARMOR: AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR,
-            UpgradeId.ULTRALISK_SPEED: AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED,
-            UpgradeId.VOID_RAY_SPEED: AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED,
-            UpgradeId.WARP_GATE: AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE,
-            UpgradeId.WARP_PRISM_SPEED: AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED,
-            UpgradeId.YAMATO_CANNON: AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON,
-            UpgradeId.ZERGLING_SPEED: AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED,
-            UpgradeId.ZERG_AIR_ARMOR_1: AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1,
-            UpgradeId.ZERG_AIR_ARMOR_2: AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2,
-            UpgradeId.ZERG_AIR_ARMOR_3: AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3,
-            UpgradeId.ZERG_AIR_WEAPONS_1: AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1,
-            UpgradeId.ZERG_AIR_WEAPONS_2: AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2,
-            UpgradeId.ZERG_AIR_WEAPONS_3: AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3,
-            UpgradeId.ZERG_GROUND_ARMOR_1: AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1,
-            UpgradeId.ZERG_GROUND_ARMOR_2: AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_2,
-            UpgradeId.ZERG_GROUND_ARMOR_3: AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_3,
-            UpgradeId.ZERG_MELEE_WEAPONS_1: AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1,
-            UpgradeId.ZERG_MELEE_WEAPONS_2: AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_2,
-            UpgradeId.ZERG_MELEE_WEAPONS_3: AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_3,
-            UpgradeId.ZERG_RANGE_WEAPONS_1: AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1,
-            UpgradeId.ZERG_RANGE_WEAPONS_2: AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2,
-            UpgradeId.ZERG_RANGE_WEAPONS_3: AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3,
-        }),
-        researchers=MappingProxyType({
-            UpgradeId.ADRENAL_GLANDS: frozenset({UnitTypeId.SPAWNING_POOL}),
-            UpgradeId.BANELING_SPEED: frozenset({UnitTypeId.BANELING_NEST}),
-            UpgradeId.BANSHEE_CLOAK: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            UpgradeId.BANSHEE_SPEED: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            UpgradeId.BLINK: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            UpgradeId.BLUE_FLAME: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            UpgradeId.BUILDING_ARMOR: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.BURROW: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            UpgradeId.CHARGE: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            UpgradeId.COLOSSUS_RANGE: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            UpgradeId.COMBAT_SHIELD: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            UpgradeId.CONCUSSIVE_SHELLS: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            UpgradeId.CYCLONE_LOCK_ON_DAMAGE: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            UpgradeId.DARK_TEMPLAR_BLINK: frozenset({UnitTypeId.DARK_SHRINE}),
-            UpgradeId.DRILLING_CLAWS: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            UpgradeId.GHOST_CLOAK: frozenset({UnitTypeId.GHOST_ACADEMY}),
-            UpgradeId.GLAIVES: frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
-            UpgradeId.HISEC_AUTO_TRACKING: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.HYDRALISK_LUNGE: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            UpgradeId.HYDRALISK_RANGE: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            UpgradeId.HYDRALISK_SPEED: frozenset({UnitTypeId.HYDRALISK_DEN}),
-            UpgradeId.INTERFERENCE_MATRIX: frozenset({UnitTypeId.TECH_LAB_STARPORT}),
-            UpgradeId.LIBERATOR_RANGE: frozenset({UnitTypeId.FUSION_CORE}),
-            UpgradeId.LURKER_BURROW_SPEED: frozenset({UnitTypeId.LURKER_DEN}),
-            UpgradeId.LURKER_RANGE: frozenset({UnitTypeId.LURKER_DEN}),
-            UpgradeId.MEDIVAC_ENERGY_REGENERATION: frozenset({UnitTypeId.FUSION_CORE}),
-            UpgradeId.NEURAL_PARASITE: frozenset({UnitTypeId.INFESTATION_PIT}),
-            UpgradeId.OBSERVER_SPEED: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            UpgradeId.OVERLORD_SPEED: frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
-            UpgradeId.PHOENIX_RANGE: frozenset({UnitTypeId.FLEET_BEACON}),
-            UpgradeId.PROTOSS_AIR_ARMOR_1: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_AIR_ARMOR_2: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_AIR_ARMOR_3: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_AIR_WEAPONS_1: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_AIR_WEAPONS_2: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_AIR_WEAPONS_3: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.PROTOSS_GROUND_ARMOR_1: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_GROUND_ARMOR_2: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_GROUND_ARMOR_3: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_GROUND_WEAPONS_1: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_GROUND_WEAPONS_2: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_GROUND_WEAPONS_3: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_SHIELDS_1: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_SHIELDS_2: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.PROTOSS_SHIELDS_3: frozenset({UnitTypeId.FORGE}),
-            UpgradeId.ROACH_SPEED: frozenset({UnitTypeId.ROACH_WARREN}),
-            UpgradeId.SMART_SERVOS: frozenset({UnitTypeId.TECH_LAB_FACTORY}),
-            UpgradeId.STIMPACK: frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
-            UpgradeId.STORM: frozenset({UnitTypeId.TEMPLAR_ARCHIVE}),
-            UpgradeId.TEMPEST_BUILDING_DAMAGE: frozenset({UnitTypeId.FLEET_BEACON}),
-            UpgradeId.TERRAN_INFANTRY_ARMOR_1: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_INFANTRY_ARMOR_2: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_INFANTRY_ARMOR_3: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_1: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_2: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_3: frozenset({UnitTypeId.ENGINEERING_BAY}),
-            UpgradeId.TERRAN_SHIP_WEAPONS_1: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_SHIP_WEAPONS_2: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_SHIP_WEAPONS_3: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_1: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_2: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_3: frozenset({UnitTypeId.ARMORY}),
-            UpgradeId.TUNNELING_CLAWS: frozenset({UnitTypeId.ROACH_WARREN}),
-            UpgradeId.ULTRALISK_ARMOR: frozenset({UnitTypeId.ULTRALISK_CAVERN}),
-            UpgradeId.ULTRALISK_SPEED: frozenset({UnitTypeId.ULTRALISK_CAVERN}),
-            UpgradeId.VOID_RAY_SPEED: frozenset({UnitTypeId.FLEET_BEACON}),
-            UpgradeId.WARP_GATE: frozenset({UnitTypeId.CYBERNETICS_CORE}),
-            UpgradeId.WARP_PRISM_SPEED: frozenset({UnitTypeId.ROBOTICS_BAY}),
-            UpgradeId.YAMATO_CANNON: frozenset({UnitTypeId.FUSION_CORE}),
-            UpgradeId.ZERGLING_SPEED: frozenset({UnitTypeId.SPAWNING_POOL}),
-            UpgradeId.ZERG_AIR_ARMOR_1: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_AIR_ARMOR_2: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_AIR_ARMOR_3: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_AIR_WEAPONS_1: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_AIR_WEAPONS_2: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_AIR_WEAPONS_3: frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
-            UpgradeId.ZERG_GROUND_ARMOR_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_GROUND_ARMOR_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_GROUND_ARMOR_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_MELEE_WEAPONS_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_MELEE_WEAPONS_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_MELEE_WEAPONS_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_RANGE_WEAPONS_1: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_RANGE_WEAPONS_2: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-            UpgradeId.ZERG_RANGE_WEAPONS_3: frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
-        }),
-        tech_requirements=MappingProxyType({
-            UpgradeId.ADRENAL_GLANDS: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UpgradeId.BANELING_SPEED: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UpgradeId.DRILLING_CLAWS: TechRequirements(techs=frozenset({Tech.ARMORY})),
-            UpgradeId.HYDRALISK_LUNGE: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UpgradeId.LURKER_BURROW_SPEED: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UpgradeId.LURKER_RANGE: TechRequirements(techs=frozenset({Tech.HIVE})),
-            UpgradeId.PROTOSS_AIR_ARMOR_2: TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_ARMOR_1})),
-            UpgradeId.PROTOSS_AIR_ARMOR_3: TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_ARMOR_2})),
-            UpgradeId.PROTOSS_AIR_WEAPONS_2: TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_1})),
-            UpgradeId.PROTOSS_AIR_WEAPONS_3: TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_2})),
-            UpgradeId.PROTOSS_GROUND_ARMOR_2: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_ARMOR_1})),
-            UpgradeId.PROTOSS_GROUND_ARMOR_3: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_ARMOR_2})),
-            UpgradeId.PROTOSS_GROUND_WEAPONS_2: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_WEAPONS_1})),
-            UpgradeId.PROTOSS_GROUND_WEAPONS_3: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_WEAPONS_2})),
-            UpgradeId.PROTOSS_SHIELDS_2: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_1})),
-            UpgradeId.PROTOSS_SHIELDS_3: TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_2})),
-            UpgradeId.ROACH_SPEED: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UpgradeId.SMART_SERVOS: TechRequirements(techs=frozenset({Tech.ARMORY})),
-            UpgradeId.TERRAN_INFANTRY_ARMOR_2: TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_ARMOR_1})),
-            UpgradeId.TERRAN_INFANTRY_ARMOR_3: TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_ARMOR_2})),
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_2: TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})),
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_3: TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_2})),
-            UpgradeId.TERRAN_SHIP_WEAPONS_2: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_1})),
-            UpgradeId.TERRAN_SHIP_WEAPONS_3: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_2})),
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1})),
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2})),
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_2: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_1})),
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_3: TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_2})),
-            UpgradeId.TUNNELING_CLAWS: TechRequirements(techs=frozenset({Tech.LAIR})),
-            UpgradeId.ZERG_AIR_ARMOR_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_1})),
-            UpgradeId.ZERG_AIR_ARMOR_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_2})),
-            UpgradeId.ZERG_AIR_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_1})),
-            UpgradeId.ZERG_AIR_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_2})),
-            UpgradeId.ZERG_GROUND_ARMOR_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_GROUND_ARMOR_1})),
-            UpgradeId.ZERG_GROUND_ARMOR_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_GROUND_ARMOR_2})),
-            UpgradeId.ZERG_MELEE_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_MELEE_WEAPONS_1})),
-            UpgradeId.ZERG_MELEE_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_MELEE_WEAPONS_2})),
-            UpgradeId.ZERG_RANGE_WEAPONS_2: TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_1})),
-            UpgradeId.ZERG_RANGE_WEAPONS_3: TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_2})),
-        }),
-        types=MappingProxyType({
-            UpgradeId.BUILDING_ARMOR: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_AIR_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_AIR_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_AIR_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_AIR_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_AIR_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_AIR_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_GROUND_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_GROUND_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_GROUND_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.PROTOSS_SHIELDS_1: UpgradeType.SHIELD,
-            UpgradeId.PROTOSS_SHIELDS_2: UpgradeType.SHIELD,
-            UpgradeId.PROTOSS_SHIELDS_3: UpgradeType.SHIELD,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_SHIP_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_SHIP_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_SHIP_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.ULTRALISK_ARMOR: UpgradeType.ARMOR,
-            UpgradeId.ZERG_AIR_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.ZERG_AIR_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.ZERG_AIR_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.ZERG_AIR_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.ZERG_AIR_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.ZERG_AIR_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.ZERG_GROUND_ARMOR_1: UpgradeType.ARMOR,
-            UpgradeId.ZERG_GROUND_ARMOR_2: UpgradeType.ARMOR,
-            UpgradeId.ZERG_GROUND_ARMOR_3: UpgradeType.ARMOR,
-            UpgradeId.ZERG_MELEE_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.ZERG_MELEE_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.ZERG_MELEE_WEAPONS_3: UpgradeType.ATTACK,
-            UpgradeId.ZERG_RANGE_WEAPONS_1: UpgradeType.ATTACK,
-            UpgradeId.ZERG_RANGE_WEAPONS_2: UpgradeType.ATTACK,
-            UpgradeId.ZERG_RANGE_WEAPONS_3: UpgradeType.ATTACK,
-        }),
-        levels=MappingProxyType({
-            UpgradeId.PROTOSS_AIR_ARMOR_1: 1,
-            UpgradeId.PROTOSS_AIR_ARMOR_2: 2,
-            UpgradeId.PROTOSS_AIR_ARMOR_3: 3,
-            UpgradeId.PROTOSS_AIR_WEAPONS_1: 1,
-            UpgradeId.PROTOSS_AIR_WEAPONS_2: 2,
-            UpgradeId.PROTOSS_AIR_WEAPONS_3: 3,
-            UpgradeId.PROTOSS_GROUND_ARMOR_1: 1,
-            UpgradeId.PROTOSS_GROUND_ARMOR_2: 2,
-            UpgradeId.PROTOSS_GROUND_ARMOR_3: 3,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_1: 1,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_2: 2,
-            UpgradeId.PROTOSS_GROUND_WEAPONS_3: 3,
-            UpgradeId.PROTOSS_SHIELDS_1: 1,
-            UpgradeId.PROTOSS_SHIELDS_2: 2,
-            UpgradeId.PROTOSS_SHIELDS_3: 3,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_1: 1,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_2: 2,
-            UpgradeId.TERRAN_INFANTRY_ARMOR_3: 3,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_1: 1,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_2: 2,
-            UpgradeId.TERRAN_INFANTRY_WEAPONS_3: 3,
-            UpgradeId.TERRAN_SHIP_WEAPONS_1: 1,
-            UpgradeId.TERRAN_SHIP_WEAPONS_2: 2,
-            UpgradeId.TERRAN_SHIP_WEAPONS_3: 3,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: 1,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: 2,
-            UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: 3,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_1: 1,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_2: 2,
-            UpgradeId.TERRAN_VEHICLE_WEAPONS_3: 3,
-            UpgradeId.ZERG_AIR_ARMOR_1: 1,
-            UpgradeId.ZERG_AIR_ARMOR_2: 2,
-            UpgradeId.ZERG_AIR_ARMOR_3: 3,
-            UpgradeId.ZERG_AIR_WEAPONS_1: 1,
-            UpgradeId.ZERG_AIR_WEAPONS_2: 2,
-            UpgradeId.ZERG_AIR_WEAPONS_3: 3,
-            UpgradeId.ZERG_GROUND_ARMOR_1: 1,
-            UpgradeId.ZERG_GROUND_ARMOR_2: 2,
-            UpgradeId.ZERG_GROUND_ARMOR_3: 3,
-            UpgradeId.ZERG_MELEE_WEAPONS_1: 1,
-            UpgradeId.ZERG_MELEE_WEAPONS_2: 2,
-            UpgradeId.ZERG_MELEE_WEAPONS_3: 3,
-            UpgradeId.ZERG_RANGE_WEAPONS_1: 1,
-            UpgradeId.ZERG_RANGE_WEAPONS_2: 2,
-            UpgradeId.ZERG_RANGE_WEAPONS_3: 3,
-        }),
-    ),
+        ),
+    }),
+    upgrades=MappingProxyType({
+        UpgradeId.ADRENAL_GLANDS: TechTreeUpgrade(
+            research_ability=AbilityId.SPAWNING_POOL_RESEARCH_ADRENAL_GLANDS,
+            researchers=frozenset({UnitTypeId.SPAWNING_POOL}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+        ),
+        UpgradeId.BANELING_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.BANELING_NEST_RESEARCH_BANELING_SPEED,
+            researchers=frozenset({UnitTypeId.BANELING_NEST}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+        ),
+        UpgradeId.BANSHEE_CLOAK: TechTreeUpgrade(
+            research_ability=AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_CLOAK,
+            researchers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+        ),
+        UpgradeId.BANSHEE_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.STARPORT_TECH_LAB_RESEARCH_BANSHEE_SPEED,
+            researchers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+        ),
+        UpgradeId.BLINK: TechTreeUpgrade(
+            research_ability=AbilityId.TWILIGHT_COUNCIL_RESEARCH_BLINK,
+            researchers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+        ),
+        UpgradeId.BLUE_FLAME: TechTreeUpgrade(
+            research_ability=AbilityId.FACTORY_TECH_LAB_RESEARCH_BLUE_FLAME,
+            researchers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+        ),
+        UpgradeId.BUILDING_ARMOR: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_BUILDING_ARMOR,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            upgrade_type=UpgradeType.ARMOR,
+        ),
+        UpgradeId.BURROW: TechTreeUpgrade(
+            research_ability=AbilityId.LAIR_RESEARCH_BURROW,
+            researchers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+        ),
+        UpgradeId.CHARGE: TechTreeUpgrade(
+            research_ability=AbilityId.TWILIGHT_COUNCIL_RESEARCH_CHARGE,
+            researchers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+        ),
+        UpgradeId.COLOSSUS_RANGE: TechTreeUpgrade(
+            research_ability=AbilityId.ROBOTICS_BAY_RESEARCH_COLOSSUS_RANGE,
+            researchers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+        ),
+        UpgradeId.COMBAT_SHIELD: TechTreeUpgrade(
+            research_ability=AbilityId.BARRACKS_TECH_LAB_RESEARCH_COMBAT_SHIELD,
+            researchers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+        ),
+        UpgradeId.CONCUSSIVE_SHELLS: TechTreeUpgrade(
+            research_ability=AbilityId.BARRACKS_TECH_LAB_RESEARCH_CONCUSSIVE_SHELLS,
+            researchers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+        ),
+        UpgradeId.CYCLONE_LOCK_ON_DAMAGE: TechTreeUpgrade(
+            research_ability=AbilityId.FACTORY_TECH_LAB_RESEARCH_CYCLONE_LOCK_ON_DAMAGE,
+            researchers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+        ),
+        UpgradeId.DARK_TEMPLAR_BLINK: TechTreeUpgrade(
+            research_ability=AbilityId.DARK_SHRINE_RESEARCH_DARK_TEMPLAR_BLINK,
+            researchers=frozenset({UnitTypeId.DARK_SHRINE}),
+        ),
+        UpgradeId.DRILLING_CLAWS: TechTreeUpgrade(
+            research_ability=AbilityId.FACTORY_TECH_LAB_RESEARCH_DRILLING_CLAWS,
+            researchers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY})),
+        ),
+        UpgradeId.GHOST_CLOAK: TechTreeUpgrade(
+            research_ability=AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK,
+            researchers=frozenset({UnitTypeId.GHOST_ACADEMY}),
+        ),
+        UpgradeId.GLAIVES: TechTreeUpgrade(
+            research_ability=AbilityId.TWILIGHT_COUNCIL_RESEARCH_GLAIVES,
+            researchers=frozenset({UnitTypeId.TWILIGHT_COUNCIL}),
+        ),
+        UpgradeId.HISEC_AUTO_TRACKING: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_HISEC_AUTO_TRACKING,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+        ),
+        UpgradeId.HYDRALISK_LUNGE: TechTreeUpgrade(
+            research_ability=AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_LUNGE,
+            researchers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+        ),
+        UpgradeId.HYDRALISK_RANGE: TechTreeUpgrade(
+            research_ability=AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_RANGE,
+            researchers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+        ),
+        UpgradeId.HYDRALISK_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.HYDRALISK_DEN_RESEARCH_HYDRALISK_SPEED,
+            researchers=frozenset({UnitTypeId.HYDRALISK_DEN}),
+        ),
+        UpgradeId.INTERFERENCE_MATRIX: TechTreeUpgrade(
+            research_ability=AbilityId.STARPORT_TECH_LAB_RESEARCH_INTERFERENCE_MATRIX,
+            researchers=frozenset({UnitTypeId.TECH_LAB_STARPORT}),
+        ),
+        UpgradeId.LIBERATOR_RANGE: TechTreeUpgrade(
+            research_ability=AbilityId.FUSION_CORE_RESEARCH_LIBERATOR_RANGE,
+            researchers=frozenset({UnitTypeId.FUSION_CORE}),
+        ),
+        UpgradeId.LURKER_BURROW_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.LURKER_DEN_RESEARCH_LURKER_BURROW_SPEED,
+            researchers=frozenset({UnitTypeId.LURKER_DEN}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+        ),
+        UpgradeId.LURKER_RANGE: TechTreeUpgrade(
+            research_ability=AbilityId.LURKER_DEN_RESEARCH_LURKER_RANGE,
+            researchers=frozenset({UnitTypeId.LURKER_DEN}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE})),
+        ),
+        UpgradeId.MEDIVAC_ENERGY_REGENERATION: TechTreeUpgrade(
+            research_ability=AbilityId.FUSION_CORE_RESEARCH_MEDIVAC_ENERGY_REGENERATION,
+            researchers=frozenset({UnitTypeId.FUSION_CORE}),
+        ),
+        UpgradeId.NEURAL_PARASITE: TechTreeUpgrade(
+            research_ability=AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE,
+            researchers=frozenset({UnitTypeId.INFESTATION_PIT}),
+        ),
+        UpgradeId.OBSERVER_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.ROBOTICS_BAY_RESEARCH_OBSERVER_SPEED,
+            researchers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+        ),
+        UpgradeId.OVERLORD_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.LAIR_RESEARCH_OVERLORD_SPEED,
+            researchers=frozenset({UnitTypeId.HATCHERY, UnitTypeId.HIVE, UnitTypeId.LAIR}),
+        ),
+        UpgradeId.PHOENIX_RANGE: TechTreeUpgrade(
+            research_ability=AbilityId.FLEET_BEACON_RESEARCH_PHOENIX_RANGE,
+            researchers=frozenset({UnitTypeId.FLEET_BEACON}),
+        ),
+        UpgradeId.PROTOSS_AIR_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.PROTOSS_AIR_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.PROTOSS_AIR_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.PROTOSS_AIR_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.PROTOSS_AIR_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.PROTOSS_AIR_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.FLEET_BEACON}), upgrades=frozenset({UpgradeId.PROTOSS_AIR_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.PROTOSS_GROUND_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_ARMOR_1,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.PROTOSS_GROUND_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_ARMOR_2,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.PROTOSS_GROUND_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_ARMOR_3,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.PROTOSS_GROUND_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.PROTOSS_GROUND_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.PROTOSS_GROUND_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_GROUND_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_GROUND_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.PROTOSS_SHIELDS_1: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_SHIELDS_1,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            upgrade_type=UpgradeType.SHIELD,
+            level=1,
+        ),
+        UpgradeId.PROTOSS_SHIELDS_2: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_SHIELDS_2,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_1})),
+            upgrade_type=UpgradeType.SHIELD,
+            level=2,
+        ),
+        UpgradeId.PROTOSS_SHIELDS_3: TechTreeUpgrade(
+            research_ability=AbilityId.FORGE_RESEARCH_SHIELDS_3,
+            researchers=frozenset({UnitTypeId.FORGE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.TWILIGHT_COUNCIL}), upgrades=frozenset({UpgradeId.PROTOSS_SHIELDS_2})),
+            upgrade_type=UpgradeType.SHIELD,
+            level=3,
+        ),
+        UpgradeId.ROACH_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.ROACH_WARREN_RESEARCH_ROACH_SPEED,
+            researchers=frozenset({UnitTypeId.ROACH_WARREN}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+        ),
+        UpgradeId.SMART_SERVOS: TechTreeUpgrade(
+            research_ability=AbilityId.FACTORY_TECH_LAB_RESEARCH_SMART_SERVOS,
+            researchers=frozenset({UnitTypeId.TECH_LAB_FACTORY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY})),
+        ),
+        UpgradeId.STIMPACK: TechTreeUpgrade(
+            research_ability=AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK,
+            researchers=frozenset({UnitTypeId.TECH_LAB_BARRACKS}),
+        ),
+        UpgradeId.STORM: TechTreeUpgrade(
+            research_ability=AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM,
+            researchers=frozenset({UnitTypeId.TEMPLAR_ARCHIVE}),
+        ),
+        UpgradeId.TEMPEST_BUILDING_DAMAGE: TechTreeUpgrade(
+            research_ability=AbilityId.FLEET_BEACON_RESEARCH_TEMPEST_BUILDING_DAMAGE,
+            researchers=frozenset({UnitTypeId.FLEET_BEACON}),
+        ),
+        UpgradeId.TERRAN_INFANTRY_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_1,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.TERRAN_INFANTRY_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_2,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.TERRAN_INFANTRY_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_ARMOR_3,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.TERRAN_INFANTRY_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.TERRAN_INFANTRY_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.TERRAN_INFANTRY_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.ENGINEERING_BAY}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.ARMORY}), upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.TERRAN_SHIP_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.TERRAN_SHIP_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.TERRAN_SHIP_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_SHIP_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_SHIP_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_1,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_2,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_AND_SHIP_ARMOR_3,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_AND_SHIP_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.TERRAN_VEHICLE_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.TERRAN_VEHICLE_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.TERRAN_VEHICLE_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.ARMORY_RESEARCH_VEHICLE_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.ARMORY}),
+            tech_requirements=TechRequirements(upgrades=frozenset({UpgradeId.TERRAN_VEHICLE_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.TUNNELING_CLAWS: TechTreeUpgrade(
+            research_ability=AbilityId.ROACH_WARREN_RESEARCH_TUNNELING_CLAWS,
+            researchers=frozenset({UnitTypeId.ROACH_WARREN}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR})),
+        ),
+        UpgradeId.ULTRALISK_ARMOR: TechTreeUpgrade(
+            research_ability=AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_ARMOR,
+            researchers=frozenset({UnitTypeId.ULTRALISK_CAVERN}),
+            upgrade_type=UpgradeType.ARMOR,
+        ),
+        UpgradeId.ULTRALISK_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.ULTRALISK_CAVERN_RESEARCH_ULTRALISK_SPEED,
+            researchers=frozenset({UnitTypeId.ULTRALISK_CAVERN}),
+        ),
+        UpgradeId.VOID_RAY_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.FLEET_BEACON_RESEARCH_VOID_RAY_SPEED,
+            researchers=frozenset({UnitTypeId.FLEET_BEACON}),
+        ),
+        UpgradeId.WARP_GATE: TechTreeUpgrade(
+            research_ability=AbilityId.CYBERNETICS_CORE_RESEARCH_WARP_GATE,
+            researchers=frozenset({UnitTypeId.CYBERNETICS_CORE}),
+        ),
+        UpgradeId.WARP_PRISM_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.ROBOTICS_BAY_RESEARCH_WARP_PRISM_SPEED,
+            researchers=frozenset({UnitTypeId.ROBOTICS_BAY}),
+        ),
+        UpgradeId.YAMATO_CANNON: TechTreeUpgrade(
+            research_ability=AbilityId.FUSION_CORE_RESEARCH_YAMATO_CANNON,
+            researchers=frozenset({UnitTypeId.FUSION_CORE}),
+        ),
+        UpgradeId.ZERGLING_SPEED: TechTreeUpgrade(
+            research_ability=AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED,
+            researchers=frozenset({UnitTypeId.SPAWNING_POOL}),
+        ),
+        UpgradeId.ZERG_AIR_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_ARMOR_1,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.ZERG_AIR_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_ARMOR_2,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.ZERG_AIR_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_ARMOR_3,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.ZERG_AIR_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.ZERG_AIR_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.ZERG_AIR_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.SPIRE_RESEARCH_AIR_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.GREATER_SPIRE, UnitTypeId.SPIRE}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_AIR_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.ZERG_GROUND_ARMOR_1: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_1,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            upgrade_type=UpgradeType.ARMOR,
+            level=1,
+        ),
+        UpgradeId.ZERG_GROUND_ARMOR_2: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_2,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_GROUND_ARMOR_1})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=2,
+        ),
+        UpgradeId.ZERG_GROUND_ARMOR_3: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_GROUND_ARMOR_3,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_GROUND_ARMOR_2})),
+            upgrade_type=UpgradeType.ARMOR,
+            level=3,
+        ),
+        UpgradeId.ZERG_MELEE_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.ZERG_MELEE_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_MELEE_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.ZERG_MELEE_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_MELEE_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+        UpgradeId.ZERG_RANGE_WEAPONS_1: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_1,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            upgrade_type=UpgradeType.ATTACK,
+            level=1,
+        ),
+        UpgradeId.ZERG_RANGE_WEAPONS_2: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_2,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.LAIR}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_1})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=2,
+        ),
+        UpgradeId.ZERG_RANGE_WEAPONS_3: TechTreeUpgrade(
+            research_ability=AbilityId.EVOLUTION_CHAMBER_RESEARCH_RANGE_WEAPONS_3,
+            researchers=frozenset({UnitTypeId.EVOLUTION_CHAMBER}),
+            tech_requirements=TechRequirements(techs=frozenset({Tech.HIVE}), upgrades=frozenset({UpgradeId.ZERG_RANGE_WEAPONS_2})),
+            upgrade_type=UpgradeType.ATTACK,
+            level=3,
+        ),
+    }),
 )

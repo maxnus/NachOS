@@ -16,7 +16,7 @@ from sc2nachos.gamedata._techtree._overrides import (
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
-from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbilities, TechTreeUnitTypes, TechTreeUpgrades
+from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbility, TechTreeUnitType, TechTreeUpgrade
 
 __all__ = [
     "ABILITIES_PLACING_AT_THE_TARGET",
@@ -34,7 +34,7 @@ __all__ = [
     "UNIT_TYPE_COST_OVERRIDES",
     "UNNAMED_CREATION_ABILITIES",
     "TechTree",
-    "TechTreeAbilities",
-    "TechTreeUnitTypes",
-    "TechTreeUpgrades",
+    "TechTreeAbility",
+    "TechTreeUnitType",
+    "TechTreeUpgrade",
 ]
