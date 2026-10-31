@@ -39,3 +39,19 @@ jobs:
 
       - name: Test
         run: uv run pytest -v
+
+  oldest-numpy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install with numpy 2.0, and what the tests need
+        run: |
+          uv venv --python 3.12
+          uv pip install -e . "numpy==2.0.*" pytest
+
+      - name: Test
+        run: .venv/bin/python -m pytest -v
