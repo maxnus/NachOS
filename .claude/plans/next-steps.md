@@ -42,7 +42,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   `TechTreeAbility` or `TechTreeUpgrade`, whose fields are named as those of the data class they fill, so what it says
   of a ghost sits in one entry (review of #187, over a mapping per field, `TechTreeUnitTypes` and the like, which spread
   it over four). `tech_tree.unit_type(id)`, `ability(id)` and `upgrade(id)` give an empty record for an id it holds
-  none of, and each data class's reader takes the tree. `tools/generate_tech_tree.py` works out the performers, the
+  none of, as 117 of 285 unit types, the map's own, have none (the owner, review of #188, over `None`, a raise or a
+  fallback argument, and over raising for the seven abilities the readers look up that every tree holds), and each
+  data class's reader takes the tree. `tools/generate_tech_tree.py` works out the performers, the
   producers and the research abilities and writes them into the module, so that the records are plain, over the tree
   working them out at import.
 - **An order has no state, and nothing follows it once sent** (#69, then #115, 2026-10-07). A command the game
