@@ -11,7 +11,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos._checks import check_file_to_write, check_game_time
 from sc2nachos._command_line_arguments import _CommandLineArguments
-from sc2nachos.api import Api, NotPlayingError
+from sc2nachos.api import Api, NoEnemyError, NotPlayingError
 from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
@@ -298,8 +298,9 @@ def run_from_command_line(
     one to record the whole conversation with the game into, as `record_to` does, for `run_recording` to play back, and
     `--ResultFile` one to write the JSON the match workflow reads: the result, the map, as its file's name in a local
     game and as its display name in a ladder game, and the game time, each of those two `null` if the ladder closed the
-    connection before the game began. An argument of the other kind of game is logged as ignored, and one NachOS does
-    not read is left for the bot, listed in the log. `argv` defaults to `sys.argv[1:]`.
+    connection before the game began, and `opponent_actual_race`, the race the opponent played as `Enemy.race` reads at
+    the end, `null` if it was never known. An argument of the other kind of game is logged as ignored, and one NachOS
+    does not read is left for the bot, listed in the log. `argv` defaults to `sys.argv[1:]`.
     """
     command_line_arguments = _CommandLineArguments(argv)
     command_line_arguments.log_arguments_not_used()
@@ -316,6 +317,7 @@ def run_from_command_line(
             "result": result.name,
             "map": map_name,
             "game_time": _game_time(api),
+            "opponent_actual_race": _enemy_race_name(api),
         }
         command_line_arguments.result_file.write_text(json.dumps(outcome), encoding="utf-8")
     return result
@@ -357,6 +359,16 @@ def _game_time(api: Api) -> float | None:
         return round(api.time.seconds, 3)
     except NotPlayingError:
         return None
+
+
+def _enemy_race_name(api: Api) -> str | None:
+    """The name of the race the enemy of `api`'s last game played, `None` if it was never known, or the game had no
+    enemy or never began."""
+    try:
+        race = api.enemy.race
+    except (NotPlayingError, NoEnemyError):
+        return None
+    return None if race is None else race.name
 
 
 def _play_local_game(

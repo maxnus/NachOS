@@ -51,7 +51,8 @@ The result file is JSON. `result` and `map` are required; the rest are optional:
 ```
 
 `result` is `VICTORY`, `DEFEAT` or `TIE`, in any case, and `game_time` is in game seconds. `opponent_actual_race` is
-what a `RANDOM` opponent turned out to be. A game that writes no result file counts as crashed.
+the race the opponent played, which the report shows for a `RANDOM` one. `run_from_command_line` writes all four. A
+game that writes no result file counts as crashed.
 
 ### 2. `.github/sc2-games.yml`
 

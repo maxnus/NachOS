@@ -18,6 +18,7 @@ from sc2nachos import (
     Difficulty,
     FogOnError,
     GameTime,
+    NoEnemyError,
     Race,
     Result,
     UnitTypeId,
@@ -72,6 +73,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
     monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=754.3841)))
+    monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.ZERG)))
     return calls
 
 
@@ -87,6 +89,7 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
     monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=61.25)))
     monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
+    monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.PROTOSS)))
     return calls
 
 
@@ -151,6 +154,7 @@ class TestALadderGame:
             "result": "DEFEAT",
             "map": "Pylon AIE",
             "game_time": 61.25,
+            "opponent_actual_race": "PROTOSS",
         }
 
 
@@ -184,6 +188,7 @@ class TestTheLadderClosingTheConnection:
             "result": "UNDECIDED",
             "map": None,
             "game_time": None,
+            "opponent_actual_race": None,
         }
 
     def test_in_a_local_game_is_raised(self, played: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -264,7 +269,27 @@ def test_the_result_file_is_what_the_match_workflow_reads(played: dict[str, Any]
         "result": "VICTORY",
         "map": "PylonAIE_v4",
         "game_time": 754.384,
+        "opponent_actual_race": "ZERG",
     }
+
+
+def _raise_no_enemy(api: Api) -> object:
+    """`Api.enemy` in a game with no other player."""
+    raise NoEnemyError("this game has no other player")
+
+
+@pytest.mark.parametrize(
+    "enemy",
+    [property(lambda api: SimpleNamespace(race=None)), property(_raise_no_enemy)],
+    ids=["a race never known", "no enemy"],
+)
+def test_the_result_file_reads_an_opponents_race_not_known_as_null(
+    played: dict[str, Any], enemy: property, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Api, "enemy", enemy)
+    result_file = tmp_path / "result.json"
+    run_from_command_line(Api(), ["--ResultFile", str(result_file)], race=Race.TERRAN)
+    assert json.loads(result_file.read_text(encoding="utf-8"))["opponent_actual_race"] is None
 
 
 @pytest.mark.parametrize(
@@ -897,7 +922,7 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     assert result is Result.DEFEAT
     assert api.enemy.ladder_id == "5a1f"
     written = json.loads(result_file.read_text(encoding="utf-8"))
-    assert (written["result"], written["map"]) == ("DEFEAT", api.map.name)
+    assert (written["result"], written["map"], written["opponent_actual_race"]) == ("DEFEAT", api.map.name, "ZERG")
     assert not read_back.HasField("error")
     assert read_back.game_duration_loops >= 8
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]
