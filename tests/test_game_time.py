@@ -1,3 +1,4 @@
+import math
 from fractions import Fraction
 
 import numpy
@@ -9,7 +10,7 @@ from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_SECOND
 
 class TestConversions:
     def test_a_second_is_the_step_rate(self):
-        assert GameTime.from_seconds(1.0).steps == pytest.approx(STEPS_PER_SECOND)
+        assert GameTime(seconds=1.0).steps == pytest.approx(STEPS_PER_SECOND)
 
     def test_a_step_is_the_step_duration(self):
         assert GameTime(steps=1).seconds == pytest.approx(SECONDS_PER_STEP)
@@ -17,7 +18,7 @@ class TestConversions:
     def test_round_trips_exactly(self):
         # Rounding inside the conversion once made this lossy: one second in, 0.982 back.
         for seconds in (0.5, 1.0, 7.3, 30.0, 600.0):
-            assert GameTime.from_seconds(seconds).seconds == pytest.approx(seconds)
+            assert GameTime(seconds=seconds).seconds == pytest.approx(seconds)
 
     def test_whole_seconds_are_exact(self):
         assert GameTime(steps=4480).seconds == 200.0
@@ -25,14 +26,14 @@ class TestConversions:
 
     def test_seconds_that_make_whole_steps_make_them_exactly(self):
         """Multiplying by the stored 22.4 took 45 seconds to 1007.9999999999999 steps."""
-        assert GameTime.from_seconds(45) == GameTime(steps=1008)
-        assert all(GameTime.from_seconds(seconds).steps == seconds * 224 // 10 for seconds in range(0, 100_000, 5))
+        assert GameTime(seconds=45) == GameTime(steps=1008)
+        assert all(GameTime(seconds=seconds).steps == seconds * 224 // 10 for seconds in range(0, 100_000, 5))
 
     def test_is_not_rounded(self):
-        assert GameTime.from_seconds(1.0).steps == 22.4
+        assert GameTime(seconds=1.0).steps == 22.4
 
     def test_zero(self):
-        assert GameTime.from_seconds(0).steps == 0
+        assert GameTime(seconds=0).steps == 0
         assert GameTime(steps=0).seconds == 0
 
     def test_the_zero_constant_is_no_time(self):
@@ -41,22 +42,105 @@ class TestConversions:
         assert isinstance(GameTime.ZERO, GameTime)
 
     def test_a_normal_second_is_16_steps(self):
-        assert GameTime.from_normal_seconds(1) == GameTime(steps=16)
+        assert GameTime(normal_seconds=1) == GameTime(steps=16)
         assert GameTime(steps=24).normal_seconds == 1.5
 
     def test_normal_seconds_round_trip_exactly(self):
         """16 is a power of two, so neither way rounds: a weapon's 0.8608 Normal seconds come back as given."""
         for normal_seconds in (0.8608, 1.5, 0.1, 1e-9, 1234.5678):
-            assert GameTime.from_normal_seconds(normal_seconds).normal_seconds == normal_seconds
+            assert GameTime(normal_seconds=normal_seconds).normal_seconds == normal_seconds
 
     def test_takes_its_steps_by_keyword_alone(self):
         with pytest.raises(TypeError):
-            GameTime(96)  # type: ignore[misc]
+            GameTime(96)  # type: ignore[call-overload]
+
+    @pytest.mark.parametrize(
+        ("units", "given"),
+        [
+            ({}, "none"),
+            ({"steps": 96, "seconds": 1.0}, "steps and seconds"),
+            ({"seconds": 1.0, "normal_seconds": 1.0}, "seconds and normal_seconds"),
+            ({"steps": 96, "normal_seconds": 1.0}, "steps and normal_seconds"),
+            ({"steps": 0, "seconds": 0, "normal_seconds": 0}, "steps and seconds and normal_seconds"),
+        ],
+    )
+    def test_takes_exactly_one_unit(self, units, given):
+        """A zero counts as given."""
+        with pytest.raises(TypeError, match=f"exactly one of steps, seconds and normal_seconds, not {given}$"):
+            GameTime(**units)
+
+    def test_takes_no_other_unit(self):
+        with pytest.raises(TypeError):
+            GameTime(minutes=1)  # type: ignore[call-overload]
+
+    def test_each_unit_makes_the_same_time(self):
+        assert GameTime(steps=2688) == GameTime(seconds=120) == GameTime(normal_seconds=168)
+
+    def test_what_arithmetic_makes_is_a_time_like_any_other(self):
+        """Arithmetic makes its results without the constructor."""
+        total = GameTime(steps=90) + GameTime(steps=6)
+        assert (type(total), total, hash(total), repr(total)) == (
+            GameTime,
+            GameTime(steps=96),
+            hash(GameTime(steps=96)),
+            "GameTime(steps=96)",
+        )
+        with pytest.raises(AttributeError):
+            total.steps = 1  # type: ignore[misc]
 
     def test_is_frozen(self):
         time = GameTime(steps=96)
         with pytest.raises(AttributeError):
             time.steps = 1  # type: ignore[misc]
+
+
+class TestInfinite:
+    def test_is_later_and_longer_than_any_other(self):
+        assert GameTime(steps=1e300) < GameTime.INFINITE
+        assert GameTime(steps=-1e300) > -GameTime.INFINITE
+        assert max(GameTime.ZERO, GameTime.INFINITE) == GameTime.INFINITE
+        assert min(GameTime(steps=5), GameTime.INFINITE) == GameTime(steps=5)
+
+    def test_stays_infinite_when_a_finite_time_is_added_or_subtracted(self):
+        assert GameTime.INFINITE + GameTime(steps=5) == GameTime.INFINITE
+        assert GameTime.INFINITE - GameTime(steps=5) == GameTime.INFINITE
+
+    def test_is_infinite_in_every_unit(self):
+        assert GameTime.INFINITE == GameTime(seconds=math.inf) == GameTime(normal_seconds=math.inf)
+        assert GameTime.INFINITE.seconds == math.inf
+        assert GameTime.INFINITE.normal_seconds == math.inf
+
+    def test_is_true_and_not_a_whole_number_of_steps(self):
+        assert GameTime.INFINITE
+        assert not GameTime.INFINITE.is_integer()
+
+    def test_holds_none_of_a_finite_time_whole(self):
+        assert GameTime(steps=5) // GameTime.INFINITE == 0
+        assert GameTime(steps=5) / GameTime.INFINITE == 0.0
+
+    @pytest.mark.parametrize(
+        ("read", "message"),
+        [
+            (lambda time: time.nearest_step, "is not finite, so it has no nearest step"),
+            (lambda time: time.to_string(), "is not finite, so it reads as no minutes and seconds"),
+            (lambda time: time // GameTime(steps=16), "holds no whole number of GameTime"),
+        ],
+    )
+    def test_what_has_no_finite_answer_raises(self, read, message):
+        with pytest.raises(ValueError, match=message):
+            read(GameTime.INFINITE)
+        with pytest.raises(ValueError, match=message):
+            read(-GameTime.INFINITE)
+
+    def test_what_has_no_answer_at_all_is_nan_steps_which_equals_none(self):
+        """Subtracting it from itself, multiplying it by zero, and taking its remainder."""
+        for undefined in (
+            GameTime.INFINITE - GameTime.INFINITE,
+            GameTime.INFINITE * 0,
+            GameTime.INFINITE % GameTime(steps=16),
+        ):
+            assert math.isnan(undefined.steps)
+            assert undefined != undefined
 
 
 class TestNearestStep:
@@ -72,7 +156,7 @@ class TestNearestStep:
         assert GameTime(steps=steps).nearest_step == nearest
 
     def test_is_an_int(self):
-        assert type(GameTime.from_seconds(1).nearest_step) is int
+        assert type(GameTime(seconds=1).nearest_step) is int
 
 
 class TestIsInteger:
@@ -84,9 +168,9 @@ class TestIsInteger:
     def test_a_fraction_of_a_step_is_not(self, steps):
         assert not GameTime(steps=steps).is_integer()
 
-    def test_whole_seconds_from_seconds_are_whole_steps_every_5_seconds(self):
-        assert GameTime.from_seconds(45).is_integer()
-        assert not GameTime.from_seconds(1).is_integer()
+    def test_seconds_are_whole_steps_every_5_seconds(self):
+        assert GameTime(seconds=45).is_integer()
+        assert not GameTime(seconds=1).is_integer()
 
 
 class TestToString:
@@ -106,7 +190,7 @@ class TestToString:
         assert GameTime(steps=-96).to_string(0) == "-0:04"
 
     def test_past_an_hour_counts_on_in_minutes(self):
-        assert GameTime.from_seconds(3725).to_string() == "62:05.000"
+        assert GameTime(seconds=3725).to_string() == "62:05.000"
 
     @pytest.mark.parametrize("decimals", [-1, 4, 1.0, True, "3"])
     def test_any_decimals_but_0_to_3_raise(self, decimals):

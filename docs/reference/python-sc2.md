@@ -207,7 +207,7 @@ it.
 
 - **One game loop is one step, and every moment and length of game time is a `GameTime`.** `api.step` is
   python-sc2's `state.game_loop`, an int, and `api.time.seconds` its `time`. A `GameTime` adds to and compares with
-  another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime.from_seconds(120)` says which unit.
+  another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime(seconds=120)` says which unit.
   Where python-sc2 gives a length in seconds or in steps, as a float or an int, NachOS gives a `GameTime`: a cost's
   time, a cooldown, a score's idle time.
 - **`api.time.to_string()` is python-sc2's `time_formatted` to the millisecond**, `"3:20.000"` where python-sc2 reads

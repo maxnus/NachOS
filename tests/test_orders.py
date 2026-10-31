@@ -1862,5 +1862,5 @@ def _play_a_minute[
         failures: list[ActionFailure] = []
         api.on(TurnEvent)(lambda _: failures.extend(api.action_failures))
         api.on(TurnEvent)(bot.turn)
-        api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
+        api.play(client, steps_per_turn=8, time_limit=GameTime(seconds=60))
     return bot, failures

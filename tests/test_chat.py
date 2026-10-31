@@ -112,7 +112,7 @@ def test_in_a_real_game_a_message_comes_back_as_this_players_chat_event() -> Non
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(5),
+        time_limit=GameTime(seconds=5),
         window=(640, 480),
     )
 

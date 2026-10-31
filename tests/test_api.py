@@ -199,7 +199,7 @@ class TestPlaying:
     def test_a_time_limit_ends_the_game_in_a_tie(self) -> None:
         client, transport = _joined(*_game(0, 112, ending=None))
         api = Api()
-        assert api.play(client, steps_per_turn=112, time_limit=GameTime.from_seconds(5)) is Result.TIE
+        assert api.play(client, steps_per_turn=112, time_limit=GameTime(seconds=5)) is Result.TIE
         assert api.step == 112
         assert [request.step.count for request in transport.requests if request.HasField("step")] == [112]
 
@@ -466,7 +466,7 @@ class TestEvents:
         client, _ = _joined(*_game(0, 112, ending=None))
         api, results = Api(), []
         api.on(GameEndEvent)(lambda event: results.append((event.time.steps, event.result)))
-        api.play(client, steps_per_turn=112, time_limit=GameTime.from_seconds(5))
+        api.play(client, steps_per_turn=112, time_limit=GameTime(seconds=5))
         assert results == [(112, Result.TIE)]
 
     def test_what_subscribes_before_or_during_a_game_handles_the_next_one_too(self) -> None:
@@ -615,7 +615,7 @@ class TestSavingAReplay:
     def test_a_game_called_a_tie_at_its_time_limit_is_saved(self, tmp_path: Path) -> None:
         client, _ = _joined(*_game(0, ending=None, stepped=False), _SAVED_IN_GAME)
         path = tmp_path / "game.SC2Replay"
-        assert Api().play(client, time_limit=GameTime.from_seconds(0), save_replay_to=path) is Result.TIE
+        assert Api().play(client, time_limit=GameTime(seconds=0), save_replay_to=path) is Result.TIE
         assert path.read_bytes() == _REPLAY
 
     def test_a_game_a_handler_ends_by_raising_is_saved_and_the_error_raised(self, tmp_path: Path) -> None:
@@ -918,7 +918,7 @@ class TestAgainstTheRealGame:
             window=(640, 480),
         )
         assert result in (Result.VICTORY, Result.DEFEAT)
-        assert api.time > GameTime.from_seconds(60)
+        assert api.time > GameTime(seconds=60)
 
         # A recording holds the setup too, so playing it back repeats the setup.
         replayed = Api()
@@ -945,7 +945,7 @@ class TestAgainstTheRealGame:
             api = Api()
             result = run_ladder(api, race=Race.TERRAN, name="NachOS", host="127.0.0.1", port=port, steps_per_turn=16)
             assert result in (Result.VICTORY, Result.DEFEAT)
-            assert api.time > GameTime.from_seconds(60)
+            assert api.time > GameTime(seconds=60)
 
             with closing(Client(WebSocketTransport.connect(game.url))) as ladder:
                 ladder.ping()
@@ -967,7 +967,7 @@ def test_in_a_real_game_called_a_tie_at_its_time_limit_the_replay_is_saved(tmp_p
         opponent,
         race=Race.TERRAN,
         steps_per_turn=16,
-        time_limit=GameTime.from_seconds(10),
+        time_limit=GameTime(seconds=10),
         save_replay_to=replay,
     )
     assert result is Result.TIE
@@ -1014,7 +1014,7 @@ def test_in_a_real_realtime_game_each_turn_comes_at_or_after_the_step_asked_for(
         race=Race.TERRAN,
         steps_per_turn=8,
         realtime=True,
-        time_limit=GameTime.from_seconds(10),
+        time_limit=GameTime(seconds=10),
         window=(640, 480),
     )
 

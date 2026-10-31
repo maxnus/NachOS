@@ -219,11 +219,11 @@ class TestIndexing:
     def test_a_time_between_two_steps_indexes_the_nearest_a_tie_the_later(self, ramp):
         assert ramp[GameTime(steps=3.4)] == 3.0
         assert ramp[GameTime(steps=3.5)] == 4.0
-        assert ramp[GameTime.from_seconds(4 / 22.4)] == 4.0
+        assert ramp[GameTime(seconds=4 / 22.4)] == 4.0
 
     def test_a_slice_between_steps_takes_the_nearest_ends(self, ramp):
         """A second back from step 9 is 22.4 steps back, before the start; a fifth of a second is 4.48, read as 4."""
-        window = ramp[ramp.last_time - GameTime.from_seconds(0.2) :]
+        window = ramp[ramp.last_time - GameTime(seconds=0.2) :]
         assert (window.start_time, window.values.tolist()) == (GameTime(steps=5), [5.0, 6.0, 7.0, 8.0, 9.0])
 
     def test_a_plain_index_raises(self, ramp):
@@ -255,7 +255,7 @@ class TestValue:
         assert ramp.at(GameTime(steps=10)) is None
 
     def test_at_reads_the_nearest_step(self, ramp):
-        assert ramp.at(GameTime.from_seconds(4 / STEPS_PER_SECOND)) == 4.0
+        assert ramp.at(GameTime(seconds=4 / STEPS_PER_SECOND)) == 4.0
         assert ramp.at(GameTime(steps=3.6)) == 4.0
 
     def test_at_between_two_steps_reads_the_later(self, ramp):
@@ -266,7 +266,7 @@ class TestValue:
             ramp.at(4.0)  # pyright: ignore[reportArgumentType]
 
     def test_at_outside_the_range_is_none(self, ramp):
-        assert ramp.at(GameTime.from_seconds(100.0)) is None
+        assert ramp.at(GameTime(seconds=100.0)) is None
 
 
 class TestStatistics:
@@ -319,7 +319,7 @@ class TestDerivativeAt:
         series = TimeSeries.empty(float)
         for step in range(200):
             series.append(GameTime(steps=step), float(step**2))
-        rate = series.derivative_at(GameTime(steps=100), window=GameTime.from_seconds(1))
+        rate = series.derivative_at(GameTime(steps=100), window=GameTime(seconds=1))
         assert rate == pytest.approx((2 * 100 - 22) * STEPS_PER_SECOND)
 
     def test_a_window_halfway_between_two_steps_is_the_longer(self):
@@ -376,7 +376,7 @@ class TestFilters:
         assert filtered.start_time.steps == ramp.start_time.steps
         assert filtered.size == ramp.size
 
-    @pytest.mark.parametrize("size", [GameTime(steps=0), GameTime(steps=2.5), GameTime.from_seconds(1)])
+    @pytest.mark.parametrize("size", [GameTime(steps=0), GameTime(steps=2.5), GameTime(seconds=1)])
     def test_uniform_filter_over_anything_but_a_whole_number_of_steps_raises(self, ramp, size):
         with pytest.raises(ValueError, match="whole number of steps"):
             ramp.uniform_filter(size=size)

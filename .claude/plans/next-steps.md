@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #188. `uv run pytest` passes 3056 tests with #189; `uv run pytest -m
-  integration` passed 41 against a real game with #189 (run 2026-10-31).
+- nachOS `main` has every PR to #189. `uv run pytest` passes 3073 tests with #190; `uv run pytest -m
+  integration` passed 41 against a real game with #190 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -494,13 +494,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
       later (the owner's review, reversing the index of steps with `start_time` and `last_time` beside it, chosen
       over keeping the series wholly by the step counter; the nearest step over whole steps alone, and the
       property's name over `rounded_steps` and `step`);
-    - a frozen, slotted dataclass of one keyword-only field, `steps: float`, with `seconds` worked out and
-      `from_seconds` (over a `float` subclass, and over holding seconds, and in the owner's review over `GameSteps`
-      with its field positional), made once an observation for its events; `is_integer()` says whether it is a whole
-      number of steps (the owner's review, over a private helper), `GameTime.ZERO` is the one zero (the owner's
-      review, over a module constant each, and over a lowercase `zero`, every other constant being upper case), and
-      `from_normal_seconds` and `normal_seconds` read the times the game gives at the Normal speed, 16 steps a
-      second: a weapon's cooldown, the score's idle times (the owner's review);
+    - a frozen, slotted dataclass of one field, `steps: float`, with `seconds` worked out (over a `float` subclass,
+      and over holding seconds, and in the owner's review over `GameSteps` with its field positional), made once an
+      observation for its events; `is_integer()` says whether it is a whole number of steps (the owner's review,
+      over a private helper), `GameTime.ZERO` is the one zero (the owner's review, over a module constant each, and
+      over a lowercase `zero`, every other constant being upper case), and `normal_seconds` reads the times the game
+      gives at the Normal speed, 16 steps a second: a weapon's cooldown, the score's idle times (the owner's review);
+    - made from exactly one of `steps`, `seconds` and `normal_seconds`, by keyword, `GameTime(seconds=120)`, as
+      `timedelta` is, any other count of them raising `TypeError` (the owner, 2026-10-31, reversing `from_seconds` and
+      `from_normal_seconds`, and over adding the keywords up as `timedelta` does); arithmetic makes its results
+      through a private `_from_steps`, past the keyword checks;
+    - `GameTime.INFINITE`, the time of what never comes, such as the time until a structure no one is building
+      (the owner, 2026-10-31, over a constant in AvocaDOS, and over `None`, which NachOS keeps for no limit on what
+      it takes, where nothing compares it): it orders above every finite time and stays infinite when one is added;
+      `nearest_step`, `to_string` and `//` raise `ValueError` naming it; a NaN from infinity less itself, times
+      zero or a remainder is documented, not checked, since every `GameTime` made would pay for the check;
     - `timedelta`'s arithmetic: `+`, `-` and `%` between two, `*` and `/` by a plain number, `/` and `//` between two
       to a plain number, unary `-` and `abs`, ordering between two alone, `TypeError` for a plain number, and zero
       false (over the least needed, and over a plain number read as steps);
@@ -821,7 +829,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
-- Typed order methods on `OwnUnit`, M4's slice 7, deferred (above).
+- Typed order methods on `OwnUnit`, M4's slice 7, deferred (above), to plan with the owner once M5 is done (the
+  owner, 2026-10-31). Building them is easy, one `api.orders.issue` a method through the unit's tracker once it holds
+  the order book, but their design needs the owner: a small generic set with self types, so a barracks has no
+  `gather`; methods on `Units` for a group, which `issue` sends as one command; the "no second spelling" rule of
+  `docs/maintaining/code-review.md`; and raising for a unit no order book sends, in a finished game or a replay.
+  AvocaDOS keeps its own wrappers, so it will not use them soon.
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

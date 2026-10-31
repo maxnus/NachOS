@@ -296,7 +296,7 @@ class TestCadence:
 
     def test_a_min_interval_of_a_second_fires_once_22_4_steps_have_passed(self) -> None:
         """23 steps apart at a step a turn: 22 are less than a second."""
-        fired = self._fired(_EventBus(), *range(70), min_interval=GameTime.from_seconds(1))
+        fired = self._fired(_EventBus(), *range(70), min_interval=GameTime(seconds=1))
         assert fired == [0, 23, 46, 69]
 
     def test_a_handler_subscribed_part_way_through_a_game_counts_from_its_first_event(self) -> None:

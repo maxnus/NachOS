@@ -425,7 +425,7 @@ class TestReservingASite:
 
     def test_a_max_time_of_a_second_ends_it_once_22_4_steps_have_passed(self) -> None:
         game = _Game()
-        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime.from_seconds(1))
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime(seconds=1))
 
         assert game.observe(22, _scv(1)).reservations
         assert not game.observe(23, _scv(1)).reservations
@@ -1026,7 +1026,7 @@ class TestAgainstTheRealGame:
             api = Api()
             bot = _DepotBot(api, transport)
             api.on(TurnEvent)(bot.turn)
-            api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
+            api.play(client, steps_per_turn=8, time_limit=GameTime(seconds=60))
 
         print("the site, turn by turn (depot stands, reserved, open):", bot.turns)
         before = [turn for turn in bot.turns if not turn[0]]

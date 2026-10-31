@@ -26,7 +26,7 @@ class TimeSeries[T: float]:
 
     Indexing and slicing are by `GameTime`, not buffer position, so `series[time]` means the same thing for the whole
     life of the series. A time between two steps reads the nearest, a tie the later: `series.at(api.time -
-    GameTime.from_seconds(1))` reads 22 steps back. A slice is a copy, sharing no memory with the series. Steps are
+    GameTime(seconds=1))` reads 22 steps back. A slice is a copy, sharing no memory with the series. Steps are
     contiguous: a gap between appends is filled by linear interpolation, rounded to the nearest whole number in an
     integer series, a tie up.
     """

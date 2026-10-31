@@ -77,7 +77,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   [in detail](reference/python-sc2.md#events)).
 - **Game time is counted in steps**, the game loop, never in iterations. A turn is one step unless `steps_per_turn`
   says otherwise ([in detail](reference/python-sc2.md#running-a-game)). Every moment and length of game time is a
-  `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime.from_seconds(300)`, and
+  `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime(seconds=300)`, and
   `self.time` alone `api.time.seconds` ([in detail](reference/python-sc2.md#time)).
 - **A unit is one object under one id for the whole game.** Out of sight it is unlisted, not gone, and only death
   ends it. A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).

@@ -136,8 +136,8 @@ class Score:
         return cls(
             score=proto.score,
             # The game counts these in seconds at Normal speed, always a whole number of steps (corpus).
-            idle_production_time=GameTime.from_normal_seconds(details.idle_production_time),
-            idle_worker_time=GameTime.from_normal_seconds(details.idle_worker_time),
+            idle_production_time=GameTime(normal_seconds=details.idle_production_time),
+            idle_worker_time=GameTime(normal_seconds=details.idle_worker_time),
             total_value=ValueScore(details.total_value_units, details.total_value_structures),
             killed_value=ValueScore(details.killed_value_units, details.killed_value_structures),
             collected=Resources(details.collected_minerals, details.collected_vespene),

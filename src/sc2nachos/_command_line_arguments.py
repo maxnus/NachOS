@@ -70,7 +70,7 @@ class _CommandLineArguments:
     def time_limit(self) -> GameTime | None:
         """The game time after which a local game ends as a tie, given in seconds."""
         seconds = self._arguments.TimeLimit
-        return None if seconds is None else GameTime.from_seconds(seconds)
+        return None if seconds is None else GameTime(seconds=seconds)
 
     @property
     def realtime(self) -> bool:

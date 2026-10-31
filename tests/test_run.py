@@ -71,7 +71,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return Result.VICTORY
 
     monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
-    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(754.3841)))
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=754.3841)))
     return calls
 
 
@@ -85,7 +85,7 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return Result.DEFEAT
 
     monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
-    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(61.25)))
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=61.25)))
     monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
     return calls
 
@@ -449,10 +449,8 @@ class TestPlayingARecording:
     @pytest.mark.parametrize("permissive", [False, True], ids=["strict", "permissive"])
     def test_at_the_time_limit_it_is_a_tie(self, permissive: bool) -> None:
         api = Api()
-        assert (
-            run_recording(_PYLON_GAME, api, permissive=permissive, time_limit=GameTime.from_seconds(60)) is Result.TIE
-        )
-        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
+        assert run_recording(_PYLON_GAME, api, permissive=permissive, time_limit=GameTime(seconds=60)) is Result.TIE
+        assert GameTime(seconds=60) <= api.time < GameTime(seconds=61)
 
     def test_by_default_a_recording_that_stops_before_the_games_end_needs_its_time_limit(self, tmp_path: Path) -> None:
         stopped = write_recording(tmp_path / "stopped.sc2rec", _pylon_game_stopped_after(100))
@@ -527,8 +525,8 @@ class TestPlayingARecordedReplay:
     def test_at_the_time_limit_it_is_undecided(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(_PYLON_GAME)))
         api = Api()
-        assert run_recording(recording, api, time_limit=GameTime.from_seconds(60)) is Result.UNDECIDED
-        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
+        assert run_recording(recording, api, time_limit=GameTime(seconds=60)) is Result.UNDECIDED
+        assert GameTime(seconds=60) <= api.time < GameTime(seconds=61)
 
     def test_a_bot_that_leaves_it_is_undecided_where_it_left(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(_pylon_game_stopped_after(100)))
@@ -970,7 +968,7 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(20),
+        time_limit=GameTime(seconds=20),
         save_replay_to=replay,
     )
     assert result is Result.TIE
@@ -1078,7 +1076,7 @@ def test_in_a_real_game_its_replay_plays_back_once_its_map_is_gone_from_where_it
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(5),
+        time_limit=GameTime(seconds=5),
         save_replay_to=replay,
     )
     assert played is Result.TIE
@@ -1109,7 +1107,7 @@ def test_in_a_real_game_its_replay_with_the_fog_off_shows_the_player_what_the_fo
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(100),
+        time_limit=GameTime(seconds=100),
         save_replay_to=replay,
     )
 
