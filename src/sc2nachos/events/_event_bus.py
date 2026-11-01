@@ -6,6 +6,7 @@ import dataclasses
 import inspect
 import weakref
 from collections.abc import Hashable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
 from typing import TYPE_CHECKING, Any, final
@@ -153,6 +154,16 @@ class _EventBus:
                     kind = type(value).__name__
                     raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
         return found
+
+    @contextmanager
+    def _subscribing_extensions(self) -> Iterator[None]:
+        """While NachOS builds the extensions: every handler subscribed goes before the rest of its priority."""
+        subscriptions = self._subscriptions
+        subscriptions.subscribing_extensions = True
+        try:
+            yield
+        finally:
+            subscriptions.subscribing_extensions = False
 
     def _set_time(self, time: GameTime | None) -> None:
         """Set the time given to events emitted without one: the game's, or `None` once it has ended."""

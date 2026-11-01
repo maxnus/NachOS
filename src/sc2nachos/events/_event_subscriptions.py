@@ -18,7 +18,16 @@ class _EventSubscriptions:
     """The handlers subscribed to an event bus, and which of them each event class is handed to. The latter is worked
     out on first ask and cached until the handlers change."""
 
-    __slots__ = ("_by_priority", "_count", "_handlers", "_keyed", "_wanted", "resolved", "selecting")
+    __slots__ = (
+        "_by_priority",
+        "_count",
+        "_handlers",
+        "_keyed",
+        "_wanted",
+        "resolved",
+        "selecting",
+        "subscribing_extensions",
+    )
 
     def __init__(self) -> None:
         # Each event type's handlers in run order, replaced whole on every change, so a handler subscribed while an
@@ -37,6 +46,8 @@ class _EventSubscriptions:
         # classes, and how many currently subscribed select by key.
         self._count = 0
         self._keyed = 0
+        self.subscribing_extensions = False
+        """Whether NachOS is building the extensions, whose handlers go before the rest of their priority."""
 
     def __iter__(self) -> Iterator[_Handler]:
         """Every handler subscribed."""
@@ -53,13 +64,15 @@ class _EventSubscriptions:
         return self._keyed > 0
 
     def add(self, handler: _Handler) -> None:
-        """Subscribe `handler`, after those of its priority already subscribed."""
+        """Subscribe `handler`, after those of its priority already subscribed, but before those subscribed outside the
+        building of the extensions if it subscribes during it."""
         handler.order = self._count
+        handler.from_extensions = self.subscribing_extensions
         self._count += 1
         self._keyed += handler.selects.keys is not None
         event_type = handler.selects.event_type
         handlers = list(self._handlers.get(event_type, ()))
-        handlers.insert(bisect_right(handlers, -handler.priority, key=lambda other: -other.priority), handler)
+        handlers.insert(bisect_right(handlers, _run_order(handler), key=_run_order), handler)
         self._handlers[event_type] = tuple(handlers)
         self._forget()
 
@@ -87,7 +100,7 @@ class _EventSubscriptions:
         """The handlers events of `event_type` are handed to, its bases' included, in run order. Notes whether any of
         them selects by key or predicate."""
         found = [handler for cls in event_type.__mro__ for handler in self._handlers.get(cls, ())]
-        found.sort(key=lambda handler: (-handler.priority, handler.order))
+        found.sort(key=_run_order)
         if any(_selects(handler) for handler in found):
             self.selecting.add(event_type)
         resolved = self.resolved[event_type] = tuple(found)
@@ -140,6 +153,12 @@ class _EventSubscriptions:
 
 
 _NO_KEYS: frozenset[Hashable] = frozenset()
+
+
+def _run_order(handler: _Handler) -> tuple[int, bool, int]:
+    """Where `handler` runs among the handlers of an event: by priority, highest first; then those subscribed while
+    NachOS built the extensions; then in subscription order."""
+    return -handler.priority, not handler.from_extensions, handler.order
 
 
 def _selects(handler: _Handler) -> bool:

@@ -1,6 +1,6 @@
 """Everything a bot talks to."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, overload
 
@@ -42,6 +42,8 @@ from sc2nachos.units._units import _type_ids_of
 
 # The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
 _MOST_CHAT_BYTES = 1039
+# Where `Api.extensions` stands before the extensions are built, `None` being what an api without them holds.
+_NOT_BUILT = object()
 
 
 class NotPlayingError(NachOSError, RuntimeError):
@@ -56,7 +58,7 @@ class FogOnError(NachOSError, RuntimeError):
     """The fog is on, as in every game, so the game reports only what this player sees."""
 
 
-class Api:
+class Api[E]:
     """Everything a bot talks to. It is built before there is a game.
 
     Construct one where the rest of your bot can reach it, module scope included, and pass it to `run_local` or
@@ -70,16 +72,45 @@ class Api:
 
     Anything of the game raises `NotPlayingError` until the game starts. After it ends, the api keeps answering from
     it.
+
+    `E` is the type of `extensions`: an `Api()` is an `Api[None]`, and one made with `extensions=Extensions` an
+    `Api[Extensions]`. A function that takes any api takes an `Api[object]`.
     """
+
+    @overload
+    def __init__(
+        self: "Api[None]",
+        *,
+        extensions: None = None,
+        enemy_upgrade_inference: UpgradeInference = ...,
+        time_handlers: bool = ...,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        *,
+        extensions: Callable[["Api[E]"], E],
+        enemy_upgrade_inference: UpgradeInference = ...,
+        time_handlers: bool = ...,
+    ) -> None: ...
 
     def __init__(
         self,
         *,
+        extensions: Callable[[Any], object] | None = None,
         enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC,
         time_handlers: bool = False,
     ) -> None:
-        """Infer as much of `api.enemy.upgrades` as `enemy_upgrade_inference` says, and time every handler call, read
-        as `handler_timings`, if `time_handlers`. This connects to nothing."""
+        """Build the bot's extensions with `extensions` once the game starts, as `Api.extensions` says; infer as much of
+        `api.enemy.upgrades` as `enemy_upgrade_inference` says; and time every handler call, read as
+        `handler_timings`, if `time_handlers`. This connects to nothing.
+
+        `extensions` builds what `Api.extensions` reads, the bot's own object holding its extensions, from this api:
+        its class, whose constructor takes the api and builds each extension.
+        """
+        self._extensions_builder = extensions
+        self._extensions: object = _NOT_BUILT
         self._enemy_upgrade_inference = enemy_upgrade_inference
         self._events = _EventBus(time_handlers=time_handlers)
         # Everything that comes with the game, from the moment it starts.
@@ -87,9 +118,9 @@ class Api:
 
     # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
     @overload
-    def on[E: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
+    def on[T: ParameterizedEvent](  # pyright: ignore[reportOverlappingOverload]
         self,
-        event_type: type[E],
+        event_type: type[T],
         /,
         *,
         priority: EventPriority = ...,
@@ -100,9 +131,9 @@ class Api:
     ) -> None: ...
 
     @overload
-    def on[E: Event](
+    def on[T: Event](
         self,
-        event_type: type[E] | EventFilter[E],
+        event_type: type[T] | EventFilter[T],
         /,
         *,
         priority: EventPriority = ...,
@@ -110,7 +141,7 @@ class Api:
         at_time: GameTime | None = ...,
         once: bool = ...,
         catch_exceptions: bool = ...,
-    ) -> EventSubscriber[E]: ...
+    ) -> EventSubscriber[T]: ...
 
     def on(self, event_type: type[Event] | EventFilter[Any], /, **options: Any) -> Any:
         """Subscribe the decorated function to `event_type`, or mark the decorated method for `subscribe`. This works
@@ -128,13 +159,14 @@ class Api:
         event alone included, and so is a method already bound to its instance. Either stays subscribed until it is
         passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it alive.
 
-        `priority` orders the handler among the event's handlers, highest first and then in subscription order, and
-        among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
-        before any handler of the next. The handler runs on every event unless held back: `min_interval` waits until
-        that long has passed since it last ran, `at_time` runs it once, on the first event at or after that time, and
-        `once` on the first event. `min_interval` with either of the others, or not above zero, raises `ValueError`,
-        and either of the two not a `GameTime`, `TypeError`. These count only the events selected, those emitted before
-        the game included. An exception it raises ends the game, unless `catch_exceptions`, which logs it and goes on.
+        `priority` orders the handler among the event's handlers, highest first and then in subscription order, those an
+        extension subscribed while NachOS built the extensions first, as `Api.extensions` says; and among a turn's:
+        every handler of one priority is handed each event of the turn it selects, in the turn's order, before any
+        handler of the next. The handler runs on every event unless held back: `min_interval` waits until that long has
+        passed since it last ran, `at_time` runs it once, on the first event at or after that time, and `once` on the
+        first event. `min_interval` with either of the others, or not above zero, raises `ValueError`, and either of the
+        two not a `GameTime`, `TypeError`. These count only the events selected, those emitted before the game included.
+        An exception it raises ends the game, unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -174,6 +206,31 @@ class Api:
         `RuntimeError` unless the api was made with `time_handlers=True`.
         """
         return self._events.timings
+
+    @property
+    def extensions(self) -> E:
+        """The bot's own object holding its extensions, built by what the api was given as `extensions`, or `None` for
+        an api made without.
+
+        NachOS builds it once, with this api, after reading the game's map, tables and first observation and before
+        `GameStartEvent`, so `api.map`, `api.units` and the rest answer while it is built. Every handler subscribed
+        meanwhile goes before the handlers of its priority subscribed otherwise, in the order they subscribed: what an
+        extension works out on an event is up to date when the bot's handlers of its priority read it, and an order a
+        bot's handler gives a unit an extension also ordered goes out last, and stands. A handler an extension
+        subscribes later takes its place in subscription order like any other.
+
+        Raises `NotPlayingError` before the game starts, and `RuntimeError` while the extensions are being built, or
+        once building them raised.
+        """
+        extensions = self._extensions
+        if extensions is _NOT_BUILT:
+            self._current_game()
+            raise RuntimeError(
+                "the extensions are not built: an extension is handed the others it needs in its constructor"
+            )
+        # Built by what `extensions` was, typed as building an `E`; `cast` would cost a call on every read.
+        built: E = extensions  # pyright: ignore[reportAssignmentType]
+        return built
 
     def _current_game(self) -> _Game:
         """The game being played, or the one that was."""
@@ -441,6 +498,8 @@ class Api:
             client, enemy_upgrade_inference=self._enemy_upgrade_inference, enemy_ladder_id=enemy_ladder_id
         )
         self._game = game
+        if self._extensions_builder is None:
+            self._extensions = None
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._events
         events._set_time(game.time)
@@ -470,9 +529,13 @@ class Api:
         time_limit: GameTime | None,
         save_replay_to: Path | None,
     ) -> Result:
-        """Start `game` and take its turns until it ends, or the bot asks to leave it, and return how it ended. Then,
-        however the turns ended, save its replay to `save_replay_to` if given, while the client is still in the game."""
+        """Build the extensions, start `game` and take its turns until it ends, or the bot asks to leave it, and return
+        how it ended. Then, however the turns ended, save its replay to `save_replay_to` if given, while the client is
+        still in the game."""
         try:
+            if (build_extensions := self._extensions_builder) is not None:
+                with self._events._subscribing_extensions():
+                    self._extensions = build_extensions(self)
             self._events.emit(GameStartEvent(time=game.time))
             return self._play_turns(game, steps_per_turn=steps_per_turn, realtime=realtime, time_limit=time_limit)
         finally:

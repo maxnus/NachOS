@@ -4,7 +4,8 @@ from sc2nachos._enum import ReadableIntEnum
 
 
 class EventPriority(ReadableIntEnum):
-    """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order."""
+    """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order, those
+    an extension subscribed while NachOS built the extensions first (`Api.extensions`)."""
 
     LOWEST = 0
     VERY_LOW = 1

@@ -103,6 +103,18 @@ class _PointND(tuple[float, ...]):
         """Squared ground-plane distance, for when only the ordering matters."""
         return (self[0] - other[0]) ** 2 + (self[1] - other[1]) ** 2
 
+    def distance_to_segment(self, start: PointLike, end: PointLike) -> float:
+        """Distance to the nearest point of the segment from `start` to `end`, on the ground plane: to `start` where the
+        two are one point."""
+        start_x, start_y = start[0], start[1]
+        along_x, along_y = end[0] - start_x, end[1] - start_y
+        offset_x, offset_y = self[0] - start_x, self[1] - start_y
+        length_squared = along_x * along_x + along_y * along_y
+        if not length_squared:
+            return math.hypot(offset_x, offset_y)
+        fraction = min(1.0, max(0.0, (offset_x * along_x + offset_y * along_y) / length_squared))
+        return math.hypot(offset_x - fraction * along_x, offset_y - fraction * along_y)
+
     def is_closer_than(self, distance: float, other: PointLike) -> bool:
         """Whether another point lies strictly within `distance`."""
         return self.distance_to_squared(other) < distance**2

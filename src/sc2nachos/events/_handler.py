@@ -21,6 +21,7 @@ class _Handler:
         "at_time",
         "catch_exceptions",
         "done",
+        "from_extensions",
         "function",
         "instance",
         "last_steps",
@@ -55,8 +56,10 @@ class _Handler:
         self.once = once or at_time is not None
         self.catch_exceptions = catch_exceptions
         self.instance = instance
-        # Its place in subscription order across the whole bus, which orders one priority's handlers across event types.
+        # Its place in subscription order across the whole bus, which orders one priority's handlers across event types,
+        # and whether it subscribed while NachOS built the extensions, which puts it before the rest of its priority.
         self.order = 0
+        self.from_extensions = False
         # What it has done. An unsubscribed handler is `done` too, since an event being handed out may still reach it.
         self.last_steps: float | None = None
         self.done = False

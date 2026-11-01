@@ -900,7 +900,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
     parasite takes over stays a key, documented. Named over `UnitData`, which reads as a game table beside
     `UnitTypeData`, and `UnitMap`, which reads as the game's map. Found: the tracker keeps every unit seen in
     `_units_by_id` all game, so a `WeakKeyDictionary` keyed by unit, as the `__weakref__` slot's comment had it, never
-    drops a dead one; the comment is corrected. Built in this pull request.
+    drops a dead one; the comment is corrected. Built in #200.
   - The first extension is speed mining, the owner's idea, from AvocaDOS's `bot/expansion.py`, over the threat map
     from its `IntelManager`, read-only and simpler. The bot hands it workers by field, `speed_mining.mine(worker,
     field)` and `release(worker)`, keeping the economy policy (over by base, the extension choosing fields); the
@@ -909,12 +909,42 @@ Keep this file current: when a step is done, say so here in the same pull reques
     trip's move ends at, worked out once per field; cargo returned to the field's expansion's townhall, a plain gather
     where it has none of this player's finished; a plain gather while this player's ground units other than workers
     stand in the mineral line; every turn; minerals only, vespene and self-defense staying the bot's.
+  - Built in #201, with these calls of mine, to confirm in review: speed mining runs at `EventPriority.LOW` and leaves
+    alone a worker given an order this turn or sent one lately that may not show yet (`issued_to` with
+    `include_sent`), its own pair included, so nothing is sent twice on the ladder; a worker handed over while it does
+    something else, collecting vespene among it, stays at it until idle or mining minerals, so `mine` sends no worker
+    by itself; a worker the game moves to another field is sent back; a builder that raises leaves `api.extensions`
+    raising `RuntimeError`; `mine` refuses a unit that is not a worker or a field that is not minerals. Measured: the
+    return is queued as a right-click on the townhall, since a return aimed at nothing stops the worker at the move's
+    end and speed mining then mined less than plain gathers (2050 against 2070 minerals); AvocaDOS's points and
+    distances are kept, its gather points for a field behind two others lying in the gap between them.
+  - The owner's review of #201: the guide teaches one shape, the bot's own class whose `__init__` takes the api and
+    builds each extension, `Api(extensions=BotExtensions)` (over a frozen dataclass and a builder function, and over
+    handing one extension's class itself, which the owner found confusing); NachOS still takes any callable. A worker
+    on a move is not mineral walking, so units stop it (the owner): speed mining gives no move while a unit, of either
+    player, ground and not burrowed, but structures and this player's workers, larvae and eggs, stands within 0.5 of
+    the line from the worker to its trip's end, and takes a worker off the move once one does (over the whole base
+    plain while a unit stood in the mineral line). `Point.distance_to_segment` is added to geometry for it. Speed mining
+    loops by field, then by worker, each field's townhall, trip ends and nearby units read once a turn.
+  - The owner's second round on #201: the bot's class is `Extensions`. Larvae are never in a move's way, whoever owns
+    them, eggs are, and this player's workers are unless speed mining holds them. `mine` refuses a third worker at a
+    field (measured: three at a field, speed mined 1705 against plain 2115; two, 2310 against 2065). A read-only
+    `SpeedMining.miners` mapping reads each held worker's field. Held workers strike (the owner's rule, my reading
+    confirmed): a visible enemy on the ground, not a structure, in range and at most a step's turn away, the weapon's
+    cooldown at most a step, the one with least life; speed mining remembers its attacks and sends the worker back to
+    mining once it has fired, and leaves a bot's own attack alone. This reverses my earlier call that self-defense
+    stays the bot's.
+  - The owner's third round on #201: "strike" is "attack" throughout; `SpeedMining(api, attack_enemies=True)` turns the
+    attacks off; `miners_at(field)` reads a field's miners; `Units` throughout (a list saved nothing: 11.7 µs against
+    12.1 and 12.9 with 20 enemies among 183 units). `mine(worker)` with no field picks one (the owner's choice): among
+    expansions with a finished townhall of this player's, the one nearest the worker with a field of fewer than two
+    miners, the nearer half of its fields first, then the nearest to the worker; it returns the field.
 
 ## Next
 
-- **Extensions** (above), a pull request at a time: `UnitDict` (this pull request), then the extension mechanism
-  with speed mining as its first extension, its measurement a game mining with and without it; then AvocaDOS moves its
-  `RoleManager` onto `UnitDict` and its mining onto the extension.
+- **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
+  as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
+  extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

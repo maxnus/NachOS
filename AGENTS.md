@@ -39,9 +39,10 @@ These are the non-negotiables. They exist because this library is published for 
   instance-based `Api`; the consuming bot decides whether to make one global. Two `Api` instances must be able to
   coexist in one process.
 - **The API is instantiated, never subclassed.** Do not document, encourage or design for bot authors inheriting
-  from `Api`, and never add a mixin or extension hook for them to hang helpers on. Their helpers belong in their
-  own modules as ordinary functions. A felt need to subclass means NachOS is missing an API: treat it as a bug
-  report against this library, not as a pattern to support.
+  from `Api`, and never add a mixin for them to hang helpers on. Their helpers belong in their own modules as
+  ordinary functions. A feature a bot opts into goes in an extension, which `Api(extensions=...)` builds, and nowhere
+  else. A felt need to subclass means NachOS is missing an API: treat it as a bug report against this library, not
+  as a pattern to support.
 - **`Api.__init__` must be cheap and must not require a live connection.** Consumers construct it at import time
   so that `@api.on(...)` decorators can run as their modules load. Connecting happens in `run_local` /
   `run_ladder`, which take an already-built instance.
@@ -60,7 +61,9 @@ These are the non-negotiables. They exist because this library is published for 
   the short `docs/migrating-from-python-sc2.md` only if most bots moving over would.
 - **Scope:** anything useful to any bot maker, if it is (or can be made) acceptable quality — protocol, state, data
   model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
-  orders, combat micro, roles, economy management.
+  orders, combat micro, roles, economy management. `sc2nachos.extensions` may hold opt-in features outside that
+  scope, as speed mining is; each imports only public names, which a test checks, the core imports none, and a heavy
+  dependency goes behind an optional install.
 - **The protocol transport is injectable.** Everything above it must be testable with no game client running,
   against recorded observation fixtures.
 - **Performance matters.** This code sits in the bot's hot loop. Do not add abstraction layers that cost step time.

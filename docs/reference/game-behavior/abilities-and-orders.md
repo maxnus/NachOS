@@ -251,6 +251,18 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   first. An order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the
   field with the cargo, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool
   `sweep_orders`).
+- A worker on a move with an order aimed at a unit queued behind goes on into that order at full speed: an SCV moved
+  toward its field with a gather at the field queued, and one moved toward its command center with a right-click on
+  it queued, which it shows as a return at the command center. With a return aimed at nothing queued instead, it slows
+  to a stop at the move's point and sets off again. A plain gather or return slows the worker for its last tile or
+  so. One SCV mining the nearest field of Pylon's main took 98 steps a round trip moved so, against 105 on plain
+  gathers and returns and 107 with the return aimed at nothing, and twelve on its eight fields mined 2315 minerals in
+  three minutes against 2070 (tested; #201, local game, build 75689).
+- A worker on a gather or a return passes through other units, which players call mineral walking: twelve SCVs on
+  Pylon's main mined 2070 minerals in three minutes on plain gathers and returns with a marine standing halfway from
+  the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move
+  is stopped by them (stated). Speed mined, they mined 2275 with the marine there against 2315 without, its move given
+  only while no unit stood in the worker's way.
 
 ## Loading and unloading
 
