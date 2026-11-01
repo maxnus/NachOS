@@ -9,13 +9,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #193. `uv run pytest` passes 3043 tests with M6's sweep, on numpy 2.0.2 as on the
-  newest; `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
+- nachOS `main` has every PR to #193. `uv run pytest` passes 3043 tests with #194, on numpy 2.0.2 as on the newest;
+  `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
   bot (#125). Slice 7, typed order methods on `OwnUnit`, is deferred (below).
-- **M5 is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01), and M6 is under way (below).
+- **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
+  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, M5), is open. M6 is under
+  way (below).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR. It has no
   python-sc2 left (AvocaDOS #68), and its game map searches run on `Grid` (AvocaDOS #70).
@@ -821,6 +823,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   reported (2026-10-25, above).
 
 ## 1. Waiting until something needs them
+
+M5's swap is done, so the items below that waited on it, a type for start locations, a narrow context for a unit and
+typed order methods, can be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A launch passes no data version, only the base build: a replay whose data version is not its base build's default
   may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).

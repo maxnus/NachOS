@@ -20,12 +20,12 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN, record_to="
 run killed before then leaves only part of it.
 
 Record games of the bot itself for its tests: a game in which it builds, fights and loses units gives its code those
-turns to run on. NachOS's own corpus, in its repository's `tests/corpus`, is its own test data and is not installed with
-it: a bare api that never acts, whose recorded side only ever has its townhall and workers.
+turns to run on. The corpus in NachOS's repository, `tests/corpus`, is NachOS's own test data and does not ship with
+the package: a bare api that never acts, whose recorded side only ever has its townhall and workers.
 
-A recording plays back only on a NachOS that asks the game what it asked when the game was recorded, permissively too:
-NachOS's own requests, for the game info, the tables and each observation, are answered from the file in order. One
-recorded before NachOS came to ask otherwise raises `ProtocolError`, and is recorded again.
+A recording plays back only on a NachOS that asks the same kinds of question, in the same order, as the one that
+recorded it, permissively too: NachOS's own requests, such as for the tables and each observation, are answered from the
+file in turn. One recorded before NachOS came to ask otherwise raises `ProtocolError`, and is recorded again.
 
 ## Playing a bot's own game back exactly
 
