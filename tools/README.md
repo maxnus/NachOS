@@ -29,6 +29,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` | no |
 | Regenerate `ActionResult` | `uv run python tools/generate_action_results.py`, after a protocol release adds results | no |
 | List the multi-line docstrings, to check each after a round of doc edits | `uv run python tools/list_multiline_docstrings.py` | no |
+| Build the API reference, a page for each public module, as the release publishes it | `uv run python tools/build_api_reference.py`, into `build/api-reference` | no |
 
 `_sandbox.py` is what the in-game tools share: a game to play, free ground to put structures on, and the requests they
 make of the game.

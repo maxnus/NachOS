@@ -49,6 +49,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 ## Docstrings
 
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
+- **A docstring in `src` is Markdown**: the API reference renders it with pdoc (`tools/build_api_reference.py`),
+  which links a public name in backticks to its entry, such as `Api.on` or `UnitTypeId`. Write no reStructuredText
+  there.
 - **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
   code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
   cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
