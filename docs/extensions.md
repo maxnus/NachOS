@@ -99,13 +99,14 @@ class ThreatMap:
   ```python
   @api.on(GameStartEvent)
   def start_mining(event: GameStartEvent) -> None:
-      fields = api.expansions[0].mineral_fields
-      for index, worker in enumerate(api.units.own.workers):
-          api.extensions.speed_mining.mine(worker, fields[index % len(fields)])
+      for worker in api.units.own.workers:
+          api.extensions.speed_mining.mine(worker)
   ```
 
-  A field takes two workers at most: with three, speed mining mined less than plain gathers. A worker the bot sends to
-  build is left alone until it is idle or mining again, and then goes back to its field; `release(worker)` takes one
-  back, and `miners` reads which worker mines which field. A worker on a move, unlike one on a gather or a return, can
-  be stopped by other units, so no move is given while a unit stands in a worker's way. A worker strikes an enemy it
-  can hit as it stands, then goes back to mining. The API reference says the rest.
+  Given no field, `mine` picks one at the base nearest the worker, its nearer fields first; `mine(worker, field)`
+  takes the bot's own pick. A field takes two workers at most: with three, speed mining mined less than plain gathers.
+  A worker the bot sends to build is left alone until it is idle or mining again, and then goes back to its field;
+  `release(worker)` takes one back, and `miners` and `miners_at(field)` read which worker mines which field. A worker
+  on a move, unlike one on a gather or a return, can be stopped by other units, so no move is given while a unit stands
+  in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to mining, unless speed mining
+  is built with `attack_enemies=False`. The API reference says the rest.

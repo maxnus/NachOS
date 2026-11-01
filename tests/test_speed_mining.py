@@ -42,29 +42,26 @@ _RETURN_POINT = Point((27.625, 24.5))
 _HANDED_SCV = 10
 
 
-def _pylon_main(*, command_center_progress: float = 1.0) -> list[raw_pb2.Unit]:
-    """The base's fields, tags 101 to 108, its geysers, and this player's command center, built as far as
-    `command_center_progress` says."""
+def _pylon_main(
+    *, command_center_progress: float = 1.0, at: tuple[float, float] = _TOWNHALL_CENTER, tags_from: int = 100
+) -> list[raw_pb2.Unit]:
+    """The base laid out as Pylon's main around a townhall at `at`: its fields, tags `tags_from` + 1 to 8, its geysers,
+    + 11 and 12, and this player's command center, `tags_from` // 100, built as far as `command_center_progress`
+    says."""
     fields = [
         make_unit(
-            101 + index,
-            UnitTypeId.MINERAL_FIELD,
-            at=(_TOWNHALL_CENTER[0] + dx, _TOWNHALL_CENTER[1] + dy),
-            alliance=Alliance.NEUTRAL,
+            tags_from + 1 + index, UnitTypeId.MINERAL_FIELD, at=(at[0] + dx, at[1] + dy), alliance=Alliance.NEUTRAL
         )
         for index, (dx, dy) in enumerate(_FIELD_OFFSETS)
     ]
     geysers = [
         make_unit(
-            111 + index,
-            UnitTypeId.VESPENE_GEYSER,
-            at=(_TOWNHALL_CENTER[0] + dx, _TOWNHALL_CENTER[1] + dy),
-            alliance=Alliance.NEUTRAL,
+            tags_from + 11 + index, UnitTypeId.VESPENE_GEYSER, at=(at[0] + dx, at[1] + dy), alliance=Alliance.NEUTRAL
         )
         for index, (dx, dy) in enumerate(_GEYSER_OFFSETS)
     ]
     command_center = make_unit(
-        _COMMAND_CENTER, UnitTypeId.COMMAND_CENTER, at=_TOWNHALL_CENTER, build_progress=command_center_progress
+        tags_from // 100, UnitTypeId.COMMAND_CENTER, at=at, build_progress=command_center_progress
     )
     return [*fields, *geysers, command_center]
 
@@ -111,14 +108,17 @@ def _orders_sent(
     assigned: Iterable[tuple[int, int]] = ((_HANDED_SCV, _MINED_FIELD),),
     started: Callable[[Api[SpeedMining]], object] = lambda api: None,
     dead: Callable[[int], Sequence[int]] = lambda turn: (),
+    attack_enemies: bool = True,
+    map_width: int = 48,
 ) -> list[list[tuple[int, Point | int | None, bool]]]:
     """Play a turn on each of `turns`, the units each observation lists, speed mining each worker of `assigned` at its
-    field, and return what each turn ordered: each command's ability, its target, a point or a tag, and whether it was
-    queued. `started` runs as the game starts, after the workers are handed over, and `dead` gives the tags each
-    observation reports dead."""
+    field, its workers attacking enemies if `attack_enemies`, and return what each turn ordered: each command's
+    ability, its target, a point or a tag, and whether it was queued. `started` runs as the game starts, after the
+    workers are handed over, and `dead` gives the tags each observation reports dead. The map is `map_width` wide and
+    48 high, of open ground."""
     observations = [make_observation(step, units=units, dead=dead(step)) for step, units in enumerate([*turns, ()])]
-    game = ScriptedGame(observations, game_info=make_game_info(*["#" * 48] * 48), data=shipped_game_data())
-    api = Api(extensions=SpeedMining)
+    game = ScriptedGame(observations, game_info=make_game_info(*["#" * map_width] * 48), data=shipped_game_data())
+    api = Api(extensions=lambda api: SpeedMining(api, attack_enemies=attack_enemies))
 
     @api.on(GameStartEvent)
     def hand_over(event: GameStartEvent) -> None:
@@ -313,12 +313,12 @@ def _zergling_beside(scv_at: tuple[float, float], *, degrees_off_its_facing: flo
     return make_unit(30, UnitTypeId.ZERGLING, at=at, alliance=Alliance.ENEMY, build_progress=1.0, radius=0.375)
 
 
-class TestStriking:
-    """A worker strikes an enemy it can hit as it stands: its cooldown at most a step, and a step's turn away at most, a
+class TestAttacking:
+    """A worker attacks an enemy it can hit as it stands: its cooldown at most a step, and a step's turn away at most, a
     worker's 62.5 degrees."""
 
     @pytest.mark.parametrize("degrees_off_its_facing", [0.0, 60.0])
-    def test_a_worker_strikes_an_enemy_in_range_ahead_with_its_weapon_ready(
+    def test_a_worker_attacks_an_enemy_in_range_ahead_with_its_weapon_ready(
         self, degrees_off_its_facing: float
     ) -> None:
         scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
@@ -335,7 +335,12 @@ class TestStriking:
         zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=degrees_off_its_facing)
         assert _orders_sent([*_pylon_main(), scv, zergling]) == [[]]
 
-    def test_of_several_it_strikes_the_one_with_least_life(self) -> None:
+    def test_not_when_speed_mining_was_built_not_to(self) -> None:
+        scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
+        assert _orders_sent([*_pylon_main(), scv, zergling], attack_enemies=False) == [[]]
+
+    def test_of_several_it_attacks_the_one_with_least_life(self) -> None:
         scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
         healthy = _zergling_beside((26.0, 30.0), degrees_off_its_facing=-30.0)
         healthy.health, healthy.health_max = 35.0, 35.0
@@ -396,14 +401,16 @@ class TestHandingOver:
         assert refused == ["speed mining mines a field with 2 workers at most"]
 
     def test_miners_reads_each_worker_held_with_its_field_and_no_dead_one(self) -> None:
-        read: list[tuple[bool, int | None, int]] = []
+        read: list[tuple[bool, int | None, int, list[int]]] = []
 
         def read_the_miners(api: Api[SpeedMining]) -> None:
             def read_them(event: TurnEvent) -> None:
                 miners = api.extensions.miners
                 scv = _own_unit_of_tag(api, 11) if event.time.steps == 0 else None
                 field = None if scv is None else miners.get(scv)
-                read.append((scv in miners, None if field is None else field.tag, len(miners)))
+                at_the_other_field = api.extensions.miners_at(_unit_of_tag(api, _OTHER_FIELD))
+                tags = [worker.tag for worker in at_the_other_field]
+                read.append((scv in miners, None if field is None else field.tag, len(miners), tags))
 
             api.on(TurnEvent, priority=EventPriority.LOWEST)(read_them)
 
@@ -416,7 +423,63 @@ class TestHandingOver:
             started=read_the_miners,
             dead=lambda step: [11] * (step == 1),
         )
-        assert read == [(True, _OTHER_FIELD, 2), (False, None, 1)]
+        assert read == [(True, _OTHER_FIELD, 2, [11]), (False, None, 1, [])]
+
+    @pytest.mark.parametrize(
+        ("held_at_its_nearest_fields", "picked"),
+        [((), 102), ((102, 102), 104), ((102, 102, 104, 104, 101, 101, 103, 103), 107)],
+        ids=["the nearest near field", "the next near field", "the nearest far field once the near ones are full"],
+    )
+    def test_mine_with_no_field_picks_one_at_the_nearest_base_near_ones_first(
+        self, held_at_its_nearest_fields: tuple[int, ...], picked: int
+    ) -> None:
+        """An SCV at (31.0, 28.0), above `_MINED_FIELD`: far field 107, at (32.0, 23.5), is nearer than near field 104,
+        at (31.0, 22.5), but comes after it."""
+        others = [(20 + index, field) for index, field in enumerate(held_at_its_nearest_fields)]
+        scvs = [_reported_scv((25.0, 30.0), tag=tag) for tag, _ in others]
+        picked_fields: list[int] = []
+
+        def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
+            picked_fields.append(api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV)).tag)
+
+        newcomer = _reported_scv((31.0, 28.0))
+        _orders_sent([*_pylon_main(), newcomer, *scvs], assigned=others, started=hand_over_with_no_field)
+        assert picked_fields == [picked]
+
+    @pytest.mark.parametrize(
+        ("held_at_the_nearer_base", "picked"),
+        [((), 201), ((202, 202, 201, 201, 203, 203, 204, 204, 205, 205, 206, 206, 207, 207, 208, 208), 102)],
+        ids=["the nearer base", "the other once it is full"],
+    )
+    def test_mine_with_no_field_picks_the_base_nearest_the_worker_with_room(
+        self, held_at_the_nearer_base: tuple[int, ...], picked: int
+    ) -> None:
+        """A second base, its townhall at (56.5, 24.5), its fields tagged from 201; an SCV at (45.0, 28.0), nearer
+        it."""
+        others = [(20 + index, field) for index, field in enumerate(held_at_the_nearer_base)]
+        scvs = [_reported_scv((50.0, 30.0), tag=tag) for tag, _ in others]
+        picked_fields: list[int] = []
+
+        def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
+            picked_fields.append(api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV)).tag)
+
+        bases = [*_pylon_main(), *_pylon_main(at=(56.5, 24.5), tags_from=200)]
+        newcomer = _reported_scv((45.0, 28.0))
+        _orders_sent([*bases, newcomer, *scvs], assigned=others, started=hand_over_with_no_field, map_width=80)
+        assert picked_fields == [picked]
+
+    def test_mine_with_no_field_raises_with_no_finished_townhall_of_this_players(self) -> None:
+        refused: list[str] = []
+
+        def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
+            with pytest.raises(ValueError) as raised:
+                api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV))
+            refused.append(str(raised.value).split(":")[0])
+
+        units = [*_pylon_main(command_center_progress=0.5), _reported_scv((31.0, 28.0))]
+        _orders_sent(units, assigned=(), started=hand_over_with_no_field)
+        assert len(refused) == 1
+        assert refused[0].startswith("speed mining has no field for")
 
     def test_built_before_the_game_starts_it_raises(self) -> None:
         with pytest.raises(NotPlayingError):
@@ -425,7 +488,7 @@ class TestHandingOver:
 
 def _workers_on_the_main(api: Api[object]) -> list[tuple[OwnUnit[Any], Unit[Any]]]:
     """This player's workers, each with a field of its main to mine: one at each field, nearest first, then a second at
-    the nearest."""
+    the nearest, as speed mining's own picks have it."""
     fields = api.expansions[0].mineral_fields
     workers = sorted(api.units.own.workers, key=lambda worker: worker.tag)
     return [(worker, fields[index % len(fields)]) for index, worker in enumerate(workers)]
@@ -449,8 +512,8 @@ def test_in_a_real_game_speed_mined_scvs_mine_more_than_scvs_sent_to_gather_once
 
     @speed_mined.on(GameStartEvent)
     def hand_over(event: GameStartEvent) -> None:
-        for worker, field in _workers_on_the_main(speed_mined):
-            speed_mined.extensions.mine(worker, field)
+        for worker in speed_mined.units.own.workers:
+            speed_mined.extensions.mine(worker)
 
     for api in (sent_once, speed_mined):
         opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)

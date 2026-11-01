@@ -934,6 +934,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     cooldown at most a step, the one with least life; speed mining remembers its attacks and sends the worker back to
     mining once it has fired, and leaves a bot's own attack alone. This reverses my earlier call that self-defense
     stays the bot's.
+  - The owner's third round on #201: "strike" is "attack" throughout; `SpeedMining(api, attack_enemies=True)` turns the
+    attacks off; `miners_at(field)` reads a field's miners; `Units` throughout (a list saved nothing: 11.7 µs against
+    12.1 and 12.9 with 20 enemies among 183 units). `mine(worker)` with no field picks one (the owner's choice): among
+    expansions with a finished townhall of this player's, the one nearest the worker with a field of fewer than two
+    miners, the nearer half of its fields first, then the nearest to the worker; it returns the field.
 
 ## Next
 
