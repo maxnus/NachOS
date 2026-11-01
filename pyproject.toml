@@ -20,9 +20,9 @@ classifiers = [
 dependencies = [
     "pys2clientprotocol>=1.0.2",
     "websocket-client>=1.9",
-    "numpy>=2.1",
+    "numpy>=2.0",
     "scipy>=1.14",
-    "semita>=0.2",
+    "semita>=0.2.1",
     "loguru>=0.7",
 ]
 

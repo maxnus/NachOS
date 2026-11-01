@@ -9,8 +9,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #191. `uv run pytest` passes 3085 tests with #192; `uv run pytest -m
-  integration` passed 41 against a real game with #192 (run 2026-10-31).
+- nachOS `main` has every PR to #192. `uv run pytest` passes 3085 tests with #193, on numpy 2.0.2 as on the newest;
+  `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
@@ -306,6 +306,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     of #147). Chosen over an object built from the settings that subscribes its handlers, which makes each a method,
     over handlers defined in the main block, which does not scale to many settings, and over a function that builds
     the api, which keeps it from the modules that register handlers. Subclassing `Api` stays out.
+  - NachOS declares numpy 2.0 or later, as the aiarena ladder's bot image carries numpy 2.0.2 on Python 3.12, and
+    semita 0.2.1 or later, which declares the same (semita #7), over keeping 2.1, which the ladder zip does not install
+    through pip (the owner, 2026-10-31). Checked once, all the tests on numpy 2.0.2 with Python 3.12, with no test job
+    on numpy 2.0 in every CI run (the owner, review of #193); semita keeps its own.
   - The result file holds `opponent_actual_race`, the race the opponent played as `Enemy.race` reads at the end, `null`
     if it was never known, as the match workflow's report reads for a `RANDOM` opponent (the owner, 2026-10-31, over
     AvocaDOS rewriting NachOS's file to add it and over AvocaDOS's report dropping it).
