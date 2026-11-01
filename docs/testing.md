@@ -1,4 +1,7 @@
-# Testing a bot on a recorded game
+# Testing a bot
+
+A bot is tested without a game client in two ways: a test of code that reads units makes the units it needs
+([making units for a unit test](#making-units-for-a-unit-test)), and the whole bot plays a recorded game.
 
 A bot runs from start to end with no game client by playing a recorded game. The bot is the player recorded, and its
 handlers run on every recorded observation, a turn at each, whether the game was played stepped, `steps_per_turn` steps
@@ -82,3 +85,38 @@ A query for abilities or placements through `api.client.query` raises `ProtocolE
 recording holds no answer to.
 
 Underneath, `run_recording` plays the file through a `PermissivePlaybackTransport`.
+
+## Making units for a unit test
+
+`MadeUpUnits` makes units as NachOS makes them in a game, from the reports of one observation after another, so the
+code under test reads the same `Unit` and `OwnUnit` objects it reads in a game:
+
+```python
+from sc2nachos.ids import UnitTypeId
+from sc2nachos.testing import MadeUpUnits, UnitReport
+from sc2nachos.units import Alliance
+
+
+def test_the_marine_targets_the_nearer_zergling() -> None:
+    marine, near_zergling, far_zergling = MadeUpUnits().observe(
+        UnitReport(1, UnitTypeId.MARINE, at=(10, 10)),
+        UnitReport(2, UnitTypeId.ZERGLING, at=(13, 10), alliance=Alliance.ENEMY),
+        UnitReport(3, UnitTypeId.ZERGLING, at=(20, 10), alliance=Alliance.ENEMY),
+    )
+    assert pick_target(marine, [near_zergling, far_zergling]) is near_zergling
+```
+
+- **A `UnitReport`** is this player's finished unit in sight unless its fields say otherwise, and each field reads back
+  as the unit's property of the same name. Health, shield and energy read zero unless given, and each maximum reads as
+  its value. An order is the ability and its target, and its progress if any: `(AbilityId.MOVE, (20, 10))`, aimed at a
+  point, at another unit's report, at a tag, or at `None`.
+- **`observe`** returns the units of its reports in their order. A report under a tag seen before is of the same unit,
+  read anew: `dataclasses.replace(report, at=(12, 10))` moves it, at the velocity the steps between give. A unit not
+  reported again is no longer listed, `dead` reports units dead, and `units` lists every unit of the latest
+  observation. Each observation is a step after the one before unless `step` says otherwise.
+- **The game's data** the units read their types from is by default that of build 75689, StarCraft II 4.10 for Linux,
+  which NachOS ships, read afresh in about 15 ms for each `MadeUpUnits`. `load_game_data(base_build=75689)` reads it
+  once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
+
+The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
+a recorded game, as below.

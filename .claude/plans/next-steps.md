@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #193. `uv run pytest` passes 3043 tests with #194, on numpy 2.0.2 as on the newest;
+- nachOS `main` has every PR to #195. `uv run pytest` passes 3097 tests with #196, on numpy 2.0.2 as on the newest;
   `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -804,11 +804,29 @@ Keep this file current: when a step is done, say so here in the same pull reques
     itself, a tie up, is the private `_rounding.rounded_half_up`.
   - A public way for a bot's tests to make units, planned with the owner before the first release. AvocaDOS's tests
     make them through the private `_Tracker`, as NachOS's own do through `tests/support.py` (over planning it after
-    the release, and over leaving it).
+    the release, and over leaving it). Planned as `sc2nachos.testing` (#196, below).
   - A bot records its own games for its tests. The corpus is NachOS's test data, not installed with the package: a
     bare api that never acts, whose recorded side only ever has its townhall and workers, so most of a bot's code never
     runs on it (the owner). AvocaDOS records one game a map (over shipping the corpus in the package, and over
     AvocaDOS copying it).
+
+- **`sc2nachos.testing` makes units for a bot's tests** (#196; the owner, 2026-11-01, one question at a time):
+  - A test describes each unit as a `UnitReport` of NachOS types, by default this player's finished unit in sight,
+    with the owner's player id filled in from its alliance: `UnitReport(1, UnitTypeId.MARINE, at=(10, 10))`, an order
+    as `(AbilityId.MOVE, (20, 10))`. A bot's tests import nothing of s2clientprotocol (over adding raw protobuf fields
+    as `**report_fields`, and over taking the raw `raw_pb2.Unit`).
+  - `MadeUpUnits().observe(*reports, step=)` takes in one observation after another and returns the units of the
+    reports in their order; a tag reported again is the same object, read anew (over a dict by tag, and over a one-shot
+    function).
+  - NachOS ships the game's data of the build it is tested against, the first corpus game's, 50 KB xz-compressed,
+    as `game_data_75689.binpb.xz`; `game_data=` takes other data (over a public `GameData.from_recording`, and over
+    leaving it to the bot). At the owner's review, `load_game_data(base_build=75689)` reads it and raises `ValueError`
+    for a build not shipped, and `MadeUpUnits()` reads build 75689's, the default, which stays there rather than
+    following the newest build shipped, as more robust (the owner, over requiring every test to name its build).
+  - The names stay `MadeUpUnits` and `UnitReport` (the owner, open to either, over `MockUnits`, `TestUnits`,
+    `MockUnitReport` and `TestUnitReport`): the units are NachOS's real ones, and pytest warns that it cannot collect
+    each `Test*` class with an `__init__` that a test module imports.
+  - NachOS's own tests move onto it in the pull request after it (over the same one, and over not at all).
 
 ## Next
 
@@ -890,8 +908,9 @@ from the checkout beside it, so run them on a nachOS pull request that renames o
 
 In AvocaDOS's plan, section "M6 — Delete burnysc2". Done: python-sc2 gone from AvocaDOS (AvocaDOS #68),
 `external/pathfinding` retired onto `Grid` (AvocaDOS #70), and the sweep for AvocaDOS-shaped code (2026-11-01, above),
-whose numeric helpers went back to AvocaDOS (AvocaDOS #71) before nachOS deleted them. Next, a pull request each:
-1. AvocaDOS records its own games, one a map, for its tests, which then read nothing from nachOS's checkout; one game's
-   size is measured first.
-2. The public way for a bot's tests to make units, planned with the owner, then AvocaDOS moves onto it.
-3. The README and the API docs, then the first release to PyPI, with the owner's permission, and AvocaDOS pinned to it.
+whose numeric helpers went back to AvocaDOS (AvocaDOS #71) before nachOS deleted them (#194). AvocaDOS's tests play
+its own games, whole, one a map, and read nothing from nachOS's checkout; CI plays them only in a weekly run (AvocaDOS
+#72). Next, a pull request each:
+1. `sc2nachos.testing`, the public way for a bot's tests to make units (#196), then AvocaDOS's `tests/tracked_units.py`
+   moves onto it, then nachOS's own tests do.
+2. The README and the API docs, then the first release to PyPI, with the owner's permission, and AvocaDOS pinned to it.
