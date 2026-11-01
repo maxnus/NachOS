@@ -20,12 +20,12 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 
 ## Getting started
 
-1. **Install StarCraft II.** On Windows and macOS, install it through Battle.net; it is free to play. On Linux,
-   download Blizzard's headless client from [s2client-proto](https://github.com/Blizzard/s2client-proto#downloads).
-   NachOS is tested against its 4.10 build, 75689, the one the AI Arena ladder plays, and `run_local` logs a warning
-   for any other. NachOS finds the game through `SC2PATH`, then where the launcher recorded it, then where the
-   platform installs it by default: `C:\Program Files (x86)\StarCraft II`, `/Applications/StarCraft II` or
-   `~/StarCraftII`.
+1. **Install StarCraft II.** On Linux, download Blizzard's headless client from
+   [s2client-proto](https://github.com/Blizzard/s2client-proto#downloads): NachOS is tested against its 4.10 build,
+   75689, the one the AI Arena ladder plays, and `run_local` logs a warning for any other. On Windows and macOS,
+   Battle.net installs the current build, free to play, which NachOS is not tested on. NachOS finds the game through
+   `SC2PATH`, then where the launcher recorded it, then where the platform installs it by default:
+   `C:\Program Files (x86)\StarCraft II`, `/Applications/StarCraft II` or `~/StarCraftII`.
 2. **Add the maps.** NachOS finds a map by its name anywhere under the game's `Maps` folder, so a folder of maps can
    go in as it is. [`sc2maps/AIE`](https://github.com/maxnus/NachOS/tree/main/sc2maps/AIE) holds the AI Arena
    ladder's maps that NachOS is tested on.

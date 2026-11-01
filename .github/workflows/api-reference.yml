@@ -1,18 +1,23 @@
 name: api-reference
 
 # Builds NachOS's API reference with tools/build_api_reference.py, and publishes it to GitHub Pages at each release, so
-# that it describes the version on PyPI. A pull request that changes what it is built from builds it as a check.
-# Started by hand from the Actions tab, it builds and publishes the branch it is started on.
+# that it describes the version on PyPI; a pre-release publishes nothing. A pull request that changes what it is built
+# from builds it as a check. Started by hand from the Actions tab on main, it publishes main's reference, which stands
+# until the next release; started on another branch, it builds, and the `github-pages` environment refuses to publish.
 #
 # Publishing needs Pages switched on in the repository's settings, with GitHub Actions as its source, and the
 # `github-pages` environment allowing the release tags, `v*`, to deploy: by default it allows the default branch alone.
+# A release made with a workflow's GITHUB_TOKEN starts no workflow, this one included, so a release workflow publishes
+# the reference by starting this one on the release's tag, which the token may (`gh workflow run api-reference.yml
+# --ref v0.1.0`), or makes its release with another token.
 on:
   release:
-    types: [published]
+    types: [released]
   pull_request:
     paths:
       - src/**
       - tools/build_api_reference.py
+      - tools/api_reference_templates/**
       - pyproject.toml
       - uv.lock
       - .github/workflows/api-reference.yml

@@ -844,9 +844,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     source shows, as pdoc's default (mine to call): hidden, the reference was 21 MB against 33, and its links to
     GitHub could name only a package's `__init__.py`. The package's docstring is the front page, with links to the
     guides.
-  - It is published to GitHub Pages at each release, so that it describes the version on PyPI, over every merge to
-    main and over Read the Docs; a pull request that changes the source builds it as a check, and it can be
-    published by hand from the Actions tab.
+  - It is published to GitHub Pages at each release, a pre-release aside, so that it describes the version on PyPI,
+    over every merge to main and over Read the Docs; a pull request that changes the source builds it as a check, and
+    it can be published by hand from the Actions tab.
   - The README says alpha, with AvocaDOS on the ladder, and gains a getting started and a list of what NachOS has;
     its links are whole GitHub URLs, which the PyPI page can follow.
 
@@ -936,4 +936,5 @@ its own games, whole, one a map, and read nothing from nachOS's checkout; CI pla
 do where they need nothing but units (above), and the README and the API reference are written (above). Next, the
 first release to PyPI, with the owner's permission, and AvocaDOS pinned to it. Before it, the owner switches GitHub
 Pages on, with GitHub Actions as its source, and lets the `github-pages` environment deploy the release tags, `v*`,
-so that the release publishes the reference.
+so that the release publishes the reference. A release a workflow makes with its GITHUB_TOKEN starts no other
+workflow, so a release workflow starts `api-reference` on the tag itself, as that workflow's comment says.
