@@ -16,10 +16,13 @@ class UnitDict[K: Unit[Any], V](MutableMapping[K, V]):
     """A value for each unit, as a dict keyed by unit holds one, that forgets a unit once it is dead: a bot's own data
     for its units, such as a role or the mineral field a worker mines.
 
-    A unit is the same key for the whole game, however often the game changes its tag. A dead unit reads as absent
+    A unit is the same key for the whole game, however often the game changes its tag. A dead key reads as absent
     wherever it is read: a lookup drops its entry, and iterating, `len` and the views skip it, so a unit's value cannot
-    be read in the turn it dies. Storing a dead unit is not refused, and no read sees it. A unit a neural parasite takes
-    over changes class in place, so an `OwnUnit` key can be the enemy's while it lasts.
+    be read in the turn it dies. A unit is dead once `is_dead` says so: an enemy's unit that dies out of sight stays a
+    key until NachOS finds it dead, and a dead unit held as a value stays. Storing a dead unit is not refused, and no
+    read sees it. A unit a neural parasite takes over changes class in place, so an `OwnUnit` key can be the enemy's
+    while it lasts. In a replay played back with the fog off, `api.units` and `api.all_units` hold different objects
+    for one unit, each a key of its own.
     """
 
     __slots__ = ("_values",)
@@ -43,9 +46,8 @@ class UnitDict[K: Unit[Any], V](MutableMapping[K, V]):
         self._values[unit] = value
 
     def __delitem__(self, unit: K, /) -> None:
-        was_dead = unit._dead
         del self._values[unit]
-        if was_dead:
+        if unit._dead:
             raise KeyError(unit)
 
     def __contains__(self, unit: object, /) -> bool:
@@ -66,6 +68,22 @@ class UnitDict[K: Unit[Any], V](MutableMapping[K, V]):
     def __len__(self) -> int:
         self._forget_dead_units()
         return len(self._values)
+
+    def __bool__(self) -> bool:
+        return any(not unit._dead for unit in self._values)
+
+    def clear(self) -> None:
+        """Forget every unit."""
+        self._values.clear()
+
+    def copy(self) -> UnitDict[K, V]:
+        """A new `UnitDict` of the living units with their values."""
+        self._forget_dead_units()
+        copied: UnitDict[K, V] = UnitDict()
+        copied._values = dict(self._values)
+        return copied
+
+    __copy__ = copy
 
     @overload
     def get(self, unit: K, /) -> V | None: ...

@@ -1,5 +1,6 @@
 """A bot's own value for each unit, which forgets a unit once it is dead."""
 
+import copy
 from typing import Any
 
 import pytest
@@ -77,6 +78,28 @@ def test_deleting_or_popping_a_dead_unit_finds_it_absent() -> None:
     units.observe(_OTHER_SCV, dead=[_SCV])
     with pytest.raises(KeyError):
         del roles[scv]
+    with pytest.raises(KeyError):
+        del roles[other_scv.id]  # pyright: ignore[reportArgumentType]
     assert roles.pop(scv, "gone") == "gone"
     assert roles.pop(other_scv) == "building"
     assert not roles
+
+
+def test_the_other_mapping_methods_skip_dead_units_too() -> None:
+    units = MadeUpUnits()
+    scv, other_scv, field = units.observe(_SCV, _OTHER_SCV, _FIELD)
+    roles: UnitDict[Unit[Any], str] = UnitDict({scv: "mining"})
+    roles.update({other_scv: "building"})
+    assert roles.setdefault(other_scv, "scouting") == "building"
+    copied = roles.copy()
+    units.observe(_OTHER_SCV, _FIELD, dead=[_SCV])
+    keys = roles.keys()
+    assert other_scv in keys and scv not in keys
+    assert roles == {other_scv: "building"} == copied
+    shallow = copy.copy(roles)
+    shallow[field] = "landmark"
+    assert field not in roles
+    assert roles.popitem() == (other_scv, "building")
+    assert not roles
+    copied.clear()
+    assert len(copied) == 0
