@@ -40,7 +40,9 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 ## What NachOS has
 
 - **Units**: `api.units`, this player's, the enemy's and the map's, remembered structures included, selected by
-  [type group](https://maxnus.github.io/NachOS/sc2nachos/units.html#UnitType), alliance and distance.
+  [type group](https://maxnus.github.io/NachOS/sc2nachos/units.html#UnitType), alliance and distance; and a bot's own
+  data for each unit in a [`UnitDict`](https://maxnus.github.io/NachOS/sc2nachos/units.html#UnitDict), which forgets a
+  unit once it dies.
 - **Events** for what happens in a game, from a unit's death to an upgrade finishing, each subscribed to with
   `api.on` ([guide](https://github.com/maxnus/NachOS/blob/main/docs/events.md)).
 - **Orders** through `api.orders.issue`, with what the game refused listed in `api.action_failures` on the next turn

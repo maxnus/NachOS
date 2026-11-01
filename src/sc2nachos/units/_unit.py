@@ -86,7 +86,8 @@ class Unit[K: UnitType.AnyType]:
     """
 
     # `OwnUnit` declares no slots, so a unit can change between the two classes in place. `__weakref__` lets a bot
-    # key its own data by unit in a `weakref.WeakKeyDictionary`, which slots would otherwise rule out.
+    # refer to a unit weakly, which slots would otherwise rule out. A `WeakKeyDictionary` keyed by unit still keeps a
+    # dead unit's entry all game, as the tracker keeps every unit it has seen; a `UnitDict` forgets it.
     __slots__ = (
         "__weakref__",
         "_damage_taken",

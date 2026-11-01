@@ -868,18 +868,53 @@ Keep this file current: when a step is done, say so here in the same pull reques
     fork plugins).
   - What existed for a next game went: resetting what each handler has done and its timings, and the trackers'
     `end`, which marked the last game's units unlisted.
+- **Extensions**, opt-in features of NachOS's or anyone's, and **a bot's data per unit** (the owner, 2026-11-01, one
+  question at a time):
+  - Called extensions, over plugins, which to the owner suggests changing existing methods, and over add-ons, the
+    Terran add-on: an extension only adds to the api, as Flask's do (`app.extensions`). `api.extensions`, over
+    `api.ext`.
+  - The bot hands the api one function, `Api(extensions=build_extensions)`, which NachOS calls once, after reading the
+    game's map, tables and first observation and before `GameStartEvent`; `api.extensions` is what it returns, typed by
+    the bot's own class, `NotPlayingError` before the game and `None` for an api made without (my calls, kept). An
+    extension is any class taking the api, given what it depends on and its options in its constructor, where it
+    subscribes with `api.on`. Bots keep `api.on`; decorators without an api, a `Plugin` base class with `add_plugin`
+    and `api.plugin(T)`, `api.threat` itself (untyped through `__getattr__`, and sharing `Api`'s names) and handles
+    from an `api.per_game` were weighed and dropped.
+  - `Api` is generic in its extensions' type with no default, `class Api[E]`: `Api()` is an `Api[None]`, and a strict
+    extension writes `api: Api[object]`, which takes any api (over a default of `object` through `typing_extensions`, a
+    runtime dependency while 3.12 is supported). Checked with pyright on prototypes.
+  - An extension's handlers, subscribed while NachOS builds the extensions, run before the bot's of the same priority,
+    priorities still first (the owner, over after them): what it works out is fresh when the bot reads it, and the
+    bot's order to a unit an extension also ordered goes out last and stands. One an extension subscribes later gets
+    the usual place.
+  - NachOS's own extensions live in `sc2nachos.extensions`, importing only public names, checked by a test, and the
+    core imports none (over a uv workspace member and a repository of its own). AGENTS.md's scope gains that they may
+    hold opt-in features outside the core's, and its and the README's "no extension hook" say extensions are the one
+    place opt-in features go; `docs/extensions.md` is the guide. Others' are packages named `sc2nachos-<name>`.
+  - A bot's data per unit is `UnitDict[K, V]` in `sc2nachos.units`, typed in key and value as `dict[K, V]` is,
+    checking each unit as it is read, so that a dead unit reads as absent and its value cannot be read in the turn it
+    dies, with no api (over data on the unit itself, untyped and shared by every extension; over nothing new, a dict
+    swept as AvocaDOS's `RoleManager` sweeps its roles; over taking the api and dropping an entry on the death event;
+    and over a data type parameter on `Unit`, which spreads through `OwnUnit`, `Units`, every unit event and `Api`).
+    Storing a dead unit is not refused, and no read sees it, as `issue` sends what it is given; a unit a neural
+    parasite takes over stays a key, documented. Named over `UnitData`, which reads as a game table beside
+    `UnitTypeData`, and `UnitMap`, which reads as the game's map. Found: the tracker keeps every unit seen in
+    `_units_by_id` all game, so a `WeakKeyDictionary` keyed by unit, as the `__weakref__` slot's comment had it, never
+    drops a dead one; the comment is corrected. Built in this pull request.
+  - The first extension is speed mining, the owner's idea, from AvocaDOS's `bot/expansion.py`, over the threat map
+    from its `IntelManager`, read-only and simpler. The bot hands it workers by field, `speed_mining.mine(worker,
+    field)` and `release(worker)`, keeping the economy policy (over by base, the extension choosing fields); the
+    extension keeps a `UnitDict` of each worker's field. It leaves alone an assigned worker doing anything but mining
+    until it is idle or mining again, so a worker sent to build comes back by itself. My calls, kept: the points each
+    trip's move ends at, worked out once per field; cargo returned to the field's expansion's townhall, a plain gather
+    where it has none of this player's finished; a plain gather while this player's ground units other than workers
+    stand in the mineral line; every turn; minerals only, vespene and self-defense staying the bot's.
 
 ## Next
 
-- **Plugins**, opt-in features of NachOS's or anyone's (the owner, 2026-11-01: the direction, not its details). The bot
-  hands the api one function, `Api(plugins=build_plugins)`, which NachOS calls once as the game starts, before
-  `GameStartEvent`; `api.plugins.threat` reads the object it returns, typed by the bot's own class, whose names cannot
-  clash with NachOS's. A plugin is any class taking the api, given what it depends on and its options in its
-  constructor, where it subscribes with `api.on`. Bots keep `api.on`; decorators without an api, a `Plugin` base class
-  with `add_plugin` and `api.plugin(T)`, `api.threat` itself (untyped through `__getattr__`, and sharing `Api`'s names)
-  and handles from an `api.per_game` were weighed and dropped. It needs an exception to AGENTS.md's "no extension
-  hook" for the one attribute. Open: whether pyright takes `Api` generic in its plugins' type, and the names. To plan
-  one question at a time and build with a first real plugin, adding to NachOS only the gaps it hits.
+- **Extensions** (above), a pull request at a time: `UnitDict` (this pull request), then the extension mechanism
+  with speed mining as its first extension, its measurement a game mining with and without it; then AvocaDOS moves its
+  `RoleManager` onto `UnitDict` and its mining onto the extension.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

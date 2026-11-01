@@ -344,6 +344,8 @@ it.
   game as one. NachOS follows a structure through those swaps, so it keeps its object and id, and `unit.tag` is
   only the game's current handle. An id's first digit is the unit's alliance when first seen, 1 for yours and 4 for
   the enemy's; the rest counts that alliance's units. python-sc2 builds new objects every step, keyed by tag.
+- **A bot's data for each unit goes in a `UnitDict`**, keyed by the unit: a dict that forgets a unit once it is dead.
+  A dict keyed by tag, as a python-sc2 bot keeps one, loses a structure each time it goes out of sight.
 - **A unit out of the observation is unlisted, not gone.** It keeps what it last read, `is_listed` is false, and it
   is in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
   into sight does, it is the same object. Only death ends it: `is_dead` becomes true.
