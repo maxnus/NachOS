@@ -1,8 +1,8 @@
 # Testing a bot on a recorded game
 
 A bot runs from start to end with no game client by playing a recorded game. The bot is the player recorded, and its
-handlers run on every recorded observation, a turn at each, whether the game was played stepped or in real time: the
-corpus's are 16 steps apart. `run_recording` plays a recording in one of two ways:
+handlers run on every recorded observation, a turn at each, whether the game was played stepped, `steps_per_turn` steps
+apart, or in real time. `run_recording` plays a recording in one of two ways:
 - **exactly**, by default, for a bot playing its own game back, as it asked then, with the game's own answers;
 - **permissively**, for any bot, or one whose code has changed since, which makes the recording a smoke test that runs
   anywhere, CI included.
@@ -17,9 +17,15 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN, record_to="
 
 `run_from_command_line` takes the file as `--RecordFile`, in a ladder game too
 ([playing on the ladder](ladder.md#replays-recordings-and-results)). The file is complete once the runner returns; a
-run killed before then leaves only part of it. NachOS's own repository holds seven such games in `tests/corpus`, a bot
-that does nothing losing to the computer on each map of the ladder pool, three of them as Terran;
-`tools/record_corpus.py` says what each one is.
+run killed before then leaves only part of it.
+
+Record games of the bot itself for its tests: a game in which it builds, fights and loses units gives its code those
+turns to run on. The corpus in NachOS's repository, `tests/corpus`, is NachOS's own test data and does not ship with
+the package: a bare api that never acts, whose recorded side only ever has its townhall and workers.
+
+A recording plays back only on a NachOS that asks the same kinds of question, in the same order, as the one that
+recorded it, permissively too: NachOS's own requests, such as for the tables and each observation, are answered from the
+file in turn. One recorded before NachOS came to ask otherwise raises `ProtocolError`, and is recorded again.
 
 ## Playing a bot's own game back exactly
 
@@ -56,13 +62,14 @@ Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 
 ```python
 def test_the_bot_plays_a_whole_recorded_game() -> None:
-    run_recording("tests/corpus/PylonAIE_v4-TvZ.sc2rec", api, permissive=True)
+    run_recording("tests/games/pylon.sc2rec", api, permissive=True)
 ```
 
 With `permissive=True`, it returns `UNDECIDED` if the recording stops before the game's end, as one made with a time
 limit does, and `DEFEAT` if the bot leaves first. The bot sees the game as recorded, whatever it does: its orders
-change nothing that comes after them. What it asks of the game of its own accord is answered as if the game had
-answered:
+change nothing that comes after them. A game an older version of the bot played still tests a newer one: where the newer
+one decides otherwise, it sees what the older one did. What it asks of the game of its own accord is answered as if the
+game had answered:
 - **Orders, the camera and chat** are accepted: every order reads as sent, and `api.action_failures` stays empty.
 - **Debug requests** are accepted, and draw nothing.
 - **`api.pathing.query_distance` and `query_distances`** answer the straight line between each pair of ends, from a

@@ -9,16 +9,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #192. `uv run pytest` passes 3085 tests with #193, on numpy 2.0.2 as on the newest;
+- nachOS `main` has every PR to #193. `uv run pytest` passes 3043 tests with #194, on numpy 2.0.2 as on the newest;
   `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
   (#121), the expansions (#122), the placement grids (#123), slice 6, debug and chat (#127), and slice 8, the demo
-  bot (#125). Slice 7, typed order methods on `OwnUnit`, is deferred (below). Next is M5, in AvocaDOS.
+  bot (#125). Slice 7, typed order methods on `OwnUnit`, is deferred (below).
+- **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
+  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, M5), is open. M6 is under
+  way (below).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
-  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR; its
-  `tests/test_nachos_parity.py` compares NachOS with python-sc2 over this repo's corpus and passes again as of
-  AvocaDOS `51d0ed1`.
+  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR. It has no
+  python-sc2 left (AvocaDOS #68), and its game map searches run on `Grid` (AvocaDOS #70).
 
 ## Decided, so not to be proposed again
 
@@ -794,29 +796,25 @@ Keep this file current: when a step is done, say so here in the same pull reques
   Not in NachOS: `can_afford` (#46, above), an upgrade's
   progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
   forecast of when tech is there, and a getter beside `api.data.units[t]` (over `api.data[t]` and a getter per field).
+- **What M6's sweep for AvocaDOS-shaped code settled** (the owner, 2026-11-01, one question at a time):
+  - `sc2nachos.util` holds `TimeSeries` alone. `clip`, `lerp`, `remap`, `damp`, `s_curve` and `sticky_round` came from
+    AvocaDOS in M1 and nothing in NachOS called them, so they went back to AvocaDOS (AvocaDOS #71), and `logistic`,
+    which nothing used, is gone. Decided before the first release, which makes every public name a promise (over
+    moving `TimeSeries` too, over keeping all eight, and over deleting `logistic` alone). The rounding NachOS uses
+    itself, a tie up, is the private `_rounding.rounded_half_up`.
+  - A public way for a bot's tests to make units, planned with the owner before the first release. AvocaDOS's tests
+    make them through the private `_Tracker`, as NachOS's own do through `tests/support.py` (over planning it after
+    the release, and over leaving it).
+  - A bot records its own games for its tests. The corpus is NachOS's test data, not installed with the package: a
+    bare api that never acts, whose recorded side only ever has its townhall and workers, so most of a bot's code never
+    runs on it (the owner). AvocaDOS records one game a map (over shipping the corpus in the package, and over
+    AvocaDOS copying it).
 
 ## Next
 
-- **What M5 needs of NachOS first** (AvocaDOS's plan, M5, the owner's decisions of 2026-10-20), each a pull request:
-  players (#143), running on the ladder (#146: its command line, a bot's own arguments in `run_from_command_line`,
-  replay saving, and the runners taking the api with `race` and `name`, #147), paths on a grid (#148, #151), combat
-  conveniences on a unit (#152, #153), a playback mode that answers a bot's own actions (#154, with `--RecordFile` in
-  #155), and ramp wall-in sites with their sweep (#156), the last of them.
-- **What the owner's review of AvocaDOS #49 asks of NachOS** (2026-10-23, below), each a pull request before the swap's
-  next piece: `Units.non_structures` and the race's unit types (#157); `Unit.damage_taken` (#158); repair, measured by a
-  sweep, then `Unit.required_repair_cost` and `Unit.total_repair_cost`, with `Cost.steps` (#159); and turning,
-  measured by a sweep of how each type turns, then `UnitTypeData.turn_rate` and `moves_while_turning`,
-  `Weapon.turns_to_fire` and `Unit.time_to_face(target)` (#162).
-- **What AvocaDOS's units piece needs of NachOS** (2026-10-25, above): the nearest-unit methods taking a unit,
-  `OwnUnit.is_doing`, `Unit.has_buff`, `Unit.is_carrying_resource`, `Units.doing`, `Units.with_buff` and
-  `BuffId.CARRYING_GAS` (#173), before the piece; and what the owner's review of AvocaDOS #52 moved into NachOS (#175),
-  before that piece merges.
-- **What the owner's review of AvocaDOS #57 moves into NachOS** (2026-10-30, above): the static tech reads and
-  `Resources.minimum` and `maximum` (#187), then `InProduction`'s `producer`, `unit`, `time_left` and `total_time`,
-  measured in a game first (#189). AvocaDOS adopts each as it merges.
-- M5, in AvocaDOS (section 3).
-- Beside M5, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in the order
-  salsa's plan holds:
+- M6, in the order of section 3.
+- Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
+  the order salsa's plan holds:
   1. Two bugs AI Arena's replays hit (the owner, 2026-10-25): `run_replay` could not play back a replay whose map is
      not where the replay names it (#169, merged), and `OwnUnit.engaged_target` raised for a target the game never
      listed (#170, merged).
@@ -825,6 +823,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   reported (2026-10-25, above).
 
 ## 1. Waiting until something needs them
+
+M5's swap is done, so the items below that waited on it, a type for start locations, a narrow context for a unit and
+typed order methods, can be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A launch passes no data version, only the base build: a replay whose data version is not its base build's default
   may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).
@@ -881,15 +882,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## 2. After each nachOS pull request merges
 
-Record it in AvocaDOS's `docs/plans/nachOS-plan.md` on `main`: a paragraph under M5's "Status" saying what it
-settled and what AvocaDOS writes differently at M5. That needs an AvocaDOS checkout; its tests (`uv run pytest`,
-`tests/test_nachos_parity.py` in particular) install nachOS from source. Commit there, and push only when the owner
-says so.
+Record it in AvocaDOS's `docs/plans/nachOS-plan.md`, in the next AvocaDOS pull request: a paragraph under M6's
+"Status" saying what it settled and what AvocaDOS writes differently. AvocaDOS's tests (`uv run pytest`) install nachOS
+from the checkout beside it, so run them on a nachOS pull request that renames or removes anything.
 
-## 3. M5 (AvocaDOS runs on NachOS)
+## 3. M6 (python-sc2 gone, NachOS released)
 
-In AvocaDOS's plan, section "M5 — The swap". Its preparation on python-sc2 is done (AvocaDOS #45 to #48: the bot's
-state off the api, the event layer in NachOS's shape, the last order wins, and the whole turn timed), and the swap is
-a pull request a piece into AvocaDOS's `main`, the first of them AvocaDOS #49 (the owner, 2026-10-24, over an
-integration branch, `nachos-swap`, to be merged into `main` once the whole passed). Merged: `sc2nachos.Api()` (#49)
-and ids and points (#51). Next is the units piece, once #173 is merged.
+In AvocaDOS's plan, section "M6 — Delete burnysc2". Done: python-sc2 gone from AvocaDOS (AvocaDOS #68),
+`external/pathfinding` retired onto `Grid` (AvocaDOS #70), and the sweep for AvocaDOS-shaped code (2026-11-01, above),
+whose numeric helpers went back to AvocaDOS (AvocaDOS #71) before nachOS deleted them. Next, a pull request each:
+1. AvocaDOS records its own games, one a map, for its tests, which then read nothing from nachOS's checkout; one game's
+   size is measured first.
+2. The public way for a bot's tests to make units, planned with the owner, then AvocaDOS moves onto it.
+3. The README and the API docs, then the first release to PyPI, with the owner's permission, and AvocaDOS pinned to it.
