@@ -444,8 +444,8 @@ it.
 - **Collections are combined with `Units.combined(a, b, ...)`**, or `a.combined_with(b)` for `b` one unit or several.
   Each keeps a unit where it first appears and knows it by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
 - **Your own data about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its class
-  is not yours to subclass. A `weakref.WeakKeyDictionary` keyed by unit lets go of an entry once the unit is dead
-  and dropped.
+  is not yours to subclass. A `UnitDict` forgets a unit once it is dead; a `weakref.WeakKeyDictionary` keyed by unit
+  never does, as NachOS keeps every unit it has seen all game.
 
 ## The state
 

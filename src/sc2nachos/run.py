@@ -31,7 +31,7 @@ from sc2nachos.protocol import (
 
 def run_local(
     map_file: MapFile | str,
-    api: Api,
+    api: Api[object],
     opponent: Computer | None = None,
     *,
     race: Race,
@@ -87,7 +87,7 @@ def run_local(
 
 
 def run_ladder(
-    api: Api,
+    api: Api[object],
     *,
     race: Race,
     name: str | None = None,
@@ -128,7 +128,7 @@ def run_ladder(
 
 def run_replay(
     replay: Path | str,
-    api: Api,
+    api: Api[object],
     *,
     player_id: int,
     disable_fog: bool = False,
@@ -221,7 +221,7 @@ def _check_replay_player(info: sc2api_pb2.ResponseReplayInfo, player_id: int) ->
 
 def run_recording(
     recording: Recording | Path | str,
-    api: Api,
+    api: Api[object],
     *,
     permissive: bool = False,
     time_limit: GameTime | None = None,
@@ -282,7 +282,7 @@ def run_recording(
 
 
 def run_from_command_line(
-    api: Api,
+    api: Api[object],
     argv: Sequence[str] | None = None,
     *,
     race: Race,
@@ -336,7 +336,12 @@ def run_from_command_line(
 
 
 def _play_ladder_game(
-    api: Api, command_line_arguments: _CommandLineArguments, *, race: Race, name: str | None, steps_per_turn: int
+    api: Api[object],
+    command_line_arguments: _CommandLineArguments,
+    *,
+    race: Race,
+    name: str | None,
+    steps_per_turn: int,
 ) -> tuple[Result, str | None]:
     """Join the ladder's game as `command_line_arguments` say, and return how it ended and the map's display name,
     `None` if the ladder closed the connection before the game began."""
@@ -365,7 +370,7 @@ def _play_ladder_game(
         return result, None
 
 
-def _game_time(api: Api) -> float | None:
+def _game_time(api: Api[object]) -> float | None:
     """The game seconds `api`'s game lasted, to the millisecond, `None` if it began none."""
     try:
         return round(api.time.seconds, 3)
@@ -373,7 +378,7 @@ def _game_time(api: Api) -> float | None:
         return None
 
 
-def _enemy_race_name(api: Api) -> str | None:
+def _enemy_race_name(api: Api[object]) -> str | None:
     """The name of the race the enemy of `api`'s game played, `None` if it was never known, or the game had no
     enemy or never began."""
     try:
@@ -384,7 +389,12 @@ def _enemy_race_name(api: Api) -> str | None:
 
 
 def _play_local_game(
-    api: Api, command_line_arguments: _CommandLineArguments, *, race: Race, name: str | None, steps_per_turn: int
+    api: Api[object],
+    command_line_arguments: _CommandLineArguments,
+    *,
+    race: Race,
+    name: str | None,
+    steps_per_turn: int,
 ) -> tuple[Result, str]:
     """Play a local game against the built-in computer as `command_line_arguments` say, and return how it ended and
     the map file's name."""

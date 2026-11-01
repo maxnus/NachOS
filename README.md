@@ -67,6 +67,9 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
   back as one of its players saw it ([replays](https://github.com/maxnus/NachOS/blob/main/docs/replays.md)).
 - **Testing**: `sc2nachos.testing` makes units for a bot's unit tests
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/testing.md)).
+- **Extensions**: features a bot opts into, NachOS's or anyone's, which the api builds once the game starts and holds
+  as `api.extensions`. NachOS's first is speed mining
+  ([guide](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)).
 
 ## Design
 
@@ -100,9 +103,11 @@ choice, confined to one line of your own code. An api plays one game, so a bot p
 ladder, and two bots playing each other run in a process each. A program that plays several games in one process,
 such as a script reading replays, makes an api for each.
 
-Your own helpers live in your own modules, as ordinary functions and objects. There is no mixin to inherit and no
-extension hook to register. If you want to subclass so you can hang a helper off `api`, that is a gap in NachOS,
-not a pattern to follow — please open an issue.
+Your own helpers live in your own modules, as ordinary functions and objects, and there is no mixin to inherit. A
+feature a bot opts into, NachOS's or anyone's, is an extension: `Api(extensions=build_extensions)` builds it once the
+game starts, and `api.extensions` holds it
+([extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)). If you want to subclass so you can
+hang a helper off `api`, that is a gap in NachOS, not a pattern to follow — please open an issue.
 
 `Api()` is cheap and needs no live connection, so you can construct it at import time and register handlers as
 your modules load. Connecting happens later, in the runner:
@@ -123,6 +128,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   about each order.
 - [Debugging](https://github.com/maxnus/NachOS/blob/main/docs/debugging.md): drawing on the game's screen, cheats, and
   creating units.
+- [Extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md): features a bot opts into, how to use
+  one and how to write one.
 - [Running StarCraft II on GitHub Actions](https://github.com/maxnus/NachOS/blob/main/docs/github-actions.md): playing
   matches in a bot repository's workflows.
 - [Playing on the ladder](https://github.com/maxnus/NachOS/blob/main/docs/ladder.md): one script for the ladder and

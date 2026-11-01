@@ -1,14 +1,16 @@
 """Fakes and builders shared by the tests that run the library without a game."""
 
 import importlib.util
+import lzma
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from importlib import resources
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import numpy
-from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
+from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos import GameTime
@@ -85,6 +87,72 @@ class FakeTransport:
 
     def close(self) -> None:
         self.closed = True
+
+
+class ScriptedGame:
+    """A game that answers every request by its kind: the map `game_info`, or `make_game_info`'s; the tables `data`, or
+    none; an observation from `observations` in turn, the last ending the game in a victory; and success for every
+    action and debug command. It records every request."""
+
+    def __init__(
+        self,
+        observations: Sequence[sc2api_pb2.ResponseObservation],
+        *,
+        game_info: sc2api_pb2.ResponseGameInfo | None = None,
+        data: sc2api_pb2.ResponseData | None = None,
+    ) -> None:
+        self.observations = deque(observations)
+        self.requests: list[sc2api_pb2.Request] = []
+        self.info = make_game_info() if game_info is None else game_info
+        self.data = sc2api_pb2.ResponseData() if data is None else data
+
+    def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
+        self.requests.append(request)
+        match request.WhichOneof("request"):
+            case "join_game":
+                return make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1))
+            case "game_info":
+                return make_response(game_info=self.info)
+            case "data":
+                return make_response(data=self.data)
+            case "observation":
+                observation = self.observations.popleft()
+                if not self.observations:
+                    observation.player_result.add(player_id=1, result=Result.VICTORY.value)
+                return make_response(Status.ENDED if not self.observations else Status.IN_GAME, observation=observation)
+            case "step":
+                return make_response(step=sc2api_pb2.ResponseStep())
+            case "action":
+                results = [error_pb2.Success] * len(request.action.actions)
+                return make_response(action=sc2api_pb2.ResponseAction(result=results))
+            case "debug":
+                return make_response(debug=sc2api_pb2.ResponseDebug())
+            case other:
+                raise AssertionError(f"the test game was asked for {other}")
+
+    def close(self) -> None: ...
+
+    def joined(self) -> Client:
+        """A client over this game, joined as player one."""
+        client = Client(self)
+        client.join_game(Race.TERRAN)
+        return client
+
+    def commands_by_turn(self) -> list[list[raw_pb2.ActionRawUnitCommand]]:
+        """The unit commands each turn sent, by the observation the turn read, counting from the first."""
+        commands: list[list[raw_pb2.ActionRawUnitCommand]] = []
+        for request in self.requests:
+            if request.HasField("observation"):
+                commands.append([])
+            elif request.HasField("action"):
+                commands[-1] += [action.action_raw.unit_command for action in request.action.actions]
+        return commands
+
+
+def shipped_game_data() -> sc2api_pb2.ResponseData:
+    """The game's answer to `RequestData` that `sc2nachos.testing` ships, build 75689's."""
+    shipped_file = resources.files("sc2nachos.testing").joinpath("game_data_75689.binpb.xz")
+    return sc2api_pb2.ResponseData.FromString(lzma.decompress(shipped_file.read_bytes()))
 
 
 class FakeWebSocket:
