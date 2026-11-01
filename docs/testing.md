@@ -147,4 +147,4 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
 The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
-a recorded game, as below.
+a recorded game, as above.

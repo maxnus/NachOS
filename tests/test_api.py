@@ -449,6 +449,21 @@ class TestPlaying:
             api.play(client, save_replay_to=tmp_path / "no folder" / "game.SC2Replay")
         assert api.play(client, steps_per_turn=2) is Result.VICTORY
 
+    def test_a_runner_that_refused_its_arguments_leaves_the_api_to_play(self) -> None:
+        api = Api()
+        with pytest.raises(FileNotFoundError):
+            run_local(_somewhere(), api, race=Race.TERRAN, record_to=_IN_NO_FOLDER)
+        assert api.play(_joined(*_game(0, 2))[0], steps_per_turn=2) is Result.VICTORY
+
+    def test_a_play_that_failed_reading_the_game_leaves_the_api_to_play(self) -> None:
+        never_joined = Client(FakeTransport(*_game(0, 2)))
+        api = Api()
+        with pytest.raises(ValueError, match="the client has joined no game"):
+            api.play(never_joined)
+        with pytest.raises(NotPlayingError):
+            _ = api.step
+        assert api.play(_joined(*_game(0, 2))[0], steps_per_turn=2) is Result.VICTORY
+
     @pytest.mark.parametrize(
         "run",
         [
@@ -517,6 +532,34 @@ class TestEvents:
         api.on(GameEndEvent)(lambda event: results.append((event.time.steps, event.result)))
         api.play(client, steps_per_turn=112, time_limit=GameTime(seconds=5))
         assert results == [(112, Result.TIE)]
+
+    def test_what_subscribes_before_or_during_the_game_handles_it(self) -> None:
+        """Including an instance a `GameStartEvent` handler subscribes before it unsubscribes itself."""
+        api = Api()
+        fired: list[tuple[str, float]] = []
+
+        @api.on(TurnEvent, at_time=GameTime(steps=2))
+        def function(event: TurnEvent) -> None:
+            fired.append(("function", event.time.steps))
+
+        class Handlers:
+            def __init__(self, name: str) -> None:
+                self.name = name
+                api.subscribe(self)
+
+            @api.on(TurnEvent, once=True)
+            def on_turn(self, event: TurnEvent) -> None:
+                fired.append((self.name, event.time.steps))
+
+        Handlers("before")
+
+        @api.on(GameStartEvent)
+        def make(event: GameStartEvent) -> None:
+            Handlers("during")
+            api.unsubscribe(make)
+
+        api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
+        assert fired == [("before", 0), ("during", 0), ("function", 2)]
 
     def test_handler_timings_count_a_games_calls_for_an_api_made_to_time_handlers(self) -> None:
         api = Api(time_handlers=True)

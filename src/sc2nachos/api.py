@@ -133,8 +133,8 @@ class Api:
         before any handler of the next. The handler runs on every event unless held back: `min_interval` waits until
         that long has passed since it last ran, `at_time` runs it once, on the first event at or after that time, and
         `once` on the first event. `min_interval` with either of the others, or not above zero, raises `ValueError`,
-        and either of the two not a `GameTime`, `TypeError`. These count only the events selected. An exception it
-        raises ends the game, unless `catch_exceptions`, which logs it and goes on.
+        and either of the two not a `GameTime`, `TypeError`. These count only the events selected, those emitted before
+        the game included. An exception it raises ends the game, unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -168,7 +168,7 @@ class Api:
 
     @property
     def handler_timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
-        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
+        """How long each handler has taken, by event type and handler name, on events emitted before the game too.
 
         A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
         `RuntimeError` unless the api was made with `time_handlers=True`.
@@ -428,7 +428,8 @@ class Api:
         that names a folder `IsADirectoryError`.
 
         An api plays one game. Once it has started one, this and every runner raise `RuntimeError` before anything
-        else. A call that raised before its game started, as on its arguments, leaves the api to play.
+        else. A call that raised before the game started, on its arguments or while reading the game's map, tables and
+        first observation, leaves the api to play.
         """
         self._check_has_not_played()
         if time_limit is not None:

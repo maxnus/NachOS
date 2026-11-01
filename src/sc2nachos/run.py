@@ -366,7 +366,7 @@ def _play_ladder_game(
 
 
 def _game_time(api: Api) -> float | None:
-    """The game seconds `api`'s last game lasted, to the millisecond, `None` if it began none."""
+    """The game seconds `api`'s game lasted, to the millisecond, `None` if it began none."""
     try:
         return round(api.time.seconds, 3)
     except NotPlayingError:
@@ -374,7 +374,7 @@ def _game_time(api: Api) -> float | None:
 
 
 def _enemy_race_name(api: Api) -> str | None:
-    """The name of the race the enemy of `api`'s last game played, `None` if it was never known, or the game had no
+    """The name of the race the enemy of `api`'s game played, `None` if it was never known, or the game had no
     enemy or never began."""
     try:
         race = api.enemy.race
