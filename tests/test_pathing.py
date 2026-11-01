@@ -37,7 +37,7 @@ def _answering(*distances: float) -> tuple[Pathing, FakeTransport]:
     return Pathing(client), transport
 
 
-def _reaper(*, at: tuple[float, float] = (10.0, 10.0), left_out_since: bool = False) -> Unit[Any]:
+def _own_reaper(*, at: tuple[float, float] = (10.0, 10.0), left_out_since: bool = False) -> Unit[Any]:
     """This player's reaper under tag 7, which the last observation left out if `left_out_since`."""
     made_up_units = MadeUpUnits(_TABLES)
     (reaper,) = made_up_units.observe(UnitReport(7, UnitTypeId.REAPER, at=at))
@@ -62,14 +62,14 @@ class TestDistances:
 
     def test_a_unit_is_asked_from_by_its_tag(self) -> None:
         pathing, transport = _answering(3.3)
-        assert pathing.query_distance(_reaper(), (12, 10)) == pytest.approx(3.3)
+        assert pathing.query_distance(_own_reaper(), (12, 10)) == pytest.approx(3.3)
         (asked,) = transport.requests[0].query.pathing
         assert (asked.WhichOneof("start"), asked.unit_tag) == ("unit_tag", 7)
 
     def test_a_unit_the_last_observation_left_out_raises_without_asking(self) -> None:
         pathing, transport = _answering()
         with pytest.raises(ValueError, match="did not report"):
-            pathing.query_distance(_reaper(left_out_since=True), (12, 10))
+            pathing.query_distance(_own_reaper(left_out_since=True), (12, 10))
         assert not transport.requests
 
     def test_no_path_reads_infinite(self) -> None:
@@ -82,7 +82,7 @@ class TestDistances:
 
     def test_a_unit_to_its_own_position_reads_zero(self) -> None:
         pathing, _ = _answering(0.0)
-        assert pathing.query_distance(_reaper(at=(10.5, 10.5)), (10.5, 10.5)) == 0.0
+        assert pathing.query_distance(_own_reaper(at=(10.5, 10.5)), (10.5, 10.5)) == 0.0
 
     def test_no_pairs_ask_nothing(self) -> None:
         pathing, transport = _answering()
@@ -121,9 +121,10 @@ def _pathing_over_a_depot(
     made_up_units.observe(
         *also, UnitReport(5, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), UnitReport(6, UnitTypeId.MARINE, at=(1.5, 1.5))
     )
+    present_units = made_up_units.units
     pathing = Pathing(client)
-    pathing._update(made_up_units.units)
-    return pathing, transport, made_up_units.units
+    pathing._update(present_units)
+    return pathing, transport, present_units
 
 
 class TestTheTurnsGrid:
